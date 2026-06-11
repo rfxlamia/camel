@@ -329,7 +329,7 @@ export default function App() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-white px-6 py-3">
         <div className="flex items-baseline gap-3">
           <h1 className="text-md font-semibold text-primary-900">
-            <span aria-hidden className="mr-2 inline-block h-3 w-3 rounded-sm bg-accent-500" />
+            <img src="/logo.png" alt="Camel" className="mr-2 inline-block h-6 w-6" />
             Camel
           </h1>
           <p className="text-xs text-neutral-500">Kanban for dev teams</p>

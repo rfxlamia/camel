@@ -51,7 +51,7 @@ export default function AuthPage({ onAuth }: Props) {
     <div className="flex min-h-screen items-center justify-center bg-neutral-100 p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-baseline justify-center gap-2">
-          <span aria-hidden className="inline-block h-3 w-3 rounded-sm bg-accent-500" />
+          <img src="/logo.png" alt="Camel" className="inline-block h-6 w-6" />
           <h1 className="text-lg font-semibold text-primary-900">Camel</h1>
           <span className="text-sm text-neutral-500">Kanban for dev teams</span>
         </div>
