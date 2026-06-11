@@ -3,8 +3,45 @@ import { pool } from "./db/pool.js";
 import { neighborsAt, positionBetween, rebalance, POSITION_GAP } from "./core/position.js";
 import { checkWipLimit } from "./core/wip.js";
 import { computeFlowMetrics } from "./core/metrics.js";
+import { requireAuth, type AuthUser } from "./auth.js";
+import {
+  clearPresence,
+  heartbeat,
+  onlineUsers,
+  publishEvent,
+  sseHandler,
+} from "./realtime.js";
 
 export const api = Router();
+
+api.use(requireAuth);
+
+type Queryable = Pick<typeof pool, "query">;
+
+async function recordActivity(
+  db: Queryable,
+  actor: AuthUser,
+  eventType: "create" | "update" | "move" | "delete",
+  opts: {
+    cardId?: number | null;
+    fromColumnId?: number | null;
+    toColumnId?: number | null;
+    payload?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await db.query(
+    `INSERT INTO card_events (card_id, from_column_id, to_column_id, actor_id, event_type, payload)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      opts.cardId ?? null,
+      opts.fromColumnId ?? null,
+      opts.toColumnId ?? null,
+      actor.id,
+      eventType,
+      JSON.stringify(opts.payload ?? {}),
+    ],
+  );
+}
 
 // ---- Board ----------------------------------------------------------------
 
@@ -14,7 +51,7 @@ api.get("/board", async (_req, res) => {
      FROM columns ORDER BY position`,
   );
   const cards = await pool.query(
-    `SELECT id, column_id, title, description, position, created_at, started_at, done_at
+    `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
      FROM cards ORDER BY position`,
   );
   res.json({
@@ -33,6 +70,7 @@ api.get("/board", async (_req, res) => {
           title: c.title,
           description: c.description,
           position: c.position,
+          version: c.version,
           createdAt: c.created_at,
           startedAt: c.started_at,
           doneAt: c.done_at,
@@ -75,6 +113,7 @@ api.patch("/columns/:id", async (req, res) => {
     [id, title ?? null, wipLimit !== undefined, wipLimit ?? null, policy ?? null],
   );
   if (rows.length === 0) return res.status(404).json({ error: "column not found" });
+  await publishEvent({ type: "column.updated", actor: req.user! });
   res.json(rows[0]);
 });
 
@@ -116,35 +155,71 @@ api.post("/cards", async (req, res) => {
     `INSERT INTO cards (column_id, title, description, position)
      VALUES ($1, $2, $3,
              COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4)
-     RETURNING id, column_id, title, description, position, created_at, started_at, done_at`,
+     RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
     [Number(columnId), title.trim(), description ?? "", POSITION_GAP],
   );
-  await pool.query(
-    "INSERT INTO card_events (card_id, from_column_id, to_column_id) VALUES ($1, NULL, $2)",
-    [rows[0].id, Number(columnId)],
-  );
+  await recordActivity(pool, req.user!, "create", {
+    cardId: rows[0].id,
+    toColumnId: Number(columnId),
+    payload: { cardTitle: rows[0].title },
+  });
+  await publishEvent({ type: "card.created", actor: req.user!, cardId: rows[0].id });
   res.status(201).json(rows[0]);
 });
 
 api.patch("/cards/:id", async (req, res) => {
-  const { title, description } = req.body ?? {};
+  const { title, description, version } = req.body ?? {};
+  const id = Number(req.params.id);
+  if (version !== undefined && !Number.isInteger(version)) {
+    return res.status(400).json({ error: "version must be an integer" });
+  }
   const { rows } = await pool.query(
     `UPDATE cards SET
        title = COALESCE($2, title),
-       description = COALESCE($3, description)
-     WHERE id = $1
-     RETURNING id, column_id, title, description, position, created_at, started_at, done_at`,
-    [Number(req.params.id), title ?? null, description ?? null],
+       description = COALESCE($3, description),
+       version = version + 1
+     WHERE id = $1 AND ($4::int IS NULL OR version = $4)
+     RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
+    [id, title ?? null, description ?? null, version ?? null],
   );
-  if (rows.length === 0) return res.status(404).json({ error: "card not found" });
+  if (rows.length === 0) {
+    const current = await pool.query(
+      `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
+       FROM cards WHERE id = $1`,
+      [id],
+    );
+    if (current.rows.length === 0) {
+      return res.status(404).json({ error: "card not found" });
+    }
+    return res.status(409).json({
+      error: "Someone else updated this card first.",
+      code: "version_conflict",
+      card: current.rows[0],
+    });
+  }
+  await recordActivity(pool, req.user!, "update", {
+    cardId: id,
+    payload: {
+      cardTitle: rows[0].title,
+      changed: [title != null && "title", description != null && "description"].filter(Boolean),
+    },
+  });
+  await publishEvent({ type: "card.updated", actor: req.user!, cardId: id });
   res.json(rows[0]);
 });
 
 api.delete("/cards/:id", async (req, res) => {
-  const { rowCount } = await pool.query("DELETE FROM cards WHERE id = $1", [
-    Number(req.params.id),
-  ]);
-  if (rowCount === 0) return res.status(404).json({ error: "card not found" });
+  const id = Number(req.params.id);
+  const { rows } = await pool.query(
+    "DELETE FROM cards WHERE id = $1 RETURNING title, column_id",
+    [id],
+  );
+  if (rows.length === 0) return res.status(404).json({ error: "card not found" });
+  await recordActivity(pool, req.user!, "delete", {
+    fromColumnId: rows[0].column_id,
+    payload: { cardTitle: rows[0].title },
+  });
+  await publishEvent({ type: "card.deleted", actor: req.user!, cardId: id });
   res.status(204).end();
 });
 
@@ -152,9 +227,12 @@ api.delete("/cards/:id", async (req, res) => {
 
 api.post("/cards/:id/move", async (req, res) => {
   const cardId = Number(req.params.id);
-  const { toColumnId, index } = req.body ?? {};
+  const { toColumnId, index, version } = req.body ?? {};
   if (!Number.isInteger(toColumnId) || !Number.isInteger(index) || index < 0) {
     return res.status(400).json({ error: "toColumnId and index are required" });
+  }
+  if (version !== undefined && !Number.isInteger(version)) {
+    return res.status(400).json({ error: "version must be an integer" });
   }
 
   const client = await pool.connect();
@@ -162,7 +240,7 @@ api.post("/cards/:id/move", async (req, res) => {
     await client.query("BEGIN");
 
     const cardRes = await client.query(
-      "SELECT id, column_id, started_at, done_at FROM cards WHERE id = $1 FOR UPDATE",
+      "SELECT id, column_id, title, version, started_at, done_at FROM cards WHERE id = $1 FOR UPDATE",
       [cardId],
     );
     if (cardRes.rows.length === 0) {
@@ -170,6 +248,14 @@ api.post("/cards/:id/move", async (req, res) => {
       return res.status(404).json({ error: "card not found" });
     }
     const card = cardRes.rows[0];
+
+    if (version !== undefined && card.version !== version) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        error: "Someone else moved this card first.",
+        code: "version_conflict",
+      });
+    }
 
     const colRes = await client.query(
       `SELECT id, wip_limit, is_done,
@@ -229,6 +315,7 @@ api.post("/cards/:id/move", async (req, res) => {
       `UPDATE cards SET
          column_id = $2,
          position = $3,
+         version = version + 1,
          started_at = CASE
            WHEN started_at IS NULL AND ($4 OR NOT $5) THEN now()
            ELSE started_at
@@ -239,16 +326,22 @@ api.post("/cards/:id/move", async (req, res) => {
     );
 
     if (!isSameColumn) {
-      await client.query(
-        "INSERT INTO card_events (card_id, from_column_id, to_column_id) VALUES ($1, $2, $3)",
-        [cardId, card.column_id, toColumnId],
-      );
+      await recordActivity(client, req.user!, "move", {
+        cardId,
+        fromColumnId: card.column_id,
+        toColumnId,
+        payload: { cardTitle: card.title },
+      });
     }
 
     await client.query("COMMIT");
 
+    if (!isSameColumn) {
+      await publishEvent({ type: "card.moved", actor: req.user!, cardId });
+    }
+
     const updated = await pool.query(
-      `SELECT id, column_id, title, description, position, created_at, started_at, done_at
+      `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
        FROM cards WHERE id = $1`,
       [cardId],
     );
@@ -280,3 +373,58 @@ api.get("/metrics", async (req, res) => {
   );
   res.json(metrics);
 });
+
+// ---- Activity feed -----------------------------------------------------------
+
+api.get("/activity", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const { rows } = await pool.query(
+    `SELECT e.id, e.event_type, e.payload, e.created_at, e.card_id,
+            u.username, u.display_name,
+            c.title AS current_card_title,
+            fc.title AS from_column_title,
+            tc.title AS to_column_title
+     FROM card_events e
+     LEFT JOIN users u ON u.id = e.actor_id
+     LEFT JOIN cards c ON c.id = e.card_id
+     LEFT JOIN columns fc ON fc.id = e.from_column_id
+     LEFT JOIN columns tc ON tc.id = e.to_column_id
+     ORDER BY e.created_at DESC, e.id DESC
+     LIMIT $1`,
+    [limit],
+  );
+  res.json({
+    events: rows.map((e) => ({
+      id: e.id,
+      type: e.event_type,
+      cardId: e.card_id,
+      cardTitle: e.current_card_title ?? e.payload?.cardTitle ?? null,
+      fromColumn: e.from_column_title,
+      toColumn: e.to_column_title,
+      actor: e.username
+        ? { username: e.username, displayName: e.display_name }
+        : null,
+      createdAt: e.created_at,
+    })),
+  });
+});
+
+// ---- Presence (Redis TTL heartbeat) -------------------------------------------
+
+api.post("/presence/heartbeat", async (req, res) => {
+  await heartbeat(req.user!);
+  res.json({ ok: true });
+});
+
+api.get("/presence", async (req, res) => {
+  res.json({ users: await onlineUsers(req.user!) });
+});
+
+api.delete("/presence", async (req, res) => {
+  await clearPresence(req.user!.id);
+  res.status(204).end();
+});
+
+// ---- Real-time stream (Redis Pub/Sub -> SSE) ----------------------------------
+
+api.get("/events/stream", sseHandler);
