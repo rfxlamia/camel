@@ -70,6 +70,14 @@ export interface FlowMetrics {
   wipCount: number;
 }
 
+export interface MetricsHistoryBucket {
+  weekStart: string;
+  throughput: number;
+  avgLeadTimeMs: number | null;
+  avgCycleTimeMs: number | null;
+  wipCount: number;
+}
+
 export type WipStatus = "unlimited" | "under" | "at" | "over";
 
 export function wipStatus(count: number, wipLimit: number | null): WipStatus {

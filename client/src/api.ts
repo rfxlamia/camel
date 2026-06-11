@@ -4,6 +4,7 @@ import type {
   Card,
   Column,
   FlowMetrics,
+  MetricsHistoryBucket,
   PresenceUser,
   User,
 } from "./types";
@@ -42,6 +43,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getBoard: () => request<Board>("/board"),
   getMetrics: () => request<FlowMetrics>("/metrics"),
+  getMetricsHistory: (weeks = 8) =>
+    request<{ weeks: MetricsHistoryBucket[] }>(`/metrics/history?weeks=${weeks}`),
   createCard: (columnId: number, title: string, description = "") =>
     request<Card>("/cards", {
       method: "POST",
