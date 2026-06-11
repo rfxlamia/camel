@@ -17,6 +17,7 @@ import type { Card, Column } from "../types";
 import { useBoard } from "../context/BoardContext";
 import { CardBody } from "../components/CardView";
 import ColumnView from "../components/ColumnView";
+import TrashZone from "../components/TrashZone";
 
 function cardIdFrom(dndId: string | number): number | null {
   const s = String(dndId);
@@ -33,7 +34,8 @@ function findColumnOfCard(columns: Column[], cardId: number): Column | undefined
 }
 
 export default function BoardPage() {
-  const { columns, setColumns, loadError, refresh, showToast } = useBoard();
+  const { columns, setColumns, loadError, refresh, showToast, deleteCard } =
+    useBoard();
   const navigate = useNavigate();
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const snapshotRef = useRef<Column[] | null>(null);
@@ -107,6 +109,29 @@ export default function BoardPage() {
     const cardId = cardIdFrom(active.id);
     if (cardId === null || !over) {
       revert();
+      return;
+    }
+
+    // Dropped on the trash target: soft delete the card. ContextPanel (if open
+    // for this card) self-closes once refresh removes it from columns.
+    if (over.id === "trash") {
+      // Remove the card from local state immediately so it vanishes on drop
+      // instead of lingering in the board until the request + refresh land.
+      setColumns((cols) =>
+        cols
+          ? cols.map((c) => ({
+              ...c,
+              cards: c.cards.filter((card) => card.id !== cardId),
+            }))
+          : cols,
+      );
+      try {
+        await deleteCard(cardId);
+        snapshotRef.current = null;
+      } catch {
+        revert();
+        showToast("Couldn't delete the card. Check your connection and try again.");
+      }
       return;
     }
 
@@ -234,6 +259,7 @@ export default function BoardPage() {
               </div>
             )}
           </DragOverlay>
+          <TrashZone visible={activeCard !== null} />
         </DndContext>
       )}
 

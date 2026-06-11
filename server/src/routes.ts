@@ -52,7 +52,7 @@ api.get("/board", async (_req, res) => {
   );
   const cards = await pool.query(
     `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-     FROM cards ORDER BY position`,
+     FROM cards WHERE deleted_at IS NULL ORDER BY position`,
   );
   res.json({
     columns: columns.rows.map((col) => ({
@@ -140,7 +140,7 @@ api.post("/cards", async (req, res) => {
     return res.status(404).json({ error: "column not found" });
   }
   const count = await pool.query(
-    "SELECT COUNT(*)::int AS n FROM cards WHERE column_id = $1",
+    "SELECT COUNT(*)::int AS n FROM cards WHERE column_id = $1 AND deleted_at IS NULL",
     [Number(columnId)],
   );
   const wip = checkWipLimit({
@@ -178,14 +178,14 @@ api.patch("/cards/:id", async (req, res) => {
        title = COALESCE($2, title),
        description = COALESCE($3, description),
        version = version + 1
-     WHERE id = $1 AND ($4::int IS NULL OR version = $4)
+     WHERE id = $1 AND deleted_at IS NULL AND ($4::int IS NULL OR version = $4)
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
     [id, title ?? null, description ?? null, version ?? null],
   );
   if (rows.length === 0) {
     const current = await pool.query(
       `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-       FROM cards WHERE id = $1`,
+       FROM cards WHERE id = $1 AND deleted_at IS NULL`,
       [id],
     );
     if (current.rows.length === 0) {
@@ -210,8 +210,10 @@ api.patch("/cards/:id", async (req, res) => {
 
 api.delete("/cards/:id", async (req, res) => {
   const id = Number(req.params.id);
+  // Soft delete: mark the row, don't remove it. Keeps activity history and
+  // the card_events FK intact; all read/flow queries filter deleted_at IS NULL.
   const { rows } = await pool.query(
-    "DELETE FROM cards WHERE id = $1 RETURNING title, column_id",
+    "UPDATE cards SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING title, column_id",
     [id],
   );
   if (rows.length === 0) return res.status(404).json({ error: "card not found" });
@@ -240,7 +242,7 @@ api.post("/cards/:id/move", async (req, res) => {
     await client.query("BEGIN");
 
     const cardRes = await client.query(
-      "SELECT id, column_id, title, version, started_at, done_at FROM cards WHERE id = $1 FOR UPDATE",
+      "SELECT id, column_id, title, version, started_at, done_at FROM cards WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
       [cardId],
     );
     if (cardRes.rows.length === 0) {
@@ -272,7 +274,7 @@ api.post("/cards/:id/move", async (req, res) => {
 
     const siblingsRes = await client.query(
       `SELECT id, position FROM cards
-       WHERE column_id = $1 AND id <> $2
+       WHERE column_id = $1 AND id <> $2 AND deleted_at IS NULL
        ORDER BY position FOR UPDATE`,
       [toColumnId, cardId],
     );
@@ -342,7 +344,7 @@ api.post("/cards/:id/move", async (req, res) => {
 
     const updated = await pool.query(
       `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-       FROM cards WHERE id = $1`,
+       FROM cards WHERE id = $1 AND deleted_at IS NULL`,
       [cardId],
     );
     res.json(updated.rows[0]);
@@ -361,7 +363,7 @@ api.get("/metrics", async (req, res) => {
     ? Number(req.query.windowDays)
     : undefined;
   const { rows } = await pool.query(
-    "SELECT created_at, started_at, done_at FROM cards",
+    "SELECT created_at, started_at, done_at FROM cards WHERE deleted_at IS NULL",
   );
   const metrics = computeFlowMetrics(
     rows.map((r) => ({
@@ -380,7 +382,7 @@ api.get("/metrics/history", async (req, res) => {
     return res.status(400).json({ error: "weeks must be an integer between 1 and 26" });
   }
   const { rows } = await pool.query(
-    "SELECT created_at, started_at, done_at FROM cards",
+    "SELECT created_at, started_at, done_at FROM cards WHERE deleted_at IS NULL",
   );
   const history = computeMetricsHistory(
     rows.map((r) => ({
@@ -403,7 +405,7 @@ const ACTIVITY_SELECT = `
          tc.title AS to_column_title
   FROM card_events e
   LEFT JOIN users u ON u.id = e.actor_id
-  LEFT JOIN cards c ON c.id = e.card_id
+  LEFT JOIN cards c ON c.id = e.card_id AND c.deleted_at IS NULL
   LEFT JOIN columns fc ON fc.id = e.from_column_id
   LEFT JOIN columns tc ON tc.id = e.to_column_id`;
 

@@ -63,3 +63,8 @@ ALTER TABLE card_events ALTER COLUMN to_column_id DROP NOT NULL;
 ALTER TABLE card_events ALTER COLUMN card_id DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_events_created ON card_events(created_at DESC);
+
+-- Soft delete: cards are marked, not removed, so activity history and the
+-- card_events FK survive. All board/flow queries filter `deleted_at IS NULL`.
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_cards_active ON cards(column_id) WHERE deleted_at IS NULL;
