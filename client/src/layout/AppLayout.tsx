@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import { Menu } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
-import MetricsBar from "../components/MetricsBar";
 import PresenceBar from "../components/PresenceBar";
 import Toast from "../components/Toast";
 import Sidebar, { MobileNav, NAV_ITEMS } from "./Sidebar";
@@ -10,7 +9,7 @@ import Sidebar, { MobileNav, NAV_ITEMS } from "./Sidebar";
 const SIDEBAR_COLLAPSED_KEY = "camel.sidebar.collapsed";
 
 export default function AppLayout() {
-  const { user, metrics, presence, toast, logout } = useBoard();
+  const { user, presence, toast, logout } = useBoard();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
   );
@@ -41,11 +40,6 @@ export default function AppLayout() {
               <Menu size={20} aria-hidden />
             </button>
             <h1 className="text-md font-semibold text-primary-900">{pageTitle}</h1>
-          </div>
-
-          {/* Quick metrics stay visible on every page. */}
-          <div className="hidden lg:block">
-            <MetricsBar metrics={metrics} />
           </div>
 
           <div className="flex items-center gap-3">
