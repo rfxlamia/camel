@@ -30,3 +30,36 @@ CREATE TABLE IF NOT EXISTS card_events (
 
 CREATE INDEX IF NOT EXISTS idx_cards_column ON cards(column_id);
 CREATE INDEX IF NOT EXISTS idx_events_card ON card_events(card_id);
+
+-- Team collaboration (2026-06: auth, optimistic locking, activity feed)
+
+CREATE TABLE IF NOT EXISTS users (
+  id            SERIAL PRIMARY KEY,
+  username      TEXT NOT NULL UNIQUE,
+  display_name  TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token      TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+-- Optimistic locking: clients send the version they last saw; a mismatch
+-- means someone else changed the card first (conflict -> 409).
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
+-- Activity feed: who did what, beyond column moves.
+ALTER TABLE card_events ADD COLUMN IF NOT EXISTS actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE card_events ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT 'move';
+ALTER TABLE card_events ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE card_events ALTER COLUMN to_column_id DROP NOT NULL;
+-- Delete events outlive the card row (card_id NULL, title kept in payload).
+ALTER TABLE card_events ALTER COLUMN card_id DROP NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_events_created ON card_events(created_at DESC);
