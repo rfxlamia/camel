@@ -1,0 +1,7 @@
+{
+  "controls": [
+    { "sid": "bgColor", "label": "Background color" },
+    { "sid": "camelColor", "label": "Camel color" },
+    { "sid": "sunColor", "label": "Sun color" }
+  ]
+}
