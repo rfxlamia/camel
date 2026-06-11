@@ -42,7 +42,7 @@ Camel is multi-user. All board routes require a signed-in session
 | Presence | Heartbeat every 25s → Redis key with 60s TTL; header shows who's online |
 | Real-time updates | Mutations publish to Redis Pub/Sub → fan-out to clients over SSE |
 | Optimistic locking | Cards carry a `version`; a stale write returns HTTP 409 and the client refreshes |
-| Activity feed | Every create/update/move/delete is recorded with its actor and shown in the side panel |
+| Activity feed | Every create/update/move/delete is recorded with its actor and shown on the Activity page |
 
 If Redis is down the app degrades gracefully: the board still works,
 presence shows only yourself, and live updates fall back to in-process
@@ -58,6 +58,21 @@ fan-out (single server instance).
 | Explicit policies | Editable policy text under each column header |
 | Feedback loops | Metrics bar in the header, recomputed on every change |
 | Continuous improvement | WIP limits and policies are editable in place |
+
+## Pages
+
+The client is a multi-page SPA (React Router, client-side routing) with a
+collapsible sidebar. Deep links and browser back/forward work.
+
+| Page | Route | What's there |
+|---|---|---|
+| Board | `/board` | Full-width kanban board with drag-and-drop |
+| Dashboard | `/dashboard` | Weekly KPI cards and 8-week trend charts (throughput, lead time, cycle time, WIP) backed by `GET /api/metrics/history` |
+| Activity | `/activity` | Full team activity feed |
+
+The SSE connection and board state live above the router, so navigation
+never drops the live connection or reloads board data. The Dashboard
+page (Recharts) is code-split and loads on first visit.
 
 ## Scripts
 
