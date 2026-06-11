@@ -12,12 +12,25 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { ApiError, api } from "./api";
-import type { Card, Column, FlowMetrics } from "./types";
+import type {
+  ActivityEvent,
+  Card,
+  Column,
+  FlowMetrics,
+  PresenceUser,
+  User,
+} from "./types";
+import ActivityFeed from "./components/ActivityFeed";
+import AuthPage from "./components/AuthPage";
 import CardModal from "./components/CardModal";
 import { CardBody } from "./components/CardView";
 import ColumnView from "./components/ColumnView";
 import MetricsBar from "./components/MetricsBar";
+import PresenceBar from "./components/PresenceBar";
 import Toast from "./components/Toast";
+
+const HEARTBEAT_INTERVAL_MS = 25_000;
+const PRESENCE_REFRESH_MS = 30_000;
 
 function cardIdFrom(dndId: string | number): number | null {
   const s = String(dndId);
@@ -34,8 +47,13 @@ function findColumnOfCard(columns: Column[], cardId: number): Column | undefined
 }
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [metrics, setMetrics] = useState<FlowMetrics | null>(null);
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [feedOpen, setFeedOpen] = useState(true);
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [openCard, setOpenCard] = useState<Card | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -51,18 +69,72 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [board, m] = await Promise.all([api.getBoard(), api.getMetrics()]);
+      const [board, m, a] = await Promise.all([
+        api.getBoard(),
+        api.getMetrics(),
+        api.getActivity(),
+      ]);
       setColumns(board.columns);
       setMetrics(m);
+      setActivity(a.events);
       setLoadError(false);
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null);
+        return;
+      }
       setLoadError(true);
     }
   }, []);
 
+  // Session check on first load.
   useEffect(() => {
+    api
+      .me()
+      .then(({ user }) => setUser(user))
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  // Board + collaboration wiring, active only while signed in.
+  useEffect(() => {
+    if (!user) return;
     void refresh();
-  }, [refresh]);
+
+    const beat = () => {
+      void api.heartbeat().catch(() => {});
+      void api.getPresence().then(({ users }) => setPresence(users)).catch(() => {});
+    };
+    beat();
+    const heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+    const presenceTimer = setInterval(
+      () => void api.getPresence().then(({ users }) => setPresence(users)).catch(() => {}),
+      PRESENCE_REFRESH_MS,
+    );
+
+    // Live updates: server pushes board events over SSE; EventSource
+    // reconnects on its own after a dropped connection.
+    const stream = new EventSource("/api/events/stream");
+    stream.onmessage = () => void refresh();
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      clearInterval(presenceTimer);
+      stream.close();
+    };
+  }, [user, refresh]);
+
+  const onLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // session cookie is gone either way
+    }
+    setUser(null);
+    setColumns(null);
+    setPresence([]);
+    setActivity([]);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -169,13 +241,21 @@ export default function App() {
       return;
     }
 
+    // Version from the pre-drag snapshot: detects a concurrent move by a teammate.
+    const version = before
+      ? findColumnOfCard(before, cardId)?.cards.find((c) => c.id === cardId)?.version
+      : undefined;
+
     try {
-      await api.moveCard(cardId, col.id, index);
+      await api.moveCard(cardId, col.id, index, version);
       snapshotRef.current = null;
       await refresh();
     } catch (err) {
       revert();
-      if (err instanceof ApiError && err.status === 409) {
+      if (err instanceof ApiError && err.code === "version_conflict") {
+        showToast("Someone else moved this card first — board refreshed.");
+        await refresh();
+      } else if (err instanceof ApiError && err.status === 409) {
         showToast("WIP limit reached — finish something first.");
       } else {
         showToast("Couldn't move the card. Check your connection and try again.");
@@ -200,8 +280,20 @@ export default function App() {
     id: number,
     patch: { title?: string; description?: string },
   ) => {
-    await api.updateCard(id, patch);
-    await refresh();
+    const current = columns
+      ? findColumnOfCard(columns, id)?.cards.find((c) => c.id === id)
+      : undefined;
+    try {
+      await api.updateCard(id, { ...patch, version: current?.version });
+      await refresh();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "version_conflict") {
+        showToast("Someone else updated this card first — board refreshed.");
+        await refresh();
+      } else {
+        showToast("Couldn't save the card. Check your connection and try again.");
+      }
+    }
   };
 
   const onDeleteCard = async (id: number) => {
@@ -221,6 +313,17 @@ export default function App() {
     }
   };
 
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-neutral-500">Loading...</p>
+      </div>
+    );
+  }
+  if (!user) {
+    return <AuthPage onAuth={setUser} />;
+  }
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-white px-6 py-3">
@@ -232,8 +335,27 @@ export default function App() {
           <p className="text-xs text-neutral-500">Kanban for dev teams</p>
         </div>
         <MetricsBar metrics={metrics} />
+        <div className="flex items-center gap-3">
+          <PresenceBar users={presence} self={user} />
+          <button
+            onClick={() => setFeedOpen((open) => !open)}
+            className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+          >
+            {feedOpen ? "Hide activity" : "Activity"}
+          </button>
+          <span className="text-sm text-neutral-700" title={`@${user.username}`}>
+            {user.displayName}
+          </span>
+          <button
+            onClick={() => void onLogout()}
+            className="rounded-md px-2 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
+      <div className="flex min-h-0 flex-1">
       <main className="flex-1 overflow-x-auto p-6">
         {loadError && (
           <div className="mx-auto max-w-md rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
@@ -277,6 +399,10 @@ export default function App() {
           </DndContext>
         )}
       </main>
+      {feedOpen && (
+        <ActivityFeed events={activity} onClose={() => setFeedOpen(false)} />
+      )}
+      </div>
 
       {openCard && (
         <CardModal
