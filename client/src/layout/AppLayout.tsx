@@ -9,7 +9,7 @@ import Sidebar, { MobileNav, NAV_ITEMS } from "./Sidebar";
 const SIDEBAR_COLLAPSED_KEY = "camel.sidebar.collapsed";
 
 export default function AppLayout() {
-  const { user, presence, toast, logout } = useBoard();
+  const { user, presence, toast } = useBoard();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
   );
@@ -50,12 +50,6 @@ export default function AppLayout() {
             >
               {user.displayName}
             </span>
-            <button
-              onClick={() => void logout()}
-              className="rounded-md px-2 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-            >
-              Sign out
-            </button>
           </div>
         </header>
 
