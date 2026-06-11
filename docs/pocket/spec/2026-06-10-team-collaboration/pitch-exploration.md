@@ -11,7 +11,8 @@ Kesederhanaan (single-user, local) vs kolaborasi (multi-user, real-time). Menamb
 
 ## Key Constraints
 - Small team (5-6 orang) — toleransi eventual consistency tinggi
-- Existing PostgreSQL — bisa extend schema
+- Existing PostgreSQL — bisa extend schema untuk data layer (optimistic locking, activity feed)
+- ⚠️ PostgreSQL TIDAK cukup untuk real-time notifications — perlu Redis (see research report)
 - Existing `card_events` — bisa extended untuk audit trail
 - Pragmatic incrementalism — polling dulu sebelum WebSocket
 - Single-user app saat ini — tidak ada auth, tidak ada multi-user support
@@ -62,46 +63,71 @@ Advisor mengkonfirmasi bahwa **visibility adalah core need** — semua stakehold
 - Optimistic locking: tambah `version` column ke `cards`, update pakai `WHERE version = expected_version`
 - Presence: `user_sessions` table dengan heartbeat (last_seen_at)
 - Conflict resolution: optimistic update + rollback, notify user, biarkan human resolve
-**Implication:** Semua approach viable di PostgreSQL existing. Tidak perlu infra baru.
+**Implication:** Optimistic locking dan activity feed viable di PostgreSQL. Tapi real-time notifications TIDAK — LISTEN/NOTIFY punya fundamental issues (global lock di COMMIT, no persistence, PgBouncer incompatibility). Perlu Redis untuk real-time layer.
 
 ---
 
 ## Approach Directions
 
-### Direction A: Presence-First (Recommended)
-Tambahkan fitur kolaborasi secara incremental, mulai dari yang paling sederhana: Auth → Presence → Optimistic Locking → Polling → Activity Feed.
-+ Incremental, low risk, bisa deliver value cepat
-− Tidak "real-time" sesungguhnya (ada delay 30s)
+### Direction A: Presence-First + Redis Hybrid (Recommended)
+Tambahkan fitur kolaborasi secara incremental dengan hybrid approach: PostgreSQL untuk data layer, Redis untuk real-time layer.
 
-### Direction B: Real-Time First
-Langsung investasi di WebSocket/SSE untuk true real-time collaboration.
+**Layer 1 — PostgreSQL (data layer):**
+- Auth → Optimistic Locking (`version` column) → Activity Feed (JSONB + timestamp)
+
+**Layer 2 — Redis (real-time layer):**
+- Presence tracking (Redis key TTL + heartbeat)
+- Real-time event notification (Redis Pub/Sub → SSE ke client)
+
++ Incremental, low risk, bisa deliver value cepat
++ Real-time notifications reliable (Redis purpose-built untuk ini)
++ PostgreSQL tidak dipaksa melakukan yang bukan kekuatannya
+− Tambah satu infra component (Redis) — tapi cost sangat rendah (satu Docker container)
+
+### Direction B: PostgreSQL-Only (Polling + SSE)
+Tetap gunakan PostgreSQL saja, tanpa Redis. Gunakan polling 15-30 detik untuk presence + activity feed, SSE untuk server push.
++ Zero infra baru — hanya PostgreSQL yang sudah ada
++ SSE lebih sederhana dari WebSocket
+− Bukan real-time sesungguhnya (ada delay 15-30 detik)
+− LISTEN/NOTIFY punya known issues (global lock, no persistence, PgBouncer incompatibility)
+− Risk: kalau team grow atau butuh real-time yang lebih baik, harus refactor
+
+### Direction C: Real-Time First (WebSocket)
+Langsung investasi di WebSocket untuk true real-time collaboration.
 + Experience terbaik, seperti Figma/Linear
 − Complexity tinggi, lebih banyak yang bisa salah
-
-### Direction C: GitHub-Native
-Leverage GitHub sebagai identity provider dan sync source.
-+ Sesuai creative brief ("terhubung langsung dengan GitHub issue")
-− Dependency pada GitHub API, complexity tinggi, rate limits
+− Over-engineered untuk 5-6 orang
 
 ---
 
 ## Open Questions for pocket-grinding
+- [x] ~~Apakah PostgreSQL cukup untuk semua fitur kolaborasi?~~ **ANSWERED by research: TIDAK. Perlu Redis untuk real-time layer.** (see research report)
 - [ ] Bagaimana cara implementasi auth sederhana yang cukup untuk 5-6 orang? (JWT? Session? Magic link?)
-- [ ] Apakah presence harus real-time (WebSocket) atau polling cukup untuk small team?
+- [ ] Apakah Redis perlu di-deploy sebagai container terpisah atau managed service?
 - [ ] Bagaimana cara menampilkan conflict resolution UI yang tidak membingungkan user?
 - [ ] Apakah perlu "lock" card ketika sedang diedit, atau cukup optimistic update?
 - [ ] Bagaimana cara menampilkan activity feed yang tidak terlalu noise tapi tetap informatif?
+- [ ] Bagaimana cara handle reconnection untuk SSE/Redis Pub/Sub ketika user koneksi terputus?
 
 ---
 
 ## Recommended Direction
-Direction A (Presence-First) — paling pragmatic, low risk, dan bisa deliver value cepat untuk small team. Real-time bisa di-upgrade nanti setelah foundation solid.
+Direction A (Presence-First + Redis Hybrid) — paling pragmatic, low risk, dan solve real problem. PostgreSQL untuk data layer (proven, reliable), Redis untuk real-time layer (purpose-built). Cost menambah Redis sangat rendah (satu Docker container), tapi risk elimination signifikan.
+
+**Research-backed rationale:** Structured research (2026-06-11) membuktikan bahwa PostgreSQL TIDAK cukup untuk semua fitur kolaborasi — LISTEN/NOTIFY punya fundamental issues yang bisa menyebabkan production problems. Hybrid approach adalah sweet spot: tidak over-engineered, tidak under-engineered.
 
 ---
 
 ## Handoff Context (for pocket-grinding)
 When pocket-grinding reads this doc:
 - Start with this problem statement (Phase 1 context)
-- Use Direction A (Presence-First) sebagai working hypothesis untuk Phase 5 Design Proposals
+- Use Direction A (Presence-First + Redis Hybrid) sebagai working hypothesis untuk Phase 5 Design Proposals
 - Treat Open Questions di atas sebagai Phase 3 Discovery targets
 - Do NOT treat Approach Directions sebagai final architecture — validate through GWT first
+- Read research report: `docs/pocket/research/2026-06-11-pg-collaboration-capability/research-report.md` untuk evidence backing
+
+## Research References
+- **Structured Research Report:** `docs/pocket/research/2026-06-11-pg-collaboration-capability/research-report.md`
+- **Verdict:** Refuted (medium confidence) — PostgreSQL alone TIDAK cukup untuk semua fitur kolaborasi
+- **Key finding:** LISTEN/NOTIFY punya global lock di COMMIT phase, incompatible dengan PgBouncer, notifikasi tidak persisted
+- **Recommendation:** Hybrid PostgreSQL (data) + Redis (real-time)
