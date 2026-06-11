@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type CardTimestamps,
   computeFlowMetrics,
+  computeMetricsHistory,
   formatDuration,
 } from "./metrics.js";
 
@@ -78,6 +79,62 @@ describe("computeFlowMetrics", () => {
       card(5, 3, 1), // done
     ];
     expect(computeFlowMetrics(cards, { now: NOW }).wipCount).toBe(1);
+  });
+});
+
+describe("computeMetricsHistory", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("returns the requested number of buckets, oldest first", () => {
+    const history = computeMetricsHistory([], { now: NOW, weeks: 4 });
+    expect(history).toHaveLength(4);
+    expect(new Date(history[0].weekStart).getTime()).toBe(
+      NOW.getTime() - 4 * 7 * DAY,
+    );
+    expect(new Date(history[3].weekStart).getTime()).toBe(
+      NOW.getTime() - 7 * DAY,
+    );
+  });
+
+  it("defaults to 8 weeks", () => {
+    expect(computeMetricsHistory([], { now: NOW })).toHaveLength(8);
+  });
+
+  it("buckets throughput by done date", () => {
+    const cards = [
+      card(20, 15, 1), // done 1d ago → last bucket
+      card(20, 15, 8), // done 8d ago → second-to-last bucket
+      card(20, 15, 8.5), // done 8.5d ago → second-to-last bucket
+      card(5, 3, null), // not done → no bucket
+    ];
+    const history = computeMetricsHistory(cards, { now: NOW, weeks: 3 });
+    expect(history.map((b) => b.throughput)).toEqual([0, 2, 1]);
+  });
+
+  it("computes lead and cycle averages per bucket", () => {
+    // done 1d ago: lead 9d, cycle 7d
+    const history = computeMetricsHistory([card(10, 8, 1)], {
+      now: NOW,
+      weeks: 1,
+    });
+    expect(history[0].avgLeadTimeMs).toBe(9 * DAY);
+    expect(history[0].avgCycleTimeMs).toBe(7 * DAY);
+  });
+
+  it("leaves averages null in empty buckets", () => {
+    const history = computeMetricsHistory([], { now: NOW, weeks: 1 });
+    expect(history[0].avgLeadTimeMs).toBeNull();
+    expect(history[0].avgCycleTimeMs).toBeNull();
+  });
+
+  it("counts wip as of each bucket end", () => {
+    const cards = [
+      card(20, 15, 1), // in progress 15d ago → wip until done 1d ago
+      card(20, 10, null), // started 10d ago, still in progress
+    ];
+    const history = computeMetricsHistory(cards, { now: NOW, weeks: 3 });
+    // bucket ends: 14d ago, 7d ago, now
+    expect(history.map((b) => b.wipCount)).toEqual([1, 2, 1]);
   });
 });
 

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { pool } from "./db/pool.js";
 import { neighborsAt, positionBetween, rebalance, POSITION_GAP } from "./core/position.js";
 import { checkWipLimit } from "./core/wip.js";
-import { computeFlowMetrics } from "./core/metrics.js";
+import { computeFlowMetrics, computeMetricsHistory } from "./core/metrics.js";
 import { requireAuth, type AuthUser } from "./auth.js";
 import {
   clearPresence,
@@ -372,6 +372,25 @@ api.get("/metrics", async (req, res) => {
     { windowDays },
   );
   res.json(metrics);
+});
+
+api.get("/metrics/history", async (req, res) => {
+  const weeks = req.query.weeks ? Number(req.query.weeks) : undefined;
+  if (weeks !== undefined && (!Number.isInteger(weeks) || weeks < 1 || weeks > 26)) {
+    return res.status(400).json({ error: "weeks must be an integer between 1 and 26" });
+  }
+  const { rows } = await pool.query(
+    "SELECT created_at, started_at, done_at FROM cards",
+  );
+  const history = computeMetricsHistory(
+    rows.map((r) => ({
+      createdAt: r.created_at,
+      startedAt: r.started_at,
+      doneAt: r.done_at,
+    })),
+    { weeks },
+  );
+  res.json({ weeks: history });
 });
 
 // ---- Activity feed -----------------------------------------------------------

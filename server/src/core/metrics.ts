@@ -62,6 +62,65 @@ function average(values: number[]): number | null {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+export interface MetricsHistoryBucket {
+  /** Start of the 7-day bucket (ISO timestamp). */
+  weekStart: string;
+  /** Cards completed within the bucket. */
+  throughput: number;
+  /** Average ms from creation to done for cards done in the bucket. */
+  avgLeadTimeMs: number | null;
+  /** Average ms from started to done for cards done in the bucket. */
+  avgCycleTimeMs: number | null;
+  /** Cards in progress (started, not done) at the end of the bucket. */
+  wipCount: number;
+}
+
+const WEEK_MS = 7 * DAY_MS;
+
+/**
+ * Weekly flow-metric trends derived from card timestamps. Buckets are
+ * 7-day windows aligned so the most recent bucket ends at `now`.
+ */
+export function computeMetricsHistory(
+  cards: CardTimestamps[],
+  options: { weeks?: number; now?: Date } = {},
+): MetricsHistoryBucket[] {
+  const now = options.now ?? new Date();
+  const weeks = options.weeks ?? 8;
+
+  const buckets: MetricsHistoryBucket[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const end = new Date(now.getTime() - i * WEEK_MS);
+    const start = new Date(end.getTime() - WEEK_MS);
+
+    const doneInBucket = cards.filter(
+      (c) => c.doneAt !== null && c.doneAt >= start && c.doneAt < end,
+    );
+    const leadTimes = doneInBucket.map(
+      (c) => (c.doneAt as Date).getTime() - c.createdAt.getTime(),
+    );
+    const cycleTimes = doneInBucket
+      .filter((c) => c.startedAt !== null)
+      .map(
+        (c) => (c.doneAt as Date).getTime() - (c.startedAt as Date).getTime(),
+      );
+
+    buckets.push({
+      weekStart: start.toISOString(),
+      throughput: doneInBucket.length,
+      avgLeadTimeMs: average(leadTimes),
+      avgCycleTimeMs: average(cycleTimes),
+      wipCount: cards.filter(
+        (c) =>
+          c.startedAt !== null &&
+          c.startedAt < end &&
+          (c.doneAt === null || c.doneAt >= end),
+      ).length,
+    });
+  }
+  return buckets;
+}
+
 /** Format a duration in ms as a human-friendly string, e.g. "2.5d" or "3h". */
 export function formatDuration(ms: number): string {
   if (ms < 60 * 60 * 1000) {
