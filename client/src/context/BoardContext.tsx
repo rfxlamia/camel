@@ -21,6 +21,9 @@ import type {
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const PRESENCE_REFRESH_MS = 30_000;
 
+/** Outcome of a save, so callers (e.g. the context panel) can react to a 409. */
+export type SaveCardResult = "saved" | "conflict" | "error";
+
 interface BoardContextValue {
   user: User;
   columns: Column[] | null;
@@ -32,6 +35,11 @@ interface BoardContextValue {
   /** Bumped after every successful refresh so pages can refetch derived data. */
   refreshTick: number;
   refresh: () => Promise<void>;
+  saveCard: (
+    id: number,
+    patch: { title?: string; description?: string; version?: number },
+  ) => Promise<SaveCardResult>;
+  deleteCard: (id: number) => Promise<void>;
   toast: string | null;
   showToast: (message: string) => void;
   logout: () => Promise<void>;
@@ -120,6 +128,45 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
     };
   }, [refresh]);
 
+  // Card mutations live here (not in BoardPage) so the route-sibling context
+  // panel can call them. Logic ported verbatim from BoardPage, including the
+  // optimistic-locking version + 409 conflict flow.
+  const saveCard = useCallback(
+    async (
+      id: number,
+      patch: { title?: string; description?: string; version?: number },
+    ): Promise<SaveCardResult> => {
+      // Callers editing a draft pass the version their draft is based on, so
+      // a teammate's concurrent change still 409s even though SSE already
+      // refreshed columns. Without it, fall back to the live version.
+      const current = columns
+        ?.flatMap((col) => col.cards)
+        .find((c) => c.id === id);
+      try {
+        await api.updateCard(id, { ...patch, version: patch.version ?? current?.version });
+        await refresh();
+        return "saved";
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "version_conflict") {
+          showToast("Someone else updated this card first — board refreshed.");
+          await refresh();
+          return "conflict";
+        }
+        showToast("Couldn't save the card. Check your connection and try again.");
+        return "error";
+      }
+    },
+    [columns, refresh, showToast],
+  );
+
+  const deleteCard = useCallback(
+    async (id: number) => {
+      await api.deleteCard(id);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const logout = useCallback(async () => {
     try {
       await api.logout();
@@ -141,6 +188,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         loadError,
         refreshTick,
         refresh,
+        saveCard,
+        deleteCard,
         toast,
         showToast,
         logout,

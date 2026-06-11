@@ -60,6 +60,8 @@ export const api = {
     }),
   deleteCard: (id: number) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
+  getCardActivity: (id: number) =>
+    request<{ events: ActivityEvent[] }>(`/cards/${id}/activity`),
   moveCard: (id: number, toColumnId: number, index: number, version?: number) =>
     request<Card>(`/cards/${id}/move`, {
       method: "POST",

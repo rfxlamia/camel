@@ -74,6 +74,18 @@
   --color-info-100: oklch(95% 0.02 245);
   --color-info-500: oklch(55% 0.08 245);
   --color-info-900: oklch(35% 0.068 245);
+
+  /* Context panel slide-in (calm, brief — per brand emotional goal) */
+  --animate-panel-in: panel-in 200ms ease-out;
+
+  @keyframes panel-in {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
 }
 
 body {

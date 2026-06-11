@@ -3,6 +3,7 @@ import { Navigate, RouterProvider, createBrowserRouter } from "react-router";
 import { api } from "./api";
 import type { User } from "./types";
 import AuthPage from "./components/AuthPage";
+import ContextPanel from "./components/ContextPanel";
 import { BoardProvider } from "./context/BoardContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
@@ -24,7 +25,11 @@ const router = createBrowserRouter([
     HydrateFallback: LoadingScreen,
     children: [
       { index: true, element: <Navigate to="/board" replace /> },
-      { path: "board", Component: BoardPage },
+      {
+        path: "board",
+        Component: BoardPage,
+        children: [{ path: "card/:cardId", Component: ContextPanel }],
+      },
       {
         path: "dashboard",
         lazy: async () => ({

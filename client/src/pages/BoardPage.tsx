@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { Outlet, useNavigate } from "react-router";
 import {
   DndContext,
   DragOverlay,
@@ -14,7 +15,6 @@ import { arrayMove } from "@dnd-kit/sortable";
 import { ApiError, api } from "../api";
 import type { Card, Column } from "../types";
 import { useBoard } from "../context/BoardContext";
-import CardModal from "../components/CardModal";
 import { CardBody } from "../components/CardView";
 import ColumnView from "../components/ColumnView";
 
@@ -34,9 +34,12 @@ function findColumnOfCard(columns: Column[], cardId: number): Column | undefined
 
 export default function BoardPage() {
   const { columns, setColumns, loadError, refresh, showToast } = useBoard();
+  const navigate = useNavigate();
   const [activeCard, setActiveCard] = useState<Card | null>(null);
-  const [openCard, setOpenCard] = useState<Card | null>(null);
   const snapshotRef = useRef<Column[] | null>(null);
+
+  // Card click opens the route-driven context panel (deep-linkable URL).
+  const onOpenCard = (card: Card) => navigate(`/board/card/${card.id}`);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -114,7 +117,6 @@ export default function BoardPage() {
     }
 
     // Same-column reorder: compute the final index from the over target.
-    let finalColumns = columns;
     let index = col.cards.findIndex((c) => c.id === cardId);
     const overCardId = cardIdFrom(over.id);
     if (overCardId !== null && overCardId !== cardId) {
@@ -123,11 +125,12 @@ export default function BoardPage() {
         const from = index;
         const to = overCol.cards.findIndex((c) => c.id === overCardId);
         if (from !== to) {
-          finalColumns = columns.map((c) =>
-            c.id === col.id ? { ...c, cards: arrayMove(c.cards, from, to) } : c,
-          );
           index = to;
-          setColumns(finalColumns);
+          setColumns(
+            columns.map((c) =>
+              c.id === col.id ? { ...c, cards: arrayMove(c.cards, from, to) } : c,
+            ),
+          );
         }
       }
     }
@@ -178,31 +181,6 @@ export default function BoardPage() {
     }
   };
 
-  const onSaveCard = async (
-    id: number,
-    patch: { title?: string; description?: string },
-  ) => {
-    const current = columns
-      ? findColumnOfCard(columns, id)?.cards.find((c) => c.id === id)
-      : undefined;
-    try {
-      await api.updateCard(id, { ...patch, version: current?.version });
-      await refresh();
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "version_conflict") {
-        showToast("Someone else updated this card first — board refreshed.");
-        await refresh();
-      } else {
-        showToast("Couldn't save the card. Check your connection and try again.");
-      }
-    }
-  };
-
-  const onDeleteCard = async (id: number) => {
-    await api.deleteCard(id);
-    await refresh();
-  };
-
   const onUpdateColumn = async (
     id: number,
     patch: { title?: string; wipLimit?: number | null; policy?: string },
@@ -243,7 +221,7 @@ export default function BoardPage() {
               <ColumnView
                 key={column.id}
                 column={column}
-                onOpenCard={setOpenCard}
+                onOpenCard={onOpenCard}
                 onAddCard={onAddCard}
                 onUpdateColumn={onUpdateColumn}
               />
@@ -259,14 +237,8 @@ export default function BoardPage() {
         </DndContext>
       )}
 
-      {openCard && (
-        <CardModal
-          card={openCard}
-          onSave={onSaveCard}
-          onDelete={onDeleteCard}
-          onClose={() => setOpenCard(null)}
-        />
-      )}
+      {/* Context panel route (/board/card/:id) renders here. */}
+      <Outlet />
     </div>
   );
 }
