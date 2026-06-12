@@ -11,10 +11,12 @@ import {
   publishEvent,
   sseHandler,
 } from "./realtime.js";
+import { settingsRouter } from "./routes/settings.js";
 
 export const api = Router();
 
 api.use(requireAuth);
+api.use("/settings", settingsRouter);
 
 type Queryable = Pick<typeof pool, "query">;
 
