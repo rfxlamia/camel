@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-13
 **Spec:** docs/pocket/spec/2026-06-12-camel-settings/settings-infrastructure.md
-**Status:** draft
+**Status:** validated (2026-06-13 — DRY/YAGNI/TDD + codebase gap analysis applied)
 **Total tasks:** 6
 
 ---
@@ -12,11 +12,16 @@
 ```
 Tasks enriched: 6
 Integration test tasks added: 0 (all GWT scenarios are unit-verifiable)
-TDD order corrections made: 1 (T1 — was structural-only, added type-check step)
+TDD order corrections made: 3
+  - T1 — was structural-only, added type-check step
+  - T5 — validators moved to client/src/lib/settingsValidation.ts so the red phase is real
+          (previously defined in the test file → no genuine failure, untested page logic)
+  - T6 — utils moved to client/src/lib/title.ts for the same reason
 Test framework used: Vitest
 Coverage areas:
   - Tested: board name validation, file type/size validation, logo filename generation,
-    API method signatures, context integration patterns, sidebar dynamic rendering
+    API method signatures, context integration patterns, shared client validators,
+    title/favicon utils
   - Intentionally not tested: full HTTP request/response cycle (no DB mocking infra),
     React component rendering (no testing-library setup), multer internals,
     Redis pub/sub behavior
@@ -41,7 +46,7 @@ T1 → T2, T4 (parallel) → T3 → T5, T6 (parallel)
 | Group B | T5, T6 | T2+T3+T4 (T5), T4 (T6) |
 
 ### Constraints Reminder
-**Architecture:** No changes to core/ modules (position, wip, metrics). Optimistic locking via `version` field per setting. `requireAuth` on all settings routes. Toast feedback via `BoardContext.showToast()`.
+**Architecture:** No changes to core/ modules (position, wip, metrics). Optimistic locking via a **single global settings version** = `MAX(version)` across all setting rows (PATCH validates the incoming version against this global value; on write, touched rows are bumped to `global + 1`). This matches the aggregate version already returned by `generateDefaultSettings` and the single `settingsVersion` held client-side — a per-row version check against an aggregate value would 409 falsely. `requireAuth` on all settings routes. Toast feedback via `BoardContext.showToast()`. Settings changes fan out over the existing SSE channel (`settings.updated` event) so other clients call `refreshSettings()`. File paths (uploads dir, multer destination) must resolve to an absolute path anchored at the repo root — never a `process.cwd()`-relative string.
 **Out-of-scope:** Per-user settings, AI toggle, workspace/role system, Delete Board, tabbed layout, external storage (S3/Cloudinary), audit trail.
 **Assumptions at risk:** None — all open questions resolved.
 **Sequencing:** T2 and T4 are parallel (both depend only on T1). T3 depends on T2 (modifies settings.ts created by T2). T5 needs T2+T3+T4 complete (full server + client integration). T6 only needs T4 (sidebar reads from context).
@@ -50,17 +55,19 @@ T1 → T2, T4 (parallel) → T3 → T5, T6 (parallel)
 
 ```
 Rule: Settings DB Schema
-  Create: server/src/db/migrations/add-settings-table.sql
-  Modify: server/src/db/schema.sql
-  Test:   (structural — verified via migration run)
+  Modify: server/src/db/schema.sql  (append settings DDL — schema.sql is the only thing migrate.ts runs)
+  Modify: client/src/types.ts
+  Test:   client/src/types.test.ts (type contract)
 
 Rule: Settings API
   Create: server/src/routes/settings.ts
   Modify: server/src/routes.ts
+  Modify: server/src/realtime.ts (add "settings.updated" to BoardEvent union)
   Test:   server/src/routes/settings.test.ts
 
 Rule: Logo Upload
   Create: (within server/src/routes/settings.ts)
+  Modify: server/src/index.ts (express.static for /uploads in production)
   Modify: server/package.json (add multer)
   Test:   server/src/routes/settings.test.ts
 
@@ -72,12 +79,15 @@ Rule: Client Settings Integration
 Rule: Settings Page
   Create: client/src/pages/SettingsPage.tsx
   Create: client/src/components/LogoCropper.tsx
+  Create: client/src/lib/settingsValidation.ts (shared validation utils — imported by page AND test)
   Modify: client/src/App.tsx
-  Test:   client/src/pages/SettingsPage.test.ts
+  Test:   client/src/lib/settingsValidation.test.ts
 
 Rule: Dynamic Sidebar
   Modify: client/src/layout/Sidebar.tsx
   Modify: client/src/layout/AppLayout.tsx
+  Create: client/src/lib/title.ts (formatTitle/getFaviconLink utils — imported by layout AND test)
+  Test:   client/src/lib/title.test.ts
 ```
 
 ---
@@ -92,9 +102,10 @@ Rule: Dynamic Sidebar
 Create the `settings` table in PostgreSQL and define shared TypeScript types for settings data. This is the foundation all other tasks depend on.
 
 Files:
-- Create: `server/src/db/migrations/add-settings-table.sql`
 - Modify: `server/src/db/schema.sql` (append settings table DDL)
 - Modify: `client/src/types.ts` (add Settings interface)
+
+> **Migration mechanism:** `server/src/db/migrate.ts` reads and applies **only** `schema.sql` — there is no runner that scans a `migrations/` directory. Do **not** create a standalone `migrations/add-settings-table.sql`; it would be dead code and duplicate the DDL. Appending idempotent DDL to `schema.sql` (the established pattern) is the migration.
 
 Steps:
 1. Write failing test for: TypeScript types compile and match expected shape
@@ -113,17 +124,23 @@ Steps:
      return s.logoPath;
    }
 
+   function getVersion(s: SettingsMap): number {
+     return s.version;
+   }
+
    describe("SettingsMap interface", () => {
-     it("allows access to boardName and logoPath", () => {
-       const settings: SettingsMap = { boardName: "Dev Team", logoPath: "/uploads/logo.png" };
+     it("allows access to boardName, logoPath, and version", () => {
+       const settings: SettingsMap = { boardName: "Dev Team", logoPath: "/uploads/logo.png", version: 3 };
        expect(getBoardName(settings)).toBe("Dev Team");
        expect(getLogoPath(settings)).toBe("/uploads/logo.png");
+       expect(getVersion(settings)).toBe(3);
      });
 
      it("works with default values", () => {
-       const settings: SettingsMap = { boardName: "Camel", logoPath: "/logo.png" };
+       const settings: SettingsMap = { boardName: "Camel", logoPath: "/logo.png", version: 0 };
        expect(settings.boardName).toBe("Camel");
        expect(settings.logoPath).toBe("/logo.png");
+       expect(settings.version).toBe(0);
      });
    });
    ```
@@ -132,7 +149,7 @@ Steps:
    `npx vitest run client/src/types.test.ts`
    Expected failure: Module not found — SettingsMap not exported from types.ts
 
-3. Implement SQL migration to create `settings` table:
+3. Append the settings DDL to `server/src/db/schema.sql` (the single source of truth that `migrate.ts` applies — see the migration-mechanism note above):
    ```sql
    CREATE TABLE IF NOT EXISTS settings (
      key       TEXT PRIMARY KEY,
@@ -142,11 +159,9 @@ Steps:
      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
    );
    ```
-   File: `server/src/db/migrations/add-settings-table.sql`
+   File: `server/src/db/schema.sql`
 
-4. Append the same DDL to `server/src/db/schema.sql` (source of truth).
-
-5. Add TypeScript types to `client/src/types.ts`:
+4. Add TypeScript types to `client/src/types.ts`. `SettingsMap` carries the global settings `version` so the client can send it back on PATCH for optimistic locking:
    ```typescript
    export interface Setting {
      key: string;
@@ -159,18 +174,19 @@ Steps:
    export interface SettingsMap {
      boardName: string;
      logoPath: string;
+     version: number;
    }
    ```
    File: `client/src/types.ts`
 
-6. Run test — verify PASS:
+5. Run test — verify PASS:
    `npx vitest run client/src/types.test.ts`
-   Expected: PASS — SettingsMap interface accessible with boardName and logoPath
+   Expected: PASS — SettingsMap interface accessible with boardName, logoPath, and version
 
-7. Verify migration runs: `npm run db:migrate`
+6. Verify migration runs: `npm run db:migrate` (re-runnable; `IF NOT EXISTS` makes it idempotent)
 
-8. Commit:
-   `git add server/src/db/migrations/add-settings-table.sql server/src/db/schema.sql client/src/types.ts client/src/types.test.ts`
+7. Commit:
+   `git add server/src/db/schema.sql client/src/types.ts client/src/types.test.ts`
    `git commit -m "chore(settings): add settings table schema and shared types"`
 
 ## REFERENCES LOADED
@@ -187,7 +203,7 @@ Justification: Schema DDL is structural, no behavioral logic. Types are shared c
 You are implementing Settings DB Schema for Settings Infrastructure.
 Spec: docs/pocket/spec/2026-06-12-camel-settings/settings-infrastructure.md
 Design decision: Option A — Single Settings Table with typed columns
-Files in scope: server/src/db/migrations/add-settings-table.sql, server/src/db/schema.sql, client/src/types.ts, client/src/types.test.ts
+Files in scope: server/src/db/schema.sql, client/src/types.ts, client/src/types.test.ts
 Available after: none (prereq)
 Architecture rule: No changes to core/ modules. Typed columns for type safety.
 [RESTATE: settings table must use typed columns (text_value, bool_value) — no JSONB]
@@ -195,10 +211,10 @@ Architecture rule: No changes to core/ modules. Typed columns for type safety.
 ## DELIVERABLE
 Verification — task is DONE when all pass:
 
-Given migration file exists, When `npm run db:migrate` runs, Then `settings` table is created with columns: key (TEXT PK), text_value (TEXT), bool_value (BOOLEAN), version (INTEGER DEFAULT 1), updated_at (TIMESTAMPTZ)
-Given schema.sql updated, When compared to migration, Then DDL matches
+Given settings DDL appended to schema.sql, When `npm run db:migrate` runs, Then `settings` table is created with columns: key (TEXT PK), text_value (TEXT), bool_value (BOOLEAN), version (INTEGER DEFAULT 1), updated_at (TIMESTAMPTZ)
+Given migrate.ts only reads schema.sql, When verifying, Then no standalone migrations/ file is created (DDL lives only in schema.sql)
 Given types.ts updated, When TypeScript compiles, Then Setting and SettingsMap interfaces are exported
-Given SettingsMap type, When used in test, Then boardName and logoPath accessible
+Given SettingsMap type, When used in test, Then boardName, logoPath, and version accessible
 
 All tests PASS. Commit exists with message matching `chore(settings): add settings table schema and shared types`.
 
@@ -216,6 +232,7 @@ Must-not-have:
   - JSONB columns (violates design decision)
   - scope column (per-user settings is out-of-scope)
   - Changes to existing tables
+  - A standalone `migrations/add-settings-table.sql` file (migrate.ts never runs it — DDL belongs in schema.sql)
 
 Open question risks:
   — None
@@ -238,8 +255,15 @@ Implement REST API endpoints for settings CRUD: GET all settings (with defaults)
 Files:
 - Create: `server/src/routes/settings.ts`
 - Modify: `server/src/routes.ts` (mount settings router)
+- Modify: `server/src/realtime.ts` (add `"settings.updated"` to the `BoardEvent` `type` union)
 - Modify: `server/package.json` (add multer dependency — for logo upload in T3, but install here)
 - Test: `server/src/routes/settings.test.ts`
+
+> **Optimistic locking — single global version.** `generateDefaultSettings` returns one aggregate `version = MAX(version)` across rows, and the client holds one `settingsVersion`. PATCH therefore validates the incoming version against this **global** value (not per-row): if `incomingVersion !== currentGlobalMax` → 409 `code: "version_conflict"`. On a successful write, every touched row is set to `currentGlobalMax + 1` so the next GET's aggregate advances. A naive per-row `version = $sent` check against an aggregate value would 409 falsely (e.g. board_name row=2, logo_path row=5, global=5 → editing board_name with version 5 must NOT conflict).
+>
+> **First-write upsert.** A setting key may have no row yet (GET returned default with global version 0). The PATCH upsert must `INSERT ... ON CONFLICT (key) DO UPDATE` and, on the no-row path, accept incoming version 0 and insert with `version = 1`.
+>
+> **Active-user check uses the real signature.** `onlineUsers(self: AuthUser)` always includes `self` in its result. "Others online" = `(await onlineUsers(req.user!)).filter(u => u.id !== req.user!.id).length > 0`. When Redis is down it returns only `[self]`, so reset is allowed.
 
 **Important:** Since there is no DB mocking infrastructure, tests focus on pure validation functions extracted from the route handlers. The validation logic is implemented as testable pure functions in `settings.ts`, then used by route handlers.
 
@@ -417,18 +441,24 @@ Steps:
    ```
 
 6. Implement route handlers with Express Router:
-   - GET /settings: query all rows, merge with defaults
-   - PATCH /settings: validate each setting, optimistic locking, upsert
-   - DELETE /settings: delete all rows
-   - POST /settings/reset-app: check active users, hard delete
+   - GET /settings: query all rows, merge with defaults via `generateDefaultSettings`
+   - PATCH /settings: validate each setting (key + board name), check incoming version against the **global** `MAX(version)`, 409 on mismatch, then upsert each touched row with `version = global + 1` (`INSERT ... ON CONFLICT (key) DO UPDATE`, first-write inserts version 1). On success call `publishEvent({ type: "settings.updated", actor: req.user! })`.
+   - DELETE /settings: delete all rows (reverts to defaults on next GET). Call `publishEvent({ type: "settings.updated", actor: req.user! })`.
+   - POST /settings/reset-app: block if other users online (`onlineUsers(req.user!)` filtered to exclude self), else hard-delete. Deleting `columns` cascades to `cards` (FK `ON DELETE CASCADE`) which cascades to `card_events` — so a single `DELETE FROM columns` clears the board and activity feed; then `DELETE FROM settings`. Wrap in a transaction. `publishEvent` afterward so other clients refresh.
    File: `server/src/routes/settings.ts`
 
-7. Mount settings router in routes.ts:
+7. Mount settings router in routes.ts and extend the realtime event union:
    ```typescript
+   // routes.ts
    import { settingsRouter } from "./routes/settings.js";
    api.use("/settings", settingsRouter);
    ```
-   File: `server/src/routes.ts`
+   ```typescript
+   // realtime.ts — add to the BoardEvent type union
+   type: "card.created" | "card.updated" | "card.moved" | "card.deleted"
+     | "column.updated" | "presence.changed" | "settings.updated";
+   ```
+   Files: `server/src/routes.ts`, `server/src/realtime.ts`
 
 8. Install multer: `npm install multer @types/multer --workspace=server`
 
@@ -442,7 +472,7 @@ Steps:
 ## REFERENCES LOADED
 docs/pocket/spec/2026-06-12-camel-settings/settings-infrastructure.md — rules: Board Name Customization, Reset Settings, Reset App
 server/src/routes.ts — existing route patterns (requireAuth, recordActivity, publishEvent)
-server/src/realtime.ts — onlineUsers() for active user check
+server/src/realtime.ts — `onlineUsers(self)` (always includes self — filter it out for the "others online" check) and `publishEvent`/`BoardEvent` union
 server/src/auth.ts — requireAuth middleware pattern
 
 ## WHY THIS APPROACH
@@ -463,14 +493,16 @@ Architecture rule: requireAuth on all routes. Optimistic locking via version fie
 Verification — task is DONE when all pass:
 
 Given empty settings, When GET /settings, Then returns `{ boardName: "Camel", logoPath: "/logo.png", version: 0 }`
-Given board_name update with "Dev Team", When PATCH /settings, Then saved, returns updated settings
+Given no row for board_name (global version 0), When PATCH with version 0, Then row inserted with version 1 (first-write upsert)
+Given board_name update with "Dev Team", When PATCH /settings, Then saved, returns updated settings with bumped global version
 Given board_name update with "", When PATCH /settings, Then 400 "Name is required"
 Given board_name update with 16+ chars, When PATCH /settings, Then 400 "Max 15 characters"
 Given board_name update with "  Dev Team  ", When PATCH /settings, Then trimmed to "Dev Team"
-Given two concurrent edits, When second PATCH with stale version, Then 409 conflict
-Given customized settings, When DELETE /settings, Then table empty, defaults on next GET
-Given 2 users online, When POST /settings/reset-app, Then 409 "Cannot reset while other users are online"
-Given 1 user online, When POST /settings/reset-app, Then cards+columns+settings deleted, users remain
+Given board_name row=2 and logo_path row=5 (global=5), When PATCH board_name with version 5, Then succeeds (no false 409)
+Given PATCH with version less than the current global max, When processed, Then 409 conflict `code: "version_conflict"`
+Given customized settings, When DELETE /settings, Then table empty, defaults on next GET, `settings.updated` published
+Given another user online (besides self), When POST /settings/reset-app, Then 409 "Cannot reset while other users are online"
+Given only self online, When POST /settings/reset-app, Then columns+cards+card_events (cascade) + settings deleted, users remain
 
 Given validateBoardName(""), When called, Then returns `{ valid: false, error: "Name is required" }`
 Given validateBoardName("Super Long Name Here"), When called, Then returns `{ valid: false, error: "Max 15 characters" }`
@@ -486,8 +518,11 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ## QUALITY BAR
 Must-have:
   - Board name validation: 1-15 chars, trim, reject empty
-  - Optimistic locking on PATCH (version check, 409 on conflict)
-  - Reset App active user check
+  - Optimistic locking on PATCH against the single global version (409 on conflict), touched rows bumped to global+1
+  - First-write upsert (ON CONFLICT) handling a key with no existing row
+  - Reset App active-user check that excludes self
+  - Reset App as a transaction; relies on FK cascade (columns→cards→card_events)
+  - `settings.updated` published on PATCH/DELETE/reset so other clients refresh
   - requireAuth on all endpoints
   - Pure validation functions extracted and tested independently
   - Tests written BEFORE implementation (TDD)
@@ -518,7 +553,12 @@ Implement server-side logo upload endpoint using multer: accept .png/.jpg files 
 
 Files:
 - Modify: `server/src/routes/settings.ts` (add logo upload endpoint — created by T2)
+- Modify: `server/src/index.ts` (serve `/uploads` statically in production builds)
 - Test: `server/src/routes/settings.test.ts` (append logo tests)
+
+> **Path resolution (critical).** The uploads directory must be an **absolute path anchored at the repo root**, not the `process.cwd()`-relative string `"client/public/uploads"` — workspace scripts run with cwd = `server/`, so a relative path would write to `server/client/public/uploads`. Derive it once, e.g. `const UPLOADS_DIR = fileURLToPath(new URL("../../../client/public/uploads", import.meta.url))` (adjust depth to settings.ts location), and use it for both `mkdirSync` and multer's `diskStorage.destination`.
+>
+> **Serving uploads.** In dev, Vite serves `client/public` at :5173 so `/uploads/x.png` resolves. In a production build there is no Vite — add `app.use("/uploads", express.static(UPLOADS_DIR))` (or equivalent) in `server/src/index.ts` so saved logos are reachable. The stored `logo_path` stays root-relative (`/uploads/<file>`).
 
 Steps:
 1. Write failing test for: file type validation rejects non-image
@@ -653,26 +693,34 @@ Steps:
 
 5. Implement POST /settings/logo endpoint with multer:
    - Configure multer with diskStorage:
-     - destination: `client/public/uploads/`
+     - destination: the absolute `UPLOADS_DIR` (see path-resolution note — NOT a relative string)
      - filename: use `generateLogoFilename()`
-   - File filter: use `validateLogoFile()`
-   - Size limit: use `MAX_LOGO_SIZE_BYTES`
-   - On upload: query current logo_path setting, delete old file if exists
-   - Save new path as `logo_path` setting
+   - File filter: use `validateLogoFile()` (rejects non-png/jpg)
+   - Size limit: set `limits.fileSize = MAX_LOGO_SIZE_BYTES`. multer rejects oversize files with a `LIMIT_FILE_SIZE` error before the handler runs — map it to `413 "File size must be under 10MB"`. (`validateFileSize` is the pure, independently-tested mirror of this rule; use it as the single source for the limit constant and message, and as a guard if reading size off a buffered upload.)
+   - On upload: query current logo_path setting, delete old file if it exists and is under `UPLOADS_DIR`
+   - Save new path (`/uploads/<file>`) as `logo_path` setting, then `publishEvent({ type: "settings.updated", actor: req.user! })`
    - Return updated settings
    File: `server/src/routes/settings.ts`
 
-6. Ensure `client/public/uploads/` directory exists:
+6. Ensure the uploads directory exists (absolute path — see note):
    ```typescript
    import { mkdirSync } from "node:fs";
-   mkdirSync("client/public/uploads", { recursive: true });
+   import { fileURLToPath } from "node:url";
+   const UPLOADS_DIR = fileURLToPath(new URL("../../../client/public/uploads", import.meta.url));
+   mkdirSync(UPLOADS_DIR, { recursive: true });
    ```
 
-7. Run all tests — verify PASS:
+7. Add production static serving in `server/src/index.ts` so uploaded logos resolve without Vite:
+   ```typescript
+   app.use("/uploads", express.static(UPLOADS_DIR));
+   ```
+   File: `server/src/index.ts`
+
+8. Run all tests — verify PASS:
    `npx vitest run src/routes/settings.test.ts`
 
-8. Commit:
-   `git add server/src/routes/settings.ts server/src/routes/settings.test.ts`
+9. Commit:
+   `git add server/src/routes/settings.ts server/src/index.ts server/src/routes/settings.test.ts`
    `git commit -m "feat(settings): add logo upload with file validation and cleanup"`
 
 ## REFERENCES LOADED
@@ -689,18 +737,19 @@ Justification: File upload requires multer configuration, file validation, clean
 You are implementing Logo Upload for Settings Infrastructure.
 Spec: docs/pocket/spec/2026-06-12-camel-settings/settings-infrastructure.md
 Design decision: Option A — multer for Express, local filesystem storage
-Files in scope: server/src/routes/settings.ts, server/src/routes/settings.test.ts
+Files in scope: server/src/routes/settings.ts, server/src/index.ts, server/src/routes/settings.test.ts
 Available after: T2 (settings table + settings.ts file exist)
-Architecture rule: requireAuth. File filter for .png/.jpg only. 10MB max.
+Architecture rule: requireAuth. File filter for .png/.jpg only. 10MB max. Absolute UPLOADS_DIR. express.static for /uploads in production.
 [RESTATE: Logo files must be stored in client/public/uploads/ — not server directory]
 
 ## DELIVERABLE
 Verification — task is DONE when all pass:
 
-Given valid .png file (2MB), When POST /settings/logo, Then file saved to client/public/uploads/, path returned
+Given valid .png file (2MB), When POST /settings/logo, Then file saved to the absolute repo-root `client/public/uploads/` (NOT `server/client/...`), `/uploads/<file>` path returned
 Given .pdf file, When POST /settings/logo, Then 400 "Only .png and .jpg files are accepted"
-Given 15MB file, When POST /settings/logo, Then 413 "File size must be under 10MB"
+Given 15MB file, When POST /settings/logo, Then multer LIMIT_FILE_SIZE mapped to 413 "File size must be under 10MB"
 Given existing logo, When new logo uploaded, Then old file deleted from filesystem
+Given a production build (no Vite), When GET /uploads/<file>, Then express.static serves it
 Given network error during upload, Then multer error handled, no orphaned temp file
 
 Given validateLogoFile("image/png"), When called, Then returns `{ valid: true }`
@@ -716,7 +765,9 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ## QUALITY BAR
 Must-have:
   - File type validation (.png/.jpg only)
-  - File size limit (10MB)
+  - File size limit (10MB) — multer LIMIT_FILE_SIZE mapped to 413
+  - Absolute UPLOADS_DIR anchored at repo root (no cwd-relative path)
+  - express.static("/uploads") for production serving
   - Old logo cleanup on new upload
   - requireAuth on endpoint
   - Pure validation functions extracted and tested independently
@@ -888,24 +939,33 @@ Steps:
    refreshSettings: () => Promise<void>;
    
    // Add to BoardProvider:
-   const [settings, setSettings] = useState<SettingsMap>({ boardName: "Camel", logoPath: "/logo.png" });
+   const [settings, setSettings] = useState<SettingsMap>({ boardName: "Camel", logoPath: "/logo.png", version: 0 });
    const [settingsVersion, setSettingsVersion] = useState(0);
    
    const refreshSettings = useCallback(async () => {
      const s = await api.getSettings();
      setSettings(s);
-     setSettingsVersion(s.version ?? 0);
+     setSettingsVersion(s.version);
    }, []);
    ```
+   Callers PATCH with this single `settingsVersion` (global optimistic-locking version — see T2). 
    File: `client/src/context/BoardContext.tsx`
 
-6. Load settings on mount (in existing useEffect):
+6. Load settings on mount AND keep them live over SSE (in the existing refresh useEffect). The board stream already pushes events; parse them and refresh settings when a `settings.updated` event arrives, so another client's change updates the sidebar/title without a reload:
    ```typescript
-   // Add to the existing refresh useEffect:
    void refreshSettings();
+   // ...
+   stream.onmessage = (e) => {
+     void refresh();
+     try {
+       if (JSON.parse(e.data).type === "settings.updated") void refreshSettings();
+     } catch {
+       // non-JSON keep-alive comment
+     }
+   };
    ```
 
-7. Expose settings in context provider value.
+7. Expose settings, settingsVersion, and refreshSettings in context provider value.
 
 8. Run tests — verify PASS:
    `npx vitest run client/src/api.test.ts`
@@ -937,8 +997,9 @@ Architecture rule: Settings in BoardContext. Toast via showToast().
 ## DELIVERABLE
 Verification — task is DONE when all pass:
 
-Given API returns settings, When app loads, Then settings state populated in BoardContext
+Given API returns settings, When app loads, Then settings state (incl. version) populated in BoardContext
 Given settings updated, When refreshSettings called, Then context state reflects new values
+Given another client emits `settings.updated` over SSE, When the event is received, Then refreshSettings runs and settings state updates live
 Given uploadLogo called, When file sent, Then returns updated SettingsMap
 Given api.getSettings(), When called, Then fetches /api/settings
 Given api.updateSettings(), When called, Then sends PATCH with body
@@ -952,9 +1013,10 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ## QUALITY BAR
 Must-have:
-  - Settings state in BoardContext (not separate context)
+  - Settings state in BoardContext (not separate context), including the global version
   - All API methods: getSettings, updateSettings, resetSettings, resetApp, uploadLogo
   - Settings load on app mount
+  - SSE `settings.updated` triggers refreshSettings (live cross-client sync)
   - Tests verify API method behavior via mocked fetch
   - Tests written BEFORE implementation (TDD)
 
@@ -978,38 +1040,29 @@ Escalate when: context refactor breaks existing board functionality
 Build the /settings page with collapsible sections (Identity, Danger Zone), board name input with live preview, logo upload with client-side cropping via react-easy-crop, and destructive actions (Reset Settings, Reset App) with appropriate safeguards.
 
 Files:
+- Create: `client/src/lib/settingsValidation.ts` (shared client-side validators — imported by SettingsPage AND its test)
 - Create: `client/src/pages/SettingsPage.tsx`
 - Create: `client/src/components/LogoCropper.tsx`
 - Modify: `client/src/App.tsx` (add /settings route)
 - Modify: `client/package.json` (add react-easy-crop)
-- Test: `client/src/pages/SettingsPage.test.ts`
+- Test: `client/src/lib/settingsValidation.test.ts`
+
+> **No duplicated logic / real red phase.** The previous draft defined the validators *inside* the test file and then claimed a red→green cycle — but a function defined in its own test can never fail to import, so the "red" was fake and the actual page logic went untested. Extract the validators to `client/src/lib/settingsValidation.ts` and have both `SettingsPage.tsx` and the test import them. The test's red phase is then genuine (module-not-found until the file exists).
 
 Steps:
 1. Install react-easy-crop: `npm install react-easy-crop --workspace=client`
 
-2. Write failing test for: board name validation rejects empty input
-   File: `client/src/pages/SettingsPage.test.ts`
+2. Write failing test for: board name validation rejects empty input. Import the validators from the real module (this is the genuine red phase — the module does not exist yet):
+   File: `client/src/lib/settingsValidation.test.ts`
    Test verifies: Given empty input, When validateBoardName called, Then error "Name is required"
 
    ```typescript
    import { describe, expect, it } from "vitest";
-
-   // Client-side validation utility (same logic as server, tested independently)
-   function validateBoardName(name: string): { valid: false; error: string } | { valid: true; trimmed: string } {
-     const trimmed = name.trim();
-     if (trimmed === "") return { valid: false, error: "Name is required" };
-     if (trimmed.length > 15) return { valid: false, error: "Max 15 characters" };
-     return { valid: true, trimmed };
-   }
-
-   function validateResetAppConfirmation(text: string, checkboxChecked: boolean): { enabled: boolean } {
-     const trimmed = text.trim().toUpperCase();
-     return { enabled: trimmed === "DELETE" && checkboxChecked };
-   }
-
-   function validateUnsavedChanges(original: string, current: string): boolean {
-     return original.trim() !== current.trim();
-   }
+   import {
+     validateBoardName,
+     validateResetAppConfirmation,
+     validateUnsavedChanges,
+   } from "./settingsValidation";
 
    describe("validateBoardName (client)", () => {
      it("rejects empty string", () => {
@@ -1092,41 +1145,62 @@ Steps:
    ```
 
 3. Run test — verify FAIL:
-   `npx vitest run client/src/pages/SettingsPage.test.ts`
-   Expected failure: validation functions not defined (they're in the test file, but test should verify they work)
+   `npx vitest run client/src/lib/settingsValidation.test.ts`
+   Expected failure: module not found — `./settingsValidation` does not exist yet
 
-4. Run test — verify PASS:
-   `npx vitest run client/src/pages/SettingsPage.test.ts`
+4. Implement the validators in `client/src/lib/settingsValidation.ts`:
+   ```typescript
+   export function validateBoardName(name: string): { valid: false; error: string } | { valid: true; trimmed: string } {
+     const trimmed = name.trim();
+     if (trimmed === "") return { valid: false, error: "Name is required" };
+     if (trimmed.length > 15) return { valid: false, error: "Max 15 characters" };
+     return { valid: true, trimmed };
+   }
+
+   export function validateResetAppConfirmation(text: string, checkboxChecked: boolean): { enabled: boolean } {
+     const trimmed = text.trim().toUpperCase();
+     return { enabled: trimmed === "DELETE" && checkboxChecked };
+   }
+
+   export function validateUnsavedChanges(original: string, current: string): boolean {
+     return original.trim() !== current.trim();
+   }
+   ```
+   File: `client/src/lib/settingsValidation.ts`
+
+5. Run test — verify PASS:
+   `npx vitest run client/src/lib/settingsValidation.test.ts`
    Expected: PASS — all validation functions work correctly
 
-5. Implement LogoCropper component:
+6. Implement LogoCropper component:
    - Accept `image: string` (object URL) and `onCropComplete: (blob: Blob) => void`
    - Use react-easy-crop Cropper with `aspect={1}` (1:1)
    - Implement getCroppedImg utility using canvas
    - Show crop area, zoom slider, Confirm/Cancel buttons
    File: `client/src/components/LogoCropper.tsx`
 
-6. Implement SettingsPage component:
+7. Implement SettingsPage component (import validators from `../lib/settingsValidation` — do NOT redefine them):
    - Identity section: board name input + logo preview + upload button
    - Danger Zone section: Reset Settings button + Reset App button
-   - Board name: input with validation, Save button, live preview
+   - Board name: input with validation, Save button, live preview; PATCH carries `settingsVersion` from context (global optimistic-lock version)
+   - On 409 from save, show "Someone else updated settings first" toast and refreshSettings (mirrors the cards conflict flow)
    - Logo: file input (.png/.jpg), on select open LogoCropper, on confirm upload
-   - Reset Settings: confirmation dialog -> call api.resetSettings() -> refresh
-   - Reset App: multi-step modal (type "DELETE" + checkbox) -> call api.resetApp()
-   - Unsaved changes warning via beforeunload
+   - Reset Settings: confirmation dialog -> call api.resetSettings() -> refreshSettings
+   - Reset App: multi-step modal (type "DELETE" + checkbox, gated by validateResetAppConfirmation) -> call api.resetApp()
+   - Unsaved changes warning via beforeunload (gated by validateUnsavedChanges)
    File: `client/src/pages/SettingsPage.tsx`
 
-7. Add /settings route to App.tsx:
+8. Add /settings route to App.tsx:
    ```typescript
    { path: "settings", Component: SettingsPage },
    ```
    File: `client/src/App.tsx`
 
-8. Run all tests — verify PASS:
-   `npx vitest run client/src/pages/SettingsPage.test.ts`
+9. Run all tests — verify PASS:
+   `npx vitest run client/src/lib/settingsValidation.test.ts`
 
-9. Commit:
-   `git add client/src/pages/SettingsPage.tsx client/src/components/LogoCropper.tsx client/src/App.tsx client/src/pages/SettingsPage.test.ts client/package.json client/package-lock.json`
+10. Commit:
+   `git add client/src/lib/settingsValidation.ts client/src/lib/settingsValidation.test.ts client/src/pages/SettingsPage.tsx client/src/components/LogoCropper.tsx client/src/App.tsx client/package.json client/package-lock.json`
    `git commit -m "feat(settings): add settings page with logo cropper and danger zone"`
 
 ## REFERENCES LOADED
@@ -1146,7 +1220,7 @@ Justification: Multi-component page with client-side cropping (new dependency), 
 You are implementing Settings Page for Settings Infrastructure.
 Spec: docs/pocket/spec/2026-06-12-camel-settings/settings-infrastructure.md
 Design decision: Option A — single /settings page with collapsible sections
-Files in scope: client/src/pages/SettingsPage.tsx, client/src/components/LogoCropper.tsx, client/src/App.tsx, client/src/pages/SettingsPage.test.ts
+Files in scope: client/src/lib/settingsValidation.ts, client/src/lib/settingsValidation.test.ts, client/src/pages/SettingsPage.tsx, client/src/components/LogoCropper.tsx, client/src/App.tsx
 Available after: T2 (server API), T3 (logo upload), T4 (client integration)
 Architecture rule: Use BoardContext for settings state. Toast via showToast(). Design tokens from creative-brief.md.
 [RESTATE: No changes to core/ modules. Settings page must use BoardContext for state.]
@@ -1190,10 +1264,13 @@ Must-have:
   - Reset App multi-step confirmation (type "DELETE" + checkbox)
   - Unsaved changes warning (beforeunload)
   - Design tokens from creative-brief.md (colors, typography)
-  - Client-side validation utilities tested independently
+  - Validators live in client/src/lib/settingsValidation.ts and are imported by BOTH page and test (no copy in the test file)
+  - Genuine TDD red phase (test fails on missing module, not on logic in its own file)
+  - 409 conflict handling on save (toast + refreshSettings)
   - Tests written BEFORE implementation (TDD)
 
 Must-not-have:
+  - Validators redefined inside the test file (fake red phase) or duplicated into SettingsPage.tsx
   - External storage (S3/Cloudinary) — out-of-scope
   - Tabbed settings layout — out-of-scope
   - Per-user settings — out-of-scope
@@ -1218,24 +1295,20 @@ Escalate when: react-easy-crop API incompatible or design tokens conflict
 Refactor Sidebar to display dynamic board name and logo from settings state. Update browser tab title and favicon dynamically when settings change. Add Settings nav item to sidebar.
 
 Files:
+- Create: `client/src/lib/title.ts` (formatTitle/getFaviconLink — imported by AppLayout AND test)
 - Modify: `client/src/layout/Sidebar.tsx`
 - Modify: `client/src/layout/AppLayout.tsx`
 
+> **Real red phase (same fix as T5).** Don't define `formatTitle`/`getFaviconLink` inside the test. Put them in `client/src/lib/title.ts`, import them in both AppLayout and the test, so the first run genuinely fails on a missing module.
+
 Steps:
-1. Write failing test for: formatTitle utility generates correct title
-   File: `client/src/layout/Sidebar.test.ts`
+1. Write failing test for: formatTitle utility generates correct title. Import from the real module:
+   File: `client/src/lib/title.test.ts`
    Test verifies: Given board name "Dev Team", When formatTitle called, Then returns "Dev Team — Kanban"
 
    ```typescript
    import { describe, expect, it } from "vitest";
-
-   function formatTitle(boardName: string): string {
-     return `${boardName} — Kanban`;
-   }
-
-   function getFaviconLink(logoPath: string): string {
-     return logoPath;
-   }
+   import { formatTitle, getFaviconLink } from "./title";
 
    describe("formatTitle", () => {
      it("formats title with custom board name", () => {
@@ -1266,11 +1339,24 @@ Steps:
    });
    ```
 
-2. Run test — verify PASS:
-   `npx vitest run client/src/layout/Sidebar.test.ts`
-   Expected: PASS — utility functions work correctly
+2. Run test — verify FAIL:
+   `npx vitest run client/src/lib/title.test.ts`
+   Expected failure: module not found — `./title` does not exist yet
 
-3. Refactor Sidebar.tsx — replace hardcoded values:
+3. Implement the utilities in `client/src/lib/title.ts`:
+   ```typescript
+   export function formatTitle(boardName: string): string {
+     return `${boardName} — Kanban`;
+   }
+
+   export function getFaviconLink(logoPath: string): string {
+     return logoPath;
+   }
+   ```
+   Run test — verify PASS: `npx vitest run client/src/lib/title.test.ts`
+   File: `client/src/lib/title.ts`
+
+4. Refactor Sidebar.tsx — replace hardcoded values:
    ```typescript
    // Before:
    <img src="/logo.png" alt="Camel" className="h-6 w-6 shrink-0" />
@@ -1284,7 +1370,7 @@ Steps:
    Apply to both desktop Sidebar and MobileNav components.
    File: `client/src/layout/Sidebar.tsx`
 
-4. Add Settings nav item to NAV_ITEMS:
+5. Add Settings nav item to NAV_ITEMS:
    ```typescript
    import { Settings } from "lucide-react";
    // Add to NAV_ITEMS array:
@@ -1292,11 +1378,18 @@ Steps:
    ```
    File: `client/src/layout/Sidebar.tsx`
 
-5. Add dynamic title + favicon in AppLayout.tsx:
+6. Add dynamic title + favicon in AppLayout.tsx (import `formatTitle`/`getFaviconLink` from `../lib/title`):
    ```typescript
+   import { formatTitle, getFaviconLink } from "../lib/title";
+   // ...
+   const onSettings = location.pathname.startsWith("/settings");
    useEffect(() => {
-     document.title = formatTitle(settings.boardName);
-     
+     // Spec Story 5: the Settings page tab reads "Settings — <board>";
+     // every other route uses the default "<board> — Kanban".
+     document.title = onSettings
+       ? `Settings — ${settings.boardName}`
+       : formatTitle(settings.boardName);
+
      // Update favicon
      let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
      if (!link) {
@@ -1304,16 +1397,16 @@ Steps:
        link.rel = "icon";
        document.head.appendChild(link);
      }
-     link.href = settings.logoPath;
-   }, [settings.boardName, settings.logoPath]);
+     link.href = getFaviconLink(settings.logoPath);
+   }, [settings.boardName, settings.logoPath, onSettings]);
    ```
    File: `client/src/layout/AppLayout.tsx`
 
-6. Run tests — verify PASS:
-   `npx vitest run client/src/layout/Sidebar.test.ts`
+7. Run tests — verify PASS:
+   `npx vitest run client/src/lib/title.test.ts`
 
-7. Commit:
-   `git add client/src/layout/Sidebar.tsx client/src/layout/AppLayout.tsx client/src/layout/Sidebar.test.ts`
+8. Commit:
+   `git add client/src/lib/title.ts client/src/lib/title.test.ts client/src/layout/Sidebar.tsx client/src/layout/AppLayout.tsx`
    `git commit -m "feat(settings): dynamic sidebar, browser title, and favicon from settings"`
 
 ## REFERENCES LOADED
@@ -1331,7 +1424,7 @@ Justification: Simple refactor replacing hardcoded values with context-driven va
 You are implementing Dynamic Sidebar for Settings Infrastructure.
 Spec: docs/pocket/spec/2026-06-12-camel-settings/settings-infrastructure.md
 Design decision: Option A — settings in BoardContext, sidebar consumes
-Files in scope: client/src/layout/Sidebar.tsx, client/src/layout/AppLayout.tsx, client/src/layout/Sidebar.test.ts
+Files in scope: client/src/lib/title.ts, client/src/lib/title.test.ts, client/src/layout/Sidebar.tsx, client/src/layout/AppLayout.tsx
 Available after: T4 (settings in BoardContext)
 Architecture rule: Use useBoard() for settings. No direct API calls in layout.
 [RESTATE: Sidebar must use settings from BoardContext — not fetch independently]
@@ -1342,7 +1435,8 @@ Verification — task is DONE when all pass:
 Given settings.boardName = "Dev Team", When Sidebar renders, Then shows "Dev Team"
 Given settings.logoPath = "/uploads/logo-abc.png", When Sidebar renders, Then shows custom logo
 Given no custom settings, When Sidebar renders, Then shows "Camel" + "/logo.png" (defaults)
-Given settings.boardName = "Dev Team", When AppLayout mounts, Then document.title = "Dev Team — Kanban"
+Given settings.boardName = "Dev Team" on a non-settings route, When AppLayout mounts, Then document.title = "Dev Team — Kanban"
+Given user is on /settings with boardName "Camel", When effect runs, Then document.title = "Settings — Camel"
 Given settings.logoPath changed, When effect runs, Then favicon href updated
 Given NAV_ITEMS updated, When Sidebar renders, Then Settings link visible
 
@@ -1360,9 +1454,9 @@ Must-have:
   - Dynamic board name from settings
   - Dynamic logo from settings
   - Settings nav item in sidebar
-  - Dynamic document.title
+  - Dynamic document.title ("<board> — Kanban", and "Settings — <board>" on /settings)
   - Dynamic favicon
-  - Utility functions extracted and tested
+  - Utilities live in client/src/lib/title.ts, imported by BOTH AppLayout and test (genuine red phase; no copy in the test file)
   - Tests written BEFORE implementation (TDD)
 
 Must-not-have:
@@ -1383,9 +1477,9 @@ Escalate when: layout refactor breaks existing navigation
 
 | Task | Name | Depends | Complexity | Key Verification |
 |------|------|---------|------------|-----------------|
-| T1 | Settings DB Schema + Shared Types | prereq | lightweight | Migration runs, types compile, type test passes |
-| T2 | Settings Server API + Validation | T1 | standard | Pure validation functions tested, GET/PATCH/DELETE endpoints |
-| T3 | Logo Upload + Cleanup Endpoints | T2 | standard | File validation functions tested, upload endpoint with multer |
-| T4 | Client Settings Integration | T1 | lightweight | API methods tested with mocked fetch, context integration |
-| T5 | Settings Page + Logo Cropper + Danger Zone | T2,T3,T4 | deep | Client validation utilities tested, full settings page |
-| T6 | Dynamic Sidebar + Browser Title + Favicon | T4 | lightweight | Utility functions tested, dynamic values from settings |
+| T1 | Settings DB Schema + Shared Types | prereq | lightweight | schema.sql DDL (no migrations/ file), types compile incl. `version`, type test passes |
+| T2 | Settings Server API + Validation | T1 | standard | Pure validation tested; GET/PATCH/DELETE + reset-app; single global version locking; self-excluded online check; `settings.updated` event |
+| T3 | Logo Upload + Cleanup Endpoints | T2 | standard | File validation tested; multer upload to absolute UPLOADS_DIR; express.static for prod |
+| T4 | Client Settings Integration | T1 | lightweight | API methods tested with mocked fetch; context incl. version; SSE settings sync |
+| T5 | Settings Page + Logo Cropper + Danger Zone | T2,T3,T4 | deep | Validators in lib/settingsValidation.ts (real red phase); full settings page; 409 handling |
+| T6 | Dynamic Sidebar + Browser Title + Favicon | T4 | lightweight | Utils in lib/title.ts (real red phase); dynamic values; Settings-page title |
