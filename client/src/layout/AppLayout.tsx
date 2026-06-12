@@ -5,20 +5,40 @@ import { useBoard } from "../context/BoardContext";
 import PresenceBar from "../components/PresenceBar";
 import Toast from "../components/Toast";
 import Sidebar, { MobileNav, NAV_ITEMS } from "./Sidebar";
+import { formatTitle, getFaviconLink } from "../lib/title";
 
 const SIDEBAR_COLLAPSED_KEY = "camel.sidebar.collapsed";
 
 export default function AppLayout() {
-  const { user, presence, toast } = useBoard();
+  const { user, presence, toast, settings } = useBoard();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
 
+  const onSettings = location.pathname.startsWith("/settings");
+
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  useEffect(() => {
+    // Spec Story 5: the Settings page tab reads "Settings — <board>";
+    // every other route uses the default "<board> — Kanban".
+    document.title = onSettings
+      ? `Settings — ${settings.boardName}`
+      : formatTitle(settings.boardName);
+
+    // Update favicon
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = getFaviconLink(settings.logoPath);
+  }, [settings.boardName, settings.logoPath, onSettings]);
 
   const pageTitle =
     NAV_ITEMS.find((item) => location.pathname.startsWith(item.to))?.label ??
