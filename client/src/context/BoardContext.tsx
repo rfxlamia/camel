@@ -15,6 +15,7 @@ import type {
   Column,
   FlowMetrics,
   PresenceUser,
+  SettingsMap,
   User,
 } from "../types";
 
@@ -43,6 +44,9 @@ interface BoardContextValue {
   toast: string | null;
   showToast: (message: string) => void;
   logout: () => Promise<void>;
+  settings: SettingsMap;
+  settingsVersion: number;
+  refreshSettings: () => Promise<void>;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -72,6 +76,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   const [loadError, setLoadError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [settings, setSettings] = useState<SettingsMap>({ boardName: "Camel", logoPath: "/logo.png", version: 0 });
+  const [settingsVersion, setSettingsVersion] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string) => {
@@ -101,9 +107,16 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
     }
   }, [onSignedOut]);
 
+  const refreshSettings = useCallback(async () => {
+    const s = await api.getSettings();
+    setSettings(s);
+    setSettingsVersion(s.version);
+  }, []);
+
   // Board + collaboration wiring, active for the signed-in session.
   useEffect(() => {
     void refresh();
+    void refreshSettings();
 
     const beat = () => {
       void api.heartbeat().catch(() => {});
@@ -119,7 +132,14 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
     // Live updates: server pushes board events over SSE; EventSource
     // reconnects on its own after a dropped connection.
     const stream = new EventSource("/api/events/stream");
-    stream.onmessage = () => void refresh();
+    stream.onmessage = (e) => {
+      void refresh();
+      try {
+        if (JSON.parse(e.data).type === "settings.updated") void refreshSettings();
+      } catch {
+        // non-JSON keep-alive comment
+      }
+    };
 
     return () => {
       clearInterval(heartbeatTimer);
@@ -193,6 +213,9 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         toast,
         showToast,
         logout,
+        settings,
+        settingsVersion,
+        refreshSettings,
       }}
     >
       {children}

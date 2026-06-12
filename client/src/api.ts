@@ -6,6 +6,7 @@ import type {
   FlowMetrics,
   MetricsHistoryBucket,
   PresenceUser,
+  SettingsMap,
   User,
 } from "./types";
 
@@ -96,6 +97,29 @@ export const api = {
   getPresence: () => request<{ users: PresenceUser[] }>("/presence"),
   heartbeat: () =>
     request<{ ok: boolean }>("/presence/heartbeat", { method: "POST" }),
+
+  // Settings
+  getSettings: () => request<SettingsMap>("/settings"),
+  updateSettings: (settings: Array<{ key: string; textValue?: string; boolValue?: boolean; version: number }>) =>
+    request<SettingsMap>("/settings", { method: "PATCH", body: JSON.stringify(settings) }),
+  resetSettings: () => request<void>("/settings", { method: "DELETE" }),
+  resetApp: () => request<void>("/settings/reset-app", { method: "POST" }),
+  uploadLogo: async (file: File): Promise<SettingsMap> => {
+    const formData = new FormData();
+    formData.append("logo", file);
+    const res = await fetch("/api/settings/logo", { method: "POST", body: formData });
+    if (!res.ok) {
+      let message = `Upload failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body.error) message = body.error;
+      } catch {
+        // non-JSON error body
+      }
+      throw new ApiError(message, res.status);
+    }
+    return res.json();
+  },
 };
 
 export { ApiError };
