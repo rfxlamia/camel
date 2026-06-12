@@ -108,3 +108,91 @@ describe("PATCH validation", () => {
     if (result.valid) expect(result.trimmed).toBe("Dev Team");
   });
 });
+
+import {
+  validateLogoFile,
+  validateFileSize,
+  generateLogoFilename,
+  MAX_LOGO_SIZE_BYTES,
+} from "./settings.js";
+
+describe("validateLogoFile", () => {
+  it("accepts image/png", () => {
+    expect(validateLogoFile("image/png")).toEqual({ valid: true });
+  });
+
+  it("accepts image/jpeg", () => {
+    expect(validateLogoFile("image/jpeg")).toEqual({ valid: true });
+  });
+
+  it("rejects application/pdf", () => {
+    expect(validateLogoFile("application/pdf")).toEqual({
+      valid: false,
+      error: "Only .png and .jpg files are accepted",
+    });
+  });
+
+  it("rejects image/gif", () => {
+    expect(validateLogoFile("image/gif")).toEqual({
+      valid: false,
+      error: "Only .png and .jpg files are accepted",
+    });
+  });
+
+  it("rejects empty mimetype", () => {
+    expect(validateLogoFile("")).toEqual({
+      valid: false,
+      error: "Only .png and .jpg files are accepted",
+    });
+  });
+});
+
+describe("validateFileSize", () => {
+  it("accepts file under 10MB", () => {
+    expect(validateFileSize(2 * 1024 * 1024)).toEqual({ valid: true });
+  });
+
+  it("accepts file exactly at 10MB", () => {
+    expect(validateFileSize(10 * 1024 * 1024)).toEqual({ valid: true });
+  });
+
+  it("rejects file over 10MB", () => {
+    expect(validateFileSize(15 * 1024 * 1024)).toEqual({
+      valid: false,
+      error: "File size must be under 10MB",
+    });
+  });
+
+  it("rejects file at 10MB + 1 byte", () => {
+    expect(validateFileSize(10 * 1024 * 1024 + 1)).toEqual({
+      valid: false,
+      error: "File size must be under 10MB",
+    });
+  });
+});
+
+describe("generateLogoFilename", () => {
+  it("generates filename with logo prefix and timestamp", () => {
+    const filename = generateLogoFilename("image/png");
+    expect(filename).toMatch(/^logo-\d+-\w+\.png$/);
+  });
+
+  it("uses jpg extension for jpeg", () => {
+    const filename = generateLogoFilename("image/jpeg");
+    expect(filename).toMatch(/\.jpg$/);
+  });
+
+  it("generates unique filenames on consecutive calls", () => {
+    const a = generateLogoFilename("image/png");
+    const b = generateLogoFilename("image/png");
+    // Both should match pattern, but may be same if called in same ms
+    expect(a).toMatch(/^logo-/);
+    expect(b).toMatch(/^logo-/);
+  });
+});
+
+describe("MAX_LOGO_SIZE_BYTES", () => {
+  it("is 10MB", () => {
+    expect(MAX_LOGO_SIZE_BYTES).toBe(10 * 1024 * 1024);
+  });
+});

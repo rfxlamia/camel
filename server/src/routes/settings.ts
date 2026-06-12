@@ -2,6 +2,10 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { type AuthUser } from "../auth.js";
 import { onlineUsers, publishEvent } from "../realtime.js";
+import { mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import * as path from "node:path";
+import { unlink } from "node:fs/promises";
 
 export const VALID_SETTING_KEYS = new Set(["board_name", "logo_path"]);
 
@@ -19,6 +23,82 @@ export function validateBoardName(name: string): { valid: false; error: string }
 
 export function validateSettingKey(key: string): boolean {
   return VALID_SETTING_KEYS.has(key);
+}
+
+export const MAX_LOGO_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
+
+export function validateLogoFile(mimetype: string): { valid: boolean; error?: string } {
+  if (!ALLOWED_MIME_TYPES.has(mimetype)) {
+    return { valid: false, error: "Only .png and .jpg files are accepted" };
+  }
+  return { valid: true };
+}
+
+export function validateFileSize(size: number): { valid: boolean; error?: string } {
+  if (size > MAX_LOGO_SIZE_BYTES) {
+    return { valid: false, error: "File size must be under 10MB" };
+  }
+  return { valid: true };
+}
+
+export function generateLogoFilename(mimetype: string): string {
+  const ext = mimetype === "image/jpeg" ? "jpg" : "png";
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  return `logo-${timestamp}-${random}.${ext}`;
+}
+
+export const UPLOADS_DIR = fileURLToPath(new URL("../../../client/public/uploads", import.meta.url));
+mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Lazy multer instance: dynamic import ensures pure validator tests (which only import
+// the top-level pure functions) do not require the 'multer' package at collection time.
+let uploadPromise: Promise<any> | null = null;
+
+async function getUpload() {
+  if (!uploadPromise) {
+    const multerMod = await import("multer");
+    const multer = multerMod.default ?? multerMod;
+
+    const storage = multer.diskStorage({
+      destination: (_req, _file, cb) => {
+        cb(null, UPLOADS_DIR);
+      },
+      filename: (_req, file, cb) => {
+        const name = generateLogoFilename(file.mimetype);
+        cb(null, name);
+      },
+    });
+
+    uploadPromise = Promise.resolve(
+      multer({
+        storage,
+        fileFilter: (_req, file, cb) => {
+          const v = validateLogoFile(file.mimetype);
+          if (!v.valid) {
+            return cb(new Error(v.error!));
+          }
+          cb(null, true);
+        },
+        limits: { fileSize: MAX_LOGO_SIZE_BYTES },
+      })
+    );
+  }
+  return uploadPromise;
+}
+
+async function tryDeleteOldUploadedLogo(currentLogoPath: string | null | undefined) {
+  if (!currentLogoPath || !currentLogoPath.startsWith("/uploads/")) return;
+  const base = currentLogoPath.replace(/^\/uploads\//, "");
+  if (!base || base.includes("/") || base.includes("..")) return;
+  const absPath = path.join(UPLOADS_DIR, base);
+  if (!absPath.startsWith(UPLOADS_DIR)) return;
+  try {
+    await unlink(absPath);
+  } catch {
+    // best-effort cleanup; ignore ENOENT or permission errors for previous logo
+  }
 }
 
 export interface SettingRow {
@@ -208,3 +288,71 @@ settingsRouter.post("/reset-app", async (req, res) => {
   await publishEvent({ type: "settings.updated", actor: req.user! });
   res.status(204).end();
 });
+
+settingsRouter.post(
+  "/logo",
+  async (req, res, next) => {
+    try {
+      const upload = await getUpload();
+      upload.single("logo")(req, res, (err: any) => {
+        if (err) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(413).json({ error: "File size must be under 10MB" });
+          }
+          const msg = err.message || "Upload error";
+          if (msg.includes("Only .png and .jpg")) {
+            return res.status(400).json({ error: msg });
+          }
+          return res.status(400).json({ error: msg });
+        }
+        next();
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const newRelativePath = `/uploads/${req.file.filename}`;
+
+    // Read current logo_path to clean up old uploaded file (if any)
+    const { rows: currentRows } = await pool.query(
+      `SELECT key, text_value FROM settings WHERE key = 'logo_path'`
+    );
+    const oldLogoPath = currentRows[0]?.text_value ?? null;
+
+    await tryDeleteOldUploadedLogo(oldLogoPath);
+
+    // Bump global version and persist the new logo_path (authoritative on upload)
+    const { rows: verRows } = await pool.query(`SELECT version FROM settings`);
+    const currentGlobal = verRows.reduce((max: number, r: any) => Math.max(max, r.version || 0), 0);
+    const newVersion = currentGlobal + 1;
+
+    await pool.query(
+      `INSERT INTO settings (key, text_value, version, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (key) DO UPDATE SET
+         text_value = EXCLUDED.text_value,
+         version = EXCLUDED.version,
+         updated_at = now()`,
+      ["logo_path", newRelativePath, newVersion]
+    );
+
+    await publishEvent({ type: "settings.updated", actor: req.user! });
+
+    const { rows: rawAfter } = await pool.query(
+      `SELECT key, text_value, bool_value, version FROM settings`
+    );
+    const afterRows: SettingRow[] = rawAfter.map((r: any) => ({
+      key: r.key,
+      textValue: r.text_value,
+      boolValue: r.bool_value,
+      version: r.version,
+      updatedAt: "",
+    }));
+    res.json(generateDefaultSettings(afterRows));
+  }
+);
