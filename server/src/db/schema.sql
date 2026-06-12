@@ -68,3 +68,14 @@ CREATE INDEX IF NOT EXISTS idx_events_created ON card_events(created_at DESC);
 -- card_events FK survive. All board/flow queries filter `deleted_at IS NULL`.
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_cards_active ON cards(column_id) WHERE deleted_at IS NULL;
+
+-- Settings infrastructure (T1 foundation): single table, typed columns only (no JSONB),
+-- global version for optimistic locking on PATCH, IF NOT EXISTS for idempotent re-runs.
+-- migrate.ts applies ONLY this schema.sql (no migrations/ dir or separate files).
+CREATE TABLE IF NOT EXISTS settings (
+  key       TEXT PRIMARY KEY,
+  text_value TEXT,
+  bool_value BOOLEAN,
+  version   INTEGER NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

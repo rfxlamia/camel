@@ -94,3 +94,17 @@ export function formatDuration(ms: number): string {
   if (ms < day) return `${(ms / hour).toFixed(1).replace(/\.0$/, "")}h`;
   return `${(ms / day).toFixed(1).replace(/\.0$/, "")}d`;
 }
+
+export interface Setting {
+  key: string;
+  textValue: string | null;
+  boolValue: boolean | null;
+  version: number;
+  updatedAt: string;
+}
+
+export interface SettingsMap {
+  boardName: string;
+  logoPath: string;
+  version: number;
+}
