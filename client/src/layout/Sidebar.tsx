@@ -6,6 +6,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
   SquareKanban,
   X,
   type LucideIcon,
@@ -16,6 +17,7 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/board", label: "Board", icon: SquareKanban },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/activity", label: "Activity", icon: Activity },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
@@ -124,7 +126,7 @@ interface SidebarProps {
  * unless the user collapsed it.
  */
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { logout } = useBoard();
+  const { logout, settings } = useBoard();
   const labelClass = collapsed ? "hidden" : "hidden lg:inline whitespace-nowrap";
   const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
@@ -140,9 +142,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       }`}
     >
       <div className="flex h-14 items-center gap-2 border-b border-neutral-200 px-3">
-        <img src="/logo.png" alt="Camel" className="h-6 w-6 shrink-0" />
+        <img src={settings.logoPath} alt={settings.boardName} className="h-6 w-6 shrink-0" />
         <span className={`text-base font-semibold text-primary-900 ${labelClass}`}>
-          Camel
+          {settings.boardName}
         </span>
       </div>
 
@@ -205,7 +207,7 @@ interface MobileNavProps {
 
 /** Full-label overlay drawer for screens below md. */
 export function MobileNav({ open, onClose }: MobileNavProps) {
-  const { logout } = useBoard();
+  const { logout, settings } = useBoard();
   const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
   const handleSignOut = useCallback(() => {
@@ -225,8 +227,8 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
       <div className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-lg">
         <div className="flex h-14 items-center justify-between border-b border-neutral-200 px-4">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Camel" className="h-6 w-6" />
-            <span className="text-base font-semibold text-primary-900">Camel</span>
+            <img src={settings.logoPath} alt={settings.boardName} className="h-6 w-6" />
+            <span className="text-base font-semibold text-primary-900">{settings.boardName}</span>
           </div>
           <button
             onClick={onClose}
