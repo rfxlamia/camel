@@ -8,6 +8,7 @@ import { BoardProvider } from "./context/BoardContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
+import SettingsPage from "./pages/SettingsPage";
 
 function LoadingScreen() {
   return (
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
         }),
       },
       { path: "activity", Component: ActivityPage },
+      { path: "settings", Component: SettingsPage },
       { path: "*", element: <Navigate to="/board" replace /> },
     ],
   },
