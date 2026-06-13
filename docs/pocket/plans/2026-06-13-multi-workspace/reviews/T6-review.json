@@ -1,0 +1,45 @@
+{
+  "task_id": "T6",
+  "task_name": "Client workspace selection state and scoped data context",
+  "cycle": 1,
+  "timestamp": "2026-06-13T07:29:50Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Active workspace id is single-source-of-truth: every scoped API call (board, metrics, activity, presence, card CRUD, move, columns) reads activeWorkspaceId from BoardContext (BoardContext.tsx:118-301, BoardPage.tsx:246-307).",
+      "SSE correctly closes the old stream and opens a new one on workspace switch via the activeWorkspaceId-keyed effect with cleanup (BoardContext.tsx:222, 258-262).",
+      "Invalid saved workspace id is cleared from localStorage through chooseInitialWorkspace + clearSavedWorkspaceId (workspaceSelection.ts:41-45, BoardContext.tsx:175).",
+      "Deep-link miss redirects silently to /board with replace and no toast, while preserving the pre-existing teammate-delete toast path (cardPanel.ts:43-49, ContextPanel.tsx:219-238).",
+      "Pure, well-tested selection helpers (chooseInitialWorkspace, getRemovalRedirect, planWorkspaceRefresh, getMissingCardRedirect) keep decision logic out of React; all 26 client tests pass.",
+      "Tests written before implementation per TDD steps; follows existing api.ts request wrapper and BoardContext patterns without inventing new abstractions.",
+      "No must-not-haves violated: no slug-based routing, no multi-tab storage-event sync, no per-workspace scroll/panel persistence."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "planWorkspaceRefresh labels a 'load-settings' step as workspace-scoped, but refreshSettings() calls the global unscoped api.getSettings() ('/settings'). This is by design (T4 deliberately left /settings global; T6 only requires settings to reload on switch, which it does at BoardContext.tsx:202). Cosmetic naming inconsistency in a test-only planning helper, not a behavioral defect.",
+        "location": "client/src/lib/workspaceSelection.ts:88"
+      },
+      {
+        "severity": "Minor",
+        "description": "planWorkspaceRefresh is exported and unit-tested but never called by switchWorkspace; the actual close->load->open ordering is enforced by React running the old effect cleanup before the new activeWorkspaceId effect. The helper documents intent the plan's own test mandates, so it is not extra scope, but it is effectively dead code in production.",
+        "location": "client/src/lib/workspaceSelection.ts:81-91"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  }
+}

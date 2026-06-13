@@ -1,0 +1,47 @@
+{
+  "task_id": "T4",
+  "task_name": "Workspace-scoped board, metrics, activity, and card APIs",
+  "cycle": 2,
+  "timestamp": "2026-06-13T14:46:30Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle-1 move body key mismatch RESOLVED: client api.ts:83-91 sends body containing `index`, BoardPage.tsx:252-256 passes `index`, and server routes.ts:971-973 destructures and validates `index`. Chain agrees end-to-end.",
+      "Test asserts body shape: api.test.ts:121-123 parses the move request body and asserts `toEqual({ toColumnId: 2, index: 3, version: 3 })` plus `not.toHaveProperty('position')` — a real regression guard, not just a path check."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All board/columns/cards/metrics/activity/presence routes are workspace-scoped: every route parses workspaceId, performs a `lookupMembership` 404 guard, and constrains queries by `workspace_id` (e.g., routes.ts:682-694, 1099-1124, 1194-1211).",
+      "Optimistic locking (routes.ts:993-998, 906-924), WIP enforcement (routes.ts:862-869, 1022-1033), activity recording with workspace_id (recordActivity, routes.ts:647-672), and soft-delete (routes.ts:946-950) all preserved and scoped.",
+      "Non-member card reads return 404 via the testable createScopedBoardService factory (routes.ts:123-159), avoiding workspace-existence leakage.",
+      "core/* is untouched: metrics/WIP helpers receive only pre-scoped rows; no changes to server/src/core/ in the task range.",
+      "Client board APIs require an explicit workspaceId argument on every method (api.ts:48-133); no slug-based routing introduced.",
+      "Move-route mutating UPDATEs (routes.ts:1045, 1054) operate on rows already SELECT...FOR UPDATE'd with `workspace_id = $2` in the same transaction (routes.ts:983-986, 1014-1019), so they are transactionally workspace-scoped and locked."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Defense-in-depth: the two move UPDATEs filter by `id` alone rather than also including `workspace_id`. Safe today because the card and siblings are FOR UPDATE-verified within the workspace in the same transaction, but an inline `AND workspace_id = $N` would make the guarantee local to each statement.",
+        "location": "server/src/routes.ts:1045,1054"
+      },
+      {
+        "severity": "Minor",
+        "description": "DELETE /workspaces/:workspaceId/presence omits the `lookupMembership` 404 guard present on every other scoped route. Harmless because it only clears the caller's own presence key (req.user!.id), but it is inconsistent with the surrounding pattern.",
+        "location": "server/src/routes.ts:1272-1280"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  }
+}
