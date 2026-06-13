@@ -94,6 +94,7 @@ api.post("/columns", async (req, res) => {
      RETURNING id, title, position, wip_limit, policy, is_done`,
     [title.trim(), POSITION_GAP],
   );
+  await publishEvent({ type: "column.created", actor: req.user! });
   res.status(201).json(rows[0]);
 });
 

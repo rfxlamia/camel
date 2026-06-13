@@ -12,7 +12,7 @@ const PRESENCE_PREFIX = "camel:presence:";
 const PRESENCE_TTL_SECONDS = 60;
 
 export interface BoardEvent {
-  type: "card.created" | "card.updated" | "card.moved" | "card.deleted" | "column.updated" | "presence.changed" | "settings.updated";
+  type: "card.created" | "card.updated" | "card.moved" | "card.deleted" | "column.created" | "column.updated" | "presence.changed" | "settings.updated";
   actor: AuthUser;
   cardId?: number;
   at: string;

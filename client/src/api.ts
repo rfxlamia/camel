@@ -68,6 +68,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ toColumnId, index, version }),
     }),
+  createColumn: (title: string) =>
+    request<Column>("/columns", {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
   updateColumn: (
     id: number,
     patch: { title?: string; wipLimit?: number | null; policy?: string },
