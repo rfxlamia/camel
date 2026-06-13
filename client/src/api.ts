@@ -83,7 +83,7 @@ export const api = {
   moveCard: (
     workspaceId: number,
     id: number,
-    body: { toColumnId: number; position: number; version?: number },
+    body: { toColumnId: number; index: number; version?: number },
   ) =>
     request<Card>(`/workspaces/${workspaceId}/cards/${id}/move`, {
       method: "POST",

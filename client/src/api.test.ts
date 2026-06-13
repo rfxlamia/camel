@@ -100,7 +100,7 @@ describe("scoped board API paths", () => {
     await api.getPresence(7);
     await api.getCard(7, 42);
     await api.createCard(7, { columnId: 1, title: "New" });
-    await api.moveCard(7, 42, { toColumnId: 2, position: 1000, version: 3 });
+    await api.moveCard(7, 42, { toColumnId: 2, index: 3, version: 3 });
 
     const paths = mockFetch.mock.calls.map(([path]) => path);
     expect(paths).toEqual([
@@ -113,6 +113,14 @@ describe("scoped board API paths", () => {
       "/api/workspaces/7/cards",
       "/api/workspaces/7/cards/42/move",
     ]);
+
+    const moveCall = mockFetch.mock.calls.find(
+      ([path]) => path === "/api/workspaces/7/cards/42/move",
+    );
+    expect(moveCall).toBeDefined();
+    const moveBody = JSON.parse((moveCall![1] as RequestInit).body as string);
+    expect(moveBody).toEqual({ toColumnId: 2, index: 3, version: 3 });
+    expect(moveBody).not.toHaveProperty("position");
   });
 });
 

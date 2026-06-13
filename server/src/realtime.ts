@@ -121,7 +121,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       await deps.subscriber.pSubscribe(WORKSPACE_EVENTS_PATTERN, onRedisMessage);
     },
 
-    connectLocalClient({ workspaceId }: { workspaceId: number; userId: number }) {
+    connectLocalClient({ workspaceId }: { workspaceId: number }) {
       const client: LocalTestClient = { workspaceId, buffer: [] };
       localTestClients.add(client);
       return {

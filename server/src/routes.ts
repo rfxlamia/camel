@@ -163,9 +163,6 @@ export type WorkspaceAccessDeps = {
     workspaceId: number,
     actorId: number,
   ) => Promise<{ userId: number; role: string } | null>;
-  getWorkspaceOwner: (
-    workspaceId: number,
-  ) => Promise<{ userId: number; role: string } | null>;
   getWorkspace: (workspaceId: number) => Promise<{ id: number; name: string } | null>;
   getTargetMembership: (
     workspaceId: number,
@@ -234,13 +231,6 @@ const workspaceAccessService = createWorkspaceAccessService({
   getActorMembership: async (workspaceId, actorId) => {
     const role = await lookupMembership(actorId, workspaceId);
     return role ? { userId: actorId, role } : null;
-  },
-  getWorkspaceOwner: async (workspaceId) => {
-    const { rows } = await pool.query(
-      "SELECT user_id, role FROM workspace_members WHERE workspace_id = $1 AND role = 'owner' LIMIT 1",
-      [workspaceId],
-    );
-    return rows[0] ? { userId: rows[0].user_id as number, role: rows[0].role as string } : null;
   },
   getWorkspace: async (workspaceId) => {
     const { rows } = await pool.query(
@@ -1291,4 +1281,14 @@ api.delete("/workspaces/:workspaceId/presence", async (req, res) => {
 
 // ---- Real-time stream (Redis Pub/Sub -> SSE) ----------------------------------
 
-api.get("/workspaces/:workspaceId/events/stream", sseHandler);
+api.get("/workspaces/:workspaceId/events/stream", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
+  sseHandler(req, res);
+});

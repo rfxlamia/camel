@@ -8,8 +8,8 @@ import {
 describe("workspace realtime isolation", () => {
   it("keeps local fallback clients isolated by workspace", async () => {
     const hub = createRealtimeHub({ publisher: null, subscriber: null });
-    const wsA = hub.connectLocalClient({ workspaceId: 1, userId: 10 });
-    const wsB = hub.connectLocalClient({ workspaceId: 2, userId: 11 });
+    const wsA = hub.connectLocalClient({ workspaceId: 1 });
+    const wsB = hub.connectLocalClient({ workspaceId: 2 });
 
     await hub.publishEvent(2, { type: "card.created", cardId: 42 });
 

@@ -251,7 +251,7 @@ export default function BoardPage() {
     try {
       await api.moveCard(activeWorkspaceId, cardId, {
         toColumnId: col.id,
-        position: index,
+        index,
         version,
       });
       snapshotRef.current = null;

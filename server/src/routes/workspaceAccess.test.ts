@@ -75,7 +75,6 @@ describe("membership removal events", () => {
     const clearPresence = vi.fn(async () => undefined);
     const service = createWorkspaceAccessService({
       getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
-      getWorkspaceOwner: vi.fn(async () => ({ userId: 1, role: "owner" })),
       getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
       getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
       removeMember: vi.fn(async () => ({ userId: 4, username: "nina" })),
