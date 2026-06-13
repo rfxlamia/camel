@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type NextFunction, type Request } from "express";
 import { pool } from "./db/pool.js";
 import { neighborsAt, positionBetween, rebalance, POSITION_GAP } from "./core/position.js";
 import { checkWipLimit } from "./core/wip.js";
@@ -91,6 +91,50 @@ async function lookupMembership(
     [workspaceId, userId],
   );
   return rows[0]?.role as string | undefined;
+}
+
+export type MembershipLookup = (
+  userId: number,
+  workspaceId: number,
+) => Promise<string | undefined>;
+
+export function createRequestMembershipLookup(
+  lookup: MembershipLookup,
+): MembershipLookup {
+  const cache = new Map<string, Promise<string | undefined>>();
+
+  return (userId, workspaceId) => {
+    const key = `${userId}:${workspaceId}`;
+    let cached = cache.get(key);
+    if (!cached) {
+      cached = lookup(userId, workspaceId);
+      cache.set(key, cached);
+    }
+    return cached;
+  };
+}
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      membershipLookup?: MembershipLookup;
+    }
+  }
+}
+
+function attachMembershipLookup(req: Request, _res: unknown, next: NextFunction) {
+  req.membershipLookup = createRequestMembershipLookup(lookupMembership);
+  next();
+}
+
+function getRequestMembership(
+  req: Request,
+  userId: number,
+  workspaceId: number,
+): Promise<string | undefined> {
+  req.membershipLookup ??= createRequestMembershipLookup(lookupMembership);
+  return req.membershipLookup(userId, workspaceId);
 }
 
 function parseWorkspaceId(raw: string): number | null {
@@ -227,42 +271,45 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
   };
 }
 
-const workspaceAccessService = createWorkspaceAccessService({
-  getActorMembership: async (workspaceId, actorId) => {
-    const role = await lookupMembership(actorId, workspaceId);
-    return role ? { userId: actorId, role } : null;
-  },
-  getWorkspace: async (workspaceId) => {
-    const { rows } = await pool.query(
-      "SELECT id, name FROM workspaces WHERE id = $1",
-      [workspaceId],
-    );
-    return rows[0] ? { id: rows[0].id as number, name: rows[0].name as string } : null;
-  },
-  getTargetMembership: async (workspaceId, userId) => {
-    const role = await lookupMembership(userId, workspaceId);
-    return role ? { userId, role } : null;
-  },
-  removeMember: async (workspaceId, userId) => {
-    const { rows } = await pool.query(
-      `DELETE FROM workspace_members
-       WHERE workspace_id = $1 AND user_id = $2
-       RETURNING user_id`,
-      [workspaceId, userId],
-    );
-    const { rows: userRows } = await pool.query(
-      "SELECT username FROM users WHERE id = $1",
-      [rows[0].user_id],
-    );
-    return { userId: rows[0].user_id as number, username: userRows[0].username as string };
-  },
-  publishEvent,
-  clearPresence,
-});
+function createWorkspaceAccessServiceForRequest(req: Request) {
+  return createWorkspaceAccessService({
+    getActorMembership: async (workspaceId, actorId) => {
+      const role = await getRequestMembership(req, actorId, workspaceId);
+      return role ? { userId: actorId, role } : null;
+    },
+    getWorkspace: async (workspaceId) => {
+      const { rows } = await pool.query(
+        "SELECT id, name FROM workspaces WHERE id = $1",
+        [workspaceId],
+      );
+      return rows[0] ? { id: rows[0].id as number, name: rows[0].name as string } : null;
+    },
+    getTargetMembership: async (workspaceId, userId) => {
+      const role = await getRequestMembership(req, userId, workspaceId);
+      return role ? { userId, role } : null;
+    },
+    removeMember: async (workspaceId, userId) => {
+      const { rows } = await pool.query(
+        `DELETE FROM workspace_members
+         WHERE workspace_id = $1 AND user_id = $2
+         RETURNING user_id`,
+        [workspaceId, userId],
+      );
+      const { rows: userRows } = await pool.query(
+        "SELECT username FROM users WHERE id = $1",
+        [rows[0].user_id],
+      );
+      return { userId: rows[0].user_id as number, username: userRows[0].username as string };
+    },
+    publishEvent,
+    clearPresence,
+  });
+}
 
 export const api = Router();
 
 api.use(requireAuth);
+api.use(attachMembershipLookup);
 
 // ---- Workspaces --------------------------------------------------------------
 
@@ -358,7 +405,7 @@ api.get("/workspaces/:workspaceId/members", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const { rows } = await pool.query(
@@ -386,7 +433,7 @@ api.post("/workspaces/:workspaceId/members", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  const actorRole = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!actorRole) return res.status(404).json({ error: "Not found" });
 
   const manage = checkActorCanManage(actorRole);
@@ -409,7 +456,7 @@ api.post("/workspaces/:workspaceId/members", async (req, res) => {
 
   if (targetRes.rows.length > 0) {
     const target = targetRes.rows[0];
-    const existing = await lookupMembership(target.id, workspaceId);
+    const existing = await getRequestMembership(req, target.id, workspaceId);
     if (existing) {
       return res.status(409).json({ error: "User is already a member of this workspace" });
     }
@@ -466,7 +513,7 @@ api.delete("/workspaces/:workspaceId/members/:userId", async (req, res) => {
     return res.status(400).json({ error: "workspaceId and userId must be integers" });
   }
 
-  const result = await workspaceAccessService.removeMember({
+  const result = await createWorkspaceAccessServiceForRequest(req).removeMember({
     actorId: req.user!.id,
     workspaceId,
     userId: targetUserId,
@@ -495,7 +542,7 @@ api.post("/workspaces/:workspaceId/invites/:inviteId/accept", async (req, res) =
   }
   const invite = invRes.rows[0];
 
-  const existing = await lookupMembership(req.user!.id, workspaceId);
+  const existing = await getRequestMembership(req, req.user!.id, workspaceId);
   if (existing) {
     return res.status(409).json({ error: "Already a member of this workspace" });
   }
@@ -559,7 +606,7 @@ api.post("/workspaces/:workspaceId/transfer-ownership", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  const actorRole = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!actorRole || actorRole !== "owner") {
     return res.status(404).json({ error: "Not found" });
   }
@@ -576,7 +623,7 @@ api.post("/workspaces/:workspaceId/transfer-ownership", async (req, res) => {
       ? previousOwnerRole
       : "admin";
 
-  const newOwnerRole = await lookupMembership(newOwnerId, workspaceId);
+  const newOwnerRole = await getRequestMembership(req, newOwnerId, workspaceId);
   if (!newOwnerRole) {
     return res.status(404).json({ error: "Not found" });
   }
@@ -614,7 +661,7 @@ api.delete("/workspaces/:workspaceId", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  const actorRole = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!actorRole) return res.status(404).json({ error: "Not found" });
   if (actorRole !== "owner") return res.status(404).json({ error: "Not found" });
 
@@ -680,7 +727,7 @@ api.get("/workspaces/:workspaceId/board", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const columns = await pool.query(
@@ -726,7 +773,7 @@ api.post("/workspaces/:workspaceId/columns", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const { title } = req.body ?? {};
@@ -749,7 +796,7 @@ api.patch("/workspaces/:workspaceId/columns/:id", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const id = Number(req.params.id);
@@ -779,7 +826,7 @@ api.delete("/workspaces/:workspaceId/columns/:id", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const { rowCount } = await pool.query(
@@ -801,7 +848,7 @@ api.get("/workspaces/:workspaceId/cards/:id", async (req, res) => {
   const cardId = Number(req.params.id);
   const result = await createScopedBoardService({
     getMembership: async (wsId, userId) => {
-      const r = await lookupMembership(userId, wsId);
+      const r = await getRequestMembership(req, userId, wsId);
       return r ? { role: r } : null;
     },
     getCardById: async (wsId, cId) => {
@@ -842,7 +889,7 @@ api.post("/workspaces/:workspaceId/cards", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const { columnId, title, description } = req.body ?? {};
@@ -891,7 +938,7 @@ api.patch("/workspaces/:workspaceId/cards/:id", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const { title, description, version } = req.body ?? {};
@@ -940,7 +987,7 @@ api.delete("/workspaces/:workspaceId/cards/:id", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const id = Number(req.params.id);
@@ -965,7 +1012,7 @@ api.post("/workspaces/:workspaceId/cards/:id/move", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const cardId = Number(req.params.id);
@@ -1103,7 +1150,7 @@ api.get("/workspaces/:workspaceId/metrics", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const windowDays = req.query.windowDays
@@ -1130,7 +1177,7 @@ api.get("/workspaces/:workspaceId/metrics/history", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const weeks = req.query.weeks ? Number(req.query.weeks) : undefined;
@@ -1198,7 +1245,7 @@ api.get("/workspaces/:workspaceId/activity", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const limit = Math.min(Number(req.query.limit) || 50, 200);
@@ -1218,7 +1265,7 @@ api.get("/workspaces/:workspaceId/cards/:id/activity", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const cardId = Number(req.params.id);
@@ -1251,7 +1298,7 @@ api.post("/workspaces/:workspaceId/presence/heartbeat", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   await heartbeat(workspaceId, req.user!);
@@ -1264,7 +1311,7 @@ api.get("/workspaces/:workspaceId/presence", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   res.json({ users: await onlineUsers(workspaceId, req.user!) });
@@ -1288,7 +1335,7 @@ api.get("/workspaces/:workspaceId/events/stream", async (req, res) => {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const role = await lookupMembership(req.user!.id, workspaceId);
+  const role = await getRequestMembership(req, req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
   sseHandler(req, res);

@@ -5,6 +5,7 @@ import {
   checkActorCanManage,
   checkCanRemoveUser,
   checkInviteeCap,
+  createRequestMembershipLookup,
   createScopedBoardService,
   createWorkspaceAccessService,
   createWorkspaceIntegrationHarness,
@@ -68,6 +69,26 @@ describe("scoped board service", () => {
       activity: [{ id: 200, workspaceId: 1 }],
     });
     expect(JSON.stringify(board)).not.toContain("WS-B");
+  });
+});
+
+describe("request-scoped membership lookup", () => {
+  it("reuses the same user/workspace membership lookup within a request", async () => {
+    const lookup = vi.fn(async (userId: number, workspaceId: number) => (
+      userId === 1 && workspaceId === 10 ? "admin" : undefined
+    ));
+    const requestLookup = createRequestMembershipLookup(lookup);
+
+    await expect(requestLookup(1, 10)).resolves.toBe("admin");
+    await expect(requestLookup(1, 10)).resolves.toBe("admin");
+    await expect(requestLookup(1, 11)).resolves.toBeUndefined();
+    await expect(requestLookup(1, 11)).resolves.toBeUndefined();
+    await expect(requestLookup(2, 10)).resolves.toBeUndefined();
+
+    expect(lookup).toHaveBeenCalledTimes(3);
+    expect(lookup).toHaveBeenNthCalledWith(1, 1, 10);
+    expect(lookup).toHaveBeenNthCalledWith(2, 1, 11);
+    expect(lookup).toHaveBeenNthCalledWith(3, 2, 10);
   });
 });
 
