@@ -8,6 +8,7 @@ import { useBoard, type SaveCardResult } from "../context/BoardContext";
 import {
   describeCardEvent,
   findCardInColumns,
+  getMissingCardRedirect,
   parseCardId,
 } from "../lib/cardPanel";
 
@@ -143,15 +144,16 @@ function DetailsSection({
 }
 
 function ActivitySection({ cardId }: { cardId: number }) {
-  const { refreshTick } = useBoard();
+  const { activeWorkspaceId, refreshTick } = useBoard();
   const [events, setEvents] = useState<ActivityEvent[] | null>(null);
 
   // Fetched on open and after every board refresh, so teammate changes show
   // up through the existing SSE → refresh model.
   useEffect(() => {
+    if (activeWorkspaceId === null) return;
     let active = true;
     api
-      .getCardActivity(cardId)
+      .getCardActivity(activeWorkspaceId, cardId)
       .then(({ events }) => {
         if (active) setEvents(events);
       })
@@ -159,7 +161,7 @@ function ActivitySection({ cardId }: { cardId: number }) {
     return () => {
       active = false;
     };
-  }, [cardId, refreshTick]);
+  }, [activeWorkspaceId, cardId, refreshTick]);
 
   return (
     <section
@@ -222,9 +224,18 @@ export default function ContextPanel() {
     }
     if (hadCardRef.current && !selfDeleteRef.current) {
       showToast("This card was deleted.");
+      navigate("/board", { replace: true });
+      return;
     }
-    navigate("/board", { replace: true });
-  }, [columns, card, navigate, showToast]);
+    const redirect = getMissingCardRedirect({
+      cardId,
+      boardLoaded: true,
+      cardFound: false,
+    });
+    if (redirect) {
+      navigate(redirect.to, { replace: redirect.replace });
+    }
+  }, [cardId, columns, card, navigate, showToast]);
 
   const close = useCallback(() => navigate("/board"), [navigate]);
 

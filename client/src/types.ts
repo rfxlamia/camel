@@ -138,3 +138,9 @@ export interface WorkspaceListResponse {
   workspaces: Workspace[];
   pendingInvites: WorkspaceInvite[];
 }
+
+export interface WorkspaceSelectionState {
+  activeWorkspaceId: number | null;
+  pickerRequired: boolean;
+  workspacesReady: boolean;
+}

@@ -4,7 +4,7 @@ import { api } from "./api";
 import type { User } from "./types";
 import AuthPage from "./components/AuthPage";
 import ContextPanel from "./components/ContextPanel";
-import { BoardProvider } from "./context/BoardContext";
+import { BoardProvider, useBoard } from "./context/BoardContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
@@ -44,6 +44,16 @@ const router = createBrowserRouter([
   },
 ]);
 
+function AuthenticatedApp() {
+  const { workspacesReady, pickerRequired } = useBoard();
+
+  if (!workspacesReady) return <LoadingScreen />;
+  // Picker UI lands in Phase 3; until then block routing when no workspace is selected.
+  if (pickerRequired) return <LoadingScreen />;
+
+  return <RouterProvider router={router} />;
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -62,7 +72,7 @@ export default function App() {
 
   return (
     <BoardProvider user={user} onSignedOut={() => setUser(null)}>
-      <RouterProvider router={router} />
+      <AuthenticatedApp />
     </BoardProvider>
   );
 }

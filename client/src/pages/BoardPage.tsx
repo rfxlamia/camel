@@ -94,8 +94,15 @@ function AddColumn({
 }
 
 export default function BoardPage() {
-  const { columns, setColumns, loadError, refresh, showToast, deleteCard } =
-    useBoard();
+  const {
+    columns,
+    setColumns,
+    loadError,
+    refresh,
+    showToast,
+    deleteCard,
+    activeWorkspaceId,
+  } = useBoard();
   const navigate = useNavigate();
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const snapshotRef = useRef<Column[] | null>(null);
@@ -236,8 +243,17 @@ export default function BoardPage() {
       ? findColumnOfCard(before, cardId)?.cards.find((c) => c.id === cardId)?.version
       : undefined;
 
+    if (activeWorkspaceId === null) {
+      revert();
+      return;
+    }
+
     try {
-      await api.moveCard(cardId, col.id, index, version);
+      await api.moveCard(activeWorkspaceId, cardId, {
+        toColumnId: col.id,
+        position: index,
+        version,
+      });
       snapshotRef.current = null;
       await refresh();
     } catch (err) {
@@ -254,8 +270,9 @@ export default function BoardPage() {
   };
 
   const onAddCard = async (columnId: number, title: string) => {
+    if (activeWorkspaceId === null) return;
     try {
-      await api.createCard(columnId, title);
+      await api.createCard(activeWorkspaceId, { columnId, title });
       await refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -270,8 +287,9 @@ export default function BoardPage() {
     id: number,
     patch: { title?: string; wipLimit?: number | null; policy?: string },
   ) => {
+    if (activeWorkspaceId === null) return;
     try {
-      await api.updateColumn(id, patch);
+      await api.updateColumn(activeWorkspaceId, id, patch);
       await refresh();
     } catch {
       showToast("Couldn't update the column. Try again.");
@@ -279,8 +297,9 @@ export default function BoardPage() {
   };
 
   const onAddColumn = async (title: string) => {
+    if (activeWorkspaceId === null) return;
     try {
-      await api.createColumn(title);
+      await api.createColumn(activeWorkspaceId, title);
       await refresh();
     } catch {
       showToast("Couldn't add the column. Check your connection and try again.");

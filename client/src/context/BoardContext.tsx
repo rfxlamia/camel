@@ -10,6 +10,13 @@ import {
   type SetStateAction,
 } from "react";
 import { ApiError, api } from "../api";
+import {
+  chooseInitialWorkspace,
+  clearSavedWorkspaceId,
+  getRemovalRedirect,
+  persistWorkspaceId,
+  readSavedWorkspaceId,
+} from "../lib/workspaceSelection";
 import type {
   ActivityEvent,
   Column,
@@ -17,6 +24,8 @@ import type {
   PresenceUser,
   SettingsMap,
   User,
+  Workspace,
+  WorkspaceInvite,
 } from "../types";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
@@ -27,6 +36,13 @@ export type SaveCardResult = "saved" | "conflict" | "error";
 
 interface BoardContextValue {
   user: User;
+  activeWorkspaceId: number | null;
+  activeWorkspace: Workspace | null;
+  workspaces: Workspace[];
+  pendingInvites: WorkspaceInvite[];
+  pickerRequired: boolean;
+  workspacesReady: boolean;
+  switchWorkspace: (workspaceId: number) => void;
   columns: Column[] | null;
   setColumns: Dispatch<SetStateAction<Column[] | null>>;
   metrics: FlowMetrics | null;
@@ -66,9 +82,15 @@ interface Props {
 /**
  * Holds board data and the real-time wiring (SSE, heartbeat, presence) at the
  * app root, above the router, so navigation never drops the connection and
- * board state persists across pages.
+ * board state persists across pages. All data is scoped to exactly one active
+ * workspace at a time.
  */
 export function BoardProvider({ user, onSignedOut, children }: Props) {
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<WorkspaceInvite[]>([]);
+  const [pickerRequired, setPickerRequired] = useState(false);
+  const [workspacesReady, setWorkspacesReady] = useState(false);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [metrics, setMetrics] = useState<FlowMetrics | null>(null);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
@@ -79,6 +101,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   const [settings, setSettings] = useState<SettingsMap>({ boardName: "Camel", logoPath: "/logo.png", version: 0 });
   const [settingsVersion, setSettingsVersion] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workspacesRef = useRef(workspaces);
+  workspacesRef.current = workspaces;
+
+  const activeWorkspace =
+    activeWorkspaceId === null
+      ? null
+      : workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -87,11 +116,12 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (activeWorkspaceId === null) return;
     try {
       const [board, m, a] = await Promise.all([
-        api.getBoard(),
-        api.getMetrics(),
-        api.getActivity(),
+        api.getBoard(activeWorkspaceId),
+        api.getMetrics(activeWorkspaceId),
+        api.getActivity(activeWorkspaceId),
       ]);
       setColumns(board.columns);
       setMetrics(m);
@@ -105,7 +135,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
       }
       setLoadError(true);
     }
-  }, [onSignedOut]);
+  }, [activeWorkspaceId, onSignedOut]);
 
   const refreshSettings = useCallback(async () => {
     const s = await api.getSettings();
@@ -113,32 +143,116 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
     setSettingsVersion(s.version);
   }, []);
 
-  // Board + collaboration wiring, active for the signed-in session.
+  const reloadWorkspaces = useCallback(async () => {
+    const { workspaces: list, pendingInvites: invites } = await api.getWorkspaces();
+    setWorkspaces(list);
+    setPendingInvites(invites);
+    return list;
+  }, []);
+
+  const switchWorkspace = useCallback((workspaceId: number) => {
+    setActiveWorkspaceId(workspaceId);
+    persistWorkspaceId(workspaceId);
+    setPickerRequired(false);
+    setColumns(null);
+    setMetrics(null);
+    setActivity([]);
+    setPresence([]);
+    setLoadError(false);
+  }, []);
+
+  // Load workspace list and restore last-active workspace from localStorage.
   useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { workspaces: list, pendingInvites: invites } = await api.getWorkspaces();
+        if (!active) return;
+        const selection = chooseInitialWorkspace({
+          workspaces: list,
+          savedWorkspaceId: readSavedWorkspaceId(),
+        });
+        if (selection.clearSavedWorkspace) clearSavedWorkspaceId();
+        setWorkspaces(list);
+        setPendingInvites(invites);
+        setPickerRequired(selection.pickerRequired);
+        if (selection.activeWorkspaceId !== null) {
+          setActiveWorkspaceId(selection.activeWorkspaceId);
+          persistWorkspaceId(selection.activeWorkspaceId);
+        }
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          onSignedOut();
+          return;
+        }
+      } finally {
+        if (active) setWorkspacesReady(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [onSignedOut]);
+
+  // Board + collaboration wiring scoped to the active workspace.
+  useEffect(() => {
+    if (activeWorkspaceId === null) return;
+
     void refresh();
     void refreshSettings();
 
     const beat = () => {
-      void api.heartbeat().catch(() => {});
-      void api.getPresence().then(({ users }) => setPresence(users)).catch(() => {});
+      void api.heartbeat(activeWorkspaceId).catch(() => {});
+      void api
+        .getPresence(activeWorkspaceId)
+        .then(({ users }) => setPresence(users))
+        .catch(() => {});
     };
     beat();
     const heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
     const presenceTimer = setInterval(
-      () => void api.getPresence().then(({ users }) => setPresence(users)).catch(() => {}),
+      () =>
+        void api
+          .getPresence(activeWorkspaceId)
+          .then(({ users }) => setPresence(users))
+          .catch(() => {}),
       PRESENCE_REFRESH_MS,
     );
 
-    // Live updates: server pushes board events over SSE; EventSource
-    // reconnects on its own after a dropped connection.
-    const stream = new EventSource("/api/events/stream");
+    const stream = new EventSource(`/api/workspaces/${activeWorkspaceId}/events/stream`);
     stream.onmessage = (e) => {
-      void refresh();
       try {
-        if (JSON.parse(e.data).type === "settings.updated") void refreshSettings();
+        const data = JSON.parse(e.data) as {
+          type?: string;
+          userId?: number;
+          workspaceId?: number;
+          workspaceName?: string;
+        };
+        if (
+          data.type === "membership.removed" &&
+          data.userId === user.id &&
+          data.workspaceId !== undefined &&
+          data.workspaceName
+        ) {
+          const redirect = getRemovalRedirect({
+            activeWorkspaceId,
+            removedWorkspaceId: data.workspaceId,
+            removedWorkspaceName: data.workspaceName,
+            workspaces: workspacesRef.current,
+          });
+          if (redirect) {
+            showToast(redirect.toast);
+            void reloadWorkspaces().then(() => {
+              switchWorkspace(redirect.nextWorkspaceId);
+            });
+            return;
+          }
+        }
+        if (data.type === "settings.updated") void refreshSettings();
       } catch {
         // non-JSON keep-alive comment
       }
+      void refresh();
     };
 
     return () => {
@@ -146,24 +260,22 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
       clearInterval(presenceTimer);
       stream.close();
     };
-  }, [refresh]);
+  }, [activeWorkspaceId, refresh, refreshSettings, reloadWorkspaces, showToast, switchWorkspace, user.id]);
 
-  // Card mutations live here (not in BoardPage) so the route-sibling context
-  // panel can call them. Logic ported verbatim from BoardPage, including the
-  // optimistic-locking version + 409 conflict flow.
   const saveCard = useCallback(
     async (
       id: number,
       patch: { title?: string; description?: string; version?: number },
     ): Promise<SaveCardResult> => {
-      // Callers editing a draft pass the version their draft is based on, so
-      // a teammate's concurrent change still 409s even though SSE already
-      // refreshed columns. Without it, fall back to the live version.
+      if (activeWorkspaceId === null) return "error";
       const current = columns
         ?.flatMap((col) => col.cards)
         .find((c) => c.id === id);
       try {
-        await api.updateCard(id, { ...patch, version: patch.version ?? current?.version });
+        await api.updateCard(activeWorkspaceId, id, {
+          ...patch,
+          version: patch.version ?? current?.version,
+        });
         await refresh();
         return "saved";
       } catch (err) {
@@ -176,15 +288,16 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         return "error";
       }
     },
-    [columns, refresh, showToast],
+    [activeWorkspaceId, columns, refresh, showToast],
   );
 
   const deleteCard = useCallback(
     async (id: number) => {
-      await api.deleteCard(id);
+      if (activeWorkspaceId === null) return;
+      await api.deleteCard(activeWorkspaceId, id);
       await refresh();
     },
-    [refresh],
+    [activeWorkspaceId, refresh],
   );
 
   const logout = useCallback(async () => {
@@ -200,6 +313,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
     <BoardContext.Provider
       value={{
         user,
+        activeWorkspaceId,
+        activeWorkspace,
+        workspaces,
+        pendingInvites,
+        pickerRequired,
+        workspacesReady,
+        switchWorkspace,
         columns,
         setColumns,
         metrics,

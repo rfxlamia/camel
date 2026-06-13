@@ -127,8 +127,10 @@ export const api = {
     ),
   getPresence: (workspaceId: number) =>
     request<{ users: PresenceUser[] }>(`/workspaces/${workspaceId}/presence`),
-  heartbeat: () =>
-    request<{ ok: boolean }>("/presence/heartbeat", { method: "POST" }),
+  heartbeat: (workspaceId: number) =>
+    request<{ ok: boolean }>(`/workspaces/${workspaceId}/presence/heartbeat`, {
+      method: "POST",
+    }),
 
   // Settings
   getSettings: () => request<SettingsMap>("/settings"),

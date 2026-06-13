@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ActivityEvent, Card, Column } from "../types";
-import { describeCardEvent, findCardInColumns, parseCardId } from "./cardPanel";
+import {
+  describeCardEvent,
+  findCardInColumns,
+  getMissingCardRedirect,
+  parseCardId,
+} from "./cardPanel";
 
 function makeCard(id: number, columnId: number): Card {
   return {
@@ -118,5 +123,23 @@ describe("describeCardEvent", () => {
     expect(describeCardEvent(makeEvent({ type: "update" }))).toBe(
       "updated this card",
     );
+  });
+});
+
+describe("workspace-aware card panel redirects", () => {
+  it("silently replaces the route when the card is absent from the active workspace", () => {
+    expect(getMissingCardRedirect({
+      cardId: 42,
+      boardLoaded: true,
+      cardFound: false,
+    })).toEqual({
+      to: "/board",
+      replace: true,
+      toast: null,
+    });
+  });
+
+  it("does not redirect while the board is still loading", () => {
+    expect(getMissingCardRedirect({ cardId: 42, boardLoaded: false, cardFound: false })).toBeNull();
   });
 });

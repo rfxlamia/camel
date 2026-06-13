@@ -27,6 +27,27 @@ export function findCardInColumns(
   return null;
 }
 
+export interface MissingCardRedirectInput {
+  cardId: number | null;
+  boardLoaded: boolean;
+  cardFound: boolean;
+}
+
+export interface MissingCardRedirect {
+  to: string;
+  replace: boolean;
+  toast: null;
+}
+
+/** Silent redirect when a deep-linked card is absent after the board has loaded. */
+export function getMissingCardRedirect({
+  boardLoaded,
+  cardFound,
+}: MissingCardRedirectInput): MissingCardRedirect | null {
+  if (!boardLoaded || cardFound) return null;
+  return { to: "/board", replace: true, toast: null };
+}
+
 /**
  * Per-card activity line, e.g. "moved Doing → Review". A move whose source
  * column was deleted (fromColumn null) omits the null side: "moved this to
