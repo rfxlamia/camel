@@ -45,6 +45,7 @@ Camel Kanban is a full-stack, multi-user kanban board designed for small develop
 
 - [Node.js](https://nodejs.org/) v18+
 - [Docker](https://www.docker.com/) (for PostgreSQL and Redis)
+- `make` — pre-installed on macOS/Linux. On Windows, install via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install), [Chocolatey](https://chocolatey.org/) (`choco install make`), or [Scoop](https://scoop.sh/) (`scoop install make`).
 
 ### Quick start
 
