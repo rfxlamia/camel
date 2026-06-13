@@ -8,6 +8,7 @@ export interface Card {
   createdAt: string;
   startedAt: string | null;
   doneAt: string | null;
+  workspaceId?: number;
 }
 
 export interface User {

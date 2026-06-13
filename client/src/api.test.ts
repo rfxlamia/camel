@@ -87,6 +87,35 @@ describe("Settings API methods", () => {
   });
 });
 
+describe("scoped board API paths", () => {
+  it("prefixes board, metrics, activity, presence, and card methods with workspace id", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    const { api } = await import("./api");
+
+    await api.getBoard(7);
+    await api.getMetrics(7);
+    await api.getMetricsHistory(7);
+    await api.getActivity(7);
+    await api.getPresence(7);
+    await api.getCard(7, 42);
+    await api.createCard(7, { columnId: 1, title: "New" });
+    await api.moveCard(7, 42, { toColumnId: 2, position: 1000, version: 3 });
+
+    const paths = mockFetch.mock.calls.map(([path]) => path);
+    expect(paths).toEqual([
+      "/api/workspaces/7/board",
+      "/api/workspaces/7/metrics",
+      "/api/workspaces/7/metrics/history",
+      "/api/workspaces/7/activity",
+      "/api/workspaces/7/presence",
+      "/api/workspaces/7/cards/42",
+      "/api/workspaces/7/cards",
+      "/api/workspaces/7/cards/42/move",
+    ]);
+  });
+});
+
 describe("workspace API methods", () => {
   it("calls documented workspace and membership endpoints", async () => {
     mockFetch.mockClear();

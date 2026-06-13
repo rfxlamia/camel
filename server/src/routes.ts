@@ -93,6 +93,71 @@ async function lookupMembership(
   return rows[0]?.role as string | undefined;
 }
 
+function parseWorkspaceId(raw: string): number | null {
+  const workspaceId = Number(raw);
+  return Number.isInteger(workspaceId) ? workspaceId : null;
+}
+
+export type ScopedBoardDeps = {
+  getMembership: (
+    workspaceId: number,
+    userId: number,
+  ) => Promise<{ role: string } | null>;
+  getCardById: (
+    workspaceId: number,
+    cardId: number,
+  ) => Promise<{ id: number; workspaceId: number; title: string } | null>;
+  getBoardRows: (workspaceId: number) => Promise<
+    Array<{
+      id: number;
+      workspaceId: number;
+      title: string;
+      cards: Array<{ id: number; workspaceId: number; title: string }>;
+    }>
+  >;
+  getActivityRows: (
+    workspaceId: number,
+  ) => Promise<Array<{ id: number; workspaceId: number; cardTitle: string }>>;
+};
+
+export function createScopedBoardService(deps: ScopedBoardDeps) {
+  return {
+    async getCard({
+      userId,
+      workspaceId,
+      cardId,
+    }: {
+      userId: number;
+      workspaceId: number;
+      cardId: number;
+    }) {
+      const membership = await deps.getMembership(workspaceId, userId);
+      if (!membership) return { status: 404 as const, error: "Not found" };
+
+      const card = await deps.getCardById(workspaceId, cardId);
+      if (!card || card.workspaceId !== workspaceId) {
+        return { status: 404 as const, error: "Not found" };
+      }
+      return card;
+    },
+
+    async getBoard({
+      userId,
+      workspaceId,
+    }: {
+      userId: number;
+      workspaceId: number;
+    }) {
+      const membership = await deps.getMembership(workspaceId, userId);
+      if (!membership) return { status: 404 as const, error: "Not found" };
+
+      const columns = await deps.getBoardRows(workspaceId);
+      const activity = await deps.getActivityRows(workspaceId);
+      return { columns, activity };
+    },
+  };
+}
+
 export const api = Router();
 
 api.use(requireAuth);
@@ -492,6 +557,7 @@ type Queryable = Pick<typeof pool, "query">;
 async function recordActivity(
   db: Queryable,
   actor: AuthUser,
+  workspaceId: number,
   eventType: "create" | "update" | "move" | "delete",
   opts: {
     cardId?: number | null;
@@ -501,8 +567,8 @@ async function recordActivity(
   },
 ): Promise<void> {
   await db.query(
-    `INSERT INTO card_events (card_id, from_column_id, to_column_id, actor_id, event_type, payload)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO card_events (card_id, from_column_id, to_column_id, actor_id, event_type, payload, workspace_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       opts.cardId ?? null,
       opts.fromColumnId ?? null,
@@ -510,20 +576,31 @@ async function recordActivity(
       actor.id,
       eventType,
       JSON.stringify(opts.payload ?? {}),
+      workspaceId,
     ],
   );
 }
 
-// ---- Board ----------------------------------------------------------------
+// ---- Board (workspace-scoped) -----------------------------------------------
 
-api.get("/board", async (_req, res) => {
+api.get("/workspaces/:workspaceId/board", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const columns = await pool.query(
     `SELECT id, title, position, wip_limit, policy, is_done
-     FROM columns ORDER BY position`,
+     FROM columns WHERE workspace_id = $1 ORDER BY position`,
+    [workspaceId],
   );
   const cards = await pool.query(
     `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-     FROM cards WHERE deleted_at IS NULL ORDER BY position`,
+     FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY position`,
+    [workspaceId],
   );
   res.json({
     columns: columns.rows.map((col) => ({
@@ -552,22 +629,38 @@ api.get("/board", async (_req, res) => {
 
 // ---- Columns ---------------------------------------------------------------
 
-api.post("/columns", async (req, res) => {
+api.post("/workspaces/:workspaceId/columns", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const { title } = req.body ?? {};
   if (typeof title !== "string" || title.trim() === "") {
     return res.status(400).json({ error: "title is required" });
   }
   const { rows } = await pool.query(
-    `INSERT INTO columns (title, position)
-     VALUES ($1, COALESCE((SELECT MAX(position) FROM columns), 0) + $2)
+    `INSERT INTO columns (title, position, workspace_id)
+     VALUES ($1, COALESCE((SELECT MAX(position) FROM columns WHERE workspace_id = $2), 0) + $3, $2)
      RETURNING id, title, position, wip_limit, policy, is_done`,
-    [title.trim(), POSITION_GAP],
+    [title.trim(), workspaceId, POSITION_GAP],
   );
   await publishEvent({ type: "column.created", actor: req.user! });
   res.status(201).json(rows[0]);
 });
 
-api.patch("/columns/:id", async (req, res) => {
+api.patch("/workspaces/:workspaceId/columns/:id", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const id = Number(req.params.id);
   const { title, wipLimit, policy } = req.body ?? {};
   if (wipLimit !== undefined && wipLimit !== null) {
@@ -580,40 +673,101 @@ api.patch("/columns/:id", async (req, res) => {
        title = COALESCE($2, title),
        wip_limit = CASE WHEN $3 THEN $4 ELSE wip_limit END,
        policy = COALESCE($5, policy)
-     WHERE id = $1
+     WHERE id = $1 AND workspace_id = $6
      RETURNING id, title, position, wip_limit, policy, is_done`,
-    [id, title ?? null, wipLimit !== undefined, wipLimit ?? null, policy ?? null],
+    [id, title ?? null, wipLimit !== undefined, wipLimit ?? null, policy ?? null, workspaceId],
   );
   if (rows.length === 0) return res.status(404).json({ error: "column not found" });
   await publishEvent({ type: "column.updated", actor: req.user! });
   res.json(rows[0]);
 });
 
-api.delete("/columns/:id", async (req, res) => {
-  const { rowCount } = await pool.query("DELETE FROM columns WHERE id = $1", [
-    Number(req.params.id),
-  ]);
+api.delete("/workspaces/:workspaceId/columns/:id", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
+  const { rowCount } = await pool.query(
+    "DELETE FROM columns WHERE id = $1 AND workspace_id = $2",
+    [Number(req.params.id), workspaceId],
+  );
   if (rowCount === 0) return res.status(404).json({ error: "column not found" });
   res.status(204).end();
 });
 
 // ---- Cards -----------------------------------------------------------------
 
-api.post("/cards", async (req, res) => {
+api.get("/workspaces/:workspaceId/cards/:id", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const cardId = Number(req.params.id);
+  const result = await createScopedBoardService({
+    getMembership: async (wsId, userId) => {
+      const r = await lookupMembership(userId, wsId);
+      return r ? { role: r } : null;
+    },
+    getCardById: async (wsId, cId) => {
+      const { rows } = await pool.query(
+        `SELECT id, workspace_id, column_id, title, description, position, version,
+                created_at, started_at, done_at
+         FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+        [cId, wsId],
+      );
+      if (rows.length === 0) return null;
+      const c = rows[0];
+      return {
+        id: c.id,
+        workspaceId: c.workspace_id,
+        title: c.title,
+        columnId: c.column_id,
+        description: c.description,
+        position: c.position,
+        version: c.version,
+        createdAt: c.created_at,
+        startedAt: c.started_at,
+        doneAt: c.done_at,
+      };
+    },
+    getBoardRows: async () => [],
+    getActivityRows: async () => [],
+  }).getCard({ userId: req.user!.id, workspaceId, cardId });
+
+  if ("status" in result) {
+    return res.status(result.status).json({ error: result.error });
+  }
+  res.json(result);
+});
+
+api.post("/workspaces/:workspaceId/cards", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const { columnId, title, description } = req.body ?? {};
   if (typeof title !== "string" || title.trim() === "") {
     return res.status(400).json({ error: "title is required" });
   }
   const col = await pool.query(
-    "SELECT id, wip_limit FROM columns WHERE id = $1",
-    [Number(columnId)],
+    "SELECT id, wip_limit FROM columns WHERE id = $1 AND workspace_id = $2",
+    [Number(columnId), workspaceId],
   );
   if (col.rows.length === 0) {
     return res.status(404).json({ error: "column not found" });
   }
   const count = await pool.query(
-    "SELECT COUNT(*)::int AS n FROM cards WHERE column_id = $1 AND deleted_at IS NULL",
-    [Number(columnId)],
+    "SELECT COUNT(*)::int AS n FROM cards WHERE column_id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+    [Number(columnId), workspaceId],
   );
   const wip = checkWipLimit({
     currentCount: count.rows[0].n,
@@ -624,13 +778,14 @@ api.post("/cards", async (req, res) => {
     return res.status(409).json({ error: "WIP limit reached for this column" });
   }
   const { rows } = await pool.query(
-    `INSERT INTO cards (column_id, title, description, position)
+    `INSERT INTO cards (column_id, title, description, position, workspace_id)
      VALUES ($1, $2, $3,
-             COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4)
+             COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
+             $5)
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
-    [Number(columnId), title.trim(), description ?? "", POSITION_GAP],
+    [Number(columnId), title.trim(), description ?? "", POSITION_GAP, workspaceId],
   );
-  await recordActivity(pool, req.user!, "create", {
+  await recordActivity(pool, req.user!, workspaceId, "create", {
     cardId: rows[0].id,
     toColumnId: Number(columnId),
     payload: { cardTitle: rows[0].title },
@@ -639,7 +794,15 @@ api.post("/cards", async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-api.patch("/cards/:id", async (req, res) => {
+api.patch("/workspaces/:workspaceId/cards/:id", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const { title, description, version } = req.body ?? {};
   const id = Number(req.params.id);
   if (version !== undefined && !Number.isInteger(version)) {
@@ -650,15 +813,15 @@ api.patch("/cards/:id", async (req, res) => {
        title = COALESCE($2, title),
        description = COALESCE($3, description),
        version = version + 1
-     WHERE id = $1 AND deleted_at IS NULL AND ($4::int IS NULL OR version = $4)
+     WHERE id = $1 AND workspace_id = $4 AND deleted_at IS NULL AND ($5::int IS NULL OR version = $5)
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
-    [id, title ?? null, description ?? null, version ?? null],
+    [id, title ?? null, description ?? null, workspaceId, version ?? null],
   );
   if (rows.length === 0) {
     const current = await pool.query(
       `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-       FROM cards WHERE id = $1 AND deleted_at IS NULL`,
-      [id],
+       FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+      [id, workspaceId],
     );
     if (current.rows.length === 0) {
       return res.status(404).json({ error: "card not found" });
@@ -669,7 +832,7 @@ api.patch("/cards/:id", async (req, res) => {
       card: current.rows[0],
     });
   }
-  await recordActivity(pool, req.user!, "update", {
+  await recordActivity(pool, req.user!, workspaceId, "update", {
     cardId: id,
     payload: {
       cardTitle: rows[0].title,
@@ -680,16 +843,22 @@ api.patch("/cards/:id", async (req, res) => {
   res.json(rows[0]);
 });
 
-api.delete("/cards/:id", async (req, res) => {
+api.delete("/workspaces/:workspaceId/cards/:id", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const id = Number(req.params.id);
-  // Soft delete: mark the row, don't remove it. Keeps activity history and
-  // the card_events FK intact; all read/flow queries filter deleted_at IS NULL.
   const { rows } = await pool.query(
-    "UPDATE cards SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING title, column_id",
-    [id],
+    "UPDATE cards SET deleted_at = now() WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL RETURNING title, column_id",
+    [id, workspaceId],
   );
   if (rows.length === 0) return res.status(404).json({ error: "card not found" });
-  await recordActivity(pool, req.user!, "delete", {
+  await recordActivity(pool, req.user!, workspaceId, "delete", {
     fromColumnId: rows[0].column_id,
     payload: { cardTitle: rows[0].title },
   });
@@ -699,7 +868,15 @@ api.delete("/cards/:id", async (req, res) => {
 
 // ---- Move (the WIP-enforced core flow) --------------------------------------
 
-api.post("/cards/:id/move", async (req, res) => {
+api.post("/workspaces/:workspaceId/cards/:id/move", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const cardId = Number(req.params.id);
   const { toColumnId, index, version } = req.body ?? {};
   if (!Number.isInteger(toColumnId) || !Number.isInteger(index) || index < 0) {
@@ -714,8 +891,8 @@ api.post("/cards/:id/move", async (req, res) => {
     await client.query("BEGIN");
 
     const cardRes = await client.query(
-      "SELECT id, column_id, title, version, started_at, done_at FROM cards WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
-      [cardId],
+      "SELECT id, column_id, title, version, started_at, done_at FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL FOR UPDATE",
+      [cardId, workspaceId],
     );
     if (cardRes.rows.length === 0) {
       await client.query("ROLLBACK");
@@ -733,9 +910,9 @@ api.post("/cards/:id/move", async (req, res) => {
 
     const colRes = await client.query(
       `SELECT id, wip_limit, is_done,
-              (position = (SELECT MIN(position) FROM columns)) AS is_first
-       FROM columns WHERE id = $1`,
-      [toColumnId],
+              (position = (SELECT MIN(position) FROM columns WHERE workspace_id = $2)) AS is_first
+       FROM columns WHERE id = $1 AND workspace_id = $2`,
+      [toColumnId, workspaceId],
     );
     if (colRes.rows.length === 0) {
       await client.query("ROLLBACK");
@@ -746,9 +923,9 @@ api.post("/cards/:id/move", async (req, res) => {
 
     const siblingsRes = await client.query(
       `SELECT id, position FROM cards
-       WHERE column_id = $1 AND id <> $2 AND deleted_at IS NULL
+       WHERE column_id = $1 AND workspace_id = $2 AND id <> $3 AND deleted_at IS NULL
        ORDER BY position FOR UPDATE`,
-      [toColumnId, cardId],
+      [toColumnId, workspaceId, cardId],
     );
     const siblings = siblingsRes.rows;
 
@@ -773,7 +950,6 @@ api.post("/cards/:id/move", async (req, res) => {
       );
       position = positionBetween(before, after);
     } catch {
-      // Neighbors too close to split — respace the whole column, then insert.
       const fresh = rebalance(siblings.length);
       for (let i = 0; i < siblings.length; i++) {
         await client.query("UPDATE cards SET position = $2 WHERE id = $1", [
@@ -800,7 +976,7 @@ api.post("/cards/:id/move", async (req, res) => {
     );
 
     if (!isSameColumn) {
-      await recordActivity(client, req.user!, "move", {
+      await recordActivity(client, req.user!, workspaceId, "move", {
         cardId,
         fromColumnId: card.column_id,
         toColumnId,
@@ -816,8 +992,8 @@ api.post("/cards/:id/move", async (req, res) => {
 
     const updated = await pool.query(
       `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-       FROM cards WHERE id = $1 AND deleted_at IS NULL`,
-      [cardId],
+       FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+      [cardId, workspaceId],
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -830,12 +1006,21 @@ api.post("/cards/:id/move", async (req, res) => {
 
 // ---- Flow metrics (feedback loop) -------------------------------------------
 
-api.get("/metrics", async (req, res) => {
+api.get("/workspaces/:workspaceId/metrics", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const windowDays = req.query.windowDays
     ? Number(req.query.windowDays)
     : undefined;
   const { rows } = await pool.query(
-    "SELECT created_at, started_at, done_at FROM cards WHERE deleted_at IS NULL",
+    "SELECT created_at, started_at, done_at FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL",
+    [workspaceId],
   );
   const metrics = computeFlowMetrics(
     rows.map((r) => ({
@@ -848,13 +1033,22 @@ api.get("/metrics", async (req, res) => {
   res.json(metrics);
 });
 
-api.get("/metrics/history", async (req, res) => {
+api.get("/workspaces/:workspaceId/metrics/history", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const weeks = req.query.weeks ? Number(req.query.weeks) : undefined;
   if (weeks !== undefined && (!Number.isInteger(weeks) || weeks < 1 || weeks > 26)) {
     return res.status(400).json({ error: "weeks must be an integer between 1 and 26" });
   }
   const { rows } = await pool.query(
-    "SELECT created_at, started_at, done_at FROM cards WHERE deleted_at IS NULL",
+    "SELECT created_at, started_at, done_at FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL",
+    [workspaceId],
   );
   const history = computeMetricsHistory(
     rows.map((r) => ({
@@ -907,29 +1101,53 @@ function toActivityEvent(e: {
   };
 }
 
-api.get("/activity", async (req, res) => {
+api.get("/workspaces/:workspaceId/activity", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const { rows } = await pool.query(
     `${ACTIVITY_SELECT}
+     WHERE e.workspace_id = $1
      ORDER BY e.created_at DESC, e.id DESC
-     LIMIT $1`,
-    [limit],
+     LIMIT $2`,
+    [workspaceId, limit],
   );
   res.json({ events: rows.map(toActivityEvent) });
 });
 
-// Per-card history for the context panel. All rows, newest first (no
-// pagination this cycle); uses idx_events_card.
-api.get("/cards/:id/activity", async (req, res) => {
+api.get("/workspaces/:workspaceId/cards/:id/activity", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
   const cardId = Number(req.params.id);
   if (!Number.isInteger(cardId)) {
     return res.status(400).json({ error: "card id must be an integer" });
   }
+
+  const cardCheck = await pool.query(
+    "SELECT id FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+    [cardId, workspaceId],
+  );
+  if (cardCheck.rows.length === 0) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
   const { rows } = await pool.query(
     `${ACTIVITY_SELECT}
-     WHERE e.card_id = $1
+     WHERE e.card_id = $1 AND e.workspace_id = $2
      ORDER BY e.created_at DESC, e.id DESC`,
-    [cardId],
+    [cardId, workspaceId],
   );
   res.json({ events: rows.map(toActivityEvent) });
 });

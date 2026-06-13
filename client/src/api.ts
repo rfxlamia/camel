@@ -45,42 +45,61 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getBoard: () => request<Board>("/board"),
-  getMetrics: () => request<FlowMetrics>("/metrics"),
-  getMetricsHistory: (weeks = 8) =>
-    request<{ weeks: MetricsHistoryBucket[] }>(`/metrics/history?weeks=${weeks}`),
-  createCard: (columnId: number, title: string, description = "") =>
-    request<Card>("/cards", {
+  getBoard: (workspaceId: number) => request<Board>(`/workspaces/${workspaceId}/board`),
+  getMetrics: (workspaceId: number) => request<FlowMetrics>(`/workspaces/${workspaceId}/metrics`),
+  getMetricsHistory: (workspaceId: number, weeks?: number) =>
+    request<{ weeks: MetricsHistoryBucket[] }>(
+      weeks !== undefined
+        ? `/workspaces/${workspaceId}/metrics/history?weeks=${weeks}`
+        : `/workspaces/${workspaceId}/metrics/history`,
+    ),
+  getCard: (workspaceId: number, id: number) =>
+    request<Card>(`/workspaces/${workspaceId}/cards/${id}`),
+  createCard: (
+    workspaceId: number,
+    body: { columnId: number; title: string; description?: string },
+  ) =>
+    request<Card>(`/workspaces/${workspaceId}/cards`, {
       method: "POST",
-      body: JSON.stringify({ columnId, title, description }),
+      body: JSON.stringify({
+        columnId: body.columnId,
+        title: body.title,
+        description: body.description ?? "",
+      }),
     }),
   updateCard: (
+    workspaceId: number,
     id: number,
     patch: { title?: string; description?: string; version?: number },
   ) =>
-    request<Card>(`/cards/${id}`, {
+    request<Card>(`/workspaces/${workspaceId}/cards/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
-  deleteCard: (id: number) =>
-    request<void>(`/cards/${id}`, { method: "DELETE" }),
-  getCardActivity: (id: number) =>
-    request<{ events: ActivityEvent[] }>(`/cards/${id}/activity`),
-  moveCard: (id: number, toColumnId: number, index: number, version?: number) =>
-    request<Card>(`/cards/${id}/move`, {
+  deleteCard: (workspaceId: number, id: number) =>
+    request<void>(`/workspaces/${workspaceId}/cards/${id}`, { method: "DELETE" }),
+  getCardActivity: (workspaceId: number, id: number) =>
+    request<{ events: ActivityEvent[] }>(`/workspaces/${workspaceId}/cards/${id}/activity`),
+  moveCard: (
+    workspaceId: number,
+    id: number,
+    body: { toColumnId: number; position: number; version?: number },
+  ) =>
+    request<Card>(`/workspaces/${workspaceId}/cards/${id}/move`, {
       method: "POST",
-      body: JSON.stringify({ toColumnId, index, version }),
+      body: JSON.stringify(body),
     }),
-  createColumn: (title: string) =>
-    request<Column>("/columns", {
+  createColumn: (workspaceId: number, title: string) =>
+    request<Column>(`/workspaces/${workspaceId}/columns`, {
       method: "POST",
       body: JSON.stringify({ title }),
     }),
   updateColumn: (
+    workspaceId: number,
     id: number,
     patch: { title?: string; wipLimit?: number | null; policy?: string },
   ) =>
-    request<Column>(`/columns/${id}`, {
+    request<Column>(`/workspaces/${workspaceId}/columns/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
@@ -100,9 +119,14 @@ export const api = {
   me: () => request<{ user: User }>("/auth/me"),
 
   // ---- Collaboration ----
-  getActivity: (limit = 50) =>
-    request<{ events: ActivityEvent[] }>(`/activity?limit=${limit}`),
-  getPresence: () => request<{ users: PresenceUser[] }>("/presence"),
+  getActivity: (workspaceId: number, limit?: number) =>
+    request<{ events: ActivityEvent[] }>(
+      limit !== undefined
+        ? `/workspaces/${workspaceId}/activity?limit=${limit}`
+        : `/workspaces/${workspaceId}/activity`,
+    ),
+  getPresence: (workspaceId: number) =>
+    request<{ users: PresenceUser[] }>(`/workspaces/${workspaceId}/presence`),
   heartbeat: () =>
     request<{ ok: boolean }>("/presence/heartbeat", { method: "POST" }),
 
