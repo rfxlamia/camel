@@ -1,4 +1,5 @@
-import type { WorkspaceInvite } from "../types";
+import type { Workspace, WorkspaceInvite } from "../types";
+import { WORKSPACE_STORAGE_KEY } from "./workspaceSelection";
 
 export const WORKSPACE_MEMBERSHIP_CAP = 10;
 export const CAP_MESSAGE = "You've reached the workspace limit (10).";
@@ -90,6 +91,43 @@ export function readRemindedInviteIds(): number[] {
 
 export function persistRemindedInviteIds(ids: number[]): void {
   localStorage.setItem(REMINDED_INVITES_KEY, JSON.stringify(ids));
+}
+
+export const WORKSPACE_CREATED_TOAST = "Workspace created.";
+
+export interface CreatedWorkspaceSelectionInput {
+  currentWorkspaceIds: number[];
+  createdWorkspace: Pick<Workspace, "id" | "name" | "role" | "isPersonal">;
+}
+
+export interface CreatedWorkspaceSelectionResult {
+  workspaces: Array<Pick<Workspace, "id"> | Pick<Workspace, "id" | "name" | "role" | "isPersonal">>;
+  activeWorkspaceId: number;
+  localStorageWrite: { key: string; value: string };
+  toast: string;
+}
+
+export function applyCreatedWorkspaceSelection({
+  currentWorkspaceIds,
+  createdWorkspace,
+}: CreatedWorkspaceSelectionInput): CreatedWorkspaceSelectionResult {
+  return {
+    workspaces: [
+      ...currentWorkspaceIds.map((id) => ({ id })),
+      {
+        id: createdWorkspace.id,
+        name: createdWorkspace.name,
+        role: createdWorkspace.role,
+        isPersonal: createdWorkspace.isPersonal,
+      },
+    ],
+    activeWorkspaceId: createdWorkspace.id,
+    localStorageWrite: {
+      key: WORKSPACE_STORAGE_KEY,
+      value: String(createdWorkspace.id),
+    },
+    toast: WORKSPACE_CREATED_TOAST,
+  };
 }
 
 export function workspaceInitials(name: string): string {

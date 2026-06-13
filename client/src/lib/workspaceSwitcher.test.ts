@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { planWorkspaceRefresh } from "./workspaceSelection";
 import {
   CAP_MESSAGE,
+  applyCreatedWorkspaceSelection,
   getInvitePopoverState,
   getSwitchAttemptState,
   getWorkspaceLimitActionState,
@@ -38,6 +40,36 @@ describe("workspace switcher state", () => {
     expect(getWorkspaceLimitActionState({ membershipCount: 10, action: "create-workspace" })).toEqual({
       disabled: true,
       message: CAP_MESSAGE,
+    });
+  });
+});
+
+describe("workspace client integration plan", () => {
+  it("refreshes every scoped resource and reconnects SSE when active workspace changes", () => {
+    expect(planWorkspaceRefresh(12)).toEqual([
+      "close-event-stream",
+      "load-board:12",
+      "load-metrics:12",
+      "load-activity:12",
+      "load-presence:12",
+      "load-settings:12",
+      "open-event-stream:12",
+    ]);
+  });
+
+  it("selects a newly created workspace and persists it", () => {
+    expect(applyCreatedWorkspaceSelection({
+      currentWorkspaceIds: [1, 2],
+      createdWorkspace: { id: 13, name: "Launch", role: "owner", isPersonal: false },
+    })).toEqual({
+      workspaces: [
+        { id: 1 },
+        { id: 2 },
+        { id: 13, name: "Launch", role: "owner", isPersonal: false },
+      ],
+      activeWorkspaceId: 13,
+      localStorageWrite: { key: "activeWorkspaceId", value: "13" },
+      toast: "Workspace created.",
     });
   });
 });

@@ -12,6 +12,7 @@ import {
 import { ApiError, api } from "../api";
 import {
   CAP_MESSAGE,
+  applyCreatedWorkspaceSelection,
   getSwitchAttemptState,
   persistRemindedInviteIds,
   readRemindedInviteIds,
@@ -265,11 +266,16 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
       const trimmed = name.trim();
       if (!trimmed) return;
       try {
+        const prevIds = workspacesRef.current.map((w) => w.id);
         const created = await api.createWorkspace({ name: trimmed });
         await reloadWorkspaces();
-        switchWorkspace(created.id);
+        const selection = applyCreatedWorkspaceSelection({
+          currentWorkspaceIds: prevIds,
+          createdWorkspace: created,
+        });
+        switchWorkspace(selection.activeWorkspaceId);
         setCreateWorkspaceOpen(false);
-        showToast("Workspace created.");
+        showToast(selection.toast);
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           showToast(err.message || CAP_MESSAGE);

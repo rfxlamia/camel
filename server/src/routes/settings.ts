@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../realtime.js";
 import { mkdirSync } from "node:fs";
@@ -53,7 +53,8 @@ mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Lazy multer instance: dynamic import ensures pure validator tests (which only import
 // the top-level pure functions) do not require the 'multer' package at collection time.
-let uploadPromise: Promise<any> | null = null;
+type LogoUpload = { single: (field: string) => RequestHandler };
+let uploadPromise: Promise<LogoUpload> | null = null;
 
 async function getUpload() {
   if (!uploadPromise) {
@@ -106,6 +107,25 @@ export interface SettingRow {
   boolValue: boolean | null;
   version: number;
   updatedAt: string;
+}
+
+type PgSettingRow = {
+  key: string;
+  text_value: string | null;
+  bool_value: boolean | null;
+  version: number;
+};
+
+type PgVersionRow = { version: number | null };
+
+function mapPgSettingRow(r: PgSettingRow): SettingRow {
+  return {
+    key: r.key,
+    textValue: r.text_value,
+    boolValue: r.bool_value,
+    version: r.version,
+    updatedAt: "",
+  };
 }
 
 export interface SettingsResponse {
@@ -184,10 +204,12 @@ function parseWorkspaceId(raw: string): number | null {
   return Number.isInteger(workspaceId) ? workspaceId : null;
 }
 
+type WorkspaceRouteParams = { workspaceId: string };
+
 export const settingsRouter = Router({ mergeParams: true });
 
 settingsRouter.get("/", async (req, res) => {
-  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  const workspaceId = parseWorkspaceId((req.params as WorkspaceRouteParams).workspaceId);
   if (workspaceId === null) {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
@@ -202,19 +224,13 @@ settingsRouter.get("/", async (req, res) => {
     `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
     [workspaceId],
   );
-  const rows: SettingRow[] = raw.map((r: any) => ({
-    key: r.key,
-    textValue: r.text_value,
-    boolValue: r.bool_value,
-    version: r.version,
-    updatedAt: "",
-  }));
+  const rows: SettingRow[] = raw.map((r) => mapPgSettingRow(r as PgSettingRow));
   const settings = generateDefaultSettings(rows);
   res.json(settings);
 });
 
 settingsRouter.patch("/", async (req, res) => {
-  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  const workspaceId = parseWorkspaceId((req.params as WorkspaceRouteParams).workspaceId);
   if (workspaceId === null) {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
@@ -262,6 +278,7 @@ settingsRouter.patch("/", async (req, res) => {
     version?: number;
     boardName?: unknown;
     logoPath?: unknown;
+    updates?: Array<{ key?: string; value?: string }>;
   };
   clientVersion = body.version;
 
@@ -287,7 +304,7 @@ settingsRouter.patch("/", async (req, res) => {
   }
 
   // Support explicit updates array form (exercises validateSettingKey for unknown keys)
-  const maybeUpdates = (body as any).updates;
+  const maybeUpdates = body.updates;
   if (Array.isArray(maybeUpdates)) {
     for (const item of maybeUpdates) {
       if (!item || typeof item.key !== "string" || !validateSettingKey(item.key)) {
@@ -328,7 +345,10 @@ settingsRouter.patch("/", async (req, res) => {
     `SELECT version FROM settings WHERE workspace_id = $1`,
     [workspaceId],
   );
-  const currentGlobal = verRows.reduce((max: number, r: any) => Math.max(max, r.version || 0), 0);
+  const currentGlobal = verRows.reduce(
+    (max: number, r) => Math.max(max, (r as PgVersionRow).version || 0),
+    0,
+  );
 
   if (clientVersion !== currentGlobal) {
     return res.status(409).json({
@@ -342,13 +362,7 @@ settingsRouter.patch("/", async (req, res) => {
       `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
       [workspaceId],
     );
-    const rows: SettingRow[] = raw.map((r: any) => ({
-      key: r.key,
-      textValue: r.text_value,
-      boolValue: r.bool_value,
-      version: r.version,
-      updatedAt: "",
-    }));
+    const rows: SettingRow[] = raw.map((r) => mapPgSettingRow(r as PgSettingRow));
     return res.json(generateDefaultSettings(rows));
   }
 
@@ -372,18 +386,12 @@ settingsRouter.patch("/", async (req, res) => {
     `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
     [workspaceId],
   );
-  const afterRows: SettingRow[] = rawAfter.map((r: any) => ({
-    key: r.key,
-    textValue: r.text_value,
-    boolValue: r.bool_value,
-    version: r.version,
-    updatedAt: "",
-  }));
+  const afterRows: SettingRow[] = rawAfter.map((r) => mapPgSettingRow(r as PgSettingRow));
   res.json(generateDefaultSettings(afterRows));
 });
 
 settingsRouter.delete("/", async (req, res) => {
-  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  const workspaceId = parseWorkspaceId((req.params as WorkspaceRouteParams).workspaceId);
   if (workspaceId === null) {
     return res.status(400).json({ error: "workspaceId must be an integer" });
   }
@@ -409,12 +417,13 @@ settingsRouter.post(
   async (req, res, next) => {
     try {
       const upload = await getUpload();
-      upload.single("logo")(req, res, (err: any) => {
+      upload.single("logo")(req, res, (err: unknown) => {
         if (err) {
-          if (err.code === "LIMIT_FILE_SIZE") {
+          const uploadErr = err as Error & { code?: string };
+          if (uploadErr.code === "LIMIT_FILE_SIZE") {
             return res.status(413).json({ error: "File size must be under 10MB" });
           }
-          const msg = err.message || "Upload error";
+          const msg = uploadErr.message || "Upload error";
           if (msg.includes("Only .png and .jpg")) {
             return res.status(400).json({ error: msg });
           }
@@ -427,7 +436,7 @@ settingsRouter.post(
     }
   },
   async (req, res) => {
-    const workspaceId = parseWorkspaceId(req.params.workspaceId);
+    const workspaceId = parseWorkspaceId((req.params as WorkspaceRouteParams).workspaceId);
     if (workspaceId === null) {
       return res.status(400).json({ error: "workspaceId must be an integer" });
     }
@@ -461,7 +470,10 @@ settingsRouter.post(
       `SELECT version FROM settings WHERE workspace_id = $1`,
       [workspaceId],
     );
-    const currentGlobal = verRows.reduce((max: number, r: any) => Math.max(max, r.version || 0), 0);
+    const currentGlobal = verRows.reduce(
+    (max: number, r) => Math.max(max, (r as PgVersionRow).version || 0),
+    0,
+  );
     const newVersion = currentGlobal + 1;
 
     await pool.query(
@@ -480,13 +492,7 @@ settingsRouter.post(
       `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
       [workspaceId],
     );
-    const afterRows: SettingRow[] = rawAfter.map((r: any) => ({
-      key: r.key,
-      textValue: r.text_value,
-      boolValue: r.bool_value,
-      version: r.version,
-      updatedAt: "",
-    }));
+    const afterRows: SettingRow[] = rawAfter.map((r) => mapPgSettingRow(r as PgSettingRow));
     res.json(generateDefaultSettings(afterRows));
   }
 );

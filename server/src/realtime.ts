@@ -87,7 +87,7 @@ interface LocalTestClient {
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
   const redisAvailable = deps.publisher !== null;
-  const presence = deps.presence ?? deps.publisher;
+  const presence = (deps.presence ?? deps.publisher) as PresenceLike | null;
   const sseClients = new Set<SseClient>();
   const localTestClients = new Set<LocalTestClient>();
 

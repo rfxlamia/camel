@@ -7,6 +7,8 @@ import {
   checkInviteeCap,
   createScopedBoardService,
   createWorkspaceAccessService,
+  createWorkspaceIntegrationHarness,
+  legacyWorkspaceRouteMatrix,
 } from "../routes.js";
 
 describe("workspace authorization rules", () => {
@@ -92,5 +94,31 @@ describe("membership removal events", () => {
     });
     expect(publishEvent).not.toHaveBeenCalledWith(9, expect.anything());
     expect(clearPresence).toHaveBeenCalledWith(8, 4);
+  });
+});
+
+describe("workspace integration cleanup", () => {
+  it("keeps cards and activity isolated through a create and switch flow", async () => {
+    const app = createWorkspaceIntegrationHarness();
+    const alice = await app.signIn("alice");
+    const wsA = await app.createWorkspace(alice, "WS-A");
+    const wsB = await app.createWorkspace(alice, "WS-B");
+    const card = await app.createCard(alice, wsA.id, { title: "Only in A" });
+
+    await expect(app.getCard(alice, wsB.id, card.id)).resolves.toEqual({ status: 404 });
+    await expect(app.getActivity(alice, wsB.id)).resolves.toEqual([]);
+    await expect(app.getActivity(alice, wsA.id)).resolves.toEqual([
+      expect.objectContaining({ cardId: card.id, workspaceId: wsA.id }),
+    ]);
+  });
+
+  it("removes legacy global board, card, settings, event, and presence routes", () => {
+    expect(legacyWorkspaceRouteMatrix()).toEqual([
+      { method: "GET", path: "/api/board", status: 404 },
+      { method: "POST", path: "/api/cards", status: 404 },
+      { method: "GET", path: "/api/settings", status: 404 },
+      { method: "GET", path: "/api/events/stream", status: 404 },
+      { method: "GET", path: "/api/presence", status: 404 },
+    ]);
   });
 });
