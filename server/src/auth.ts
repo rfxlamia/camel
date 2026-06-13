@@ -9,6 +9,37 @@ export interface AuthUser {
   displayName: string;
 }
 
+export interface PendingInvite {
+  id: number;
+  workspaceId: number;
+  username: string;
+  role: string;
+}
+
+export interface SignupWorkspacePlan {
+  personalWorkspace: { name: string; ownerUserId: number; isPersonal: boolean };
+  memberships: Array<{ userId: number; role: "owner"; personal: boolean }>;
+  pendingInvites: PendingInvite[];
+  consumedInviteIds: number[];
+}
+
+export function createSignupWorkspacePlan(input: {
+  user: AuthUser;
+  pendingInvites: PendingInvite[];
+}): SignupWorkspacePlan {
+  const { user, pendingInvites } = input;
+  return {
+    personalWorkspace: {
+      name: `${user.displayName}'s Workspace`,
+      ownerUserId: user.id,
+      isPersonal: true,
+    },
+    memberships: [{ userId: user.id, role: "owner", personal: true }],
+    pendingInvites,
+    consumedInviteIds: [],
+  };
+}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -81,20 +112,64 @@ auth.post("/register", async (req, res) => {
       : username;
 
   const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  const normalizedUsername = username.toLowerCase();
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
       `INSERT INTO users (username, display_name, password_hash)
        VALUES ($1, $2, $3)
        RETURNING id, username, display_name`,
-      [username.toLowerCase(), name, hash],
+      [normalizedUsername, name, hash],
     );
-    await createSession(res, rows[0].id);
-    res.status(201).json({ user: toUser(rows[0]) });
+    const user = toUser(rows[0]);
+
+    const pendingRes = await client.query(
+      `SELECT id, workspace_id, username, role
+       FROM workspace_invites WHERE username = $1`,
+      [normalizedUsername],
+    );
+    const pendingInvites: PendingInvite[] = pendingRes.rows.map((row) => ({
+      id: row.id,
+      workspaceId: row.workspace_id,
+      username: row.username,
+      role: row.role,
+    }));
+
+    const plan = createSignupWorkspacePlan({ user, pendingInvites });
+
+    const wsRes = await client.query(
+      `INSERT INTO workspaces (name, owner_user_id, is_personal)
+       VALUES ($1, $2, $3)
+       RETURNING id`,
+      [
+        plan.personalWorkspace.name,
+        plan.personalWorkspace.ownerUserId,
+        plan.personalWorkspace.isPersonal,
+      ],
+    );
+    const workspaceId = wsRes.rows[0].id;
+
+    for (const membership of plan.memberships) {
+      await client.query(
+        `INSERT INTO workspace_members (workspace_id, user_id, role)
+         VALUES ($1, $2, $3)`,
+        [workspaceId, membership.userId, membership.role],
+      );
+    }
+
+    await client.query("COMMIT");
+    await createSession(res, user.id);
+    res.status(201).json({ user });
   } catch (err) {
+    await client.query("ROLLBACK");
     if ((err as { code?: string }).code === "23505") {
       return res.status(409).json({ error: "That username's already taken — try another." });
     }
     throw err;
+  } finally {
+    client.release();
   }
 });
 

@@ -13,6 +13,40 @@ import {
 } from "./realtime.js";
 import { settingsRouter } from "./routes/settings.js";
 
+export const WORKSPACE_LIMIT = 10;
+export const CAP_ERROR_MESSAGE = `You've reached the workspace limit (${WORKSPACE_LIMIT}).`;
+
+export type WorkspaceCapacity =
+  | { ok: true }
+  | { ok: false; status: 409; error: string };
+
+export function getWorkspaceCapacity(membershipCount: number): WorkspaceCapacity {
+  if (membershipCount >= WORKSPACE_LIMIT) {
+    return { ok: false, status: 409, error: CAP_ERROR_MESSAGE };
+  }
+  return { ok: true };
+}
+
+export function serializeWorkspaceList(input: {
+  workspaces: Array<{ id: number; name: string; role: string; isPersonal: boolean }>;
+  invites: Array<{ id: number; workspaceId: number; workspaceName: string; role: string }>;
+}) {
+  return {
+    workspaces: input.workspaces.map((ws) => ({
+      id: ws.id,
+      name: ws.name,
+      role: ws.role,
+      isPersonal: ws.isPersonal,
+    })),
+    pendingInvites: input.invites.map((inv) => ({
+      id: inv.id,
+      workspaceId: inv.workspaceId,
+      workspaceName: inv.workspaceName,
+      role: inv.role,
+    })),
+  };
+}
+
 export const api = Router();
 
 api.use(requireAuth);
