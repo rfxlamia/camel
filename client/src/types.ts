@@ -108,3 +108,32 @@ export interface SettingsMap {
   logoPath: string;
   version: number;
 }
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+
+export interface Workspace {
+  id: number;
+  name: string;
+  role: WorkspaceRole;
+  isPersonal: boolean;
+  memberCount: number;
+}
+
+export interface WorkspaceMember {
+  userId: number;
+  username: string;
+  displayName: string;
+  role: WorkspaceRole;
+}
+
+export interface WorkspaceInvite {
+  id: number;
+  workspaceId: number;
+  workspaceName: string;
+  role: WorkspaceRole;
+}
+
+export interface WorkspaceListResponse {
+  workspaces: Workspace[];
+  pendingInvites: WorkspaceInvite[];
+}

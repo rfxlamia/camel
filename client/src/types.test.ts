@@ -28,3 +28,25 @@ describe("SettingsMap interface", () => {
     expect(settings.version).toBe(0);
   });
 });
+
+import type {
+  Workspace,
+  WorkspaceInvite,
+  WorkspaceListResponse,
+  WorkspaceMember,
+  WorkspaceRole,
+} from "./types";
+
+describe("workspace response types", () => {
+  it("type-checks the server response shape", () => {
+    const role: WorkspaceRole = "owner";
+    const workspace: Workspace = { id: 7, name: "Launch", role, isPersonal: false, memberCount: 3 };
+    const member: WorkspaceMember = { userId: 2, username: "iris", displayName: "Iris", role: "member" };
+    const invite: WorkspaceInvite = { id: 12, workspaceId: 7, workspaceName: "Launch", role: "member" };
+    const response: WorkspaceListResponse = { workspaces: [workspace], pendingInvites: [invite] };
+
+    expect(response.workspaces[0].role).toBe("owner");
+    expect(member.role).toBe("member");
+    expect(response.pendingInvites[0].workspaceName).toBe("Launch");
+  });
+});

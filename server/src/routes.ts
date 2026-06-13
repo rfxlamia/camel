@@ -28,7 +28,13 @@ export function getWorkspaceCapacity(membershipCount: number): WorkspaceCapacity
 }
 
 export function serializeWorkspaceList(input: {
-  workspaces: Array<{ id: number; name: string; role: string; isPersonal: boolean }>;
+  workspaces: Array<{
+    id: number;
+    name: string;
+    role: string;
+    isPersonal: boolean;
+    memberCount?: number;
+  }>;
   invites: Array<{ id: number; workspaceId: number; workspaceName: string; role: string }>;
 }) {
   return {
@@ -37,6 +43,7 @@ export function serializeWorkspaceList(input: {
       name: ws.name,
       role: ws.role,
       isPersonal: ws.isPersonal,
+      ...(ws.memberCount !== undefined ? { memberCount: ws.memberCount } : {}),
     })),
     pendingInvites: input.invites.map((inv) => ({
       id: inv.id,
@@ -47,10 +54,405 @@ export function serializeWorkspaceList(input: {
   };
 }
 
+export type AuthCheck =
+  | { allowed: true }
+  | { allowed: false; status: number; error: string };
+
+export function checkActorCanManage(role: string): AuthCheck {
+  if (role === "admin" || role === "owner") return { allowed: true };
+  return { allowed: false, status: 404, error: "Not found" };
+}
+
+export function checkCanRemoveUser(_actorRole: string, targetRole: string): AuthCheck {
+  if (targetRole === "owner") {
+    return { allowed: false, status: 403, error: "Cannot remove workspace owner" };
+  }
+  return { allowed: true };
+}
+
+export function checkInviteeCap(membershipCount: number): WorkspaceCapacity {
+  return getWorkspaceCapacity(membershipCount);
+}
+
+async function countUserMemberships(userId: number): Promise<number> {
+  const { rows } = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM workspace_members WHERE user_id = $1",
+    [userId],
+  );
+  return rows[0].n;
+}
+
+async function lookupMembership(
+  userId: number,
+  workspaceId: number,
+): Promise<string | undefined> {
+  const { rows } = await pool.query(
+    "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+    [workspaceId, userId],
+  );
+  return rows[0]?.role as string | undefined;
+}
+
 export const api = Router();
 
 api.use(requireAuth);
 api.use("/settings", settingsRouter);
+
+// ---- Workspaces --------------------------------------------------------------
+
+api.get("/workspaces", async (req, res) => {
+  const userId = req.user!.id;
+  const username = req.user!.username;
+
+  const wsRes = await pool.query(
+    `SELECT w.id, w.name, w.is_personal, wm.role,
+            (SELECT COUNT(*)::int FROM workspace_members m WHERE m.workspace_id = w.id) AS member_count
+     FROM workspace_members wm
+     JOIN workspaces w ON w.id = wm.workspace_id
+     WHERE wm.user_id = $1
+     ORDER BY w.name`,
+    [userId],
+  );
+
+  const invRes = await pool.query(
+    `SELECT wi.id, wi.workspace_id, w.name AS workspace_name, wi.role
+     FROM workspace_invites wi
+     JOIN workspaces w ON w.id = wi.workspace_id
+     WHERE wi.username = $1
+     ORDER BY wi.created_at`,
+    [username],
+  );
+
+  res.json(
+    serializeWorkspaceList({
+      workspaces: wsRes.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        role: row.role,
+        isPersonal: row.is_personal,
+        memberCount: row.member_count,
+      })),
+      invites: invRes.rows.map((row) => ({
+        id: row.id,
+        workspaceId: row.workspace_id,
+        workspaceName: row.workspace_name,
+        role: row.role,
+      })),
+    }),
+  );
+});
+
+api.post("/workspaces", async (req, res) => {
+  const { name } = req.body ?? {};
+  if (typeof name !== "string" || name.trim() === "") {
+    return res.status(400).json({ error: "name is required" });
+  }
+
+  const membershipCount = await countUserMemberships(req.user!.id);
+  const cap = getWorkspaceCapacity(membershipCount);
+  if (!cap.ok) {
+    return res.status(cap.status).json({ error: cap.error });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const wsRes = await client.query(
+      `INSERT INTO workspaces (name, owner_user_id, is_personal)
+       VALUES ($1, $2, false)
+       RETURNING id, name, is_personal`,
+      [name.trim(), req.user!.id],
+    );
+    const ws = wsRes.rows[0];
+    await client.query(
+      `INSERT INTO workspace_members (workspace_id, user_id, role)
+       VALUES ($1, $2, 'owner')`,
+      [ws.id, req.user!.id],
+    );
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      id: ws.id,
+      name: ws.name,
+      role: "owner",
+      isPersonal: ws.is_personal,
+      memberCount: 1,
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+api.get("/workspaces/:workspaceId/members", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  if (!Number.isInteger(workspaceId)) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
+  const { rows } = await pool.query(
+    `SELECT u.id AS user_id, u.username, u.display_name, wm.role
+     FROM workspace_members wm
+     JOIN users u ON u.id = wm.user_id
+     WHERE wm.workspace_id = $1
+     ORDER BY wm.role, u.username`,
+    [workspaceId],
+  );
+
+  res.json({
+    members: rows.map((row) => ({
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      role: row.role,
+    })),
+  });
+});
+
+api.post("/workspaces/:workspaceId/members", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  if (!Number.isInteger(workspaceId)) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  if (!actorRole) return res.status(404).json({ error: "Not found" });
+
+  const manage = checkActorCanManage(actorRole);
+  if (!manage.allowed) {
+    return res.status(manage.status).json({ error: manage.error });
+  }
+
+  const { username, role: inviteRole } = req.body ?? {};
+  if (typeof username !== "string" || username.trim() === "") {
+    return res.status(400).json({ error: "username is required" });
+  }
+  const memberRole =
+    inviteRole === "admin" || inviteRole === "member" ? inviteRole : "member";
+
+  const normalizedUsername = username.trim().toLowerCase();
+  const targetRes = await pool.query(
+    "SELECT id, username, display_name FROM users WHERE username = $1",
+    [normalizedUsername],
+  );
+
+  if (targetRes.rows.length > 0) {
+    const target = targetRes.rows[0];
+    const existing = await lookupMembership(target.id, workspaceId);
+    if (existing) {
+      return res.status(409).json({ error: "User is already a member of this workspace" });
+    }
+
+    const inviteeCount = await countUserMemberships(target.id);
+    const cap = checkInviteeCap(inviteeCount);
+    if (!cap.ok) {
+      return res.status(cap.status).json({ error: cap.error });
+    }
+
+    await pool.query(
+      `INSERT INTO workspace_members (workspace_id, user_id, role)
+       VALUES ($1, $2, $3)`,
+      [workspaceId, target.id, memberRole],
+    );
+
+    return res.status(201).json({
+      userId: target.id,
+      username: target.username,
+      displayName: target.display_name,
+      role: memberRole,
+    });
+  }
+
+  const dupInvite = await pool.query(
+    "SELECT id FROM workspace_invites WHERE workspace_id = $1 AND username = $2",
+    [workspaceId, normalizedUsername],
+  );
+  if (dupInvite.rows.length > 0) {
+    return res.status(409).json({ error: "Invite already pending for this username" });
+  }
+
+  const invRes = await pool.query(
+    `INSERT INTO workspace_invites (workspace_id, username, role, invited_by)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, workspace_id, username, role`,
+    [workspaceId, normalizedUsername, memberRole, req.user!.id],
+  );
+  const inv = invRes.rows[0];
+
+  res.status(201).json({
+    id: inv.id,
+    workspaceId: inv.workspace_id,
+    username: inv.username,
+    role: inv.role,
+    pending: true,
+  });
+});
+
+api.post("/workspaces/:workspaceId/invites/:inviteId/accept", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  const inviteId = Number(req.params.inviteId);
+  if (!Number.isInteger(workspaceId) || !Number.isInteger(inviteId)) {
+    return res.status(400).json({ error: "workspaceId and inviteId must be integers" });
+  }
+
+  const invRes = await pool.query(
+    `SELECT id, workspace_id, username, role
+     FROM workspace_invites
+     WHERE id = $1 AND workspace_id = $2 AND username = $3`,
+    [inviteId, workspaceId, req.user!.username],
+  );
+  if (invRes.rows.length === 0) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  const invite = invRes.rows[0];
+
+  const existing = await lookupMembership(req.user!.id, workspaceId);
+  if (existing) {
+    return res.status(409).json({ error: "Already a member of this workspace" });
+  }
+
+  const membershipCount = await countUserMemberships(req.user!.id);
+  const cap = checkInviteeCap(membershipCount);
+  if (!cap.ok) {
+    return res.status(cap.status).json({ error: cap.error });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO workspace_members (workspace_id, user_id, role)
+       VALUES ($1, $2, $3)`,
+      [workspaceId, req.user!.id, invite.role],
+    );
+    await client.query("DELETE FROM workspace_invites WHERE id = $1", [inviteId]);
+    await client.query("COMMIT");
+
+    const wsRes = await client.query(
+      "SELECT id, name, is_personal FROM workspaces WHERE id = $1",
+      [workspaceId],
+    );
+    const ws = wsRes.rows[0];
+
+    res.json({
+      id: ws.id,
+      name: ws.name,
+      role: invite.role,
+      isPersonal: ws.is_personal,
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+api.delete("/workspaces/:workspaceId/invites/:inviteId", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  const inviteId = Number(req.params.inviteId);
+  if (!Number.isInteger(workspaceId) || !Number.isInteger(inviteId)) {
+    return res.status(400).json({ error: "workspaceId and inviteId must be integers" });
+  }
+
+  const { rowCount } = await pool.query(
+    `DELETE FROM workspace_invites
+     WHERE id = $1 AND workspace_id = $2 AND username = $3`,
+    [inviteId, workspaceId, req.user!.username],
+  );
+  if (rowCount === 0) return res.status(404).json({ error: "Not found" });
+  res.status(204).end();
+});
+
+api.post("/workspaces/:workspaceId/transfer-ownership", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  if (!Number.isInteger(workspaceId)) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  if (!actorRole || actorRole !== "owner") {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  const { newOwnerId, previousOwnerRole } = req.body ?? {};
+  if (!Number.isInteger(newOwnerId)) {
+    return res.status(400).json({ error: "newOwnerId is required" });
+  }
+  const demotedRole =
+    previousOwnerRole === "admin" || previousOwnerRole === "member"
+      ? previousOwnerRole
+      : "admin";
+
+  const newOwnerRole = await lookupMembership(newOwnerId, workspaceId);
+  if (!newOwnerRole) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE workspace_members SET role = 'owner'
+       WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, newOwnerId],
+    );
+    await client.query(
+      `UPDATE workspace_members SET role = $3
+       WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, req.user!.id, demotedRole],
+    );
+    await client.query(
+      "UPDATE workspaces SET owner_user_id = $2 WHERE id = $1",
+      [workspaceId, newOwnerId],
+    );
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+api.delete("/workspaces/:workspaceId", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  if (!Number.isInteger(workspaceId)) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  if (!actorRole) return res.status(404).json({ error: "Not found" });
+  if (actorRole !== "owner") return res.status(404).json({ error: "Not found" });
+
+  const wsRes = await pool.query(
+    "SELECT is_personal FROM workspaces WHERE id = $1",
+    [workspaceId],
+  );
+  if (wsRes.rows.length === 0) return res.status(404).json({ error: "Not found" });
+  if (wsRes.rows[0].is_personal) {
+    return res.status(403).json({ error: "Personal workspaces cannot be deleted" });
+  }
+
+  const countRes = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM workspace_members WHERE workspace_id = $1",
+    [workspaceId],
+  );
+  if (countRes.rows[0].n > 1) {
+    return res.status(409).json({
+      error: "Remove all other members before deleting this workspace",
+    });
+  }
+
+  await pool.query("DELETE FROM workspaces WHERE id = $1", [workspaceId]);
+  res.status(204).end();
+});
 
 type Queryable = Pick<typeof pool, "query">;
 

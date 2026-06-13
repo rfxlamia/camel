@@ -86,3 +86,29 @@ describe("Settings API methods", () => {
     expect(result.logoPath).toBe("/uploads/new.png");
   });
 });
+
+describe("workspace API methods", () => {
+  it("calls documented workspace and membership endpoints", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    const { api } = await import("./api");
+
+    await api.getWorkspaces();
+    await api.createWorkspace({ name: "Launch" });
+    await api.getWorkspaceMembers(7);
+    await api.addWorkspaceMember(7, { username: "iris" });
+    await api.acceptInvite(7, 12);
+    await api.declineInvite(7, 12);
+    await api.transferWorkspaceOwnership(7, { newOwnerId: 2, previousOwnerRole: "admin" });
+    await api.deleteWorkspace(7);
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces", expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces", expect.objectContaining({ method: "POST" }));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/members", expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/members", expect.objectContaining({ method: "POST" }));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/invites/12/accept", expect.objectContaining({ method: "POST" }));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/invites/12", expect.objectContaining({ method: "DELETE" }));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/transfer-ownership", expect.objectContaining({ method: "POST" }));
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7", expect.objectContaining({ method: "DELETE" }));
+  });
+});
