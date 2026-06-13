@@ -2,12 +2,13 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import { auth } from "./auth.js";
+import { createCorsOptions } from "./cors.js";
 import { connectRedis } from "./realtime.js";
 import { api } from "./routes.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors(createCorsOptions()));
 app.use(express.json());
 app.use(cookieParser());
 

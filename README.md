@@ -157,6 +157,7 @@ The server reads the following environment variables:
 | `DATABASE_URL` | `postgres://camel:camel@localhost:5432/camel_kanban` | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `PORT` | `3001` | Server port |
+| `CORS_ORIGIN` | local Vite origins in development, none in production | Comma-separated browser origins allowed to make credentialed API requests |
 
 ## Testing
 
