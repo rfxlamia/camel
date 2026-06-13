@@ -345,6 +345,7 @@ settingsRouter.patch("/", async (req, res) => {
     `SELECT version FROM settings WHERE workspace_id = $1`,
     [workspaceId],
   );
+  // All setting keys share one version per workspace; client must send the max it last saw.
   const currentGlobal = verRows.reduce(
     (max: number, r) => Math.max(max, (r as PgVersionRow).version || 0),
     0,

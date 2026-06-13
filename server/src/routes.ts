@@ -1321,7 +1321,10 @@ function listTopLevelApiRoutes(router: Router): Set<string> {
   return keys;
 }
 
-/** Documents legacy global routes and verifies they are not mounted on the API router. */
+/**
+ * Documents legacy global routes and verifies they are not mounted on the API router.
+ * Uses router stack inspection — does not issue real HTTP requests.
+ */
 export function legacyWorkspaceRouteMatrix() {
   const registered = listTopLevelApiRoutes(api);
   return LEGACY_WORKSPACE_API_ROUTES.map(({ method, path }) => ({
@@ -1333,6 +1336,10 @@ export function legacyWorkspaceRouteMatrix() {
 
 export type IntegrationUser = { userId: number; username: string };
 
+/**
+ * In-process isolation harness — no DB or real HTTP involved.
+ * Verifies workspace boundary logic via the same pure services used by route handlers.
+ */
 export function createWorkspaceIntegrationHarness() {
   let nextUserId = 1;
   let nextWorkspaceId = 1;

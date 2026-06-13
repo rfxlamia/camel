@@ -592,9 +592,6 @@ export function WorkspaceOverlays() {
     activeWorkspaceId,
     pendingInvites,
     remindedInviteIds,
-    switchConfirm,
-    confirmPendingSwitch,
-    cancelPendingSwitch,
   } = useBoard();
 
   if (!workspacesReady) return null;
@@ -607,30 +604,6 @@ export function WorkspaceOverlays() {
       {blockingInvite && <BlockingInviteModal invite={blockingInvite} />}
       {!blockingInvite && pickerRequired && activeWorkspaceId === null && <WorkspacePickerModal />}
       <CreateWorkspaceModal />
-      {switchConfirm.open && pickerRequired && activeWorkspaceId === null && (
-        <ModalBackdrop onClose={cancelPendingSwitch}>
-          <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-lg">
-            <p className="text-sm font-medium text-neutral-700">Switch workspace?</p>
-            <p className="mt-1 text-xs text-neutral-500">
-              You have unsaved card edits. They will be discarded.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={cancelPendingSwitch}
-                className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmPendingSwitch}
-                className="flex-1 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
-              >
-                Switch
-              </button>
-            </div>
-          </div>
-        </ModalBackdrop>
-      )}
     </>
   );
 }

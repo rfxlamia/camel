@@ -75,8 +75,6 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [settingsLoadError, setSettingsLoadError] = useState(false);
-
   const canEdit = activeWorkspace ? canEditWorkspaceSettings(activeWorkspace.role) : false;
   const dangerZone = activeWorkspace
     ? getWorkspaceDangerZoneState({
@@ -210,29 +208,6 @@ export default function SettingsPage() {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
-  }
-
-  async function handleRetryLoad() {
-    setSettingsLoadError(false);
-    try {
-      await refreshSettings();
-    } catch {
-      setSettingsLoadError(true);
-    }
-  }
-
-  if (settingsLoadError) {
-    return (
-      <div className="p-6">
-        <p className="text-error-600">Failed to load settings.</p>
-        <button
-          onClick={handleRetryLoad}
-          className="mt-2 text-sm text-primary-600 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-        >
-          Retry
-        </button>
-      </div>
-    );
   }
 
   if (activeWorkspaceId === null || !activeWorkspace) {

@@ -269,6 +269,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         const prevIds = workspacesRef.current.map((w) => w.id);
         const created = await api.createWorkspace({ name: trimmed });
         await reloadWorkspaces();
+        // .workspaces and .localStorageWrite are unused: reloadWorkspaces() and switchWorkspace() cover them.
         const selection = applyCreatedWorkspaceSelection({
           currentWorkspaceIds: prevIds,
           createdWorkspace: created,

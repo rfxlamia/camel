@@ -97,7 +97,7 @@ describe("membership removal events", () => {
   });
 });
 
-describe("workspace integration cleanup", () => {
+describe("workspace isolation and legacy route cleanup", () => {
   it("keeps cards and activity isolated through a create and switch flow", async () => {
     const app = createWorkspaceIntegrationHarness();
     const alice = await app.signIn("alice");
