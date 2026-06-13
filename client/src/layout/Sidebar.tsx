@@ -74,7 +74,7 @@ function PopoverShell({
   const positionClasses =
     placement === "right"
       ? "left-full ml-2 top-1/2 -translate-y-1/2"
-      : "bottom-full mb-2 left-0";
+      : "bottom-full mb-4 left-0";
 
   const arrowClasses =
     placement === "right"
@@ -188,10 +188,33 @@ function WorkspaceSwitcher({ collapsed = false, placement = "right" }: Workspace
     confirmPendingSwitch,
     cancelPendingSwitch,
     openCreateWorkspace,
+    acceptWorkspaceInvite,
+    declineWorkspaceInvite,
   } = useBoard();
 
   const [open, setOpen] = useState(false);
+  const [busyInviteId, setBusyInviteId] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const handleAcceptInvite = async (invite: WorkspaceInvite) => {
+    if (busyInviteId !== null) return;
+    setBusyInviteId(invite.id);
+    try {
+      await acceptWorkspaceInvite(invite);
+    } finally {
+      setBusyInviteId(null);
+    }
+  };
+
+  const handleDeclineInvite = async (invite: WorkspaceInvite) => {
+    if (busyInviteId !== null) return;
+    setBusyInviteId(invite.id);
+    try {
+      await declineWorkspaceInvite(invite);
+    } finally {
+      setBusyInviteId(null);
+    }
+  };
 
   const invitePopover = getInvitePopoverState({
     switcherOpen: open,
@@ -340,15 +363,41 @@ function WorkspaceSwitcher({ collapsed = false, placement = "right" }: Workspace
           ariaLabel="Pending workspace invites"
         >
           <p className="text-sm font-medium text-neutral-700">Pending invites</p>
-          <ul className="mt-2 space-y-2">
-            {invitePopover.invites.map((invite) => (
-              <li key={invite.id} className="text-xs text-neutral-600">
-                <span className="font-medium text-neutral-800">{invite.workspaceName}</span>
-                <span className="text-neutral-500"> · {invite.role}</span>
-              </li>
-            ))}
+          <ul className="mt-2 space-y-3">
+            {invitePopover.invites.map((invite) => {
+              const acceptLimit = getWorkspaceLimitActionState({ membershipCount, action: "accept-invite" });
+              const busy = busyInviteId === invite.id;
+              return (
+                <li key={invite.id} className="space-y-1.5">
+                  <p className="text-xs text-neutral-600">
+                    <span className="font-medium text-neutral-800">{invite.workspaceName}</span>
+                    <span className="text-neutral-500"> · {invite.role}</span>
+                  </p>
+                  {acceptLimit.disabled && acceptLimit.message && (
+                    <p className="text-xs text-error-600">{acceptLimit.message}</p>
+                  )}
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={busy || acceptLimit.disabled}
+                      onClick={() => void handleAcceptInvite(invite)}
+                      className="flex-1 rounded-md bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                    >
+                      {busy ? "…" : "Accept"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleDeclineInvite(invite)}
+                      className="flex-1 rounded-md border border-neutral-300 bg-neutral-100 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-neutral-200 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
-          <p className="mt-2 text-xs text-neutral-500">Open invites from the banner when you sign in.</p>
         </PopoverShell>
       )}
     </div>

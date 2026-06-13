@@ -56,7 +56,7 @@ export function getInvitePopoverState({
   remindedInviteIds,
   pendingInvites,
 }: InvitePopoverInput): InvitePopoverState {
-  if (!switcherOpen || remindedInviteIds.length === 0) {
+  if (switcherOpen || remindedInviteIds.length === 0) {
     return { visible: false, invites: [] };
   }
   const reminded = new Set(remindedInviteIds);

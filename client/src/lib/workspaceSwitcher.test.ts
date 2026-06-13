@@ -20,9 +20,9 @@ describe("workspace switcher state", () => {
     });
   });
 
-  it("shows invite popover after remind me later when switcher opens", () => {
+  it("shows invite popover after remind me later when switcher is closed", () => {
     expect(getInvitePopoverState({
-      switcherOpen: true,
+      switcherOpen: false,
       remindedInviteIds: [5],
       pendingInvites: [{ id: 5, workspaceId: 1, workspaceName: "Team", role: "member" }],
     })).toEqual({
