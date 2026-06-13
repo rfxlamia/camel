@@ -46,27 +46,27 @@ Camel Kanban is a full-stack, multi-user kanban board designed for small develop
 - [Node.js](https://nodejs.org/) v18+
 - [Docker](https://www.docker.com/) (for PostgreSQL and Redis)
 
-### Installation
+### Quick start
 
 ```sh
 # 1. Install dependencies
-npm install
+make install
 
-# 2. Start PostgreSQL + Redis (Docker)
-npm run db:up
+# 2. Start PostgreSQL + Redis
+make services-up
 
 # 3. Apply schema and seed demo data
-npm run db:migrate
-npm run db:seed
+make db-migrate
+make db-seed
 
 # 4. Run server (:3001) and client (:5173)
-npm run dev
+make dev
 ```
 
 Open http://localhost:5173 and create an account (username + password).
 
-> [!NOTE]
-> The database runs in Docker and persists data in a named volume (`camel_pgdata`). To reset it, run `docker compose down -v` and re-run the seed command.
+> [!TIP]
+> Run `make help` to see all available targets. You can also reset the database with `make db-reset` or do a hard reset with `make db-reset-hard` (destructive — removes volumes).
 
 ## Project structure
 
@@ -131,17 +131,22 @@ The SSE connection and board state live above the router, so navigation never dr
 
 ## Scripts
 
+Run `make help` for the full list. Common targets:
+
 | Command | What it does |
 |---------|--------------|
-| `npm run dev` | Run server and client together |
-| `npm run dev:server` | Run server only |
-| `npm run dev:client` | Run client only |
-| `npm test` | Run unit tests (server + client) |
-| `npm run db:up` | Start PostgreSQL (5432) + Redis (6379) via Docker Compose |
-| `npm run db:migrate` | Apply `server/src/db/schema.sql` |
-| `npm run db:seed` | Seed demo columns and cards (no-op if data exists) |
-| `npm run build` | Type-check and build both workspaces |
-| `npm run lint` | Run ESLint |
+| `make install` | Install all dependencies |
+| `make dev` | Run server and client together |
+| `make dev-server` | Run server only |
+| `make dev-client` | Run client only |
+| `make test` | Run unit tests |
+| `make build` | Type-check and build both workspaces |
+| `make lint` | Run ESLint |
+| `make services-up` | Start PostgreSQL + Redis via Docker |
+| `make db-migrate` | Apply `server/src/db/schema.sql` |
+| `make db-seed` | Seed demo columns and cards |
+| `make db-reset` | Stop → start → migrate → seed |
+| `make logs` | Tail Docker Compose logs |
 
 ## Configuration
 
