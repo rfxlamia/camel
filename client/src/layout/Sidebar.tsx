@@ -261,7 +261,7 @@ function WorkspaceSwitcher({ collapsed = false, placement = "right" }: Workspace
 
       {open && (
         <div
-          className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-neutral-200 bg-white py-1 shadow-lg"
+          className="absolute left-0 bottom-full z-50 mb-1 w-56 rounded-md border border-neutral-200 bg-white py-1 shadow-lg"
           role="listbox"
           aria-label="Workspaces"
         >
@@ -650,7 +650,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       <div className="border-t border-neutral-200 p-2">
-        <WorkspaceSwitcher collapsed={collapsed} placement="right" />
+        <WorkspaceSwitcher collapsed={collapsed} placement="top" />
       </div>
 
       <div className="relative border-t border-neutral-200 p-2">
