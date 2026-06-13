@@ -254,7 +254,7 @@ function WorkspaceSwitcher({ collapsed = false, placement = "right" }: Workspace
         </span>
         <ChevronDown
           size={16}
-          className={`shrink-0 text-neutral-500 transition-transform ${open ? "rotate-180" : ""} ${collapsed ? "hidden lg:block" : ""}`}
+          className={`shrink-0 text-neutral-500 transition-transform ${open ? "rotate-180" : ""} ${collapsed ? "hidden" : ""}`}
           aria-hidden
         />
       </button>
