@@ -58,6 +58,7 @@ interface BoardContextValue {
   confirmPendingSwitch: () => void;
   cancelPendingSwitch: () => void;
   switchWorkspace: (workspaceId: number) => void;
+  reloadWorkspaces: () => Promise<Workspace[]>;
   acceptWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
   declineWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
   remindInviteLater: (invite: WorkspaceInvite) => void;
@@ -161,10 +162,11 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   }, [activeWorkspaceId, onSignedOut]);
 
   const refreshSettings = useCallback(async () => {
-    const s = await api.getSettings();
+    if (activeWorkspaceId === null) return;
+    const s = await api.getSettings(activeWorkspaceId);
     setSettings(s);
     setSettingsVersion(s.version);
-  }, []);
+  }, [activeWorkspaceId]);
 
   const reloadWorkspaces = useCallback(async () => {
     const { workspaces: list, pendingInvites: invites } = await api.getWorkspaces();
@@ -446,6 +448,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         confirmPendingSwitch,
         cancelPendingSwitch,
         switchWorkspace,
+        reloadWorkspaces,
         acceptWorkspaceInvite,
         declineWorkspaceInvite,
         remindInviteLater,

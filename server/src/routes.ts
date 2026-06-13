@@ -263,7 +263,6 @@ const workspaceAccessService = createWorkspaceAccessService({
 export const api = Router();
 
 api.use(requireAuth);
-api.use("/settings", settingsRouter);
 
 // ---- Workspaces --------------------------------------------------------------
 
@@ -641,6 +640,8 @@ api.delete("/workspaces/:workspaceId", async (req, res) => {
   await pool.query("DELETE FROM workspaces WHERE id = $1", [workspaceId]);
   res.status(204).end();
 });
+
+api.use("/workspaces/:workspaceId/settings", settingsRouter);
 
 type Queryable = Pick<typeof pool, "query">;
 

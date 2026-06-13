@@ -3,8 +3,9 @@ import { api, ApiError } from "../api";
 import { useBoard } from "../context/BoardContext";
 import LogoCropper from "../components/LogoCropper";
 import {
+  canEditWorkspaceSettings,
+  getWorkspaceDangerZoneState,
   validateBoardName,
-  validateResetAppConfirmation,
   validateUnsavedChanges,
 } from "../lib/settingsValidation";
 
@@ -52,7 +53,16 @@ function SettingsSection({
 }
 
 export default function SettingsPage() {
-  const { settings, settingsVersion, refreshSettings, showToast } = useBoard();
+  const {
+    activeWorkspaceId,
+    activeWorkspace,
+    settings,
+    settingsVersion,
+    refreshSettings,
+    showToast,
+    reloadWorkspaces,
+    switchWorkspace,
+  } = useBoard();
 
   const [boardNameInput, setBoardNameInput] = useState(settings.boardName);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -62,42 +72,48 @@ export default function SettingsPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showResetApp, setShowResetApp] = useState(false);
-  const [resetText, setResetText] = useState("");
-  const [resetChecked, setResetChecked] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [settingsLoadError, setSettingsLoadError] = useState(false);
 
-  // Sync input when external settings change (e.g. after save, reset, SSE)
+  const canEdit = activeWorkspace ? canEditWorkspaceSettings(activeWorkspace.role) : false;
+  const dangerZone = activeWorkspace
+    ? getWorkspaceDangerZoneState({
+        role: activeWorkspace.role,
+        memberCount: activeWorkspace.memberCount,
+        isPersonal: activeWorkspace.isPersonal,
+      })
+    : { canDelete: false, reason: null, resetAppVisible: false };
+
   useEffect(() => {
     setBoardNameInput(settings.boardName);
   }, [settings.boardName]);
 
-  // Unsaved changes warning (gated by validateUnsavedChanges)
   useEffect(() => {
     const onBeforeUnload = (ev: BeforeUnloadEvent) => {
-      if (validateUnsavedChanges(settings.boardName, boardNameInput)) {
+      if (canEdit && validateUnsavedChanges(settings.boardName, boardNameInput)) {
         ev.preventDefault();
         ev.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [settings.boardName, boardNameInput]);
+  }, [settings.boardName, boardNameInput, canEdit]);
 
   const nameVal = validateBoardName(boardNameInput);
   const hasNameChange = validateUnsavedChanges(settings.boardName, boardNameInput);
-  const canSaveName = nameVal.valid && hasNameChange && !isSaving;
+  const canSaveName = canEdit && nameVal.valid && hasNameChange && !isSaving;
 
   async function handleSaveName() {
-    if (!nameVal.valid) {
-      setNameError(nameVal.error);
+    if (!canEdit || activeWorkspaceId === null || !nameVal.valid) {
+      if (!nameVal.valid) setNameError(nameVal.error);
       return;
     }
     setNameError(null);
     setIsSaving(true);
     try {
-      await api.updateSettings([
+      await api.updateSettings(activeWorkspaceId, [
         { key: "board_name", textValue: nameVal.trimmed, version: settingsVersion },
       ]);
       await refreshSettings();
@@ -106,6 +122,8 @@ export default function SettingsPage() {
       if (err instanceof ApiError && err.code === "version_conflict") {
         showToast("Someone else updated settings first");
         await refreshSettings();
+      } else if (err instanceof ApiError && err.status === 403) {
+        showToast("You don't have permission to edit workspace settings");
       } else {
         showToast("Couldn't save the settings. Check your connection and try again.");
       }
@@ -115,9 +133,9 @@ export default function SettingsPage() {
   }
 
   function handleLogoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!canEdit) return;
     setLogoError(null);
     const file = e.target.files?.[0];
-    // reset the input so same file can be re-selected if needed
     e.target.value = "";
     if (!file) return;
 
@@ -135,12 +153,13 @@ export default function SettingsPage() {
   }
 
   async function handleCroppedLogo(blob: Blob) {
+    if (activeWorkspaceId === null) return;
     const urlToRevoke = cropImage;
     setCropImage(null);
 
     const file = new File([blob], "logo.png", { type: "image/png" });
     try {
-      await api.uploadLogo(file);
+      await api.uploadLogo(activeWorkspaceId, file);
       await refreshSettings();
       showToast("Settings saved");
     } catch (err: unknown) {
@@ -159,29 +178,37 @@ export default function SettingsPage() {
   }
 
   async function handleResetSettings() {
+    if (!canEdit || activeWorkspaceId === null) return;
     setShowResetConfirm(false);
     try {
-      await api.resetSettings();
+      await api.resetSettings(activeWorkspaceId);
       await refreshSettings();
       showToast("Settings reset to defaults");
-    } catch {
-      showToast("Failed to reset settings. Try again.");
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 403) {
+        showToast("You don't have permission to edit workspace settings");
+      } else {
+        showToast("Failed to reset settings. Try again.");
+      }
     }
   }
 
-  const resetAppVal = validateResetAppConfirmation(resetText, resetChecked);
-
-  async function handleResetApp() {
-    if (!resetAppVal.enabled) return;
-    setShowResetApp(false);
-    setResetText("");
-    setResetChecked(false);
+  async function handleDeleteWorkspace() {
+    if (!dangerZone.canDelete || activeWorkspaceId === null) return;
+    setIsDeleting(true);
     try {
-      await api.resetApp();
-      await refreshSettings();
-      showToast("App has been reset");
-    } catch {
-      showToast("Failed to reset app. Try again.");
+      await api.deleteWorkspace(activeWorkspaceId);
+      const list = await reloadWorkspaces();
+      const fallback = list.find((w) => w.isPersonal) ?? list[0];
+      if (fallback) switchWorkspace(fallback.id);
+      showToast("Workspace deleted");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiError ? err.message : "Failed to delete workspace. Try again.";
+      showToast(msg);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   }
 
@@ -208,13 +235,25 @@ export default function SettingsPage() {
     );
   }
 
+  if (activeWorkspaceId === null || !activeWorkspace) {
+    return (
+      <div className="p-6">
+        <p className="text-neutral-600">Select a workspace to view settings.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl p-6">
       <h1 className="mb-6 text-2xl font-semibold text-neutral-900">Settings</h1>
 
-      {/* Identity section */}
+      {!canEdit && (
+        <p className="mb-4 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+          Only workspace owners and admins can edit settings.
+        </p>
+      )}
+
       <SettingsSection title="Identity">
-          {/* Board name */}
           <div>
             <label htmlFor="boardName" className="block text-sm font-medium text-neutral-700">
               Board name
@@ -229,7 +268,8 @@ export default function SettingsPage() {
                   if (nameError) setNameError(null);
                 }}
                 maxLength={15}
-                className={`flex-1 rounded-md border px-3 py-2 text-base focus:outline-none ${
+                disabled={!canEdit}
+                className={`flex-1 rounded-md border px-3 py-2 text-base focus:outline-none disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 ${
                   nameVal.valid
                     ? "border-neutral-300 focus:border-primary-600"
                     : "border-error-500 focus:border-error-500"
@@ -249,7 +289,6 @@ export default function SettingsPage() {
             )}
             <p className="mt-1 text-xs text-neutral-500">1–15 characters. Saved changes appear in the sidebar and browser tab.</p>
 
-            {/* Live preview */}
             <div className="mt-2 rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm">
               <span className="text-neutral-500">Sidebar preview: </span>
               <span className="font-semibold text-primary-900">
@@ -258,7 +297,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Logo */}
           <div>
             <div className="text-sm font-medium text-neutral-700">Logo</div>
             <div className="mt-2 flex items-start gap-4">
@@ -271,12 +309,17 @@ export default function SettingsPage() {
                 }}
               />
               <div className="min-w-0">
-                <label className="inline-flex cursor-pointer items-center rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-200 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-600">
+                <label
+                  className={`inline-flex items-center rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-700 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-600 ${
+                    canEdit ? "cursor-pointer hover:bg-neutral-200" : "cursor-not-allowed opacity-60"
+                  }`}
+                >
                   Upload new logo
                   <input
                     type="file"
                     accept="image/png,image/jpeg"
                     className="sr-only"
+                    disabled={!canEdit}
                     onChange={handleLogoSelect}
                   />
                 </label>
@@ -287,8 +330,8 @@ export default function SettingsPage() {
           </div>
       </SettingsSection>
 
-      {/* Danger Zone */}
-      <SettingsSection title="Danger Zone" titleClassName="text-error-700">
+      {canEdit && (
+        <SettingsSection title="Danger Zone" titleClassName="text-error-700">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="font-medium text-neutral-800">Reset Settings</div>
@@ -304,27 +347,27 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="font-medium text-neutral-800">Reset App</div>
-              <div className="text-sm text-neutral-500">
-                Permanently delete all cards, columns, and settings. Users can still log in. Cannot be undone.
+          {activeWorkspace.role === "owner" && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="font-medium text-neutral-800">Delete Workspace</div>
+                <div className="text-sm text-neutral-500">
+                  {dangerZone.reason ??
+                    "Permanently delete this workspace and all its cards, columns, and settings. Cannot be undone."}
+                </div>
               </div>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={!dangerZone.canDelete || isDeleting}
+                className="shrink-0 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error-500 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+              >
+                Delete Workspace
+              </button>
             </div>
-            <button
-              onClick={() => {
-                setShowResetApp(true);
-                setResetText("");
-                setResetChecked(false);
-              }}
-              className="shrink-0 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error-500"
-            >
-              Reset App
-            </button>
-          </div>
-      </SettingsSection>
+          )}
+        </SettingsSection>
+      )}
 
-      {/* Reset Settings confirmation dialog */}
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Confirm reset settings">
           <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
@@ -348,64 +391,32 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Reset App multi-step modal (gated by validateResetAppConfirmation) */}
-      {showResetApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Confirm reset app">
-          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
-            <h4 className="text-lg font-semibold text-error-700">Reset entire app?</h4>
-            <p className="mt-1 text-sm text-neutral-600">
-              This permanently deletes every card, column, and all settings. User accounts remain and you can log in again.
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Confirm delete workspace">
+          <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
+            <p className="font-medium text-error-700">Delete this workspace?</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              This permanently deletes {activeWorkspace.name} and all cards, columns, and settings in it.
             </p>
-
-            <div className="mt-4">
-              <label htmlFor="resetConfirm" className="block text-sm font-medium text-neutral-700">
-                Type DELETE to confirm
-              </label>
-              <input
-                id="resetConfirm"
-                type="text"
-                value={resetText}
-                onChange={(e) => setResetText(e.target.value)}
-                className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-base focus:border-error-500 focus:outline-none"
-                placeholder="DELETE"
-                autoComplete="off"
-              />
-            </div>
-
-            <label className="mt-3 flex items-start gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                checked={resetChecked}
-                onChange={(e) => setResetChecked(e.target.checked)}
-                className="mt-1 accent-error-500"
-              />
-              <span>I understand this cannot be undone</span>
-            </label>
-
             <div className="mt-4 flex gap-2">
               <button
-                onClick={() => {
-                  setShowResetApp(false);
-                  setResetText("");
-                  setResetChecked(false);
-                }}
+                onClick={() => setShowDeleteConfirm(false)}
                 className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
               >
                 Cancel
               </button>
               <button
-                onClick={handleResetApp}
-                disabled={!resetAppVal.enabled}
+                onClick={handleDeleteWorkspace}
+                disabled={isDeleting}
                 className="flex-1 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
               >
-                Reset App
+                {isDeleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Logo cropper (opened after valid file select) */}
       {cropImage && (
         <LogoCropper
           image={cropImage}

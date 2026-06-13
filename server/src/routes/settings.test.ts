@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   validateBoardName,
   validateSettingKey,
@@ -194,5 +194,49 @@ describe("generateLogoFilename", () => {
 describe("MAX_LOGO_SIZE_BYTES", () => {
   it("is 10MB", () => {
     expect(MAX_LOGO_SIZE_BYTES).toBe(10 * 1024 * 1024);
+  });
+});
+
+import { createWorkspaceSettingsService, hasResetAppRoute } from "./settings.js";
+
+describe("workspace settings service", () => {
+  it("reads and writes settings by workspace id", async () => {
+    const repo = {
+      getMembership: vi.fn(async (_workspaceId, userId) => ({ userId, role: "admin" })),
+      getSettings: vi.fn(async (workspaceId) => (
+        workspaceId === 1
+          ? [{ key: "board_name", textValue: "Alpha", boolValue: null, version: 1, updatedAt: "2026-06-13" }]
+          : [{ key: "board_name", textValue: "Beta", boolValue: null, version: 1, updatedAt: "2026-06-13" }]
+      )),
+      updateSettings: vi.fn(async (workspaceId, updates) => ({ workspaceId, updates })),
+    };
+    const service = createWorkspaceSettingsService(repo);
+
+    await expect(service.getSettings({ userId: 1, workspaceId: 1 }))
+      .resolves.toMatchObject({ boardName: "Alpha" });
+    await expect(service.getSettings({ userId: 1, workspaceId: 2 }))
+      .resolves.toMatchObject({ boardName: "Beta" });
+
+    await service.updateSettings({
+      userId: 1,
+      workspaceId: 2,
+      updates: [{ key: "board_name", textValue: "Beta 2", version: 1 }],
+    });
+    expect(repo.updateSettings).toHaveBeenCalledWith(2, [{ key: "board_name", textValue: "Beta 2", version: 1 }]);
+  });
+
+  it("blocks member writes and removes reset-app", async () => {
+    const service = createWorkspaceSettingsService({
+      getMembership: vi.fn(async () => ({ role: "member" })),
+      getSettings: vi.fn(),
+      updateSettings: vi.fn(),
+    });
+
+    await expect(service.updateSettings({
+      userId: 4,
+      workspaceId: 7,
+      updates: [{ key: "board_name", textValue: "Nope", version: 1 }],
+    })).resolves.toEqual({ status: 403, error: "Forbidden" });
+    expect(hasResetAppRoute()).toBe(false);
   });
 });

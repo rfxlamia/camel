@@ -133,15 +133,25 @@ export const api = {
     }),
 
   // Settings
-  getSettings: () => request<SettingsMap>("/settings"),
-  updateSettings: (settings: Array<{ key: string; textValue?: string; boolValue?: boolean; version: number }>) =>
-    request<SettingsMap>("/settings", { method: "PATCH", body: JSON.stringify(settings) }),
-  resetSettings: () => request<void>("/settings", { method: "DELETE" }),
-  resetApp: () => request<void>("/settings/reset-app", { method: "POST" }),
-  uploadLogo: async (file: File): Promise<SettingsMap> => {
+  getSettings: (workspaceId: number) =>
+    request<SettingsMap>(`/workspaces/${workspaceId}/settings`),
+  updateSettings: (
+    workspaceId: number,
+    settings: Array<{ key: string; textValue?: string; boolValue?: boolean; version: number }>,
+  ) =>
+    request<SettingsMap>(`/workspaces/${workspaceId}/settings`, {
+      method: "PATCH",
+      body: JSON.stringify(settings),
+    }),
+  resetSettings: (workspaceId: number) =>
+    request<void>(`/workspaces/${workspaceId}/settings`, { method: "DELETE" }),
+  uploadLogo: async (workspaceId: number, file: File): Promise<SettingsMap> => {
     const formData = new FormData();
     formData.append("logo", file);
-    const res = await fetch("/api/settings/logo", { method: "POST", body: formData });
+    const res = await fetch(`/api/workspaces/${workspaceId}/settings/logo`, {
+      method: "POST",
+      body: formData,
+    });
     if (!res.ok) {
       let message = `Upload failed (${res.status})`;
       try {

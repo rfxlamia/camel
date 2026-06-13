@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
-import { type AuthUser } from "../auth.js";
-import { onlineUsers, publishEvent } from "../realtime.js";
+import { publishEvent } from "../realtime.js";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "node:path";
@@ -123,11 +122,85 @@ export function generateDefaultSettings(rows: SettingRow[]): SettingsResponse {
   return { boardName, logoPath, version };
 }
 
-export const settingsRouter = Router();
+export type SettingsAuthCheck =
+  | { allowed: true }
+  | { allowed: false; status: number; error: string };
 
-settingsRouter.get("/", async (_req, res) => {
+export function checkCanEditSettings(role: string): SettingsAuthCheck {
+  if (role === "admin" || role === "owner") return { allowed: true };
+  return { allowed: false, status: 403, error: "Forbidden" };
+}
+
+export type WorkspaceSettingsRepo = {
+  getMembership: (
+    workspaceId: number,
+    userId: number,
+  ) => Promise<{ userId: number; role: string } | null>;
+  getSettings: (workspaceId: number) => Promise<SettingRow[]>;
+  updateSettings: (
+    workspaceId: number,
+    updates: Array<{ key: string; textValue: string; version: number }>,
+  ) => Promise<unknown>;
+};
+
+export function createWorkspaceSettingsService(repo: WorkspaceSettingsRepo) {
+  return {
+    async getSettings({ userId, workspaceId }: { userId: number; workspaceId: number }) {
+      const membership = await repo.getMembership(workspaceId, userId);
+      if (!membership) return { status: 404 as const, error: "Not found" };
+      const rows = await repo.getSettings(workspaceId);
+      return generateDefaultSettings(rows);
+    },
+
+    async updateSettings({
+      userId,
+      workspaceId,
+      updates,
+    }: {
+      userId: number;
+      workspaceId: number;
+      updates: Array<{ key: string; textValue: string; version: number }>;
+    }) {
+      const membership = await repo.getMembership(workspaceId, userId);
+      if (!membership) return { status: 404 as const, error: "Not found" };
+
+      const edit = checkCanEditSettings(membership.role);
+      if (!edit.allowed) {
+        return { status: edit.status, error: edit.error };
+      }
+
+      await repo.updateSettings(workspaceId, updates);
+      return { ok: true as const };
+    },
+  };
+}
+
+export function hasResetAppRoute(): boolean {
+  return false;
+}
+
+function parseWorkspaceId(raw: string): number | null {
+  const workspaceId = Number(raw);
+  return Number.isInteger(workspaceId) ? workspaceId : null;
+}
+
+export const settingsRouter = Router({ mergeParams: true });
+
+settingsRouter.get("/", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const { rows: memberRows } = await pool.query(
+    "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+    [workspaceId, req.user!.id],
+  );
+  if (memberRows.length === 0) return res.status(404).json({ error: "Not found" });
+
   const { rows: raw } = await pool.query(
-    `SELECT key, text_value, bool_value, version FROM settings`
+    `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
+    [workspaceId],
   );
   const rows: SettingRow[] = raw.map((r: any) => ({
     key: r.key,
@@ -141,16 +214,56 @@ settingsRouter.get("/", async (_req, res) => {
 });
 
 settingsRouter.patch("/", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const { rows: memberRows } = await pool.query(
+    "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+    [workspaceId, req.user!.id],
+  );
+  if (memberRows.length === 0) return res.status(404).json({ error: "Not found" });
+
+  const edit = checkCanEditSettings(memberRows[0].role as string);
+  if (!edit.allowed) {
+    return res.status(edit.status).json({ error: edit.error });
+  }
+
+  const updates: Array<{ key: string; textValue: string }> = [];
+  let clientVersion: number | undefined;
+
+  if (Array.isArray(req.body)) {
+    for (const item of req.body as Array<{ key?: string; textValue?: string; version?: number }>) {
+      if (typeof item.version === "number") clientVersion = item.version;
+      if (!item?.key || !validateSettingKey(item.key)) {
+        return res.status(400).json({ error: `Invalid setting key: ${item?.key ?? ""}` });
+      }
+      if (item.key === "board_name") {
+        if (typeof item.textValue !== "string") {
+          return res.status(400).json({ error: "board_name value must be a string" });
+        }
+        const vr = validateBoardName(item.textValue);
+        if (!vr.valid) return res.status(400).json({ error: vr.error });
+        updates.push({ key: "board_name", textValue: vr.trimmed });
+      } else if (item.key === "logo_path") {
+        if (typeof item.textValue !== "string") {
+          return res.status(400).json({ error: "logo_path value must be a string" });
+        }
+        const trimmed = item.textValue.trim();
+        if (trimmed === "") {
+          return res.status(400).json({ error: "logo_path cannot be empty" });
+        }
+        updates.push({ key: "logo_path", textValue: trimmed });
+      }
+    }
+  } else {
   const body = (req.body ?? {}) as {
     version?: number;
     boardName?: unknown;
     logoPath?: unknown;
   };
-  if (typeof body.version !== "number" || !Number.isInteger(body.version)) {
-    return res.status(400).json({ error: "version must be an integer" });
-  }
-
-  const updates: Array<{ key: string; textValue: string }> = [];
+  clientVersion = body.version;
 
   if (body.boardName !== undefined) {
     if (typeof body.boardName !== "string") {
@@ -205,11 +318,19 @@ settingsRouter.patch("/", async (req, res) => {
       }
     }
   }
+  }
 
-  const { rows: verRows } = await pool.query(`SELECT version FROM settings`);
+  if (typeof clientVersion !== "number" || !Number.isInteger(clientVersion)) {
+    return res.status(400).json({ error: "version must be an integer" });
+  }
+
+  const { rows: verRows } = await pool.query(
+    `SELECT version FROM settings WHERE workspace_id = $1`,
+    [workspaceId],
+  );
   const currentGlobal = verRows.reduce((max: number, r: any) => Math.max(max, r.version || 0), 0);
 
-  if (body.version !== currentGlobal) {
+  if (clientVersion !== currentGlobal) {
     return res.status(409).json({
       error: "Someone else updated settings first.",
       code: "version_conflict",
@@ -218,7 +339,8 @@ settingsRouter.patch("/", async (req, res) => {
 
   if (updates.length === 0) {
     const { rows: raw } = await pool.query(
-      `SELECT key, text_value, bool_value, version FROM settings`
+      `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
+      [workspaceId],
     );
     const rows: SettingRow[] = raw.map((r: any) => ({
       key: r.key,
@@ -234,20 +356,21 @@ settingsRouter.patch("/", async (req, res) => {
 
   for (const u of updates) {
     await pool.query(
-      `INSERT INTO settings (key, text_value, version, updated_at)
-       VALUES ($1, $2, $3, now())
-       ON CONFLICT (key) DO UPDATE SET
+      `INSERT INTO settings (workspace_id, key, text_value, version, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (workspace_id, key) DO UPDATE SET
          text_value = EXCLUDED.text_value,
          version = EXCLUDED.version,
          updated_at = now()`,
-      [u.key, u.textValue, newVersion]
+      [workspaceId, u.key, u.textValue, newVersion],
     );
   }
 
-  await publishEvent({ type: "settings.updated", actor: req.user! });
+  await publishEvent(workspaceId, { type: "settings.updated", actor: req.user! });
 
   const { rows: rawAfter } = await pool.query(
-    `SELECT key, text_value, bool_value, version FROM settings`
+    `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
+    [workspaceId],
   );
   const afterRows: SettingRow[] = rawAfter.map((r: any) => ({
     key: r.key,
@@ -260,32 +383,24 @@ settingsRouter.patch("/", async (req, res) => {
 });
 
 settingsRouter.delete("/", async (req, res) => {
-  await pool.query("DELETE FROM settings");
-  await publishEvent({ type: "settings.updated", actor: req.user! });
-  res.status(204).end();
-});
-
-settingsRouter.post("/reset-app", async (req, res) => {
-  const users = await onlineUsers(req.user!);
-  const othersOnline = users.filter((u) => u.id !== req.user!.id);
-  if (othersOnline.length > 0) {
-    return res.status(409).json({ error: "Cannot reset while other users are online" });
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("DELETE FROM columns");
-    await client.query("DELETE FROM settings");
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+  const { rows: memberRows } = await pool.query(
+    "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+    [workspaceId, req.user!.id],
+  );
+  if (memberRows.length === 0) return res.status(404).json({ error: "Not found" });
+
+  const edit = checkCanEditSettings(memberRows[0].role as string);
+  if (!edit.allowed) {
+    return res.status(edit.status).json({ error: edit.error });
   }
 
-  await publishEvent({ type: "settings.updated", actor: req.user! });
+  await pool.query("DELETE FROM settings WHERE workspace_id = $1", [workspaceId]);
+  await publishEvent(workspaceId, { type: "settings.updated", actor: req.user! });
   res.status(204).end();
 });
 
@@ -312,39 +427,58 @@ settingsRouter.post(
     }
   },
   async (req, res) => {
+    const workspaceId = parseWorkspaceId(req.params.workspaceId);
+    if (workspaceId === null) {
+      return res.status(400).json({ error: "workspaceId must be an integer" });
+    }
+
+    const { rows: memberRows } = await pool.query(
+      "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+      [workspaceId, req.user!.id],
+    );
+    if (memberRows.length === 0) return res.status(404).json({ error: "Not found" });
+
+    const edit = checkCanEditSettings(memberRows[0].role as string);
+    if (!edit.allowed) {
+      return res.status(edit.status).json({ error: edit.error });
+    }
+
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
     const newRelativePath = `/uploads/${req.file.filename}`;
 
-    // Read current logo_path to clean up old uploaded file (if any)
     const { rows: currentRows } = await pool.query(
-      `SELECT key, text_value FROM settings WHERE key = 'logo_path'`
+      `SELECT key, text_value FROM settings WHERE workspace_id = $1 AND key = 'logo_path'`,
+      [workspaceId],
     );
     const oldLogoPath = currentRows[0]?.text_value ?? null;
 
     await tryDeleteOldUploadedLogo(oldLogoPath);
 
-    // Bump global version and persist the new logo_path (authoritative on upload)
-    const { rows: verRows } = await pool.query(`SELECT version FROM settings`);
+    const { rows: verRows } = await pool.query(
+      `SELECT version FROM settings WHERE workspace_id = $1`,
+      [workspaceId],
+    );
     const currentGlobal = verRows.reduce((max: number, r: any) => Math.max(max, r.version || 0), 0);
     const newVersion = currentGlobal + 1;
 
     await pool.query(
-      `INSERT INTO settings (key, text_value, version, updated_at)
-       VALUES ($1, $2, $3, now())
-       ON CONFLICT (key) DO UPDATE SET
+      `INSERT INTO settings (workspace_id, key, text_value, version, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (workspace_id, key) DO UPDATE SET
          text_value = EXCLUDED.text_value,
          version = EXCLUDED.version,
          updated_at = now()`,
-      ["logo_path", newRelativePath, newVersion]
+      [workspaceId, "logo_path", newRelativePath, newVersion],
     );
 
-    await publishEvent({ type: "settings.updated", actor: req.user! });
+    await publishEvent(workspaceId, { type: "settings.updated", actor: req.user! });
 
     const { rows: rawAfter } = await pool.query(
-      `SELECT key, text_value, bool_value, version FROM settings`
+      `SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
+      [workspaceId],
     );
     const afterRows: SettingRow[] = rawAfter.map((r: any) => ({
       key: r.key,

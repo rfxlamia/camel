@@ -13,8 +13,9 @@ describe("Settings API methods", () => {
     });
 
     const { api } = await import("./api");
-    const result = await api.getSettings();
+    const result = await api.getSettings(7);
     expect(result).toEqual({ boardName: "Dev Team", logoPath: "/uploads/logo.png", version: 1 });
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/settings", expect.any(Object));
   });
 
   it("updateSettings sends PATCH with body", async () => {
@@ -25,10 +26,10 @@ describe("Settings API methods", () => {
     });
 
     const { api } = await import("./api");
-    await api.updateSettings([{ key: "board_name", textValue: "New Name", version: 1 }]);
+    await api.updateSettings(7, [{ key: "board_name", textValue: "New Name", version: 1 }]);
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/settings",
+      "/api/workspaces/7/settings",
       expect.objectContaining({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -44,27 +45,11 @@ describe("Settings API methods", () => {
     });
 
     const { api } = await import("./api");
-    await api.resetSettings();
+    await api.resetSettings(7);
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/settings",
+      "/api/workspaces/7/settings",
       expect.objectContaining({ method: "DELETE" })
-    );
-  });
-
-  it("resetApp sends POST", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 204,
-      json: () => Promise.resolve(undefined),
-    });
-
-    const { api } = await import("./api");
-    await api.resetApp();
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/settings/reset-app",
-      expect.objectContaining({ method: "POST" })
     );
   });
 
@@ -77,13 +62,28 @@ describe("Settings API methods", () => {
 
     const { api } = await import("./api");
     const file = new File(["test"], "logo.png", { type: "image/png" });
-    const result = await api.uploadLogo(file);
+    const result = await api.uploadLogo(7, file);
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/settings/logo",
+      "/api/workspaces/7/settings/logo",
       expect.objectContaining({ method: "POST" })
     );
     expect(result.logoPath).toBe("/uploads/new.png");
+  });
+});
+
+describe("scoped settings API", () => {
+  it("uses workspace-prefixed settings paths and removes resetApp", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ boardName: "Alpha", logoPath: "/logo.png", version: 1 }) });
+    const { api } = await import("./api");
+
+    await api.getSettings(7);
+    await api.updateSettings(7, [{ key: "board_name", textValue: "Alpha", version: 1 }]);
+
+    expect(mockFetch).toHaveBeenNthCalledWith(1, "/api/workspaces/7/settings", expect.any(Object));
+    expect(mockFetch).toHaveBeenNthCalledWith(2, "/api/workspaces/7/settings", expect.objectContaining({ method: "PATCH" }));
+    expect("resetApp" in api).toBe(false);
   });
 });
 

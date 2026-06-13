@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canEditWorkspaceSettings,
+  getWorkspaceDangerZoneState,
   validateBoardName,
-  validateResetAppConfirmation,
   validateUnsavedChanges,
 } from "./settingsValidation";
 
@@ -40,32 +41,6 @@ describe("validateBoardName (client)", () => {
   });
 });
 
-describe("validateResetAppConfirmation", () => {
-  it("enables when DELETE typed and checkbox checked", () => {
-    expect(validateResetAppConfirmation("DELETE", true)).toEqual({ enabled: true });
-  });
-
-  it("enables for lowercase delete", () => {
-    expect(validateResetAppConfirmation("delete", true)).toEqual({ enabled: true });
-  });
-
-  it("enables for mixed case with spaces", () => {
-    expect(validateResetAppConfirmation("  Delete  ", true)).toEqual({ enabled: true });
-  });
-
-  it("disables when DELETE typed but checkbox unchecked", () => {
-    expect(validateResetAppConfirmation("DELETE", false)).toEqual({ enabled: false });
-  });
-
-  it("disables when checkbox checked but wrong text", () => {
-    expect(validateResetAppConfirmation("WRONG", true)).toEqual({ enabled: false });
-  });
-
-  it("disables when both wrong", () => {
-    expect(validateResetAppConfirmation("", false)).toEqual({ enabled: false });
-  });
-});
-
 describe("validateUnsavedChanges", () => {
   it("detects changes", () => {
     expect(validateUnsavedChanges("Camel", "Dev Team")).toBe(true);
@@ -81,5 +56,26 @@ describe("validateUnsavedChanges", () => {
 
   it("no change returns false", () => {
     expect(validateUnsavedChanges("Camel", "Camel")).toBe(false);
+  });
+});
+
+describe("workspace settings validation state", () => {
+  it("allows owner/admin edits and blocks member edits", () => {
+    expect(canEditWorkspaceSettings("owner")).toBe(true);
+    expect(canEditWorkspaceSettings("admin")).toBe(true);
+    expect(canEditWorkspaceSettings("member")).toBe(false);
+  });
+
+  it("uses workspace delete danger state instead of reset app", () => {
+    expect(getWorkspaceDangerZoneState({
+      role: "owner",
+      memberCount: 1,
+      isPersonal: false,
+    })).toEqual({ canDelete: true, reason: null, resetAppVisible: false });
+    expect(getWorkspaceDangerZoneState({
+      role: "owner",
+      memberCount: 1,
+      isPersonal: true,
+    })).toMatchObject({ canDelete: false, resetAppVisible: false });
   });
 });
