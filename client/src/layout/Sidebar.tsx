@@ -618,7 +618,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { logout } = useBoard();
+  const { logout, settings, activeWorkspace } = useBoard();
   const labelClass = collapsed ? "hidden" : "hidden lg:inline whitespace-nowrap";
   const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
@@ -634,7 +634,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       }`}
     >
       <div className="flex h-14 items-center gap-2 border-b border-neutral-200 px-3">
-        <WorkspaceSwitcher collapsed={collapsed} placement="right" />
+        <WorkspaceAvatar workspace={activeWorkspace ?? { id: 0, name: settings.boardName } as Workspace} logoPath={settings.logoPath} />
+        <span className={`text-base font-semibold text-primary-900 ${labelClass}`}>
+          {settings.boardName}
+        </span>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-2" aria-label="Main">
@@ -645,6 +648,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+
+      <div className="border-t border-neutral-200 p-2">
+        <WorkspaceSwitcher collapsed={collapsed} placement="right" />
+      </div>
 
       <div className="relative border-t border-neutral-200 p-2">
         <button
@@ -693,7 +700,7 @@ interface MobileNavProps {
 }
 
 export function MobileNav({ open, onClose }: MobileNavProps) {
-  const { logout } = useBoard();
+  const { logout, settings, activeWorkspace } = useBoard();
   const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
   const handleSignOut = useCallback(() => {
@@ -712,7 +719,12 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
       />
       <div className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-lg">
         <div className="flex h-14 items-center justify-between gap-2 border-b border-neutral-200 px-4">
-          <WorkspaceSwitcher placement="top" />
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <WorkspaceAvatar workspace={activeWorkspace ?? { id: 0, name: settings.boardName } as Workspace} logoPath={settings.logoPath} />
+            <span className="truncate text-base font-semibold text-primary-900">
+              {settings.boardName}
+            </span>
+          </div>
           <button
             onClick={onClose}
             aria-label="Close menu"
@@ -736,6 +748,10 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
             </NavLink>
           ))}
         </nav>
+
+        <div className="border-t border-neutral-200 p-3">
+          <WorkspaceSwitcher placement="top" />
+        </div>
 
         <div className="relative border-t border-neutral-200 p-3">
           <button
