@@ -293,6 +293,36 @@ api.post("/workspaces/:workspaceId/members", async (req, res) => {
   });
 });
 
+api.delete("/workspaces/:workspaceId/members/:userId", async (req, res) => {
+  const workspaceId = Number(req.params.workspaceId);
+  const targetUserId = Number(req.params.userId);
+  if (!Number.isInteger(workspaceId) || !Number.isInteger(targetUserId)) {
+    return res.status(400).json({ error: "workspaceId and userId must be integers" });
+  }
+
+  const actorRole = await lookupMembership(req.user!.id, workspaceId);
+  if (!actorRole) return res.status(404).json({ error: "Not found" });
+
+  const manage = checkActorCanManage(actorRole);
+  if (!manage.allowed) {
+    return res.status(manage.status).json({ error: manage.error });
+  }
+
+  const targetRole = await lookupMembership(targetUserId, workspaceId);
+  if (!targetRole) return res.status(404).json({ error: "Not found" });
+
+  const canRemove = checkCanRemoveUser(actorRole, targetRole);
+  if (!canRemove.allowed) {
+    return res.status(canRemove.status).json({ error: canRemove.error });
+  }
+
+  await pool.query(
+    "DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+    [workspaceId, targetUserId],
+  );
+  res.status(204).end();
+});
+
 api.post("/workspaces/:workspaceId/invites/:inviteId/accept", async (req, res) => {
   const workspaceId = Number(req.params.workspaceId);
   const inviteId = Number(req.params.inviteId);
@@ -383,6 +413,9 @@ api.post("/workspaces/:workspaceId/transfer-ownership", async (req, res) => {
   const { newOwnerId, previousOwnerRole } = req.body ?? {};
   if (!Number.isInteger(newOwnerId)) {
     return res.status(400).json({ error: "newOwnerId is required" });
+  }
+  if (newOwnerId === req.user!.id) {
+    return res.status(400).json({ error: "Cannot transfer ownership to yourself" });
   }
   const demotedRole =
     previousOwnerRole === "admin" || previousOwnerRole === "member"
