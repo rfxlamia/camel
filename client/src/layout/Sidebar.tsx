@@ -618,7 +618,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { logout, settings, activeWorkspace } = useBoard();
+  const { logout, settings } = useBoard();
   const labelClass = collapsed ? "hidden" : "hidden lg:inline whitespace-nowrap";
   const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
@@ -634,7 +634,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       }`}
     >
       <div className="flex h-14 items-center gap-2 border-b border-neutral-200 px-3">
-        <WorkspaceAvatar workspace={activeWorkspace ?? { id: 0, name: settings.boardName } as Workspace} logoPath={settings.logoPath} />
+        <img src={settings.logoPath} alt={settings.boardName} className="h-6 w-6 shrink-0" />
         <span className={`text-base font-semibold text-primary-900 ${labelClass}`}>
           {settings.boardName}
         </span>
@@ -700,7 +700,7 @@ interface MobileNavProps {
 }
 
 export function MobileNav({ open, onClose }: MobileNavProps) {
-  const { logout, settings, activeWorkspace } = useBoard();
+  const { logout, settings } = useBoard();
   const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
   const handleSignOut = useCallback(() => {
@@ -720,7 +720,7 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
       <div className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-lg">
         <div className="flex h-14 items-center justify-between gap-2 border-b border-neutral-200 px-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <WorkspaceAvatar workspace={activeWorkspace ?? { id: 0, name: settings.boardName } as Workspace} logoPath={settings.logoPath} />
+            <img src={settings.logoPath} alt={settings.boardName} className="h-6 w-6 shrink-0" />
             <span className="truncate text-base font-semibold text-primary-900">
               {settings.boardName}
             </span>
