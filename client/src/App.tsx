@@ -45,11 +45,9 @@ const router = createBrowserRouter([
 ]);
 
 function AuthenticatedApp() {
-  const { workspacesReady, pickerRequired } = useBoard();
+  const { workspacesReady } = useBoard();
 
   if (!workspacesReady) return <LoadingScreen />;
-  // Picker UI lands in Phase 3; until then block routing when no workspace is selected.
-  if (pickerRequired) return <LoadingScreen />;
 
   return <RouterProvider router={router} />;
 }

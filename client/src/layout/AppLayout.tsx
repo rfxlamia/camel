@@ -4,7 +4,7 @@ import { Menu } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import PresenceBar from "../components/PresenceBar";
 import Toast from "../components/Toast";
-import Sidebar, { MobileNav, NAV_ITEMS } from "./Sidebar";
+import Sidebar, { MobileNav, NAV_ITEMS, WorkspaceOverlays } from "./Sidebar";
 import { formatTitle, getFaviconLink } from "../lib/title";
 
 const SIDEBAR_COLLAPSED_KEY = "camel.sidebar.collapsed";
@@ -46,6 +46,7 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen">
+      <WorkspaceOverlays />
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
 

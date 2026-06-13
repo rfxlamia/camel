@@ -124,6 +124,48 @@ describe("scoped board API paths", () => {
   });
 });
 
+describe("workspace create and invite API contracts", () => {
+  it("creates workspaces and accepts invites through scoped endpoints", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 9, name: "Launch", role: "owner", isPersonal: false }),
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ workspaceId: 7, role: "member" }),
+    });
+    const { api } = await import("./api");
+
+    await api.createWorkspace({ name: "Launch" });
+    await api.acceptInvite(7, 12);
+
+    expect(mockFetch).toHaveBeenNthCalledWith(1, "/api/workspaces", expect.objectContaining({ method: "POST" }));
+    expect(mockFetch).toHaveBeenNthCalledWith(2, "/api/workspaces/7/invites/12/accept", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("surfaces the 409 cap message for create and accept failures", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ error: "You've reached the workspace limit (10)." }),
+    });
+    const { api } = await import("./api");
+
+    await expect(api.createWorkspace({ name: "Extra" })).rejects.toMatchObject({
+      status: 409,
+      message: "You've reached the workspace limit (10).",
+    });
+    await expect(api.acceptInvite(7, 12)).rejects.toMatchObject({
+      status: 409,
+      message: "You've reached the workspace limit (10).",
+    });
+  });
+});
+
 describe("workspace API methods", () => {
   it("calls documented workspace and membership endpoints", async () => {
     mockFetch.mockClear();

@@ -66,7 +66,7 @@ export default function AuthPage({ onAuth }: Props) {
           <p className="mt-1 text-sm text-neutral-600">
             {mode === "login"
               ? "Welcome back. Your board's waiting."
-              : "Join your team's board in a few seconds."}
+              : "Join your team's board in a few seconds. Pending workspace invites appear after you sign in."}
           </p>
 
           <div className="mt-5 space-y-3">

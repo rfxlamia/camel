@@ -144,3 +144,14 @@ export interface WorkspaceSelectionState {
   pickerRequired: boolean;
   workspacesReady: boolean;
 }
+
+export type SwitchConfirmState =
+  | { open: false }
+  | { open: true; pendingWorkspaceId: number };
+
+export interface WorkspaceCreateState {
+  open: boolean;
+  name: string;
+  busy: boolean;
+  error: string | null;
+}

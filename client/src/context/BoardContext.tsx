@@ -11,6 +11,12 @@ import {
 } from "react";
 import { ApiError, api } from "../api";
 import {
+  CAP_MESSAGE,
+  getSwitchAttemptState,
+  persistRemindedInviteIds,
+  readRemindedInviteIds,
+} from "../lib/workspaceSwitcher";
+import {
   chooseInitialWorkspace,
   clearSavedWorkspaceId,
   getRemovalRedirect,
@@ -23,6 +29,7 @@ import type {
   FlowMetrics,
   PresenceUser,
   SettingsMap,
+  SwitchConfirmState,
   User,
   Workspace,
   WorkspaceInvite,
@@ -42,14 +49,28 @@ interface BoardContextValue {
   pendingInvites: WorkspaceInvite[];
   pickerRequired: boolean;
   workspacesReady: boolean;
+  membershipCount: number;
+  remindedInviteIds: number[];
+  hasUnsavedCardEdits: boolean;
+  setHasUnsavedCardEdits: (dirty: boolean) => void;
+  switchConfirm: SwitchConfirmState;
+  attemptSwitchWorkspace: (workspaceId: number) => void;
+  confirmPendingSwitch: () => void;
+  cancelPendingSwitch: () => void;
   switchWorkspace: (workspaceId: number) => void;
+  acceptWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
+  declineWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
+  remindInviteLater: (invite: WorkspaceInvite) => void;
+  openCreateWorkspace: () => void;
+  closeCreateWorkspace: () => void;
+  createWorkspaceOpen: boolean;
+  submitCreateWorkspace: (name: string) => Promise<void>;
   columns: Column[] | null;
   setColumns: Dispatch<SetStateAction<Column[] | null>>;
   metrics: FlowMetrics | null;
   activity: ActivityEvent[];
   presence: PresenceUser[];
   loadError: boolean;
-  /** Bumped after every successful refresh so pages can refetch derived data. */
   refreshTick: number;
   refresh: () => Promise<void>;
   saveCard: (
@@ -79,18 +100,16 @@ interface Props {
   children: ReactNode;
 }
 
-/**
- * Holds board data and the real-time wiring (SSE, heartbeat, presence) at the
- * app root, above the router, so navigation never drops the connection and
- * board state persists across pages. All data is scoped to exactly one active
- * workspace at a time.
- */
 export function BoardProvider({ user, onSignedOut, children }: Props) {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [pendingInvites, setPendingInvites] = useState<WorkspaceInvite[]>([]);
   const [pickerRequired, setPickerRequired] = useState(false);
   const [workspacesReady, setWorkspacesReady] = useState(false);
+  const [remindedInviteIds, setRemindedInviteIds] = useState<number[]>(() => readRemindedInviteIds());
+  const [hasUnsavedCardEdits, setHasUnsavedCardEdits] = useState(false);
+  const [switchConfirm, setSwitchConfirm] = useState<SwitchConfirmState>({ open: false });
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [metrics, setMetrics] = useState<FlowMetrics | null>(null);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
@@ -103,11 +122,15 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspacesRef = useRef(workspaces);
   workspacesRef.current = workspaces;
+  const hasUnsavedRef = useRef(hasUnsavedCardEdits);
+  hasUnsavedRef.current = hasUnsavedCardEdits;
 
   const activeWorkspace =
     activeWorkspaceId === null
       ? null
       : workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+
+  const membershipCount = workspaces.length;
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -151,6 +174,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   }, []);
 
   const switchWorkspace = useCallback((workspaceId: number) => {
+    setHasUnsavedCardEdits(false);
+    setSwitchConfirm({ open: false });
     setActiveWorkspaceId(workspaceId);
     persistWorkspaceId(workspaceId);
     setPickerRequired(false);
@@ -160,6 +185,99 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
     setPresence([]);
     setLoadError(false);
   }, []);
+
+  const attemptSwitchWorkspace = useCallback(
+    (workspaceId: number) => {
+      const state = getSwitchAttemptState({
+        activeWorkspaceId,
+        targetWorkspaceId: workspaceId,
+        hasUnsavedCardEdits: hasUnsavedRef.current,
+      });
+      if (state.status === "noop") return;
+      if (state.status === "confirm-required") {
+        setSwitchConfirm({ open: true, pendingWorkspaceId: state.pendingWorkspaceId });
+        return;
+      }
+      switchWorkspace(state.workspaceId);
+    },
+    [activeWorkspaceId, switchWorkspace],
+  );
+
+  const confirmPendingSwitch = useCallback(() => {
+    if (!switchConfirm.open) return;
+    switchWorkspace(switchConfirm.pendingWorkspaceId);
+  }, [switchConfirm, switchWorkspace]);
+
+  const cancelPendingSwitch = useCallback(() => {
+    setSwitchConfirm({ open: false });
+  }, []);
+
+  const acceptWorkspaceInvite = useCallback(
+    async (invite: WorkspaceInvite) => {
+      try {
+        await api.acceptInvite(invite.workspaceId, invite.id);
+        const list = await reloadWorkspaces();
+        switchWorkspace(list.find((w) => w.id === invite.workspaceId)?.id ?? invite.workspaceId);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          showToast(err.message || CAP_MESSAGE);
+          return;
+        }
+        showToast("Couldn't accept the invite. Try again.");
+      }
+    },
+    [reloadWorkspaces, showToast, switchWorkspace],
+  );
+
+  const declineWorkspaceInvite = useCallback(
+    async (invite: WorkspaceInvite) => {
+      try {
+        await api.declineInvite(invite.workspaceId, invite.id);
+        await reloadWorkspaces();
+      } catch {
+        showToast("Couldn't decline the invite. Try again.");
+      }
+    },
+    [reloadWorkspaces, showToast],
+  );
+
+  const remindInviteLater = useCallback((invite: WorkspaceInvite) => {
+    setRemindedInviteIds((prev) => {
+      if (prev.includes(invite.id)) return prev;
+      const next = [...prev, invite.id];
+      persistRemindedInviteIds(next);
+      return next;
+    });
+  }, []);
+
+  const openCreateWorkspace = useCallback(() => {
+    setCreateWorkspaceOpen(true);
+  }, []);
+
+  const closeCreateWorkspace = useCallback(() => {
+    setCreateWorkspaceOpen(false);
+  }, []);
+
+  const submitCreateWorkspace = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      try {
+        const created = await api.createWorkspace({ name: trimmed });
+        await reloadWorkspaces();
+        switchWorkspace(created.id);
+        setCreateWorkspaceOpen(false);
+        showToast("Workspace created.");
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          showToast(err.message || CAP_MESSAGE);
+          return;
+        }
+        showToast("Couldn't create the workspace. Try again.");
+      }
+    },
+    [reloadWorkspaces, showToast, switchWorkspace],
+  );
 
   // Load workspace list and restore last-active workspace from localStorage.
   useEffect(() => {
@@ -319,7 +437,22 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         pendingInvites,
         pickerRequired,
         workspacesReady,
+        membershipCount,
+        remindedInviteIds,
+        hasUnsavedCardEdits,
+        setHasUnsavedCardEdits,
+        switchConfirm,
+        attemptSwitchWorkspace,
+        confirmPendingSwitch,
+        cancelPendingSwitch,
         switchWorkspace,
+        acceptWorkspaceInvite,
+        declineWorkspaceInvite,
+        remindInviteLater,
+        openCreateWorkspace,
+        closeCreateWorkspace,
+        createWorkspaceOpen,
+        submitCreateWorkspace,
         columns,
         setColumns,
         metrics,

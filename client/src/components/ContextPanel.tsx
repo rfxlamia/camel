@@ -40,6 +40,7 @@ function DetailsSection({
   onDelete: () => Promise<void>;
   onClose: () => void;
 }) {
+  const { setHasUnsavedCardEdits } = useBoard();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description);
   // Card snapshot the draft is based on — "dirty" means the draft differs
@@ -67,6 +68,13 @@ function DetailsSection({
     setTitle(card.title);
     setDescription(card.description);
   }, [card.title, card.description, card.version, title, description, syncNonce]);
+
+  useEffect(() => {
+    const base = baselineRef.current;
+    const dirty = title !== base.title || description !== base.description;
+    setHasUnsavedCardEdits(dirty);
+    return () => setHasUnsavedCardEdits(false);
+  }, [title, description, setHasUnsavedCardEdits]);
 
   const save = async () => {
     const trimmed = title.trim();
