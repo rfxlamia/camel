@@ -6,6 +6,7 @@ import {
   checkCanRemoveUser,
   checkInviteeCap,
   createScopedBoardService,
+  createWorkspaceAccessService,
 } from "../routes.js";
 
 describe("workspace authorization rules", () => {
@@ -65,5 +66,32 @@ describe("scoped board service", () => {
       activity: [{ id: 200, workspaceId: 1 }],
     });
     expect(JSON.stringify(board)).not.toContain("WS-B");
+  });
+});
+
+describe("membership removal events", () => {
+  it("publishes membership.removed only to the removed workspace", async () => {
+    const publishEvent = vi.fn(async () => undefined);
+    const clearPresence = vi.fn(async () => undefined);
+    const service = createWorkspaceAccessService({
+      getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
+      getWorkspaceOwner: vi.fn(async () => ({ userId: 1, role: "owner" })),
+      getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
+      getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+      removeMember: vi.fn(async () => ({ userId: 4, username: "nina" })),
+      publishEvent,
+      clearPresence,
+    });
+
+    await service.removeMember({ actorId: 1, workspaceId: 8, userId: 4 });
+
+    expect(publishEvent).toHaveBeenCalledWith(8, {
+      type: "membership.removed",
+      userId: 4,
+      workspaceId: 8,
+      workspaceName: "WS-R",
+    });
+    expect(publishEvent).not.toHaveBeenCalledWith(9, expect.anything());
+    expect(clearPresence).toHaveBeenCalledWith(8, 4);
   });
 });

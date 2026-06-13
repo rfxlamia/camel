@@ -158,6 +158,118 @@ export function createScopedBoardService(deps: ScopedBoardDeps) {
   };
 }
 
+export type WorkspaceAccessDeps = {
+  getActorMembership: (
+    workspaceId: number,
+    actorId: number,
+  ) => Promise<{ userId: number; role: string } | null>;
+  getWorkspaceOwner: (
+    workspaceId: number,
+  ) => Promise<{ userId: number; role: string } | null>;
+  getWorkspace: (workspaceId: number) => Promise<{ id: number; name: string } | null>;
+  getTargetMembership: (
+    workspaceId: number,
+    userId: number,
+  ) => Promise<{ userId: number; role: string } | null>;
+  removeMember: (
+    workspaceId: number,
+    userId: number,
+  ) => Promise<{ userId: number; username: string }>;
+  publishEvent: (
+    workspaceId: number,
+    event: {
+      type: "membership.removed";
+      userId: number;
+      workspaceId: number;
+      workspaceName: string;
+    },
+  ) => Promise<void>;
+  clearPresence: (workspaceId: number, userId: number) => Promise<void>;
+};
+
+export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
+  return {
+    async removeMember({
+      actorId,
+      workspaceId,
+      userId,
+    }: {
+      actorId: number;
+      workspaceId: number;
+      userId: number;
+    }) {
+      const actorMembership = await deps.getActorMembership(workspaceId, actorId);
+      if (!actorMembership) return { status: 404 as const, error: "Not found" };
+
+      const manage = checkActorCanManage(actorMembership.role);
+      if (!manage.allowed) {
+        return { status: manage.status, error: manage.error };
+      }
+
+      const targetMembership = await deps.getTargetMembership(workspaceId, userId);
+      if (!targetMembership) return { status: 404 as const, error: "Not found" };
+
+      const canRemove = checkCanRemoveUser(actorMembership.role, targetMembership.role);
+      if (!canRemove.allowed) {
+        return { status: canRemove.status, error: canRemove.error };
+      }
+
+      const workspace = await deps.getWorkspace(workspaceId);
+      if (!workspace) return { status: 404 as const, error: "Not found" };
+
+      const removed = await deps.removeMember(workspaceId, userId);
+      await deps.clearPresence(workspaceId, userId);
+      await deps.publishEvent(workspaceId, {
+        type: "membership.removed",
+        userId: removed.userId,
+        workspaceId,
+        workspaceName: workspace.name,
+      });
+      return { status: 204 as const };
+    },
+  };
+}
+
+const workspaceAccessService = createWorkspaceAccessService({
+  getActorMembership: async (workspaceId, actorId) => {
+    const role = await lookupMembership(actorId, workspaceId);
+    return role ? { userId: actorId, role } : null;
+  },
+  getWorkspaceOwner: async (workspaceId) => {
+    const { rows } = await pool.query(
+      "SELECT user_id, role FROM workspace_members WHERE workspace_id = $1 AND role = 'owner' LIMIT 1",
+      [workspaceId],
+    );
+    return rows[0] ? { userId: rows[0].user_id as number, role: rows[0].role as string } : null;
+  },
+  getWorkspace: async (workspaceId) => {
+    const { rows } = await pool.query(
+      "SELECT id, name FROM workspaces WHERE id = $1",
+      [workspaceId],
+    );
+    return rows[0] ? { id: rows[0].id as number, name: rows[0].name as string } : null;
+  },
+  getTargetMembership: async (workspaceId, userId) => {
+    const role = await lookupMembership(userId, workspaceId);
+    return role ? { userId, role } : null;
+  },
+  removeMember: async (workspaceId, userId) => {
+    const { rows } = await pool.query(
+      `DELETE FROM workspace_members
+       WHERE workspace_id = $1 AND user_id = $2
+       RETURNING user_id`,
+      [workspaceId, userId],
+    );
+    const { rows: userRows } = await pool.query(
+      "SELECT username FROM users WHERE id = $1",
+      [rows[0].user_id],
+    );
+    return { userId: rows[0].user_id as number, username: userRows[0].username as string };
+  },
+  publishEvent,
+  clearPresence,
+});
+
 export const api = Router();
 
 api.use(requireAuth);
@@ -365,26 +477,14 @@ api.delete("/workspaces/:workspaceId/members/:userId", async (req, res) => {
     return res.status(400).json({ error: "workspaceId and userId must be integers" });
   }
 
-  const actorRole = await lookupMembership(req.user!.id, workspaceId);
-  if (!actorRole) return res.status(404).json({ error: "Not found" });
-
-  const manage = checkActorCanManage(actorRole);
-  if (!manage.allowed) {
-    return res.status(manage.status).json({ error: manage.error });
+  const result = await workspaceAccessService.removeMember({
+    actorId: req.user!.id,
+    workspaceId,
+    userId: targetUserId,
+  });
+  if (result.status !== 204) {
+    return res.status(result.status).json({ error: result.error });
   }
-
-  const targetRole = await lookupMembership(targetUserId, workspaceId);
-  if (!targetRole) return res.status(404).json({ error: "Not found" });
-
-  const canRemove = checkCanRemoveUser(actorRole, targetRole);
-  if (!canRemove.allowed) {
-    return res.status(canRemove.status).json({ error: canRemove.error });
-  }
-
-  await pool.query(
-    "DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-    [workspaceId, targetUserId],
-  );
   res.status(204).end();
 });
 
@@ -648,7 +748,7 @@ api.post("/workspaces/:workspaceId/columns", async (req, res) => {
      RETURNING id, title, position, wip_limit, policy, is_done`,
     [title.trim(), workspaceId, POSITION_GAP],
   );
-  await publishEvent({ type: "column.created", actor: req.user! });
+  await publishEvent(workspaceId, { type: "column.created", actor: req.user! });
   res.status(201).json(rows[0]);
 });
 
@@ -678,7 +778,7 @@ api.patch("/workspaces/:workspaceId/columns/:id", async (req, res) => {
     [id, title ?? null, wipLimit !== undefined, wipLimit ?? null, policy ?? null, workspaceId],
   );
   if (rows.length === 0) return res.status(404).json({ error: "column not found" });
-  await publishEvent({ type: "column.updated", actor: req.user! });
+  await publishEvent(workspaceId, { type: "column.updated", actor: req.user! });
   res.json(rows[0]);
 });
 
@@ -790,7 +890,7 @@ api.post("/workspaces/:workspaceId/cards", async (req, res) => {
     toColumnId: Number(columnId),
     payload: { cardTitle: rows[0].title },
   });
-  await publishEvent({ type: "card.created", actor: req.user!, cardId: rows[0].id });
+  await publishEvent(workspaceId, { type: "card.created", actor: req.user!, cardId: rows[0].id });
   res.status(201).json(rows[0]);
 });
 
@@ -839,7 +939,7 @@ api.patch("/workspaces/:workspaceId/cards/:id", async (req, res) => {
       changed: [title != null && "title", description != null && "description"].filter(Boolean),
     },
   });
-  await publishEvent({ type: "card.updated", actor: req.user!, cardId: id });
+  await publishEvent(workspaceId, { type: "card.updated", actor: req.user!, cardId: id });
   res.json(rows[0]);
 });
 
@@ -862,7 +962,7 @@ api.delete("/workspaces/:workspaceId/cards/:id", async (req, res) => {
     fromColumnId: rows[0].column_id,
     payload: { cardTitle: rows[0].title },
   });
-  await publishEvent({ type: "card.deleted", actor: req.user!, cardId: id });
+  await publishEvent(workspaceId, { type: "card.deleted", actor: req.user!, cardId: id });
   res.status(204).end();
 });
 
@@ -987,7 +1087,7 @@ api.post("/workspaces/:workspaceId/cards/:id/move", async (req, res) => {
     await client.query("COMMIT");
 
     if (!isSameColumn) {
-      await publishEvent({ type: "card.moved", actor: req.user!, cardId });
+      await publishEvent(workspaceId, { type: "card.moved", actor: req.user!, cardId });
     }
 
     const updated = await pool.query(
@@ -1154,20 +1254,41 @@ api.get("/workspaces/:workspaceId/cards/:id/activity", async (req, res) => {
 
 // ---- Presence (Redis TTL heartbeat) -------------------------------------------
 
-api.post("/presence/heartbeat", async (req, res) => {
-  await heartbeat(req.user!);
+api.post("/workspaces/:workspaceId/presence/heartbeat", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
+  await heartbeat(workspaceId, req.user!);
   res.json({ ok: true });
 });
 
-api.get("/presence", async (req, res) => {
-  res.json({ users: await onlineUsers(req.user!) });
+api.get("/workspaces/:workspaceId/presence", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  const role = await lookupMembership(req.user!.id, workspaceId);
+  if (!role) return res.status(404).json({ error: "Not found" });
+
+  res.json({ users: await onlineUsers(workspaceId, req.user!) });
 });
 
-api.delete("/presence", async (req, res) => {
-  await clearPresence(req.user!.id);
+api.delete("/workspaces/:workspaceId/presence", async (req, res) => {
+  const workspaceId = parseWorkspaceId(req.params.workspaceId);
+  if (workspaceId === null) {
+    return res.status(400).json({ error: "workspaceId must be an integer" });
+  }
+
+  await clearPresence(workspaceId, req.user!.id);
   res.status(204).end();
 });
 
 // ---- Real-time stream (Redis Pub/Sub -> SSE) ----------------------------------
 
-api.get("/events/stream", sseHandler);
+api.get("/workspaces/:workspaceId/events/stream", sseHandler);
