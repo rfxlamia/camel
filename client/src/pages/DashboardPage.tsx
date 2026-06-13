@@ -141,20 +141,21 @@ function ChartCard({ title, children }: { title: string; children: ReactNode }) 
 }
 
 export default function DashboardPage() {
-  const { metrics, activity, refreshTick } = useBoard();
+  const { metrics, activity, refreshTick, activeWorkspaceId } = useBoard();
   const [history, setHistory] = useState<MetricsHistoryBucket[] | null>(null);
   const [historyError, setHistoryError] = useState(false);
 
   // refreshTick bumps on every board change (SSE), keeping trends current.
   useEffect(() => {
+    if (activeWorkspaceId === null) return;
     api
-      .getMetricsHistory(HISTORY_WEEKS)
+      .getMetricsHistory(activeWorkspaceId, HISTORY_WEEKS)
       .then(({ weeks }) => {
         setHistory(weeks);
         setHistoryError(false);
       })
       .catch(() => setHistoryError(true));
-  }, [refreshTick]);
+  }, [refreshTick, activeWorkspaceId]);
 
   if (history === null && !historyError) {
     return <p className="p-6 text-sm text-neutral-500">Loading dashboard...</p>;
