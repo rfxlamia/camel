@@ -176,6 +176,20 @@ npm run test --workspace=client
 npx vitest run src/core/position.test.ts
 ```
 
+HTTP route integration tests are opt-in because they need PostgreSQL. They refuse
+to run unless the target database name contains `test`, create that database
+when possible, apply `server/src/db/schema.sql`, and truncate mutable tables
+between tests.
+
+```sh
+# Start PostgreSQL first. Redis is not required for these tests.
+npm run db:up
+
+HTTP_INTEGRATION=1 \
+HTTP_INTEGRATION_DATABASE_URL=postgres://camel:camel@localhost:5432/camel_kanban_test \
+npm run test:integration --workspace=server
+```
+
 ## Architecture decisions
 
 - **Fractional positions**: Cards and columns use float positions (midpoint insertion). If spacing falls below `MIN_SPACING = 1e-9`, a rebalance is triggered.
