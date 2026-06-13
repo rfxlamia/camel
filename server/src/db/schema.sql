@@ -141,9 +141,9 @@ BEGIN
   INSERT INTO workspace_members (workspace_id, user_id, role)
   SELECT
     default_ws_id,
-    u.id,
-    CASE WHEN u.id = (SELECT MIN(id) FROM users) THEN 'owner' ELSE 'member' END
-  FROM users u;
+    usr.id,
+    CASE WHEN usr.id = (SELECT MIN(id) FROM users) THEN 'owner' ELSE 'member' END
+  FROM users usr;
 
   FOR u IN SELECT id, display_name FROM users ORDER BY id LOOP
     INSERT INTO workspaces (name, owner_user_id, is_personal)
