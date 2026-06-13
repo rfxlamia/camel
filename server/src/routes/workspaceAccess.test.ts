@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as routeExports from "../routes.js";
 import {
   CAP_ERROR_MESSAGE,
   WORKSPACE_LIMIT,
@@ -7,9 +8,11 @@ import {
   checkInviteeCap,
   createScopedBoardService,
   createWorkspaceAccessService,
+} from "../routes.js";
+import {
   createWorkspaceIntegrationHarness,
   legacyWorkspaceRouteMatrix,
-} from "../routes.js";
+} from "../test/workspaceHarness.js";
 
 describe("workspace authorization rules", () => {
   it("blocks member from managing — returns 404", () => {
@@ -98,6 +101,11 @@ describe("membership removal events", () => {
 });
 
 describe("workspace isolation and legacy route cleanup", () => {
+  it("does not expose test-only workspace helpers from production routes", () => {
+    expect(routeExports).not.toHaveProperty("createWorkspaceIntegrationHarness");
+    expect(routeExports).not.toHaveProperty("legacyWorkspaceRouteMatrix");
+  });
+
   it("keeps cards and activity isolated through a create and switch flow", async () => {
     const app = createWorkspaceIntegrationHarness();
     const alice = await app.signIn("alice");
