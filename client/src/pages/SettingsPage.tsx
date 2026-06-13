@@ -8,6 +8,49 @@ import {
   validateUnsavedChanges,
 } from "../lib/settingsValidation";
 
+/** Collapsible section following creative-brief design tokens */
+function SettingsSection({
+  title,
+  titleClassName = "text-neutral-800",
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  titleClassName?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between px-4 py-3 text-base font-medium text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+        aria-expanded={isOpen}
+      >
+        <span className={titleClassName}>{title}</span>
+        <svg
+          className={`h-4 w-4 text-neutral-500 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="border-t border-neutral-200 p-4 space-y-6">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { settings, settingsVersion, refreshSettings, showToast } = useBoard();
 
@@ -169,12 +212,8 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl p-6">
       <h1 className="mb-6 text-2xl font-semibold text-neutral-900">Settings</h1>
 
-      {/* Identity section (collapsible) */}
-      <details open className="mb-6 overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <summary className="cursor-pointer select-none px-4 py-3 text-base font-medium text-neutral-800">
-          Identity
-        </summary>
-        <div className="border-t border-neutral-200 p-4 space-y-6">
+      {/* Identity section */}
+      <SettingsSection title="Identity">
           {/* Board name */}
           <div>
             <label htmlFor="boardName" className="block text-sm font-medium text-neutral-700">
@@ -246,15 +285,10 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
-      </details>
+      </SettingsSection>
 
-      {/* Danger Zone (collapsible) */}
-      <details open className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <summary className="cursor-pointer select-none px-4 py-3 text-base font-medium text-error-700">
-          Danger Zone
-        </summary>
-        <div className="border-t border-neutral-200 p-4 space-y-4">
+      {/* Danger Zone */}
+      <SettingsSection title="Danger Zone" titleClassName="text-error-700">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="font-medium text-neutral-800">Reset Settings</div>
@@ -288,8 +322,7 @@ export default function SettingsPage() {
               Reset App
             </button>
           </div>
-        </div>
-      </details>
+      </SettingsSection>
 
       {/* Reset Settings confirmation dialog */}
       {showResetConfirm && (
