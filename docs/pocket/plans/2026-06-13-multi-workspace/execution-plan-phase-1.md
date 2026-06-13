@@ -32,6 +32,7 @@ Files:
 - Modify: `server/src/db/schema.sql`
 - Modify: `server/src/db/migrate.ts`
 - Modify: `server/src/db/seed.ts`
+- Create: `server/src/db/migrateHelpers.ts`
 - Test: `server/src/db/workspaceMigration.test.ts`
 
 Steps:
@@ -42,35 +43,25 @@ Steps:
    ```ts
    import { describe, expect, it } from "vitest";
    import { readFileSync } from "node:fs";
-   import { analyzeWorkspaceSchema, planLegacyWorkspaceMigration } from "./migrate.js";
+   import { planLegacyWorkspaceMigration } from "./migrateHelpers.js";
 
    const schemaSql = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
 
    describe("workspace migration foundation", () => {
-     it("declares workspace tables and non-null scoped columns", () => {
-       const schema = analyzeWorkspaceSchema(schemaSql);
-
-       expect(schema.tables).toEqual(expect.arrayContaining([
-         "workspaces",
-         "workspace_members",
-         "workspace_invites",
-       ]));
-       expect(schema.scopedTables).toMatchObject({
-         columns: "workspace_id",
-         cards: "workspace_id",
-         card_events: "workspace_id",
-         settings: "workspace_id",
-       });
-       expect(schema.notNullWorkspaceTables).toEqual(expect.arrayContaining([
-         "columns",
-         "cards",
-         "card_events",
-         "settings",
-       ]));
-       expect(schema.uniqueGuards).toEqual(expect.arrayContaining([
-         "workspace_members:user_id,workspace_id",
-         "workspace_invites:workspace_id,username",
-       ]));
+     it("schema.sql declares workspace tables, scoped columns, and constraints", () => {
+       expect(schemaSql).toContain("CREATE TABLE IF NOT EXISTS workspaces");
+       expect(schemaSql).toContain("CREATE TABLE IF NOT EXISTS workspace_members");
+       expect(schemaSql).toContain("CREATE TABLE IF NOT EXISTS workspace_invites");
+       // Scoped columns added via idempotent ALTER
+       expect(schemaSql).toMatch(/ALTER TABLE columns ADD COLUMN IF NOT EXISTS workspace_id/);
+       expect(schemaSql).toMatch(/ALTER TABLE cards ADD COLUMN IF NOT EXISTS workspace_id/);
+       expect(schemaSql).toMatch(/ALTER TABLE card_events ADD COLUMN IF NOT EXISTS workspace_id/);
+       expect(schemaSql).toMatch(/ALTER TABLE settings ADD COLUMN IF NOT EXISTS workspace_id/);
+       // settings composite PK replaces single-column PK
+       expect(schemaSql).toMatch(/PRIMARY KEY.*workspace_id.*key|PRIMARY KEY.*key.*workspace_id/s);
+       // Uniqueness guards
+       expect(schemaSql).toMatch(/UNIQUE.*user_id.*workspace_id|UNIQUE.*workspace_id.*user_id/s);
+       expect(schemaSql).toMatch(/UNIQUE.*workspace_id.*username|UNIQUE.*username.*workspace_id/s);
      });
 
      it("plans idempotent default and personal workspace assignment", () => {
@@ -114,13 +105,19 @@ Steps:
 
 2. Run test — verify FAIL:
    `npm run test --workspace=server -- src/db/workspaceMigration.test.ts`
-   Expected failure: assertions fail because `schema.sql` has no `workspaces`, membership tables, scoped settings, or migration guard.
+   Expected failure: `migrateHelpers.js` does not exist yet; schema.sql has no workspace tables or scoped columns.
 
 3. Implement minimal code to satisfy the test:
-   File: `server/src/db/schema.sql`
-   Implement: tables `workspaces`, `workspace_members`, `workspace_invites`; `workspace_id` on `columns`, `cards`, `card_events`, and `settings`; indexes and uniqueness constraints; default legacy workspace creation; per-user personal workspace creation with `is_personal`; idempotent guard that skips duplicate workspace creation when workspaces already exist.
+   File: `server/src/db/migrateHelpers.ts` (new — pure, no DB or pool imports)
+   Implement: `planLegacyWorkspaceMigration` pure function. This file must be importable in tests without any side effects — no pool connections, no top-level awaits.
    File: `server/src/db/migrate.ts`
-   Implement: any transaction wrapper or migration-order guard needed for the full schema to apply atomically.
+   Implement: add a script entry-point guard so the file is safe to import in tests:
+     ```ts
+     if (process.argv[1]?.endsWith("migrate.js")) { migrate().catch(...) }
+     ```
+   Any transaction wrapper or migration-order guard needed for the full schema to apply atomically.
+   File: `server/src/db/schema.sql`
+   Implement: tables `workspaces`, `workspace_members`, `workspace_invites`; idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS workspace_id` on `columns`, `cards`, `card_events`; for `settings`, re-key in 3 steps: (1) `ADD COLUMN IF NOT EXISTS workspace_id INTEGER`, (2) backfill UPDATE, (3) conditional `SET NOT NULL` + drop single-column PK + add composite `PRIMARY KEY (workspace_id, key)` — guard the PK swap so re-run is safe; indexes and uniqueness constraints; default legacy workspace creation; per-user personal workspace creation with `is_personal`; idempotent guard that skips when workspaces already exist.
    File: `server/src/db/seed.ts`
    Implement: seed into a default workspace and preserve no-op behavior when already seeded.
 
@@ -129,7 +126,7 @@ Steps:
    Expected: PASS
 
 5. Commit:
-   `git add server/src/db/schema.sql server/src/db/migrate.ts server/src/db/seed.ts server/src/db/workspaceMigration.test.ts`
+   `git add server/src/db/schema.sql server/src/db/migrate.ts server/src/db/seed.ts server/src/db/migrateHelpers.ts server/src/db/workspaceMigration.test.ts`
    `git commit -m "feat(workspaces): add scoped schema migration"`
 
 ## REFERENCES LOADED
@@ -150,7 +147,7 @@ Justification: Structural migration is the prerequisite for every later task and
 You are implementing workspace schema and migration for Multi-Workspace MVP.
 Spec: docs/pocket/spec/2026-06-13-multi-workspace/multi-workspace.md
 Design decision: Full workspace boundary with `/api/workspaces/:id/...` routes and `workspace_id` data scoping.
-Files in scope: `server/src/db/schema.sql`, `server/src/db/migrate.ts`, `server/src/db/seed.ts`, `server/src/db/workspaceMigration.test.ts`
+Files in scope: `server/src/db/schema.sql`, `server/src/db/migrate.ts`, `server/src/db/seed.ts`, `server/src/db/migrateHelpers.ts`, `server/src/db/workspaceMigration.test.ts`
 Test framework: Vitest colocated in `server/src/**/*.test.ts`
 Available after: none
 Architecture rule: migration must be idempotent and all scoped board data must carry `workspace_id`; core pure modules remain untouched.
@@ -276,11 +273,11 @@ Steps:
    describe("workspace helper contracts", () => {
      it("blocks create and invite accept at 10 memberships", () => {
        expect(WORKSPACE_LIMIT).toBe(10);
-       expect(getWorkspaceCapacity(9)).toEqual({ ok: true, remaining: 1 });
+       expect(getWorkspaceCapacity(9)).toEqual({ ok: true });
        expect(getWorkspaceCapacity(10)).toEqual({
          ok: false,
          status: 409,
-         message: "You've reached the workspace limit (10).",
+         error: "You've reached the workspace limit (10).",
        });
      });
 
@@ -367,6 +364,9 @@ Must-not-have:
   - No public workspace discovery.
   - No changes outside listed files.
 
+Known gap (acceptable for this task):
+  - Unit tests verify the pure `createSignupWorkspacePlan` function; the actual `POST /auth/register` route integration (workspace created in DB transaction) is not covered by a test in this task. Verify manually via `npm run dev` signup flow before Phase 2.
+
 Open question risks:
   - Personal workspace identity uses `is_personal` → if existing data encodes this differently, report NEEDS_CONTEXT.
 
@@ -392,8 +392,8 @@ Files:
 - Modify: `client/src/api.ts`
 - Modify: `client/src/types.ts`
 - Test: `server/src/routes/workspaceAccess.test.ts`
-- Test: `client/src/api.test.ts`
-- Test: `client/src/types.test.ts`
+- Extend: `client/src/api.test.ts` (already exists with settings tests — append new describe blocks, do NOT overwrite)
+- Extend: `client/src/types.test.ts` (already exists with SettingsMap tests — append new describe blocks, do NOT overwrite)
 
 Steps:
 1. Write failing test for: Workspace management API authorization and role rules.
@@ -401,56 +401,38 @@ Steps:
    Test verifies: Given an owner/admin, When adding an existing user with fewer than 10 memberships, Then member role is assigned; Given an unknown username, Then pending invite is stored; Given a member attempts to manage users, Then 404; Given admin attempts to remove owner, Then 403.
    Test code:
    ```ts
-   import { describe, expect, it, vi } from "vitest";
-   import { CAP_ERROR_MESSAGE, createWorkspaceAccessService } from "../routes.js";
+   import { describe, expect, it } from "vitest";
+   import {
+     CAP_ERROR_MESSAGE,
+     WORKSPACE_LIMIT,
+     checkActorCanManage,
+     checkCanRemoveUser,
+     checkInviteeCap,
+   } from "../routes.js";
 
-   function repo(overrides = {}) {
-     return {
-       getActorMembership: vi.fn(async (_workspaceId, actorId) =>
-         actorId === 1 ? { userId: 1, role: "admin" } : { userId: actorId, role: "member" },
-       ),
-       findUserByUsername: vi.fn(async (username) =>
-         username === "iris" ? { id: 2, username: "iris", membershipCount: 2 } : null,
-       ),
-       getMembershipCount: vi.fn(async (userId) => (userId === 3 ? 10 : 2)),
-       addMember: vi.fn(async (input) => ({ id: 10, ...input })),
-       createInvite: vi.fn(async (input) => ({ id: 20, ...input })),
-       getWorkspaceOwner: vi.fn(async () => ({ userId: 9, role: "owner" })),
-       removeMember: vi.fn(async () => undefined),
-       ...overrides,
-     };
-   }
-
-   describe("workspace access service", () => {
-     it("adds existing users as members and stores invites for unknown usernames", async () => {
-       const fakeRepo = repo();
-       const service = createWorkspaceAccessService(fakeRepo);
-
-       await expect(service.addMember({ actorId: 1, workspaceId: 7, username: "iris" }))
-         .resolves.toMatchObject({ userId: 2, role: "member" });
-       expect(fakeRepo.addMember).toHaveBeenCalledWith({ workspaceId: 7, userId: 2, role: "member" });
-
-       await expect(service.addMember({ actorId: 1, workspaceId: 7, username: "jack" }))
-         .resolves.toMatchObject({ workspaceId: 7, username: "jack", role: "member" });
-       expect(fakeRepo.createInvite).toHaveBeenCalledWith({ workspaceId: 7, username: "jack", role: "member", invitedBy: 1 });
+   describe("workspace authorization rules", () => {
+     it("blocks member from managing — returns 404", () => {
+       expect(checkActorCanManage("member")).toEqual({ allowed: false, status: 404, error: "Not found" });
      });
 
-     it("hides management actions from members and blocks owner removal", async () => {
-       const service = createWorkspaceAccessService(repo());
-
-       await expect(service.addMember({ actorId: 4, workspaceId: 7, username: "iris" }))
-         .resolves.toEqual({ status: 404, error: "Not found" });
-       await expect(service.removeMember({ actorId: 1, workspaceId: 7, userId: 9 }))
-         .resolves.toEqual({ status: 403, error: "Cannot remove workspace owner" });
+     it("allows admin and owner to manage", () => {
+       expect(checkActorCanManage("admin")).toEqual({ allowed: true });
+       expect(checkActorCanManage("owner")).toEqual({ allowed: true });
      });
 
-     it("returns the cap message when invitee already has 10 workspaces", async () => {
-       const service = createWorkspaceAccessService(repo({
-         findUserByUsername: vi.fn(async () => ({ id: 3, username: "iris", membershipCount: 10 })),
-       }));
+     it("blocks removal of owner — returns 403", () => {
+       expect(checkCanRemoveUser("admin", "owner")).toEqual({
+         allowed: false,
+         status: 403,
+         error: "Cannot remove workspace owner",
+       });
+       expect(checkCanRemoveUser("owner", "member")).toEqual({ allowed: true });
+     });
 
-       await expect(service.addMember({ actorId: 1, workspaceId: 7, username: "iris" }))
-         .resolves.toEqual({ status: 409, error: CAP_ERROR_MESSAGE });
+     it("blocks invitee at workspace cap with exact error message", () => {
+       expect(WORKSPACE_LIMIT).toBe(10);
+       expect(checkInviteeCap(9)).toEqual({ ok: true });
+       expect(checkInviteeCap(10)).toEqual({ ok: false, status: 409, error: CAP_ERROR_MESSAGE });
      });
    });
    ```
@@ -461,20 +443,50 @@ Steps:
 
 3. Implement minimal code to satisfy the test:
    File: `server/src/routes.ts`
-   Implement: `GET /workspaces`, `POST /workspaces`, `GET /workspaces/:workspaceId/members`, `POST /workspaces/:workspaceId/members`, invite accept/decline/remind endpoints, ownership transfer, member removal, workspace deletion, cap checks, role checks, and uniform 404 for non-member workspace access.
+   Implement: `GET /workspaces`, `POST /workspaces`, `GET /workspaces/:workspaceId/members`, `POST /workspaces/:workspaceId/members`, invite accept/decline endpoints (note: "Remind me later" is client-side localStorage state only — no backend endpoint), ownership transfer, member removal, workspace deletion. Use `pool.query` directly (consistent with existing route handlers — no service factory or repository pattern). Export pure helpers `checkActorCanManage`, `checkCanRemoveUser`, `checkInviteeCap`, `CAP_ERROR_MESSAGE`, `WORKSPACE_LIMIT` used by route handlers and tests.
 
 4. Run test — verify PASS:
    `npm run test --workspace=server -- src/routes/workspaceAccess.test.ts`
    Expected: PASS
 
-5. Write failing client contract tests.
-   File: `client/src/api.test.ts`
-   Test verifies: `api.getWorkspaces`, `api.createWorkspace`, `api.addWorkspaceMember`, `api.acceptInvite`, `api.declineInvite`, `api.transferWorkspaceOwnership`, and `api.deleteWorkspace` call the documented `/api/workspaces...` paths.
-   File: `client/src/types.test.ts`
+5. Append failing workspace tests to existing client test files (do NOT overwrite).
+   File: `client/src/api.test.ts` (APPEND — file already exists)
+   Test verifies: `api.getWorkspaces`, `api.createWorkspace`, `api.getWorkspaceMembers`, `api.addWorkspaceMember`, `api.acceptInvite`, `api.declineInvite`, `api.transferWorkspaceOwnership`, and `api.deleteWorkspace` call the documented `/api/workspaces...` paths.
+   File: `client/src/types.test.ts` (APPEND — file already exists)
    Test verifies: `Workspace`, `WorkspaceMember`, `WorkspaceInvite`, `WorkspaceRole`, and `WorkspaceListResponse` support the server response fields.
-   Test code:
+   Test code to APPEND to `client/src/api.test.ts`:
    ```ts
-   import { describe, expect, it, vi } from "vitest";
+   // Add to top-level imports (if not already present):
+   // import type { Workspace, WorkspaceInvite, WorkspaceListResponse, WorkspaceMember, WorkspaceRole } from "./types";
+
+   describe("workspace API methods", () => {
+     it("calls documented workspace and membership endpoints", async () => {
+       mockFetch.mockClear();
+       mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+       const { api } = await import("./api");
+
+       await api.getWorkspaces();
+       await api.createWorkspace({ name: "Launch" });
+       await api.getWorkspaceMembers(7);
+       await api.addWorkspaceMember(7, { username: "iris" });
+       await api.acceptInvite(7, 12);
+       await api.declineInvite(7, 12);
+       await api.transferWorkspaceOwnership(7, { newOwnerId: 2, previousOwnerRole: "admin" });
+       await api.deleteWorkspace(7);
+
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces", expect.any(Object));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces", expect.objectContaining({ method: "POST" }));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/members", expect.any(Object));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/members", expect.objectContaining({ method: "POST" }));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/invites/12/accept", expect.objectContaining({ method: "POST" }));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/invites/12", expect.objectContaining({ method: "DELETE" }));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/transfer-ownership", expect.objectContaining({ method: "POST" }));
+       expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7", expect.objectContaining({ method: "DELETE" }));
+     });
+   });
+   ```
+   Test code to APPEND to `client/src/types.test.ts`:
+   ```ts
    import type {
      Workspace,
      WorkspaceInvite,
@@ -482,32 +494,6 @@ Steps:
      WorkspaceMember,
      WorkspaceRole,
    } from "./types";
-
-   const mockFetch = vi.fn();
-   vi.stubGlobal("fetch", mockFetch);
-
-   describe("workspace API methods", () => {
-     it("calls documented workspace and membership endpoints", async () => {
-       mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
-       const { api } = await import("./api");
-
-       await api.getWorkspaces();
-       await api.createWorkspace({ name: "Launch" });
-       await api.addWorkspaceMember(7, { username: "iris" });
-       await api.acceptInvite(7, 12);
-       await api.declineInvite(7, 12);
-       await api.transferWorkspaceOwnership(7, { newOwnerId: 2, previousOwnerRole: "admin" });
-       await api.deleteWorkspace(7);
-
-       expect(mockFetch).toHaveBeenNthCalledWith(1, "/api/workspaces", expect.any(Object));
-       expect(mockFetch).toHaveBeenNthCalledWith(2, "/api/workspaces", expect.objectContaining({ method: "POST" }));
-       expect(mockFetch).toHaveBeenNthCalledWith(3, "/api/workspaces/7/members", expect.objectContaining({ method: "POST" }));
-       expect(mockFetch).toHaveBeenNthCalledWith(4, "/api/workspaces/7/invites/12/accept", expect.objectContaining({ method: "POST" }));
-       expect(mockFetch).toHaveBeenNthCalledWith(5, "/api/workspaces/7/invites/12", expect.objectContaining({ method: "DELETE" }));
-       expect(mockFetch).toHaveBeenNthCalledWith(6, "/api/workspaces/7/transfer-ownership", expect.objectContaining({ method: "POST" }));
-       expect(mockFetch).toHaveBeenNthCalledWith(7, "/api/workspaces/7", expect.objectContaining({ method: "DELETE" }));
-     });
-   });
 
    describe("workspace response types", () => {
      it("type-checks the server response shape", () => {
@@ -526,17 +512,17 @@ Steps:
 
 6. Run test — verify FAIL:
    `npm run test --workspace=client -- src/api.test.ts src/types.test.ts`
-   Expected failure: client API methods/types do not exist.
+   Expected failure: workspace API methods and types do not exist yet (existing settings tests still pass).
 
 7. Implement minimal code to satisfy the test:
    File: `client/src/api.ts`
-   Implement workspace/membership/invite API wrapper methods using `/api/workspaces...`.
+   Implement workspace/membership/invite API wrapper methods using `/api/workspaces...`. Include: `getWorkspaces`, `createWorkspace`, `getWorkspaceMembers`, `addWorkspaceMember`, `acceptInvite`, `declineInvite`, `transferWorkspaceOwnership`, `deleteWorkspace`.
    File: `client/src/types.ts`
-   Implement workspace, member, invite, role, and workspace settings response types.
+   Implement workspace, member, invite, role, and workspace list response types: `Workspace`, `WorkspaceMember`, `WorkspaceInvite`, `WorkspaceRole`, `WorkspaceListResponse`.
 
 8. Run test — verify PASS:
    `npm run test --workspace=server -- src/routes/workspaceAccess.test.ts && npm run test --workspace=client -- src/api.test.ts src/types.test.ts`
-   Expected: PASS
+   Expected: PASS — all workspace tests pass and existing settings tests remain green.
 
 9. Commit:
    `git add server/src/routes.ts server/src/routes/workspaceAccess.test.ts client/src/api.ts client/src/api.test.ts client/src/types.ts client/src/types.test.ts`
@@ -588,14 +574,20 @@ Must-have:
   - Role checks distinguish owner, admin, and member exactly as spec requires.
   - Cap checks return 409 and exact cap copy.
   - Non-member workspace API access returns 404.
-  - Client API wrappers use path-prefixed workspace routes.
+  - Client API wrappers use path-prefixed workspace routes (`/api/workspaces...`).
+  - `getWorkspaceMembers` API method included (tested in client api.test.ts).
+  - Route handlers use `pool.query` directly — no service factory or repository pattern.
+  - Authorization logic exported as pure functions (`checkActorCanManage`, `checkCanRemoveUser`, `checkInviteeCap`).
+  - Existing settings tests in `api.test.ts` and `types.test.ts` remain green after appending workspace tests.
   - Tests written before implementation.
   - Commit message follows conventional commits format.
 
 Must-not-have:
   - No organization layer, public workspaces, email/link invites, granular roles, or slug routes.
+  - No "remind me later" backend endpoint — it is client-side state only.
   - No reset-app replacement inside this task.
   - No edits to `server/src/core/*`.
+  - No service factory / repository DI pattern in routes.ts.
 
 Open question risks:
   - Admin remove owner is assumed 403 → if owner removal policy changes, report NEEDS_CONTEXT.
