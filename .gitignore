@@ -29,3 +29,4 @@ coverage/
 .pi/
 .claude/
 .worktree/
+.agents/
