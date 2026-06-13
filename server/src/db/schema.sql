@@ -79,3 +79,117 @@ CREATE TABLE IF NOT EXISTS settings (
   version   INTEGER NOT NULL DEFAULT 1,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Multi-workspace (2026-06: workspace boundaries, idempotent migration)
+
+CREATE TABLE IF NOT EXISTS workspaces (
+  id            SERIAL PRIMARY KEY,
+  name          TEXT NOT NULL,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_personal   BOOLEAN NOT NULL DEFAULT false,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS workspace_members (
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role         TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'member')),
+  joined_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (workspace_id, user_id),
+  UNIQUE (user_id, workspace_id)
+);
+
+CREATE TABLE IF NOT EXISTS workspace_invites (
+  id           SERIAL PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  username     TEXT NOT NULL,
+  role         TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'member')),
+  invited_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, username)
+);
+
+ALTER TABLE columns ADD COLUMN IF NOT EXISTS workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE;
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE;
+ALTER TABLE card_events ADD COLUMN IF NOT EXISTS workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_columns_workspace ON columns(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_cards_workspace ON cards(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_events_workspace ON card_events(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_settings_workspace ON settings(workspace_id);
+
+-- Legacy data migration: skip when workspaces already exist (idempotent re-run).
+DO $$
+DECLARE
+  default_ws_id INTEGER;
+  u RECORD;
+  personal_ws_id INTEGER;
+BEGIN
+  IF EXISTS (SELECT 1 FROM workspaces LIMIT 1) THEN
+    RETURN;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM users LIMIT 1) THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO workspaces (name, owner_user_id, is_personal)
+  SELECT 'Default Workspace', (SELECT id FROM users ORDER BY id LIMIT 1), false
+  RETURNING id INTO default_ws_id;
+
+  INSERT INTO workspace_members (workspace_id, user_id, role)
+  SELECT
+    default_ws_id,
+    u.id,
+    CASE WHEN u.id = (SELECT MIN(id) FROM users) THEN 'owner' ELSE 'member' END
+  FROM users u;
+
+  FOR u IN SELECT id, display_name FROM users ORDER BY id LOOP
+    INSERT INTO workspaces (name, owner_user_id, is_personal)
+    VALUES (u.display_name || '''s Workspace', u.id, true)
+    RETURNING id INTO personal_ws_id;
+
+    INSERT INTO workspace_members (workspace_id, user_id, role)
+    VALUES (personal_ws_id, u.id, 'owner');
+  END LOOP;
+
+  UPDATE columns SET workspace_id = default_ws_id WHERE workspace_id IS NULL;
+  UPDATE cards SET workspace_id = default_ws_id WHERE workspace_id IS NULL;
+  UPDATE card_events SET workspace_id = default_ws_id WHERE workspace_id IS NULL;
+  UPDATE settings SET workspace_id = default_ws_id WHERE workspace_id IS NULL;
+END $$;
+
+-- Settings re-key: (1) column added above, (2) backfill in DO block, (3) NOT NULL + composite PK.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'settings'::regclass
+      AND contype = 'p'
+      AND array_length(conkey, 1) = 1
+  ) THEN
+    ALTER TABLE settings DROP CONSTRAINT settings_pkey;
+    ALTER TABLE settings ALTER COLUMN workspace_id SET NOT NULL;
+    ALTER TABLE settings ADD PRIMARY KEY (workspace_id, key);
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN NULL;
+END $$;
+
+-- Enforce NOT NULL on scoped board tables after legacy backfill.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM columns WHERE workspace_id IS NULL) THEN
+    ALTER TABLE columns ALTER COLUMN workspace_id SET NOT NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM cards WHERE workspace_id IS NULL) THEN
+    ALTER TABLE cards ALTER COLUMN workspace_id SET NOT NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM card_events WHERE workspace_id IS NULL) THEN
+    ALTER TABLE card_events ALTER COLUMN workspace_id SET NOT NULL;
+  END IF;
+EXCEPTION
+  WHEN undefined_column THEN NULL;
+END $$;
