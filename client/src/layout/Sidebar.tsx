@@ -232,7 +232,7 @@ function WorkspaceSwitcher({ collapsed = false, placement = "right" }: Workspace
     return (
       <div className="flex min-w-0 flex-1 items-center gap-2 px-1">
         <span className="h-6 w-6 shrink-0 rounded bg-neutral-200" />
-        <span className={`truncate text-base font-semibold text-primary-900 ${labelHidden}`}>
+        <span className={`truncate text-sm text-primary-900 ${labelHidden}`}>
           Choose workspace
         </span>
       </div>
@@ -249,7 +249,7 @@ function WorkspaceSwitcher({ collapsed = false, placement = "right" }: Workspace
         className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
       >
         <WorkspaceAvatar workspace={activeWorkspace} logoPath={settings.logoPath} />
-        <span className={`min-w-0 truncate text-base font-semibold text-primary-900 ${labelHidden}`}>
+        <span className={`min-w-0 truncate text-sm text-primary-900 ${labelHidden}`}>
           {activeWorkspace.name}
         </span>
         <ChevronDown
@@ -635,7 +635,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     >
       <div className="flex h-14 items-center gap-2 border-b border-neutral-200 px-3">
         <img src={settings.logoPath} alt={settings.boardName} className="h-6 w-6 shrink-0" />
-        <span className={`text-base font-semibold text-primary-900 ${labelClass}`}>
+        <span className={`text-sm text-primary-900 ${labelClass}`}>
           {settings.boardName}
         </span>
       </div>
@@ -721,7 +721,7 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
         <div className="flex h-14 items-center justify-between gap-2 border-b border-neutral-200 px-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <img src={settings.logoPath} alt={settings.boardName} className="h-6 w-6 shrink-0" />
-            <span className="truncate text-base font-semibold text-primary-900">
+            <span className="truncate text-sm text-primary-900">
               {settings.boardName}
             </span>
           </div>
