@@ -12,6 +12,12 @@ import {
   sseHandler,
 } from "./realtime.js";
 import { settingsRouter } from "./routes/settings.js";
+import {
+  cardCreateBodySchema,
+  cardMoveBodySchema,
+  cardUpdateBodySchema,
+  validateRequestBody,
+} from "./validation.js";
 
 export const WORKSPACE_LIMIT = 10;
 export const CAP_ERROR_MESSAGE = `You've reached the workspace limit (${WORKSPACE_LIMIT}).`;
@@ -845,20 +851,22 @@ api.post("/workspaces/:workspaceId/cards", async (req, res) => {
   const role = await lookupMembership(req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
-  const { columnId, title, description } = req.body ?? {};
-  if (typeof title !== "string" || title.trim() === "") {
-    return res.status(400).json({ error: "title is required" });
+  const body = validateRequestBody(cardCreateBodySchema, req.body);
+  if (!body.ok) {
+    return res.status(body.status).json(body.body);
   }
+  const { columnId, title, description } = body.data;
+
   const col = await pool.query(
     "SELECT id, wip_limit FROM columns WHERE id = $1 AND workspace_id = $2",
-    [Number(columnId), workspaceId],
+    [columnId, workspaceId],
   );
   if (col.rows.length === 0) {
     return res.status(404).json({ error: "column not found" });
   }
   const count = await pool.query(
     "SELECT COUNT(*)::int AS n FROM cards WHERE column_id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
-    [Number(columnId), workspaceId],
+    [columnId, workspaceId],
   );
   const wip = checkWipLimit({
     currentCount: count.rows[0].n,
@@ -874,11 +882,11 @@ api.post("/workspaces/:workspaceId/cards", async (req, res) => {
              COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
              $5)
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
-    [Number(columnId), title.trim(), description ?? "", POSITION_GAP, workspaceId],
+    [columnId, title, description, POSITION_GAP, workspaceId],
   );
   await recordActivity(pool, req.user!, workspaceId, "create", {
     cardId: rows[0].id,
-    toColumnId: Number(columnId),
+    toColumnId: columnId,
     payload: { cardTitle: rows[0].title },
   });
   await publishEvent(workspaceId, { type: "card.created", actor: req.user!, cardId: rows[0].id });
@@ -894,11 +902,13 @@ api.patch("/workspaces/:workspaceId/cards/:id", async (req, res) => {
   const role = await lookupMembership(req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
-  const { title, description, version } = req.body ?? {};
-  const id = Number(req.params.id);
-  if (version !== undefined && !Number.isInteger(version)) {
-    return res.status(400).json({ error: "version must be an integer" });
+  const body = validateRequestBody(cardUpdateBodySchema, req.body);
+  if (!body.ok) {
+    return res.status(body.status).json(body.body);
   }
+  const { title, description, version } = body.data;
+
+  const id = Number(req.params.id);
   const { rows } = await pool.query(
     `UPDATE cards SET
        title = COALESCE($2, title),
@@ -969,13 +979,11 @@ api.post("/workspaces/:workspaceId/cards/:id/move", async (req, res) => {
   if (!role) return res.status(404).json({ error: "Not found" });
 
   const cardId = Number(req.params.id);
-  const { toColumnId, index, version } = req.body ?? {};
-  if (!Number.isInteger(toColumnId) || !Number.isInteger(index) || index < 0) {
-    return res.status(400).json({ error: "toColumnId and index are required" });
+  const body = validateRequestBody(cardMoveBodySchema, req.body);
+  if (!body.ok) {
+    return res.status(body.status).json(body.body);
   }
-  if (version !== undefined && !Number.isInteger(version)) {
-    return res.status(400).json({ error: "version must be an integer" });
-  }
+  const { toColumnId, index, version } = body.data;
 
   const client = await pool.connect();
   try {
