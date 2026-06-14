@@ -386,7 +386,37 @@ export function createAgentRouter(
 							: 404;
 					return res.status(statusCode).json(result ?? { error: "Not found" });
 				}
-				res.json(result);
+
+				// Fetch columns + cards for this agent board
+				const colsRes = await pool.query(
+					`SELECT id, title, position, slug, reasoning, system_prompt
+				 FROM columns WHERE board_id = $1 ORDER BY position`,
+					[boardId],
+				);
+				const columns = [];
+				for (const col of colsRes.rows) {
+					const cardsRes = await pool.query(
+						`SELECT id, column_id, title, position
+					 FROM cards WHERE column_id = $1 AND deleted_at IS NULL ORDER BY position`,
+						[col.id],
+					);
+					columns.push({
+						id: col.id,
+						slug: col.slug,
+						name: col.title,
+						position: col.position,
+						reasoning: col.reasoning,
+						systemPrompt: col.system_prompt,
+						cards: cardsRes.rows.map((c: Record<string, unknown>) => ({
+							id: c.id,
+							columnId: c.column_id,
+							title: c.title,
+							position: c.position,
+						})),
+					});
+				}
+
+				res.json({ ...result, columns });
 			} catch (err) {
 				console.error("agent getBoardById error:", err);
 				res.status(500).json({ error: "Failed to get board" });
