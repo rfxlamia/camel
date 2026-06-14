@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { NavLink } from "react-router";
 import {
   Activity,
+  Bot,
   Check,
   ChevronDown,
+  History,
   LayoutDashboard,
   LogOut,
   PanelLeftClose,
@@ -27,6 +29,8 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/board", label: "Board", icon: SquareKanban },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/activity", label: "Activity", icon: Activity },
+  { to: "/agent", label: "Agent", icon: Bot },
+  { to: "/history", label: "History", icon: History },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

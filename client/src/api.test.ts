@@ -191,3 +191,139 @@ describe("workspace API methods", () => {
     expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7", expect.objectContaining({ method: "DELETE" }));
   });
 });
+
+describe("Agent API methods", () => {
+  it("createAgentBoard sends POST with intent and returns boardId + explanation", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ boardId: 1, explanation: "Created 3 columns" }),
+    });
+    const { api } = await import("./api");
+
+    const result = await api.createAgentBoard(7, "Build a task tracker");
+    expect(result).toEqual({ boardId: 1, explanation: "Created 3 columns" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/workspaces/7/agent/boards",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("sendAgentBoardMessage sends POST with message", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ explanation: "Updated", boardUpdated: true }),
+    });
+    const { api } = await import("./api");
+
+    const result = await api.sendAgentBoardMessage(7, 1, "Add a testing column");
+    expect(result).toEqual({ explanation: "Updated", boardUpdated: true });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/workspaces/7/agent/boards/1/message",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("approveAgentBoard sends POST and returns void (204)", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+    });
+    const { api } = await import("./api");
+
+    const result = await api.approveAgentBoard(7, 1);
+    expect(result).toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/workspaces/7/agent/boards/1/approve",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("getAgentBoards returns array of boards", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([
+        {
+          id: 1,
+          workspaceId: 7,
+          templateId: "kanban",
+          originalIntent: "Build a tracker",
+          status: "approved",
+          executionStatus: "done",
+          createdAt: "2026-06-14T00:00:00Z",
+          columns: [],
+        },
+      ]),
+    });
+    const { api } = await import("./api");
+
+    const result = await api.getAgentBoards(7);
+    expect(result).toHaveLength(1);
+    expect(result[0].status).toBe("approved");
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/agent/boards", expect.any(Object));
+  });
+
+  it("getAgentBoard returns single board by id", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({
+        id: 1,
+        workspaceId: 7,
+        templateId: "kanban",
+        originalIntent: "Build a tracker",
+        status: "pending",
+        executionStatus: "idle",
+        createdAt: "2026-06-14T00:00:00Z",
+        columns: [
+          {
+            id: 10,
+            slug: "research",
+            name: "Research",
+            position: 1,
+            reasoning: true,
+            systemPrompt: "You are a researcher",
+            cards: [],
+          },
+        ],
+      }),
+    });
+    const { api } = await import("./api");
+
+    const result = await api.getAgentBoard(7, 1);
+    expect(result.id).toBe(1);
+    expect(result.columns).toHaveLength(1);
+    expect(result.columns[0].slug).toBe("research");
+    expect(mockFetch).toHaveBeenCalledWith("/api/workspaces/7/agent/boards/1", expect.any(Object));
+  });
+
+  it("getAgentCardOutput returns output for a column slug", async () => {
+    mockFetch.mockClear();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({
+        columnSlug: "research",
+        output: "Here is the research output.",
+        thinking: "Let me analyze...",
+      }),
+    });
+    const { api } = await import("./api");
+
+    const result = await api.getAgentCardOutput(7, 1, "research");
+    expect(result.columnSlug).toBe("research");
+    expect(result.output).toBe("Here is the research output.");
+    expect(result.thinking).toBe("Let me analyze...");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/workspaces/7/agent/boards/1/outputs/research",
+      expect.any(Object),
+    );
+  });
+});

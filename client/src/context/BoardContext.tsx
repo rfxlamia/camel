@@ -26,6 +26,7 @@ import {
 } from "../lib/workspaceSelection";
 import type {
   ActivityEvent,
+  AgentEvent,
   Column,
   FlowMetrics,
   PresenceUser,
@@ -86,6 +87,8 @@ interface BoardContextValue {
   settings: SettingsMap;
   settingsVersion: number;
   refreshSettings: () => Promise<void>;
+  agentEvents: AgentEvent[];
+  clearAgentEvents: () => void;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -121,6 +124,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [settings, setSettings] = useState<SettingsMap>({ boardName: "Camel", logoPath: "/logo.png", version: 0 });
   const [settingsVersion, setSettingsVersion] = useState(0);
+  const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspacesRef = useRef(workspaces);
   workspacesRef.current = workspaces;
@@ -376,6 +380,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
           }
         }
         if (data.type === "settings.updated") void refreshSettings();
+        if (typeof data.type === "string" && data.type.startsWith("agent.")) {
+          setAgentEvents((prev) => [...prev, data as AgentEvent]);
+          return;
+        }
       } catch {
         // non-JSON keep-alive comment
       }
@@ -479,6 +487,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         settings,
         settingsVersion,
         refreshSettings,
+        agentEvents,
+        clearAgentEvents: () => setAgentEvents([]),
       }}
     >
       {children}

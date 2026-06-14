@@ -37,6 +37,18 @@ const router = createBrowserRouter([
           Component: (await import("./pages/DashboardPage")).default,
         }),
       },
+      {
+        path: "agent",
+        lazy: async () => ({
+          Component: (await import("./pages/AgentPage")).default,
+        }),
+      },
+      {
+        path: "history",
+        lazy: async () => ({
+          Component: (await import("./pages/HistoryPage")).default,
+        }),
+      },
       { path: "activity", Component: ActivityPage },
       { path: "settings", Component: SettingsPage },
       { path: "*", element: <Navigate to="/board" replace /> },

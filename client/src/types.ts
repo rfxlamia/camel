@@ -155,3 +155,53 @@ export interface WorkspaceCreateState {
   busy: boolean;
   error: string | null;
 }
+
+// ---- Agent ----
+
+export interface AgentColumn {
+  id: number;
+  slug: string;
+  name: string;
+  position: number;
+  reasoning: boolean;
+  systemPrompt: string;
+  cards: AgentCard[];
+}
+
+export interface AgentCard {
+  id: number;
+  columnId: number;
+  title: string;
+  position: number;
+}
+
+export interface AgentBoard {
+  id: number;
+  workspaceId: number;
+  templateId: string;
+  originalIntent: string;
+  status: "pending" | "approved";
+  executionStatus: "idle" | "running" | "done" | "failed";
+  createdAt: string;
+  columns: AgentColumn[];
+}
+
+export interface AgentCardOutput {
+  columnSlug: string;
+  output: string;
+  thinking?: string;
+}
+
+export interface AgentEvent {
+  type:
+    | "agent.board.generating"
+    | "agent.board.ready"
+    | "agent.board.failed"
+    | "agent.card.started"
+    | "agent.card.token"
+    | "agent.card.done"
+    | "agent.card.failed";
+  columnSlug?: string;
+  token?: string;
+  error?: string;
+}

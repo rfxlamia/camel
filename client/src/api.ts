@@ -1,5 +1,7 @@
 import type {
   ActivityEvent,
+  AgentBoard,
+  AgentCardOutput,
   Board,
   Card,
   Column,
@@ -190,6 +192,28 @@ export const api = {
     }),
   deleteWorkspace: (workspaceId: number) =>
     request<void>(`/workspaces/${workspaceId}`, { method: "DELETE" }),
+
+  // ---- Agent ----
+  createAgentBoard: (workspaceId: number, intent: string) =>
+    request<{ boardId: number; explanation: string }>(`/workspaces/${workspaceId}/agent/boards`, {
+      method: "POST",
+      body: JSON.stringify({ intent }),
+    }),
+  sendAgentBoardMessage: (workspaceId: number, boardId: number, message: string) =>
+    request<{ explanation: string; boardUpdated: boolean }>(
+      `/workspaces/${workspaceId}/agent/boards/${boardId}/message`,
+      { method: "POST", body: JSON.stringify({ message }) },
+    ),
+  approveAgentBoard: (workspaceId: number, boardId: number) =>
+    request<void>(`/workspaces/${workspaceId}/agent/boards/${boardId}/approve`, { method: "POST" }),
+  getAgentBoards: (workspaceId: number) =>
+    request<AgentBoard[]>(`/workspaces/${workspaceId}/agent/boards`),
+  getAgentBoard: (workspaceId: number, boardId: number) =>
+    request<AgentBoard>(`/workspaces/${workspaceId}/agent/boards/${boardId}`),
+  getAgentCardOutput: (workspaceId: number, boardId: number, columnSlug: string) =>
+    request<AgentCardOutput>(
+      `/workspaces/${workspaceId}/agent/boards/${boardId}/outputs/${columnSlug}`,
+    ),
 };
 
 export { ApiError };
