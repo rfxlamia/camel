@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import type { AgentCardOutput, AgentColumn } from "../types";
@@ -138,9 +140,108 @@ export default function AgentCardDetail({
 					)}
 					{output && (
 						<div className="rounded-md border border-neutral-200 bg-white p-3">
-							<p className="text-sm text-neutral-800 whitespace-pre-wrap">
-								{output.output}
-							</p>
+							<div className="text-sm text-neutral-800 leading-relaxed">
+								<ReactMarkdown
+									remarkPlugins={[remarkGfm]}
+									components={{
+										h1: ({ children }) => (
+											<h1 className="text-xl font-semibold text-neutral-900 mt-4 mb-2 first:mt-0">
+												{children}
+											</h1>
+										),
+										h2: ({ children }) => (
+											<h2 className="text-lg font-semibold text-neutral-900 mt-4 mb-2 first:mt-0">
+												{children}
+											</h2>
+										),
+										h3: ({ children }) => (
+											<h3 className="text-base font-semibold text-neutral-900 mt-3 mb-1.5 first:mt-0">
+												{children}
+											</h3>
+										),
+										p: ({ children }) => (
+											<p className="text-sm text-neutral-800 leading-relaxed mb-2 last:mb-0">
+												{children}
+											</p>
+										),
+										ul: ({ children }) => (
+											<ul className="list-disc pl-5 mb-2 space-y-1 text-sm text-neutral-800">
+												{children}
+											</ul>
+										),
+										ol: ({ children }) => (
+											<ol className="list-decimal pl-5 mb-2 space-y-1 text-sm text-neutral-800">
+												{children}
+											</ol>
+										),
+										li: ({ children }) => (
+											<li className="text-sm text-neutral-800 leading-relaxed">
+												{children}
+											</li>
+										),
+										strong: ({ children }) => (
+											<strong className="font-semibold text-neutral-900">
+												{children}
+											</strong>
+										),
+										em: ({ children }) => (
+											<em className="italic text-neutral-700">{children}</em>
+										),
+										a: ({ href, children }) => (
+											<a
+												href={href}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="text-primary-600 hover:text-primary-700 underline underline-offset-2"
+											>
+												{children}
+											</a>
+										),
+										hr: () => <hr className="my-3 border-neutral-200" />,
+										code: ({ children, className }) => {
+											const isBlock = className?.includes("language-");
+											if (isBlock) {
+												return (
+													<pre className="rounded-md bg-neutral-100 border border-neutral-200 p-3 mb-2 overflow-x-auto">
+														<code className="text-xs font-mono text-neutral-800">
+															{children}
+														</code>
+													</pre>
+												);
+											}
+											return (
+												<code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-mono text-neutral-800">
+													{children}
+												</code>
+											);
+										},
+										blockquote: ({ children }) => (
+											<blockquote className="border-l-2 border-primary-300 pl-3 py-1 mb-2 text-sm text-neutral-600 italic">
+												{children}
+											</blockquote>
+										),
+										table: ({ children }) => (
+											<div className="overflow-x-auto mb-2">
+												<table className="w-full text-sm border-collapse">
+													{children}
+												</table>
+											</div>
+										),
+										th: ({ children }) => (
+											<th className="border-b border-neutral-200 px-3 py-1.5 text-left text-xs font-semibold text-neutral-700">
+												{children}
+											</th>
+										),
+										td: ({ children }) => (
+											<td className="border-b border-neutral-200 px-3 py-1.5 text-sm text-neutral-800">
+												{children}
+											</td>
+										),
+									}}
+								>
+									{output.output}
+								</ReactMarkdown>
+							</div>
 						</div>
 					)}
 				</div>
