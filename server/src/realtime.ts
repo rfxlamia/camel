@@ -37,7 +37,15 @@ export interface BoardEvent {
     | "column.updated"
     | "presence.changed"
     | "settings.updated"
-    | "membership.removed";
+    | "membership.removed"
+    // Agent events (Phase 1)
+    | "agent.board.generating"
+    | "agent.board.ready"
+    | "agent.board.failed"
+    | "agent.card.started"
+    | "agent.card.token"
+    | "agent.card.done"
+    | "agent.card.failed";
   actor?: AuthUser;
   cardId?: number;
   userId?: number;
