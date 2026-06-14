@@ -166,8 +166,11 @@ export default function AgentPage() {
 	const [detailColumn, setDetailColumn] = useState<AgentColumn | null>(null);
 
 	const [queueState, dispatch] = useReducer(queueReducer, initialQueue);
+	const queueStateRef = useRef(queueState);
+	queueStateRef.current = queueState;
 
 	const logEndRef = useRef<HTMLDivElement>(null);
+	const [lastIntent, setLastIntent] = useState<string | null>(null);
 
 	// Load board from URL param on mount
 	useEffect(() => {
@@ -199,32 +202,7 @@ export default function AgentPage() {
 		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [agentEvents]);
 
-	// Watch for agent.card.done / agent.card.failed to settle queue
-	useEffect(() => {
-		if (!queueState.isGenerating) return;
-		const last = agentEvents[agentEvents.length - 1];
-		if (
-			last &&
-			(last.type === "agent.card.done" || last.type === "agent.card.failed")
-		) {
-			// Use settle() directly to get the fire value
-			const result = settle(queueState);
-			dispatch({ type: "settle" });
-			if (result.fire) {
-				void sendMessage(result.fire);
-			}
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [agentEvents]);
 
-	// Handle settle → fire next queued message
-	useEffect(() => {
-		// Read fire from the settle we just dispatched
-		// We track it via ref to avoid infinite loops
-		if (!queueState.isGenerating && queueState.queue.length > 0) {
-			// This shouldn't happen — settle should have drained it
-		}
-	}, [queueState]);
 
 	// Actually handle the queue fire
 	const sendMessage = useCallback(
@@ -237,33 +215,35 @@ export default function AgentPage() {
 					msg,
 				);
 				if (result.boardUpdated) {
-					// Board changed — refetch
 					const updated = await api.getAgentBoard(activeWorkspaceId, board.id);
 					setBoard(updated);
 				}
+				// Settle on success — fire next queued message if any
+				const settleResult = settle(queueStateRef.current);
+				dispatch({ type: "settle" });
+				if (settleResult.fire) {
+					void sendMessage(settleResult.fire);
+				}
 			} catch {
 				showToast("Couldn't send message. Try again.");
-				// Settle on error so queue can continue
+				// Settle on error too — queue must continue
+				const settleResult = settle(queueStateRef.current);
 				dispatch({ type: "settle" });
+				if (settleResult.fire) {
+					void sendMessage(settleResult.fire);
+				}
 			}
 		},
 		[activeWorkspaceId, board, showToast],
 	);
 
-	// Submit handler — uses queue
-	const handleSend = useCallback(async () => {
-		const trimmed = input.trim();
-		if (!trimmed || busy || queueState.isGenerating) return;
-		setInput("");
-		setBusy(true);
-		setError(null);
-
-		if (!board) {
-			// Create new board
+	// Create a new board (extracted for queue lifecycle)
+	const createBoard = useCallback(
+		async (intent: string) => {
 			if (!activeWorkspaceId) return;
 			try {
 				clearAgentEvents();
-				const result = await api.createAgentBoard(activeWorkspaceId, trimmed);
+				const result = await api.createAgentBoard(activeWorkspaceId, intent);
 				const b = await api.getAgentBoard(activeWorkspaceId, result.boardId);
 				setBoard(b);
 				setSearchParams({ boardId: String(result.boardId) }, { replace: true });
@@ -274,13 +254,40 @@ export default function AgentPage() {
 					showToast("Couldn't create the board. Try again.");
 				}
 			} finally {
-				setBusy(false);
+				// Settle queue — fire next if any
+				const settleResult = settle(queueStateRef.current);
+				dispatch({ type: "settle" });
+				if (settleResult.fire) {
+					// Next item is a refine message (board now exists)
+					void sendMessage(settleResult.fire);
+				}
+			}
+		},
+		[activeWorkspaceId, clearAgentEvents, setSearchParams, showToast, sendMessage],
+	);
+
+	// Submit handler — uses queue
+	const handleSend = useCallback(async () => {
+		const trimmed = input.trim();
+		if (!trimmed || busy) return;
+		setInput("");
+		setBusy(true);
+		setError(null);
+		setLastIntent(trimmed);
+
+		if (!board) {
+			// Route through queue
+			const qResult = queueSubmit(queueStateRef.current, trimmed);
+			dispatch({ type: "submit", message: trimmed });
+			setBusy(false);
+			if (qResult.fire) {
+				void createBoard(qResult.fire);
 			}
 			return;
 		}
 
 		// Queue the message
-		const result = queueSubmit(queueState, trimmed);
+		const result = queueSubmit(queueStateRef.current, trimmed);
 		dispatch({ type: "submit", message: trimmed });
 		setBusy(false);
 
@@ -289,17 +296,7 @@ export default function AgentPage() {
 			clearAgentEvents();
 			void sendMessage(result.fire);
 		}
-	}, [
-		input,
-		busy,
-		queueState,
-		board,
-		activeWorkspaceId,
-		clearAgentEvents,
-		setSearchParams,
-		showToast,
-		sendMessage,
-	]);
+	}, [input, busy, board, clearAgentEvents, sendMessage, createBoard]);
 
 	// Settle → auto-fire effect (after queue reducer settles)
 	// The settle effect in the agentEvents watcher handles firing the next queued message.
@@ -459,8 +456,25 @@ export default function AgentPage() {
 
 					{/* Error message */}
 					{error && (
-						<div className="rounded-lg border border-error-200 bg-error-100 p-3">
+						<div className="rounded-lg border border-error-200 bg-error-100 p-3 space-y-2">
 							<p className="text-sm text-error-900">{error}</p>
+							{!board && (
+								<button
+									onClick={() => {
+										setError(null);
+										if (lastIntent) {
+											const qResult = queueSubmit(queueStateRef.current, lastIntent);
+											dispatch({ type: "submit", message: lastIntent });
+											if (qResult.fire) {
+												void createBoard(qResult.fire);
+											}
+										}
+									}}
+									className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+								>
+									Retry
+								</button>
+							)}
 						</div>
 					)}
 
