@@ -191,7 +191,16 @@ describe("triggerExecution", () => {
 describe("card output retrieval", () => {
   it("getCardOutput returns stored output for columnSlug", async () => {
     const getOutput = vi.fn(async () => ({ output: "Research output", thinking: null }));
-    const service = createAgentBoardService({ getOutput });
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "approved",
+        workspaceId: 1,
+        userId: 1,
+        originalIntent: "riset",
+      })),
+      getOutput,
+    });
     const result = await service.getCardOutput({
       boardId: 1,
       columnSlug: "research-specialist",
@@ -202,13 +211,66 @@ describe("card output retrieval", () => {
 
   it("getCardOutput returns 404 when no output exists", async () => {
     const getOutput = vi.fn(async () => null);
-    const service = createAgentBoardService({ getOutput });
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "approved",
+        workspaceId: 1,
+        userId: 1,
+        originalIntent: "riset",
+      })),
+      getOutput,
+    });
     const result = await service.getCardOutput({
       boardId: 1,
       columnSlug: "research-specialist",
       workspaceId: 1,
     });
     expect(result).toMatchObject({ status: 404 });
+  });
+
+  it("getCardOutput returns 404 (no leak) when board belongs to another workspace", async () => {
+    // Regression: cross-workspace data leakage. A member of workspace 1
+    // must NOT read agent outputs for a board owned by workspace 2, even
+    // if output rows exist for that board_id + column_slug.
+    const getOutput = vi.fn(async () => ({
+      output: "secret cross-workspace output",
+      thinking: null,
+    }));
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "approved",
+        workspaceId: 2, // board lives in a DIFFERENT workspace
+        userId: 1,
+        originalIntent: "riset",
+      })),
+      getOutput,
+    });
+    const result = await service.getCardOutput({
+      boardId: 1,
+      columnSlug: "research-specialist",
+      workspaceId: 1, // caller is in workspace 1
+    });
+    expect(result).toMatchObject({ status: 404 });
+    expect(result).not.toHaveProperty("output");
+    // Must not even query the output store once ownership fails.
+    expect(getOutput).not.toHaveBeenCalled();
+  });
+
+  it("getCardOutput returns 404 when board does not exist", async () => {
+    const getOutput = vi.fn(async () => ({ output: "x", thinking: null }));
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => null),
+      getOutput,
+    });
+    const result = await service.getCardOutput({
+      boardId: 999,
+      columnSlug: "research-specialist",
+      workspaceId: 1,
+    });
+    expect(result).toMatchObject({ status: 404 });
+    expect(getOutput).not.toHaveBeenCalled();
   });
 });
 
@@ -261,6 +323,30 @@ describe("sendMessage", () => {
       message: "hi",
     });
     expect(result).toMatchObject({ status: 403 });
+  });
+
+  it("returns 404 when board belongs to another workspace", async () => {
+    // Regression: workspace isolation — a board in workspace 2 must not be
+    // reachable via a workspace-1-scoped request, even by its owner.
+    const insertConversation = vi.fn(async () => {});
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "pending",
+        workspaceId: 2, // board lives in a DIFFERENT workspace
+        userId: 1,
+        originalIntent: "riset",
+      })),
+      insertConversation,
+    });
+    const result = await service.sendMessage({
+      boardId: 1,
+      userId: 1,
+      workspaceId: 1, // caller is in workspace 1
+      message: "hi",
+    });
+    expect(result).toMatchObject({ status: 404 });
+    expect(insertConversation).not.toHaveBeenCalled();
   });
 });
 

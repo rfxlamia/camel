@@ -286,12 +286,18 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		async getCardOutput({
 			boardId,
 			columnSlug,
-			workspaceId: _workspaceId,
+			workspaceId,
 		}: {
 			boardId: number;
 			columnSlug: string;
 			workspaceId: number;
 		}) {
+			// Enforce workspace ownership before exposing any output —
+			// matches getBoardById/approveBoard guards.
+			const board = await deps.getBoard!(boardId);
+			if (!board || board.workspaceId !== workspaceId)
+				return { status: 404 as const };
+
 			const output = await deps.getOutput!({ boardId, columnSlug });
 			if (!output) return { status: 404 as const };
 			return { output: output.output, thinking: output.thinking };
@@ -301,7 +307,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		async sendMessage({
 			boardId,
 			userId,
-			workspaceId: _workspaceId,
+			workspaceId,
 			message,
 		}: {
 			boardId: number;
@@ -311,6 +317,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		}) {
 			const board = await deps.getBoard!(boardId);
 			if (!board) return { status: 404 as const };
+			if (board.workspaceId !== workspaceId) return { status: 404 as const };
 			if (board.userId !== userId) return { status: 403 as const };
 
 			// Store user message
