@@ -159,6 +159,11 @@ export default function AgentPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const [board, setBoard] = useState<AgentBoard | null>(null);
+	// Always holds the latest board so synchronous queue handoffs (e.g.
+	// createBoard's finally firing a queued refine message) read current
+	// state instead of a stale closure captured while board was null.
+	const boardRef = useRef<AgentBoard | null>(board);
+	boardRef.current = board;
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [input, setInput] = useState("");
@@ -205,15 +210,22 @@ export default function AgentPage() {
 	// Actually handle the queue fire
 	const sendMessage = useCallback(
 		async (msg: string) => {
-			if (!activeWorkspaceId || !board) return;
+			// Resolve the board from the ref, not the captured `board` variable:
+			// createBoard fires the first queued refine synchronously while its
+			// own `board` closure is still null, so a captured value would be stale.
+			const currentBoard = boardRef.current;
+			if (!activeWorkspaceId || !currentBoard) return;
 			try {
 				const result = await api.sendAgentBoardMessage(
 					activeWorkspaceId,
-					board.id,
+					currentBoard.id,
 					msg,
 				);
 				if (result.boardUpdated) {
-					const updated = await api.getAgentBoard(activeWorkspaceId, board.id);
+					const updated = await api.getAgentBoard(
+						activeWorkspaceId,
+						currentBoard.id,
+					);
 					setBoard(updated);
 				}
 				// Settle on success — fire next queued message if any
@@ -232,7 +244,7 @@ export default function AgentPage() {
 				}
 			}
 		},
-		[activeWorkspaceId, board, showToast],
+		[activeWorkspaceId, showToast],
 	);
 
 	// Create a new board (extracted for queue lifecycle)
@@ -244,6 +256,10 @@ export default function AgentPage() {
 				const result = await api.createAgentBoard(activeWorkspaceId, intent);
 				const b = await api.getAgentBoard(activeWorkspaceId, result.boardId);
 				setBoard(b);
+				// Update the ref imperatively: the finally block below fires the
+				// next queued message synchronously, before the setBoard re-render
+				// commits, so sendMessage must see the new board now (not null).
+				boardRef.current = b;
 				setSearchParams({ boardId: String(result.boardId) }, { replace: true });
 			} catch (err) {
 				if (err instanceof ApiError && err.status === 422) {
