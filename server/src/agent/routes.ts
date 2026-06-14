@@ -17,6 +17,7 @@
  */
 
 import { Router } from "express";
+import type { Request } from "express";
 import { requireAuth } from "../auth.js";
 import { pool } from "../db/pool.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
@@ -34,11 +35,29 @@ import {
 // Real dependency implementations
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Workspace membership helper
+// ---------------------------------------------------------------------------
+
+async function lookupMembership(
+  userId: number,
+  workspaceId: number,
+): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT role FROM workspace_members WHERE user_id = $1 AND workspace_id = $2`,
+    [userId, workspaceId],
+  );
+  return rows.length > 0 ? rows[0].role : null;
+}
+
 const realDeps: AgentBoardServiceDeps = {
   classifyIntent: realClassifyIntent,
   executeCard: realExecuteCard,
   generateClarificationQuestion: realGenerateClarificationQuestion,
-  publishEvent: realPublishEvent,
+  publishEvent: realPublishEvent as (
+    workspaceId: number,
+    event: Record<string, unknown>,
+  ) => Promise<void>,
 
   insertBoard: async (data) => {
     const { rows } = await pool.query(
@@ -116,7 +135,7 @@ const realDeps: AgentBoardServiceDeps = {
 
   listBoards: async (workspaceId) => {
     const { rows } = await pool.query(
-      `SELECT id, original_intent, status, execution_status, created_at
+      `SELECT id, original_intent, template_id, status, execution_status, created_at
        FROM agent_boards
        WHERE workspace_id = $1
        ORDER BY created_at DESC`,
@@ -125,6 +144,7 @@ const realDeps: AgentBoardServiceDeps = {
     return rows.map((r: Record<string, unknown>) => ({
       id: r.id as number,
       originalIntent: r.original_intent as string,
+      templateId: r.template_id as string,
       status: r.status as string,
       executionStatus: r.execution_status as string,
       createdAt: r.created_at as string,
@@ -180,6 +200,20 @@ export function createAgentRouter(
   const router = Router();
   const service = createAgentBoardService({ ...realDeps, ...overrides });
 
+  // Helper: check workspace membership and short-circuit with 404
+  async function requireWorkspaceMember(
+    req: Request,
+    res: Parameters<Parameters<typeof router.get>[1]>[1],
+    workspaceId: number,
+  ): Promise<boolean> {
+    const membership = await lookupMembership(req.user!.id, workspaceId);
+    if (!membership) {
+      res.status(404).json({ error: "Not found" });
+      return false;
+    }
+    return true;
+  }
+
   // ---- POST /workspaces/:workspaceId/agent/boards ----
   router.post(
     "/workspaces/:workspaceId/agent/boards",
@@ -196,13 +230,15 @@ export function createAgentRouter(
       }
 
       try {
+        if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
         const result = await service.createBoard({
           workspaceId,
           userId: req.user!.id,
           intent: intent.trim(),
         });
 
-        if ("status" in result && result.status) {
+        if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json(result);
         }
         res.status(201).json(result);
@@ -230,6 +266,8 @@ export function createAgentRouter(
       }
 
       try {
+        if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
         const result = await service.sendMessage({
           boardId,
           userId: req.user!.id,
@@ -237,7 +275,7 @@ export function createAgentRouter(
           message: message.trim(),
         });
 
-        if ("status" in result && result.status) {
+        if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json(result);
         }
         res.json(result);
@@ -260,13 +298,15 @@ export function createAgentRouter(
       }
 
       try {
+        if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
         const result = await service.approveBoard({
           boardId,
           userId: req.user!.id,
           workspaceId,
         });
 
-        if (result && "status" in result && result.status) {
+        if (result && "status" in result && typeof result.status === "number") {
           return res.status(result.status).json(result);
         }
 
@@ -294,6 +334,8 @@ export function createAgentRouter(
       }
 
       try {
+        if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
         const boards = await service.getBoards({ workspaceId });
         res.json(boards);
       } catch (err) {
@@ -315,9 +357,12 @@ export function createAgentRouter(
       }
 
       try {
+        if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
         const result = await service.getBoardById({ boardId, workspaceId });
-        if (result && "status" in result && result.status) {
-          return res.status(result.status).json(result);
+        if (!result || ("status" in result && typeof result.status === "number")) {
+          const statusCode = result && "status" in result && typeof result.status === "number" ? result.status : 404;
+          return res.status(statusCode).json(result ?? { error: "Not found" });
         }
         res.json(result);
       } catch (err) {
@@ -334,19 +379,21 @@ export function createAgentRouter(
     async (req, res) => {
       const workspaceId = Number(req.params.workspaceId);
       const boardId = Number(req.params.boardId);
-      const columnSlug = req.params.columnSlug;
+      const columnSlug = req.params.columnSlug as string;
       if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
         return res.status(400).json({ error: "Invalid params" });
       }
 
       try {
+        if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
         const result = await service.getCardOutput({
           boardId,
           columnSlug,
           workspaceId,
         });
 
-        if ("status" in result && result.status) {
+        if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json(result);
         }
         res.json(result);

@@ -28,6 +28,7 @@ export interface AgentBoardRecord {
 export interface BoardListItem {
   id: number;
   originalIntent: string;
+  templateId: string;
   status: string;
   executionStatus: string;
   createdAt: string;
@@ -221,6 +222,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
       await deps.publishEvent?.(workspaceId, {
         type: "agent.card.started",
+        columnSlug: firstCard.columnSlug,
       });
 
       // Token batching via setInterval(200ms)
@@ -229,7 +231,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
         if (tokenBuffer) {
           deps.publishEvent?.(workspaceId, {
             type: "agent.card.token",
-            tokens: tokenBuffer,
+            token: tokenBuffer,
           });
           tokenBuffer = "";
         }
@@ -252,7 +254,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
         if (tokenBuffer) {
           await deps.publishEvent?.(workspaceId, {
             type: "agent.card.token",
-            tokens: tokenBuffer,
+            token: tokenBuffer,
           });
         }
 
@@ -268,13 +270,15 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
         await deps.updateBoard!(boardId, { execution_status: "done" });
         await deps.publishEvent?.(workspaceId, {
           type: "agent.card.done",
+          columnSlug: firstCard.columnSlug,
         });
-      } catch (_err) {
+      } catch (err) {
         clearInterval(batchInterval);
 
         await deps.updateBoard!(boardId, { execution_status: "failed" });
         await deps.publishEvent?.(workspaceId, {
           type: "agent.card.failed",
+          error: String(err),
         });
       }
     },
