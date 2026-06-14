@@ -118,3 +118,7 @@ import 'package:lottie/lottie.dart';
 
 Lottie.asset('assets/animation.json')
 ```
+
+## Credits
+
+Camel artwork by **Alvaro Cabrera** from the [Noun Project](https://thenounproject.com/).

@@ -4,6 +4,7 @@ import { api } from "./api";
 import type { User } from "./types";
 import AuthPage from "./components/AuthPage";
 import ContextPanel from "./components/ContextPanel";
+import LoadingCamel from "./components/LoadingCamel";
 import { BoardProvider, useBoard } from "./context/BoardContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
@@ -12,7 +13,8 @@ import SettingsPage from "./pages/SettingsPage";
 
 function LoadingScreen() {
 	return (
-		<div className="flex min-h-screen items-center justify-center">
+		<div className="flex min-h-screen flex-col items-center justify-center gap-2">
+			<LoadingCamel size={200} />
 			<p className="text-sm text-neutral-500">Loading...</p>
 		</div>
 	);

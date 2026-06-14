@@ -1,7 +1,23 @@
 {
   "controls": [
-    { "sid": "bgColor", "label": "Background color" },
-    { "sid": "camelColor", "label": "Camel color" },
-    { "sid": "sunColor", "label": "Sun color" }
+    {
+      "sid": "strokeColor",
+      "label": "Line color"
+    },
+    {
+      "sid": "fillColor",
+      "label": "Fill color"
+    },
+    {
+      "sid": "strokeWidth",
+      "label": "Line width",
+      "min": 1,
+      "max": 20,
+      "step": 1
+    },
+    {
+      "sid": "bgColor",
+      "label": "Background color"
+    }
   ]
 }
