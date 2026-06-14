@@ -12,7 +12,7 @@
  *                  false when using compatible endpoint like MiMo
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { ClientOptions } from "@anthropic-ai/sdk";
 import { renderSystemPrompt } from "./templates.js";
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!_client) {
-    const opts: Anthropic.ClientOptions = {
+    const opts: ClientOptions = {
       apiKey: process.env.ANTHROPIC_API_KEY,
     };
     // Support custom base URL for MiMo-compatible endpoints
@@ -73,7 +73,7 @@ Respond with ONLY a JSON object:
   });
 
   const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+    response.content[0]?.type === "text" ? response.content[0].text : "";
 
   try {
     const parsed = JSON.parse(text) as ClassifyResult;
@@ -111,7 +111,7 @@ export async function generateExplanation(
     ],
   });
 
-  return response.content[0].type === "text"
+  return response.content[0]?.type === "text"
     ? response.content[0].text
     : "";
 }
@@ -140,7 +140,7 @@ export async function generateClarificationQuestion(
     ],
   });
 
-  return response.content[0].type === "text"
+  return response.content[0]?.type === "text"
     ? response.content[0].text
     : "";
 }
@@ -158,6 +158,9 @@ export async function executeCard(
   systemPrompt: string,
   intent: string,
   previousOutputs: string[],
+  // `reasoning` is intentionally unused in Phase 1: extended-thinking /
+  // cache_control gating is deferred to a later phase. Kept in the signature
+  // so callers can pass it without a future breaking change.
   reasoning: boolean,
   onToken: (token: string) => void,
 ): Promise<ExecuteResult> {
