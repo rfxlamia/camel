@@ -1,6 +1,6 @@
 export interface QueueState {
-  isGenerating: boolean;
-  queue: string[];
+	isGenerating: boolean;
+	queue: string[];
 }
 
 export const initialQueue: QueueState = { isGenerating: false, queue: [] };
@@ -10,13 +10,16 @@ export const initialQueue: QueueState = { isGenerating: false, queue: [] };
  * If idle, fires immediately. If generating, queues it.
  */
 export function submit(
-  state: QueueState,
-  message: string,
+	state: QueueState,
+	message: string,
 ): { state: QueueState; fire: string | null } {
-  if (state.isGenerating) {
-    return { state: { ...state, queue: [...state.queue, message] }, fire: null };
-  }
-  return { state: { ...state, isGenerating: true }, fire: message };
+	if (state.isGenerating) {
+		return {
+			state: { ...state, queue: [...state.queue, message] },
+			fire: null,
+		};
+	}
+	return { state: { ...state, isGenerating: true }, fire: message };
 }
 
 /**
@@ -24,12 +27,12 @@ export function submit(
  * If queued items remain, auto-fires the next one.
  */
 export function settle(state: QueueState): {
-  state: QueueState;
-  fire: string | null;
+	state: QueueState;
+	fire: string | null;
 } {
-  if (state.queue.length === 0) {
-    return { state: { ...state, isGenerating: false }, fire: null };
-  }
-  const [next, ...rest] = state.queue;
-  return { state: { isGenerating: true, queue: rest }, fire: next };
+	if (state.queue.length === 0) {
+		return { state: { ...state, isGenerating: false }, fire: null };
+	}
+	const [next, ...rest] = state.queue;
+	return { state: { isGenerating: true, queue: rest }, fire: next };
 }
