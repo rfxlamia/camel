@@ -371,6 +371,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		const stream = new EventSource(
 			`/api/workspaces/${activeWorkspaceId}/events/stream`,
 		);
+		// Re-fetch board data whenever the SSE connection (re)opens — covers the
+		// startup race where the server wasn't ready on first connect, leaving
+		// loadError=true until the next board event arrived.
+		stream.onopen = () => void refresh();
 		stream.onmessage = (e) => {
 			try {
 				const data = JSON.parse(e.data) as {

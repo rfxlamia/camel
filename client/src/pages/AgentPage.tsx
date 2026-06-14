@@ -203,6 +203,20 @@ export default function AgentPage() {
 		};
 	}, [activeWorkspaceId, searchParams, setSearchParams, showToast]);
 
+	// Re-fetch board when execution completes or fails so status and cards update.
+	// BoardContext returns early on agent.* events and never calls refresh(), so
+	// AgentPage must explicitly sync board state on terminal events.
+	useEffect(() => {
+		if (!agentEvents.length || !activeWorkspaceId || !board) return;
+		const last = agentEvents[agentEvents.length - 1];
+		if (last.type !== "agent.card.done" && last.type !== "agent.card.failed")
+			return;
+		api
+			.getAgentBoard(activeWorkspaceId, board.id)
+			.then(setBoard)
+			.catch(() => {});
+	}, [agentEvents, activeWorkspaceId, board?.id]);
+
 	// Auto-scroll event log
 	useEffect(() => {
 		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -479,11 +493,19 @@ export default function AgentPage() {
 			<div className="flex w-96 flex-col bg-neutral-100">
 				{/* Chat / explanation area */}
 				<div className="flex-1 overflow-y-auto p-4 space-y-3">
-					{!board && (
+					{!board && !lastIntent && (
 						<p className="text-sm text-neutral-600">
 							Describe what you want to build. The agent will generate a board
 							structure you can review and approve.
 						</p>
+					)}
+
+					{!board && lastIntent && (
+						<div className="flex justify-end">
+							<div className="max-w-[80%] rounded-lg bg-primary-600 px-3 py-2">
+								<p className="text-sm text-white break-words">{lastIntent}</p>
+							</div>
+						</div>
 					)}
 
 					{board && (

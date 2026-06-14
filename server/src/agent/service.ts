@@ -35,6 +35,7 @@ export interface BoardListItem {
 }
 
 export interface FirstCardInfo {
+	columnId: number;
 	columnSlug: string;
 	systemPrompt: string;
 	reasoning: boolean;
@@ -101,6 +102,13 @@ export interface AgentBoardServiceDeps {
 		cardIndex: number;
 		output: string;
 		thinking?: string;
+	}) => Promise<void>;
+
+	insertCard?: (data: {
+		columnId: number;
+		title: string;
+		position: number;
+		workspaceId: number;
 	}) => Promise<void>;
 
 	getOutput?: (data: {
@@ -264,6 +272,19 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					cardIndex: 0,
 					output: result.output,
 					thinking: result.thinking,
+				});
+
+				// Create a card in the column so the board visual has a clickable handle.
+				// The card title is a preview of the output; full output lives in agent_card_outputs.
+				const preview =
+					result.output.length > 120
+						? result.output.slice(0, 120) + "…"
+						: result.output;
+				await deps.insertCard!({
+					columnId: firstCard.columnId,
+					title: preview,
+					position: 1.0,
+					workspaceId,
 				});
 
 				await deps.updateBoard!(boardId, { execution_status: "done" });

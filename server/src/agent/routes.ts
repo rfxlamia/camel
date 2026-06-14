@@ -159,7 +159,7 @@ const realDeps: AgentBoardServiceDeps = {
 
 	getFirstCard: async (boardId) => {
 		const { rows } = await pool.query(
-			`SELECT slug, system_prompt, reasoning
+			`SELECT id, slug, system_prompt, reasoning
        FROM columns
        WHERE board_id = $1
        ORDER BY position
@@ -168,10 +168,19 @@ const realDeps: AgentBoardServiceDeps = {
 		);
 		if (rows.length === 0) return null;
 		return {
+			columnId: rows[0].id,
 			columnSlug: rows[0].slug,
 			systemPrompt: rows[0].system_prompt,
 			reasoning: rows[0].reasoning,
 		};
+	},
+
+	insertCard: async (data) => {
+		await pool.query(
+			`INSERT INTO cards (column_id, title, position, workspace_id)
+       VALUES ($1, $2, $3, $4)`,
+			[data.columnId, data.title, data.position, data.workspaceId],
+		);
 	},
 
 	insertOutput: async (data) => {
@@ -253,7 +262,9 @@ export function createAgentRouter(
 				});
 
 				if ("status" in result && typeof result.status === "number") {
-					return res.status(result.status).json(result);
+					return res.status(result.status).json({
+						error: "message" in result ? result.message : "Request failed",
+					});
 				}
 				res.status(201).json(result);
 			} catch (err) {

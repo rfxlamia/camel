@@ -93,8 +93,37 @@ describe("approval", () => {
 });
 
 describe("triggerExecution", () => {
+  it("creates a card in the cards table after inserting output", async () => {
+    const insertCard = vi.fn(async () => {});
+    const insertOutput = vi.fn(async () => {});
+    const service = createAgentBoardService({
+      executeCard: vi.fn(async (_sys, _intent, _prev, _reasoning, onToken) => {
+        onToken("hello");
+        return { output: "Research output here", thinking: undefined };
+      }),
+      insertOutput,
+      insertCard,
+      updateBoard: vi.fn(async () => {}),
+      publishEvent: vi.fn(async () => {}),
+      getBoard: vi.fn(async () => ({
+        id: 1, status: "approved", workspaceId: 1, userId: 1, originalIntent: "riset",
+      })),
+      getFirstCard: vi.fn(async () => ({
+        columnId: 10,
+        columnSlug: "research-specialist",
+        systemPrompt: "You are a Research Specialist...",
+        reasoning: false,
+      })),
+    });
+    await service.triggerExecution({ boardId: 1, workspaceId: 1 });
+    expect(insertCard).toHaveBeenCalledWith(
+      expect.objectContaining({ columnId: 10, workspaceId: 1 }),
+    );
+  });
+
   it("calls executeCard, persists output, publishes done event", async () => {
     const insertOutput = vi.fn(async () => {});
+    const insertCard = vi.fn(async () => {});
     const updateBoard = vi.fn(async () => {});
     const publishEvent = vi.fn(async () => {});
     const executeCard = vi.fn(
@@ -112,6 +141,7 @@ describe("triggerExecution", () => {
     const service = createAgentBoardService({
       executeCard,
       insertOutput,
+      insertCard,
       updateBoard,
       publishEvent,
       getBoard: vi.fn(async () => ({
@@ -122,6 +152,7 @@ describe("triggerExecution", () => {
         originalIntent: "riset kompetitor fintech lokal",
       })),
       getFirstCard: vi.fn(async () => ({
+        columnId: 10,
         columnSlug: "research-specialist",
         systemPrompt: "You are a Research Specialist...",
         reasoning: false,
@@ -172,11 +203,13 @@ describe("triggerExecution", () => {
         originalIntent: "riset",
       })),
       getFirstCard: vi.fn(async () => ({
+        columnId: 10,
         columnSlug: "research-specialist",
         systemPrompt: "You are...",
         reasoning: false,
       })),
       insertOutput: vi.fn(),
+      insertCard: vi.fn(),
     });
     await service.triggerExecution({ boardId: 1, workspaceId: 1 });
 
