@@ -28,19 +28,12 @@ function ExecutionBadge({ status }: { status: AgentBoard["executionStatus"] }) {
 	);
 }
 
-function StatusBadge({ status }: { status: AgentBoard["status"] }) {
-	if (status === "approved") {
-		return (
-			<span className="rounded-md bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-800">
-				Approved
-			</span>
-		);
-	}
-	return (
-		<span className="rounded-md bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-900">
-			Pending
-		</span>
-	);
+const TEMPLATE_NAMES: Record<string, string> = {
+	"research-report": "Research & Report",
+};
+
+function templateName(templateId: string): string {
+	return TEMPLATE_NAMES[templateId] ?? templateId;
 }
 
 export default function HistoryPage() {
@@ -151,11 +144,10 @@ export default function HistoryPage() {
 										: board.originalIntent}
 								</p>
 								<p className="mt-0.5 text-xs text-neutral-500">
-									{formatRelativeTime(board.createdAt)}
+									{templateName(board.templateId)} · {formatRelativeTime(board.createdAt)}
 								</p>
 							</div>
 							<div className="flex shrink-0 items-center gap-1.5">
-								<StatusBadge status={board.status} />
 								<ExecutionBadge status={board.executionStatus} />
 							</div>
 						</button>
