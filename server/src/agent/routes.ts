@@ -175,6 +175,22 @@ const realDeps: AgentBoardServiceDeps = {
 		};
 	},
 
+	getColumns: async (boardId) => {
+		const { rows } = await pool.query(
+			`SELECT id, slug, system_prompt, reasoning
+     FROM columns
+     WHERE board_id = $1
+     ORDER BY position`,
+			[boardId],
+		);
+		return rows.map((r: Record<string, unknown>) => ({
+			columnId: r.id as number,
+			columnSlug: r.slug as string,
+			systemPrompt: r.system_prompt as string,
+			reasoning: r.reasoning as boolean,
+		}));
+	},
+
 	insertCard: async (data) => {
 		await pool.query(
 			`INSERT INTO cards (column_id, title, position, workspace_id)
@@ -336,8 +352,8 @@ export function createAgentRouter(
 				}
 
 				// Fire-and-forget execution — client receives progress via SSE
-				service.triggerExecution({ boardId, workspaceId }).catch((err) => {
-					console.error("agent triggerExecution error:", err);
+				service.runPipeline({ boardId, workspaceId }).catch((err) => {
+					console.error("agent runPipeline error:", err);
 				});
 
 				res.json({ ok: true });
