@@ -16,7 +16,10 @@ import { formatRelativeTime } from "../types";
 
 // ---- Queue reducer ----
 
-type QueueAction = { type: "submit"; message: string } | { type: "settle" };
+type QueueAction =
+	| { type: "submit"; message: string }
+	| { type: "settle" }
+	| { type: "reset" };
 
 function queueReducer(state: QueueState, action: QueueAction): QueueState {
 	switch (action.type) {
@@ -27,6 +30,9 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 		case "settle": {
 			const result = settle(state);
 			return result.state;
+		}
+		case "reset": {
+			return initialQueue;
 		}
 	}
 }
@@ -299,10 +305,7 @@ export default function AgentPage() {
 					// yet, so the next item is itself an intent that must re-enter
 					// createBoard; routing it to sendMessage would early-return and
 					// strand the queue (isGenerating stuck true).
-					const route = routeNext(
-						settleResult.fire,
-						boardRef.current !== null,
-					);
+					const route = routeNext(settleResult.fire, boardRef.current !== null);
 					if (route === "createBoard") {
 						void createBoardRef.current?.(settleResult.fire);
 					} else if (route === "sendMessage") {
@@ -526,16 +529,15 @@ export default function AgentPage() {
 							{!board && (
 								<button
 									onClick={() => {
+										// Cleanup state and put intent back in input for user to review/edit
 										setError(null);
+										clearAgentEvents();
+										setLastIntent(null);
+										setBusy(false);
+										// Reset queue to initial state
+										dispatch({ type: "reset" });
 										if (lastIntent) {
-											const qResult = queueSubmit(
-												queueStateRef.current,
-												lastIntent,
-											);
-											dispatch({ type: "submit", message: lastIntent });
-											if (qResult.fire) {
-												void createBoard(qResult.fire);
-											}
+											setInput(lastIntent);
 										}
 									}}
 									className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
