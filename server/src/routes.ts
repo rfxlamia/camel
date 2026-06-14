@@ -645,6 +645,27 @@ api.use("/workspaces/:workspaceId/settings", settingsRouter);
 
 type Queryable = Pick<typeof pool, "query">;
 
+export type HumanColumn = {
+  id: number;
+  title: string;
+  position: number;
+  wip_limit: number | null;
+  policy: string;
+  is_done: boolean;
+};
+
+export async function getHumanColumns(
+  db: Queryable,
+  workspaceId: number,
+): Promise<HumanColumn[]> {
+  const { rows } = await db.query(
+    `SELECT id, title, position, wip_limit, policy, is_done
+     FROM columns WHERE workspace_id = $1 AND board_id IS NULL ORDER BY position`,
+    [workspaceId],
+  );
+  return rows;
+}
+
 async function recordActivity(
   db: Queryable,
   actor: AuthUser,
@@ -683,18 +704,14 @@ api.get("/workspaces/:workspaceId/board", async (req, res) => {
   const role = await lookupMembership(req.user!.id, workspaceId);
   if (!role) return res.status(404).json({ error: "Not found" });
 
-  const columns = await pool.query(
-    `SELECT id, title, position, wip_limit, policy, is_done
-     FROM columns WHERE workspace_id = $1 ORDER BY position`,
-    [workspaceId],
-  );
+  const columns = await getHumanColumns(pool, workspaceId);
   const cards = await pool.query(
     `SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
      FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY position`,
     [workspaceId],
   );
   res.json({
-    columns: columns.rows.map((col) => ({
+    columns: columns.map((col) => ({
       id: col.id,
       title: col.title,
       position: col.position,
