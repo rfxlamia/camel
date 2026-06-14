@@ -1,0 +1,47 @@
+{
+  "task_id": "T3",
+  "task_name": "Agent API Routes",
+  "cycle": 3,
+  "timestamp": "2026-06-14T11:21:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Prior #1 (Critical — getCardOutput cross-workspace data leakage) FIXED in 48c3312: getCardOutput now loads the board via deps.getBoard(boardId) and returns { status: 404 } when the board is missing OR board.workspaceId !== workspaceId, BEFORE calling deps.getOutput (service.ts:297-303). Regression tests confirm getOutput is never invoked on workspace mismatch or missing board (service.test.ts:232-274).",
+      "Prior #2 (Important — sendMessage missing workspaceId guard) FIXED in 48c3312: sendMessage now returns { status: 404 } when board.workspaceId !== workspaceId, placed before the userId/403 check, matching getBoardById/approveBoard (service.ts:320). Regression test confirms insertConversation is not called on workspace mismatch (service.test.ts:328-350).",
+      "Prior #3 (Note — llm.ts TS2694 build error, T2-owned/out of T3 scope) NO LONGER PRESENT: server `tsc --noEmit` now exits clean (0 errors); the previously-flagged llm.ts build failure has been resolved upstream, so the server build is no longer assumed-broken."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Cross-workspace isolation is now consistent across the entire service surface: getCardOutput, sendMessage, getBoardById, and approveBoard all enforce board.workspaceId === workspaceId, layered on top of route-level requireWorkspaceMember membership checks (defense-in-depth).",
+      "Both correction commits added genuine behavior-verifying regression tests, not just status assertions — they assert that the sensitive downstream dep (getOutput / insertConversation) is NOT called once ownership fails, preventing both data leak and side effects. 16/16 service tests pass.",
+      "Workspace guards short-circuit before any data access, and getOutput/getBoard remain pure injected deps — the fix lives in the testable service layer, not the route.",
+      "C2 token batching, fire-and-forget execution on board.originalIntent, and agent_card_outputs-only persistence (never card_events) all remain intact and unaffected by the corrections."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "sendMessage stores the user message but does not persist the assistant clarification question to agent_conversations on the pending/refine branch (the plan's reference impl included a second insertConversation for role:'assistant'). createBoard does persist its assistant explanation, so refine-loop threads are slightly incomplete for later reconstruction. Pre-existing (not introduced by the corrections) and not required by the T3 DELIVERABLE; note only.",
+        "location": "server/src/agent/service.ts:330-338"
+      },
+      {
+        "severity": "Minor",
+        "description": "requireWorkspaceMember types its res param via nested `Parameters<Parameters<typeof router.get>[1]>[1]`, which is hard to read versus importing express Response. Compiles cleanly; stylistic only.",
+        "location": "server/src/agent/routes.ts:216-227"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "48c3312fe503e43a3c952fe8880d74ac74b2cd74"
+}

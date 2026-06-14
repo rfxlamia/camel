@@ -1,0 +1,55 @@
+{
+  "task_id": "T4",
+  "task_name": "Client Types + API + Routing",
+  "cycle": 2,
+  "timestamp": "2026-06-14T11:20:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [
+      {
+        "type": "extra",
+        "description": "AgentPage.tsx and HistoryPage.tsx are created in the T4 SHA range as 13-line placeholder stubs ('available soon'). Full implementations are T5/T6 scope. Per task note this is observation only, not blocking.",
+        "location": "client/src/pages/AgentPage.tsx:1-13, client/src/pages/HistoryPage.tsx:1-13 (at baf79ca)"
+      }
+    ],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All 6 agent API functions (createAgentBoard, sendAgentBoardMessage, approveAgentBoard, getAgentBoards, getAgentBoard, getAgentCardOutput) follow the existing request<T> pattern with correct workspace-scoped paths, methods, and bodies (api.ts:230-263)",
+      "BoardContext surfaces agent.* SSE events into agentEvents and returns early before void refresh(), correctly avoiding a human-board refetch on every streamed agent.card.token (BoardContext.tsx:403-406)",
+      "Routes use the data-router lazy: convention (not React.lazy) and Sidebar adds Agent/History nav links with icons (App.tsx:40-51, Sidebar.tsx:38-39)",
+      "AgentEvent client type mirrors the realtime.ts agent.* union exactly; no @anthropic-ai/sdk import, no duplicate EventSource, no fictional SSEContext/useSSE",
+      "approveAgentBoard test correctly mocks a 204 with no json() and asserts undefined, matching request<void> behavior; all 15 client API tests pass"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "clearAgentEvents is created inline (() => setAgentEvents([])) so it gets a new identity each render; memoizing with useCallback would stabilize it for consumer effect deps. Carried over from cycle 1, still present.",
+        "location": "client/src/context/BoardContext.tsx:521"
+      },
+      {
+        "severity": "Minor",
+        "description": "createAgentBoard and sendAgentBoardMessage tests assert only expect.objectContaining({ method: 'POST' }) and do not verify the request body contains the intent/message. The DELIVERABLE 'POST ... with intent in body' is satisfied by the implementation but is not directly exercised by a test (the plan's TDD spec asserted the JSON body).",
+        "location": "client/src/api.test.ts:289-327"
+      },
+      {
+        "severity": "Minor",
+        "description": "AgentCardOutput type declares columnSlug, but the T3 service getCardOutput returns only { output, thinking }. Harmless contract drift; the field is optional in practice and tests mock it. Observation.",
+        "location": "client/src/types.ts:189-193"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "baf79caa4ea36a06ff0c4ec9e8d59d3a813f0f0f"
+}
