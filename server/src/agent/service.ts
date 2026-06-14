@@ -8,7 +8,12 @@
  * NOT card_events — human Activity Feed must stay clean.
  */
 
-import { getTemplate } from "./templates.js";
+import {
+	getTemplate,
+	buildVarsMap,
+	findUnresolvedPlaceholders,
+	renderSystemPrompt,
+} from "./templates.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,6 +40,13 @@ export interface BoardListItem {
 }
 
 export interface FirstCardInfo {
+	columnId: number;
+	columnSlug: string;
+	systemPrompt: string;
+	reasoning: boolean;
+}
+
+export interface ColumnInfo {
 	columnId: number;
 	columnSlug: string;
 	systemPrompt: string;
@@ -87,6 +99,8 @@ export interface AgentBoardServiceDeps {
 	listBoards?: (workspaceId: number) => Promise<BoardListItem[]>;
 
 	getFirstCard?: (boardId: number) => Promise<FirstCardInfo | null>;
+
+	getColumns?: (boardId: number) => Promise<ColumnInfo[]>;
 
 	executeCard?: (
 		systemPrompt: string,
@@ -301,6 +315,174 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					error: String(err),
 				});
 			}
+		},
+
+		// ---- runPipeline ----
+		async runPipeline({
+			boardId,
+			workspaceId,
+		}: {
+			boardId: number;
+			workspaceId: number;
+		}) {
+			const board = await deps.getBoard!(boardId);
+			if (!board) return;
+
+			const columns = await deps.getColumns!(boardId);
+			if (!columns || columns.length === 0) return;
+
+			const template = getTemplate(board.templateId ?? "");
+			const slugToOutputKey = new Map<string, string>(
+				(template?.columns ?? [])
+					.filter((c) => c.output_key)
+					.map((c) => [c.slug, c.output_key!]),
+			);
+
+			const accumulator: Record<string, string> = {};
+			let previousOutput = "";
+
+			for (let i = 0; i < columns.length; i++) {
+				const column = columns[i];
+
+				await deps.publishEvent?.(workspaceId, {
+					type: "agent.card.started",
+					columnSlug: column.columnSlug,
+				});
+
+				const vars = buildVarsMap(
+					board.originalIntent,
+					previousOutput,
+					accumulator,
+				);
+				const rendered = renderSystemPrompt(column.systemPrompt, vars);
+
+				const unresolved = findUnresolvedPlaceholders(rendered);
+				if (unresolved.length > 0) {
+					const reason = `Unresolved placeholders: ${unresolved.join(", ")}`;
+					console.error(
+						`[runPipeline] card ${column.columnSlug} halted — ${reason}`,
+					);
+					await deps.insertOutput!({
+						boardId,
+						columnSlug: column.columnSlug,
+						cardIndex: i,
+						output: "",
+					});
+					await deps.updateBoard!(boardId, { execution_status: "failed" });
+					await deps.publishEvent?.(workspaceId, {
+						type: "agent.card.failed",
+						columnSlug: column.columnSlug,
+						reason,
+					});
+					return;
+				}
+
+				let tokenBuffer = "";
+				const batchInterval = setInterval(() => {
+					if (tokenBuffer) {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.card.token",
+							columnSlug: column.columnSlug,
+							token: tokenBuffer,
+						});
+						tokenBuffer = "";
+					}
+				}, 200);
+
+				try {
+					const result = await deps.executeCard!(
+						rendered,
+						board.originalIntent,
+						[],
+						column.reasoning,
+						(token: string) => {
+							tokenBuffer += token;
+						},
+					);
+
+					clearInterval(batchInterval);
+
+					if (tokenBuffer) {
+						await deps.publishEvent?.(workspaceId, {
+							type: "agent.card.token",
+							columnSlug: column.columnSlug,
+							token: tokenBuffer,
+						});
+					}
+
+					if (result.output.trim().length === 0) {
+						const reason = "Empty output";
+						console.error(
+							`[runPipeline] card ${column.columnSlug} halted — ${reason}`,
+						);
+						await deps.insertOutput!({
+							boardId,
+							columnSlug: column.columnSlug,
+							cardIndex: i,
+							output: result.output,
+							thinking: result.thinking,
+						});
+						await deps.updateBoard!(boardId, { execution_status: "failed" });
+						await deps.publishEvent?.(workspaceId, {
+							type: "agent.card.failed",
+							columnSlug: column.columnSlug,
+							reason,
+						});
+						return;
+					}
+
+					await deps.insertOutput!({
+						boardId,
+						columnSlug: column.columnSlug,
+						cardIndex: i,
+						output: result.output,
+						thinking: result.thinking,
+					});
+
+					const preview =
+						result.output.length > 120
+							? result.output.slice(0, 120) + "…"
+							: result.output;
+					await deps.insertCard!({
+						columnId: column.columnId,
+						title: preview,
+						position: 1.0,
+						workspaceId,
+					});
+
+					await deps.publishEvent?.(workspaceId, {
+						type: "agent.card.done",
+						columnSlug: column.columnSlug,
+					});
+
+					const outputKey = slugToOutputKey.get(column.columnSlug);
+					if (outputKey) {
+						accumulator[outputKey] = result.output;
+					}
+					previousOutput = result.output;
+				} catch (err) {
+					clearInterval(batchInterval);
+					const reason = String(err);
+					console.error(
+						`[runPipeline] card ${column.columnSlug} threw — ${reason}`,
+					);
+					await deps.insertOutput!({
+						boardId,
+						columnSlug: column.columnSlug,
+						cardIndex: i,
+						output: "",
+					});
+					await deps.updateBoard!(boardId, { execution_status: "failed" });
+					await deps.publishEvent?.(workspaceId, {
+						type: "agent.card.failed",
+						columnSlug: column.columnSlug,
+						reason,
+					});
+					return;
+				}
+			}
+
+			await deps.updateBoard!(boardId, { execution_status: "done" });
 		},
 
 		// ---- getCardOutput ----

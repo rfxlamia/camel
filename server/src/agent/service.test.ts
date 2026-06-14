@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { getHumanColumns } from "../routes.js";
 import { createAgentBoardService } from "./service.js";
+import type { AgentBoardServiceDeps, ColumnInfo } from "./service.js";
 
 // ---- T1 scaffold: board isolation ----
 
@@ -405,5 +406,224 @@ describe("getBoards", () => {
     const result = await service.getBoards({ workspaceId: 1 });
     expect(result).toHaveLength(2);
     expect(listBoards).toHaveBeenCalledWith(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runPipeline — Phase 2 sequential loop
+// ---------------------------------------------------------------------------
+
+const DEFAULT_COLUMNS: ColumnInfo[] = [
+  {
+    columnId: 10,
+    columnSlug: "research-specialist",
+    systemPrompt: "You are a researcher. Topic: {original_intent}",
+    reasoning: false,
+  },
+  {
+    columnId: 20,
+    columnSlug: "analysis-specialist",
+    systemPrompt: "Analyze this. Previous: {previous_output}",
+    reasoning: false,
+  },
+];
+
+const DEFAULT_BOARD = {
+  id: 1,
+  workspaceId: 1,
+  userId: 1,
+  templateId: "research-report",
+  originalIntent: "Test intent",
+  status: "approved",
+  executionStatus: "running",
+};
+
+function buildService(overrides: Partial<AgentBoardServiceDeps> = {}) {
+  const deps: AgentBoardServiceDeps = {
+    getBoard: vi.fn().mockResolvedValue(DEFAULT_BOARD),
+    getColumns: vi.fn().mockResolvedValue(DEFAULT_COLUMNS),
+    executeCard: vi.fn().mockResolvedValue({ output: "mock output text" }),
+    insertOutput: vi.fn().mockResolvedValue(undefined),
+    insertCard: vi.fn().mockResolvedValue(undefined),
+    updateBoard: vi.fn().mockResolvedValue(undefined),
+    publishEvent: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+  return { service: createAgentBoardService(deps), deps };
+}
+
+describe("runPipeline", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("happy path: executeCard called once per column in order, insertOutput called with correct cardIndex, updateBoard called with done", async () => {
+    const { service, deps } = buildService();
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(deps.executeCard).toHaveBeenCalledTimes(2);
+
+    const firstCall = (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls[0];
+    const secondCall = (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(firstCall[0]).toContain("researcher");
+    expect(secondCall[0]).toContain("Analyze");
+
+    expect(deps.insertOutput).toHaveBeenCalledTimes(2);
+    const insertCalls = (deps.insertOutput as ReturnType<typeof vi.fn>).mock.calls;
+    expect(insertCalls[0][0]).toMatchObject({ cardIndex: 0, columnSlug: "research-specialist" });
+    expect(insertCalls[1][0]).toMatchObject({ cardIndex: 1, columnSlug: "analysis-specialist" });
+
+    expect(deps.updateBoard).toHaveBeenCalledWith(1, { execution_status: "done" });
+  });
+
+  it("named resolution: second card systemPrompt has {previous_output} replaced with first card output", async () => {
+    const { service, deps } = buildService({
+      executeCard: vi.fn().mockResolvedValue({ output: "first card result" }),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    const secondCallSystemPrompt = (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls[1][0] as string;
+    expect(secondCallSystemPrompt).not.toMatch(/\{previous_output\}/);
+    expect(secondCallSystemPrompt).toContain("first card result");
+  });
+
+  it("SSE: agent.card.started emitted before executeCard, agent.card.done emitted after insertOutput for each card", async () => {
+    const events: Array<Record<string, unknown>> = [];
+
+    const { service } = buildService({
+      publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+        events.push(event);
+      }),
+      executeCard: vi.fn().mockImplementation(async () => {
+        return { output: "mock output" };
+      }),
+      insertOutput: vi.fn().mockImplementation(async () => {}),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(events[0]).toMatchObject({
+      type: "agent.card.started",
+      columnSlug: "research-specialist",
+    });
+
+    const firstDoneIdx = events.findIndex(
+      (e) => e.type === "agent.card.done" && e.columnSlug === "research-specialist",
+    );
+    expect(firstDoneIdx).toBeGreaterThan(0);
+
+    const secondStartIdx = events.findIndex(
+      (e) => e.type === "agent.card.started" && e.columnSlug === "analysis-specialist",
+    );
+    expect(secondStartIdx).toBeGreaterThan(firstDoneIdx);
+
+    const secondDoneIdx = events.findIndex(
+      (e) => e.type === "agent.card.done" && e.columnSlug === "analysis-specialist",
+    );
+    expect(secondDoneIdx).toBeGreaterThan(secondStartIdx);
+  });
+
+  it("fail-closed — unresolved placeholder: executeCard NOT called, updateBoard called with failed, agent.card.failed emitted, insertOutput called with empty output", async () => {
+    const { service, deps } = buildService({
+      getColumns: vi.fn().mockResolvedValue([
+        {
+          columnId: 10,
+          columnSlug: "research-specialist",
+          systemPrompt: "Hello {unknown_key_xyz}",
+          reasoning: false,
+        },
+      ] as ColumnInfo[]),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(deps.executeCard).not.toHaveBeenCalled();
+    expect(deps.updateBoard).toHaveBeenCalledWith(1, { execution_status: "failed" });
+
+    const publishCalls = (deps.publishEvent as ReturnType<typeof vi.fn>).mock.calls;
+    const failedEvent = publishCalls
+      .map((c: unknown[]) => c[1] as Record<string, unknown>)
+      .find((e) => e.type === "agent.card.failed");
+    expect(failedEvent).toBeDefined();
+    expect(failedEvent!.columnSlug).toBe("research-specialist");
+    expect(String(failedEvent!.reason)).toContain("{unknown_key_xyz}");
+
+    expect(deps.insertOutput).toHaveBeenCalledWith(
+      expect.objectContaining({ columnSlug: "research-specialist", output: "" }),
+    );
+  });
+
+  it("fail-closed — empty output: pipeline halts after first card, second executeCard NOT called, updateBoard called with failed", async () => {
+    const executeCardMock = vi.fn()
+      .mockResolvedValueOnce({ output: "   " })
+      .mockResolvedValueOnce({ output: "should not be called" });
+
+    const { service, deps } = buildService({ executeCard: executeCardMock });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(executeCardMock).toHaveBeenCalledTimes(1);
+    expect(deps.updateBoard).toHaveBeenCalledWith(1, { execution_status: "failed" });
+
+    const insertCalls = (deps.insertOutput as ReturnType<typeof vi.fn>).mock.calls;
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0][0]).toMatchObject({ columnSlug: "research-specialist" });
+
+    const publishCalls = (deps.publishEvent as ReturnType<typeof vi.fn>).mock.calls;
+    const failedEvent = publishCalls
+      .map((c: unknown[]) => c[1] as Record<string, unknown>)
+      .find((e) => e.type === "agent.card.failed");
+    expect(failedEvent).toBeDefined();
+    expect(failedEvent!.columnSlug).toBe("research-specialist");
+  });
+
+  it("fail-closed — executeCard throws on second card: first insertOutput remains (cardIndex 0), updateBoard called with failed, agent.card.failed emitted, second insertOutput called with empty output", async () => {
+    const executeCardMock = vi.fn()
+      .mockResolvedValueOnce({ output: "first card result" })
+      .mockRejectedValueOnce(new Error("LLM timeout"));
+
+    const { service, deps } = buildService({ executeCard: executeCardMock });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    const insertCalls = (deps.insertOutput as ReturnType<typeof vi.fn>).mock.calls;
+    expect(insertCalls[0][0]).toMatchObject({
+      cardIndex: 0,
+      columnSlug: "research-specialist",
+      output: "first card result",
+    });
+
+    expect(insertCalls[1][0]).toMatchObject({
+      cardIndex: 1,
+      columnSlug: "analysis-specialist",
+      output: "",
+    });
+
+    expect(deps.updateBoard).toHaveBeenCalledWith(1, { execution_status: "failed" });
+
+    const publishCalls = (deps.publishEvent as ReturnType<typeof vi.fn>).mock.calls;
+    const failedEvent = publishCalls
+      .map((c: unknown[]) => c[1] as Record<string, unknown>)
+      .find((e) => e.type === "agent.card.failed");
+    expect(failedEvent).toBeDefined();
+    expect(failedEvent!.columnSlug).toBe("analysis-specialist");
   });
 });
