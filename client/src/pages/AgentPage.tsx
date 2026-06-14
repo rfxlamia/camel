@@ -202,8 +202,6 @@ export default function AgentPage() {
 		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [agentEvents]);
 
-
-
 	// Actually handle the queue fire
 	const sendMessage = useCallback(
 		async (msg: string) => {
@@ -263,7 +261,13 @@ export default function AgentPage() {
 				}
 			}
 		},
-		[activeWorkspaceId, clearAgentEvents, setSearchParams, showToast, sendMessage],
+		[
+			activeWorkspaceId,
+			clearAgentEvents,
+			setSearchParams,
+			showToast,
+			sendMessage,
+		],
 	);
 
 	// Submit handler — uses queue
@@ -463,7 +467,10 @@ export default function AgentPage() {
 									onClick={() => {
 										setError(null);
 										if (lastIntent) {
-											const qResult = queueSubmit(queueStateRef.current, lastIntent);
+											const qResult = queueSubmit(
+												queueStateRef.current,
+												lastIntent,
+											);
 											dispatch({ type: "submit", message: lastIntent });
 											if (qResult.fire) {
 												void createBoard(qResult.fire);

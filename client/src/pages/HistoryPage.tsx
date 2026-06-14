@@ -144,7 +144,8 @@ export default function HistoryPage() {
 										: board.originalIntent}
 								</p>
 								<p className="mt-0.5 text-xs text-neutral-500">
-									{templateName(board.templateId)} · {formatRelativeTime(board.createdAt)}
+									{templateName(board.templateId)} ·{" "}
+									{formatRelativeTime(board.createdAt)}
 								</p>
 							</div>
 							<div className="flex shrink-0 items-center gap-1.5">
