@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import type { AgentCardOutput, AgentColumn } from "../types";
@@ -19,6 +19,7 @@ export default function AgentCardDetail({
 	const [output, setOutput] = useState<AgentCardOutput | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
+	const [isPromptOpen, setIsPromptOpen] = useState(true);
 
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
@@ -85,16 +86,37 @@ export default function AgentCardDetail({
 					</span>
 				</div>
 
-				{/* System prompt */}
+				{/* System prompt — collapsible */}
 				<div>
-					<h4 className="text-xs font-medium text-neutral-600 mb-1">
-						System Prompt
-					</h4>
-					<div className="rounded-md border border-neutral-200 bg-neutral-100 p-3">
-						<p className="text-sm text-neutral-800 whitespace-pre-wrap">
-							{column.systemPrompt}
-						</p>
-					</div>
+					<button
+						type="button"
+						onClick={() => setIsPromptOpen((v) => !v)}
+						className="flex w-full items-center gap-1.5 text-left"
+					>
+						{isPromptOpen ? (
+							<ChevronDown
+								size={14}
+								className="shrink-0 text-neutral-500"
+								aria-hidden
+							/>
+						) : (
+							<ChevronRight
+								size={14}
+								className="shrink-0 text-neutral-500"
+								aria-hidden
+							/>
+						)}
+						<h4 className="text-xs font-medium text-neutral-600">
+							System Prompt
+						</h4>
+					</button>
+					{isPromptOpen && (
+						<div className="mt-1 rounded-md border border-neutral-200 bg-neutral-100 p-3">
+							<p className="text-sm text-neutral-800 whitespace-pre-wrap">
+								{column.systemPrompt}
+							</p>
+						</div>
+					)}
 				</div>
 
 				{/* Output */}
