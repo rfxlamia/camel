@@ -5,6 +5,8 @@
 **Method:** DRY / YAGNI / TDD review + codebase-aware gap analysis (claims verified against real source)
 **Resolution:** ✅ All findings (4 CRITICAL + 4 WARNING + 4 INFO) applied to `execution-plan.md` on 2026-06-14. Post-fix grade: **A-** (execute-ready).
 
+**Second pass:** 2 CRITICAL + 5 WARNING found and applied on 2026-06-14. Post-fix grade: **A** (execute-ready).
+
 ---
 
 ## Executive Summary
@@ -105,3 +107,52 @@ Tests mock `useBoard: () => ({ workspaceId: 1, addToast })`. The real `BoardCont
 ## Grade Rationale
 
 4 CRITICAL blockers, each defeating its own test, in the path that delivers the Phase-1 hypothesis → cannot grade as execute-ready. **D.** Resolving C1–C4 (and ideally W1–W2) would lift this to **A-** — the structure, sequencing, and pattern discipline are otherwise strong.
+
+---
+
+## Second Validation Pass (2026-06-14)
+
+After first-pass fixes were applied, a second DRY/YAGNI/TDD review + codebase verification found 2 new critical issues and 5 warnings. All resolved.
+
+### 🚨 CRITICAL (second pass)
+
+#### C1-new — T2 `llm.ts` has zero dedicated tests
+T2 creates 4 exported async functions (`classifyIntent`, `generateExplanation`, `generateClarificationQuestion`, `executeCard`) but only tests `templates.ts`. T3's DI mocks test the *service layer's usage* of LLM functions — not the functions themselves. If `classifyIntent` has a JSON parsing bug or `executeCard` mishandles the MiMo streaming fallback, no test catches it.
+**Applied fix:** Added `server/src/agent/llm.test.ts` with mocked `@anthropic-ai/sdk` — tests classifyIntent response parsing and executeCard placeholder substitution. Added to T2 file list, commit step, quality bar, and deliverables.
+
+#### C2-new — SSE token flooding: no throttling on `agent.card.token` events
+T3's `triggerExecution` calls `publishEvent` inside `onToken` for every streamed token (~30-50/sec). This floods Redis and SSE clients. T4's early-return fix prevents human board refetching but doesn't address React re-render flooding.
+**Applied fix:** Added server-side token batching in `triggerExecution` — accumulates tokens in a buffer, flushes via `publishEvent` every ~200ms. Reduces event rate from ~50/sec to ~5/sec. Batching is an orchestration concern of the service layer, not `llm.ts`.
+
+### ⚡ WARNINGS (second pass)
+
+#### W1-new — `getHumanColumns` exported from `routes.ts` breaks separation pattern
+All existing data-access lives in service deps interfaces (`ScopedBoardDeps.getBoardRows`). Exporting a raw SQL helper from routes.ts is pragmatic for Phase 1 but should be extracted to `server/src/agent/repo.ts` in Phase 2.
+**Applied fix:** Added note in T1 documenting the tech debt decision.
+
+#### W2-new — No test for LLM placeholder substitution contract
+`templates.test.ts` tests `renderSystemPrompt` as a pure function, but no test verifies that `executeCard` actually *calls* `renderSystemPrompt` before the API call.
+**Applied fix:** Covered by C1-new's `llm.test.ts` — the `executeCard` test verifies system prompt substitution.
+
+#### W3-new — `migrate.ts` transaction ordering risk
+`agent-schema.sql` has `ALTER TABLE columns ADD COLUMN ... REFERENCES agent_boards(id)`. The `agent_boards` table is created in the same file. Within a single PostgreSQL transaction, DDL is visible to subsequent statements — but this should be verified.
+**Applied fix:** Added verification note in T1 Step 4 with fallback strategy (split transactions or reorder DDL).
+
+#### W4-new — `sendMessage`/`getBoards` implementation was skeletal
+T3's `createAgentBoardService` had `// sendMessage, getBoards, getBoard...` placeholder. The routes reference these methods. Without implementation, T3 would fail.
+**Applied fix:** Filled in `sendMessage` (stores user message, returns clarification for pending boards), `getBoards` (workspace-scoped list), `getBoardById` (single board with workspace check). Added corresponding test cases and deps (`listBoards`, `generateClarificationQuestion`). Updated deliverables and quality bar.
+
+#### W5-new — `Queryable` type vs `pg.Pool` clarity
+T1 defines `Queryable` for test injection but doesn't clarify that the real call passes the `pg.Pool` instance directly.
+**Applied fix:** Added inline comment explaining `Pool.query(sql, params)` compatibility.
+
+#### W6-new — `approveAgentBoard` test mock calls `json()` on 204 response
+T4 test defines `json: () => Promise.resolve(undefined)` on a 204 mock. The real `request<T>` helper returns `undefined as T` for 204 *without calling `res.json()`*.
+**Applied fix:** Removed `json` method from the 204 mock, added comment explaining why.
+
+### Additional fixes applied
+- Added `agentQueue.ts` + `agentQueue.test.ts` to file structure map (was missing)
+- Updated Test-Architect Summary to mention `llm.test.ts` coverage
+- Updated T2 deliverables with classifyIntent/executeCard contract assertions
+- Updated T3 must-have from "5 endpoints" to "6 endpoints"
+- Updated Plan Summary table T2 verification column

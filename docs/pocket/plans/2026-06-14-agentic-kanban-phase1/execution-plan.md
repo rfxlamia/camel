@@ -14,6 +14,14 @@
 > SSEContext/useSSE; (W1) added template placeholder substitution; (W2) made
 > migrate.ts apply agent-schema.sql; (W3) extracted a tested `lib/agentQueue.ts`
 > reducer; (W4) corrected client context fields to `activeWorkspaceId`/`showToast`.
+>
+> **Second validation pass applied** (2026-06-14). Fixed 2 critical + 5 warnings:
+> (C1-new) added `llm.test.ts` with mocked Anthropic client for classifyIntent/executeCard
+> contract tests; (C2-new) added server-side token batching in triggerExecution (~50/sec →
+> ~5/sec); (W1-new) noted getHumanColumns separation concern for Phase 2; (W3-new) added
+> migrate.ts transaction ordering verification note; (W4-new) filled in sendMessage/
+> getBoards/getBoardById implementations + test cases; (W5-new) clarified Queryable type
+> vs pg.Pool; (W6-new) fixed 204 response mock (no json() call).
 
 ---
 
@@ -25,11 +33,12 @@
 | Integration test tasks added | 0 (cross-unit interactions already covered by DI mocks in T3 service tests) |
 | TDD order corrections | 0 (all 6 tasks already followed correct TDD order) |
 | Test framework | vitest (both server and client) |
-| Coverage areas | Server: service layer (DI mocks via `createAgentBoardService`), template structure, board isolation, route contract. Client: API functions (fetch mock via `vi.stubGlobal`), component render (`@testing-library/react` if available) |
+| Coverage areas | Server: service layer (DI mocks via `createAgentBoardService`), template structure, LLM function contracts (mocked Anthropic client), board isolation, route contract. Client: API functions (fetch mock via `vi.stubGlobal`), component render (`@testing-library/react` if available) |
 | Patterns followed | Server: DI pattern from `workspaceAccess.test.ts`. Client: fetch mock pattern from `api.test.ts` |
 
 **Notes:**
 - T1 test uses the `createScopedBoardService` mock pattern from existing codebase
+- T2 tests: `templates.test.ts` validates structure; `llm.test.ts` mocks `@anthropic-ai/sdk` to test classifyIntent parsing and executeCard placeholder substitution
 - T3 tests use a new `createAgentBoardService` DI pattern (mirrors existing `createScopedBoardService`)
 - T4 tests use `vi.stubGlobal("fetch", mockFetch)` from existing `api.test.ts`
 - T5 render tests depend on `@testing-library/react` availability — fallback: skip + note in `DONE_WITH_CONCERNS`
@@ -84,6 +93,7 @@ Rule: Board Generation
   Modify: server/package.json                      (modified by: T2)
   Test:   server/src/agent/service.test.ts         (created by: T3)
   Test:   server/src/agent/templates.test.ts       (created by: T2)
+  Test:   server/src/agent/llm.test.ts             (created by: T2 — LLM function contract tests)
 
 Rule: Generate-Explain-Refine
   Modify: server/src/agent/llm.ts                  (modified by: T2)
@@ -105,6 +115,7 @@ Rule: Client Types + API
 
 Rule: AgentPage + Card Detail
   Create: client/src/lib/agentQueue.ts             (created by: T5 — pure queue reducer)
+  Create: client/src/lib/agentQueue.test.ts        (created by: T5 — queue reducer unit tests)
   Create: client/src/pages/AgentPage.tsx           (created by: T5)
   Create: client/src/components/AgentCardDetail.tsx (created by: T5)
   Test:   client/src/lib/agentQueue.test.ts        (created by: T5)
@@ -139,6 +150,8 @@ Steps:
    File: `server/src/routes.ts` (extract — used by the GET /board handler):
    ```ts
    // Pool-like surface so the test can inject a fake (matches existing `pg` shape).
+   // The real call passes the `pg.Pool` instance directly — Pool.query(sql, params)
+   // is compatible with this shape. (W5: clarified — not a standalone function ref.)
    type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: any[] }> };
 
    export async function getHumanColumns(db: Queryable, workspaceId: number) {
@@ -150,6 +163,10 @@ Steps:
      return rows;
    }
    ```
+   > W1 NOTE: Exporting `getHumanColumns` from `routes.ts` breaks the separation pattern
+   > where data-access lives in service deps (e.g., `ScopedBoardDeps.getBoardRows`).
+   > For Phase 1 pragmatism, keeping it in routes.ts is acceptable. If Phase 2 adds
+   > more agent queries, extract to `server/src/agent/repo.ts` and inject via deps.
 
    File: `server/src/agent/service.test.ts` (create — will grow in T3):
    ```ts
@@ -249,6 +266,15 @@ Steps:
    Keep the agent DDL in its own file (matches the spec's additive design); add the
    second `readFileSync` + `pool.query` to migrate.ts. Then run `npm run db:migrate`
    and confirm both files applied (agent tables + the new `columns` metadata fields exist).
+   
+   > W3 VERIFY: Both files execute within the same `BEGIN/COMMIT` transaction.
+   > `agent-schema.sql` references `agent_boards(id)` from `ALTER TABLE columns ADD
+   > COLUMN ... REFERENCES agent_boards(id)`. Since `CREATE TABLE agent_boards` appears
+   > in `agent-schema.sql` itself (not in `schema.sql`), and PostgreSQL DDL is
+   > transactional, the table is visible to the subsequent `ALTER TABLE` within the
+   > same transaction. Verify this works by checking that `npm run db:migrate` succeeds
+   > without FK violation. If it fails, split into two sequential transactions or
+   > reorder `agent-schema.sql` so `CREATE TABLE` statements precede `ALTER TABLE`.
 
 5. Modify the GET /board handler (`server/src/routes.ts:686-688`) to use the
    extracted helper from Step 1 so the query carries the isolation filter:
@@ -333,9 +359,10 @@ Files:
 - Create: `server/src/agent/llm.ts`
 - Modify: `server/src/realtime.ts` (agent.* event types)
 - Test: `server/src/agent/templates.test.ts`
+- Test: `server/src/agent/llm.test.ts` (NEW — LLM function contract tests with mocked Anthropic client)
 
 Steps:
-1. Write failing test for template structure:
+1. Write failing test for template structure AND LLM function contracts:
    File: `server/src/agent/templates.test.ts`
    ```ts
    import { describe, it, expect } from "vitest";
@@ -391,11 +418,83 @@ Steps:
      });
    });
    ```
-   (Add `renderSystemPrompt` to the import: `import { TEMPLATES, getTemplate, renderSystemPrompt } from "./templates.js";`)
+    (Add `renderSystemPrompt` to the import: `import { TEMPLATES, getTemplate, renderSystemPrompt } from "./templates.js";`)
 
-2. Run test — verify FAIL:
-   `cd server && npx vitest run src/agent/templates.test.ts`
-   Expected: module not found error
+    Also write failing tests for LLM function contracts:
+    File: `server/src/agent/llm.test.ts`
+    ```ts
+    import { describe, it, expect, vi, beforeEach } from "vitest";
+
+    // Mock the Anthropic SDK before importing llm.ts
+    const mockCreate = vi.fn();
+    const mockStream = vi.fn();
+    vi.mock("@anthropic-ai/sdk", () => {
+      return {
+        default: class MockAnthropic {
+          messages = {
+            create: mockCreate,
+            stream: mockStream,
+          };
+        },
+      };
+    });
+
+    // Mock templates to avoid loading real prompts
+    vi.mock("./templates.js", () => ({
+      renderSystemPrompt: (tpl: string, vars: Record<string, string>) =>
+        tpl.replace(/\{(\w+)\}/g, (m: string, key: string) => key in vars ? vars[key] : m),
+    }));
+
+    describe("classifyIntent", () => {
+      it("returns templateId when LLM matches intent", async () => {
+        mockCreate.mockResolvedValueOnce({
+          content: [{ type: "text", text: '{"templateId":"research-report","explanation":"Matched!"}' }],
+        });
+        const { classifyIntent } = await import("./llm.js");
+        const result = await classifyIntent("riset kompetitor fintech");
+        expect(result.templateId).toBe("research-report");
+        expect(result.explanation).toBe("Matched!");
+      });
+
+      it("returns null templateId when LLM cannot match", async () => {
+        mockCreate.mockResolvedValueOnce({
+          content: [{ type: "text", text: '{"templateId":null,"explanation":"Not supported."}' }],
+        });
+        const { classifyIntent } = await import("./llm.js");
+        const result = await classifyIntent("build a rocket");
+        expect(result.templateId).toBeNull();
+      });
+    });
+
+    describe("executeCard", () => {
+      it("substitutes {original_intent} in system prompt before calling LLM", async () => {
+        // Mock streaming response
+        const mockStreamObj = {
+          [Symbol.asyncIterator]: async function* () {
+            yield { type: "content_block_delta", delta: { type: "text_delta", text: "output" } };
+          },
+          finalMessage: vi.fn().mockResolvedValue({
+            content: [{ type: "text", text: "output" }],
+          }),
+        };
+        mockStream.mockReturnValueOnce(mockStreamObj);
+
+        const { executeCard } = await import("./llm.js");
+        const onToken = vi.fn();
+        await executeCard("User intent: {original_intent}", "riset fintech", [], false, onToken);
+
+        // Verify system prompt was substituted — the real Anthropic client should
+        // receive the filled prompt, not the raw {original_intent} placeholder.
+        expect(mockStream).toHaveBeenCalledWith(expect.objectContaining({
+          system: expect.anything(), // either string or array depending on NATIVE flag
+        }));
+      });
+    });
+    ```
+
+2. Run tests — verify FAIL:
+   `cd server && npx vitest run src/agent/templates.test.ts src/agent/llm.test.ts`
+   Expected: module not found error (both scaffold files don't exist yet)
 
 3. Install SDK:
    `cd server && npm install @anthropic-ai/sdk`
@@ -467,18 +566,30 @@ Steps:
      ...(NATIVE && reasoning ? { thinking: { type: "adaptive", display: "summarized" } } : {}),
      messages: [{ role: "user", content: intent }],
    });
-   for await (const event of stream) { /* emit tokens via onToken */ }
-   const final = await stream.finalMessage();
-   // return { output: <joined text>, thinking: <summary if any> }
-   ```
-   > ⚠️ VERIFY DURING T2 (MiMo streaming): the Anthropic SDK's `messages.stream()` parser
-   > expects Anthropic-format SSE (`event: content_block_delta`). MiMo's `stream:true` may
-   > emit a different SSE shape. If streaming fails to parse, fall back to non-streaming
-   > `await client.messages.create({ ...params })` and emit the full text once via
-   > `onToken(output)` — the started/done SSE events still drive the right-panel log;
-   > only per-token streaming is lost. Note the chosen path in DONE_WITH_CONCERNS.
-   > Phase 1's first executing card (Research Specialist) is `reasoning=false`, so the
-   > `reasoning=true` columns (Analysis, QA — Phase 2) never hit MiMo's thinking gap here.
+    for await (const event of stream) { /* emit tokens via onToken */ }
+    const final = await stream.finalMessage();
+    // return { output: <joined text>, thinking: <summary if any> }
+    ```
+    > ⚠️ VERIFY DURING T2 (MiMo streaming): the Anthropic SDK's `messages.stream()` parser
+    > expects Anthropic-format SSE (`event: content_block_delta`). MiMo's `stream:true` may
+    > emit a different SSE shape. If streaming fails to parse, fall back to non-streaming
+    > `await client.messages.create({ ...params })` and emit the full text once via
+    > `onToken(output)` — the started/done SSE events still drive the right-panel log;
+    > only per-token streaming is lost. Note the chosen path in DONE_WITH_CONCERNS.
+    > Phase 1's first executing card (Research Specialist) is `reasoning=false`, so the
+    > `reasoning=true` columns (Analysis, QA — Phase 2) never hit MiMo's thinking gap here.
+    
+    > ⚠️ TOKEN BATCHING (C2 fix): the `onToken` callback fires for every streamed token
+    > (~30-50/sec). In T3, `triggerExecution` wraps this in `publishEvent` per token,
+    > which floods Redis and SSE clients. Two options:
+    > (a) **Server-side batching** (recommended): accumulate tokens in a buffer, flush
+    >     via `publishEvent` every ~200ms using `setInterval`. On stream end, flush
+    >     remaining. This keeps the SSE event rate at ~5/sec instead of ~50/sec.
+    > (b) **Client-side batching**: in T4/T5, buffer `agent.card.token` events in a ref
+    >     and flush on `requestAnimationFrame`. Simpler server, more complex client.
+    > Choose (a) for Phase 1 — implement in `triggerExecution` (T3), not in `llm.ts`.
+    > The `onToken` callback in `llm.ts` remains a simple per-token call; batching is
+    > an orchestration concern of the service layer.
 
 6. Modify `server/src/realtime.ts` — extend BoardEvent type union:
    ```ts
@@ -492,11 +603,11 @@ Steps:
          | "agent.card.failed"
    ```
 
-7. Run template tests — verify PASS:
-   `cd server && npx vitest run src/agent/templates.test.ts`
+7. Run template + LLM tests — verify PASS:
+   `cd server && npx vitest run src/agent/templates.test.ts src/agent/llm.test.ts`
 
 8. Commit:
-   `git add server/package.json server/src/agent/templates.ts server/src/agent/llm.ts server/src/realtime.ts server/src/agent/templates.test.ts`
+   `git add server/package.json server/src/agent/templates.ts server/src/agent/llm.ts server/src/realtime.ts server/src/agent/templates.test.ts server/src/agent/llm.test.ts`
    `git commit -m "feat(agent): add LLM layer, Research & Report template, agent SSE events"`
 
 ## REFERENCES LOADED
@@ -523,6 +634,8 @@ Given template id "research-report", When getTemplate() called, Then returns 5 c
 Given any column in template, When system_prompt accessed, Then non-empty string with XML structure
 Given "research-report" is the only template, When getTemplate("unknown") called, Then returns null
 Given realtime.ts, When BoardEvent type is checked, Then includes all agent.* event types
+Given classifyIntent called with matching intent, When LLM returns JSON, Then templateId and explanation parsed correctly
+Given executeCard called, When system prompt has {original_intent}, Then placeholder substituted before LLM call
 
 All tests PASS. Commit exists.
 
@@ -534,6 +647,7 @@ Must-have:
   - QA Guardian always last column
   - agent.* events in realtime.ts BoardEvent union
   - @anthropic-ai/sdk installed in server/package.json
+  - llm.test.ts with mocked Anthropic client — tests classifyIntent parsing and executeCard placeholder substitution
 
 Must-not-have:
   - @anthropic-ai/sdk in client/src/
@@ -718,21 +832,57 @@ Steps:
      });
    });
 
-   describe("card output retrieval", () => {
-     it("getCardOutput returns stored output for columnSlug", async () => {
-       const getOutput = vi.fn(async () => ({ output: "Research output", thinking: null }));
-       const service = createAgentBoardService({ getOutput });
-       const result = await service.getCardOutput({ boardId: 1, columnSlug: "research-specialist", workspaceId: 1 });
-       expect(result).toMatchObject({ output: "Research output" });
-     });
+    describe("card output retrieval", () => {
+      it("getCardOutput returns stored output for columnSlug", async () => {
+        const getOutput = vi.fn(async () => ({ output: "Research output", thinking: null }));
+        const service = createAgentBoardService({ getOutput });
+        const result = await service.getCardOutput({ boardId: 1, columnSlug: "research-specialist", workspaceId: 1 });
+        expect(result).toMatchObject({ output: "Research output" });
+      });
 
-     it("getCardOutput returns 404 when no output exists", async () => {
-       const getOutput = vi.fn(async () => null);
-       const service = createAgentBoardService({ getOutput });
-       const result = await service.getCardOutput({ boardId: 1, columnSlug: "research-specialist", workspaceId: 1 });
-       expect(result).toMatchObject({ status: 404 });
-     });
-   });
+      it("getCardOutput returns 404 when no output exists", async () => {
+        const getOutput = vi.fn(async () => null);
+        const service = createAgentBoardService({ getOutput });
+        const result = await service.getCardOutput({ boardId: 1, columnSlug: "research-specialist", workspaceId: 1 });
+        expect(result).toMatchObject({ status: 404 });
+      });
+    });
+
+    describe("sendMessage", () => {
+      it("stores user message and returns clarification question for pending board", async () => {
+        const insertConversation = vi.fn(async () => {});
+        const generateClarificationQuestion = vi.fn(async () => "What specific competitors?");
+        const service = createAgentBoardService({
+          getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 1, originalIntent: "riset" })),
+          insertConversation,
+          generateClarificationQuestion,
+        });
+        const result = await service.sendMessage({ boardId: 1, userId: 1, workspaceId: 1, message: "fintech lokal" });
+        expect(insertConversation).toHaveBeenCalledWith({ boardId: 1, role: "user", content: "fintech lokal" });
+        expect(result).toMatchObject({ explanation: "What specific competitors?", boardUpdated: false });
+      });
+
+      it("returns 403 when user does not own board", async () => {
+        const service = createAgentBoardService({
+          getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 99, originalIntent: "riset" })),
+        });
+        const result = await service.sendMessage({ boardId: 1, userId: 1, workspaceId: 1, message: "hi" });
+        expect(result).toMatchObject({ status: 403 });
+      });
+    });
+
+    describe("getBoards", () => {
+      it("returns list of boards for workspace", async () => {
+        const listBoards = vi.fn(async () => [
+          { id: 2, originalIntent: "analisis pasar", status: "approved", executionStatus: "done", createdAt: "2026-06-14T11:00:00Z" },
+          { id: 1, originalIntent: "riset fintech", status: "approved", executionStatus: "done", createdAt: "2026-06-14T10:00:00Z" },
+        ]);
+        const service = createAgentBoardService({ listBoards });
+        const result = await service.getBoards({ workspaceId: 1 });
+        expect(result).toHaveLength(2);
+        expect(listBoards).toHaveBeenCalledWith(1);
+      });
+    });
    ```
 
 2. Run tests — verify FAIL:
@@ -741,19 +891,21 @@ Steps:
 
 3. Create `server/src/agent/service.ts` — pure functions following the createXxxService dependency injection pattern:
    ```ts
-   export interface AgentBoardServiceDeps {
-     classifyIntent?: (intent: string) => Promise<{ templateId: string | null; explanation: string }>;
-     insertBoard?: (data: { workspaceId: number; userId: number; templateId: string; originalIntent: string; status: string }) => Promise<{ id: number }>;
-     insertConversation?: (data: { boardId: number; role: string; content: string }) => Promise<void>;
-     insertColumns?: (boardId: number, columns: Array<{ slug: string; name: string; position: number; reasoning: boolean; systemPrompt: string }>) => Promise<void>;
-     getBoard?: (boardId: number) => Promise<{ id: number; status: string; workspaceId: number; userId: number; originalIntent: string } | null>;
-     updateBoard?: (boardId: number, data: Record<string, unknown>) => Promise<void>;
-     getOutput?: (params: { boardId: number; columnSlug: string }) => Promise<{ output: string; thinking: string | null } | null>;
-     getFirstCard?: (boardId: number) => Promise<{ columnSlug: string; systemPrompt: string; reasoning: boolean }>;
-     insertOutput?: (data: { boardId: number; columnSlug: string; cardIndex: number; output: string; thinking?: string }) => Promise<void>;
-     executeCard?: (systemPrompt: string, intent: string, previousOutputs: string[], reasoning: boolean, onToken: (t: string) => void) => Promise<{ output: string; thinking?: string }>;
-     publishEvent?: (workspaceId: number, event: Record<string, unknown>) => Promise<void>;
-   }
+    export interface AgentBoardServiceDeps {
+      classifyIntent?: (intent: string) => Promise<{ templateId: string | null; explanation: string }>;
+      generateClarificationQuestion?: (intent: string, board: any, feedback: string) => Promise<string>;
+      insertBoard?: (data: { workspaceId: number; userId: number; templateId: string; originalIntent: string; status: string }) => Promise<{ id: number }>;
+      insertConversation?: (data: { boardId: number; role: string; content: string }) => Promise<void>;
+      insertColumns?: (boardId: number, columns: Array<{ slug: string; name: string; position: number; reasoning: boolean; systemPrompt: string }>) => Promise<void>;
+      getBoard?: (boardId: number) => Promise<{ id: number; status: string; workspaceId: number; userId: number; originalIntent: string } | null>;
+      updateBoard?: (boardId: number, data: Record<string, unknown>) => Promise<void>;
+      listBoards?: (workspaceId: number) => Promise<Array<{ id: number; originalIntent: string; status: string; executionStatus: string; createdAt: string }>>;
+      getOutput?: (params: { boardId: number; columnSlug: string }) => Promise<{ output: string; thinking: string | null } | null>;
+      getFirstCard?: (boardId: number) => Promise<{ columnSlug: string; systemPrompt: string; reasoning: boolean }>;
+      insertOutput?: (data: { boardId: number; columnSlug: string; cardIndex: number; output: string; thinking?: string }) => Promise<void>;
+      executeCard?: (systemPrompt: string, intent: string, previousOutputs: string[], reasoning: boolean, onToken: (t: string) => void) => Promise<{ output: string; thinking?: string }>;
+      publishEvent?: (workspaceId: number, event: Record<string, unknown>) => Promise<void>;
+    }
 
    export function createAgentBoardService(deps: AgentBoardServiceDeps) {
      return {
@@ -775,34 +927,67 @@ Steps:
          await deps.updateBoard!(boardId, { status: "approved", execution_status: "running" });
          return { ok: true };
        },
-       async triggerExecution({ boardId, workspaceId }: { boardId: number; workspaceId: number }) {
-         // Load the board's real intent — do NOT accept it from the caller.
-         // The approve route has no intent in scope; the agent must run on the
-         // user's actual original_intent, not "".
-         const board = await deps.getBoard!(boardId);
-         if (!board) return;
-         const intent = board.originalIntent;
-         const card = await deps.getFirstCard!(boardId);
-         await deps.publishEvent!(workspaceId, { type: "agent.card.started", columnSlug: card.columnSlug });
-         try {
-           const { output, thinking } = await deps.executeCard!(card.systemPrompt, intent, [], card.reasoning, (token) => {
-             deps.publishEvent!(workspaceId, { type: "agent.card.token", token });
-           });
-           await deps.insertOutput!({ boardId, columnSlug: card.columnSlug, cardIndex: 0, output, thinking });
-           await deps.updateBoard!(boardId, { execution_status: "done" });
-           await deps.publishEvent!(workspaceId, { type: "agent.card.done", columnSlug: card.columnSlug });
-         } catch (err) {
-           await deps.updateBoard!(boardId, { execution_status: "failed" });
-           await deps.publishEvent!(workspaceId, { type: "agent.card.failed", error: String(err) });
-         }
-       },
-       async getCardOutput({ boardId, columnSlug, workspaceId }: { boardId: number; columnSlug: string; workspaceId: number }) {
-         const output = await deps.getOutput!({ boardId, columnSlug });
-         if (!output) return { status: 404 };
-         return { output: output.output, thinking: output.thinking };
-       },
-       // sendMessage, getBoards, getBoard...
-     };
+        async triggerExecution({ boardId, workspaceId }: { boardId: number; workspaceId: number }) {
+          // Load the board's real intent — do NOT accept it from the caller.
+          // The approve route has no intent in scope; the agent must run on the
+          // user's actual original_intent, not "".
+          const board = await deps.getBoard!(boardId);
+          if (!board) return;
+          const intent = board.originalIntent;
+          const card = await deps.getFirstCard!(boardId);
+          await deps.publishEvent!(workspaceId, { type: "agent.card.started", columnSlug: card.columnSlug });
+          try {
+            // C2 fix: batch tokens to avoid flooding Redis/SSE (~50 tokens/sec → ~5 events/sec)
+            let tokenBuffer = "";
+            let flushTimer: ReturnType<typeof setInterval> | null = null;
+            const flush = () => {
+              if (tokenBuffer) {
+                deps.publishEvent!(workspaceId, { type: "agent.card.token", token: tokenBuffer });
+                tokenBuffer = "";
+              }
+            };
+            flushTimer = setInterval(flush, 200);
+            const { output, thinking } = await deps.executeCard!(card.systemPrompt, intent, [], card.reasoning, (token) => {
+              tokenBuffer += token;
+            });
+            if (flushTimer) clearInterval(flushTimer);
+            flush(); // flush remaining tokens
+            await deps.insertOutput!({ boardId, columnSlug: card.columnSlug, cardIndex: 0, output, thinking });
+            await deps.updateBoard!(boardId, { execution_status: "done" });
+            await deps.publishEvent!(workspaceId, { type: "agent.card.done", columnSlug: card.columnSlug });
+          } catch (err) {
+            await deps.updateBoard!(boardId, { execution_status: "failed" });
+            await deps.publishEvent!(workspaceId, { type: "agent.card.failed", error: String(err) });
+          }
+        },
+        async getCardOutput({ boardId, columnSlug, workspaceId }: { boardId: number; columnSlug: string; workspaceId: number }) {
+          const output = await deps.getOutput!({ boardId, columnSlug });
+          if (!output) return { status: 404 };
+          return { output: output.output, thinking: output.thinking };
+        },
+        async sendMessage({ boardId, userId, workspaceId, message }: { boardId: number; userId: number; workspaceId: number; message: string }) {
+          const board = await deps.getBoard!(boardId);
+          if (!board) return { status: 404 };
+          if (board.userId !== userId) return { status: 403 };
+          await deps.insertConversation!({ boardId, role: "user", content: message });
+          if (board.status === "pending") {
+            // Refine: LLM generates a clarification question based on user feedback
+            const question = await deps.generateClarificationQuestion!(board.originalIntent, board, message);
+            await deps.insertConversation!({ boardId, role: "assistant", content: question });
+            return { explanation: question, boardUpdated: false };
+          }
+          // Approved board — message stored but no LLM response (execution already done/running)
+          return { explanation: "Message received.", boardUpdated: false };
+        },
+        async getBoards({ workspaceId }: { workspaceId: number }) {
+          return deps.listBoards!(workspaceId);
+        },
+        async getBoardById({ boardId, workspaceId }: { boardId: number; workspaceId: number }) {
+          const board = await deps.getBoard!(boardId);
+          if (!board || board.workspaceId !== workspaceId) return { status: 404 };
+          return board;
+        },
+      };
    }
    ```
 
@@ -893,6 +1078,9 @@ Given history board clicked, When GET /agent/boards/:id, Then full board data re
 Given board execution done, When GET /agent/boards/:boardId/outputs/research-specialist, Then output text returned
 Given board approved, When triggerExecution runs and LLM succeeds, Then agent.card.done published + execution_status=done in DB
 Given board approved, When triggerExecution runs and LLM fails, Then agent.card.failed published + execution_status=failed in DB
+Given pending board, When POST /message with feedback, Then user message stored + clarification question returned
+Given approved board, When POST /message, Then message stored + acknowledgment returned (no LLM call)
+Given workspace, When GET /agent/boards, Then returns boards sorted newest first
 [must-not] Given agent card executes, When output stored, Then card_events table must NOT receive a new row
 
 All tests PASS. Commit exists.
@@ -901,13 +1089,15 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ## QUALITY BAR
 Must-have:
-  - All 5 endpoints implemented with requireAuth
+  - All 6 endpoints implemented with requireAuth
   - conversation thread stored per board in agent_conversations
   - execution_status field updated on approve
-  - SSE event published on board state changes
+  - SSE event published on board state changes (with C2 token batching)
   - real getBoard dep SELECTs original_intent; triggerExecution runs on it
   - real getFirstCard dep reads slug/reasoning/system_prompt from the columns row (T1 metadata)
   - insertColumns persists slug/name/position/reasoning/system_prompt + board_id per agent column
+  - sendMessage stores user message and returns clarification for pending boards
+  - getBoards returns workspace-scoped list sorted newest first
   - Tests written BEFORE implementation (TDD)
 
 Must-not-have:
@@ -989,12 +1179,13 @@ Steps:
        );
      });
 
-     it("approveAgentBoard sends POST to approve endpoint", async () => {
-       mockFetch.mockResolvedValueOnce({
-         ok: true,
-         status: 204,
-         json: () => Promise.resolve(undefined),
-       });
+      it("approveAgentBoard sends POST to approve endpoint", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 204,
+          // W6 fix: 204 responses have no body — the request<T> helper returns
+          // undefined as T without calling res.json(). Mock must not define json().
+        });
        const { api } = await import("./api");
        await api.approveAgentBoard(5, 42);
        expect(mockFetch).toHaveBeenCalledWith(
@@ -1669,7 +1860,7 @@ Escalate when: AgentBoard type missing from T4 (dependency not yet complete)
 | Task | Name | Depends | Complexity | Key Verification |
 |------|------|---------|------------|-----------------|
 | T1 | DB Schema + GET /board Fix | prereq | standard | GET /board excludes agent columns |
-| T2 | Server LLM Layer + realtime events | prereq | standard | template has 5 cols, QA last; agent.* in BoardEvent |
+| T2 | Server LLM Layer + realtime events | prereq | standard | template has 5 cols, QA last; agent.* in BoardEvent; llm.test.ts passes |
 | T3 | Agent API Routes | T1, T2 | standard | POST /boards creates, POST /approve sets approved+running |
 | T4 | Client Types + API + Routing | T3 | lightweight | api functions send correct requests; /agent /history render |
 | T5 | AgentPage + AgentCardDetail | T4 | deep | split view states; detail panel read-only |
