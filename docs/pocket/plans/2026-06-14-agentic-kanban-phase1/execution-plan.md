@@ -2,8 +2,18 @@
 
 **Date:** 2026-06-14
 **Spec:** docs/pocket/spec/2026-06-14-agentic-kanban-phase1/agent-board-phase1.md
-**Status:** reviewed
+**Status:** reviewed → validated (2026-06-14)
 **Total tasks:** 6
+
+> **Validation revisions applied** (see `validation-report.md`). Fixed 4 blockers +
+> 4 warnings + info: (C1) replaced the tautological GET /board test with a real
+> query-contract test via an extracted `getHumanColumns`; (C2) added `slug/reasoning/
+> system_prompt` columns so agent-column metadata has storage; (C3) execution now
+> loads `original_intent` from the board instead of running on `""`; (C4) wired
+> agent.* SSE consumption through BoardContext (`agentEvents`) — there is no
+> SSEContext/useSSE; (W1) added template placeholder substitution; (W2) made
+> migrate.ts apply agent-schema.sql; (W3) extracted a tested `lib/agentQueue.ts`
+> reducer; (W4) corrected client context fields to `activeWorkspaceId`/`showToast`.
 
 ---
 
@@ -68,7 +78,8 @@ Rule: Board Generation
   Create: server/src/agent/llm.ts                  (created by: T2)
   Create: server/src/agent/service.ts              (created by: T3)
   Create: server/src/agent/routes.ts               (created by: T3)
-  Modify: server/src/routes.ts:L688                (modified by: T1)
+  Modify: server/src/routes.ts                     (modified by: T1 — extract getHumanColumns + board_id filter)
+  Modify: server/src/db/migrate.ts                 (modified by: T1 — also apply agent-schema.sql)
   Modify: server/src/index.ts                      (modified by: T3)
   Modify: server/package.json                      (modified by: T2)
   Test:   server/src/agent/service.test.ts         (created by: T3)
@@ -89,11 +100,14 @@ Rule: Client Types + API
   Modify: client/src/api.ts                        (modified by: T4)
   Modify: client/src/App.tsx                       (modified by: T4)
   Modify: client/src/layout/Sidebar.tsx            (modified by: T4)
+  Modify: client/src/context/BoardContext.tsx      (modified by: T4 — consume agent.* SSE)
   Test:   client/src/api.test.ts                   (modified by: T4)
 
 Rule: AgentPage + Card Detail
+  Create: client/src/lib/agentQueue.ts             (created by: T5 — pure queue reducer)
   Create: client/src/pages/AgentPage.tsx           (created by: T5)
   Create: client/src/components/AgentCardDetail.tsx (created by: T5)
+  Test:   client/src/lib/agentQueue.test.ts        (created by: T5)
 
 Rule: History Page
   Create: client/src/pages/HistoryPage.tsx         (created by: T6)
@@ -116,40 +130,60 @@ Files:
 - Test: `server/src/agent/service.test.ts` (scaffold — grows in T3)
 
 Steps:
-1. Write failing test verifying GET /board excludes columns with non-null board_id:
-   File: `server/src/agent/service.test.ts` (create — will grow in T3)
+1. Write failing test that exercises the REAL GET /board column query:
+   The current GET /board handler (`routes.ts:686-688`) runs a raw `pool.query` that
+   does NOT route through `createScopedBoardService` — so a service-level mock cannot
+   test the isolation filter. First extract the human-columns fetch into a small,
+   unit-testable exported helper, then test that helper directly.
+
+   File: `server/src/routes.ts` (extract — used by the GET /board handler):
+   ```ts
+   // Pool-like surface so the test can inject a fake (matches existing `pg` shape).
+   type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: any[] }> };
+
+   export async function getHumanColumns(db: Queryable, workspaceId: number) {
+     const { rows } = await db.query(
+       `SELECT id, title, position, wip_limit, policy, is_done
+        FROM columns WHERE workspace_id = $1 AND board_id IS NULL ORDER BY position`,
+       [workspaceId],
+     );
+     return rows;
+   }
+   ```
+
+   File: `server/src/agent/service.test.ts` (create — will grow in T3):
    ```ts
    import { describe, it, expect, vi } from "vitest";
+   import { getHumanColumns } from "../routes.js";
 
    describe("board isolation", () => {
-     it("getBoardRows excludes agent columns (board_id IS NOT NULL)", async () => {
-       // After T1, routes.ts filters: WHERE workspace_id = $1 AND board_id IS NULL
-       // Agent columns have board_id IS NOT NULL and must not appear in human kanban
-       
-       const getBoardRows = vi.fn(async (workspaceId: number) => [
-         { id: 1, title: "To Do", position: 1.0, board_id: null },
-         { id: 2, title: "Done", position: 2.0, board_id: null },
-       ]);
+     it("getHumanColumns filters agent columns via board_id IS NULL", async () => {
+       // Capture the SQL actually issued — this goes RED if the filter is dropped.
+       const calls: string[] = [];
+       const fakeDb = {
+         query: vi.fn(async (sql: string, _params: unknown[]) => {
+           calls.push(sql);
+           return { rows: [] };
+         }),
+       };
 
-       const service = createScopedBoardService({
-         getMembership: vi.fn(async () => ({ role: "member" })),
-         getCardById: vi.fn(),
-         getBoardRows,
-         getActivityRows: vi.fn(),
-       });
+       await getHumanColumns(fakeDb, 1);
 
-       const result = await service.getBoard({ userId: 1, workspaceId: 1 });
-
-       // Only human columns (board_id = null) returned
-       expect(result.columns).toHaveLength(2);
-       expect(result.columns.every((col: any) => col.boardId === undefined || col.boardId === null)).toBe(true);
-
-       // Verify DB call was made
-       expect(getBoardRows).toHaveBeenCalledWith(1);
+       expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [1]);
+       expect(calls[0]).toMatch(/board_id IS NULL/i);
+       // Guard against a partial-match regression (e.g. only `board_id IS NOT NULL`).
+       expect(calls[0]).not.toMatch(/board_id IS NOT NULL/i);
      });
    });
    ```
-   Test verifies: Given column with `board_id = 5` exists, When `getBoard` called, Then that column is NOT returned.
+   This test fails RED today (the filter and `getHumanColumns` don't exist yet) and
+   only goes green once the real query carries `AND board_id IS NULL`.
+   Test verifies: Given the column query is issued, When it runs, Then it filters
+   `board_id IS NULL` — i.e. a column with `board_id = 5` can never be returned.
+
+   > Note: this is a query-contract unit test. A full DB-backed integration test
+   > (insert an agent column, assert GET /board omits it) is stronger and recommended
+   > as a follow-up, but is out of scope for the pure-function test layer this repo uses.
 
 2. Run test — verify FAIL:
    `cd server && npx vitest run src/agent/service.test.ts`
@@ -191,30 +225,47 @@ Steps:
      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
    );
 
-   -- Nullable board_id on columns — agent columns have non-null board_id
+   -- Nullable board_id on columns — agent columns have non-null board_id.
+   -- Agent columns also carry their routing metadata so card-detail (Story 4)
+   -- and execution can read it directly. Human columns leave these NULL.
+   -- Decision: store slug + reasoning + system_prompt on the column row
+   -- (denormalized from templates.ts). For Phase 1's single hardcoded template
+   -- the drift risk is negligible and this keeps reads single-query — no
+   -- template resolution layer on either server or client.
    ALTER TABLE columns ADD COLUMN IF NOT EXISTS board_id
      INTEGER REFERENCES agent_boards(id) ON DELETE CASCADE;
+   ALTER TABLE columns ADD COLUMN IF NOT EXISTS slug TEXT;
+   ALTER TABLE columns ADD COLUMN IF NOT EXISTS reasoning BOOLEAN NOT NULL DEFAULT false;
+   ALTER TABLE columns ADD COLUMN IF NOT EXISTS system_prompt TEXT;
 
    CREATE INDEX IF NOT EXISTS idx_agent_boards_workspace ON agent_boards(workspace_id);
    CREATE INDEX IF NOT EXISTS idx_agent_conversations_board ON agent_conversations(board_id);
    CREATE INDEX IF NOT EXISTS idx_columns_board ON columns(board_id);
    ```
 
-4. Apply schema: `npm run db:migrate` (migrate.ts must be updated to also apply agent-schema.sql or the SQL must be appended to schema.sql — check migrate.ts pattern and follow it)
+4. Apply schema. `server/src/db/migrate.ts:9` reads ONLY `schema.sql` — it will not
+   pick up a separate `agent-schema.sql`. Decision (do not improvise in-task):
+   extend `migrate.ts` to also read and execute `agent-schema.sql` after `schema.sql`.
+   Keep the agent DDL in its own file (matches the spec's additive design); add the
+   second `readFileSync` + `pool.query` to migrate.ts. Then run `npm run db:migrate`
+   and confirm both files applied (agent tables + the new `columns` metadata fields exist).
 
-5. Modify `server/src/routes.ts` L688 — the `FROM columns WHERE workspace_id = $1 ORDER BY position` query:
-   ```sql
-   -- Before (L688):
-   FROM columns WHERE workspace_id = $1 ORDER BY position
-   -- After:
-   FROM columns WHERE workspace_id = $1 AND board_id IS NULL ORDER BY position
+5. Modify the GET /board handler (`server/src/routes.ts:686-688`) to use the
+   extracted helper from Step 1 so the query carries the isolation filter:
+   ```ts
+   // Before: inline raw query
+   //   const columns = await pool.query(`SELECT ... FROM columns WHERE workspace_id = $1 ORDER BY position`, [workspaceId]);
+   // After: route through the tested helper (now includes AND board_id IS NULL)
+   const columnRows = await getHumanColumns(pool, workspaceId);
    ```
+   The `SELECT` column list and downstream `columns.rows.map(...)` shape are unchanged —
+   only the source query gains `AND board_id IS NULL`.
 
 6. Run isolation test — verify PASS:
    `cd server && npx vitest run src/agent/service.test.ts`
 
 7. Commit:
-   `git add server/src/db/agent-schema.sql server/src/routes.ts server/src/agent/service.test.ts`
+   `git add server/src/db/agent-schema.sql server/src/db/migrate.ts server/src/routes.ts server/src/agent/service.test.ts`
    `git commit -m "feat(agent): add agent DB schema and fix GET /board workspace isolation"`
 
 ## REFERENCES LOADED
@@ -248,25 +299,26 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ## QUALITY BAR
 Must-have:
-  - agent-schema.sql applied and tables exist
-  - columns.board_id column added as nullable
-  - GET /board query includes `AND board_id IS NULL`
-  - Test confirms isolation
+  - agent-schema.sql applied via migrate.ts (migrate.ts reads it after schema.sql)
+  - columns.board_id added as nullable; columns.slug/reasoning/system_prompt added (agent-only metadata)
+  - GET /board routes through getHumanColumns with `AND board_id IS NULL`
+  - Test exercises the real query contract (goes RED if the filter is removed)
 
 Must-not-have:
   - Modifications to card_events table
   - Touching core/position.ts, core/wip.ts, core/metrics.ts
   - board_id NOT NULL (must remain nullable)
+  - A test that mocks getBoardRows and never touches the real query (tautology)
 
 Rollback note:
   - DROP TABLE agent_card_outputs, agent_conversations, agent_boards CASCADE
-  - ALTER TABLE columns DROP COLUMN board_id
-  - Revert GET /board query to original
+  - ALTER TABLE columns DROP COLUMN board_id, DROP COLUMN slug, DROP COLUMN reasoning, DROP COLUMN system_prompt
+  - Revert GET /board to the inline query; revert migrate.ts
 
 ## STOP CONDITIONS
-Done when: schema tables exist, GET /board isolation test passes, commit created
-Uncertain when: migrate.ts doesn't support multiple SQL files — investigate and adapt
-Escalate when: adding board_id column breaks existing human kanban tests
+Done when: schema tables + columns metadata exist, getHumanColumns isolation test passes, commit created
+Uncertain when: migrate.ts multi-file execution behaves unexpectedly — investigate and adapt
+Escalate when: adding board_id/metadata columns breaks existing human kanban tests
 
 ---
 
@@ -321,7 +373,25 @@ Steps:
        expect(getTemplate("nonexistent")).toBeNull();
      });
    });
+
+   describe("renderSystemPrompt", () => {
+     it("substitutes {original_intent} with the provided value", () => {
+       const out = renderSystemPrompt("The user has requested: {original_intent}", {
+         original_intent: "riset kompetitor fintech",
+       });
+       expect(out).toBe("The user has requested: riset kompetitor fintech");
+       expect(out).not.toMatch(/\{original_intent\}/);
+     });
+
+     it("leaves unfilled placeholders intact (Phase 2 tokens)", () => {
+       const out = renderSystemPrompt("{original_intent} / {previous_output}", {
+         original_intent: "x",
+       });
+       expect(out).toBe("x / {previous_output}");
+     });
+   });
    ```
+   (Add `renderSystemPrompt` to the import: `import { TEMPLATES, getTemplate, renderSystemPrompt } from "./templates.js";`)
 
 2. Run test — verify FAIL:
    `cd server && npx vitest run src/agent/templates.test.ts`
@@ -332,27 +402,83 @@ Steps:
 
 4. Create `server/src/agent/templates.ts` with the Research & Report template definition (all 5 columns with their full system prompts from spec's Template Definition section). Each column object must have: `{ slug, name, position, reasoning, system_prompt }`.
 
+   Also export a pure placeholder-substitution helper — the system prompts contain
+   `{original_intent}`, `{previous_output}`, `{research_output}`, `{analysis_output}`,
+   `{writer_output}`, `{editor_output}`. These are NOT auto-substituted by the SDK;
+   without this step the LLM literally reads `The user has requested: {original_intent}`.
+   ```ts
+   export function renderSystemPrompt(
+     template: string,
+     vars: Record<string, string>,
+   ): string {
+     // Replace every {key} that has a provided value; leave unknown tokens intact.
+     return template.replace(/\{(\w+)\}/g, (m, key) =>
+       key in vars ? vars[key] : m,
+     );
+   }
+   ```
+   For Phase 1 thin execution only `{original_intent}` is populated (first card has no
+   previous output); the `{previous_output}`-style tokens stay unfilled until Phase 2.
+
 5. Create `server/src/agent/llm.ts` with these exported pure async functions:
    - `classifyIntent(intent: string): Promise<{ templateId: string | null; explanation: string }>` — calls Claude, returns matched template or null with user-facing message
    - `generateExplanation(board: AgentBoardShape, intent: string): Promise<string>` — returns natural language explanation of generated board
    - `generateClarificationQuestion(intent: string, board: AgentBoardShape, feedback: string): Promise<string>` — returns 1 targeted clarification question
-   - `executeCard(systemPrompt: string, intent: string, previousOutputs: string[], reasoning: boolean, onToken: (t: string) => void): Promise<{ output: string; thinking?: string }>` — streaming LLM call
+   - `executeCard(systemPrompt: string, intent: string, previousOutputs: string[], reasoning: boolean, onToken: (t: string) => void): Promise<{ output: string; thinking?: string }>` — streaming LLM call. MUST substitute placeholders before the call: `const filledSystem = renderSystemPrompt(systemPrompt, { original_intent: intent });`
    
-   Use Anthropic SDK:
+   Use Anthropic SDK. The active deployment target is **MiMo** (Xiaomi), an
+   Anthropic-compatible facade over a non-Claude model — so the request must stay on
+   the lowest-common-denominator Messages API surface. Two backend-specific facts,
+   verified against the MiMo docs and the @anthropic-ai/sdk source:
+   - **Auth header differs.** The SDK maps `apiKey` → `X-Api-Key`, but MiMo expects
+     `api-key`. Send the key as BOTH (same value) via `defaultHeaders` — each backend
+     reads the header it knows and ignores the other.
+   - **`thinking` and `cache_control` are Claude-only.** MiMo's `/anthropic/v1/messages`
+     takes a plain-string `system` and no `thinking`. Send those Claude extras ONLY when
+     pointed at the real Anthropic API (i.e. `ANTHROPIC_BASE_URL` unset).
+
    ```ts
    import Anthropic from "@anthropic-ai/sdk";
-   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-   
+   import { renderSystemPrompt } from "./templates.js";
+
+   const KEY = process.env.ANTHROPIC_API_KEY;
+   // baseURL may carry a path prefix; the SDK appends "/v1/messages".
+   //   MiMo: ANTHROPIC_BASE_URL=https://token-plan-sgp.xiaomimimo.com/anthropic
+   //         → POSTs to .../anthropic/v1/messages   (NO trailing slash on the env value)
+   const client = new Anthropic({
+     apiKey: KEY,                          // → X-Api-Key (real Anthropic)
+     baseURL: process.env.ANTHROPIC_BASE_URL, // unset → api.anthropic.com
+     defaultHeaders: { "api-key": KEY },   // → api-key (MiMo); harmless extra on real Anthropic
+   });
+   const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6"; // MiMo: mimo-v2.5-pro
+   const NATIVE = !process.env.ANTHROPIC_BASE_URL; // true → real Anthropic, Claude extras allowed
+
    // For streaming executeCard:
+   const filledSystem = renderSystemPrompt(systemPrompt, { original_intent: intent });
    const stream = client.messages.stream({
-     model: "claude-sonnet-4-6",
+     model: MODEL,
      max_tokens: 4096,
-     thinking: reasoning ? { type: "enabled", budget_tokens: 2048 } : undefined,
-     system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+     // system: cacheable block on real Anthropic; plain string on MiMo (no cache_control).
+     system: NATIVE
+       ? [{ type: "text", text: filledSystem, cache_control: { type: "ephemeral" } }]
+       : filledSystem,
+     // thinking: Claude-only. Real Anthropic + reasoning → adaptive (budget_tokens is
+     // deprecated on Sonnet 4.6 — do NOT use). MiMo → omit entirely (would 400).
+     ...(NATIVE && reasoning ? { thinking: { type: "adaptive", display: "summarized" } } : {}),
      messages: [{ role: "user", content: intent }],
    });
    for await (const event of stream) { /* emit tokens via onToken */ }
+   const final = await stream.finalMessage();
+   // return { output: <joined text>, thinking: <summary if any> }
    ```
+   > ⚠️ VERIFY DURING T2 (MiMo streaming): the Anthropic SDK's `messages.stream()` parser
+   > expects Anthropic-format SSE (`event: content_block_delta`). MiMo's `stream:true` may
+   > emit a different SSE shape. If streaming fails to parse, fall back to non-streaming
+   > `await client.messages.create({ ...params })` and emit the full text once via
+   > `onToken(output)` — the started/done SSE events still drive the right-panel log;
+   > only per-token streaming is lost. Note the chosen path in DONE_WITH_CONCERNS.
+   > Phase 1's first executing card (Research Specialist) is `reasoning=false`, so the
+   > `reasoning=true` columns (Analysis, QA — Phase 2) never hit MiMo's thinking gap here.
 
 6. Modify `server/src/realtime.ts` — extend BoardEvent type union:
    ```ts
@@ -389,7 +515,7 @@ Spec: docs/pocket/spec/2026-06-14-agentic-kanban-phase1/agent-board-phase1.md
 Design decision: Option C — server manages conversation state; client sends only new message
 Files in scope: server/package.json, server/src/agent/templates.ts, server/src/agent/llm.ts, server/src/realtime.ts, server/src/agent/templates.test.ts
 Available after: none (prereq)
-Architecture rule: API key from process.env.ANTHROPIC_API_KEY only; never hardcode or expose to client
+Architecture rule: API key from process.env.ANTHROPIC_API_KEY only; never hardcode or expose to client. Endpoint via process.env.ANTHROPIC_BASE_URL (optional) and model via process.env.ANTHROPIC_MODEL (optional) — server-side env only
 [RESTATE: @anthropic-ai/sdk import must never appear in any file under client/src/]
 
 ## DELIVERABLE
@@ -416,18 +542,27 @@ Must-not-have:
 
 Open question risks:
   - ANTHROPIC_API_KEY not set in .env → executeCard will throw at runtime; note in DONE_WITH_CONCERNS
+  - MiMo .env (active target): ANTHROPIC_BASE_URL=https://token-plan-sgp.xiaomimimo.com/anthropic
+    (no trailing slash), ANTHROPIC_MODEL=mimo-v2.5-pro, ANTHROPIC_API_KEY=<MiMo key>
+  - Auth: MiMo reads `api-key` header (sent via defaultHeaders); SDK also sends X-Api-Key —
+    if MiMo rejects the extra header, drop X-Api-Key by constructing with apiKey:null and
+    keeping only defaultHeaders. Flag if 401.
+  - MiMo streaming SSE may not be Anthropic-format → fall back to non-streaming create()
+    (see VERIFY note in Step 5); note in DONE_WITH_CONCERNS
+  - thinking/cache_control are gated behind NATIVE (real Anthropic only); on MiMo they are
+    omitted by design — not a bug
 
 ## STOP CONDITIONS
 Done when: template tests pass, llm.ts exports all 4 functions, agent events in realtime.ts, commit created
-Uncertain when: SDK streaming API differs from docs — adapt but note in DONE_WITH_CONCERNS
-Escalate when: SDK types conflict with existing TypeScript config
+Uncertain when: MiMo `messages.stream()` SSE doesn't parse as Anthropic format → switch executeCard to non-streaming create() and note in DONE_WITH_CONCERNS
+Escalate when: MiMo returns 401 (auth header) or SDK types conflict with existing TypeScript config
 
 ---
 
 ### Task 3: Agent API Routes [depends: T1, T2]
 
 ## OBJECTIVE
-Implement all /api/agent/* Express endpoints and mount the router. This task wires T1 (DB) and T2 (LLM) together into a working server API.
+Implement all workspace-scoped agent endpoints (`/api/workspaces/:workspaceId/agent/*`) and mount the router. This task wires T1 (DB) and T2 (LLM) together into a working server API.
 
 Files:
 - Create: `server/src/agent/service.ts`
@@ -492,7 +627,7 @@ Steps:
        const updateBoard = vi.fn(async () => {});
        const publishEvent = vi.fn(async () => {});
        const service = createAgentBoardService({
-         getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 1 })),
+         getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 1, originalIntent: "riset" })),
          updateBoard,
          triggerExecution: vi.fn(async () => {}),
          publishEvent,
@@ -503,7 +638,7 @@ Steps:
 
      it("returns 403 when user tries to approve board they do not own", async () => {
        const service = createAgentBoardService({
-         getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 99 })),
+         getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 99, originalIntent: "riset" })),
        });
        const result = await service.approveBoard({ boardId: 1, userId: 1, workspaceId: 1 });
        expect(result).toMatchObject({ status: 403 });
@@ -511,7 +646,7 @@ Steps:
 
      it("returns 409 when board is already approved", async () => {
        const service = createAgentBoardService({
-         getBoard: vi.fn(async () => ({ id: 1, status: "approved", workspaceId: 1, userId: 1 })),
+         getBoard: vi.fn(async () => ({ id: 1, status: "approved", workspaceId: 1, userId: 1, originalIntent: "riset" })),
        });
        const result = await service.approveBoard({ boardId: 1, userId: 1, workspaceId: 1 });
        expect(result).toMatchObject({ status: 409 });
@@ -532,16 +667,23 @@ Steps:
          insertOutput,
          updateBoard,
          publishEvent,
+         getBoard: vi.fn(async () => ({
+           id: 1, status: "approved", workspaceId: 1, userId: 1,
+           originalIntent: "riset kompetitor fintech lokal",
+         })),
          getFirstCard: vi.fn(async () => ({
            columnSlug: "research-specialist",
            systemPrompt: "You are a Research Specialist...",
            reasoning: false,
          })),
        });
-       await service.triggerExecution({ boardId: 1, workspaceId: 1, intent: "riset fintech" });
+       await service.triggerExecution({ boardId: 1, workspaceId: 1 });
 
        expect(publishEvent).toHaveBeenCalledWith(1, expect.objectContaining({ type: "agent.card.started" }));
-       expect(executeCard).toHaveBeenCalled();
+       // Execution must run on the board's REAL intent, not an empty/caller-supplied string.
+       expect(executeCard).toHaveBeenCalledWith(
+         expect.any(String), "riset kompetitor fintech lokal", [], false, expect.any(Function),
+       );
        expect(insertOutput).toHaveBeenCalledWith(expect.objectContaining({
          boardId: 1,
          columnSlug: "research-specialist",
@@ -559,6 +701,9 @@ Steps:
          executeCard: vi.fn(async () => { throw new Error("LLM timeout"); }),
          updateBoard,
          publishEvent,
+         getBoard: vi.fn(async () => ({
+           id: 1, status: "approved", workspaceId: 1, userId: 1, originalIntent: "riset",
+         })),
          getFirstCard: vi.fn(async () => ({
            columnSlug: "research-specialist",
            systemPrompt: "You are...",
@@ -566,7 +711,7 @@ Steps:
          })),
          insertOutput: vi.fn(),
        });
-       await service.triggerExecution({ boardId: 1, workspaceId: 1, intent: "riset" });
+       await service.triggerExecution({ boardId: 1, workspaceId: 1 });
 
        expect(updateBoard).toHaveBeenCalledWith(1, { execution_status: "failed" });
        expect(publishEvent).toHaveBeenCalledWith(1, expect.objectContaining({ type: "agent.card.failed" }));
@@ -601,7 +746,7 @@ Steps:
      insertBoard?: (data: { workspaceId: number; userId: number; templateId: string; originalIntent: string; status: string }) => Promise<{ id: number }>;
      insertConversation?: (data: { boardId: number; role: string; content: string }) => Promise<void>;
      insertColumns?: (boardId: number, columns: Array<{ slug: string; name: string; position: number; reasoning: boolean; systemPrompt: string }>) => Promise<void>;
-     getBoard?: (boardId: number) => Promise<{ id: number; status: string; workspaceId: number; userId: number } | null>;
+     getBoard?: (boardId: number) => Promise<{ id: number; status: string; workspaceId: number; userId: number; originalIntent: string } | null>;
      updateBoard?: (boardId: number, data: Record<string, unknown>) => Promise<void>;
      getOutput?: (params: { boardId: number; columnSlug: string }) => Promise<{ output: string; thinking: string | null } | null>;
      getFirstCard?: (boardId: number) => Promise<{ columnSlug: string; systemPrompt: string; reasoning: boolean }>;
@@ -630,7 +775,13 @@ Steps:
          await deps.updateBoard!(boardId, { status: "approved", execution_status: "running" });
          return { ok: true };
        },
-       async triggerExecution({ boardId, workspaceId, intent }: { boardId: number; workspaceId: number; intent: string }) {
+       async triggerExecution({ boardId, workspaceId }: { boardId: number; workspaceId: number }) {
+         // Load the board's real intent — do NOT accept it from the caller.
+         // The approve route has no intent in scope; the agent must run on the
+         // user's actual original_intent, not "".
+         const board = await deps.getBoard!(boardId);
+         if (!board) return;
+         const intent = board.originalIntent;
          const card = await deps.getFirstCard!(boardId);
          await deps.publishEvent!(workspaceId, { type: "agent.card.started", columnSlug: card.columnSlug });
          try {
@@ -675,8 +826,9 @@ Steps:
        // approve + fire-and-forget triggerExecution
        const result = await service.approveBoard({ boardId: Number(req.params.boardId), userId: req.user!.id, workspaceId: Number(req.params.workspaceId) });
        if (result.status) return res.status(result.status).json(result);
-       // Fire-and-forget execution:
-       service.triggerExecution({ boardId: Number(req.params.boardId), workspaceId: Number(req.params.workspaceId), intent: "" }).catch(console.error);
+       // Fire-and-forget execution. triggerExecution loads original_intent from
+       // the board itself — the route deliberately passes NO intent.
+       service.triggerExecution({ boardId: Number(req.params.boardId), workspaceId: Number(req.params.workspaceId) }).catch(console.error);
        res.status(204).end();
      });
      router.get("/workspaces/:workspaceId/agent/boards", requireAuth, async (req, res) => {
@@ -692,10 +844,15 @@ Steps:
    }
    ```
 
-5. Modify `server/src/index.ts` — mount agent router:
+5. Modify `server/src/index.ts` — mount agent router alongside the existing `api`
+   router. The existing pattern is `app.use("/api", api)` and agent routes already
+   apply `requireAuth` per-route — so do NOT add a second top-level `requireAuth`
+   (that would double-run it):
    ```ts
    import { createAgentRouter } from "./agent/routes.js";
-   app.use("/api", requireAuth, createAgentRouter(realDeps));
+   // ...
+   app.use("/api", api);                       // existing
+   app.use("/api", createAgentRouter(realDeps)); // new — requireAuth is per-route inside
    ```
 
 6. Run all service tests — verify PASS:
@@ -748,12 +905,16 @@ Must-have:
   - conversation thread stored per board in agent_conversations
   - execution_status field updated on approve
   - SSE event published on board state changes
+  - real getBoard dep SELECTs original_intent; triggerExecution runs on it
+  - real getFirstCard dep reads slug/reasoning/system_prompt from the columns row (T1 metadata)
+  - insertColumns persists slug/name/position/reasoning/system_prompt + board_id per agent column
   - Tests written BEFORE implementation (TDD)
 
 Must-not-have:
   - Writing to card_events from agent code
   - Exposing ANTHROPIC_API_KEY in any response
   - Cross-workspace data leakage (always filter by workspace_id)
+  - Passing a hardcoded/empty intent into execution (must come from the board)
 
 Open question risks:
   - executeCard async completion — approve endpoint returns 200 immediately; execution runs in background (fire-and-forget + SSE). If fire-and-forget fails silently → report NEEDS_CONTEXT
@@ -768,14 +929,24 @@ Escalate when: adding /api/agent route conflicts with existing /api route mounti
 ### Task 4: Client Types + API + Routing [depends: T3]
 
 ## OBJECTIVE
-Add TypeScript interfaces for agent entities, implement all agent API functions, add /agent and /history routes to the React router, and add navigation links to Sidebar.
+Add TypeScript interfaces for agent entities, implement all agent API functions, add /agent and /history routes to the React router, add navigation links to Sidebar, and wire agent.* SSE events into the existing BoardContext stream so AgentPage (T5) can consume them.
 
 Files:
 - Modify: `client/src/types.ts`
 - Modify: `client/src/api.ts`
 - Modify: `client/src/App.tsx`
 - Modify: `client/src/layout/Sidebar.tsx`
+- Modify: `client/src/context/BoardContext.tsx` (consume agent.* SSE events)
 - Modify: `client/src/api.test.ts`
+
+> SSE NOTE (critical — there is NO `SSEContext`/`useSSE` in this codebase): SSE is
+> already handled privately inside `BoardContext.tsx`. Its `EventSource` is on the
+> same `/workspaces/:id/events/stream` channel that T3 publishes agent.* events to,
+> but the current `onmessage` handler (a) ignores unknown event types and (b) calls
+> `void refresh()` on EVERY message — which would refetch the human board on every
+> streamed `agent.card.token`. T4 must extend this handler to surface agent events
+> to pages AND skip `refresh()` for them. T5 consumes `useBoard().agentEvents`, NOT
+> a fictional `useSSE`.
 
 Steps:
 1. Write failing API tests:
@@ -916,6 +1087,16 @@ Steps:
      output: string;
      thinking?: string;
    }
+
+   // Mirrors the agent.* BoardEvent union published by realtime.ts (T2).
+   export interface AgentEvent {
+     type:
+       | "agent.board.generating" | "agent.board.ready" | "agent.board.failed"
+       | "agent.card.started" | "agent.card.token" | "agent.card.done" | "agent.card.failed";
+     columnSlug?: string;
+     token?: string;
+     error?: string;
+   }
    ```
 
 4. Add to `client/src/api.ts` (follow existing `request<T>` pattern):
@@ -949,12 +1130,29 @@ Steps:
    - "History" → `/history`
    (follow existing nav link pattern)
 
-7. Run API tests — verify PASS:
+7. Extend `client/src/context/BoardContext.tsx` to surface agent.* SSE events:
+   - Add state: `const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);`
+   - In the `stream.onmessage` handler (currently ~line 350), BEFORE the trailing
+     `void refresh()`, branch on agent events and return early so the human board is
+     NOT refetched per token:
+     ```ts
+     if (typeof data.type === "string" && data.type.startsWith("agent.")) {
+       setAgentEvents((prev) => [...prev, data as AgentEvent]);
+       return; // do NOT call refresh() for agent events
+     }
+     ```
+   - Add `agentEvents` and `clearAgentEvents: () => setAgentEvents([])` to
+     `BoardContextValue` and the provider's returned value. (AgentPage clears on a
+     new generation/approval so logs don't bleed across sessions.)
+   - Note: the real field consumed by pages is `activeWorkspaceId` (number | null)
+     and `showToast` — there is no `workspaceId`/`addToast` on this context.
+
+8. Run API tests — verify PASS:
    `cd client && npx vitest run src/api.test.ts`
 
-8. Commit:
-   `git add client/src/types.ts client/src/api.ts client/src/App.tsx client/src/layout/Sidebar.tsx client/src/api.test.ts`
-   `git commit -m "feat(agent): add client types, API functions, and /agent /history routes"`
+9. Commit:
+   `git add client/src/types.ts client/src/api.ts client/src/App.tsx client/src/layout/Sidebar.tsx client/src/context/BoardContext.tsx client/src/api.test.ts`
+   `git commit -m "feat(agent): add client types, API functions, /agent /history routes, agent SSE wiring"`
 
 ## REFERENCES LOADED
 docs/pocket/spec/2026-06-14-agentic-kanban-phase1/agent-board-phase1.md — AgentBoard, AgentColumn, AgentCard schema; all 6 API endpoint contracts
@@ -991,16 +1189,19 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ## QUALITY BAR
 Must-have:
   - All API functions return typed responses matching AgentBoard interfaces
-  - Both routes registered and lazy-loaded
+  - Both routes registered and lazy-loaded (data-router `lazy:` convention, not React.lazy)
   - Sidebar shows Agent + History nav links
+  - BoardContext exposes agentEvents + clearAgentEvents; agent.* events do NOT trigger refresh()
   - Tests written BEFORE implementation (TDD)
 
 Must-not-have:
   - Any import from @anthropic-ai/sdk
   - Hardcoded workspace IDs in API functions
+  - A second/duplicate EventSource for agent events (reuse BoardContext's stream)
+  - Reference to a non-existent SSEContext/useSSE
 
 ## STOP CONDITIONS
-Done when: API tests pass, routes render, sidebar links visible, commit created
+Done when: API tests pass, routes render, sidebar links visible, agentEvents wired, commit created
 Escalate when: existing App.tsx routing pattern conflicts with new routes
 
 ---
@@ -1011,10 +1212,79 @@ Escalate when: existing App.tsx routing pattern conflicts with new routes
 Build the /agent split-view page: left panel (board visual or empty CTA), right panel (chat input + agent explanations + approve button + live execution log), and the read-only AgentCardDetail panel.
 
 Files:
+- Create: `client/src/lib/agentQueue.ts` (pure queue state machine)
+- Create: `client/src/lib/agentQueue.test.ts` (unit tests — no testing-library needed)
 - Create: `client/src/pages/AgentPage.tsx`
 - Create: `client/src/components/AgentCardDetail.tsx`
 
 Steps:
+0. Extract the generate/refine queue into a PURE reducer first (TDD, and this is the
+   highest-risk logic in the task). `@testing-library/react` is NOT installed in this
+   repo, so the render tests below get skipped — but the queue logic (Story 1 Rule 2:
+   "input queued while generating; auto-fires after done/fail; queue survives failure")
+   can and must be unit-tested. This mirrors the repo's tested-pure-function pattern
+   (`client/src/lib/workspaceSelection.ts`, `cardPanel.ts`, `title.ts`).
+
+   File: `client/src/lib/agentQueue.ts`
+   ```ts
+   export interface QueueState { isGenerating: boolean; queue: string[]; }
+   export const initialQueue: QueueState = { isGenerating: false, queue: [] };
+
+   // Returns next state + the message to send NOW (or null if nothing should fire).
+   export function submit(state: QueueState, message: string): { state: QueueState; fire: string | null } {
+     if (state.isGenerating) return { state: { ...state, queue: [...state.queue, message] }, fire: null };
+     return { state: { ...state, isGenerating: true }, fire: message };
+   }
+   // On done OR fail: drop the in-flight job; if queued items remain, fire the next.
+   // Queue is NOT reset on failure.
+   export function settle(state: QueueState): { state: QueueState; fire: string | null } {
+     if (state.queue.length === 0) return { state: { ...state, isGenerating: false }, fire: null };
+     const [next, ...rest] = state.queue;
+     return { state: { isGenerating: true, queue: rest }, fire: next };
+   }
+   ```
+
+   File: `client/src/lib/agentQueue.test.ts`
+   ```ts
+   import { describe, it, expect } from "vitest";
+   import { initialQueue, submit, settle } from "./agentQueue.js";
+
+   describe("agentQueue", () => {
+     it("fires immediately when idle", () => {
+       const r = submit(initialQueue, "a");
+       expect(r.fire).toBe("a");
+       expect(r.state.isGenerating).toBe(true);
+     });
+     it("queues a second submit while generating", () => {
+       const r1 = submit(initialQueue, "a");
+       const r2 = submit(r1.state, "b");
+       expect(r2.fire).toBeNull();
+       expect(r2.state.queue).toEqual(["b"]);
+     });
+     it("auto-fires the queued message on settle", () => {
+       const r1 = submit(initialQueue, "a");
+       const r2 = submit(r1.state, "b");
+       const s = settle(r2.state);
+       expect(s.fire).toBe("b");
+       expect(s.state.queue).toEqual([]);
+     });
+     it("queue survives failure (settle is used for both done and fail)", () => {
+       const r1 = submit(initialQueue, "a");
+       const r2 = submit(r1.state, "b");
+       const s = settle(r2.state); // failure path still drains the queue
+       expect(s.fire).toBe("b");
+     });
+     it("goes idle when queue is empty on settle", () => {
+       const r1 = submit(initialQueue, "a");
+       const s = settle(r1.state);
+       expect(s.fire).toBeNull();
+       expect(s.state.isGenerating).toBe(false);
+     });
+   });
+   ```
+   Run: `cd client && npx vitest run src/lib/agentQueue.test.ts` (RED → GREEN). AgentPage
+   consumes `submit`/`settle` instead of hand-rolling queue logic inline.
+
 1. Write failing render tests:
    File: `client/src/pages/AgentPage.test.tsx` (or skip if `@testing-library/react` not installed)
    Check: `npm ls @testing-library/react --workspace=client 2>/dev/null`
@@ -1043,14 +1313,17 @@ Steps:
      },
    }));
 
-   // Mock workspace context
+   // Mock workspace context. NOTE: the REAL BoardContext exposes
+   // `activeWorkspaceId` (number | null) and `showToast` — there is no
+   // `workspaceId`/`addToast`. Agent SSE events arrive via `agentEvents`
+   // on this same context (there is NO separate SSEContext/useSSE).
    vi.mock("../context/BoardContext.js", () => ({
-     useBoard: () => ({ workspaceId: 1, addToast: vi.fn() }),
-   }));
-
-   // Mock SSE
-   vi.mock("../context/SSEContext.js", () => ({
-     useSSE: () => ({ lastEvent: null }),
+     useBoard: () => ({
+       activeWorkspaceId: 1,
+       showToast: vi.fn(),
+       agentEvents: [],
+       clearAgentEvents: vi.fn(),
+     }),
    }));
 
    describe("AgentPage", () => {
@@ -1146,11 +1419,16 @@ Steps:
    - Board pending: chat shows explanation + approve/refine; input enabled
    - Board approved: input disabled; live execution log (SSE agent.* events)
 
-   Queue behavior:
-   - `isGenerating` state + `messageQueue` array
-   - Submit while generating → push to queue
-   - On complete/fail → shift and auto-send
-   - Queue survives failure
+   Queue behavior (use the pure reducer from Step 0 — do NOT re-implement inline):
+   - Hold `QueueState` from `agentQueue.ts`
+   - Submit → `submit(state, msg)`; if `fire` non-null, send it; else it's queued
+   - On generation complete OR fail → `settle(state)`; if `fire` non-null, auto-send next
+   - Queue survives failure (settle drains on both paths)
+
+   Live execution log (right panel): read `agentEvents` from `useBoard()` (wired in T4).
+   On entering execution, call `clearAgentEvents()`, then render the accumulating
+   `agent.card.started` → `agent.card.token` → `agent.card.done`/`agent.card.failed`
+   stream. There is NO `useSSE` — events come through BoardContext.
 
    Error handling:
    - LLM fail → `errorMessage` + "Retry" button
@@ -1162,8 +1440,8 @@ Steps:
 6. Run tests (if applicable) — verify PASS.
 
 7. Commit:
-   `git add client/src/pages/AgentPage.tsx client/src/components/AgentCardDetail.tsx`
-   `git commit -m "feat(agent): add AgentPage split view and AgentCardDetail panel"`
+   `git add client/src/lib/agentQueue.ts client/src/lib/agentQueue.test.ts client/src/pages/AgentPage.tsx client/src/components/AgentCardDetail.tsx`
+   `git commit -m "feat(agent): add AgentPage split view, AgentCardDetail panel, queue reducer"`
 
 ## REFERENCES LOADED
 docs/pocket/spec/2026-06-14-agentic-kanban-phase1/agent-board-phase1.md — Stories 1-5 GWT scenarios, board states, queue behavior, error states
@@ -1208,7 +1486,9 @@ Must-have:
   - creative-brief.md loaded before any styling
   - Board visual read-only (no @dnd-kit drag handlers)
   - Chat input disabled after approval
-  - SSE agent.* events update right panel log
+  - Queue logic lives in tested `lib/agentQueue.ts` (not hand-rolled inline)
+  - Right panel log driven by `agentEvents` from BoardContext (no useSSE)
+  - Reads `activeWorkspaceId`/`showToast` from useBoard (guard `activeWorkspaceId === null`)
   - AgentCardDetail shows system_prompt + reasoning badge
   - Tests written BEFORE implementation (TDD)
 
@@ -1216,9 +1496,11 @@ Must-not-have:
   - Edit controls in AgentCardDetail
   - Drag-and-drop on agent board
   - Import of @anthropic-ai/sdk
+  - Reference to a fictional SSEContext/useSSE, or `workspaceId`/`addToast` on useBoard
 
 Open question risks:
-  - testing-library not installed → skip render tests, note in DONE_WITH_CONCERNS
+  - testing-library not installed → render tests skipped, but agentQueue.test.ts MUST
+    pass (it needs no testing-library); note skipped render tests in DONE_WITH_CONCERNS
 
 ## STOP CONDITIONS
 Done when: /agent page renders with all states, detail panel works, creative-brief applied, commit created
@@ -1254,9 +1536,9 @@ Steps:
      api: { getAgentBoards: (...args: any[]) => mockGetAgentBoards(...args) },
    }));
 
-   // Mock workspace context
+   // Mock workspace context. Real field is `activeWorkspaceId` (not `workspaceId`).
    vi.mock("../context/BoardContext.js", () => ({
-     useBoard: () => ({ workspaceId: 1 }),
+     useBoard: () => ({ activeWorkspaceId: 1 }),
    }));
 
    describe("HistoryPage", () => {
@@ -1319,7 +1601,8 @@ Steps:
    `cd client && npx vitest run src/pages/HistoryPage.test.tsx`
 
 3. Create `client/src/pages/HistoryPage.tsx`:
-   - On mount: call `api.getAgentBoards(workspaceId)` → render list sorted by created_at DESC
+   - Read `activeWorkspaceId` from `useBoard()` (NOT `workspaceId`); guard the `null` case
+   - On mount: call `api.getAgentBoards(activeWorkspaceId)` → render list sorted by created_at DESC
    - Each item: `originalIntent` (truncated to ~80 chars), template display name ("Research & Report"), formatted date (reuse `formatRelativeTime` from types.ts if available), `executionStatus` badge
    - Click item → `navigate('/agent?boardId=' + board.id)`
    - Empty state: "No agent boards yet." + link to `/agent`
