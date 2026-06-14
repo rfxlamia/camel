@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { Bot, CheckCircle, Send, XCircle } from "lucide-react";
 import { ApiError, api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
+import LoadingCamel from "../components/LoadingCamel";
 import { useBoard } from "../context/BoardContext";
 import {
 	initialQueue,
@@ -117,43 +118,53 @@ function EventEntry({ event }: { event: AgentEvent }) {
 function AgentBoardVisual({
 	board,
 	onCardClick,
+	activeColumnSlug,
 }: {
 	board: AgentBoard;
 	onCardClick: (column: AgentColumn) => void;
+	activeColumnSlug: string | null;
 }) {
 	return (
 		<div className="flex gap-4 overflow-x-auto p-4">
-			{board.columns.map((col) => (
-				<div
-					key={col.id}
-					className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white"
-				>
-					<div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2">
-						<h3 className="text-sm font-medium text-neutral-900 truncate">
-							{col.name}
-						</h3>
-						<span className="rounded-md bg-neutral-200 px-1.5 py-0.5 text-xs font-semibold text-neutral-700">
-							{col.cards.length}
-						</span>
+			{board.columns.map((col) => {
+				const isActive = col.slug === activeColumnSlug;
+				return (
+					<div
+						key={col.id}
+						className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white"
+					>
+						<div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2">
+							<h3 className="text-sm font-medium text-neutral-900 truncate">
+								{col.name}
+							</h3>
+							<span className="rounded-md bg-neutral-200 px-1.5 py-0.5 text-xs font-semibold text-neutral-700">
+								{col.cards.length}
+							</span>
+						</div>
+						<div className="min-h-[60px] space-y-2 p-2">
+							{isActive && (
+								<div className="flex justify-center py-1">
+									<LoadingCamel size={48} />
+								</div>
+							)}
+							{col.cards.length === 0 && !isActive && (
+								<p className="py-4 text-center text-xs text-neutral-400">
+									No cards
+								</p>
+							)}
+							{col.cards.map((card) => (
+								<button
+									key={card.id}
+									onClick={() => onCardClick(col)}
+									className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 hover:border-primary-300 hover:bg-primary-100/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+								>
+									{card.title}
+								</button>
+							))}
+						</div>
 					</div>
-					<div className="min-h-[60px] space-y-2 p-2">
-						{col.cards.length === 0 && (
-							<p className="py-4 text-center text-xs text-neutral-400">
-								No cards
-							</p>
-						)}
-						{col.cards.map((card) => (
-							<button
-								key={card.id}
-								onClick={() => onCardClick(col)}
-								className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 hover:border-primary-300 hover:bg-primary-100/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								{card.title}
-							</button>
-						))}
-					</div>
-				</div>
-			))}
+				);
+			})}
 		</div>
 	);
 }
@@ -435,6 +446,17 @@ export default function AgentPage() {
 	const isDone = board?.executionStatus === "done";
 	const isFailed = board?.executionStatus === "failed";
 
+	// Derive which column is currently being processed.
+	// Walk agentEvents: set on `started`, clear on `done`/`failed`, ignore everything else.
+	const activeColumnSlug: string | null = isRunning
+		? agentEvents.reduce<string | null>((active, e) => {
+				if (e.type === "agent.card.started") return e.columnSlug ?? null;
+				if (e.type === "agent.card.done" || e.type === "agent.card.failed")
+					return null;
+				return active;
+			}, null)
+		: null;
+
 	// Determine if any agent.card.token events are streaming
 	const isStreaming =
 		isRunning && agentEvents.some((e) => e.type === "agent.card.token");
@@ -487,7 +509,11 @@ export default function AgentPage() {
 								</button>
 							</div>
 						</div>
-						<AgentBoardVisual board={board} onCardClick={setDetailColumn} />
+						<AgentBoardVisual
+								board={board}
+								onCardClick={setDetailColumn}
+								activeColumnSlug={activeColumnSlug}
+							/>
 					</div>
 				)}
 			</div>

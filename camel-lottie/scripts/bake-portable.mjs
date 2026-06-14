@@ -1,8 +1,14 @@
 // Produce a runtime-portable copy of public/lottie.json for lottie-web /
-// lottie-react (the common web players). The authored file uses Skottie "slots"
-// (`{sid}` refs + a top-level `slots` map) for live color editing; lottie-web
-// does not resolve those, so here we inline each slot's default value as a
-// normal static property and drop the slots map. Output: public/lottie.web.json
+// lottie-react (the common web players). Two Skottie-isms are normalized here:
+//   1. "slots" (`{sid}` refs + a top-level `slots` map) for live color editing —
+//      lottie-web does not resolve those, so each slot's default is inlined as a
+//      static property and the slots map is dropped.
+//   2. The transparent background. Skottie honors a fill color's alpha channel,
+//      so the bg rect reads as transparent there; lottie-web ignores color alpha
+//      (it uses only the separate fill-opacity), so that same rect would paint a
+//      near-white box. The web build has no background control to keep anyway, so
+//      the whole background layer is removed — guaranteeing true transparency.
+// Output: public/lottie.web.json
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -30,5 +36,10 @@ function inline(node) {
 const portable = inline(doc);
 delete portable.slots;
 
+// Drop the background layer so lottie-web renders on a fully transparent canvas.
+const before = portable.layers.length;
+portable.layers = portable.layers.filter((l) => l.nm !== "background");
+const removed = before - portable.layers.length;
+
 writeFileSync(resolve(root, "public/lottie.web.json"), JSON.stringify(portable));
-console.log("Wrote public/lottie.web.json (slots inlined, no slot map)");
+console.log(`Wrote public/lottie.web.json (slots inlined, ${removed} background layer removed)`);
