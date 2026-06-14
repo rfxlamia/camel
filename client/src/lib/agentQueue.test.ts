@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initialQueue, submit, settle } from "./agentQueue.js";
+import { initialQueue, submit, settle, routeNext } from "./agentQueue.js";
 
 describe("agentQueue", () => {
 	it("fires immediately when idle", () => {
@@ -54,5 +54,24 @@ describe("agentQueue", () => {
 		const s3 = settle(s2.state);
 		expect(s3.fire).toBeNull();
 		expect(s3.state.isGenerating).toBe(false);
+	});
+});
+
+describe("routeNext (orchestration routing)", () => {
+	it("routes to none when nothing is queued", () => {
+		expect(routeNext(null, true)).toBe("none");
+		expect(routeNext(null, false)).toBe("none");
+	});
+
+	it("routes the next item through sendMessage when a board exists", () => {
+		expect(routeNext("b", true)).toBe("sendMessage");
+	});
+
+	// Discriminates the create-failure bug: when a board-create fails, no board
+	// exists, so the next queued intent must be FIRED through createBoard. The
+	// old orchestration always called sendMessage here, which early-returns
+	// (no board) and strands the queue with isGenerating stuck true.
+	it("routes the next queued item through createBoard when create failed (no board)", () => {
+		expect(routeNext("b", false)).toBe("createBoard");
 	});
 });

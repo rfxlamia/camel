@@ -36,3 +36,20 @@ export function settle(state: QueueState): {
 	const [next, ...rest] = state.queue;
 	return { state: { isGenerating: true, queue: rest }, fire: next };
 }
+
+/**
+ * Decide how the orchestrator should route a settle result's next item.
+ *
+ * When a board-create FAILS, no board exists yet, so the next queued item is
+ * itself an intent that must go through createBoard (not sendMessage, which
+ * would early-return without a board and strand the queue). When a board does
+ * exist, the next item is a refine message handled by sendMessage.
+ */
+export function routeNext(
+	fire: string | null,
+	boardExists: boolean,
+): "createBoard" | "sendMessage" | "none" {
+	if (fire === null) return "none";
+	if (!boardExists) return "createBoard";
+	return "sendMessage";
+}

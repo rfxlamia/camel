@@ -6,6 +6,7 @@ import AgentCardDetail from "../components/AgentCardDetail";
 import { useBoard } from "../context/BoardContext";
 import {
 	initialQueue,
+	routeNext,
 	settle,
 	submit as queueSubmit,
 	type QueueState,
@@ -247,6 +248,13 @@ export default function AgentPage() {
 		[activeWorkspaceId, showToast],
 	);
 
+	// Holds the latest createBoard so its own finally can re-enter createBoard
+	// (instead of sendMessage) when a create failed and the next queued item is
+	// itself an intent. A ref avoids the self-reference / stale-closure problem.
+	const createBoardRef = useRef<((intent: string) => Promise<void>) | null>(
+		null,
+	);
+
 	// Create a new board (extracted for queue lifecycle)
 	const createBoard = useCallback(
 		async (intent: string) => {
@@ -268,12 +276,24 @@ export default function AgentPage() {
 					showToast("Couldn't create the board. Try again.");
 				}
 			} finally {
-				// Settle queue — fire next if any
+				// Settle queue — fire next if any.
 				const settleResult = settle(queueStateRef.current);
 				dispatch({ type: "settle" });
 				if (settleResult.fire) {
-					// Next item is a refine message (board now exists)
-					void sendMessage(settleResult.fire);
+					// On a successful create a board now exists, so the next item is a
+					// refine message → sendMessage. On a FAILED create no board exists
+					// yet, so the next item is itself an intent that must re-enter
+					// createBoard; routing it to sendMessage would early-return and
+					// strand the queue (isGenerating stuck true).
+					const route = routeNext(
+						settleResult.fire,
+						boardRef.current !== null,
+					);
+					if (route === "createBoard") {
+						void createBoardRef.current?.(settleResult.fire);
+					} else if (route === "sendMessage") {
+						void sendMessage(settleResult.fire);
+					}
 				}
 			}
 		},
@@ -285,6 +305,9 @@ export default function AgentPage() {
 			sendMessage,
 		],
 	);
+
+	// Mirror the latest createBoard into the ref (same pattern as boardRef).
+	createBoardRef.current = createBoard;
 
 	// Submit handler — uses queue
 	const handleSend = useCallback(async () => {
@@ -594,12 +617,17 @@ export default function AgentPage() {
 										? "Execution in progress..."
 										: "Refine the board..."
 							}
-							disabled={busy || isRunning}
+							disabled={busy || isRunning || board?.status === "approved"}
 							className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-400"
 						/>
 						<button
 							type="submit"
-							disabled={!input.trim() || busy || isRunning}
+							disabled={
+								!input.trim() ||
+								busy ||
+								isRunning ||
+								board?.status === "approved"
+							}
 							aria-label="Send"
 							className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
