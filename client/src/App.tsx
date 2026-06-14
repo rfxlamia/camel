@@ -11,7 +11,22 @@ import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
 import SettingsPage from "./pages/SettingsPage";
 
+// Only show the loading UI if loading takes longer than this threshold.
+// Prevents a flash of the camel on fast connections (< 200ms).
+// Trade-off: blank screen for up to 200ms — acceptable for a CSR-only Vite SPA.
+// Relies on full unmount/remount on each loading toggle; do not hoist this component.
+const LOADING_DELAY_MS = 200;
+
 function LoadingScreen() {
+	const [visible, setVisible] = useState(false);
+
+	useEffect(() => {
+		const timer = setTimeout(() => setVisible(true), LOADING_DELAY_MS);
+		return () => clearTimeout(timer);
+	}, []);
+
+	if (!visible) return null;
+
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center gap-2">
 			<LoadingCamel size={200} />
