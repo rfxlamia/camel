@@ -6,6 +6,7 @@ import { auth } from "./auth.js";
 import { connectRedis } from "./realtime.js";
 import { api } from "./routes.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
+import { createAgentRouter } from "./agent/routes.js";
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -17,6 +18,7 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", auth);
 app.use("/api", api);
+app.use("/api", createAgentRouter());
 
 app.use(
   (
