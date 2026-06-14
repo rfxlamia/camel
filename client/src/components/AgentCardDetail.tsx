@@ -21,7 +21,7 @@ export default function AgentCardDetail({
 	const [output, setOutput] = useState<AgentCardOutput | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
-	const [isPromptOpen, setIsPromptOpen] = useState(true);
+	const [isPromptOpen, setIsPromptOpen] = useState(false);
 
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;

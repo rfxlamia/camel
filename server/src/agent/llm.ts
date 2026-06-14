@@ -75,14 +75,60 @@ Respond with ONLY a JSON object:
 	const text =
 		response.content[0]?.type === "text" ? response.content[0].text : "";
 
+	// Try multiple parsing strategies
 	try {
+		// Strategy 1: Direct JSON parse
 		const parsed = JSON.parse(text) as ClassifyResult;
 		return {
 			templateId: parsed.templateId ?? null,
 			explanation: parsed.explanation ?? "",
 		};
 	} catch {
-		return { templateId: null, explanation: "Failed to parse LLM response." };
+		// Strategy 2: Extract JSON from markdown code blocks
+		const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+		if (jsonMatch) {
+			try {
+				const parsed = JSON.parse(jsonMatch[1].trim()) as ClassifyResult;
+				return {
+					templateId: parsed.templateId ?? null,
+					explanation: parsed.explanation ?? "",
+				};
+			} catch {
+				// Fall through to next strategy
+			}
+		}
+
+		// Strategy 3: Find JSON object in text
+		const jsonObjectMatch = text.match(/\{[^}]*\}/);
+		if (jsonObjectMatch) {
+			try {
+				const parsed = JSON.parse(jsonObjectMatch[0]) as ClassifyResult;
+				return {
+					templateId: parsed.templateId ?? null,
+					explanation: parsed.explanation ?? "",
+				};
+			} catch {
+				// Fall through to default
+			}
+		}
+
+		// Strategy 4: Try to extract templateId and explanation from text
+		const templateIdMatch = text.match(/"templateId"\s*:\s*(?:"([^"]+)"|null)/);
+		const explanationMatch = text.match(/"explanation"\s*:\s*"([^"]+)"/);
+		if (templateIdMatch || explanationMatch) {
+			return {
+				templateId: templateIdMatch?.[1] ?? null,
+				explanation: explanationMatch?.[1] ?? "Intent could not be classified.",
+			};
+		}
+
+		// All parsing strategies failed
+		console.error("Failed to parse LLM response:", text);
+		return {
+			templateId: null,
+			explanation:
+				"Intent could not be classified. Please try a research-related request.",
+		};
 	}
 }
 
