@@ -1,4 +1,11 @@
-import { Bot, CheckCircle, Send, XCircle } from "lucide-react";
+import {
+	Bot,
+	CheckCircle,
+	ChevronDown,
+	ChevronRight,
+	Send,
+	XCircle,
+} from "lucide-react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
@@ -231,6 +238,7 @@ export default function AgentPage() {
 
 	const logEndRef = useRef<HTMLDivElement>(null);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
+	const [isLogExpanded, setIsLogExpanded] = useState(false);
 
 	// Load board from URL param on mount
 	useEffect(() => {
@@ -461,6 +469,11 @@ export default function AgentPage() {
 		setInput("");
 	}, [setSearchParams, clearAgentEvents]);
 
+	// Auto-expand log when execution starts
+	useEffect(() => {
+		if (board?.executionStatus === "running") setIsLogExpanded(true);
+	}, [board?.executionStatus]);
+
 	if (activeWorkspaceId === null) {
 		return (
 			<div className="flex min-h-[50vh] items-center justify-center">
@@ -647,49 +660,66 @@ export default function AgentPage() {
 						</div>
 					)}
 
-					{/* Execution log */}
+					{/* Execution log — collapsible */}
 					{board && (isRunning || isDone || isFailed) && (
-						<div className="rounded-lg border border-neutral-200 bg-white p-3 space-y-2">
-							<p className="text-xs font-medium text-neutral-500">
+						<div className="rounded-lg border border-neutral-200 bg-white">
+							<button
+								type="button"
+								onClick={() => setIsLogExpanded((prev) => !prev)}
+								className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors"
+								aria-expanded={isLogExpanded}
+							>
+								{isLogExpanded ? (
+									<ChevronDown size={14} aria-hidden />
+								) : (
+									<ChevronRight size={14} aria-hidden />
+								)}
 								Execution Log
-							</p>
-							{isRunning && (
-								<p className="text-xs text-info-700">
-									Running...{" "}
-									{tokenCount > 0 && `(${tokenCount} tokens received)`}
-								</p>
-							)}
-							{logEvents.map((event, i) => (
-								<EventEntry key={i} event={event} />
-							))}
-							{isStreaming && (
-								<div className="flex items-center gap-1.5 text-xs text-neutral-500">
-									<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary-600" />
-									Streaming...
+								{isRunning && !isLogExpanded && (
+									<span className="ml-auto text-info-700">Running…</span>
+								)}
+							</button>
+							{isLogExpanded && (
+								<div className="space-y-2 border-t border-neutral-200 p-3">
+									{isRunning && (
+										<p className="text-xs text-info-700">
+											Running...{" "}
+											{tokenCount > 0 && `(${tokenCount} tokens received)`}
+										</p>
+									)}
+									{logEvents.map((event, i) => (
+										<EventEntry key={i} event={event} />
+									))}
+									{isStreaming && (
+										<div className="flex items-center gap-1.5 text-xs text-neutral-500">
+											<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary-600" />
+											Streaming...
+										</div>
+									)}
+									{isDone && (
+										<div className="flex items-center gap-1.5 text-sm text-success-900">
+											<CheckCircle size={16} aria-hidden />
+											Execution complete
+										</div>
+									)}
+									{isFailed && (
+										<div className="space-y-2">
+											<div className="flex items-center gap-1.5 text-sm text-error-900">
+												<XCircle size={16} aria-hidden />
+												Execution failed
+											</div>
+											<button
+												onClick={handleRetryExecution}
+												disabled={busy}
+												className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+											>
+												{busy ? "Retrying..." : "Retry Execution"}
+											</button>
+										</div>
+									)}
+									<div ref={logEndRef} />
 								</div>
 							)}
-							{isDone && (
-								<div className="flex items-center gap-1.5 text-sm text-success-900">
-									<CheckCircle size={16} aria-hidden />
-									Execution complete
-								</div>
-							)}
-							{isFailed && (
-								<div className="space-y-2">
-									<div className="flex items-center gap-1.5 text-sm text-error-900">
-										<XCircle size={16} aria-hidden />
-										Execution failed
-									</div>
-									<button
-										onClick={handleRetryExecution}
-										disabled={busy}
-										className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-									>
-										{busy ? "Retrying..." : "Retry Execution"}
-									</button>
-								</div>
-							)}
-							<div ref={logEndRef} />
 						</div>
 					)}
 
