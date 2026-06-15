@@ -168,6 +168,16 @@ export interface AgentColumn {
 	cards: AgentCard[];
 }
 
+export interface ToolTraceItem {
+	columnSlug: string;
+	toolName: string;
+	query?: string;
+	resultCount?: number;
+	errorCode?: string;
+	attempt?: number;
+	createdAt?: string;
+}
+
 export interface AgentCard {
 	id: number;
 	columnId: number;
@@ -184,6 +194,7 @@ export interface AgentBoard {
 	executionStatus: "idle" | "running" | "done" | "failed";
 	createdAt: string;
 	columns: AgentColumn[];
+	toolTrace?: ToolTraceItem[];
 }
 
 export interface AgentCardOutput {
@@ -200,8 +211,16 @@ export interface AgentEvent {
 		| "agent.card.started"
 		| "agent.card.token"
 		| "agent.card.done"
-		| "agent.card.failed";
+		| "agent.card.failed"
+		| "agent.tool.started"
+		| "agent.tool.result"
+		| "agent.tool.failed";
 	columnSlug?: string;
 	token?: string;
 	error?: string;
+	toolName?: string;
+	query?: string;
+	resultCount?: number;
+	errorCode?: string;
+	attempt?: number;
 }

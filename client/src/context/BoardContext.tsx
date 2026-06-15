@@ -32,6 +32,7 @@ import type {
 	PresenceUser,
 	SettingsMap,
 	SwitchConfirmState,
+	ToolTraceItem,
 	User,
 	Workspace,
 	WorkspaceInvite,
@@ -89,6 +90,8 @@ interface BoardContextValue {
 	refreshSettings: () => Promise<void>;
 	agentEvents: AgentEvent[];
 	clearAgentEvents: () => void;
+	toolTrace: ToolTraceItem[];
+	setToolTrace: Dispatch<SetStateAction<ToolTraceItem[]>>;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -135,6 +138,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	});
 	const [settingsVersion, setSettingsVersion] = useState(0);
 	const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
+	const [toolTrace, setToolTrace] = useState<ToolTraceItem[]>([]);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
@@ -523,6 +527,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				refreshSettings,
 				agentEvents,
 				clearAgentEvents: () => setAgentEvents([]),
+				toolTrace,
+				setToolTrace,
 			}}
 		>
 			{children}
