@@ -54,21 +54,30 @@ export interface ClassifyResult {
 	explanation: string;
 }
 
-export async function classifyIntent(intent: string): Promise<ClassifyResult> {
-	const client = getClient();
-
-	const systemPrompt = `You are a board-template classifier. Given a user intent, decide which template (if any) fits.
+// Fix #4: System prompt diperkuat — JSON-only strict, multilingual-aware
+const CLASSIFY_SYSTEM_PROMPT = `You are a board-template classifier. Given a user intent (in ANY language), decide which template fits.
 
 Available templates:
-- "research-report": Research & Report — for research, analysis, competitive analysis, market reports, investigation tasks.
+- "research-report": Research & Report — for research, analysis, investigation, competitive analysis, market reports, or any fact-finding task. This includes requests in Indonesian (riset, analisis, investigasi), Spanish, French, or any other language.
 
-Respond with ONLY a JSON object:
-{"templateId": "research-report" | null, "explanation": "<one sentence>"}`;
+CRITICAL RULES:
+1. Respond with ONLY a raw JSON object. No preamble, no explanation text, no markdown, no code fences.
+2. Your entire response must be valid JSON that can be parsed directly.
+3. If the intent is research-related in ANY language, use "research-report".
 
+{"templateId": "research-report" | null, "explanation": "<one sentence in English>"}`;
+
+// Internal single-attempt classifier — extracted so retry wrapper can call it cleanly
+async function classifyIntentOnce(
+	client: Anthropic,
+	intent: string,
+): Promise<ClassifyResult> {
+	// Fix #1: temperature: 0 — classification is deterministic, variance is unwanted
 	const response = await client.messages.create({
 		model: MODEL,
 		max_tokens: 256,
-		system: systemPrompt,
+		temperature: 0,
+		system: CLASSIFY_SYSTEM_PROMPT,
 		messages: [{ role: "user", content: intent }],
 	});
 
@@ -98,8 +107,8 @@ Respond with ONLY a JSON object:
 			}
 		}
 
-		// Strategy 3: Find JSON object in text
-		const jsonObjectMatch = text.match(/\{[^}]*\}/);
+		// Fix #3: Strategy 3 — greedy [\s\S]* agar tidak berhenti di } dalam string
+		const jsonObjectMatch = text.match(/\{[\s\S]*\}/);
 		if (jsonObjectMatch) {
 			try {
 				const parsed = JSON.parse(jsonObjectMatch[0]) as ClassifyResult;
@@ -108,7 +117,7 @@ Respond with ONLY a JSON object:
 					explanation: parsed.explanation ?? "",
 				};
 			} catch {
-				// Fall through to default
+				// Fall through to next strategy
 			}
 		}
 
@@ -122,14 +131,44 @@ Respond with ONLY a JSON object:
 			};
 		}
 
-		// All parsing strategies failed
-		console.error("Failed to parse LLM response:", text);
-		return {
-			templateId: null,
-			explanation:
-				"Intent could not be classified. Please try a research-related request.",
-		};
+		// All parsing strategies failed — return null so retry wrapper can try again
+		console.error("classifyIntentOnce: failed to parse LLM response:", text);
+		return { templateId: null, explanation: "" };
 	}
+}
+
+// Fix #2: Retry wrapper — up to 3 attempts before surfacing failure to client
+const CLASSIFY_MAX_ATTEMPTS = 3;
+
+export async function classifyIntent(intent: string): Promise<ClassifyResult> {
+	const client = getClient();
+
+	for (let attempt = 1; attempt <= CLASSIFY_MAX_ATTEMPTS; attempt++) {
+		const result = await classifyIntentOnce(client, intent);
+
+		// Parsing succeeded AND LLM returned a valid templateId → done
+		if (result.templateId !== null) return result;
+
+		// LLM returned null with a real explanation → it genuinely doesn't match any template
+		// Don't retry in this case — it's a semantic decision, not a parse failure
+		if (result.explanation) return result;
+
+		// Parse failure (explanation is empty) — retry if attempts remain
+		if (attempt < CLASSIFY_MAX_ATTEMPTS) {
+			console.warn(
+				`classifyIntent: attempt ${attempt} parse failed, retrying (${CLASSIFY_MAX_ATTEMPTS - attempt} left)...`,
+			);
+		}
+	}
+
+	console.error(
+		`classifyIntent: all ${CLASSIFY_MAX_ATTEMPTS} attempts failed for intent: "${intent}"`,
+	);
+	return {
+		templateId: null,
+		explanation:
+			"Intent could not be classified. Please try a research-related request.",
+	};
 }
 
 // ---------------------------------------------------------------------------

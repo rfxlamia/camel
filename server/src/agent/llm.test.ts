@@ -85,21 +85,83 @@ describe("classifyIntent", () => {
 		expect(result.explanation).toBe("Not a research task");
 	});
 
-	it("handles completely unparseable response gracefully", async () => {
-		mockCreate.mockResolvedValueOnce({
+	it("handles completely unparseable response gracefully after all retries", async () => {
+		// All 3 attempts return unparseable text → final fallback message
+		const unparseable = {
 			content: [
 				{
 					type: "text",
 					text: "I cannot classify this intent. It does not match any template.",
 				},
 			],
-		});
+		};
+		mockCreate
+			.mockResolvedValueOnce(unparseable)
+			.mockResolvedValueOnce(unparseable)
+			.mockResolvedValueOnce(unparseable);
 		const { classifyIntent } = await import("./llm.js");
 		const result = await classifyIntent("buat gambar ikan");
 		expect(result.templateId).toBeNull();
 		expect(result.explanation).toBe(
 			"Intent could not be classified. Please try a research-related request.",
 		);
+		expect(mockCreate).toHaveBeenCalledTimes(3);
+	});
+
+	it("succeeds on retry after initial parse failure", async () => {
+		// First attempt returns garbage, second returns valid JSON
+		mockCreate
+			.mockResolvedValueOnce({
+				content: [{ type: "text", text: "Maaf, saya tidak bisa memproses." }],
+			})
+			.mockResolvedValueOnce({
+				content: [
+					{
+						type: "text",
+						text: '{"templateId":"research-report","explanation":"Research on coffee limits detected."}',
+					},
+				],
+			});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent(
+			"lakukan riset tentang jumlah maksimum minum kopi sehari",
+		);
+		expect(result.templateId).toBe("research-report");
+		expect(mockCreate).toHaveBeenCalledTimes(2);
+	});
+
+	it("does NOT retry when LLM returns null with a real explanation (semantic no-match)", async () => {
+		// LLM confidently says null — no retry needed
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"templateId":null,"explanation":"This is a rocket-building request, not supported."}',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("build me a rocket ship");
+		expect(result.templateId).toBeNull();
+		expect(result.explanation).toBe(
+			"This is a rocket-building request, not supported.",
+		);
+		expect(mockCreate).toHaveBeenCalledTimes(1);
+	});
+
+	it("Strategy 3 regex handles explanation containing } character", async () => {
+		// Old regex \{[^}]*\} would truncate this JSON — new [\s\S]* handles it
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: 'Here: {"templateId":"research-report","explanation":"Research about {coffee} limits"} done.',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("riset batas konsumsi kopi");
+		expect(result.templateId).toBe("research-report");
 	});
 });
 
