@@ -83,7 +83,60 @@ Steps:
 1. Write failing test for: registry resolves a known tool name and builds an Anthropic tool definition; unknown names are ignored.
    File: `server/src/agent/tools/registry.test.ts`
    Test verifies: Given a registry with a mock tool `web_search`, When `resolveTools(["web_search","nope"])` is called, Then it returns `[mockTool]` (unknown dropped); When `toAnthropicToolDefs([mockTool])`, Then it returns `[{name, description, input_schema}]`.
-   [Test-Architect will add code here]
+   ```ts
+   // server/src/agent/tools/registry.test.ts
+   import { describe, it, expect, vi } from "vitest";
+   import { createToolRegistry, toAnthropicToolDefs } from "./registry.js";
+   import type { Tool } from "./types.js";
+
+   const mockTool: Tool = {
+     name: "web_search",
+     description: "Search the web",
+     inputSchema: {
+       type: "object",
+       properties: { query: { type: "string" } },
+       required: ["query"],
+     },
+     riskTier: "read-only",
+     execute: vi.fn(async () => ({ ok: true, content: "result" })),
+   };
+
+   describe("createToolRegistry.resolveTools", () => {
+     it("resolves a known tool name to its definition", () => {
+       const registry = createToolRegistry([mockTool]);
+       expect(registry.resolveTools(["web_search"])).toEqual([mockTool]);
+     });
+
+     it("drops unknown tool names without throwing", () => {
+       const registry = createToolRegistry([mockTool]);
+       expect(registry.resolveTools(["web_search", "nope"])).toEqual([mockTool]);
+     });
+
+     it("returns [] for an empty name list", () => {
+       const registry = createToolRegistry([mockTool]);
+       expect(registry.resolveTools([])).toEqual([]);
+     });
+   });
+
+   describe("toAnthropicToolDefs", () => {
+     it("maps each Tool to {name, description, input_schema}", () => {
+       expect(toAnthropicToolDefs([mockTool])).toEqual([
+         {
+           name: "web_search",
+           description: "Search the web",
+           input_schema: mockTool.inputSchema,
+         },
+       ]);
+     });
+
+     it("does not leak execute/riskTier into the Anthropic def", () => {
+       const [def] = toAnthropicToolDefs([mockTool]);
+       expect(def).not.toHaveProperty("execute");
+       expect(def).not.toHaveProperty("riskTier");
+       expect(def).not.toHaveProperty("inputSchema");
+     });
+   });
+   ```
 2. Run test — verify FAIL: `npx vitest run src/agent/tools/registry.test.ts` (from `server/`). Expected: module not found / export missing.
 3. Implement minimal code:
    File: `server/src/agent/tools/types.ts` — export `type ToolRiskTier = "read-only" | "write" | "destructive";` and `interface Tool { name: string; description: string; inputSchema: Record<string, unknown>; riskTier: ToolRiskTier; execute(input: Record<string, unknown>): Promise<ToolResult>; }` and `interface ToolResult { ok: boolean; content: string; errorCode?: string; }` and a `ToolEvent` type `{ phase: "started"|"result"|"failed"|"reasoning"; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number; text?: string; }` (the `"reasoning"` phase carries interim assistant text in `text`; `toolName` optional for reasoning events).
@@ -163,8 +216,30 @@ Steps:
    Verify: `npm run db:migrate` runs without error (or `grep -c "agent_tool_calls" server/src/db/agent-schema.sql` == expected).
 2. Write failing test for: research-report template gives research-specialist `tools: ["web_search"]` and other columns `[]`.
    File: `server/src/agent/templates.test.ts`
-   Test verifies: Given `getTemplate("research-report")`, When inspecting columns, Then `research-specialist.tools` deep-equals `["web_search"]` and `editor.tools` deep-equals `[]`.
-   [Test-Architect will add code here]
+   Test verifies: Given `getTemplate("research-report")`, When inspecting columns, Then `research-specialist.tools` deep-equals `["web_search"]` and `editor.tools` deep-equals `[]` (or undefined → normalize via `?? []`).
+   ```ts
+   // server/src/agent/templates.test.ts
+   import { describe, it, expect } from "vitest";
+   import { getTemplate } from "./templates.js";
+
+   describe("research-report template tool assignment", () => {
+     const template = getTemplate("research-report")!;
+     const bySlug = (slug: string) =>
+       template.columns.find((c) => c.slug === slug)!;
+
+     it("gives the research-specialist column web_search", () => {
+       expect(bySlug("research-specialist").tools).toEqual(["web_search"]);
+     });
+
+     it("gives non-research columns no tools", () => {
+       // others omit `tools` or set [] — normalize so either is accepted
+       expect(bySlug("editor").tools ?? []).toEqual([]);
+       expect(bySlug("writer").tools ?? []).toEqual([]);
+       expect(bySlug("analysis-specialist").tools ?? []).toEqual([]);
+       expect(bySlug("qa-guardian").tools ?? []).toEqual([]);
+     });
+   });
+   ```
 3. Run test — verify FAIL: `npx vitest run src/agent/templates.test.ts`.
 4. Implement: in `server/src/agent/templates.ts` extend `interface TemplateColumn` with `tools?: string[]` and `tool_budget?: number`; set `tools: ["web_search"]` on the `research-specialist` column (others omit/`[]`). Update `insertColumns` SQL in `server/src/agent/routes.ts` ONLY IF needed to persist `tools`/`tool_budget` — NOTE: deferred to T6 to keep this task within templates+schema; here just add `tools` to the in-memory template definition.
 5. Run test — verify PASS: `npx vitest run src/agent/templates.test.ts`.
@@ -228,7 +303,104 @@ Steps:
    - ENV_VAR_MISSING: Given `TAVILY_API_KEY` unset, When `execute`, Then `ok:false, errorCode:"ENV_VAR_MISSING"` WITHOUT calling Tavily.
    - RATE_LIMIT: Given Tavily throws `Error("Rate limit exceeded")` on all attempts, When `execute`, Then after 3 retries `ok:false, errorCode:"RATE_LIMIT"`.
    - Empty: Given Tavily returns `results:[]`, When `execute`, Then `ok:true, content` states "no results found for <query>".
-   [Test-Architect will add code here]
+   ```ts
+   // server/src/agent/tools/webSearch.test.ts
+   import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+   const mockSearch = vi.fn();
+   vi.mock("@tavily/core", () => ({
+     tavily: vi.fn(() => ({ search: mockSearch })),
+   }));
+
+   function makeResults(n: number) {
+     return Array.from({ length: n }, (_, i) => ({
+       title: `Title ${i}`,
+       url: `https://example.com/${i}`,
+       content: "x".repeat(1000), // long snippet to exercise the size cap
+     }));
+   }
+
+   describe("web_search tool", () => {
+     beforeEach(() => {
+       mockSearch.mockReset();
+       process.env.TAVILY_API_KEY = "test-key";
+     });
+     afterEach(() => {
+       delete process.env.TAVILY_API_KEY;
+     });
+
+     it("caps to ≤10 results and size-caps each snippet (R2/R8)", async () => {
+       mockSearch.mockResolvedValueOnce({ results: makeResults(12) });
+       const { webSearch } = await import("./webSearch.js");
+       const result = await webSearch.execute({ query: "fintech" });
+
+       expect(result.ok).toBe(true);
+       // never asks Tavily for more than 10
+       expect(mockSearch).toHaveBeenCalledWith("fintech", expect.objectContaining({ maxResults: 10 }));
+       // at most 10 results surface, and the long snippet is truncated
+       const matches = result.content.match(/https:\/\/example\.com\//g) ?? [];
+       expect(matches.length).toBeLessThanOrEqual(10);
+       expect(result.content).not.toContain("x".repeat(1000));
+     });
+
+     it("retries a transient network error then succeeds (R3)", async () => {
+       mockSearch
+         .mockRejectedValueOnce(new Error("fetch failed"))
+         .mockResolvedValueOnce({ results: makeResults(1) });
+       const { webSearch } = await import("./webSearch.js");
+       const result = await webSearch.execute({ query: "fintech" });
+
+       expect(result.ok).toBe(true);
+       expect(mockSearch).toHaveBeenCalledTimes(2);
+     });
+
+     it("returns ENV_VAR_MISSING without calling Tavily when key unset (R3)", async () => {
+       delete process.env.TAVILY_API_KEY;
+       const { webSearch } = await import("./webSearch.js");
+       const result = await webSearch.execute({ query: "fintech" });
+
+       expect(result).toMatchObject({ ok: false, errorCode: "ENV_VAR_MISSING" });
+       expect(mockSearch).not.toHaveBeenCalled();
+     });
+
+     it("returns RATE_LIMIT after exhausting retries (R3)", async () => {
+       mockSearch.mockRejectedValue(new Error("Rate limit exceeded"));
+       const { webSearch } = await import("./webSearch.js");
+       const result = await webSearch.execute({ query: "fintech" });
+
+       expect(result).toMatchObject({ ok: false, errorCode: "RATE_LIMIT" });
+       expect(mockSearch).toHaveBeenCalledTimes(3); // ≤3 attempts
+     });
+
+     it("does NOT retry an auth error (API_ERROR)", async () => {
+       mockSearch.mockRejectedValue(new Error("Invalid API key"));
+       const { webSearch } = await import("./webSearch.js");
+       const result = await webSearch.execute({ query: "fintech" });
+
+       expect(result).toMatchObject({ ok: false, errorCode: "API_ERROR" });
+       expect(mockSearch).toHaveBeenCalledTimes(1); // auth won't fix itself
+     });
+
+     it("reports a friendly message on empty results (R7)", async () => {
+       mockSearch.mockResolvedValueOnce({ results: [] });
+       const { webSearch } = await import("./webSearch.js");
+       const result = await webSearch.execute({ query: "obscure topic" });
+
+       expect(result.ok).toBe(true);
+       expect(result.content.toLowerCase()).toContain("no results found");
+       expect(result.content).toContain("obscure topic");
+     });
+
+     it("never throws — any failure surfaces as a structured result", async () => {
+       mockSearch.mockRejectedValue(new Error("something weird"));
+       const { webSearch } = await import("./webSearch.js");
+       await expect(webSearch.execute({ query: "x" })).resolves.toMatchObject({
+         ok: false,
+       });
+     });
+   });
+   ```
+   > Note: this mock resolves/rejects instantly, so the implementation's retry backoff must be either zero in tests or short; if a real `setTimeout` backoff is added, wrap retry waits so they don't slow the suite (e.g. `vi.useFakeTimers()` + `vi.runAllTimersAsync()`), or keep backoff small (≤ a few ms).
 2. Run test — verify FAIL: `npx vitest run src/agent/tools/webSearch.test.ts`.
 3. Implement: `server/src/agent/tools/webSearch.ts` exporting a `Tool` named `web_search`, riskTier `"read-only"`, inputSchema `{type:"object", properties:{query:{type:"string"}}, required:["query"]}`. `execute`: read `process.env.TAVILY_API_KEY` → if absent return `{ok:false, errorCode:"ENV_VAR_MISSING"}` WITHOUT constructing the client; else call `tavily({apiKey}).search(query, {maxResults: 10})` inside a retry helper (≤3 attempts, small backoff). Error classification — wrap the entire `search()` call in one try/catch (the Tavily SDK throws `Error`; this also catches underlying fetch/timeout rejections that surface through the SDK). Classify on the caught error, case-insensitively, in this order: `/rate.?limit/i` → `RATE_LIMIT`; `/invalid api key|unauthorized|401|403/i` → `API_ERROR`; `/timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|fetch failed|network/i` → `NETWORK_ERROR`; anything else → `UNKNOWN`. Retry only `RATE_LIMIT`, `NETWORK_ERROR`, and `UNKNOWN`; do NOT retry `API_ERROR` (auth won't fix itself). Truncate each result to title+url+snippet (snippet capped, e.g. 300 chars); empty results → friendly "no results found for <query>" content with `ok:true`. Add `@tavily/core` to `server/package.json` deps.
 4. Run test — verify PASS: `npx vitest run src/agent/tools/webSearch.test.ts`.
@@ -293,7 +465,167 @@ Steps:
    - Budget: Given the model keeps requesting tool_use beyond budget=1, When executeCard, Then the 2nd request is not executed and the model is told the limit is reached; final output still produced (R2).
    - Adapt on failure: Given mockTool returns `ok:false, errorCode:"RATE_LIMIT"`, When executeCard, Then the structured error is fed back as tool_result, `onToolEvent` fires failed, and executeCard returns a final output (no throw) (R3).
    - Degrade: Given `tools:[]` (or undefined), When executeCard, Then it behaves exactly as today (single stream, no tools param) (R1/Scenario 5).
-   [Test-Architect will add code here]
+   ```ts
+   // server/src/agent/llm.test.ts — ADD these to the existing file
+   // (the existing `vi.mock("@anthropic-ai/sdk", ...)` with mockCreate/mockStream
+   //  and the `./templates.js` mock at the top of the file are reused as-is).
+   import type { Tool, ToolEvent } from "./tools/types.js";
+
+   // Build a fake stream turn: text deltas (async-iterable) + a finalMessage().
+   function makeTurn(opts: {
+     text?: string;
+     stopReason: "tool_use" | "end_turn";
+     toolUse?: { id: string; name: string; input: Record<string, unknown> };
+   }) {
+     const content: unknown[] = [];
+     if (opts.text) content.push({ type: "text", text: opts.text });
+     if (opts.toolUse)
+       content.push({ type: "tool_use", ...opts.toolUse });
+     return {
+       async *[Symbol.asyncIterator]() {
+         if (opts.text)
+           yield {
+             type: "content_block_delta",
+             delta: { type: "text_delta", text: opts.text },
+           };
+       },
+       finalMessage: vi
+         .fn()
+         .mockResolvedValue({ stop_reason: opts.stopReason, content }),
+     };
+   }
+
+   function mockTool(execute: Tool["execute"]): Tool {
+     return {
+       name: "web_search",
+       description: "Search the web",
+       inputSchema: { type: "object", properties: { query: { type: "string" } } },
+       riskTier: "read-only",
+       execute,
+     };
+   }
+
+   describe("executeCard tool loop", () => {
+     beforeEach(() => {
+       mockStream.mockReset();
+     });
+
+     it("executes a tool then returns ONLY the final turn's text (R4)", async () => {
+       // turn 1: model asks for the tool; turn 2: model writes the answer
+       mockStream
+         .mockReturnValueOnce(
+           makeTurn({
+             text: "let me search", // interim reasoning — must NOT be in output
+             stopReason: "tool_use",
+             toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
+           }),
+         )
+         .mockReturnValueOnce(
+           makeTurn({ text: "Final answer.", stopReason: "end_turn" }),
+         );
+
+       const execute = vi.fn(async () => ({ ok: true, content: "search hit" }));
+       const events: ToolEvent[] = [];
+       const { executeCard } = await import("./llm.js");
+
+       const result = await executeCard(
+         "prompt",
+         "intent",
+         [],
+         false,
+         vi.fn(),
+         [mockTool(execute)],
+         3,
+         (e: ToolEvent) => events.push(e),
+       );
+
+       expect(execute).toHaveBeenCalledTimes(1);
+       expect(events.map((e) => e.phase)).toEqual(
+         expect.arrayContaining(["started", "result"]),
+       );
+       // R4: only the final (non-tool_use) turn is the official output
+       expect(result.output).toBe("Final answer.");
+       expect(result.output).not.toContain("let me search");
+     });
+
+     it("refuses tool calls past the budget but still produces a final answer (R2)", async () => {
+       // budget=1: first tool_use is executed, the model asks again, second is refused.
+       mockStream
+         .mockReturnValueOnce(
+           makeTurn({
+             stopReason: "tool_use",
+             toolUse: { id: "tu_1", name: "web_search", input: { query: "a" } },
+           }),
+         )
+         .mockReturnValueOnce(
+           makeTurn({
+             stopReason: "tool_use",
+             toolUse: { id: "tu_2", name: "web_search", input: { query: "b" } },
+           }),
+         )
+         .mockReturnValueOnce(
+           makeTurn({ text: "Done within budget.", stopReason: "end_turn" }),
+         );
+
+       const execute = vi.fn(async () => ({ ok: true, content: "hit" }));
+       const { executeCard } = await import("./llm.js");
+
+       const result = await executeCard(
+         "prompt", "intent", [], false, vi.fn(),
+         [mockTool(execute)], 1, vi.fn(),
+       );
+
+       // budget counts model-issued requests, not retries → only 1 execution
+       expect(execute).toHaveBeenCalledTimes(1);
+       expect(result.output).toBe("Done within budget.");
+     });
+
+     it("feeds a structured tool error back and finishes without throwing (R3)", async () => {
+       mockStream
+         .mockReturnValueOnce(
+           makeTurn({
+             stopReason: "tool_use",
+             toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
+           }),
+         )
+         .mockReturnValueOnce(
+           makeTurn({ text: "Recovered.", stopReason: "end_turn" }),
+         );
+
+       const execute = vi.fn(async () => ({
+         ok: false,
+         content: "rate limited",
+         errorCode: "RATE_LIMIT",
+       }));
+       const events: ToolEvent[] = [];
+       const { executeCard } = await import("./llm.js");
+
+       const result = await executeCard(
+         "prompt", "intent", [], false, vi.fn(),
+         [mockTool(execute)], 3, (e: ToolEvent) => events.push(e),
+       );
+
+       expect(events.some((e) => e.phase === "failed" && e.errorCode === "RATE_LIMIT")).toBe(true);
+       expect(result.output).toBe("Recovered."); // no throw, final answer produced
+     });
+
+     it("degrades to the single-shot path when tools are empty (R1)", async () => {
+       mockStream.mockReturnValueOnce(
+         makeTurn({ text: "Plain answer.", stopReason: "end_turn" }),
+       );
+       const { executeCard } = await import("./llm.js");
+       const onToken = vi.fn();
+
+       // called the legacy way (no tools args) → identical to today
+       const result = await executeCard("prompt", "intent", [], false, onToken);
+
+       expect(mockStream).toHaveBeenCalledTimes(1);
+       expect(mockStream.mock.calls[0][0]).not.toHaveProperty("tools");
+       expect(result.output).toBe("Plain answer.");
+       expect(onToken).toHaveBeenCalledWith("Plain answer.");
+     });
+   });
+   ```
 2. Run test — verify FAIL: `npx vitest run src/agent/llm.test.ts`.
 3. Implement: extend `executeCard` signature additively to accept `tools: Tool[] = []`, `toolBudget = 3`, and `onToolEvent?: (e: ToolEvent) => void` (keep existing params/behavior; mirror the `_reasoning` additive-param precedent). When `tools.length === 0` → existing single-shot path. Otherwise build a message array; loop: `client.messages.stream({..., tools: toAnthropicToolDefs(tools)})`, stream text deltas via existing `onToken` ONLY for the turn that becomes final (buffer per-turn; interim turns' text is emitted via `onToolEvent({phase:"reasoning", text})` — this is the single event stream T7 consumes, no separate callback), `await finalMessage()`; if `stop_reason === "tool_use"`: for each `tool_use` block, if budget remaining → call `tool.execute(input)` (emit started/result|failed), else synthesize a "search limit reached" tool_result; append assistant message + a user message with `tool_result` blocks; decrement budget per executed request; continue. Stop when `stop_reason !== "tool_use"`; return that turn's text as `output`. Cap total loop iterations defensively at `toolBudget + 1`.
    Note: "final turn text only" — accumulate each assistant turn's text; the LAST turn (non-tool_use) is the official output; earlier turns' text is interim reasoning (forwarded for the trace, not concatenated into output).
@@ -359,7 +691,124 @@ Steps:
    - Given a column with `tools:["web_search"]` and an injected `executeCard` that invokes its `onToolEvent`, When `runPipeline` runs, Then `publishEvent` is called with `agent.tool.started`/`agent.tool.result` events AND an injected `insertToolCall` dep is called (R5).
    - Given a tool event, When published, Then only the final output is written to `insertOutput` (agent_card_outputs), never to card_events (R6).
    - Given a column with `tools:[]`, When runPipeline runs, Then executeCard is called with empty tools and no tool events fire (R1).
-   [Test-Architect will add code here]
+   ```ts
+   // server/src/agent/service.test.ts — ADD this block to the existing file.
+   // Reuses the existing DEFAULT_BOARD const and the vi.useFakeTimers() pattern
+   // already established in the `runPipeline` describe block above.
+
+   describe("runPipeline tool wiring", () => {
+     beforeEach(() => vi.useFakeTimers());
+     afterEach(() => vi.useRealTimers());
+
+     // A single research column that carries a tool + budget.
+     const TOOL_COLUMNS: ColumnInfo[] = [
+       {
+         columnId: 10,
+         columnSlug: "research-specialist",
+         systemPrompt: "Research: {original_intent}",
+         reasoning: false,
+         tools: ["web_search"],
+         toolBudget: 3,
+       } as ColumnInfo,
+     ];
+
+     function buildToolService(overrides: Partial<AgentBoardServiceDeps> = {}) {
+       const deps: AgentBoardServiceDeps = {
+         getBoard: vi.fn().mockResolvedValue(DEFAULT_BOARD),
+         getColumns: vi.fn().mockResolvedValue(TOOL_COLUMNS),
+         // executeCard receives (sys, intent, prev, reasoning, onToken, tools, budget, onToolEvent)
+         executeCard: vi.fn(
+           async (
+             _sys: string, _intent: string, _prev: string[], _reasoning: boolean,
+             _onToken: (t: string) => void,
+             _tools?: unknown[], _budget?: number,
+             onToolEvent?: (e: Record<string, unknown>) => void,
+           ) => {
+             onToolEvent?.({ phase: "started", toolName: "web_search", query: "x" });
+             onToolEvent?.({ phase: "result", toolName: "web_search", resultCount: 5 });
+             return { output: "research done" };
+           },
+         ),
+         insertOutput: vi.fn().mockResolvedValue(undefined),
+         insertCard: vi.fn().mockResolvedValue(undefined),
+         insertToolCall: vi.fn().mockResolvedValue(undefined),
+         updateBoard: vi.fn().mockResolvedValue(undefined),
+         publishEvent: vi.fn().mockResolvedValue(undefined),
+         toolRegistry: { resolveTools: vi.fn((names: string[]) => names) },
+         ...overrides,
+       } as AgentBoardServiceDeps;
+       return { service: createAgentBoardService(deps), deps };
+     }
+
+     it("translates tool events to SSE and persists each tool call (R5)", async () => {
+       const { service, deps } = buildToolService();
+
+       const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+       await vi.runAllTimersAsync();
+       await promise;
+
+       const published = (deps.publishEvent as ReturnType<typeof vi.fn>).mock.calls.map(
+         (c) => c[1] as Record<string, unknown>,
+       );
+       expect(published.some((e) => e.type === "agent.tool.started")).toBe(true);
+       expect(published.some((e) => e.type === "agent.tool.result")).toBe(true);
+       expect(deps.insertToolCall).toHaveBeenCalledWith(
+         expect.objectContaining({ columnSlug: "research-specialist", toolName: "web_search" }),
+       );
+     });
+
+     it("writes the final output to agent_card_outputs only — never card_events (R6)", async () => {
+       const { service, deps } = buildToolService();
+
+       const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+       await vi.runAllTimersAsync();
+       await promise;
+
+       expect(deps.insertOutput).toHaveBeenCalledWith(
+         expect.objectContaining({ columnSlug: "research-specialist", output: "research done" }),
+       );
+       // No card_events dep exists on the service; assert nothing tries to write one.
+       const published = (deps.publishEvent as ReturnType<typeof vi.fn>).mock.calls.map(
+         (c) => c[1] as Record<string, unknown>,
+       );
+       expect(published.every((e) => !String(e.type).startsWith("card."))).toBe(true);
+     });
+
+     it("passes empty tools and fires no tool events when a column has no tools (R1)", async () => {
+       const events: Record<string, unknown>[] = [];
+       const { service, deps } = buildToolService({
+         getColumns: vi.fn().mockResolvedValue([
+           {
+             columnId: 10,
+             columnSlug: "research-specialist",
+             systemPrompt: "Research: {original_intent}",
+             reasoning: false,
+             tools: [],
+             toolBudget: null,
+           } as ColumnInfo,
+         ]),
+         executeCard: vi.fn(
+           async (
+             _s: string, _i: string, _p: string[], _r: boolean,
+             _t: (x: string) => void, tools?: unknown[],
+           ) => {
+             expect(tools ?? []).toEqual([]); // resolved to empty
+             return { output: "no-tool output" };
+           },
+         ),
+         publishEvent: vi.fn(async (_wid, e) => { events.push(e); }),
+       });
+
+       const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+       await vi.runAllTimersAsync();
+       await promise;
+
+       expect(deps.executeCard).toHaveBeenCalled();
+       expect(events.some((e) => String(e.type).startsWith("agent.tool."))).toBe(false);
+     });
+   });
+   ```
+   > Note: `toolRegistry`, `insertToolCall`, and `ColumnInfo.tools/toolBudget` are the new DI seams added in Step 3; `executeCard` is asserted positionally (8 args) to match the T4 signature.
 2. Run test — verify FAIL: `npx vitest run src/agent/service.test.ts`.
 3. Implement: extend `ColumnInfo` with `tools: string[]` and `toolBudget: number | null`; in `getColumns` consumers, resolve `Tool[]` via an injected `toolRegistry` dep (default = real registry with web_search); pass `tools`, `toolBudget ?? 3`, and an `onToolEvent` callback into `deps.executeCard`. The callback calls `deps.publishEvent` with `{type:"agent.tool.started"|"agent.tool.result"|"agent.tool.failed", columnSlug, toolName, query?, resultCount?, errorCode?, attempt?}` and `deps.insertToolCall?.({boardId, columnSlug, toolName, input, result, errorCode, attempt})`. Add `insertToolCall` to `AgentBoardServiceDeps` (optional). Extend `BoardEvent` union in `server/src/realtime.ts` with the three tool event types + optional fields. Keep final-output persistence to `agent_card_outputs` only.
 4. Run test — verify PASS: `npx vitest run src/agent/service.test.ts`.
@@ -417,8 +866,64 @@ Files:
 
 Steps:
 1. Write failing test for trace replay shape (use existing route test harness / a thin query-shape test):
-   Test verifies: Given a board with rows in `agent_tool_calls`, When `GET /workspaces/:wid/agent/boards/:id`, Then the response includes a single flat `toolTrace` array at the board level: `board.toolTrace: Array<{columnSlug, toolName, query?, resultCount?, errorCode?, attempt?, createdAt}>` (ordered by created_at; the client groups by columnSlug). No tool is executed.
-   [Test-Architect will add code here]
+   Test verifies: Given a board with rows in `agent_tool_calls`, When the read-only trace replay runs, Then it returns a single flat `toolTrace` array: `Array<{columnSlug, toolName, query?, resultCount?, errorCode?, attempt?, createdAt}>` (ordered by created_at; the client groups by columnSlug), it queries with the board id, and NO tool is executed.
+   ```ts
+   // server/src/agent/routes.test.ts
+   // The GET-board handler is wired into the Express app and has no supertest
+   // harness in this repo, so the replay logic is extracted into a small
+   // exported, pool-injectable read-only helper that the route calls and the
+   // test drives directly (query-shape test). This keeps the route handler thin
+   // and the trace logic unit-testable without booting Express.
+   import { describe, it, expect, vi } from "vitest";
+   import { getToolTrace } from "./routes.js"; // implementer EXPORTS this in Step 3
+
+   describe("getToolTrace (read-only replay)", () => {
+     it("returns the flat trace ordered by created_at, scoped to the board", async () => {
+       const rows = [
+         {
+           column_slug: "research-specialist",
+           tool_name: "web_search",
+           input: { query: "fintech" },
+           result: "…",
+           error_code: null,
+           attempt: 1,
+           created_at: "2026-06-15T10:00:00Z",
+         },
+       ];
+       const fakeDb = { query: vi.fn(async () => ({ rows })) };
+
+       const trace = await getToolTrace(fakeDb as any, 42);
+
+       // scoped to the board id
+       expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+       const sql = fakeDb.query.mock.calls[0][0] as string;
+       expect(sql).toMatch(/agent_tool_calls/i);
+       expect(sql).toMatch(/board_id\s*=\s*\$1/i);
+       expect(sql).toMatch(/order by\s+created_at/i);
+
+       // flat shape the client expects (groups by columnSlug itself)
+       expect(trace).toEqual([
+         expect.objectContaining({
+           columnSlug: "research-specialist",
+           toolName: "web_search",
+           query: "fintech",
+           attempt: 1,
+           createdAt: "2026-06-15T10:00:00Z",
+         }),
+       ]);
+     });
+
+     it("is read-only — issues exactly one SELECT and executes no tool", async () => {
+       const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
+       const trace = await getToolTrace(fakeDb as any, 1);
+
+       expect(trace).toEqual([]);
+       expect(fakeDb.query).toHaveBeenCalledTimes(1);
+       expect((fakeDb.query.mock.calls[0][0] as string).toLowerCase()).not.toContain("insert");
+     });
+   });
+   ```
+   > Note: this drives the replay through an exported `getToolTrace(db, boardId)` helper (pool injected for the test, defaulting to the real pool in the route). The GET-board handler calls it and attaches the result as `board.toolTrace`. The `getColumns`/`insertColumns`/`insertToolCall` realDeps SQL changes are exercised indirectly here via the same pool-injection pattern if the implementer chooses to extract them; at minimum the trace replay is unit-tested.
 2. Run test — verify FAIL.
 3. Implement in `server/src/agent/routes.ts`: extend `getColumns` SELECT to include `tools, tool_budget` and map to `ColumnInfo`; extend `insertColumns` INSERT to persist `tools` (TEXT[]) and `tool_budget`; add real `insertToolCall` dep (`INSERT INTO agent_tool_calls ...`); in the `GET .../boards/:id` handler, query `agent_tool_calls WHERE board_id=$1 ORDER BY created_at` and attach as a single flat `board.toolTrace` array of `{columnSlug, toolName, query?, resultCount?, errorCode?, attempt?, createdAt}` (the client groups by columnSlug). Read-only replay — never invoke a tool here.
 4. Run test — verify PASS.
@@ -481,8 +986,55 @@ GATE (blocking, before any test or code): Read `docs/pocket/rule/creative-brief.
 Steps:
 1. Write failing test for ToolTrace (props shape locked to T6: `steps: Array<{columnSlug, toolName, query?, resultCount?, errorCode?, attempt?, createdAt?}>`, plus live `reasoning` text items):
    File: `client/src/components/ToolTrace.test.tsx`
-   Test verifies: Given a list of tool steps `[{toolName:"web_search", query:"X", resultCount:10}]`, When `<ToolTrace steps={...}/>` renders, Then it is collapsed by default showing a summary ("web_search · X · 10 results"), and expands to show detail on click.
-   [Test-Architect will add code here]
+   Test verifies: Given a list of tool steps `[{toolName:"web_search", query:"X", resultCount:10}]`, When `<ToolTrace steps={...}/>` renders, Then it is collapsed by default showing a summary ("web_search · X · 10 results"), and expands to show detail on click; a step with `errorCode` shows a failed state.
+
+   PRECONDITION (test infra — implementer must satisfy BEFORE this test can run): the client workspace has NO DOM test stack today. The implementer must, as part of Step 3 (or a dedicated chore before it):
+   - add dev deps to `client/`: `@testing-library/react`, `@testing-library/dom`, `jsdom`;
+   - set `test.environment: "jsdom"` AND widen `test.include` to `src/**/*.test.{ts,tsx}` in `client/vitest.config.ts` (currently only `src/**/*.test.ts`, so a `.tsx` test is NOT picked up).
+   This is a test-first task: write the test below, watch it FAIL (initially because the harness/component are missing), then implement.
+   ```tsx
+   // client/src/components/ToolTrace.test.tsx
+   import { describe, it, expect } from "vitest";
+   import { render, screen, fireEvent } from "@testing-library/react";
+   import { ToolTrace } from "./ToolTrace";
+
+   describe("ToolTrace", () => {
+     it("renders collapsed by default with a one-line summary", () => {
+       render(
+         <ToolTrace steps={[{ toolName: "web_search", query: "X", resultCount: 10 }]} />,
+       );
+       // collapsed summary: toolName · query · resultCount
+       expect(screen.getByText(/web_search/)).toBeTruthy();
+       expect(screen.getByText(/X/)).toBeTruthy();
+       expect(screen.getByText(/10/)).toBeTruthy();
+     });
+
+     it("expands to show step detail on click", () => {
+       render(
+         <ToolTrace steps={[{ toolName: "web_search", query: "X", resultCount: 10 }]} />,
+       );
+       // detail not visible while collapsed
+       expect(screen.queryByTestId("tool-trace-detail")).toBeNull();
+       fireEvent.click(screen.getByRole("button"));
+       expect(screen.getByTestId("tool-trace-detail")).toBeTruthy();
+     });
+
+     it("shows a failed state when a step carries an errorCode", () => {
+       render(
+         <ToolTrace
+           steps={[{ toolName: "web_search", query: "X", errorCode: "RATE_LIMIT" }]}
+         />,
+       );
+       expect(screen.getByText(/RATE_LIMIT/)).toBeTruthy();
+     });
+
+     it("renders nothing when there are no steps", () => {
+       const { container } = render(<ToolTrace steps={[]} />);
+       expect(container.textContent).toBe("");
+     });
+   });
+   ```
+   > Note: `screen.getBy*` truthiness assertions are used instead of `@testing-library/jest-dom` matchers (e.g. `toBeInTheDocument`) to avoid pulling in another dep — `getBy*` already throws if the element is absent. The component must expose a clickable toggle (`role="button"`) and a `data-testid="tool-trace-detail"` wrapper for the expanded section. Replay (R5): the same `steps` prop is fed from the stored `toolTrace` on board load, so no separate test path is needed — rendering from props IS the replay.
 2. Run test — verify FAIL: `npx vitest run src/components/ToolTrace.test.tsx` (from `client/`).
 3. Implement: extend `AgentEvent.type` union in `client/src/types.ts` with `"agent.tool.started" | "agent.tool.result" | "agent.tool.failed"` and optional fields `toolName?, query?, resultCount?, errorCode?, attempt?`; in `BoardContext.tsx` accumulate tool events (the existing `setAgentEvents` already captures them — derive a per-column step list) and ingest `toolTrace` from the board fetch for replay; create `ToolTrace.tsx` (collapsible, Camel-styled per creative-brief) showing summary + expandable detail and a failed state (errorCode); render it in `ContextPanel.tsx` for the selected card/column.
 4. Run test — verify PASS.
