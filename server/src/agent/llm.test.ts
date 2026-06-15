@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Tool, ToolEvent } from "./tools/types.js";
 
 const mockCreate = vi.fn();
 const mockStream = vi.fn();
@@ -232,5 +233,171 @@ describe("executeCard", () => {
 		expect(onToken).toHaveBeenCalledWith("Hello");
 		expect(onToken).toHaveBeenCalledWith(" world");
 		expect(result.output).toBe("Hello world");
+	});
+});
+
+function makeTurn(opts: {
+	text?: string;
+	stopReason: "tool_use" | "end_turn";
+	toolUse?: { id: string; name: string; input: Record<string, unknown> };
+}) {
+	const content: unknown[] = [];
+	if (opts.text) content.push({ type: "text", text: opts.text });
+	if (opts.toolUse)
+		content.push({ type: "tool_use", ...opts.toolUse });
+	return {
+		async *[Symbol.asyncIterator]() {
+			if (opts.text)
+				yield {
+					type: "content_block_delta",
+					delta: { type: "text_delta", text: opts.text },
+				};
+		},
+		finalMessage: vi
+			.fn()
+			.mockResolvedValue({ stop_reason: opts.stopReason, content }),
+	};
+}
+
+function mockTool(execute: Tool["execute"]): Tool {
+	return {
+		name: "web_search",
+		description: "Search the web",
+		inputSchema: {
+			type: "object",
+			properties: { query: { type: "string" } },
+		},
+		riskTier: "read-only",
+		execute,
+	};
+}
+
+describe("executeCard tool loop", () => {
+	beforeEach(() => {
+		mockStream.mockReset();
+	});
+
+	it("executes a tool then returns ONLY the final turn's text (R4)", async () => {
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					text: "let me search",
+					stopReason: "tool_use",
+					toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({ text: "Final answer.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({ ok: true, content: "search hit" }));
+		const events: ToolEvent[] = [];
+		const { executeCard } = await import("./llm.js");
+
+		const result = await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(execute)],
+			3,
+			(e: ToolEvent) => events.push(e),
+		);
+
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(events.map((e) => e.phase)).toEqual(
+			expect.arrayContaining(["started", "result"]),
+		);
+		expect(result.output).toBe("Final answer.");
+		expect(result.output).not.toContain("let me search");
+	});
+
+	it("refuses tool calls past the budget but still produces a final answer (R2)", async () => {
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "tu_1", name: "web_search", input: { query: "a" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "tu_2", name: "web_search", input: { query: "b" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({ text: "Done within budget.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({ ok: true, content: "hit" }));
+		const { executeCard } = await import("./llm.js");
+
+		const result = await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(execute)],
+			1,
+			vi.fn(),
+		);
+
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(result.output).toBe("Done within budget.");
+	});
+
+	it("feeds a structured tool error back and finishes without throwing (R3)", async () => {
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({ text: "Recovered.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({
+			ok: false,
+			content: "rate limited",
+			errorCode: "RATE_LIMIT",
+		}));
+		const events: ToolEvent[] = [];
+		const { executeCard } = await import("./llm.js");
+
+		const result = await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(execute)],
+			3,
+			(e: ToolEvent) => events.push(e),
+		);
+
+		expect(
+			events.some((e) => e.phase === "failed" && e.errorCode === "RATE_LIMIT"),
+		).toBe(true);
+		expect(result.output).toBe("Recovered.");
+	});
+
+	it("degrades to the single-shot path when tools are empty (R1)", async () => {
+		mockStream.mockReturnValueOnce(
+			makeTurn({ text: "Plain answer.", stopReason: "end_turn" }),
+		);
+		const { executeCard } = await import("./llm.js");
+		const onToken = vi.fn();
+
+		const result = await executeCard("prompt", "intent", [], false, onToken);
+
+		expect(mockStream).toHaveBeenCalledTimes(1);
+		expect(mockStream.mock.calls[0][0]).not.toHaveProperty("tools");
+		expect(result.output).toBe("Plain answer.");
+		expect(onToken).toHaveBeenCalledWith("Plain answer.");
 	});
 });

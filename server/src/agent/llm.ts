@@ -14,6 +14,8 @@
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { renderSystemPrompt } from "./templates.js";
+import { toAnthropicToolDefs } from "./tools/registry.js";
+import type { Tool, ToolEvent } from "./tools/types.js";
 
 // ---------------------------------------------------------------------------
 // Client singleton — lazy-initialized on first call
@@ -244,6 +246,9 @@ export async function executeCard(
 	// so callers can pass it without a future breaking change.
 	_reasoning: boolean,
 	onToken: (token: string) => void,
+	tools: Tool[] = [],
+	toolBudget = 3,
+	onToolEvent?: (e: ToolEvent) => void,
 ): Promise<ExecuteResult> {
 	const client = getClient();
 
@@ -261,11 +266,37 @@ export async function executeCard(
 			"\n</previous_outputs>";
 	}
 
-	// Stream the response
+	// Empty tools → legacy single-shot path (no tools param)
+	if (tools.length === 0) {
+		return executeCardSingleShot(
+			client,
+			rendered,
+			userContent,
+			onToken,
+		);
+	}
+
+	return executeCardWithTools(
+		client,
+		rendered,
+		userContent,
+		tools,
+		toolBudget,
+		onToken,
+		onToolEvent,
+	);
+}
+
+async function executeCardSingleShot(
+	client: Anthropic,
+	system: string,
+	userContent: string,
+	onToken: (token: string) => void,
+): Promise<ExecuteResult> {
 	const stream = client.messages.stream({
 		model: MODEL,
 		max_tokens: 4096,
-		system: rendered,
+		system,
 		messages: [{ role: "user", content: userContent }],
 	});
 
@@ -285,7 +316,6 @@ export async function executeCard(
 
 	const finalMessage = await stream.finalMessage();
 
-	// Extract thinking block if present (Claude extended thinking)
 	for (const block of finalMessage.content) {
 		if (block.type === "thinking") {
 			thinking = block.thinking;
@@ -293,4 +323,155 @@ export async function executeCard(
 	}
 
 	return { output, thinking: thinking || undefined };
+}
+
+type AnthropicMessage = Anthropic.MessageParam;
+
+async function executeCardWithTools(
+	client: Anthropic,
+	system: string,
+	userContent: string,
+	tools: Tool[],
+	toolBudget: number,
+	onToken: (token: string) => void,
+	onToolEvent?: (e: ToolEvent) => void,
+): Promise<ExecuteResult> {
+	const toolsByName = new Map(tools.map((t) => [t.name, t]));
+	const messages: AnthropicMessage[] = [
+		{ role: "user", content: userContent },
+	];
+	let remainingBudget = toolBudget;
+	let thinking: string | undefined;
+	// Allow toolBudget executions, refused requests, and a final text turn
+	const maxIterations = toolBudget + 5;
+
+	for (let iteration = 0; iteration < maxIterations; iteration++) {
+		const stream = client.messages.stream({
+			model: MODEL,
+			max_tokens: 4096,
+			system,
+			messages,
+			tools: toAnthropicToolDefs(tools),
+		});
+
+		let turnText = "";
+
+		for await (const event of stream) {
+			if (
+				event.type === "content_block_delta" &&
+				event.delta.type === "text_delta"
+			) {
+				turnText += event.delta.text;
+			}
+		}
+
+		const finalMessage = await stream.finalMessage();
+
+		for (const block of finalMessage.content) {
+			if (block.type === "thinking") {
+				thinking = block.thinking;
+			}
+		}
+
+		if (finalMessage.stop_reason === "tool_use") {
+			if (turnText && onToolEvent) {
+				onToolEvent({ phase: "reasoning", text: turnText });
+			}
+
+			messages.push({
+				role: "assistant",
+				content: finalMessage.content,
+			});
+
+			const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+			for (const block of finalMessage.content) {
+				if (block.type !== "tool_use") continue;
+
+				const query =
+					typeof block.input === "object" &&
+					block.input !== null &&
+					"query" in block.input
+						? String((block.input as { query: unknown }).query)
+						: undefined;
+
+				if (remainingBudget > 0) {
+					remainingBudget--;
+					const tool = toolsByName.get(block.name);
+
+					onToolEvent?.({
+						phase: "started",
+						toolName: block.name,
+						query,
+					});
+
+					if (!tool) {
+						const content = `Unknown tool: ${block.name}`;
+						onToolEvent?.({
+							phase: "failed",
+							toolName: block.name,
+							query,
+							errorCode: "UNKNOWN_TOOL",
+						});
+						toolResults.push({
+							type: "tool_result",
+							tool_use_id: block.id,
+							content,
+							is_error: true,
+						});
+						continue;
+					}
+
+					const result = await tool.execute(
+						block.input as Record<string, unknown>,
+					);
+
+					if (result.ok) {
+						onToolEvent?.({
+							phase: "result",
+							toolName: block.name,
+							query,
+						});
+						toolResults.push({
+							type: "tool_result",
+							tool_use_id: block.id,
+							content: result.content,
+						});
+					} else {
+						onToolEvent?.({
+							phase: "failed",
+							toolName: block.name,
+							query,
+							errorCode: result.errorCode,
+						});
+						toolResults.push({
+							type: "tool_result",
+							tool_use_id: block.id,
+							content: result.content,
+							is_error: true,
+						});
+					}
+				} else {
+					toolResults.push({
+						type: "tool_result",
+						tool_use_id: block.id,
+						content: "search limit reached",
+						is_error: true,
+					});
+				}
+			}
+
+			messages.push({ role: "user", content: toolResults });
+			continue;
+		}
+
+		// Final turn — stream buffered text via onToken
+		if (turnText) {
+			onToken(turnText);
+		}
+
+		return { output: turnText, thinking };
+	}
+
+	return { output: "", thinking };
 }
