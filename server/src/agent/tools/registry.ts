@@ -1,4 +1,4 @@
-import type { Tool } from "./types.js";
+import type { Tool, ToolInputSchema } from "./types.js";
 
 export interface ToolRegistry {
 	resolveTools(names: string[]): Tool[];
@@ -7,7 +7,7 @@ export interface ToolRegistry {
 export interface AnthropicToolDef {
 	name: string;
 	description: string;
-	input_schema: Record<string, unknown>;
+	input_schema: ToolInputSchema;
 }
 
 export function createToolRegistry(tools: Tool[]): ToolRegistry {

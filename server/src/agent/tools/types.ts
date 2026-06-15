@@ -1,15 +1,23 @@
 export type ToolRiskTier = "read-only" | "write" | "destructive";
 
+/** Anthropic Messages API requires `type: "object"` on tool input_schema. */
+export interface ToolInputSchema {
+  type: "object";
+  properties?: unknown;
+  required?: string[] | null;
+  [key: string]: unknown;
+}
+
 export interface ToolResult {
-	ok: boolean;
-	content: string;
-	errorCode?: string;
+  ok: boolean;
+  content: string;
+  errorCode?: string;
 }
 
 export interface Tool {
-	name: string;
-	description: string;
-	inputSchema: Record<string, unknown>;
+  name: string;
+  description: string;
+  inputSchema: ToolInputSchema;
 	riskTier: ToolRiskTier;
 	execute: (input: Record<string, unknown>) => Promise<ToolResult>;
 }

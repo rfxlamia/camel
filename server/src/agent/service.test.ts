@@ -747,7 +747,7 @@ describe("runPipeline tool wiring", () => {
 				{
 					name: "web_search",
 					description: "Search",
-					inputSchema: {},
+					inputSchema: { type: "object" },
 					riskTier: "read-only" as const,
 					execute: vi.fn(),
 				},
