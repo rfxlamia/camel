@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { getToolTrace } from "./routes.js";
+import { getToolTrace, runInsertColumns } from "./routes.js";
 
 describe("getToolTrace (read-only replay)", () => {
 	it("returns the flat trace ordered by created_at, scoped to the board", async () => {
@@ -46,5 +46,62 @@ describe("getToolTrace (read-only replay)", () => {
 		expect(
 			(fakeDb.query.mock.calls[0][0] as string).toLowerCase(),
 		).not.toContain("insert");
+	});
+});
+
+describe("insertColumns tools serialization", () => {
+	it("passes a raw array for TEXT[] tools column, not a JSON string", async () => {
+		const mockDb = { query: vi.fn(async () => ({})) };
+
+		await runInsertColumns(mockDb as any, {
+			boardId: 1,
+			workspaceId: 1,
+			columns: [
+				{
+					name: "Research",
+					position: 1,
+					slug: "research-specialist",
+					reasoning: false,
+					system_prompt: "Do research",
+					tools: ["web_search"],
+					tool_budget: 3,
+				},
+			],
+		});
+
+		expect(mockDb.query).toHaveBeenCalledTimes(1);
+		const params = mockDb.query.mock.calls[0][1] as unknown[];
+		const toolsArg = params[7]; // $8 is the tools parameter
+
+		// Must be a raw array, NOT a JSON string
+		expect(Array.isArray(toolsArg)).toBe(true);
+		expect(toolsArg).toEqual(["web_search"]);
+		expect(typeof toolsArg).not.toBe("string");
+	});
+
+	it("passes an empty array when tools is undefined", async () => {
+		const mockDb = { query: vi.fn(async () => ({})) };
+
+		await runInsertColumns(mockDb as any, {
+			boardId: 1,
+			workspaceId: 1,
+			columns: [
+				{
+					name: "Analysis",
+					position: 2,
+					slug: "analysis",
+					reasoning: false,
+					system_prompt: "Analyse",
+					tools: undefined,
+					tool_budget: undefined,
+				},
+			],
+		});
+
+		const params = mockDb.query.mock.calls[0][1] as unknown[];
+		const toolsArg = params[7];
+
+		expect(Array.isArray(toolsArg)).toBe(true);
+		expect(toolsArg).toEqual([]);
 	});
 });

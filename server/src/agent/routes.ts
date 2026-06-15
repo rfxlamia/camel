@@ -92,6 +92,39 @@ export async function getToolTrace(
 }
 
 // ---------------------------------------------------------------------------
+// Exported helper for insertColumns — testable without a live pool
+// ---------------------------------------------------------------------------
+
+export async function runInsertColumns(
+	db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+	data: {
+		boardId: number;
+		workspaceId: number;
+		columns: Array<Record<string, unknown>>;
+	},
+): Promise<void> {
+	for (const col of data.columns) {
+		const tools = col.tools as string[] | undefined;
+		const toolBudget = col.tool_budget as number | undefined;
+		await db.query(
+			`INSERT INTO columns (title, position, board_id, slug, reasoning, system_prompt, workspace_id, tools, tool_budget)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			[
+				col.name,
+				col.position,
+				data.boardId,
+				col.slug,
+				col.reasoning,
+				col.system_prompt,
+				data.workspaceId,
+				tools ?? [],
+				toolBudget ?? null,
+			],
+		);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Real dependency implementations
 // ---------------------------------------------------------------------------
 
@@ -143,31 +176,8 @@ const realDeps: AgentBoardServiceDeps = {
 		);
 	},
 
-	insertColumns: async (data) => {
-		for (const col of data.columns) {
-			const tools = (col as Record<string, unknown>).tools as
-				| string[]
-				| undefined;
-			const toolBudget = (col as Record<string, unknown>).tool_budget as
-				| number
-				| undefined;
-			await pool.query(
-				`INSERT INTO columns (title, position, board_id, slug, reasoning, system_prompt, workspace_id, tools, tool_budget)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-				[
-					col.name,
-					col.position,
-					data.boardId,
-					col.slug,
-					col.reasoning,
-					col.system_prompt,
-					data.workspaceId,
-					tools ? JSON.stringify(tools) : "{}",
-					toolBudget ?? null,
-				],
-			);
-		}
-	},
+	insertColumns: (data) =>
+		runInsertColumns(pool, data as Parameters<typeof runInsertColumns>[1]),
 
 	getBoard: async (boardId) => {
 		const { rows } = await pool.query(
