@@ -342,8 +342,8 @@ async function executeCardWithTools(
 	];
 	let remainingBudget = toolBudget;
 	let thinking: string | undefined;
-	// Allow toolBudget executions, refused requests, and a final text turn
-	const maxIterations = toolBudget + 5;
+	// toolBudget executions + refused retries + one final text turn
+	const maxIterations = 2 * toolBudget + 1;
 
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const stream = client.messages.stream({
