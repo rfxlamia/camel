@@ -49,6 +49,22 @@ function getClient(): Anthropic {
 }
 
 // ---------------------------------------------------------------------------
+// Response helpers
+// ---------------------------------------------------------------------------
+
+// Reasoning models (e.g. MiMo) interleave `thinking` blocks with `text`, and
+// the text block is not always at index 0. Concatenate every text block so we
+// never lose the answer to a thinking block sitting in front of it.
+function extractText(response: Anthropic.Message): string {
+	return response.content
+		.filter(
+			(block): block is Anthropic.TextBlock => block.type === "text",
+		)
+		.map((block) => block.text)
+		.join("");
+}
+
+// ---------------------------------------------------------------------------
 // classifyIntent — match user intent to a board template
 // ---------------------------------------------------------------------------
 
@@ -76,16 +92,18 @@ async function classifyIntentOnce(
 	intent: string,
 ): Promise<ClassifyResult> {
 	// Fix #1: temperature: 0 — classification is deterministic, variance is unwanted
+	// Budget: reasoning models spend tokens on a thinking block before the JSON.
+	// 256 truncated the answer (stop_reason=max_tokens) → unparseable → 422.
+	// max_tokens is a cap, not a target: we only pay for tokens generated.
 	const response = await client.messages.create({
 		model: MODEL,
-		max_tokens: 256,
+		max_tokens: 2048,
 		temperature: 0,
 		system: CLASSIFY_SYSTEM_PROMPT,
 		messages: [{ role: "user", content: intent }],
 	});
 
-	const text =
-		response.content[0]?.type === "text" ? response.content[0].text : "";
+	const text = extractText(response);
 
 	// Try multiple parsing strategies
 	try {
@@ -188,7 +206,7 @@ export async function generateExplanation(
 
 	const response = await client.messages.create({
 		model: MODEL,
-		max_tokens: 512,
+		max_tokens: 2048,
 		system:
 			"You explain kanban board plans in 2-3 concise sentences for a non-technical user.",
 		messages: [
@@ -199,7 +217,7 @@ export async function generateExplanation(
 		],
 	});
 
-	return response.content[0]?.type === "text" ? response.content[0].text : "";
+	return extractText(response);
 }
 
 // ---------------------------------------------------------------------------
@@ -215,7 +233,7 @@ export async function generateClarificationQuestion(
 
 	const response = await client.messages.create({
 		model: MODEL,
-		max_tokens: 256,
+		max_tokens: 2048,
 		system:
 			"You are helping a user refine their request. Ask ONE focused clarification question.",
 		messages: [
@@ -226,7 +244,7 @@ export async function generateClarificationQuestion(
 		],
 	});
 
-	return response.content[0]?.type === "text" ? response.content[0].text : "";
+	return extractText(response);
 }
 
 // ---------------------------------------------------------------------------

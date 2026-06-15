@@ -150,6 +150,42 @@ describe("classifyIntent", () => {
 		expect(mockCreate).toHaveBeenCalledTimes(1);
 	});
 
+	it("parses the text block even when a thinking block comes first", async () => {
+		// Reasoning models (e.g. MiMo) can emit content as [thinking, text].
+		// Reading only content[0] would yield "" and fail every parse attempt.
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{ type: "thinking", thinking: "Let me classify this request." },
+				{
+					type: "text",
+					text: '{"templateId":"research-report","explanation":"Research task detected"}',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("riset pasar air mineral");
+		expect(result.templateId).toBe("research-report");
+		expect(result.explanation).toBe("Research task detected");
+		expect(mockCreate).toHaveBeenCalledTimes(1);
+	});
+
+	it("requests a token budget large enough for reasoning models", async () => {
+		// Root cause of the live 422: max_tokens=256 truncated the JSON before
+		// the model's thinking block finished. Guard against regressing to a
+		// budget too tight for a reasoning model.
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"templateId":"research-report","explanation":"ok"}',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		await classifyIntent("riset apa saja");
+		expect(mockCreate.mock.calls[0][0].max_tokens).toBeGreaterThanOrEqual(1024);
+	});
+
 	it("Strategy 3 regex handles explanation containing } character", async () => {
 		// Old regex \{[^}]*\} would truncate this JSON — new [\s\S]* handles it
 		mockCreate.mockResolvedValueOnce({
