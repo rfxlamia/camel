@@ -120,15 +120,19 @@ function AgentBoardVisual({
 	board,
 	onCardClick,
 	activeColumnSlug,
+	doneColumnSlugs,
 }: {
 	board: AgentBoard;
 	onCardClick: (column: AgentColumn) => void;
 	activeColumnSlug: string | null;
+	doneColumnSlugs: Set<string>;
 }) {
 	return (
 		<div className="flex gap-4 overflow-x-auto p-4">
 			{board.columns.map((col) => {
-				const isActive = col.slug === activeColumnSlug;
+				// done takes priority over active (explicit mutual exclusivity)
+				const isDone = doneColumnSlugs.has(col.slug);
+				const isActive = !isDone && col.slug === activeColumnSlug;
 				return (
 					<div
 						key={col.id}
@@ -143,12 +147,17 @@ function AgentBoardVisual({
 							</span>
 						</div>
 						<div className="min-h-[60px] space-y-2 p-2">
+							{isDone && (
+								<div className="flex justify-center py-1">
+									<SuccessAnimation size={48} />
+								</div>
+							)}
 							{isActive && (
 								<div className="flex justify-center py-1">
 									<LoadingCamel size={48} />
 								</div>
 							)}
-							{col.cards.length === 0 && !isActive && (
+							{col.cards.length === 0 && !isDone && !isActive && (
 								<p className="py-4 text-center text-xs text-neutral-400">
 									No cards
 								</p>
@@ -458,6 +467,14 @@ export default function AgentPage() {
 			}, null)
 		: null;
 
+	// Collect slugs of columns that have finished successfully.
+	// Cleared naturally when clearAgentEvents() fires at the start of each run.
+	const doneColumnSlugs = new Set(
+		agentEvents
+			.filter((e) => e.type === "agent.card.done" && e.columnSlug)
+			.map((e) => e.columnSlug as string),
+	);
+
 	// Determine if any agent.card.token events are streaming
 	const isStreaming =
 		isRunning && agentEvents.some((e) => e.type === "agent.card.token");
@@ -514,6 +531,7 @@ export default function AgentPage() {
 								board={board}
 								onCardClick={setDetailColumn}
 								activeColumnSlug={activeColumnSlug}
+								doneColumnSlugs={doneColumnSlugs}
 							/>
 					</div>
 				)}
@@ -613,11 +631,9 @@ export default function AgentPage() {
 								</div>
 							)}
 							{isDone && (
-								<div className="flex flex-col items-center gap-2">
-									<SuccessAnimation size={48} />
-									<span className="text-sm text-success-900">
-										Execution complete
-									</span>
+								<div className="flex items-center gap-1.5 text-sm text-success-900">
+									<CheckCircle size={16} aria-hidden />
+									Execution complete
 								</div>
 							)}
 							{isFailed && (
