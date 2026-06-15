@@ -4,6 +4,7 @@ import { Bot, CheckCircle, Send, XCircle } from "lucide-react";
 import { ApiError, api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
 import LoadingCamel from "../components/LoadingCamel";
+import SuccessAnimation from "../components/SuccessAnimation";
 import { useBoard } from "../context/BoardContext";
 import {
 	initialQueue,
@@ -612,9 +613,11 @@ export default function AgentPage() {
 								</div>
 							)}
 							{isDone && (
-								<div className="flex items-center gap-1.5 text-sm text-success-900">
-									<CheckCircle size={16} aria-hidden />
-									Execution complete
+								<div className="flex flex-col items-center gap-2">
+									<SuccessAnimation size={48} />
+									<span className="text-sm text-success-900">
+										Execution complete
+									</span>
 								</div>
 							)}
 							{isFailed && (
