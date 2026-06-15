@@ -14,6 +14,7 @@ import {
 	findUnresolvedPlaceholders,
 	renderSystemPrompt,
 } from "./templates.js";
+import type { Tool } from "./tools/types.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,7 +113,7 @@ export interface AgentBoardServiceDeps {
 		previousOutputs: string[],
 		reasoning: boolean,
 		onToken: (token: string) => void,
-		tools?: unknown[],
+		tools?: Tool[],
 		toolBudget?: number,
 		onToolEvent?: (e: {
 			phase: string;
@@ -151,7 +152,7 @@ export interface AgentBoardServiceDeps {
 	}) => Promise<void>;
 
 	toolRegistry?: {
-		resolveTools(names: string[]): unknown[];
+		resolveTools(names: string[]): Tool[];
 	};
 
 	getOutput?: (data: {
@@ -288,10 +289,19 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}, 200);
 
-			const resolvedTools = deps.toolRegistry?.resolveTools(firstCard.tools ?? []) ?? [];
+			const resolvedTools =
+				deps.toolRegistry?.resolveTools(firstCard.tools ?? []) ?? [];
 			const toolBudget = firstCard.toolBudget ?? 3;
 
-			const onToolEvent = (e: { phase: string; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number; text?: string }) => {
+			const onToolEvent = (e: {
+				phase: string;
+				toolName?: string;
+				query?: string;
+				resultCount?: number;
+				errorCode?: string;
+				attempt?: number;
+				text?: string;
+			}) => {
 				// Flush token buffer before emitting tool event
 				if (tokenBuffer) {
 					deps.publishEvent?.(workspaceId, {
@@ -478,10 +488,19 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					}
 				}, 200);
 
-				const resolvedTools = deps.toolRegistry?.resolveTools(column.tools ?? []) ?? [];
+				const resolvedTools =
+					deps.toolRegistry?.resolveTools(column.tools ?? []) ?? [];
 				const toolBudget = column.toolBudget ?? 3;
 
-				const onToolEvent = (e: { phase: string; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number; text?: string }) => {
+				const onToolEvent = (e: {
+					phase: string;
+					toolName?: string;
+					query?: string;
+					resultCount?: number;
+					errorCode?: string;
+					attempt?: number;
+					text?: string;
+				}) => {
 					// Flush token buffer before emitting tool event
 					if (tokenBuffer) {
 						deps.publishEvent?.(workspaceId, {

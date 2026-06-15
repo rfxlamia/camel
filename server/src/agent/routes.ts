@@ -46,7 +46,12 @@ export interface ToolTraceItem {
 }
 
 export async function getToolTrace(
-	db: { query: (sql: string, params: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
+	db: {
+		query: (
+			sql: string,
+			params: unknown[],
+		) => Promise<{ rows: Array<Record<string, unknown>> }>;
+	},
 	boardId: number,
 ): Promise<ToolTraceItem[]> {
 	const { rows } = await db.query(
@@ -64,7 +69,8 @@ export async function getToolTrace(
 
 		if (input && typeof input === "object") {
 			if (typeof input.query === "string") query = input.query;
-			if (typeof input.resultCount === "number") resultCount = input.resultCount;
+			if (typeof input.resultCount === "number")
+				resultCount = input.resultCount;
 		}
 
 		// Fallback: try to parse resultCount from result text if it's a number string
@@ -139,8 +145,12 @@ const realDeps: AgentBoardServiceDeps = {
 
 	insertColumns: async (data) => {
 		for (const col of data.columns) {
-			const tools = (col as Record<string, unknown>).tools as string[] | undefined;
-			const toolBudget = (col as Record<string, unknown>).tool_budget as number | undefined;
+			const tools = (col as Record<string, unknown>).tools as
+				| string[]
+				| undefined;
+			const toolBudget = (col as Record<string, unknown>).tool_budget as
+				| number
+				| undefined;
 			await pool.query(
 				`INSERT INTO columns (title, position, board_id, slug, reasoning, system_prompt, workspace_id, tools, tool_budget)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
