@@ -37,7 +37,22 @@ ALTER TABLE columns ADD COLUMN IF NOT EXISTS board_id
 ALTER TABLE columns ADD COLUMN IF NOT EXISTS slug TEXT;
 ALTER TABLE columns ADD COLUMN IF NOT EXISTS reasoning BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE columns ADD COLUMN IF NOT EXISTS system_prompt TEXT;
+ALTER TABLE columns ADD COLUMN IF NOT EXISTS tools TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE columns ADD COLUMN IF NOT EXISTS tool_budget INTEGER;
+
+CREATE TABLE IF NOT EXISTS agent_tool_calls (
+  id          SERIAL PRIMARY KEY,
+  board_id    INTEGER NOT NULL REFERENCES agent_boards(id) ON DELETE CASCADE,
+  column_slug TEXT NOT NULL,
+  tool_name   TEXT NOT NULL,
+  input       JSONB,
+  result      TEXT,
+  error_code  TEXT,
+  attempt     INTEGER NOT NULL DEFAULT 1,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE INDEX IF NOT EXISTS idx_agent_boards_workspace ON agent_boards(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agent_conversations_board ON agent_conversations(board_id);
 CREATE INDEX IF NOT EXISTS idx_columns_board ON columns(board_id);
+CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_board ON agent_tool_calls(board_id);

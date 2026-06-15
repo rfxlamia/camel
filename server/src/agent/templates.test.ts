@@ -120,6 +120,21 @@ describe("findUnresolvedPlaceholders", () => {
   });
 });
 
+describe("research-report template tool assignment", () => {
+  const template = getTemplate("research-report")!;
+  const bySlug = (slug: string) => template.columns.find((c) => c.slug === slug)!;
+
+  it("gives the research-specialist column web_search", () => {
+    expect(bySlug("research-specialist").tools).toEqual(["web_search"]);
+  });
+  it("gives non-research columns no tools", () => {
+    expect(bySlug("editor").tools ?? []).toEqual([]);
+    expect(bySlug("writer").tools ?? []).toEqual([]);
+    expect(bySlug("analysis-specialist").tools ?? []).toEqual([]);
+    expect(bySlug("qa-guardian").tools ?? []).toEqual([]);
+  });
+});
+
 describe("RESEARCH_REPORT_COLUMNS", () => {
   it("every column has a non-empty output_key", () => {
     for (const column of RESEARCH_REPORT_COLUMNS) {
