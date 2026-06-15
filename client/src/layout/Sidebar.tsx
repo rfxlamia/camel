@@ -5,7 +5,7 @@ import {
 	useState,
 	type FormEvent,
 } from "react";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 import {
 	Activity,
 	Bot,
@@ -39,6 +39,58 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 	{ to: "/history", label: "History", icon: History },
 	{ to: "/settings", label: "Settings", icon: Settings },
 ];
+
+// Items grouped by mode (Settings lives in footer, kept in NAV_ITEMS for AppLayout pageTitle)
+const KANBAN_NAV = NAV_ITEMS.filter((i) =>
+	["/board", "/dashboard", "/activity"].includes(i.to),
+);
+const AGENT_NAV = NAV_ITEMS.filter((i) => ["/agent", "/history"].includes(i.to));
+const AGENT_PATHS = ["/agent", "/history"];
+const SETTINGS_ITEM = NAV_ITEMS.find((i) => i.to === "/settings")!;
+
+type Mode = "kanban" | "agent";
+
+function getModeFromPath(pathname: string): Mode {
+	return AGENT_PATHS.some((p) => pathname.startsWith(p)) ? "agent" : "kanban";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mode Switcher                                                       */
+/* ------------------------------------------------------------------ */
+
+interface ModeSwitcherProps {
+	mode: Mode;
+	onSwitch: (m: Mode) => void;
+}
+
+function ModeSwitcher({ mode, onSwitch }: ModeSwitcherProps) {
+	return (
+		<div className="flex rounded-lg bg-neutral-100 p-1 gap-1">
+			<button
+				type="button"
+				onClick={() => onSwitch("kanban")}
+				className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+					mode === "kanban"
+						? "bg-white text-neutral-900 shadow-sm"
+						: "text-neutral-500 hover:text-neutral-700"
+				}`}
+			>
+				Kanban
+			</button>
+			<button
+				type="button"
+				onClick={() => onSwitch("agent")}
+				className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+					mode === "agent"
+						? "bg-white text-neutral-900 shadow-sm"
+						: "text-neutral-500 hover:text-neutral-700"
+				}`}
+			>
+				Agent
+			</button>
+		</div>
+	);
+}
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
 	const base =
@@ -745,15 +797,28 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 	const { logout, settings } = useBoard();
+	const location = useLocation();
 	const labelClass = collapsed
 		? "hidden"
 		: "hidden lg:inline whitespace-nowrap";
 	const [showSignOutPopover, setShowSignOutPopover] = useState(false);
+	const [mode, setMode] = useState<Mode>(() => getModeFromPath(location.pathname));
+
+	// Sync switcher tab when navigating directly to a route
+	useEffect(() => {
+		const next = getModeFromPath(location.pathname);
+		// Only auto-switch when navigating to a mode-specific route (not settings)
+		if (location.pathname !== "/settings") {
+			setMode(next);
+		}
+	}, [location.pathname]);
 
 	const handleSignOut = useCallback(() => {
 		setShowSignOutPopover(false);
 		void logout();
 	}, [logout]);
+
+	const activeNav = mode === "kanban" ? KANBAN_NAV : AGENT_NAV;
 
 	return (
 		<aside
@@ -761,19 +826,28 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 				collapsed ? "w-14" : "w-14 lg:w-56"
 			}`}
 		>
+			{/* Header */}
 			<div className="flex h-14 items-center gap-2 border-b border-neutral-200 px-3">
 				<img
 					src={settings.logoPath}
 					alt={settings.boardName}
 					className="h-6 w-6 shrink-0"
 				/>
-				<span className={`text-sm text-primary-900 ${labelClass}`}>
+				<span className={`text-sm font-medium text-primary-900 ${labelClass}`}>
 					{settings.boardName}
 				</span>
 			</div>
 
+			{/* Mode switcher — only visible when expanded */}
+			{!collapsed && (
+				<div className="hidden border-b border-neutral-200 px-2 py-2 lg:block">
+					<ModeSwitcher mode={mode} onSwitch={setMode} />
+				</div>
+			)}
+
+			{/* Nav items */}
 			<nav className="flex flex-1 flex-col gap-1 p-2" aria-label="Main">
-				{NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+				{activeNav.map(({ to, label, icon: Icon }) => (
 					<NavLink key={to} to={to} className={navLinkClass} title={label}>
 						<Icon size={18} className="shrink-0" aria-hidden />
 						<span className={labelClass}>{label}</span>
@@ -781,34 +855,46 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 				))}
 			</nav>
 
-			<div className="border-t border-neutral-200 p-2">
-				<WorkspaceSwitcher collapsed={collapsed} placement="top" />
-			</div>
-
-			<div className="relative border-t border-neutral-200 p-2">
-				<button
-					onClick={() => setShowSignOutPopover((prev) => !prev)}
-					title="Sign out"
-					aria-label="Sign out"
-					className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+			{/* Footer */}
+			<div className="border-t border-neutral-200 p-2 space-y-1">
+				{/* Settings */}
+				<NavLink
+					to={SETTINGS_ITEM.to}
+					className={navLinkClass}
+					title={SETTINGS_ITEM.label}
 				>
-					<LogOut size={18} className="shrink-0" aria-hidden />
-					<span className={labelClass}>Sign out</span>
-				</button>
-				<SignOutPopover
-					open={showSignOutPopover}
-					onConfirm={handleSignOut}
-					onCancel={() => setShowSignOutPopover(false)}
-					placement="right"
-				/>
-			</div>
+					<SETTINGS_ITEM.icon size={18} className="shrink-0" aria-hidden />
+					<span className={labelClass}>{SETTINGS_ITEM.label}</span>
+				</NavLink>
 
-			<div className="hidden border-t border-neutral-200 p-2 lg:block">
+				{/* Workspace switcher */}
+				<WorkspaceSwitcher collapsed={collapsed} placement="top" />
+
+				{/* Sign out */}
+				<div className="relative">
+					<button
+						onClick={() => setShowSignOutPopover((prev) => !prev)}
+						title="Sign out"
+						aria-label="Sign out"
+						className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					>
+						<LogOut size={18} className="shrink-0" aria-hidden />
+						<span className={labelClass}>Sign out</span>
+					</button>
+					<SignOutPopover
+						open={showSignOutPopover}
+						onConfirm={handleSignOut}
+						onCancel={() => setShowSignOutPopover(false)}
+						placement="right"
+					/>
+				</div>
+
+				{/* Collapse toggle — desktop only */}
 				<button
 					onClick={onToggle}
 					title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
 					aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-					className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					className="hidden lg:flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 				>
 					{collapsed ? (
 						<PanelLeftOpen size={18} className="shrink-0" aria-hidden />
@@ -833,13 +919,23 @@ interface MobileNavProps {
 
 export function MobileNav({ open, onClose }: MobileNavProps) {
 	const { logout, settings } = useBoard();
+	const location = useLocation();
 	const [showSignOutPopover, setShowSignOutPopover] = useState(false);
+	const [mode, setMode] = useState<Mode>(() => getModeFromPath(location.pathname));
+
+	useEffect(() => {
+		if (location.pathname !== "/settings") {
+			setMode(getModeFromPath(location.pathname));
+		}
+	}, [location.pathname]);
 
 	const handleSignOut = useCallback(() => {
 		setShowSignOutPopover(false);
 		onClose();
 		void logout();
 	}, [logout, onClose]);
+
+	const activeNav = mode === "kanban" ? KANBAN_NAV : AGENT_NAV;
 
 	if (!open) return null;
 	return (
@@ -850,6 +946,7 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
 				aria-hidden
 			/>
 			<div className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-lg">
+				{/* Header */}
 				<div className="flex h-14 items-center justify-between gap-2 border-b border-neutral-200 px-4">
 					<div className="flex min-w-0 flex-1 items-center gap-2">
 						<img
@@ -857,7 +954,7 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
 							alt={settings.boardName}
 							className="h-6 w-6 shrink-0"
 						/>
-						<span className="truncate text-sm text-primary-900">
+						<span className="truncate text-sm font-medium text-primary-900">
 							{settings.boardName}
 						</span>
 					</div>
@@ -869,8 +966,15 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
 						<X size={18} aria-hidden />
 					</button>
 				</div>
+
+				{/* Mode switcher */}
+				<div className="border-b border-neutral-200 px-3 py-2">
+					<ModeSwitcher mode={mode} onSwitch={setMode} />
+				</div>
+
+				{/* Nav items */}
 				<nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Main">
-					{NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+					{activeNav.map(({ to, label, icon: Icon }) => (
 						<NavLink
 							key={to}
 							to={to}
@@ -885,24 +989,36 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
 					))}
 				</nav>
 
-				<div className="border-t border-neutral-200 p-3">
-					<WorkspaceSwitcher placement="top" />
-				</div>
-
-				<div className="relative border-t border-neutral-200 p-3">
-					<button
-						onClick={() => setShowSignOutPopover((prev) => !prev)}
-						className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				{/* Footer */}
+				<div className="border-t border-neutral-200 p-3 space-y-1">
+					<NavLink
+						to={SETTINGS_ITEM.to}
+						onClick={onClose}
+						className={({ isActive }) =>
+							`${navLinkClass({ isActive })} min-h-11 text-base`
+						}
 					>
-						<LogOut size={18} className="shrink-0" aria-hidden />
-						Sign out
-					</button>
-					<SignOutPopover
-						open={showSignOutPopover}
-						onConfirm={handleSignOut}
-						onCancel={() => setShowSignOutPopover(false)}
-						placement="top"
-					/>
+						<SETTINGS_ITEM.icon size={20} className="shrink-0" aria-hidden />
+						{SETTINGS_ITEM.label}
+					</NavLink>
+
+					<WorkspaceSwitcher placement="top" />
+
+					<div className="relative">
+						<button
+							onClick={() => setShowSignOutPopover((prev) => !prev)}
+							className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							<LogOut size={18} className="shrink-0" aria-hidden />
+							Sign out
+						</button>
+						<SignOutPopover
+							open={showSignOutPopover}
+							onConfirm={handleSignOut}
+							onCancel={() => setShowSignOutPopover(false)}
+							placement="top"
+						/>
+					</div>
 				</div>
 			</div>
 		</div>
