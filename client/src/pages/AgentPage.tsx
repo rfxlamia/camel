@@ -130,13 +130,38 @@ function AgentBoardVisual({
 	return (
 		<div className="flex gap-4 overflow-x-auto p-4">
 			{board.columns.map((col) => {
-				// done takes priority over active (explicit mutual exclusivity)
-				const isDone = doneColumnSlugs.has(col.slug);
+				// done takes priority over active (explicit mutual exclusivity).
+				// board.executionStatus === "done" covers boards loaded from a prior session
+				// where agentEvents is empty and doneColumnSlugs would otherwise be empty.
+				const isDone =
+					board.executionStatus === "done" || doneColumnSlugs.has(col.slug);
 				const isActive = !isDone && col.slug === activeColumnSlug;
+
+				// Done columns become interactive — the whole card opens AgentCardDetail.
+				// Active and normal columns keep their original interaction model.
+				const interactiveProps = isDone
+					? {
+							onClick: () => onCardClick(col),
+							role: "button" as const,
+							tabIndex: 0,
+							onKeyDown: (e: React.KeyboardEvent) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault(); // prevent scroll on Space
+									onCardClick(col);
+								}
+							},
+						}
+					: {};
+
 				return (
 					<div
 						key={col.id}
-						className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white"
+						className={`w-64 shrink-0 rounded-lg border border-neutral-200 bg-white ${
+							isDone
+								? "cursor-pointer hover:border-primary-300 hover:shadow-sm transition-shadow"
+								: ""
+						}`}
+						{...interactiveProps}
 					>
 						<div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2">
 							<h3 className="text-sm font-medium text-neutral-900 truncate">
@@ -157,12 +182,12 @@ function AgentBoardVisual({
 									<LoadingCamel size={48} />
 								</div>
 							)}
-							{col.cards.length === 0 && !isDone && !isActive && (
+							{!isDone && !isActive && col.cards.length === 0 && (
 								<p className="py-4 text-center text-xs text-neutral-400">
 									No cards
 								</p>
 							)}
-							{col.cards.map((card) => (
+							{!isDone && !isActive && col.cards.map((card) => (
 								<button
 									key={card.id}
 									onClick={() => onCardClick(col)}
