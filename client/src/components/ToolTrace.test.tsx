@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ToolTrace } from "./ToolTrace";
+import { deriveToolTrace } from "../context/BoardContext";
 
 describe("ToolTrace", () => {
 	it("renders collapsed by default with a one-line summary", () => {
@@ -68,9 +69,8 @@ describe("ToolTrace", () => {
 	});
 });
 
-describe("toolTrace derivation from agentEvents", () => {
-	it("maps agent.tool.* events to ToolTraceItem[] and filters out non-tool events", () => {
-		// Simulate the mapping logic from BoardContext
+describe("deriveToolTrace", () => {
+	it("filters out non-tool agent events and maps tool events to ToolTraceItem[]", () => {
 		const agentEvents = [
 			{ type: "agent.card.started", columnSlug: "research" },
 			{
@@ -86,23 +86,10 @@ describe("toolTrace derivation from agentEvents", () => {
 				resultCount: 5,
 			},
 			{ type: "agent.card.done", columnSlug: "research" },
-		];
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		] as any[];
 
-		const toolItems = agentEvents
-			.filter(
-				(e) =>
-					e.type === "agent.tool.started" ||
-					e.type === "agent.tool.result" ||
-					e.type === "agent.tool.failed",
-			)
-			.map((e) => ({
-				columnSlug: e.columnSlug ?? "",
-				toolName: (e as { toolName?: string }).toolName ?? "",
-				query: (e as { query?: string }).query,
-				resultCount: (e as { resultCount?: number }).resultCount,
-				errorCode: (e as { errorCode?: string }).errorCode,
-				attempt: (e as { attempt?: number }).attempt,
-			}));
+		const toolItems = deriveToolTrace(agentEvents);
 
 		expect(toolItems).toHaveLength(2);
 		expect(toolItems[0]).toMatchObject({
@@ -115,5 +102,40 @@ describe("toolTrace derivation from agentEvents", () => {
 			toolName: "web_search",
 			resultCount: 5,
 		});
+	});
+
+	it("includes agent.tool.failed events", () => {
+		const agentEvents = [
+			{
+				type: "agent.tool.failed",
+				columnSlug: "col-a",
+				toolName: "db_query",
+				errorCode: "TIMEOUT",
+			},
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		] as any[];
+
+		const toolItems = deriveToolTrace(agentEvents);
+
+		expect(toolItems).toHaveLength(1);
+		expect(toolItems[0]).toMatchObject({
+			columnSlug: "col-a",
+			toolName: "db_query",
+			errorCode: "TIMEOUT",
+		});
+	});
+
+	it("returns an empty array when there are no agent.tool.* events", () => {
+		const agentEvents = [
+			{ type: "agent.card.started", columnSlug: "col-b" },
+			{ type: "agent.card.done", columnSlug: "col-b" },
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		] as any[];
+
+		expect(deriveToolTrace(agentEvents)).toHaveLength(0);
+	});
+
+	it("returns an empty array for an empty input", () => {
+		expect(deriveToolTrace([])).toHaveLength(0);
 	});
 });

@@ -41,6 +41,25 @@ import type {
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const PRESENCE_REFRESH_MS = 30_000;
 
+/** Pure function: filters agent.tool.* events and maps them to ToolTraceItem[]. */
+export function deriveToolTrace(agentEvents: AgentEvent[]): ToolTraceItem[] {
+	return agentEvents
+		.filter(
+			(e) =>
+				e.type === "agent.tool.started" ||
+				e.type === "agent.tool.result" ||
+				e.type === "agent.tool.failed",
+		)
+		.map((e) => ({
+			columnSlug: e.columnSlug ?? "",
+			toolName: e.toolName ?? "",
+			query: e.query,
+			resultCount: e.resultCount,
+			errorCode: e.errorCode,
+			attempt: e.attempt,
+		}));
+}
+
 /** Outcome of a save, so callers (e.g. the context panel) can react to a 409. */
 export type SaveCardResult = "saved" | "conflict" | "error";
 
@@ -160,22 +179,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 
 	// Derive toolTrace from live agent.tool.* SSE events
 	useEffect(() => {
-		const items: ToolTraceItem[] = agentEvents
-			.filter(
-				(e) =>
-					e.type === "agent.tool.started" ||
-					e.type === "agent.tool.result" ||
-					e.type === "agent.tool.failed",
-			)
-			.map((e) => ({
-				columnSlug: e.columnSlug ?? "",
-				toolName: e.toolName ?? "",
-				query: e.query,
-				resultCount: e.resultCount,
-				errorCode: e.errorCode,
-				attempt: e.attempt,
-			}));
-		setToolTrace(items);
+		setToolTrace(deriveToolTrace(agentEvents));
 	}, [agentEvents]);
 
 	const refresh = useCallback(async () => {
