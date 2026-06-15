@@ -48,6 +48,7 @@ export interface BoardEvent {
 		| "agent.card.started"
 		| "agent.card.token"
 		| "agent.card.done"
+		| "agent.card.failed"
 		| "agent.tool.started"
 		| "agent.tool.result"
 		| "agent.tool.failed";
