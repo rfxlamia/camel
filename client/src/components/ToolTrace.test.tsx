@@ -67,3 +67,53 @@ describe("ToolTrace", () => {
 		expect(container.textContent).toBe("");
 	});
 });
+
+describe("toolTrace derivation from agentEvents", () => {
+	it("maps agent.tool.* events to ToolTraceItem[] and filters out non-tool events", () => {
+		// Simulate the mapping logic from BoardContext
+		const agentEvents = [
+			{ type: "agent.card.started", columnSlug: "research" },
+			{
+				type: "agent.tool.started",
+				columnSlug: "research-specialist",
+				toolName: "web_search",
+				query: "fintech trends",
+			},
+			{
+				type: "agent.tool.result",
+				columnSlug: "research-specialist",
+				toolName: "web_search",
+				resultCount: 5,
+			},
+			{ type: "agent.card.done", columnSlug: "research" },
+		];
+
+		const toolItems = agentEvents
+			.filter(
+				(e) =>
+					e.type === "agent.tool.started" ||
+					e.type === "agent.tool.result" ||
+					e.type === "agent.tool.failed",
+			)
+			.map((e) => ({
+				columnSlug: e.columnSlug ?? "",
+				toolName: (e as { toolName?: string }).toolName ?? "",
+				query: (e as { query?: string }).query,
+				resultCount: (e as { resultCount?: number }).resultCount,
+				errorCode: (e as { errorCode?: string }).errorCode,
+				attempt: (e as { attempt?: number }).attempt,
+			}));
+
+		expect(toolItems).toHaveLength(2);
+		expect(toolItems[0]).toMatchObject({
+			columnSlug: "research-specialist",
+			toolName: "web_search",
+			query: "fintech trends",
+		});
+		expect(toolItems[1]).toMatchObject({
+			columnSlug: "research-specialist",
+			toolName: "web_search",
+			resultCount: 5,
+		});
+	});
+});

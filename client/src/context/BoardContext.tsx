@@ -158,6 +158,26 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		toastTimer.current = setTimeout(() => setToast(null), 3500);
 	}, []);
 
+	// Derive toolTrace from live agent.tool.* SSE events
+	useEffect(() => {
+		const items: ToolTraceItem[] = agentEvents
+			.filter(
+				(e) =>
+					e.type === "agent.tool.started" ||
+					e.type === "agent.tool.result" ||
+					e.type === "agent.tool.failed",
+			)
+			.map((e) => ({
+				columnSlug: e.columnSlug ?? "",
+				toolName: e.toolName ?? "",
+				query: e.query,
+				resultCount: e.resultCount,
+				errorCode: e.errorCode,
+				attempt: e.attempt,
+			}));
+		setToolTrace(items);
+	}, [agentEvents]);
+
 	const refresh = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
 		try {
