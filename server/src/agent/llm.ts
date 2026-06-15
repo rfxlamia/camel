@@ -309,7 +309,11 @@ async function executeCardSingleShot(
 ): Promise<ExecuteResult> {
 	const stream = client.messages.stream({
 		model: MODEL,
-		max_tokens: 4096,
+		// Reasoning models spend tokens on a thinking block before the report.
+		// 4096 truncated long reports mid-sentence (stop_reason=max_tokens).
+		// Streaming bypasses the SDK's non-streaming 10-min guard, so a generous
+		// cap is safe — max_tokens is a ceiling, billed only on tokens generated.
+		max_tokens: 16384,
 		system,
 		messages: [{ role: "user", content: userContent }],
 	});
@@ -362,7 +366,9 @@ async function executeCardWithTools(
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const stream = client.messages.stream({
 			model: MODEL,
-			max_tokens: 4096,
+			// See executeCardSingleShot: 4096 truncated long reports. Generous cap
+			// is safe under streaming and billed only on tokens generated.
+			max_tokens: 16384,
 			system,
 			messages,
 			tools: toAnthropicToolDefs(tools),

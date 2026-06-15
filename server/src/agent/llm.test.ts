@@ -243,6 +243,28 @@ describe("executeCard", () => {
 		expect(callArgs.system).toContain("riset fintech");
 	});
 
+	it("requests a token budget large enough that reports are not truncated", async () => {
+		// Research reports + the model's thinking block exceeded max_tokens=4096
+		// (stop_reason=max_tokens), cutting output mid-sentence. Guard the budget.
+		const mockStreamObj = {
+			[Symbol.asyncIterator]: async function* () {
+				yield {
+					type: "content_block_delta",
+					delta: { type: "text_delta", text: "output" },
+				};
+			},
+			finalMessage: vi.fn().mockResolvedValue({
+				content: [{ type: "text", text: "output" }],
+			}),
+		};
+		mockStream.mockReturnValueOnce(mockStreamObj);
+
+		const { executeCard } = await import("./llm.js");
+		await executeCard("prompt", "intent", [], false, vi.fn());
+
+		expect(mockStream.mock.calls[0][0].max_tokens).toBeGreaterThanOrEqual(8192);
+	});
+
 	it("streams tokens via onToken callback", async () => {
 		const mockStreamObj = {
 			[Symbol.asyncIterator]: async function* () {
