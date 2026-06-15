@@ -4,20 +4,24 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
-import type { AgentCardOutput, AgentColumn } from "../types";
+import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
+import { ToolTrace } from "./ToolTrace";
+import { deriveToolTrace, pickToolTraceForColumn } from "../lib/toolTrace";
 
 interface AgentCardDetailProps {
 	column: AgentColumn;
 	boardId: number;
+	toolTrace?: ToolTraceItem[];
 	onClose: () => void;
 }
 
 export default function AgentCardDetail({
 	column,
 	boardId,
+	toolTrace = [],
 	onClose,
 }: AgentCardDetailProps) {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId, agentEvents } = useBoard();
 	const [output, setOutput] = useState<AgentCardOutput | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
@@ -51,6 +55,12 @@ export default function AgentCardDetail({
 		document.addEventListener("keydown", handleKey);
 		return () => document.removeEventListener("keydown", handleKey);
 	}, [onClose]);
+
+	const traceSteps = pickToolTraceForColumn(
+		toolTrace,
+		deriveToolTrace(agentEvents),
+		column.slug,
+	);
 
 	return (
 		<div className="fixed inset-y-0 right-0 z-30 w-full max-w-md border-l border-neutral-200 bg-white shadow-lg overflow-y-auto">
@@ -245,6 +255,16 @@ export default function AgentCardDetail({
 						</div>
 					)}
 				</div>
+
+				{/* Tool activity for this column */}
+				{traceSteps.length > 0 && (
+					<div>
+						<h4 className="text-xs font-medium text-neutral-600 mb-1">
+							Tool Activity
+						</h4>
+						<ToolTrace steps={traceSteps} />
+					</div>
+				)}
 
 				{/* Thinking */}
 				{output?.thinking && (

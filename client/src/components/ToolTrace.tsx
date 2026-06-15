@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Search, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, AlertCircle, MessageSquare } from "lucide-react";
 import type { ToolTraceItem } from "../types";
 
 interface ToolTraceProps {
@@ -9,17 +9,32 @@ interface ToolTraceProps {
 export function ToolTrace({ steps }: ToolTraceProps) {
 	const [expanded, setExpanded] = useState(false);
 
-	if (steps.length === 0) return null;
+	const toolSteps = steps.filter((s) => s.toolName !== "_reasoning");
+	const reasoningSteps = steps.filter((s) => s.toolName === "_reasoning");
 
-	// Summary: first step's toolName · query · resultCount
-	const first = steps[0];
-	const summaryParts = [first.toolName];
-	if (first.query) summaryParts.push(first.query);
-	if (first.resultCount !== undefined)
-		summaryParts.push(`${first.resultCount} results`);
+	if (toolSteps.length === 0 && reasoningSteps.length === 0) return null;
+
+	// Summary: first tool step's toolName · query · resultCount
+	const first = toolSteps[0] ?? reasoningSteps[0];
+	const summaryParts: string[] = [];
+	if (first.toolName === "_reasoning") {
+		summaryParts.push("reasoning");
+		if (first.reasoningText) {
+			const preview =
+				first.reasoningText.length > 48
+					? `${first.reasoningText.slice(0, 48)}…`
+					: first.reasoningText;
+			summaryParts.push(preview);
+		}
+	} else {
+		summaryParts.push(first.toolName);
+		if (first.query) summaryParts.push(first.query);
+		if (first.resultCount !== undefined)
+			summaryParts.push(`${first.resultCount} results`);
+	}
 	const summary = summaryParts.join(" · ");
 
-	const hasError = steps.some((s) => s.errorCode);
+	const hasError = toolSteps.some((s) => s.errorCode);
 
 	return (
 		<div className="rounded-md border border-neutral-200 bg-neutral-100">
@@ -43,7 +58,13 @@ export function ToolTrace({ steps }: ToolTraceProps) {
 					data-testid="tool-trace-detail"
 					className="border-t border-neutral-200 px-3 py-2 space-y-2"
 				>
-					{steps.map((step, i) => (
+					{reasoningSteps.map((step, i) => (
+						<div key={`r-${i}`} className="flex items-start gap-2 text-sm">
+							<MessageSquare size={14} className="mt-0.5 text-neutral-500" />
+							<p className="text-neutral-700 italic">{step.reasoningText}</p>
+						</div>
+					))}
+					{toolSteps.map((step, i) => (
 						<div key={i} className="flex items-start gap-2 text-sm">
 							{step.errorCode ? (
 								<AlertCircle size={14} className="mt-0.5 text-error-600" />

@@ -1,17 +1,34 @@
 import { describe, it, expect, vi } from "vitest";
-import { getToolTrace, runInsertColumns } from "./routes.js";
+import { getToolTrace, runInsertColumns, defaultToolRegistry } from "./routes.js";
+
+describe("defaultToolRegistry", () => {
+	it("resolves web_search for production wiring", () => {
+		const tools = defaultToolRegistry.resolveTools(["web_search"]);
+		expect(tools).toHaveLength(1);
+		expect(tools[0].name).toBe("web_search");
+	});
+});
 
 describe("getToolTrace (read-only replay)", () => {
-	it("returns the flat trace ordered by created_at, scoped to the board", async () => {
+	it("returns merged trace steps ordered by created_at, scoped to the board", async () => {
 		const rows = [
 			{
 				column_slug: "research-specialist",
 				tool_name: "web_search",
 				input: { query: "fintech" },
-				result: "…",
+				result: "started",
 				error_code: null,
 				attempt: 1,
 				created_at: "2026-06-15T10:00:00Z",
+			},
+			{
+				column_slug: "research-specialist",
+				tool_name: "web_search",
+				input: { query: "fintech", resultCount: 3 },
+				result: "3",
+				error_code: null,
+				attempt: 1,
+				created_at: "2026-06-15T10:00:01Z",
 			},
 		];
 		const fakeDb = { query: vi.fn(async () => ({ rows })) };
@@ -25,16 +42,35 @@ describe("getToolTrace (read-only replay)", () => {
 		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
 		expect(sql).toMatch(/order by\s+created_at/i);
 
-		// flat shape the client expects (groups by columnSlug itself)
+		// merged logical step the client expects
 		expect(trace).toEqual([
 			expect.objectContaining({
 				columnSlug: "research-specialist",
 				toolName: "web_search",
 				query: "fintech",
+				resultCount: 3,
 				attempt: 1,
-				createdAt: "2026-06-15T10:00:00Z",
+				createdAt: "2026-06-15T10:00:01Z",
 			}),
 		]);
+	});
+
+	it("reads legacy string input shape", async () => {
+		const rows = [
+			{
+				column_slug: "research-specialist",
+				tool_name: "web_search",
+				input: "fintech",
+				result: "2",
+				error_code: null,
+				attempt: 1,
+				created_at: "2026-06-15T10:00:00Z",
+			},
+		];
+		const fakeDb = { query: vi.fn(async () => ({ rows })) };
+		const trace = await getToolTrace(fakeDb as never, 42);
+		expect(trace[0].query).toBe("fintech");
+		expect(trace[0].resultCount).toBe(2);
 	});
 
 	it("is read-only — issues exactly one SELECT and executes no tool", async () => {

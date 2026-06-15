@@ -400,4 +400,79 @@ describe("executeCard tool loop", () => {
 		expect(result.output).toBe("Plain answer.");
 		expect(onToken).toHaveBeenCalledWith("Plain answer.");
 	});
+
+	it("includes resultCount on successful tool result events (R2)", async () => {
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({ text: "Done.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({
+			ok: true,
+			content: "1. A\n   https://a.com\n   snip\n\n2. B\n   https://b.com\n   snip",
+		}));
+		const events: ToolEvent[] = [];
+		const { executeCard } = await import("./llm.js");
+
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(execute)],
+			3,
+			(e: ToolEvent) => events.push(e),
+		);
+
+		const resultEvent = events.find((e) => e.phase === "result");
+		expect(resultEvent?.resultCount).toBe(2);
+	});
+
+	it("emits BUDGET_EXCEEDED when search budget is exhausted (R2)", async () => {
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "tu_1", name: "web_search", input: { query: "a" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "tu_2", name: "web_search", input: { query: "b" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({ text: "Done.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({ ok: true, content: "hit" }));
+		const events: ToolEvent[] = [];
+		const { executeCard } = await import("./llm.js");
+
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(execute)],
+			1,
+			(e: ToolEvent) => events.push(e),
+		);
+
+		expect(
+			events.some(
+				(e) => e.phase === "failed" && e.errorCode === "BUDGET_EXCEEDED",
+			),
+		).toBe(true);
+		expect(execute).toHaveBeenCalledTimes(1);
+	});
 });

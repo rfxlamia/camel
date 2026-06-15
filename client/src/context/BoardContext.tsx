@@ -32,7 +32,6 @@ import type {
 	PresenceUser,
 	SettingsMap,
 	SwitchConfirmState,
-	ToolTraceItem,
 	User,
 	Workspace,
 	WorkspaceInvite,
@@ -40,25 +39,6 @@ import type {
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const PRESENCE_REFRESH_MS = 30_000;
-
-/** Pure function: filters agent.tool.* events and maps them to ToolTraceItem[]. */
-export function deriveToolTrace(agentEvents: AgentEvent[]): ToolTraceItem[] {
-	return agentEvents
-		.filter(
-			(e) =>
-				e.type === "agent.tool.started" ||
-				e.type === "agent.tool.result" ||
-				e.type === "agent.tool.failed",
-		)
-		.map((e) => ({
-			columnSlug: e.columnSlug ?? "",
-			toolName: e.toolName ?? "",
-			query: e.query,
-			resultCount: e.resultCount,
-			errorCode: e.errorCode,
-			attempt: e.attempt,
-		}));
-}
 
 /** Outcome of a save, so callers (e.g. the context panel) can react to a 409. */
 export type SaveCardResult = "saved" | "conflict" | "error";
@@ -109,8 +89,6 @@ interface BoardContextValue {
 	refreshSettings: () => Promise<void>;
 	agentEvents: AgentEvent[];
 	clearAgentEvents: () => void;
-	toolTrace: ToolTraceItem[];
-	setToolTrace: Dispatch<SetStateAction<ToolTraceItem[]>>;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -157,7 +135,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	});
 	const [settingsVersion, setSettingsVersion] = useState(0);
 	const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
-	const [toolTrace, setToolTrace] = useState<ToolTraceItem[]>([]);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
@@ -176,11 +153,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		if (toastTimer.current) clearTimeout(toastTimer.current);
 		toastTimer.current = setTimeout(() => setToast(null), 3500);
 	}, []);
-
-	// Derive toolTrace from live agent.tool.* SSE events
-	useEffect(() => {
-		setToolTrace(deriveToolTrace(agentEvents));
-	}, [agentEvents]);
 
 	const refresh = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
@@ -551,8 +523,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				refreshSettings,
 				agentEvents,
 				clearAgentEvents: () => setAgentEvents([]),
-				toolTrace,
-				setToolTrace,
 			}}
 		>
 			{children}

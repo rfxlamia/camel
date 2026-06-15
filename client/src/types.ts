@@ -176,6 +176,7 @@ export interface ToolTraceItem {
 	errorCode?: string;
 	attempt?: number;
 	createdAt?: string;
+	reasoningText?: string;
 }
 
 export interface AgentCard {

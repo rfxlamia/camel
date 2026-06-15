@@ -11,7 +11,6 @@ import {
 	getMissingCardRedirect,
 	parseCardId,
 } from "../lib/cardPanel";
-import { ToolTrace } from "./ToolTrace";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
@@ -228,7 +227,7 @@ function ActivitySection({ cardId }: { cardId: number }) {
 export default function ContextPanel() {
 	const { cardId: cardIdParam } = useParams();
 	const navigate = useNavigate();
-	const { columns, saveCard, deleteCard, showToast, toolTrace } = useBoard();
+	const { columns, saveCard, deleteCard, showToast } = useBoard();
 
 	const cardId = parseCardId(cardIdParam);
 	const card = findCardInColumns(columns, cardId);
@@ -319,19 +318,6 @@ export default function ContextPanel() {
 						onClose={close}
 					/>
 					<ActivitySection cardId={card.id} />
-					{toolTrace && toolTrace.length > 0 && (
-						<section
-							aria-label="Tool Trace"
-							className="border-t border-neutral-200 px-4 py-4"
-						>
-							<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
-								Tool Activity
-							</h3>
-							<div className="mt-3">
-								<ToolTrace steps={toolTrace} />
-							</div>
-						</section>
-					)}
 				</div>
 			</aside>
 		</>

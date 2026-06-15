@@ -207,7 +207,7 @@ function AgentBoardVisual({
 // ---- Main page ----
 
 export default function AgentPage() {
-	const { activeWorkspaceId, showToast, agentEvents, clearAgentEvents, setToolTrace } =
+	const { activeWorkspaceId, showToast, agentEvents, clearAgentEvents } =
 		useBoard();
 	const [searchParams, setSearchParams] = useSearchParams();
 
@@ -229,11 +229,6 @@ export default function AgentPage() {
 
 	const logEndRef = useRef<HTMLDivElement>(null);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
-
-	// Sync stored toolTrace from AgentBoard into BoardContext for ContextPanel replay (R5)
-	useEffect(() => {
-		setToolTrace(board?.toolTrace ?? []);
-	}, [board?.toolTrace, setToolTrace]);
 
 	// Load board from URL param on mount
 	useEffect(() => {
@@ -741,6 +736,7 @@ export default function AgentPage() {
 				<AgentCardDetail
 					column={detailColumn}
 					boardId={board.id}
+					toolTrace={board.toolTrace}
 					onClose={() => setDetailColumn(null)}
 				/>
 			)}

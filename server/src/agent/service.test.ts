@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { getHumanColumns } from "../routes.js";
 import { createAgentBoardService } from "./service.js";
 import type { AgentBoardServiceDeps, ColumnInfo } from "./service.js";
+import { createToolRegistry } from "./tools/registry.js";
+import { webSearch } from "./tools/webSearch.js";
 
 // ---- T1 scaffold: board isolation ----
 
@@ -841,8 +843,15 @@ describe("runPipeline tool wiring", () => {
 				boardId: 1,
 				columnSlug: "research-specialist",
 				toolName: "web_search",
-				input: "fintech",
+				input: { query: "fintech" },
+				result: "started",
 				attempt: 1,
+			}),
+		);
+		expect(insertToolCall).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: { query: "fintech", resultCount: 5 },
+				result: "5",
 			}),
 		);
 
@@ -980,5 +989,33 @@ describe("runPipeline tool wiring", () => {
 
 		// No insertToolCall calls
 		expect(insertToolCall).not.toHaveBeenCalled();
+	});
+
+	it("passes resolved web_search when toolRegistry is wired (production path)", async () => {
+		const executeCard = vi.fn().mockResolvedValue({ output: "final output" });
+		const toolRegistry = createToolRegistry([webSearch]);
+
+		const { service } = buildService({
+			executeCard,
+			toolRegistry,
+			getColumns: vi.fn().mockResolvedValue([
+				{
+					columnId: 10,
+					columnSlug: "research-specialist",
+					systemPrompt: "You are a researcher. Topic: {original_intent}",
+					reasoning: false,
+					tools: ["web_search"],
+					toolBudget: 3,
+				},
+			] as ColumnInfo[]),
+		});
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const toolsArg = executeCard.mock.calls[0][5] as Array<{ name: string }>;
+		expect(toolsArg).toHaveLength(1);
+		expect(toolsArg[0].name).toBe("web_search");
 	});
 });

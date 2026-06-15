@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ToolTrace } from "./ToolTrace";
-import { deriveToolTrace } from "../context/BoardContext";
+import { deriveToolTrace } from "../lib/toolTrace";
 
 describe("ToolTrace", () => {
 	it("renders collapsed by default with a one-line summary", () => {
@@ -91,15 +91,11 @@ describe("deriveToolTrace", () => {
 
 		const toolItems = deriveToolTrace(agentEvents);
 
-		expect(toolItems).toHaveLength(2);
+		expect(toolItems).toHaveLength(1);
 		expect(toolItems[0]).toMatchObject({
 			columnSlug: "research-specialist",
 			toolName: "web_search",
 			query: "fintech trends",
-		});
-		expect(toolItems[1]).toMatchObject({
-			columnSlug: "research-specialist",
-			toolName: "web_search",
 			resultCount: 5,
 		});
 	});

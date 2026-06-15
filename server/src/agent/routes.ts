@@ -30,6 +30,11 @@ import {
 	createAgentBoardService,
 	type AgentBoardServiceDeps,
 } from "./service.js";
+import { createToolRegistry } from "./tools/registry.js";
+import { mergeToolTraceRows } from "./tools/trace.js";
+import { webSearch } from "./tools/webSearch.js";
+
+export const defaultToolRegistry = createToolRegistry([webSearch]);
 
 // ---------------------------------------------------------------------------
 // Trace replay helper — read-only, never executes tools
@@ -43,6 +48,7 @@ export interface ToolTraceItem {
 	errorCode?: string;
 	attempt?: number;
 	createdAt?: string;
+	reasoningText?: string;
 }
 
 export async function getToolTrace(
@@ -62,33 +68,17 @@ export async function getToolTrace(
 		[boardId],
 	);
 
-	return rows.map((r) => {
-		const input = r.input as Record<string, unknown> | null;
-		let query: string | undefined;
-		let resultCount: number | undefined;
-
-		if (input && typeof input === "object") {
-			if (typeof input.query === "string") query = input.query;
-			if (typeof input.resultCount === "number")
-				resultCount = input.resultCount;
-		}
-
-		// Fallback: try to parse resultCount from result text if it's a number string
-		if (resultCount === undefined && r.result !== null) {
-			const parsed = Number(r.result);
-			if (!Number.isNaN(parsed)) resultCount = parsed;
-		}
-
-		return {
-			columnSlug: r.column_slug as string,
-			toolName: r.tool_name as string,
-			query,
-			resultCount,
-			errorCode: r.error_code ? (r.error_code as string) : undefined,
-			attempt: r.attempt ? (r.attempt as number) : undefined,
-			createdAt: r.created_at ? (r.created_at as string) : undefined,
-		};
-	});
+	return mergeToolTraceRows(
+		rows.map((r) => ({
+			column_slug: r.column_slug as string,
+			tool_name: r.tool_name as string,
+			input: r.input,
+			result: r.result as string | null,
+			error_code: r.error_code as string | null,
+			attempt: r.attempt as number | null,
+			created_at: r.created_at as string | null,
+		})),
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +137,7 @@ const realDeps: AgentBoardServiceDeps = {
 	classifyIntent: realClassifyIntent,
 	executeCard: realExecuteCard,
 	generateClarificationQuestion: realGenerateClarificationQuestion,
+	toolRegistry: defaultToolRegistry,
 	publishEvent: realPublishEvent as (
 		workspaceId: number,
 		event: Record<string, unknown>,
@@ -237,7 +228,7 @@ const realDeps: AgentBoardServiceDeps = {
 
 	getFirstCard: async (boardId) => {
 		const { rows } = await pool.query(
-			`SELECT id, slug, system_prompt, reasoning
+			`SELECT id, slug, system_prompt, reasoning, tools, tool_budget
        FROM columns
        WHERE board_id = $1
        ORDER BY position
@@ -250,6 +241,8 @@ const realDeps: AgentBoardServiceDeps = {
 			columnSlug: rows[0].slug,
 			systemPrompt: rows[0].system_prompt,
 			reasoning: rows[0].reasoning,
+			tools: (rows[0].tools as string[] | null) ?? [],
+			toolBudget: (rows[0].tool_budget as number | null) ?? null,
 		};
 	},
 
@@ -301,7 +294,7 @@ const realDeps: AgentBoardServiceDeps = {
 				data.boardId,
 				data.columnSlug,
 				data.toolName,
-				JSON.stringify(data.input ?? null),
+				data.input !== null ? JSON.stringify(data.input) : null,
 				data.result ?? null,
 				data.errorCode ?? null,
 				data.attempt ?? 1,

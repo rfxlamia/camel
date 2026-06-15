@@ -15,6 +15,7 @@
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { renderSystemPrompt } from "./templates.js";
 import { toAnthropicToolDefs } from "./tools/registry.js";
+import { countSearchResults } from "./tools/trace.js";
 import type { Tool, ToolEvent } from "./tools/types.js";
 
 // ---------------------------------------------------------------------------
@@ -342,8 +343,10 @@ async function executeCardWithTools(
 	];
 	let remainingBudget = toolBudget;
 	let thinking: string | undefined;
-	// toolBudget executions + refused retries + one final text turn
-	const maxIterations = 2 * toolBudget + 1;
+	let lastTurnText = "";
+	// Executions + budget refusals + final text turn(s); generous cap avoids
+	// empty-output pipeline failure when the model retries past budget.
+	const maxIterations = toolBudget * 5 + 10;
 
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const stream = client.messages.stream({
@@ -355,6 +358,7 @@ async function executeCardWithTools(
 		});
 
 		let turnText = "";
+		lastTurnText = "";
 
 		for await (const event of stream) {
 			if (
@@ -366,6 +370,7 @@ async function executeCardWithTools(
 		}
 
 		const finalMessage = await stream.finalMessage();
+		lastTurnText = turnText;
 
 		for (const block of finalMessage.content) {
 			if (block.type === "thinking") {
@@ -427,10 +432,12 @@ async function executeCardWithTools(
 					);
 
 					if (result.ok) {
+						const resultCount = countSearchResults(result.content);
 						onToolEvent?.({
 							phase: "result",
 							toolName: block.name,
 							query,
+							resultCount,
 						});
 						toolResults.push({
 							type: "tool_result",
@@ -452,6 +459,12 @@ async function executeCardWithTools(
 						});
 					}
 				} else {
+					onToolEvent?.({
+						phase: "failed",
+						toolName: block.name,
+						query,
+						errorCode: "BUDGET_EXCEEDED",
+					});
 					toolResults.push({
 						type: "tool_result",
 						tool_use_id: block.id,
@@ -473,5 +486,10 @@ async function executeCardWithTools(
 		return { output: turnText, thinking };
 	}
 
-	return { output: "", thinking };
+	return {
+		output:
+			lastTurnText ||
+			"The agent could not complete this step within the tool loop limit.",
+		thinking,
+	};
 }
