@@ -13,6 +13,8 @@ export interface TemplateColumn {
   reasoning: boolean;
   system_prompt: string;
   output_key?: string;
+  tools?: string[];
+  tool_budget?: number;
 }
 
 export interface Template {
@@ -32,6 +34,7 @@ export const RESEARCH_REPORT_COLUMNS: TemplateColumn[] = [
     position: 1,
     reasoning: false,
     output_key: "research_output",
+    tools: ["web_search"],
     system_prompt: `You are a Research Specialist. Your only job is to gather and organize
 relevant, factual information based on the task objective. You do not
 analyze, interpret, or draw conclusions — that is the next agent's job.
