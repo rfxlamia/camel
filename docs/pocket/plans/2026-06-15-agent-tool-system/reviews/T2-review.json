@@ -1,0 +1,33 @@
+{
+  "task_id": "T2",
+  "task_name": "DB schema + template tool assignment",
+  "cycle": 1,
+  "timestamp": "2026-06-15T19:10:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Schema changes are strictly additive and idempotent: columns.tools (TEXT[] NOT NULL DEFAULT '{}', agent-schema.sql:40) and columns.tool_budget (INTEGER, nullable, agent-schema.sql:41) use ADD COLUMN IF NOT EXISTS; agent_tool_calls uses CREATE TABLE IF NOT EXISTS with its index (agent-schema.sql:43-58). No destructive statements (no DROP/TRUNCATE/DELETE/ALTER COLUMN TYPE).",
+      "agent_tool_calls shape matches spec R5 exactly (board_id FK with ON DELETE CASCADE, column_slug, tool_name, input JSONB, result, error_code, attempt, created_at).",
+      "TemplateColumn interface extended additively with optional tools?: string[] and tool_budget?: number (templates.ts:16-17); web_search assigned only to the research-specialist DATA, keeping schema/columns template-agnostic.",
+      "Tests written and passing (17/17), deep-equality on research-specialist.tools == ['web_search'] and ?? [] normalization for non-research columns; descriptive test names.",
+      "Persistence wiring correctly deferred to T6: git diff --stat confirms the SHA range touches only the 3 in-scope files; insertColumns in routes.ts:86-102 still omits tools/tool_budget, so no premature wiring was added."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "5fbf9b5115a122c431ab6e92663265f229494430"
+}

@@ -45,12 +45,19 @@ export interface BoardEvent {
     | "agent.card.started"
     | "agent.card.token"
     | "agent.card.done"
-    | "agent.card.failed";
+    | "agent.tool.started"
+    | "agent.tool.result"
+    | "agent.tool.failed";
   actor?: AuthUser;
   cardId?: number;
   userId?: number;
   workspaceId?: number;
   workspaceName?: string;
+  toolName?: string;
+  query?: string;
+  resultCount?: number;
+  errorCode?: string;
+  attempt?: number;
   at?: string;
 }
 

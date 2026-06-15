@@ -44,6 +44,8 @@ export interface FirstCardInfo {
 	columnSlug: string;
 	systemPrompt: string;
 	reasoning: boolean;
+	tools?: string[];
+	toolBudget?: number | null;
 }
 
 export interface ColumnInfo {
@@ -51,6 +53,8 @@ export interface ColumnInfo {
 	columnSlug: string;
 	systemPrompt: string;
 	reasoning: boolean;
+	tools?: string[];
+	toolBudget?: number | null;
 }
 
 export interface AgentBoardServiceDeps {
@@ -108,6 +112,17 @@ export interface AgentBoardServiceDeps {
 		previousOutputs: string[],
 		reasoning: boolean,
 		onToken: (token: string) => void,
+		tools?: unknown[],
+		toolBudget?: number,
+		onToolEvent?: (e: {
+			phase: string;
+			toolName?: string;
+			query?: string;
+			resultCount?: number;
+			errorCode?: string;
+			attempt?: number;
+			text?: string;
+		}) => void,
 	) => Promise<{ output: string; thinking?: string }>;
 
 	insertOutput?: (data: {
@@ -124,6 +139,20 @@ export interface AgentBoardServiceDeps {
 		position: number;
 		workspaceId: number;
 	}) => Promise<void>;
+
+	insertToolCall?: (data: {
+		boardId: number;
+		columnSlug: string;
+		toolName: string;
+		input: string;
+		result: string;
+		errorCode?: string;
+		attempt: number;
+	}) => Promise<void>;
+
+	toolRegistry?: {
+		resolveTools(names: string[]): unknown[];
+	};
 
 	getOutput?: (data: {
 		boardId: number;
@@ -248,6 +277,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
 			// Token batching via setInterval(200ms)
 			let tokenBuffer = "";
+			let toolEventCount = 0;
 			const batchInterval = setInterval(() => {
 				if (tokenBuffer) {
 					deps.publishEvent?.(workspaceId, {
@@ -258,6 +288,61 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}, 200);
 
+			const resolvedTools = deps.toolRegistry?.resolveTools(firstCard.tools ?? []) ?? [];
+			const toolBudget = firstCard.toolBudget ?? 3;
+
+			const onToolEvent = (e: { phase: string; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number; text?: string }) => {
+				// Flush token buffer before emitting tool event
+				if (tokenBuffer) {
+					deps.publishEvent?.(workspaceId, {
+						type: "agent.card.token",
+						token: tokenBuffer,
+					});
+					tokenBuffer = "";
+				}
+
+				if (e.phase === "started") {
+					deps.publishEvent?.(workspaceId, {
+						type: "agent.tool.started",
+						columnSlug: firstCard.columnSlug,
+						toolName: e.toolName,
+						query: e.query,
+						attempt: e.attempt,
+					});
+				} else if (e.phase === "result") {
+					deps.publishEvent?.(workspaceId, {
+						type: "agent.tool.result",
+						columnSlug: firstCard.columnSlug,
+						toolName: e.toolName,
+						query: e.query,
+						resultCount: e.resultCount,
+						attempt: e.attempt,
+					});
+				} else if (e.phase === "failed") {
+					deps.publishEvent?.(workspaceId, {
+						type: "agent.tool.failed",
+						columnSlug: firstCard.columnSlug,
+						toolName: e.toolName,
+						query: e.query,
+						errorCode: e.errorCode,
+						attempt: e.attempt,
+					});
+				}
+
+				if (e.phase !== "reasoning") {
+					toolEventCount++;
+					deps.insertToolCall?.({
+						boardId,
+						columnSlug: firstCard.columnSlug,
+						toolName: e.toolName ?? "",
+						input: e.query ?? "",
+						result: e.phase === "result" ? "ok" : "",
+						errorCode: e.errorCode,
+						attempt: e.attempt ?? toolEventCount,
+					});
+				}
+			};
+
 			try {
 				const result = await deps.executeCard!(
 					firstCard.systemPrompt,
@@ -267,6 +352,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					(token: string) => {
 						tokenBuffer += token;
 					},
+					resolvedTools,
+					toolBudget,
+					onToolEvent,
 				);
 
 				clearInterval(batchInterval);
@@ -378,6 +466,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 
 				let tokenBuffer = "";
+				let toolEventCount = 0;
 				const batchInterval = setInterval(() => {
 					if (tokenBuffer) {
 						deps.publishEvent?.(workspaceId, {
@@ -389,6 +478,62 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					}
 				}, 200);
 
+				const resolvedTools = deps.toolRegistry?.resolveTools(column.tools ?? []) ?? [];
+				const toolBudget = column.toolBudget ?? 3;
+
+				const onToolEvent = (e: { phase: string; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number; text?: string }) => {
+					// Flush token buffer before emitting tool event
+					if (tokenBuffer) {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.card.token",
+							columnSlug: column.columnSlug,
+							token: tokenBuffer,
+						});
+						tokenBuffer = "";
+					}
+
+					if (e.phase === "started") {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.tool.started",
+							columnSlug: column.columnSlug,
+							toolName: e.toolName,
+							query: e.query,
+							attempt: e.attempt,
+						});
+					} else if (e.phase === "result") {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.tool.result",
+							columnSlug: column.columnSlug,
+							toolName: e.toolName,
+							query: e.query,
+							resultCount: e.resultCount,
+							attempt: e.attempt,
+						});
+					} else if (e.phase === "failed") {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.tool.failed",
+							columnSlug: column.columnSlug,
+							toolName: e.toolName,
+							query: e.query,
+							errorCode: e.errorCode,
+							attempt: e.attempt,
+						});
+					}
+
+					if (e.phase !== "reasoning") {
+						toolEventCount++;
+						deps.insertToolCall?.({
+							boardId,
+							columnSlug: column.columnSlug,
+							toolName: e.toolName ?? "",
+							input: e.query ?? "",
+							result: e.phase === "result" ? "ok" : "",
+							errorCode: e.errorCode,
+							attempt: e.attempt ?? toolEventCount,
+						});
+					}
+				};
+
 				try {
 					const result = await deps.executeCard!(
 						rendered,
@@ -398,6 +543,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						(token: string) => {
 							tokenBuffer += token;
 						},
+						resolvedTools,
+						toolBudget,
+						onToolEvent,
 					);
 
 					clearInterval(batchInterval);

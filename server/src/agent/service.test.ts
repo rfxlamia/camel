@@ -51,7 +51,7 @@ describe("intent classification", () => {
       })),
       insertBoard,
       insertConversation,
-      insertColumns: vi.fn(async () => []),
+      insertColumns: vi.fn(async () => {}),
       publishEvent: vi.fn(),
     });
     const result = await service.createBoard({ workspaceId: 1, userId: 1, intent: "riset kompetitor fintech" });
@@ -69,7 +69,6 @@ describe("approval", () => {
     const service = createAgentBoardService({
       getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 1, originalIntent: "riset" })),
       updateBoard,
-      triggerExecution: vi.fn(async () => {}),
       publishEvent,
     });
     await service.approveBoard({ boardId: 1, userId: 1, workspaceId: 1 });
@@ -170,6 +169,9 @@ describe("triggerExecution", () => {
       "riset kompetitor fintech lokal",
       [],
       false,
+      expect.any(Function),
+      expect.any(Array),
+      expect.any(Number),
       expect.any(Function),
     );
     expect(insertOutput).toHaveBeenCalledWith(
@@ -390,6 +392,7 @@ describe("getBoards", () => {
       {
         id: 2,
         originalIntent: "analisis pasar",
+        templateId: "research-report",
         status: "approved",
         executionStatus: "done",
         createdAt: "2026-06-14T11:00:00Z",
@@ -397,6 +400,7 @@ describe("getBoards", () => {
       {
         id: 1,
         originalIntent: "riset fintech",
+        templateId: "research-report",
         status: "approved",
         executionStatus: "done",
         createdAt: "2026-06-14T10:00:00Z",
@@ -625,5 +629,215 @@ describe("runPipeline", () => {
       .find((e) => e.type === "agent.card.failed");
     expect(failedEvent).toBeDefined();
     expect(failedEvent!.columnSlug).toBe("analysis-specialist");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runPipeline tool wiring — T5
+// ---------------------------------------------------------------------------
+
+describe("runPipeline tool wiring", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("translates tool events to SSE and persists each tool call (R5)", async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const insertToolCall = vi.fn().mockResolvedValue(undefined);
+
+    const toolRegistry = {
+      resolveTools: vi.fn().mockReturnValue([
+        { name: "web_search", description: "Search", inputSchema: {}, riskTier: "read-only" as const, execute: vi.fn() },
+      ]),
+    };
+
+    const executeCard = vi.fn().mockImplementation(async (
+      _sys: string,
+      _intent: string,
+      _prev: string[],
+      _reasoning: boolean,
+      onToken: (token: string) => void,
+      _tools: unknown[],
+      _toolBudget: number,
+      onToolEvent?: (e: { phase: string; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number }) => void,
+    ) => {
+      onToken("token1");
+      onToolEvent?.({ phase: "started", toolName: "web_search", query: "fintech", attempt: 1 });
+      onToolEvent?.({ phase: "result", toolName: "web_search", query: "fintech", resultCount: 5, attempt: 1 });
+      onToken("token2");
+      return { output: "final output" };
+    });
+
+    const { service } = buildService({
+      executeCard,
+      publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+        events.push(event);
+      }),
+      insertToolCall,
+      toolRegistry,
+      getColumns: vi.fn().mockResolvedValue([
+        {
+          columnId: 10,
+          columnSlug: "research-specialist",
+          systemPrompt: "You are a researcher. Topic: {original_intent}",
+          reasoning: false,
+          tools: ["web_search"],
+          toolBudget: 3,
+        },
+      ] as ColumnInfo[]),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    // SSE events
+    const toolStarted = events.find((e) => e.type === "agent.tool.started");
+    expect(toolStarted).toMatchObject({
+      columnSlug: "research-specialist",
+      toolName: "web_search",
+      query: "fintech",
+      attempt: 1,
+    });
+
+    const toolResult = events.find((e) => e.type === "agent.tool.result");
+    expect(toolResult).toMatchObject({
+      columnSlug: "research-specialist",
+      toolName: "web_search",
+      query: "fintech",
+      resultCount: 5,
+      attempt: 1,
+    });
+
+    // Persistence
+    expect(insertToolCall).toHaveBeenCalledTimes(2);
+    expect(insertToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boardId: 1,
+        columnSlug: "research-specialist",
+        toolName: "web_search",
+        input: "fintech",
+        attempt: 1,
+      }),
+    );
+
+    // Token batching interleaving: tokens should still be emitted
+    const tokenEvents = events.filter((e) => e.type === "agent.card.token");
+    expect(tokenEvents.length).toBeGreaterThan(0);
+  });
+
+  it("writes the final output to agent_card_outputs only — never card_events (R6)", async () => {
+    const insertToolCall = vi.fn().mockResolvedValue(undefined);
+    const insertOutput = vi.fn().mockResolvedValue(undefined);
+    const insertCard = vi.fn().mockResolvedValue(undefined);
+
+    const toolRegistry = {
+      resolveTools: vi.fn().mockReturnValue([]),
+    };
+
+    const executeCard = vi.fn().mockResolvedValue({ output: "final output" });
+
+    const { service, deps } = buildService({
+      executeCard,
+      insertOutput,
+      insertCard,
+      insertToolCall,
+      toolRegistry,
+      getColumns: vi.fn().mockResolvedValue([
+        {
+          columnId: 10,
+          columnSlug: "research-specialist",
+          systemPrompt: "You are a researcher. Topic: {original_intent}",
+          reasoning: false,
+          tools: ["web_search"],
+          toolBudget: 3,
+        },
+      ] as ColumnInfo[]),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    // Final output goes to insertOutput only
+    expect(insertOutput).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boardId: 1,
+        columnSlug: "research-specialist",
+        output: "final output",
+      }),
+    );
+
+    // No card_events writes (insertCard is for creating the card handle, not activity feed)
+    const publishCalls = (deps.publishEvent as ReturnType<typeof vi.fn>).mock.calls;
+    const cardEventTypes = ["card.created", "card.updated", "card.moved", "card.deleted"];
+    const humanActivityEvents = publishCalls.filter((c: unknown[]) =>
+      cardEventTypes.includes((c[1] as Record<string, unknown>).type as string),
+    );
+    expect(humanActivityEvents).toHaveLength(0);
+  });
+
+  it("passes empty tools and fires no tool events when a column has no tools (R1)", async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const insertToolCall = vi.fn().mockResolvedValue(undefined);
+
+    const toolRegistry = {
+      resolveTools: vi.fn().mockReturnValue([]),
+    };
+
+    const executeCard = vi.fn().mockImplementation(async (
+      _sys: string,
+      _intent: string,
+      _prev: string[],
+      _reasoning: boolean,
+      onToken: (token: string) => void,
+      _tools: unknown[],
+      _toolBudget: number,
+      _onToolEvent?: (e: { phase: string; toolName?: string; query?: string; resultCount?: number; errorCode?: string; attempt?: number }) => void,
+    ) => {
+      onToken("token");
+      // No tool events fired
+      return { output: "no tools used" };
+    });
+
+    const { service, deps } = buildService({
+      executeCard,
+      publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+        events.push(event);
+      }),
+      insertToolCall,
+      toolRegistry,
+      getColumns: vi.fn().mockResolvedValue([
+        {
+          columnId: 10,
+          columnSlug: "research-specialist",
+          systemPrompt: "You are a researcher. Topic: {original_intent}",
+          reasoning: false,
+          // no tools field
+        },
+      ] as ColumnInfo[]),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    // Empty tools passed
+    const executeCall = (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(executeCall[5]).toEqual([]); // tools param
+    expect(executeCall[6]).toBe(3); // toolBudget default
+
+    // No tool SSE events
+    const toolEvents = events.filter((e) =>
+      ["agent.tool.started", "agent.tool.result", "agent.tool.failed"].includes(e.type as string),
+    );
+    expect(toolEvents).toHaveLength(0);
+
+    // No insertToolCall calls
+    expect(insertToolCall).not.toHaveBeenCalled();
   });
 });
