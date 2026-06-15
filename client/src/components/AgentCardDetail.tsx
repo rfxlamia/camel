@@ -273,9 +273,81 @@ export default function AgentCardDetail({
 							Thinking
 						</h4>
 						<div className="rounded-md border border-neutral-200 bg-neutral-100 p-3">
-							<p className="text-sm text-neutral-700 whitespace-pre-wrap">
-								{output.thinking}
-							</p>
+							<div className="text-sm text-neutral-700 leading-relaxed">
+								<ReactMarkdown
+									remarkPlugins={[remarkGfm]}
+									components={{
+										h1: ({ children }) => (
+											<h1 className="text-lg font-semibold text-neutral-800 mt-3 mb-1.5 first:mt-0">
+												{children}
+											</h1>
+										),
+										h2: ({ children }) => (
+											<h2 className="text-base font-semibold text-neutral-800 mt-3 mb-1.5 first:mt-0">
+												{children}
+											</h2>
+										),
+										h3: ({ children }) => (
+											<h3 className="text-sm font-semibold text-neutral-800 mt-2 mb-1 first:mt-0">
+												{children}
+											</h3>
+										),
+										p: ({ children }) => (
+											<p className="text-sm text-neutral-700 leading-relaxed mb-1.5 last:mb-0">
+												{children}
+											</p>
+										),
+										ul: ({ children }) => (
+											<ul className="list-disc pl-5 mb-1.5 space-y-0.5 text-sm text-neutral-700">
+												{children}
+											</ul>
+										),
+										ol: ({ children }) => (
+											<ol className="list-decimal pl-5 mb-1.5 space-y-0.5 text-sm text-neutral-700">
+												{children}
+											</ol>
+										),
+										li: ({ children }) => (
+											<li className="text-sm text-neutral-700 leading-relaxed">
+												{children}
+											</li>
+										),
+										strong: ({ children }) => (
+											<strong className="font-semibold text-neutral-800">
+												{children}
+											</strong>
+										),
+										em: ({ children }) => (
+											<em className="italic text-neutral-600">{children}</em>
+										),
+										code: ({ children, className }) => {
+											const isBlock = className?.includes("language-");
+											if (isBlock) {
+												return (
+													<pre className="rounded-md bg-neutral-200/60 border border-neutral-200 p-2.5 mb-1.5 overflow-x-auto">
+														<code className="text-xs font-mono text-neutral-700">
+															{children}
+														</code>
+													</pre>
+												);
+											}
+											return (
+												<code className="rounded bg-neutral-200/60 px-1 py-0.5 text-xs font-mono text-neutral-700">
+													{children}
+												</code>
+											);
+										},
+										blockquote: ({ children }) => (
+											<blockquote className="border-l-2 border-neutral-300 pl-3 py-1 mb-1.5 text-sm text-neutral-600 italic">
+												{children}
+											</blockquote>
+										),
+										hr: () => <hr className="my-2 border-neutral-300" />,
+									}}
+								>
+									{output.thinking}
+								</ReactMarkdown>
+							</div>
 						</div>
 					</div>
 				)}
