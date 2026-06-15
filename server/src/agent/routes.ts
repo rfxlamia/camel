@@ -32,6 +32,60 @@ import {
 } from "./service.js";
 
 // ---------------------------------------------------------------------------
+// Trace replay helper — read-only, never executes tools
+// ---------------------------------------------------------------------------
+
+export interface ToolTraceItem {
+	columnSlug: string;
+	toolName: string;
+	query?: string;
+	resultCount?: number;
+	errorCode?: string;
+	attempt?: number;
+	createdAt?: string;
+}
+
+export async function getToolTrace(
+	db: { query: (sql: string, params: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
+	boardId: number,
+): Promise<ToolTraceItem[]> {
+	const { rows } = await db.query(
+		`SELECT column_slug, tool_name, input, result, error_code, attempt, created_at
+		 FROM agent_tool_calls
+		 WHERE board_id = $1
+		 ORDER BY created_at`,
+		[boardId],
+	);
+
+	return rows.map((r) => {
+		const input = r.input as Record<string, unknown> | null;
+		let query: string | undefined;
+		let resultCount: number | undefined;
+
+		if (input && typeof input === "object") {
+			if (typeof input.query === "string") query = input.query;
+			if (typeof input.resultCount === "number") resultCount = input.resultCount;
+		}
+
+		// Fallback: try to parse resultCount from result text if it's a number string
+		if (resultCount === undefined && r.result !== null) {
+			const parsed = Number(r.result);
+			if (!Number.isNaN(parsed)) resultCount = parsed;
+		}
+
+		return {
+			columnSlug: r.column_slug as string,
+			toolName: r.tool_name as string,
+			query,
+			resultCount,
+			errorCode: r.error_code ? (r.error_code as string) : undefined,
+			attempt: r.attempt ? (r.attempt as number) : undefined,
+			createdAt: r.created_at ? (r.created_at as string) : undefined,
+		};
+	});
+}
+
+// ---------------------------------------------------------------------------
 // Real dependency implementations
 // ---------------------------------------------------------------------------
 
@@ -85,9 +139,11 @@ const realDeps: AgentBoardServiceDeps = {
 
 	insertColumns: async (data) => {
 		for (const col of data.columns) {
+			const tools = (col as Record<string, unknown>).tools as string[] | undefined;
+			const toolBudget = (col as Record<string, unknown>).tool_budget as number | undefined;
 			await pool.query(
-				`INSERT INTO columns (title, position, board_id, slug, reasoning, system_prompt, workspace_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+				`INSERT INTO columns (title, position, board_id, slug, reasoning, system_prompt, workspace_id, tools, tool_budget)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 				[
 					col.name,
 					col.position,
@@ -96,6 +152,8 @@ const realDeps: AgentBoardServiceDeps = {
 					col.reasoning,
 					col.system_prompt,
 					data.workspaceId,
+					tools ? JSON.stringify(tools) : "{}",
+					toolBudget ?? null,
 				],
 			);
 		}
@@ -177,7 +235,7 @@ const realDeps: AgentBoardServiceDeps = {
 
 	getColumns: async (boardId) => {
 		const { rows } = await pool.query(
-			`SELECT id, slug, system_prompt, reasoning
+			`SELECT id, slug, system_prompt, reasoning, tools, tool_budget
      FROM columns
      WHERE board_id = $1
      ORDER BY position`,
@@ -188,6 +246,8 @@ const realDeps: AgentBoardServiceDeps = {
 			columnSlug: r.slug as string,
 			systemPrompt: r.system_prompt as string,
 			reasoning: r.reasoning as boolean,
+			tools: (r.tools as string[] | null) ?? [],
+			toolBudget: (r.tool_budget as number | null) ?? null,
 		}));
 	},
 
@@ -209,6 +269,22 @@ const realDeps: AgentBoardServiceDeps = {
 				data.cardIndex,
 				data.output,
 				data.thinking ?? null,
+			],
+		);
+	},
+
+	insertToolCall: async (data) => {
+		await pool.query(
+			`INSERT INTO agent_tool_calls (board_id, column_slug, tool_name, input, result, error_code, attempt)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			[
+				data.boardId,
+				data.columnSlug,
+				data.toolName,
+				JSON.stringify(data.input ?? null),
+				data.result ?? null,
+				data.errorCode ?? null,
+				data.attempt ?? 1,
 			],
 		);
 	},
@@ -443,7 +519,10 @@ export function createAgentRouter(
 					});
 				}
 
-				res.json({ ...result, columns });
+				// Fetch stored tool trace (read-only replay)
+				const toolTrace = await getToolTrace(pool, boardId);
+
+				res.json({ ...result, columns, toolTrace });
 			} catch (err) {
 				console.error("agent getBoardById error:", err);
 				res.status(500).json({ error: "Failed to get board" });
