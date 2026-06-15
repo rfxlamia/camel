@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
+import { deriveToolTrace, pickToolTraceForColumn } from "../lib/toolTrace";
 import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
 import { ToolTrace } from "./ToolTrace";
-import { deriveToolTrace, pickToolTraceForColumn } from "../lib/toolTrace";
 
 interface AgentCardDetailProps {
 	column: AgentColumn;

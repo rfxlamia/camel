@@ -7,20 +7,20 @@
  */
 
 export interface TemplateColumn {
-  slug: string;
-  name: string;
-  position: number;
-  reasoning: boolean;
-  system_prompt: string;
-  output_key?: string;
-  tools?: string[];
-  tool_budget?: number;
+	slug: string;
+	name: string;
+	position: number;
+	reasoning: boolean;
+	system_prompt: string;
+	output_key?: string;
+	tools?: string[];
+	tool_budget?: number;
 }
 
 export interface Template {
-  id: string;
-  display_name: string;
-  columns: TemplateColumn[];
+	id: string;
+	display_name: string;
+	columns: TemplateColumn[];
 }
 
 // ---------------------------------------------------------------------------
@@ -28,14 +28,14 @@ export interface Template {
 // ---------------------------------------------------------------------------
 
 export const RESEARCH_REPORT_COLUMNS: TemplateColumn[] = [
-  {
-    slug: "research-specialist",
-    name: "Research Specialist",
-    position: 1,
-    reasoning: false,
-    output_key: "research_output",
-    tools: ["web_search"],
-    system_prompt: `You are a Research Specialist. Your only job is to gather and organize
+	{
+		slug: "research-specialist",
+		name: "Research Specialist",
+		position: 1,
+		reasoning: false,
+		output_key: "research_output",
+		tools: ["web_search"],
+		system_prompt: `You are a Research Specialist. Your only job is to gather and organize
 relevant, factual information based on the task objective. You do not
 analyze, interpret, or draw conclusions — that is the next agent's job.
 
@@ -72,14 +72,14 @@ Structure your research brief exactly as follows:
 ---
 *Handoff: Ready for Analysis Specialist.*
 </output_format>`,
-  },
-  {
-    slug: "analysis-specialist",
-    name: "Analysis Specialist",
-    position: 2,
-    reasoning: true,
-    output_key: "analysis_output",
-    system_prompt: `You are an Analysis Specialist. You do not conduct new research.
+	},
+	{
+		slug: "analysis-specialist",
+		name: "Analysis Specialist",
+		position: 2,
+		reasoning: true,
+		output_key: "analysis_output",
+		system_prompt: `You are an Analysis Specialist. You do not conduct new research.
 Your job is to analyze the research brief and extract meaningful insights
 that directly serve the user's original objective.
 
@@ -122,14 +122,14 @@ Why it matters for this objective: [1 sentence]
 ---
 *Handoff: Ready for Writer.*
 </output_format>`,
-  },
-  {
-    slug: "writer",
-    name: "Writer",
-    position: 3,
-    reasoning: false,
-    output_key: "writer_output",
-    system_prompt: `You are a professional Writer specializing in clear, actionable documents
+	},
+	{
+		slug: "writer",
+		name: "Writer",
+		position: 3,
+		reasoning: false,
+		output_key: "writer_output",
+		system_prompt: `You are a professional Writer specializing in clear, actionable documents
 for non-technical business audiences (marketing, ops, support).
 
 <task>
@@ -166,14 +166,14 @@ or analysis should fully understand it.
 ---
 *Handoff: Ready for Editorial review.*
 </output_format>`,
-  },
-  {
-    slug: "editor",
-    name: "Editor",
-    position: 4,
-    reasoning: false,
-    output_key: "editor_output",
-    system_prompt: `You are a meticulous Editor. You do not rewrite — you refine.
+	},
+	{
+		slug: "editor",
+		name: "Editor",
+		position: 4,
+		reasoning: false,
+		output_key: "editor_output",
+		system_prompt: `You are a meticulous Editor. You do not rewrite — you refine.
 Improve clarity, accuracy, and alignment with the original objective
 without changing the document's structure or scope.
 
@@ -212,14 +212,14 @@ Check for:
 ---
 *Handoff: Ready for QA Guardian.*
 </output_format>`,
-  },
-  {
-    slug: "qa-guardian",
-    name: "QA Guardian",
-    position: 5,
-    reasoning: true,
-    output_key: "qa_output",
-    system_prompt: `You are the QA Guardian. You are the final check before this work reaches
+	},
+	{
+		slug: "qa-guardian",
+		name: "QA Guardian",
+		position: 5,
+		reasoning: true,
+		output_key: "qa_output",
+		system_prompt: `You are the QA Guardian. You are the final check before this work reaches
 the user. Your only job is to verify that the final document delivers
 exactly what the user originally asked for. You do not improve or expand — you validate.
 
@@ -261,7 +261,7 @@ If NEEDS REVISION:
 - Gap [N]: [Specific thing missing or inadequate]
 **Revision instruction:** [One scope-bounded instruction for the Writer]
 </output_format>`,
-  },
+	},
 ];
 
 // ---------------------------------------------------------------------------
@@ -269,18 +269,18 @@ If NEEDS REVISION:
 // ---------------------------------------------------------------------------
 
 export const TEMPLATES: Record<string, Template> = {
-  "research-report": {
-    id: "research-report",
-    display_name: "Research & Report",
-    columns: RESEARCH_REPORT_COLUMNS,
-  },
+	"research-report": {
+		id: "research-report",
+		display_name: "Research & Report",
+		columns: RESEARCH_REPORT_COLUMNS,
+	},
 };
 
 /**
  * Look up a template by id. Returns `null` when not found.
  */
 export function getTemplate(id: string): Template | null {
-  return TEMPLATES[id] ?? null;
+	return TEMPLATES[id] ?? null;
 }
 
 /**
@@ -289,27 +289,27 @@ export function getTemplate(id: string): Template | null {
  * so that Phase 2 tokens (e.g. `{previous_output}`) survive until runtime.
  */
 export function renderSystemPrompt(
-  template: string,
-  vars: Record<string, string>,
+	template: string,
+	vars: Record<string, string>,
 ): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) =>
-    key in vars ? vars[key] : match,
-  );
+	return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+		key in vars ? vars[key] : match,
+	);
 }
 
 export function buildVarsMap(
-  intent: string,
-  previousOutput: string,
-  accumulator: Record<string, string>,
+	intent: string,
+	previousOutput: string,
+	accumulator: Record<string, string>,
 ): Record<string, string> {
-  return {
-    ...accumulator,
-    original_intent: intent,
-    topic: intent,
-    previous_output: previousOutput,
-  };
+	return {
+		...accumulator,
+		original_intent: intent,
+		topic: intent,
+		previous_output: previousOutput,
+	};
 }
 
 export function findUnresolvedPlaceholders(rendered: string): string[] {
-  return [...rendered.matchAll(/\{[a-z][a-z0-9_]*\}/g)].map((m) => m[0]);
+	return [...rendered.matchAll(/\{[a-z][a-z0-9_]*\}/g)].map((m) => m[0]);
 }

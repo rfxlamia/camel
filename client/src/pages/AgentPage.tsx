@@ -1,6 +1,6 @@
+import { Bot, CheckCircle, Send, XCircle } from "lucide-react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Bot, CheckCircle, Send, XCircle } from "lucide-react";
 import { ApiError, api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
 import LoadingCamel from "../components/LoadingCamel";
@@ -8,12 +8,12 @@ import SuccessAnimation from "../components/SuccessAnimation";
 import { useBoard } from "../context/BoardContext";
 import {
 	initialQueue,
+	type QueueState,
+	submit as queueSubmit,
 	routeNext,
 	settle,
-	submit as queueSubmit,
-	type QueueState,
 } from "../lib/agentQueue";
-import type { AgentBoard, AgentEvent, AgentColumn } from "../types";
+import type { AgentBoard, AgentColumn, AgentEvent } from "../types";
 import { formatRelativeTime } from "../types";
 
 // ---- Queue reducer ----
@@ -187,15 +187,17 @@ function AgentBoardVisual({
 									No cards
 								</p>
 							)}
-							{!isDone && !isActive && col.cards.map((card) => (
-								<button
-									key={card.id}
-									onClick={() => onCardClick(col)}
-									className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 hover:border-primary-300 hover:bg-primary-100/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-								>
-									{card.title}
-								</button>
-							))}
+							{!isDone &&
+								!isActive &&
+								col.cards.map((card) => (
+									<button
+										key={card.id}
+										onClick={() => onCardClick(col)}
+										className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 hover:border-primary-300 hover:bg-primary-100/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+									>
+										{card.title}
+									</button>
+								))}
 						</div>
 					</div>
 				);
@@ -266,13 +268,14 @@ export default function AgentPage() {
 		api
 			.getAgentBoard(activeWorkspaceId, board.id)
 			.then(setBoard)
+			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring board fetch errors
 			.catch(() => {});
-	}, [agentEvents, activeWorkspaceId, board?.id]);
+	}, [agentEvents, activeWorkspaceId, board?.id, board]);
 
 	// Auto-scroll event log
 	useEffect(() => {
 		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [agentEvents]);
+	}, []);
 
 	// Actually handle the queue fire
 	const sendMessage = useCallback(
@@ -553,11 +556,11 @@ export default function AgentPage() {
 							</div>
 						</div>
 						<AgentBoardVisual
-								board={board}
-								onCardClick={setDetailColumn}
-								activeColumnSlug={activeColumnSlug}
-								doneColumnSlugs={doneColumnSlugs}
-							/>
+							board={board}
+							onCardClick={setDetailColumn}
+							activeColumnSlug={activeColumnSlug}
+							doneColumnSlugs={doneColumnSlugs}
+						/>
 					</div>
 				)}
 			</div>

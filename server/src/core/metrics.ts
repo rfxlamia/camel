@@ -4,75 +4,75 @@
  */
 
 export interface CardTimestamps {
-  createdAt: Date;
-  /** First time the card left the backlog (work started). */
-  startedAt: Date | null;
-  /** Time the card entered a done column. */
-  doneAt: Date | null;
+	createdAt: Date;
+	/** First time the card left the backlog (work started). */
+	startedAt: Date | null;
+	/** Time the card entered a done column. */
+	doneAt: Date | null;
 }
 
 export interface FlowMetrics {
-  /** Cards completed within the window. */
-  throughput: number;
-  /** Average ms from creation to done; null when no cards are done. */
-  avgLeadTimeMs: number | null;
-  /** Average ms from work started to done; null when not measurable. */
-  avgCycleTimeMs: number | null;
-  /** Cards currently in progress (started but not done). */
-  wipCount: number;
+	/** Cards completed within the window. */
+	throughput: number;
+	/** Average ms from creation to done; null when no cards are done. */
+	avgLeadTimeMs: number | null;
+	/** Average ms from work started to done; null when not measurable. */
+	avgCycleTimeMs: number | null;
+	/** Cards currently in progress (started but not done). */
+	wipCount: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function computeFlowMetrics(
-  cards: CardTimestamps[],
-  options: { windowDays?: number; now?: Date } = {},
+	cards: CardTimestamps[],
+	options: { windowDays?: number; now?: Date } = {},
 ): FlowMetrics {
-  const now = options.now ?? new Date();
-  const windowStart =
-    options.windowDays !== undefined
-      ? new Date(now.getTime() - options.windowDays * DAY_MS)
-      : null;
+	const now = options.now ?? new Date();
+	const windowStart =
+		options.windowDays !== undefined
+			? new Date(now.getTime() - options.windowDays * DAY_MS)
+			: null;
 
-  // No upper bound on doneAt: DB and app clocks may differ by a few ms,
-  // and a card with done_at set is done regardless.
-  const doneInWindow = cards.filter(
-    (c) =>
-      c.doneAt !== null && (windowStart === null || c.doneAt >= windowStart),
-  );
+	// No upper bound on doneAt: DB and app clocks may differ by a few ms,
+	// and a card with done_at set is done regardless.
+	const doneInWindow = cards.filter(
+		(c) =>
+			c.doneAt !== null && (windowStart === null || c.doneAt >= windowStart),
+	);
 
-  const leadTimes = doneInWindow.map(
-    (c) => (c.doneAt as Date).getTime() - c.createdAt.getTime(),
-  );
-  const cycleTimes = doneInWindow
-    .filter((c) => c.startedAt !== null)
-    .map((c) => (c.doneAt as Date).getTime() - (c.startedAt as Date).getTime());
+	const leadTimes = doneInWindow.map(
+		(c) => (c.doneAt as Date).getTime() - c.createdAt.getTime(),
+	);
+	const cycleTimes = doneInWindow
+		.filter((c) => c.startedAt !== null)
+		.map((c) => (c.doneAt as Date).getTime() - (c.startedAt as Date).getTime());
 
-  return {
-    throughput: doneInWindow.length,
-    avgLeadTimeMs: average(leadTimes),
-    avgCycleTimeMs: average(cycleTimes),
-    wipCount: cards.filter((c) => c.startedAt !== null && c.doneAt === null)
-      .length,
-  };
+	return {
+		throughput: doneInWindow.length,
+		avgLeadTimeMs: average(leadTimes),
+		avgCycleTimeMs: average(cycleTimes),
+		wipCount: cards.filter((c) => c.startedAt !== null && c.doneAt === null)
+			.length,
+	};
 }
 
 function average(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
+	if (values.length === 0) return null;
+	return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
 export interface MetricsHistoryBucket {
-  /** Start of the 7-day bucket (ISO timestamp). */
-  weekStart: string;
-  /** Cards completed within the bucket. */
-  throughput: number;
-  /** Average ms from creation to done for cards done in the bucket. */
-  avgLeadTimeMs: number | null;
-  /** Average ms from started to done for cards done in the bucket. */
-  avgCycleTimeMs: number | null;
-  /** Cards in progress (started, not done) at the end of the bucket. */
-  wipCount: number;
+	/** Start of the 7-day bucket (ISO timestamp). */
+	weekStart: string;
+	/** Cards completed within the bucket. */
+	throughput: number;
+	/** Average ms from creation to done for cards done in the bucket. */
+	avgLeadTimeMs: number | null;
+	/** Average ms from started to done for cards done in the bucket. */
+	avgCycleTimeMs: number | null;
+	/** Cards in progress (started, not done) at the end of the bucket. */
+	wipCount: number;
 }
 
 const WEEK_MS = 7 * DAY_MS;
@@ -82,52 +82,52 @@ const WEEK_MS = 7 * DAY_MS;
  * 7-day windows aligned so the most recent bucket ends at `now`.
  */
 export function computeMetricsHistory(
-  cards: CardTimestamps[],
-  options: { weeks?: number; now?: Date } = {},
+	cards: CardTimestamps[],
+	options: { weeks?: number; now?: Date } = {},
 ): MetricsHistoryBucket[] {
-  const now = options.now ?? new Date();
-  const weeks = options.weeks ?? 8;
+	const now = options.now ?? new Date();
+	const weeks = options.weeks ?? 8;
 
-  const buckets: MetricsHistoryBucket[] = [];
-  for (let i = weeks - 1; i >= 0; i--) {
-    const end = new Date(now.getTime() - i * WEEK_MS);
-    const start = new Date(end.getTime() - WEEK_MS);
+	const buckets: MetricsHistoryBucket[] = [];
+	for (let i = weeks - 1; i >= 0; i--) {
+		const end = new Date(now.getTime() - i * WEEK_MS);
+		const start = new Date(end.getTime() - WEEK_MS);
 
-    const doneInBucket = cards.filter(
-      (c) => c.doneAt !== null && c.doneAt >= start && c.doneAt < end,
-    );
-    const leadTimes = doneInBucket.map(
-      (c) => (c.doneAt as Date).getTime() - c.createdAt.getTime(),
-    );
-    const cycleTimes = doneInBucket
-      .filter((c) => c.startedAt !== null)
-      .map(
-        (c) => (c.doneAt as Date).getTime() - (c.startedAt as Date).getTime(),
-      );
+		const doneInBucket = cards.filter(
+			(c) => c.doneAt !== null && c.doneAt >= start && c.doneAt < end,
+		);
+		const leadTimes = doneInBucket.map(
+			(c) => (c.doneAt as Date).getTime() - c.createdAt.getTime(),
+		);
+		const cycleTimes = doneInBucket
+			.filter((c) => c.startedAt !== null)
+			.map(
+				(c) => (c.doneAt as Date).getTime() - (c.startedAt as Date).getTime(),
+			);
 
-    buckets.push({
-      weekStart: start.toISOString(),
-      throughput: doneInBucket.length,
-      avgLeadTimeMs: average(leadTimes),
-      avgCycleTimeMs: average(cycleTimes),
-      wipCount: cards.filter(
-        (c) =>
-          c.startedAt !== null &&
-          c.startedAt < end &&
-          (c.doneAt === null || c.doneAt >= end),
-      ).length,
-    });
-  }
-  return buckets;
+		buckets.push({
+			weekStart: start.toISOString(),
+			throughput: doneInBucket.length,
+			avgLeadTimeMs: average(leadTimes),
+			avgCycleTimeMs: average(cycleTimes),
+			wipCount: cards.filter(
+				(c) =>
+					c.startedAt !== null &&
+					c.startedAt < end &&
+					(c.doneAt === null || c.doneAt >= end),
+			).length,
+		});
+	}
+	return buckets;
 }
 
 /** Format a duration in ms as a human-friendly string, e.g. "2.5d" or "3h". */
 export function formatDuration(ms: number): string {
-  if (ms < 60 * 60 * 1000) {
-    return `${Math.max(1, Math.round(ms / (60 * 1000)))}m`;
-  }
-  if (ms < DAY_MS) {
-    return `${(ms / (60 * 60 * 1000)).toFixed(1).replace(/\.0$/, "")}h`;
-  }
-  return `${(ms / DAY_MS).toFixed(1).replace(/\.0$/, "")}d`;
+	if (ms < 60 * 60 * 1000) {
+		return `${Math.max(1, Math.round(ms / (60 * 1000)))}m`;
+	}
+	if (ms < DAY_MS) {
+		return `${(ms / (60 * 60 * 1000)).toFixed(1).replace(/\.0$/, "")}h`;
+	}
+	return `${(ms / DAY_MS).toFixed(1).replace(/\.0$/, "")}d`;
 }

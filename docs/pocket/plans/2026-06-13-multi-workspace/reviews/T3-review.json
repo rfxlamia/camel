@@ -1,55 +1,55 @@
 {
-  "task_id": "T3",
-  "task_name": "Workspace and membership management API",
-  "cycle": 2,
-  "timestamp": "2026-06-13T13:56:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": []
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "Previous REVIEW_FAIL is resolved: DELETE /api/workspaces/:workspaceId/members/:userId route now exists (routes.ts:296-324) and is the call site for checkCanRemoveUser (routes.ts:314), satisfying the 'admin removes owner leo -> 403' deliverable.",
-      "All four pure authorization/cap helpers (checkActorCanManage, checkCanRemoveUser, checkInviteeCap, CAP_ERROR_MESSAGE, WORKSPACE_LIMIT) are exported and unit-tested; server (4) and client (9) tests pass.",
-      "Non-member access returns uniform 404 across members/manage/transfer/delete routes (routes.ts:196,224,304,410,461) per the CRITICAL sandwich constraint.",
-      "Route handlers use pool.query directly with no service factory or repository pattern, matching existing card/column route style as required by the QUALITY BAR.",
-      "Workspace delete relies on schema-level ON DELETE CASCADE from columns/cards/card_events/settings/members to workspaces (schema.sql:94,104,112-115), correctly implementing 'hard cascade all scoped data' without core module changes.",
-      "Client api.ts wrappers use path-prefixed /api/workspaces routes including getWorkspaceMembers, and client types (Workspace, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceListResponse) match the server response shape.",
-      "Transactional flows (create, accept invite, transfer-ownership) wrap multi-statement writes in BEGIN/COMMIT/ROLLBACK; existing settings tests remain green after appended workspace tests."
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "addWorkspaceMember/POST members accepts role 'admin' on add (routes.ts:235-236, api.ts:138). The deliverable specifies default role 'member'; the default IS member, but allowing an explicit admin grant on add is a small scope addition not described in the deliverable. Not forbidden by spec; classify as Minor.",
-        "location": "server/src/routes.ts:235-236"
-      },
-      {
-        "severity": "Minor",
-        "description": "transfer-ownership does not guard against newOwnerId === req.user.id; self-transfer would set self to owner then immediately demote self, leaving the workspace effectively ownerless. Edge case not covered by the deliverable.",
-        "location": "server/src/routes.ts:430-439"
-      },
-      {
-        "severity": "Minor",
-        "description": "DELETE members route does not publish a membership.removed SSE event. This is deferred to the later real-time task per spec scope, not a T3 gap; noted for traceability only.",
-        "location": "server/src/routes.ts:319-323"
-      },
-      {
-        "severity": "Minor",
-        "description": "GET/POST members handlers are bare async handlers without try/catch, so a DB error yields an unhandled rejection. This matches the existing card/column route pattern in the same file (e.g., /board, /columns), so per Stage 2 'follow existing patterns' guidance it is not a T3-specific regression.",
-        "location": "server/src/routes.ts:189-215"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 2,
-    "max_cycles": 2,
-    "cycles_remaining": 0
-  }
+	"task_id": "T3",
+	"task_name": "Workspace and membership management API",
+	"cycle": 2,
+	"timestamp": "2026-06-13T13:56:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": []
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"Previous REVIEW_FAIL is resolved: DELETE /api/workspaces/:workspaceId/members/:userId route now exists (routes.ts:296-324) and is the call site for checkCanRemoveUser (routes.ts:314), satisfying the 'admin removes owner leo -> 403' deliverable.",
+			"All four pure authorization/cap helpers (checkActorCanManage, checkCanRemoveUser, checkInviteeCap, CAP_ERROR_MESSAGE, WORKSPACE_LIMIT) are exported and unit-tested; server (4) and client (9) tests pass.",
+			"Non-member access returns uniform 404 across members/manage/transfer/delete routes (routes.ts:196,224,304,410,461) per the CRITICAL sandwich constraint.",
+			"Route handlers use pool.query directly with no service factory or repository pattern, matching existing card/column route style as required by the QUALITY BAR.",
+			"Workspace delete relies on schema-level ON DELETE CASCADE from columns/cards/card_events/settings/members to workspaces (schema.sql:94,104,112-115), correctly implementing 'hard cascade all scoped data' without core module changes.",
+			"Client api.ts wrappers use path-prefixed /api/workspaces routes including getWorkspaceMembers, and client types (Workspace, WorkspaceMember, WorkspaceInvite, WorkspaceRole, WorkspaceListResponse) match the server response shape.",
+			"Transactional flows (create, accept invite, transfer-ownership) wrap multi-statement writes in BEGIN/COMMIT/ROLLBACK; existing settings tests remain green after appended workspace tests."
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "addWorkspaceMember/POST members accepts role 'admin' on add (routes.ts:235-236, api.ts:138). The deliverable specifies default role 'member'; the default IS member, but allowing an explicit admin grant on add is a small scope addition not described in the deliverable. Not forbidden by spec; classify as Minor.",
+				"location": "server/src/routes.ts:235-236"
+			},
+			{
+				"severity": "Minor",
+				"description": "transfer-ownership does not guard against newOwnerId === req.user.id; self-transfer would set self to owner then immediately demote self, leaving the workspace effectively ownerless. Edge case not covered by the deliverable.",
+				"location": "server/src/routes.ts:430-439"
+			},
+			{
+				"severity": "Minor",
+				"description": "DELETE members route does not publish a membership.removed SSE event. This is deferred to the later real-time task per spec scope, not a T3 gap; noted for traceability only.",
+				"location": "server/src/routes.ts:319-323"
+			},
+			{
+				"severity": "Minor",
+				"description": "GET/POST members handlers are bare async handlers without try/catch, so a DB error yields an unhandled rejection. This matches the existing card/column route pattern in the same file (e.g., /board, /columns), so per Stage 2 'follow existing patterns' guidance it is not a T3-specific regression.",
+				"location": "server/src/routes.ts:189-215"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 2,
+		"max_cycles": 2,
+		"cycles_remaining": 0
+	}
 }

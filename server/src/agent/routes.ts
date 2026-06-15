@@ -16,8 +16,8 @@
  * NOT card_events — human Activity Feed must stay clean.
  */
 
-import { Router } from "express";
 import type { Request } from "express";
+import { Router } from "express";
 import { requireAuth } from "../auth.js";
 import { pool } from "../db/pool.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
@@ -27,8 +27,8 @@ import {
 	generateClarificationQuestion as realGenerateClarificationQuestion,
 } from "./llm.js";
 import {
-	createAgentBoardService,
 	type AgentBoardServiceDeps,
+	createAgentBoardService,
 } from "./service.js";
 import { createToolRegistry } from "./tools/registry.js";
 import { mergeToolTraceRows } from "./tools/trace.js";

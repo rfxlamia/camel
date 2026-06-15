@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tool, ToolEvent } from "./tools/types.js";
 
 const mockCreate = vi.fn();
@@ -243,8 +243,7 @@ function makeTurn(opts: {
 }) {
 	const content: unknown[] = [];
 	if (opts.text) content.push({ type: "text", text: opts.text });
-	if (opts.toolUse)
-		content.push({ type: "tool_use", ...opts.toolUse });
+	if (opts.toolUse) content.push({ type: "tool_use", ...opts.toolUse });
 	return {
 		async *[Symbol.asyncIterator]() {
 			if (opts.text)
@@ -409,13 +408,12 @@ describe("executeCard tool loop", () => {
 					toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
 				}),
 			)
-			.mockReturnValueOnce(
-				makeTurn({ text: "Done.", stopReason: "end_turn" }),
-			);
+			.mockReturnValueOnce(makeTurn({ text: "Done.", stopReason: "end_turn" }));
 
 		const execute = vi.fn(async () => ({
 			ok: true,
-			content: "1. A\n   https://a.com\n   snip\n\n2. B\n   https://b.com\n   snip",
+			content:
+				"1. A\n   https://a.com\n   snip\n\n2. B\n   https://b.com\n   snip",
 		}));
 		const events: ToolEvent[] = [];
 		const { executeCard } = await import("./llm.js");
@@ -449,9 +447,7 @@ describe("executeCard tool loop", () => {
 					toolUse: { id: "tu_2", name: "web_search", input: { query: "b" } },
 				}),
 			)
-			.mockReturnValueOnce(
-				makeTurn({ text: "Done.", stopReason: "end_turn" }),
-			);
+			.mockReturnValueOnce(makeTurn({ text: "Done.", stopReason: "end_turn" }));
 
 		const execute = vi.fn(async () => ({ ok: true, content: "hit" }));
 		const events: ToolEvent[] = [];

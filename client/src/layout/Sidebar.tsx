@@ -1,12 +1,4 @@
 import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-	type FormEvent,
-} from "react";
-import { NavLink, useLocation } from "react-router";
-import {
 	Activity,
 	Bot,
 	Check,
@@ -14,14 +6,22 @@ import {
 	History,
 	LayoutDashboard,
 	LogOut,
+	type LucideIcon,
 	PanelLeftClose,
 	PanelLeftOpen,
 	Plus,
 	Settings,
 	SquareKanban,
 	X,
-	type LucideIcon,
 } from "lucide-react";
+import {
+	type FormEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import { NavLink, useLocation } from "react-router";
 import { useBoard } from "../context/BoardContext";
 import {
 	getInvitePopoverState,
@@ -44,7 +44,9 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 const KANBAN_NAV = NAV_ITEMS.filter((i) =>
 	["/board", "/dashboard", "/activity"].includes(i.to),
 );
-const AGENT_NAV = NAV_ITEMS.filter((i) => ["/agent", "/history"].includes(i.to));
+const AGENT_NAV = NAV_ITEMS.filter((i) =>
+	["/agent", "/history"].includes(i.to),
+);
 const AGENT_PATHS = ["/agent", "/history"];
 const SETTINGS_ITEM = NAV_ITEMS.find((i) => i.to === "/settings")!;
 
@@ -802,7 +804,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 		? "hidden"
 		: "hidden lg:inline whitespace-nowrap";
 	const [showSignOutPopover, setShowSignOutPopover] = useState(false);
-	const [mode, setMode] = useState<Mode>(() => getModeFromPath(location.pathname));
+	const [mode, setMode] = useState<Mode>(() =>
+		getModeFromPath(location.pathname),
+	);
 
 	// Sync switcher tab when navigating directly to a route
 	useEffect(() => {
@@ -921,7 +925,9 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
 	const { logout, settings } = useBoard();
 	const location = useLocation();
 	const [showSignOutPopover, setShowSignOutPopover] = useState(false);
-	const [mode, setMode] = useState<Mode>(() => getModeFromPath(location.pathname));
+	const [mode, setMode] = useState<Mode>(() =>
+		getModeFromPath(location.pathname),
+	);
 
 	useEffect(() => {
 		if (location.pathname !== "/settings") {

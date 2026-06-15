@@ -9,9 +9,9 @@
  */
 
 import {
-	getTemplate,
 	buildVarsMap,
 	findUnresolvedPlaceholders,
+	getTemplate,
 	renderSystemPrompt,
 } from "./templates.js";
 import type { Tool } from "./tools/types.js";

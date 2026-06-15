@@ -5,9 +5,10 @@ export function countSearchResults(content: string): number {
 	return matches?.length ?? 0;
 }
 
-export function parseToolCallInput(
-	input: unknown,
-): { query?: string; resultCount?: number } {
+export function parseToolCallInput(input: unknown): {
+	query?: string;
+	resultCount?: number;
+} {
 	if (typeof input === "string") {
 		return input ? { query: input } : {};
 	}
@@ -70,7 +71,8 @@ export function mergeToolTraceRows(
 		};
 
 		const isStarted =
-			!r.error_code && (r.result === null || r.result === "" || r.result === "started");
+			!r.error_code &&
+			(r.result === null || r.result === "" || r.result === "started");
 		const isOkResult = r.result === "ok" || r.result === "success";
 
 		if (isStarted) {

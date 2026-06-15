@@ -1,40 +1,40 @@
 {
-  "task_id": "T3",
-  "task_name": "web_search tool (Tavily)",
-  "cycle": 1,
-  "timestamp": "2026-06-15T19:10:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": []
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "≤10 results enforced both via maxResults param and a defensive re-slice in formatResults (webSearch.ts:47), so it caps even if Tavily over-returns",
-      "Error classification is case-insensitive and ordered exactly per spec (rate-limit → auth → network → unknown) in classifyError (webSearch.ts:15-24)",
-      "ENV_VAR_MISSING short-circuits before constructing the Tavily client (webSearch.ts:111-118); API key never leaks into ToolResult",
-      "execute() wraps searchWithRetry in an outer try/catch so it can never throw out (webSearch.ts:107-128)",
-      "API_ERROR correctly excluded from isRetryable (webSearch.ts:26-28) so auth failures are not retried",
-      "All 7 tests pass; tests mock @tavily/core with no network access; named constants (MAX_RESULTS, SNIPPET_MAX, MAX_ATTEMPTS, BACKOFF_MS) avoid magic numbers"
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "tavily({ apiKey }) client is reconstructed inside the retry loop on every attempt rather than once before the loop. Trivial config-object construction; no correctness or meaningful performance impact.",
-        "location": "server/src/agent/tools/webSearch.ts:66"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 1,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  },
-  "reviewed_sha": "735136b534e666aca967c9c43b4d4e48c12ae982"
+	"task_id": "T3",
+	"task_name": "web_search tool (Tavily)",
+	"cycle": 1,
+	"timestamp": "2026-06-15T19:10:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": []
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"≤10 results enforced both via maxResults param and a defensive re-slice in formatResults (webSearch.ts:47), so it caps even if Tavily over-returns",
+			"Error classification is case-insensitive and ordered exactly per spec (rate-limit → auth → network → unknown) in classifyError (webSearch.ts:15-24)",
+			"ENV_VAR_MISSING short-circuits before constructing the Tavily client (webSearch.ts:111-118); API key never leaks into ToolResult",
+			"execute() wraps searchWithRetry in an outer try/catch so it can never throw out (webSearch.ts:107-128)",
+			"API_ERROR correctly excluded from isRetryable (webSearch.ts:26-28) so auth failures are not retried",
+			"All 7 tests pass; tests mock @tavily/core with no network access; named constants (MAX_RESULTS, SNIPPET_MAX, MAX_ATTEMPTS, BACKOFF_MS) avoid magic numbers"
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "tavily({ apiKey }) client is reconstructed inside the retry loop on every attempt rather than once before the loop. Trivial config-object construction; no correctness or meaningful performance impact.",
+				"location": "server/src/agent/tools/webSearch.ts:66"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 1,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	},
+	"reviewed_sha": "735136b534e666aca967c9c43b4d4e48c12ae982"
 }

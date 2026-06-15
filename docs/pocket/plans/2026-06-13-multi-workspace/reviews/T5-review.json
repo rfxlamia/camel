@@ -1,40 +1,40 @@
 {
-  "task_id": "T5",
-  "task_name": "Per-workspace realtime, presence, and removal events",
-  "cycle": 2,
-  "timestamp": "2026-06-13T14:46:40Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": [
-      "Cycle-1 Critical (routes.ts:1294 SSE not membership-gated) — RESOLVED: /workspaces/:workspaceId/events/stream now calls lookupMembership and returns 404 for non-members before sseHandler (routes.ts:1290-1293). Verified parallel presence routes (heartbeat routes.ts:1253, GET presence routes.ts:1266) are also membership-gated; DELETE presence clears caller's own key only — no cross-workspace leak.",
-      "Cycle-1 Minor (unused getWorkspaceOwner in WorkspaceAccessDeps) — RESOLVED: WorkspaceAccessDeps type (routes.ts:161-185) and production wiring (routes.ts:230-261) contain no getWorkspaceOwner; replaced by getTargetMembership which is legitimately used by checkCanRemoveUser owner-guard. Test file matches the new dep shape exactly (workspaceAccess.test.ts:76-83).",
-      "Cycle-1 Minor (unused userId in connectLocalClient) — RESOLVED: signature is connectLocalClient({ workspaceId }: { workspaceId: number }) (realtime.ts:124); userId removed. Test updated to match (realtime.test.ts:11-12).",
-      "DELIVERABLE 1 (oscar SSE WS-A, card in WS-B not received) — verified by fanOut workspace filter (realtime.ts:95-104).",
-      "DELIVERABLE 2 (Redis down, local fan-out WS-B event not refreshing WS-A) — verified: local fan-out path applies same workspace filter (realtime.ts:146).",
-      "DELIVERABLE 3 (nina removed from WS-R emits membership.removed for WS-R) — verified at routes.ts:219-224.",
-      "DELIVERABLE 4 (nina viewing WS-S, removed from WS-R, no WS-S event) — verified: event published only to removal workspace; test asserts not.toHaveBeenCalledWith(9, ...) (workspaceAccess.test.ts:93)."
-    ]
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "Clean dependency-injection seam: createRealtimeHub and createWorkspaceAccessService keep DB/Express out of testable logic, consistent with the existing core/ pure-function convention.",
-      "Workspace isolation enforced uniformly across both Redis pub/sub (workspaceEventChannel) and local fan-out (fanOut workspace filter), satisfying the sandwich-context invariant that Redis-down fallback still filters by workspace.",
-      "Redis graceful degradation preserved: publishEvent falls through to local fan-out on publish failure (realtime.ts:138-146); presence operations are best-effort with swallowed errors.",
-      "All presence and stream routes consistently membership-gated via lookupMembership with uniform 400/404 handling.",
-      "9 tests pass; tests assert behavior (isolation, channel naming, scoped publish, no cross-workspace event) rather than merely executing."
-    ],
-    "issues": [],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 2,
-    "max_cycles": 2,
-    "cycles_remaining": 0
-  }
+	"task_id": "T5",
+	"task_name": "Per-workspace realtime, presence, and removal events",
+	"cycle": 2,
+	"timestamp": "2026-06-13T14:46:40Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": [
+			"Cycle-1 Critical (routes.ts:1294 SSE not membership-gated) — RESOLVED: /workspaces/:workspaceId/events/stream now calls lookupMembership and returns 404 for non-members before sseHandler (routes.ts:1290-1293). Verified parallel presence routes (heartbeat routes.ts:1253, GET presence routes.ts:1266) are also membership-gated; DELETE presence clears caller's own key only — no cross-workspace leak.",
+			"Cycle-1 Minor (unused getWorkspaceOwner in WorkspaceAccessDeps) — RESOLVED: WorkspaceAccessDeps type (routes.ts:161-185) and production wiring (routes.ts:230-261) contain no getWorkspaceOwner; replaced by getTargetMembership which is legitimately used by checkCanRemoveUser owner-guard. Test file matches the new dep shape exactly (workspaceAccess.test.ts:76-83).",
+			"Cycle-1 Minor (unused userId in connectLocalClient) — RESOLVED: signature is connectLocalClient({ workspaceId }: { workspaceId: number }) (realtime.ts:124); userId removed. Test updated to match (realtime.test.ts:11-12).",
+			"DELIVERABLE 1 (oscar SSE WS-A, card in WS-B not received) — verified by fanOut workspace filter (realtime.ts:95-104).",
+			"DELIVERABLE 2 (Redis down, local fan-out WS-B event not refreshing WS-A) — verified: local fan-out path applies same workspace filter (realtime.ts:146).",
+			"DELIVERABLE 3 (nina removed from WS-R emits membership.removed for WS-R) — verified at routes.ts:219-224.",
+			"DELIVERABLE 4 (nina viewing WS-S, removed from WS-R, no WS-S event) — verified: event published only to removal workspace; test asserts not.toHaveBeenCalledWith(9, ...) (workspaceAccess.test.ts:93)."
+		]
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"Clean dependency-injection seam: createRealtimeHub and createWorkspaceAccessService keep DB/Express out of testable logic, consistent with the existing core/ pure-function convention.",
+			"Workspace isolation enforced uniformly across both Redis pub/sub (workspaceEventChannel) and local fan-out (fanOut workspace filter), satisfying the sandwich-context invariant that Redis-down fallback still filters by workspace.",
+			"Redis graceful degradation preserved: publishEvent falls through to local fan-out on publish failure (realtime.ts:138-146); presence operations are best-effort with swallowed errors.",
+			"All presence and stream routes consistently membership-gated via lookupMembership with uniform 400/404 handling.",
+			"9 tests pass; tests assert behavior (isolation, channel naming, scoped publish, no cross-workspace event) rather than merely executing."
+		],
+		"issues": [],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 2,
+		"max_cycles": 2,
+		"cycles_remaining": 0
+	}
 }

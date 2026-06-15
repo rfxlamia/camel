@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { ToolTrace } from "./ToolTrace";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { deriveToolTrace } from "../lib/toolTrace";
+import { ToolTrace } from "./ToolTrace";
 
 describe("ToolTrace", () => {
 	it("renders collapsed by default with a one-line summary", () => {
@@ -86,7 +86,6 @@ describe("deriveToolTrace", () => {
 				resultCount: 5,
 			},
 			{ type: "agent.card.done", columnSlug: "research" },
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		] as any[];
 
 		const toolItems = deriveToolTrace(agentEvents);
@@ -108,7 +107,6 @@ describe("deriveToolTrace", () => {
 				toolName: "db_query",
 				errorCode: "TIMEOUT",
 			},
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		] as any[];
 
 		const toolItems = deriveToolTrace(agentEvents);
@@ -125,7 +123,6 @@ describe("deriveToolTrace", () => {
 		const agentEvents = [
 			{ type: "agent.card.started", columnSlug: "col-b" },
 			{ type: "agent.card.done", columnSlug: "col-b" },
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		] as any[];
 
 		expect(deriveToolTrace(agentEvents)).toHaveLength(0);

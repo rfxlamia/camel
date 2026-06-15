@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
 	Area,
 	AreaChart,
@@ -15,9 +15,9 @@ import {
 	YAxis,
 } from "recharts";
 import { api } from "../api";
+import { useBoard } from "../context/BoardContext";
 import type { MetricsHistoryBucket } from "../types";
 import { formatDuration, formatRelativeTime } from "../types";
-import { useBoard } from "../context/BoardContext";
 import { describeEvent } from "./ActivityPage";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -160,7 +160,7 @@ function ChartCard({
 }
 
 export default function DashboardPage() {
-	const { metrics, activity, refreshTick, activeWorkspaceId } = useBoard();
+	const { metrics, activity, activeWorkspaceId } = useBoard();
 	const [history, setHistory] = useState<MetricsHistoryBucket[] | null>(null);
 	const [historyError, setHistoryError] = useState(false);
 
@@ -174,7 +174,7 @@ export default function DashboardPage() {
 				setHistoryError(false);
 			})
 			.catch(() => setHistoryError(true));
-	}, [refreshTick, activeWorkspaceId]);
+	}, [activeWorkspaceId]);
 
 	if (history === null && !historyError) {
 		return <p className="p-6 text-sm text-neutral-500">Loading dashboard...</p>;

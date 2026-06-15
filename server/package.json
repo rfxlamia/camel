@@ -1,39 +1,39 @@
 {
-  "name": "@camel/server",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:integration": "RUN_LLM_IT=1 vitest run src/agent/pipeline.integration.test.ts",
-    "test:watch": "vitest",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.1",
-    "@types/multer": "^2.1.0",
-    "bcryptjs": "^3.0.3",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
-    "dotenv": "^17.4.2",
-    "express": "^5.1.0",
-    "multer": "^2.1.1",
-    "pg": "^8.13.1",
-    "redis": "^6.0.0",
-    "@tavily/core": "^0.5.0"
-  },
-  "devDependencies": {
-    "@types/cookie-parser": "^1.4.10",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.10.0",
-    "@types/pg": "^8.11.10",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
-  }
+	"name": "@camel/server",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"dev": "tsx watch src/index.ts",
+		"build": "tsc -p tsconfig.json",
+		"start": "node dist/index.js",
+		"test": "vitest run",
+		"test:integration": "RUN_LLM_IT=1 vitest run src/agent/pipeline.integration.test.ts",
+		"test:watch": "vitest",
+		"db:migrate": "tsx src/db/migrate.ts",
+		"db:seed": "tsx src/db/seed.ts"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.104.1",
+		"@types/multer": "^2.1.0",
+		"bcryptjs": "^3.0.3",
+		"cookie-parser": "^1.4.7",
+		"cors": "^2.8.5",
+		"dotenv": "^17.4.2",
+		"express": "^5.1.0",
+		"multer": "^2.1.1",
+		"pg": "^8.13.1",
+		"redis": "^6.0.0",
+		"@tavily/core": "^0.5.0"
+	},
+	"devDependencies": {
+		"@types/cookie-parser": "^1.4.10",
+		"@types/cors": "^2.8.17",
+		"@types/express": "^5.0.0",
+		"@types/node": "^22.10.0",
+		"@types/pg": "^8.11.10",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8"
+	}
 }

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { initialQueue, submit, settle, routeNext } from "./agentQueue.js";
+import { describe, expect, it } from "vitest";
+import { initialQueue, routeNext, settle, submit } from "./agentQueue.js";
 
 describe("agentQueue", () => {
 	it("fires immediately when idle", () => {

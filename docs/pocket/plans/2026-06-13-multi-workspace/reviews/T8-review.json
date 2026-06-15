@@ -1,48 +1,48 @@
 {
-  "task_id": "T8",
-  "task_name": "Workspace-scoped settings, permissions, and delete replacement",
-  "cycle": 1,
-  "timestamp": "2026-06-13T15:14:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": [
-      "Provenance check on 'Reset Settings' (DELETE /settings) feature: git show cc55af45^ confirms resetSettings endpoint + UI existed BEFORE T8. T8 preserved and scoped it (added workspace_id, owner/admin permission check) while removing reset-app per spec. Not scope creep, not a Stage 1 'extra'.",
-      "Hard-cascade verification for delete deliverable: server/src/db/schema.sql lines 112-115 confirm columns, cards, card_events, settings all REFERENCES workspaces(id) ON DELETE CASCADE, so DELETE FROM workspaces permanently removes all scoped data."
-    ]
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "All settings DB queries are workspace-scoped (settings.ts:218,224,239,345,362,373,386,400,410,462,470,480,492) satisfying the must-have 'queries always include active workspace id'.",
-      "Server enforces owner/admin write permission via checkCanEditSettings on PATCH, DELETE, and POST /logo (settings.ts:244,405,450); client role gating in SettingsPage is UX-only, matching the architecture rule.",
-      "reset-app fully removed: no endpoint (hasResetAppRoute()===false, settings.ts:198), no client wrapper (api.test.ts:86 'resetApp' in api === false), no UI references.",
-      "Personal workspace delete blocked server-side with 403 (routes.ts:626-628) and client-side via getWorkspaceDangerZoneState (settingsValidation.ts:23-29).",
-      "Multi-member delete blocked with 409 and clear copy (routes.ts:634-638); danger-zone copy mirrors it (settingsValidation.ts:36).",
-      "Tests written before implementation (TDD plan steps 1-8); 31 server + 22 client tests pass. Commit message 'feat(workspaces): scope settings permissions' matches.",
-      "Logo cleanup is path-traversal hardened (settings.ts:91-102) and scoped per-workspace logo_path."
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "settingsLoadError state is effectively dead: the initial settings load happens in BoardContext (refreshSettings), which is not guarded, so settingsLoadError is only ever set true inside handleRetryLoad after a retry failure. The error UI (settings.tsx:224) can essentially never render on first load. Pre-existing UX pattern, not a spec violation.",
-        "location": "client/src/pages/SettingsPage.tsx:78,215-236"
-      },
-      {
-        "severity": "Minor",
-        "description": "PATCH handler version-conflict uses the max version across the workspace's setting rows as the optimistic-lock value (settings.ts:344-358); single-key updates increment all touched rows to currentGlobal+1. Behavior is consistent with the pre-existing global implementation and tests pass, but the per-workspace 'global version' coupling across keys is slightly non-obvious. No correctness defect observed.",
-        "location": "server/src/routes/settings.ts:344-381"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 1,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  }
+	"task_id": "T8",
+	"task_name": "Workspace-scoped settings, permissions, and delete replacement",
+	"cycle": 1,
+	"timestamp": "2026-06-13T15:14:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": [
+			"Provenance check on 'Reset Settings' (DELETE /settings) feature: git show cc55af45^ confirms resetSettings endpoint + UI existed BEFORE T8. T8 preserved and scoped it (added workspace_id, owner/admin permission check) while removing reset-app per spec. Not scope creep, not a Stage 1 'extra'.",
+			"Hard-cascade verification for delete deliverable: server/src/db/schema.sql lines 112-115 confirm columns, cards, card_events, settings all REFERENCES workspaces(id) ON DELETE CASCADE, so DELETE FROM workspaces permanently removes all scoped data."
+		]
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"All settings DB queries are workspace-scoped (settings.ts:218,224,239,345,362,373,386,400,410,462,470,480,492) satisfying the must-have 'queries always include active workspace id'.",
+			"Server enforces owner/admin write permission via checkCanEditSettings on PATCH, DELETE, and POST /logo (settings.ts:244,405,450); client role gating in SettingsPage is UX-only, matching the architecture rule.",
+			"reset-app fully removed: no endpoint (hasResetAppRoute()===false, settings.ts:198), no client wrapper (api.test.ts:86 'resetApp' in api === false), no UI references.",
+			"Personal workspace delete blocked server-side with 403 (routes.ts:626-628) and client-side via getWorkspaceDangerZoneState (settingsValidation.ts:23-29).",
+			"Multi-member delete blocked with 409 and clear copy (routes.ts:634-638); danger-zone copy mirrors it (settingsValidation.ts:36).",
+			"Tests written before implementation (TDD plan steps 1-8); 31 server + 22 client tests pass. Commit message 'feat(workspaces): scope settings permissions' matches.",
+			"Logo cleanup is path-traversal hardened (settings.ts:91-102) and scoped per-workspace logo_path."
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "settingsLoadError state is effectively dead: the initial settings load happens in BoardContext (refreshSettings), which is not guarded, so settingsLoadError is only ever set true inside handleRetryLoad after a retry failure. The error UI (settings.tsx:224) can essentially never render on first load. Pre-existing UX pattern, not a spec violation.",
+				"location": "client/src/pages/SettingsPage.tsx:78,215-236"
+			},
+			{
+				"severity": "Minor",
+				"description": "PATCH handler version-conflict uses the max version across the workspace's setting rows as the optimistic-lock value (settings.ts:344-358); single-key updates increment all touched rows to currentGlobal+1. Behavior is consistent with the pre-existing global implementation and tests pass, but the per-workspace 'global version' coupling across keys is slightly non-obvious. No correctness defect observed.",
+				"location": "server/src/routes/settings.ts:344-381"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 1,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	}
 }

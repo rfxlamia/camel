@@ -1,44 +1,44 @@
 {
-  "task_id": "T9",
-  "task_name": "End-to-end integration validation and legacy route cleanup",
-  "cycle": 1,
-  "timestamp": "2026-06-13T15:14:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": []
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "All plan-prescribed targeted tests pass (server 42, client 19); lint and build both green per the QUALITY BAR must-haves.",
-      "No edits to server/src/core/* — the must-not-have boundary is respected (diff confirms only routes.ts, settings.ts, realtime.ts, BoardContext.tsx, and switcher lib/test files changed).",
-      "Legacy global routes (/api/board, /api/cards, /api/settings, /api/events/stream, /api/presence) are confirmed absent; every production route in routes.ts is workspace-prefixed and gated by lookupMembership, and settings is mounted only under /workspaces/:workspaceId/settings.",
-      "settings.ts cleanup removed all `any` casts in favor of typed PgSettingRow/PgVersionRow plus a shared mapPgSettingRow helper, reducing duplication; reset-app remains removed (hasResetAppRoute() returns false).",
-      "SSE/realtime isolation holds in both Redis and local fan-out paths: fanOut filters by client.workspaceId and onRedisMessage parses workspace id from the channel, satisfying the cross-workspace non-delivery deliverable.",
-      "createWorkspaceIntegrationHarness and legacyWorkspaceRouteMatrix match the plan's verbatim test code exactly; no scope creep or extra product features were introduced."
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "Integration coverage uses in-memory hand-written harnesses (createWorkspaceIntegrationHarness re-implements isolation; legacyWorkspaceRouteMatrix inspects the router stack as a proxy for registration rather than asserting real 404 HTTP responses). This is exactly the test code the plan prescribed in Steps 1 and 5, so it is not a spec deviation, but the 'end-to-end' label is stronger than the actual coverage — real route/DB exercise is not performed.",
-        "location": "server/src/routes/workspaceAccess.test.ts:100-124; server/src/routes.ts:1297-1432"
-      },
-      {
-        "severity": "Minor",
-        "description": "In submitCreateWorkspace, applyCreatedWorkspaceSelection is invoked but only selection.activeWorkspaceId and selection.toast are consumed; the helper's computed selection.workspaces and selection.localStorageWrite outputs are discarded because reloadWorkspaces() and switchWorkspace() already handle list refresh and localStorage persistence. Behavior is correct, but the helper's main outputs are dead at the call site, so the passing unit test overstates integration confidence.",
-        "location": "client/src/context/BoardContext.tsx:272-278"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 1,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  }
+	"task_id": "T9",
+	"task_name": "End-to-end integration validation and legacy route cleanup",
+	"cycle": 1,
+	"timestamp": "2026-06-13T15:14:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": []
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"All plan-prescribed targeted tests pass (server 42, client 19); lint and build both green per the QUALITY BAR must-haves.",
+			"No edits to server/src/core/* — the must-not-have boundary is respected (diff confirms only routes.ts, settings.ts, realtime.ts, BoardContext.tsx, and switcher lib/test files changed).",
+			"Legacy global routes (/api/board, /api/cards, /api/settings, /api/events/stream, /api/presence) are confirmed absent; every production route in routes.ts is workspace-prefixed and gated by lookupMembership, and settings is mounted only under /workspaces/:workspaceId/settings.",
+			"settings.ts cleanup removed all `any` casts in favor of typed PgSettingRow/PgVersionRow plus a shared mapPgSettingRow helper, reducing duplication; reset-app remains removed (hasResetAppRoute() returns false).",
+			"SSE/realtime isolation holds in both Redis and local fan-out paths: fanOut filters by client.workspaceId and onRedisMessage parses workspace id from the channel, satisfying the cross-workspace non-delivery deliverable.",
+			"createWorkspaceIntegrationHarness and legacyWorkspaceRouteMatrix match the plan's verbatim test code exactly; no scope creep or extra product features were introduced."
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "Integration coverage uses in-memory hand-written harnesses (createWorkspaceIntegrationHarness re-implements isolation; legacyWorkspaceRouteMatrix inspects the router stack as a proxy for registration rather than asserting real 404 HTTP responses). This is exactly the test code the plan prescribed in Steps 1 and 5, so it is not a spec deviation, but the 'end-to-end' label is stronger than the actual coverage — real route/DB exercise is not performed.",
+				"location": "server/src/routes/workspaceAccess.test.ts:100-124; server/src/routes.ts:1297-1432"
+			},
+			{
+				"severity": "Minor",
+				"description": "In submitCreateWorkspace, applyCreatedWorkspaceSelection is invoked but only selection.activeWorkspaceId and selection.toast are consumed; the helper's computed selection.workspaces and selection.localStorageWrite outputs are discarded because reloadWorkspaces() and switchWorkspace() already handle list refresh and localStorage persistence. Behavior is correct, but the helper's main outputs are dead at the call site, so the passing unit test overstates integration confidence.",
+				"location": "client/src/context/BoardContext.tsx:272-278"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 1,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	}
 }

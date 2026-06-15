@@ -1,42 +1,42 @@
 {
-  "task_id": "T4",
-  "task_name": "Headless live-LLM integration test",
-  "cycle": 1,
-  "timestamp": "2026-06-14T23:57:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": []
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "describe.skipIf(!process.env.RUN_LLM_IT) gate is the idiomatic Vitest skip — dry run skips cleanly and exits 0 with zero network calls (verified: 1 test, 1 skipped)",
-      "executeCard spy records each systemPrompt then delegates to the REAL executeCard from llm.js (pipeline.integration.test.ts:30-41) — no mockResolvedValue, so the crown-jewel no-leak assertion runs against actually-rendered prompts",
-      "Spy parameter order (systemPrompt, intent, previousOutputs, reasoning, onToken) matches the AgentBoardServiceDeps.executeCard signature exactly (service.ts:105-111)",
-      "No-leak regex /\\{[a-z][a-z0-9_]*\\}/ matches the spec verbatim and is applied to both prompts and outputs (pipeline.integration.test.ts:78-86)",
-      "In-memory DI doubles for getBoard/getColumns/insertOutput/insertCard/updateBoard/publishEvent — no Postgres or Redis connection anywhere in the file",
-      "Structural-invariant assertions only (5 outputs, card_index 0..4, boardStatus 'done', trim().length > 0) — no exact LLM text assertions, safe for non-deterministic output",
-      "mockColumns built from the live getTemplate('research-report') definition, keeping the test in sync with the real 5-column template",
-      "Commit fcc12e7 uses correct conventional-commit message: 'test(agent): add opt-in headless live-LLM integration test for runPipeline'"
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "captured.events is collected via the publishEvent double but never asserted on. Harmless and not a QUALITY BAR requirement, but it is unused captured state that could be dropped or used to assert SSE per-card transitions.",
-        "location": "pipeline.integration.test.ts:28,67-69"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 1,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  },
-  "reviewed_sha": "3c8a7e77b4301daf199dd9efe982f4a77b476125"
+	"task_id": "T4",
+	"task_name": "Headless live-LLM integration test",
+	"cycle": 1,
+	"timestamp": "2026-06-14T23:57:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": []
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"describe.skipIf(!process.env.RUN_LLM_IT) gate is the idiomatic Vitest skip — dry run skips cleanly and exits 0 with zero network calls (verified: 1 test, 1 skipped)",
+			"executeCard spy records each systemPrompt then delegates to the REAL executeCard from llm.js (pipeline.integration.test.ts:30-41) — no mockResolvedValue, so the crown-jewel no-leak assertion runs against actually-rendered prompts",
+			"Spy parameter order (systemPrompt, intent, previousOutputs, reasoning, onToken) matches the AgentBoardServiceDeps.executeCard signature exactly (service.ts:105-111)",
+			"No-leak regex /\\{[a-z][a-z0-9_]*\\}/ matches the spec verbatim and is applied to both prompts and outputs (pipeline.integration.test.ts:78-86)",
+			"In-memory DI doubles for getBoard/getColumns/insertOutput/insertCard/updateBoard/publishEvent — no Postgres or Redis connection anywhere in the file",
+			"Structural-invariant assertions only (5 outputs, card_index 0..4, boardStatus 'done', trim().length > 0) — no exact LLM text assertions, safe for non-deterministic output",
+			"mockColumns built from the live getTemplate('research-report') definition, keeping the test in sync with the real 5-column template",
+			"Commit fcc12e7 uses correct conventional-commit message: 'test(agent): add opt-in headless live-LLM integration test for runPipeline'"
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "captured.events is collected via the publishEvent double but never asserted on. Harmless and not a QUALITY BAR requirement, but it is unused captured state that could be dropped or used to assert SSE per-card transitions.",
+				"location": "pipeline.integration.test.ts:28,67-69"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 1,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	},
+	"reviewed_sha": "3c8a7e77b4301daf199dd9efe982f4a77b476125"
 }

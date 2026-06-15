@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getHumanColumns } from "../routes.js";
-import { createAgentBoardService } from "./service.js";
 import type { AgentBoardServiceDeps, ColumnInfo } from "./service.js";
+import { createAgentBoardService } from "./service.js";
 import { createToolRegistry } from "./tools/registry.js";
 import { webSearch } from "./tools/webSearch.js";
 
@@ -743,17 +743,15 @@ describe("runPipeline tool wiring", () => {
 		const insertToolCall = vi.fn().mockResolvedValue(undefined);
 
 		const toolRegistry = {
-			resolveTools: vi
-				.fn()
-				.mockReturnValue([
-					{
-						name: "web_search",
-						description: "Search",
-						inputSchema: {},
-						riskTier: "read-only" as const,
-						execute: vi.fn(),
-					},
-				]),
+			resolveTools: vi.fn().mockReturnValue([
+				{
+					name: "web_search",
+					description: "Search",
+					inputSchema: {},
+					riskTier: "read-only" as const,
+					execute: vi.fn(),
+				},
+			]),
 		};
 
 		const executeCard = vi

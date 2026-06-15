@@ -1,46 +1,46 @@
 {
-  "task_id": "T2",
-  "task_name": "runPipeline loop in service.ts",
-  "cycle": 1,
-  "timestamp": "2026-06-14T23:55:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": []
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "runPipeline is a method on the service object returned by createAgentBoardService (service.ts:321); ColumnInfo interface (service.ts:49) and getColumns dep (service.ts:103) are both exported.",
-      "Template-agnostic named resolution: slug-to-output_key map is built from getTemplate(board.templateId) (service.ts:334-339) with no hardcoded slug or output_key strings in the loop body.",
-      "All three fail-closed halts (unresolved placeholder before executeCard at 360-378, empty output at 413-432, executeCard throw at 463-482) each persist a partial insertOutput row, set updateBoard execution_status=failed, emit agent.card.failed{columnSlug,reason}, log the error, and return early so remaining cards skip.",
-      "Token-batching setInterval is cleared on both the success path (service.ts:403) and the catch path (service.ts:464) of each card, preventing interval leaks.",
-      "executeCard called with the unchanged signature (rendered, intent, [], reasoning, onToken) (service.ts:393-401); llm.ts and templates.ts are untouched in the SHA range; triggerExecution preserved (service.ts:228-318).",
-      "Outputs persist exclusively via insertOutput (agent_card_outputs), never card_events, upholding the clean-Activity-Feed invariant.",
-      "All 23 tests in service.test.ts pass, including 6 runPipeline cases covering loop order, SSE ordering, and all three fail-closed triggers."
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "The 'named resolution' unit test uses a built-in placeholder ({previous_output}) rather than a named accumulator key ({research_output}/{analysis_output}), so the slugToOutputKey -> accumulator[outputKey] -> downstream render mechanism executes but its effect is never directly asserted in a unit test. The code is correct and the named-key path is covered live by T4's integration test, but the unit-level coverage of the novel Phase-2 accumulator behavior is thinner than the SSE/fail-closed coverage.",
-        "location": "server/src/agent/service.test.ts:486-498"
-      },
-      {
-        "severity": "Minor",
-        "description": "QUALITY BAR must-have 'Tests written BEFORE implementation (TDD)' cannot be independently verified from the single squashed commit fb4fe27, which bundles test and implementation together. Satisfied per the plan's validation note (tests appended to a pre-existing passing suite), but not confirmable by commit inspection alone.",
-        "location": "server/src/agent/service.test.ts:455"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 1,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  },
-  "reviewed_sha": "fb4fe27200ba1bc2e66615163b87b2f674d00bf3"
+	"task_id": "T2",
+	"task_name": "runPipeline loop in service.ts",
+	"cycle": 1,
+	"timestamp": "2026-06-14T23:55:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": []
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"runPipeline is a method on the service object returned by createAgentBoardService (service.ts:321); ColumnInfo interface (service.ts:49) and getColumns dep (service.ts:103) are both exported.",
+			"Template-agnostic named resolution: slug-to-output_key map is built from getTemplate(board.templateId) (service.ts:334-339) with no hardcoded slug or output_key strings in the loop body.",
+			"All three fail-closed halts (unresolved placeholder before executeCard at 360-378, empty output at 413-432, executeCard throw at 463-482) each persist a partial insertOutput row, set updateBoard execution_status=failed, emit agent.card.failed{columnSlug,reason}, log the error, and return early so remaining cards skip.",
+			"Token-batching setInterval is cleared on both the success path (service.ts:403) and the catch path (service.ts:464) of each card, preventing interval leaks.",
+			"executeCard called with the unchanged signature (rendered, intent, [], reasoning, onToken) (service.ts:393-401); llm.ts and templates.ts are untouched in the SHA range; triggerExecution preserved (service.ts:228-318).",
+			"Outputs persist exclusively via insertOutput (agent_card_outputs), never card_events, upholding the clean-Activity-Feed invariant.",
+			"All 23 tests in service.test.ts pass, including 6 runPipeline cases covering loop order, SSE ordering, and all three fail-closed triggers."
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "The 'named resolution' unit test uses a built-in placeholder ({previous_output}) rather than a named accumulator key ({research_output}/{analysis_output}), so the slugToOutputKey -> accumulator[outputKey] -> downstream render mechanism executes but its effect is never directly asserted in a unit test. The code is correct and the named-key path is covered live by T4's integration test, but the unit-level coverage of the novel Phase-2 accumulator behavior is thinner than the SSE/fail-closed coverage.",
+				"location": "server/src/agent/service.test.ts:486-498"
+			},
+			{
+				"severity": "Minor",
+				"description": "QUALITY BAR must-have 'Tests written BEFORE implementation (TDD)' cannot be independently verified from the single squashed commit fb4fe27, which bundles test and implementation together. Satisfied per the plan's validation note (tests appended to a pre-existing passing suite), but not confirmable by commit inspection alone.",
+				"location": "server/src/agent/service.test.ts:455"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 1,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	},
+	"reviewed_sha": "fb4fe27200ba1bc2e66615163b87b2f674d00bf3"
 }

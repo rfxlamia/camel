@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Navigate, RouterProvider, createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { api } from "./api";
-import type { User } from "./types";
 import AuthPage from "./components/AuthPage";
 import ContextPanel from "./components/ContextPanel";
 import LoadingCamel from "./components/LoadingCamel";
@@ -10,6 +9,7 @@ import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
 import SettingsPage from "./pages/SettingsPage";
+import type { User } from "./types";
 
 // Only show the loading UI if loading takes longer than this threshold.
 // Prevents a flash of the camel on fast connections (< 200ms).

@@ -1,16 +1,16 @@
+import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { X } from "lucide-react";
 import { api } from "../api";
-import type { ActivityEvent, Card } from "../types";
-import { formatRelativeTime } from "../types";
-import { useBoard, type SaveCardResult } from "../context/BoardContext";
+import { type SaveCardResult, useBoard } from "../context/BoardContext";
 import {
 	describeCardEvent,
 	findCardInColumns,
 	getMissingCardRedirect,
 	parseCardId,
 } from "../lib/cardPanel";
+import type { ActivityEvent, Card } from "../types";
+import { formatRelativeTime } from "../types";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
@@ -53,7 +53,7 @@ function DetailsSection({
 		version: card.version,
 	});
 	const forceSyncRef = useRef(false);
-	const [syncNonce, setSyncNonce] = useState(0);
+	const [_syncNonce, setSyncNonce] = useState(0);
 
 	useEffect(() => {
 		const base = baselineRef.current;
@@ -67,14 +67,7 @@ function DetailsSection({
 		};
 		setTitle(card.title);
 		setDescription(card.description);
-	}, [
-		card.title,
-		card.description,
-		card.version,
-		title,
-		description,
-		syncNonce,
-	]);
+	}, [card.title, card.description, card.version, title, description]);
 
 	useEffect(() => {
 		const base = baselineRef.current;
@@ -165,7 +158,7 @@ function DetailsSection({
 }
 
 function ActivitySection({ cardId }: { cardId: number }) {
-	const { activeWorkspaceId, refreshTick } = useBoard();
+	const { activeWorkspaceId } = useBoard();
 	const [events, setEvents] = useState<ActivityEvent[] | null>(null);
 
 	// Fetched on open and after every board refresh, so teammate changes show
@@ -178,11 +171,12 @@ function ActivitySection({ cardId }: { cardId: number }) {
 			.then(({ events }) => {
 				if (active) setEvents(events);
 			})
+			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring fetch errors
 			.catch(() => {});
 		return () => {
 			active = false;
 		};
-	}, [activeWorkspaceId, cardId, refreshTick]);
+	}, [activeWorkspaceId, cardId]);
 
 	return (
 		<section

@@ -1,50 +1,50 @@
 {
-  "task_id": "T2",
-  "task_name": "Server LLM Layer + realtime.ts Agent Events",
-  "cycle": 3,
-  "timestamp": "2026-06-14T11:18:40Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": [
-      "Prior Critical (Anthropic.ClientOptions TS2694 at llm.ts:29) — FIXED: correction 22e8dbe imports `{ ClientOptions }` as a named export and types `opts: ClientOptions` (llm.ts:15,29). `npm run build --workspace=server` exits 0.",
-      "Prior Minor (unguarded response.content[0] access) — FIXED: optional chaining `response.content[0]?.type` applied in classifyIntent (llm.ts:76), generateExplanation (llm.ts:114), and generateClarificationQuestion (llm.ts:143).",
-      "Prior Minor (reasoning param unused / NATIVE-gated thinking not implemented) — ADDRESSED as documented deferral: correction added an explanatory comment (llm.ts:161-163) stating extended-thinking/cache_control gating is deferred. QUALITY BAR did not list thinking/cache_control as must-haves, and Phase 1's first executing card (Research Specialist) is reasoning=false, so the gap is never exercised in scope."
-    ]
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "All 5 system prompts (Research Specialist, Analysis Specialist, Writer, Editor, QA Guardian) reproduced verbatim from spec Template Definition, including en-dash characters and XML structure (templates.ts:27-256).",
-      "QA Guardian is the last column with position 5; analysis-specialist and qa-guardian carry reasoning=true exactly per spec (templates.ts).",
-      "All 7 agent.* event types present in realtime.ts BoardEvent union (realtime.ts:41-48).",
-      "executeCard substitutes {original_intent} via renderSystemPrompt before the LLM call (llm.ts:170); renderSystemPrompt leaves Phase 2 tokens intact (templates.ts:282-289).",
-      "@anthropic-ai/sdk is in server/package.json (^0.104.1) and confirmed NOT imported anywhere under client/src.",
-      "No hardcoded API key; key sourced from process.env.ANTHROPIC_API_KEY; dual `api-key` header wired for MiMo when non-NATIVE (llm.ts:38-42). core/* untouched.",
-      "Build compiles (exit 0) and all 11 tests pass (templates.test.ts 7, llm.test.ts 4)."
-    ],
-    "issues": [
-      {
-        "severity": "Minor",
-        "description": "executeCard does not implement the plan's NATIVE-gated `cache_control: ephemeral` on the system block nor the `thinking` param for reasoning=true on real Anthropic. The NATIVE flag is only used to toggle the api-key header. Acceptable for Phase 1 (MiMo is the active target; first executing card is reasoning=false), but the gating described in plan Step 5 is not present.",
-        "location": "server/src/agent/llm.ts:183-188"
-      },
-      {
-        "severity": "Minor",
-        "description": "Default model fallback is \"claude-sonnet-4-20250514\" whereas the plan referenced \"claude-sonnet-4-6\". Practically inert since ANTHROPIC_MODEL is set for the active MiMo deployment, but it diverges from the plan's noted default.",
-        "location": "server/src/agent/llm.ts:23"
-      }
-    ],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 3,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  },
-  "reviewed_sha": "22e8dbe6e816cf851fce2f14cccdf48bf969c4c8"
+	"task_id": "T2",
+	"task_name": "Server LLM Layer + realtime.ts Agent Events",
+	"cycle": 3,
+	"timestamp": "2026-06-14T11:18:40Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": [
+			"Prior Critical (Anthropic.ClientOptions TS2694 at llm.ts:29) — FIXED: correction 22e8dbe imports `{ ClientOptions }` as a named export and types `opts: ClientOptions` (llm.ts:15,29). `npm run build --workspace=server` exits 0.",
+			"Prior Minor (unguarded response.content[0] access) — FIXED: optional chaining `response.content[0]?.type` applied in classifyIntent (llm.ts:76), generateExplanation (llm.ts:114), and generateClarificationQuestion (llm.ts:143).",
+			"Prior Minor (reasoning param unused / NATIVE-gated thinking not implemented) — ADDRESSED as documented deferral: correction added an explanatory comment (llm.ts:161-163) stating extended-thinking/cache_control gating is deferred. QUALITY BAR did not list thinking/cache_control as must-haves, and Phase 1's first executing card (Research Specialist) is reasoning=false, so the gap is never exercised in scope."
+		]
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"All 5 system prompts (Research Specialist, Analysis Specialist, Writer, Editor, QA Guardian) reproduced verbatim from spec Template Definition, including en-dash characters and XML structure (templates.ts:27-256).",
+			"QA Guardian is the last column with position 5; analysis-specialist and qa-guardian carry reasoning=true exactly per spec (templates.ts).",
+			"All 7 agent.* event types present in realtime.ts BoardEvent union (realtime.ts:41-48).",
+			"executeCard substitutes {original_intent} via renderSystemPrompt before the LLM call (llm.ts:170); renderSystemPrompt leaves Phase 2 tokens intact (templates.ts:282-289).",
+			"@anthropic-ai/sdk is in server/package.json (^0.104.1) and confirmed NOT imported anywhere under client/src.",
+			"No hardcoded API key; key sourced from process.env.ANTHROPIC_API_KEY; dual `api-key` header wired for MiMo when non-NATIVE (llm.ts:38-42). core/* untouched.",
+			"Build compiles (exit 0) and all 11 tests pass (templates.test.ts 7, llm.test.ts 4)."
+		],
+		"issues": [
+			{
+				"severity": "Minor",
+				"description": "executeCard does not implement the plan's NATIVE-gated `cache_control: ephemeral` on the system block nor the `thinking` param for reasoning=true on real Anthropic. The NATIVE flag is only used to toggle the api-key header. Acceptable for Phase 1 (MiMo is the active target; first executing card is reasoning=false), but the gating described in plan Step 5 is not present.",
+				"location": "server/src/agent/llm.ts:183-188"
+			},
+			{
+				"severity": "Minor",
+				"description": "Default model fallback is \"claude-sonnet-4-20250514\" whereas the plan referenced \"claude-sonnet-4-6\". Practically inert since ANTHROPIC_MODEL is set for the active MiMo deployment, but it diverges from the plan's noted default.",
+				"location": "server/src/agent/llm.ts:23"
+			}
+		],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 3,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	},
+	"reviewed_sha": "22e8dbe6e816cf851fce2f14cccdf48bf969c4c8"
 }

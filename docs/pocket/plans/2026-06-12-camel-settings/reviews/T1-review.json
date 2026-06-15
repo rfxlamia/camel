@@ -1,31 +1,31 @@
 {
-  "task_id": "T1",
-  "task_name": "Settings DB Schema + Shared Types",
-  "cycle": 1,
-  "timestamp": "2026-06-13T12:00:00Z",
-  "reviewer_mode": "read-only",
-  "reviewer_config": "batch-parallel",
-  "stage_1": {
-    "status": "PASS",
-    "issues": [],
-    "concerns_addressed": []
-  },
-  "stage_2": {
-    "status": "PASS",
-    "strengths": [
-      "Clean implementation following existing codebase patterns (Card/Column/User convention)",
-      "Idempotent DDL with IF NOT EXISTS",
-      "Good section comment in schema.sql explaining settings table purpose",
-      "Type contract tests verify SettingsMap interface shape"
-    ],
-    "issues": [],
-    "assessment": "Approved"
-  },
-  "overall": "REVIEW_PASS",
-  "fix_instructions": "",
-  "loop_info": {
-    "current_cycle": 1,
-    "max_cycles": 1,
-    "cycles_remaining": 0
-  }
+	"task_id": "T1",
+	"task_name": "Settings DB Schema + Shared Types",
+	"cycle": 1,
+	"timestamp": "2026-06-13T12:00:00Z",
+	"reviewer_mode": "read-only",
+	"reviewer_config": "batch-parallel",
+	"stage_1": {
+		"status": "PASS",
+		"issues": [],
+		"concerns_addressed": []
+	},
+	"stage_2": {
+		"status": "PASS",
+		"strengths": [
+			"Clean implementation following existing codebase patterns (Card/Column/User convention)",
+			"Idempotent DDL with IF NOT EXISTS",
+			"Good section comment in schema.sql explaining settings table purpose",
+			"Type contract tests verify SettingsMap interface shape"
+		],
+		"issues": [],
+		"assessment": "Approved"
+	},
+	"overall": "REVIEW_PASS",
+	"fix_instructions": "",
+	"loop_info": {
+		"current_cycle": 1,
+		"max_cycles": 1,
+		"cycles_remaining": 0
+	}
 }

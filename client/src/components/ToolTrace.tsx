@@ -1,5 +1,11 @@
+import {
+	AlertCircle,
+	ChevronDown,
+	ChevronRight,
+	MessageSquare,
+	Search,
+} from "lucide-react";
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Search, AlertCircle, MessageSquare } from "lucide-react";
 import type { ToolTraceItem } from "../types";
 
 interface ToolTraceProps {

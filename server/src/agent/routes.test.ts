@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { getToolTrace, runInsertColumns, defaultToolRegistry } from "./routes.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+	defaultToolRegistry,
+	getToolTrace,
+	runInsertColumns,
+} from "./routes.js";
 
 describe("defaultToolRegistry", () => {
 	it("resolves web_search for production wiring", () => {

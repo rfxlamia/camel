@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { deriveToolTrace, pickToolTraceForColumn } from "./toolTrace";
+import { describe, expect, it } from "vitest";
 import type { AgentEvent, ToolTraceItem } from "../types";
+import { deriveToolTrace, pickToolTraceForColumn } from "./toolTrace";
 
 describe("deriveToolTrace", () => {
 	it("merges started + result into one logical step", () => {

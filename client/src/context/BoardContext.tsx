@@ -1,22 +1,15 @@
 import {
 	createContext,
+	type Dispatch,
+	type ReactNode,
+	type SetStateAction,
 	useCallback,
 	useContext,
 	useEffect,
 	useRef,
 	useState,
-	type Dispatch,
-	type ReactNode,
-	type SetStateAction,
 } from "react";
 import { ApiError, api } from "../api";
-import {
-	CAP_MESSAGE,
-	applyCreatedWorkspaceSelection,
-	getSwitchAttemptState,
-	persistRemindedInviteIds,
-	readRemindedInviteIds,
-} from "../lib/workspaceSwitcher";
 import {
 	chooseInitialWorkspace,
 	clearSavedWorkspaceId,
@@ -24,6 +17,13 @@ import {
 	persistWorkspaceId,
 	readSavedWorkspaceId,
 } from "../lib/workspaceSelection";
+import {
+	applyCreatedWorkspaceSelection,
+	CAP_MESSAGE,
+	getSwitchAttemptState,
+	persistRemindedInviteIds,
+	readRemindedInviteIds,
+} from "../lib/workspaceSwitcher";
 import type {
 	ActivityEvent,
 	AgentEvent,
@@ -351,10 +351,14 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		void refreshSettings();
 
 		const beat = () => {
-			void api.heartbeat(activeWorkspaceId).catch(() => {});
+			void api
+				.heartbeat(activeWorkspaceId)
+				// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring heartbeat errors
+				.catch(() => {});
 			void api
 				.getPresence(activeWorkspaceId)
 				.then(({ users }) => setPresence(users))
+				// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring presence errors
 				.catch(() => {});
 		};
 		beat();
@@ -364,6 +368,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				void api
 					.getPresence(activeWorkspaceId)
 					.then(({ users }) => setPresence(users))
+					// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring presence errors
 					.catch(() => {}),
 			PRESENCE_REFRESH_MS,
 		);

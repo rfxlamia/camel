@@ -1,5 +1,5 @@
-import { createClient } from "redis";
 import type { Request, Response } from "express";
+import { createClient } from "redis";
 import type { AuthUser } from "./auth.js";
 
 // Redis carries the real-time layer (presence + pub/sub). If it is down the
@@ -272,7 +272,11 @@ publisher.on("error", () => {
 		console.error("Redis unavailable — real-time degraded to local fan-out");
 	redisAvailable = false;
 });
-subscriber.on("error", () => {});
+subscriber.on(
+	"error",
+	// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring redis subscriber errors
+	() => {},
+);
 
 let activeHub = createRealtimeHub({
 	publisher: null,

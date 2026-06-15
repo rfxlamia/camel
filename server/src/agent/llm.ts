@@ -269,12 +269,7 @@ export async function executeCard(
 
 	// Empty tools → legacy single-shot path (no tools param)
 	if (tools.length === 0) {
-		return executeCardSingleShot(
-			client,
-			rendered,
-			userContent,
-			onToken,
-		);
+		return executeCardSingleShot(client, rendered, userContent, onToken);
 	}
 
 	return executeCardWithTools(
@@ -338,9 +333,7 @@ async function executeCardWithTools(
 	onToolEvent?: (e: ToolEvent) => void,
 ): Promise<ExecuteResult> {
 	const toolsByName = new Map(tools.map((t) => [t.name, t]));
-	const messages: AnthropicMessage[] = [
-		{ role: "user", content: userContent },
-	];
+	const messages: AnthropicMessage[] = [{ role: "user", content: userContent }];
 	let remainingBudget = toolBudget;
 	let thinking: string | undefined;
 	let lastTurnText = "";

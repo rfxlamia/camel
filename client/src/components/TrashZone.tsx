@@ -8,25 +8,25 @@ import { Trash2 } from "lucide-react";
  * deletes it — the drop is handled in BoardPage's onDragEnd via over.id.
  */
 export default function TrashZone({ visible }: { visible: boolean }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "trash" });
+	const { setNodeRef, isOver } = useDroppable({ id: "trash" });
 
-  return (
-    <div
-      ref={setNodeRef}
-      aria-hidden={!visible}
-      className={`fixed bottom-8 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-150 ${
-        visible ? "opacity-100" : "pointer-events-none opacity-0"
-      }`}
-    >
-      <div
-        className={`flex h-16 w-16 items-center justify-center rounded-full border shadow-md transition-transform duration-150 ${
-          isOver
-            ? "scale-110 border-error-500 bg-error-100 text-error-900"
-            : "border-neutral-300 bg-white text-neutral-500"
-        }`}
-      >
-        <Trash2 size={24} aria-hidden />
-      </div>
-    </div>
-  );
+	return (
+		<div
+			ref={setNodeRef}
+			aria-hidden={!visible}
+			className={`fixed bottom-8 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-150 ${
+				visible ? "opacity-100" : "pointer-events-none opacity-0"
+			}`}
+		>
+			<div
+				className={`flex h-16 w-16 items-center justify-center rounded-full border shadow-md transition-transform duration-150 ${
+					isOver
+						? "scale-110 border-error-500 bg-error-100 text-error-900"
+						: "border-neutral-300 bg-white text-neutral-500"
+				}`}
+			>
+				<Trash2 size={24} aria-hidden />
+			</div>
+		</div>
+	);
 }
