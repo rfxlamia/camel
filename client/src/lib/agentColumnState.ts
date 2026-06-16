@@ -6,9 +6,10 @@ export function deriveColumnState(
 	boardId: number,
 	slug: string,
 	executionStatus: AgentBoard["executionStatus"],
+	hasPersistedOutput = false,
 ): "active" | "done" | "failed" | "pending" {
 	// Filter by boardId + columnSlug (mirror derive*ForColumn + drop missing boardId).
-	// Precedence: failed > done > (active only if running) > pending.
+	// Precedence: failed > done (live) > active > done (persisted) > pending.
 	// Never blanket based on board.executionStatus==="done" (EC4).
 	const scoped = agentEvents.filter(
 		(e) => e.boardId === boardId && e.columnSlug === slug,
@@ -19,5 +20,7 @@ export function deriveColumnState(
 	if (hasDone) return "done";
 	const hasStarted = scoped.some((e) => e.type === "agent.card.started");
 	if (hasStarted && executionStatus === "running") return "active";
+	// Column produced a card in DB but live SSE is gone (reload / events cleared).
+	if (hasPersistedOutput && executionStatus !== "running") return "done";
 	return "pending";
 }

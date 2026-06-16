@@ -55,4 +55,24 @@ describe("deriveColumnState", () => {
 			"pending",
 		);
 	});
+
+	it("returns done from persisted output when live events are gone (reload)", () => {
+		expect(deriveColumnState([], BOARD, SLUG, "done", true)).toBe("done");
+	});
+
+	it("does not treat persisted output as done while the pipeline is still running", () => {
+		expect(deriveColumnState([], BOARD, SLUG, "running", true)).toBe("pending");
+	});
+
+	it("returns failed over persisted output for the same column", () => {
+		expect(
+			deriveColumnState(
+				[ev("agent.card.failed")],
+				BOARD,
+				SLUG,
+				"failed",
+				true,
+			),
+		).toBe("failed");
+	});
 });

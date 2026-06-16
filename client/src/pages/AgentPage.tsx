@@ -146,6 +146,7 @@ function AgentBoardVisual({
 					board.id,
 					col.slug,
 					board.executionStatus,
+					col.cards.length > 0,
 				);
 				const isDone = state === "done";
 				const isActive = state === "active";
