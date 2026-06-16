@@ -100,5 +100,40 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 				.sort((a, b) => a - b);
 			expect(indices).toEqual([0, 1, 2, 3, 4]);
 		});
+
+		it("streams live thinking end-to-end and accepts max_tokens=24576 (opt-in)", async () => {
+			const events: Array<Record<string, unknown>> = [];
+			const service = createAgentBoardService({
+				getBoard: vi.fn(async () => ({
+					id: 1,
+					workspaceId: 1,
+					userId: 1,
+					templateId: "research-report",
+					originalIntent: INTENT,
+					status: "approved",
+					executionStatus: "running",
+				})),
+				getColumns: vi.fn(async () => [mockColumns[0]]),
+				executeCard: realExecuteCard,
+				insertOutput: vi.fn(async () => {}),
+				insertCard: vi.fn(async () => {}),
+				updateBoard: vi.fn(async () => {}),
+				publishEvent: vi.fn(async (_wid: number, e: Record<string, unknown>) => {
+					events.push(e);
+				}),
+			});
+
+			await service.runPipeline({ boardId: 1, workspaceId: 1 });
+
+			const failed = events.find((e) => e.type === "agent.card.failed");
+			expect(failed, JSON.stringify(failed)).toBeUndefined();
+
+			const thinking = events.filter((e) => e.type === "agent.card.thinking");
+			expect(thinking.length).toBeGreaterThan(0);
+			expect(thinking[0]).toMatchObject({
+				columnSlug: mockColumns[0].columnSlug,
+				boardId: 1,
+			});
+		}, 900_000);
 	},
 );
