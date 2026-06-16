@@ -523,8 +523,7 @@ export default function AgentPage() {
 	const isStreaming =
 		isRunning &&
 		agentEvents.some(
-			(e) =>
-				e.type === "agent.card.token" || e.type === "agent.card.thinking",
+			(e) => e.type === "agent.card.token" || e.type === "agent.card.thinking",
 		);
 
 	// Filter batched stream chunks from the log — panel shows them in detail view.
@@ -541,7 +540,7 @@ export default function AgentPage() {
 			<div className="flex-1 overflow-auto border-r border-neutral-200">
 				{!board ? (
 					/* Empty state CTA */
-					<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
+					<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 translate-x-[48px] pt-32">
 						<div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
 							<Bot size={32} className="text-primary-600" aria-hidden />
 						</div>
