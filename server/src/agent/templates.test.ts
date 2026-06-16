@@ -142,7 +142,7 @@ describe("research-report template tool assignment", () => {
 		expect(bySlug("editor").tools ?? []).toEqual([]);
 		expect(bySlug("writer").tools ?? []).toEqual([]);
 		expect(bySlug("analysis-specialist").tools ?? []).toEqual([]);
-		expect(bySlug("qa-guardian").tools ?? []).toEqual([]);
+		expect(bySlug("qa-guardian").tools ?? []).toEqual(["create_file"]);
 	});
 });
 
