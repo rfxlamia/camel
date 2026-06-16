@@ -23,7 +23,12 @@ import {
 	routeNext,
 	settle,
 } from "../lib/agentQueue";
-import type { AgentArtifact, AgentBoard, AgentColumn, AgentEvent } from "../types";
+import type {
+	AgentArtifact,
+	AgentBoard,
+	AgentColumn,
+	AgentEvent,
+} from "../types";
 import { formatRelativeTime } from "../types";
 
 // ---- Queue reducer ----
@@ -306,11 +311,7 @@ export default function AgentPage() {
 
 	// Fetch deliverable artifact when execution completes (reload-already-done + live).
 	useEffect(() => {
-		if (
-			!activeWorkspaceId ||
-			!board?.id ||
-			board.executionStatus !== "done"
-		) {
+		if (!activeWorkspaceId || !board?.id || board.executionStatus !== "done") {
 			setArtifact(null);
 			return;
 		}
@@ -653,16 +654,6 @@ export default function AgentPage() {
 						</div>
 					)}
 
-					{isDone && artifact && activeWorkspaceId !== null && board && (
-						<ArtifactCard
-							artifact={artifact}
-							downloadUrl={api.agentArtifactDownloadUrl(
-								activeWorkspaceId,
-								board.id,
-							)}
-						/>
-					)}
-
 					{/* Error message */}
 					{error && (
 						<div className="rounded-lg border border-error-200 bg-error-100 p-3 space-y-2">
@@ -766,6 +757,16 @@ export default function AgentPage() {
 								</div>
 							)}
 						</div>
+					)}
+
+					{isDone && artifact && activeWorkspaceId !== null && board && (
+						<ArtifactCard
+							artifact={artifact}
+							downloadUrl={api.agentArtifactDownloadUrl(
+								activeWorkspaceId,
+								board.id,
+							)}
+						/>
 					)}
 
 					{/* Queue indicator */}
