@@ -14,6 +14,7 @@ import LoadingCamel from "../components/LoadingCamel";
 import SuccessAnimation from "../components/SuccessAnimation";
 import { useBoard } from "../context/BoardContext";
 import { deriveColumnState } from "../lib/agentColumnState";
+import { shouldRefetchBoardOnTerminalEvent } from "../lib/agentBoardSync";
 import {
 	initialQueue,
 	type QueueState,
@@ -242,13 +243,15 @@ export default function AgentPage() {
 	queueStateRef.current = queueState;
 
 	const logEndRef = useRef<HTMLDivElement>(null);
+	const lastSyncedTerminalIdxRef = useRef(-1);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const [isLogExpanded, setIsLogExpanded] = useState(false);
 
-	// Load board from URL param on mount
+	// Load board from URL param when workspace or boardId changes.
 	useEffect(() => {
 		const boardId = searchParams.get("boardId");
 		if (!boardId || !activeWorkspaceId) return;
+		lastSyncedTerminalIdxRef.current = -1;
 		clearAgentEvents();
 		let cancelled = false;
 		setLoading(true);
@@ -277,20 +280,26 @@ export default function AgentPage() {
 		clearAgentEvents,
 	]);
 
-	// Re-fetch board when execution completes or fails so status and cards update.
-	// BoardContext returns early on agent.* events and never calls refresh(), so
-	// AgentPage must explicitly sync board state on terminal events.
+	// Re-fetch board once per terminal agent event (done/failed).
+	// Must NOT depend on `board` — setBoard would retrigger this effect forever.
 	useEffect(() => {
-		if (!agentEvents.length || !activeWorkspaceId || !board) return;
-		const last = agentEvents[agentEvents.length - 1];
-		if (last.type !== "agent.card.done" && last.type !== "agent.card.failed")
-			return;
+		if (!activeWorkspaceId) return;
+		const boardId = boardRef.current?.id;
+		if (!boardId) return;
+
+		const { shouldFetch, eventIndex } = shouldRefetchBoardOnTerminalEvent(
+			agentEvents,
+			lastSyncedTerminalIdxRef.current,
+		);
+		if (!shouldFetch) return;
+
+		lastSyncedTerminalIdxRef.current = eventIndex;
 		api
-			.getAgentBoard(activeWorkspaceId, board.id)
+			.getAgentBoard(activeWorkspaceId, boardId)
 			.then(setBoard)
 			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring board fetch errors
 			.catch(() => {});
-	}, [agentEvents, activeWorkspaceId, board?.id, board]);
+	}, [agentEvents, activeWorkspaceId]);
 
 	// Auto-scroll event log
 	useEffect(() => {

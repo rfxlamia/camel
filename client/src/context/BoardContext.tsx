@@ -169,6 +169,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		toastTimer.current = setTimeout(() => setToast(null), 3500);
 	}, []);
 
+	const clearAgentEvents = useCallback(() => setAgentEvents([]), []);
+
 	const refresh = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
 		try {
@@ -542,7 +544,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				settingsVersion,
 				refreshSettings,
 				agentEvents,
-				clearAgentEvents: () => setAgentEvents([]),
+				clearAgentEvents,
 			}}
 		>
 			{children}
