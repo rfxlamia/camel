@@ -112,6 +112,7 @@ Steps:
    - `deriveFilename`: Given content with no H1 but intent `"riset thailand"`, When derived, Then `"riset-thailand.md"`.
    - `deriveFilename`: Given no H1 and empty intent, When derived, Then `"deliverable.md"`.
    - `extractRevisedDocument`: Given `"## Editorial Notes\n- note\n\n---\n\n## Revised Document\n# Title\nBody"`, When extracted, Then returns `"# Title\nBody"` (text after the `## Revised Document` heading, trimmed).
+   - `extractRevisedDocument`: Given REAL editor output ending with the handoff footer (`# Title\nBody\n\n---\n*Handoff: Ready for QA Guardian.*`), When extracted, Then the trailing `---`/handoff footer is stripped — returns `"# Title\nBody"` (the artifact must be the clean body, not include the handoff line).
    - `extractRevisedDocument`: Given text WITHOUT a `## Revised Document` heading but WITH a leading `## Editorial Notes … ---` block, When extracted, Then the leading notes block is stripped and the remainder returned.
    - `extractRevisedDocument`: Given text with neither marker, When extracted, Then the whole input is returned (never empty).
    - `parseQaVerdict`: Given `"**Status:** PASS"`, Then `"pass"`. Given `"**Status:** NEEDS REVISION"`, Then `"needs_revision"`. Given a line `"the document passes"` with no labelled Status, Then `"unknown"`. Matching is anchored to a `Status:`-labelled line, case-insensitive; `"PASS"` substring elsewhere must NOT trigger pass.
@@ -158,6 +159,12 @@ Steps:
    		expect(extractRevisedDocument(input)).toBe("# Title\nBody");
    	});
 
+   	it("strips the trailing handoff footer from real editor output", () => {
+   		const input =
+   			"## Editorial Notes\n- note\n\n---\n\n## Revised Document\n# Title\nBody\n\n---\n*Handoff: Ready for QA Guardian.*";
+   		expect(extractRevisedDocument(input)).toBe("# Title\nBody");
+   	});
+
    	it("strips a leading Editorial Notes block when the heading is absent", () => {
    		const input = "## Editorial Notes\n- note\n\n---\n\n# Title\nBody";
    		expect(extractRevisedDocument(input)).toBe("# Title\nBody");
@@ -198,9 +205,9 @@ Steps:
    Expected failure: module `./artifact.js` not found / functions undefined.
 3. Implement minimal code:
    File: `server/src/agent/artifact.ts`
-   - `slugify(text: string): string` — lowercase, replace non-alphanumeric runs with `-`, trim leading/trailing `-`, cap 80 chars.
+   - `slugify(text: string): string` — lowercase, replace non-alphanumeric runs with `-`, cap 80 chars, THEN trim leading/trailing `-` (cap first so a mid-word cut never leaves a trailing hyphen).
    - `deriveFilename(content: string, intent: string): string` — first `^# ` H1 → slugify; else slugify(intent); else `"deliverable"`; suffix `.md`.
-   - `extractRevisedDocument(editorOutput: string): string` — if `## Revised Document` heading present, return trimmed text after it; else strip a leading `## Editorial Notes` … first `---` block; else return input. Never return empty when input is non-empty.
+   - `extractRevisedDocument(editorOutput: string): string` — if `## Revised Document` heading present, return text after it; else strip a leading `## Editorial Notes` … first `---` block; else return input. In all branches, strip a trailing `---`/`*Handoff:* …` footer if present and trim. Never return empty when input is non-empty.
    - `parseQaVerdict(qaOutput: string): "pass" | "needs_revision" | "unknown"` — find a line matching `/^\s*\**status\**\s*:?\s*(pass|needs[ -]?revision)/im`; map; else `"unknown"`.
    - `MAX_ARTIFACT_BYTES = 1_000_000` exported const.
 4. Run test — verify PASS:
@@ -367,7 +374,9 @@ Steps:
 3. Implement minimal code:
    File: `server/src/agent/tools/createFile.ts`
    - `interface CreateFileCtx { boardId: number; workspaceId: number; intent: string; insertArtifact: (a:{boardId:number;workspaceId:number;filename:string;format:"md";content:string}) => Promise<void>; }`
-   - `makeCreateFile(ctx: CreateFileCtx): Tool` — `execute` trims content; empty → `EMPTY_CONTENT`; >cap → `TOO_LARGE`; else `deriveFilename(content, ctx.intent)`, `await ctx.insertArtifact(...)`, return `{ok:true, content:"saved <filename>"}`. Ignore `input.filename`.
+   - `inputSchema` (mirror `webSearch`): `{ type: "object", properties: { content: { type: "string" }, filename: { type: "string" } }, required: ["content"] }`. The model needs `content` declared to call the tool; `filename` is accepted but ignored (backend-derived).
+   - `makeCreateFile(ctx: CreateFileCtx): Tool` — `execute` trims content; empty → return `{ ok:false, content:"content is empty", errorCode:"EMPTY_CONTENT" }`; `Buffer.byteLength(content, "utf8") > MAX_ARTIFACT_BYTES` → return `{ ok:false, content:"content exceeds size limit", errorCode:"TOO_LARGE" }`; else `deriveFilename(content, ctx.intent)`, `await ctx.insertArtifact(...)`, return `{ ok:true, content:"saved <filename>" }`. Ignore `input.filename`. NOTE: `ToolResult.content` is REQUIRED (`types.ts`) — every return path, including errors, MUST set `content`, or `tsc --noEmit` fails.
+   - Use byte length (`Buffer.byteLength`), not `String.length`, for the cap — the const is named `MAX_ARTIFACT_BYTES` and the spec budgets ~1MB of bytes.
    - Import `deriveFilename`, `MAX_ARTIFACT_BYTES` from `../artifact.js`; `Tool`, `ToolResult` from `./types.js`.
 4. Run test — verify PASS:
    `npx vitest run server/src/agent/tools/createFile.test.ts`
@@ -417,7 +426,7 @@ Rollback note:
   - New module; removing it + the QA tools entry disables the tool.
 
 ## STOP CONDITIONS
-Done when: all DELIVERABLE scenarios pass, tests green, commit created.
+Done when: all DELIVERABLE scenarios pass, tests green, `make typecheck` clean (every `ToolResult` return sets `content`), commit created.
 Escalate when: a test forces changing Tool.execute signature or importing pg here.
 
 ---
@@ -427,6 +436,7 @@ Escalate when: a test forces changing Tool.execute signature or importing pg her
 DONE when ALL of the following:
 - Every task in this phase: status DONE
 - All tests pass
+- `make typecheck` is clean on the server workspace (vitest does not type-check; tsc must pass)
 - All commits created with correct format
 - No task has status BLOCKED or NEEDS_CONTEXT
 
