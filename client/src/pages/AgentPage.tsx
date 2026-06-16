@@ -84,6 +84,29 @@ function statusBadge(board: AgentBoard) {
 	);
 }
 
+// ---- Column state derivation (pure, boardId-scoped) ----
+
+export function deriveColumnState(
+	agentEvents: AgentEvent[],
+	boardId: number,
+	slug: string,
+	executionStatus: AgentBoard["executionStatus"],
+): "active" | "done" | "failed" | "pending" {
+	// Filter by boardId + columnSlug (mirror T4 derive*ForColumn + drop missing boardId).
+	// Precedence: failed > done > (active only if running) > pending.
+	// Never blanket based on board.executionStatus==="done" (EC4).
+	const scoped = agentEvents.filter(
+		(e) => e.boardId === boardId && e.columnSlug === slug,
+	);
+	const hasFailed = scoped.some((e) => e.type === "agent.card.failed");
+	if (hasFailed) return "failed";
+	const hasDone = scoped.some((e) => e.type === "agent.card.done");
+	if (hasDone) return "done";
+	const hasStarted = scoped.some((e) => e.type === "agent.card.started");
+	if (hasStarted && executionStatus === "running") return "active";
+	return "pending";
+}
+
 // ---- Event log entry ----
 
 function EventEntry({ event }: { event: AgentEvent }) {
@@ -126,48 +149,44 @@ function EventEntry({ event }: { event: AgentEvent }) {
 function AgentBoardVisual({
 	board,
 	onCardClick,
-	activeColumnSlug,
-	doneColumnSlugs,
+	agentEvents,
 }: {
 	board: AgentBoard;
 	onCardClick: (column: AgentColumn) => void;
-	activeColumnSlug: string | null;
-	doneColumnSlugs: Set<string>;
+	agentEvents: AgentEvent[];
 }) {
 	return (
 		<div className="flex gap-4 overflow-x-auto p-4">
 			{board.columns.map((col) => {
-				// done takes priority over active (explicit mutual exclusivity).
-				// board.executionStatus === "done" covers boards loaded from a prior session
-				// where agentEvents is empty and doneColumnSlugs would otherwise be empty.
-				const isDone =
-					board.executionStatus === "done" || doneColumnSlugs.has(col.slug);
-				const isActive = !isDone && col.slug === activeColumnSlug;
+				const state = deriveColumnState(
+					agentEvents,
+					board.id,
+					col.slug,
+					board.executionStatus,
+				);
+				const isDone = state === "done";
+				const isActive = state === "active";
+				const isFailed = state === "failed";
 
-				// Done columns become interactive — the whole card opens AgentCardDetail.
-				// Active and normal columns keep their original interaction model.
-				const interactiveProps = isDone
-					? {
-							onClick: () => onCardClick(col),
-							role: "button" as const,
-							tabIndex: 0,
-							onKeyDown: (e: React.KeyboardEvent) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault(); // prevent scroll on Space
-									onCardClick(col);
-								}
-							},
+				// All column states (active/pending/failed/done) are interactive:
+				// the tile (and inner cards when pending) open the column panel.
+				// State derived per-col + boardId (no blanket on board done; EC4).
+				const interactiveProps = {
+					onClick: () => onCardClick(col),
+					role: "button" as const,
+					tabIndex: 0,
+					onKeyDown: (e: React.KeyboardEvent) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault(); // prevent scroll on Space
+							onCardClick(col);
 						}
-					: {};
+					},
+				};
 
 				return (
 					<div
 						key={col.id}
-						className={`w-64 shrink-0 rounded-lg border border-neutral-200 bg-white ${
-							isDone
-								? "cursor-pointer hover:border-primary-300 hover:shadow-sm transition-shadow"
-								: ""
-						}`}
+						className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white cursor-pointer hover:border-primary-300 hover:shadow-sm transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						{...interactiveProps}
 					>
 						<div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2">
@@ -189,13 +208,17 @@ function AgentBoardVisual({
 									<LoadingCamel size={48} />
 								</div>
 							)}
-							{!isDone && !isActive && col.cards.length === 0 && (
+							{isFailed && (
+								<div className="flex justify-center py-1">
+									<XCircle size={48} className="text-error-900" aria-hidden />
+								</div>
+							)}
+							{state === "pending" && col.cards.length === 0 && (
 								<p className="py-4 text-center text-xs text-neutral-400">
 									No cards
 								</p>
 							)}
-							{!isDone &&
-								!isActive &&
+							{state === "pending" &&
 								col.cards.map((card) => (
 									<button
 										key={card.id}
@@ -264,7 +287,13 @@ export default function AgentPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [activeWorkspaceId, searchParams, setSearchParams, showToast, clearAgentEvents]);
+	}, [
+		activeWorkspaceId,
+		searchParams,
+		setSearchParams,
+		showToast,
+		clearAgentEvents,
+	]);
 
 	// Re-fetch board when execution completes or fails so status and cards update.
 	// BoardContext returns early on agent.* events and never calls refresh(), so
@@ -498,25 +527,6 @@ export default function AgentPage() {
 	const isDone = board?.executionStatus === "done";
 	const isFailed = board?.executionStatus === "failed";
 
-	// Derive which column is currently being processed.
-	// Walk agentEvents: set on `started`, clear on `done`/`failed`, ignore everything else.
-	const activeColumnSlug: string | null = isRunning
-		? agentEvents.reduce<string | null>((active, e) => {
-				if (e.type === "agent.card.started") return e.columnSlug ?? null;
-				if (e.type === "agent.card.done" || e.type === "agent.card.failed")
-					return null;
-				return active;
-			}, null)
-		: null;
-
-	// Collect slugs of columns that have finished successfully.
-	// Cleared naturally when clearAgentEvents() fires at the start of each run.
-	const doneColumnSlugs = new Set(
-		agentEvents
-			.filter((e) => e.type === "agent.card.done" && e.columnSlug)
-			.map((e) => e.columnSlug as string),
-	);
-
 	// Determine if any agent.card.token events are streaming
 	const isStreaming =
 		isRunning && agentEvents.some((e) => e.type === "agent.card.token");
@@ -572,8 +582,7 @@ export default function AgentPage() {
 						<AgentBoardVisual
 							board={board}
 							onCardClick={setDetailColumn}
-							activeColumnSlug={activeColumnSlug}
-							doneColumnSlugs={doneColumnSlugs}
+							agentEvents={agentEvents}
 						/>
 					</div>
 				)}
