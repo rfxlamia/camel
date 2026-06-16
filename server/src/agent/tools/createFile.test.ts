@@ -8,6 +8,7 @@ function buildCtx(overrides: Record<string, unknown> = {}) {
 		boardId: 7,
 		workspaceId: 3,
 		intent: "riset thailand",
+		documentContent: "# Title\nBody",
 		insertArtifact,
 		...overrides,
 	};
@@ -39,13 +40,27 @@ describe("create_file tool factory", () => {
 		});
 	});
 
-	it("falls back to slug(intent) when content has no H1", async () => {
-		const { ctx, insertArtifact } = buildCtx();
+	it("falls back to slug(intent) when bound document has no H1", async () => {
+		const { ctx, insertArtifact } = buildCtx({
+			documentContent: "Body without a heading",
+		});
 		const tool = makeCreateFile(ctx as never);
-		await tool.execute({ content: "Body without a heading" });
+		await tool.execute({});
 
 		expect(insertArtifact).toHaveBeenCalledWith(
 			expect.objectContaining({ filename: "riset-thailand.md" }),
+		);
+	});
+
+	it("ignores LLM-supplied content and persists the server-bound document", async () => {
+		const { ctx, insertArtifact } = buildCtx({
+			documentContent: "# Title\nBody from editor",
+		});
+		const tool = makeCreateFile(ctx as never);
+		await tool.execute({ content: "# Hacker\nEvil body" });
+
+		expect(insertArtifact).toHaveBeenCalledWith(
+			expect.objectContaining({ content: "# Title\nBody from editor" }),
 		);
 	});
 
@@ -59,21 +74,21 @@ describe("create_file tool factory", () => {
 		);
 	});
 
-	it("returns EMPTY_CONTENT and does not persist for blank content", async () => {
-		const { ctx, insertArtifact } = buildCtx();
+	it("returns EMPTY_CONTENT when the bound document is blank", async () => {
+		const { ctx, insertArtifact } = buildCtx({ documentContent: "   " });
 		const tool = makeCreateFile(ctx as never);
-		const result = await tool.execute({ content: "   " });
+		const result = await tool.execute({ content: "# Title\nBody" });
 
 		expect(result).toMatchObject({ ok: false, errorCode: "EMPTY_CONTENT" });
 		expect(insertArtifact).not.toHaveBeenCalled();
 	});
 
-	it("returns TOO_LARGE and does not persist when over the byte cap", async () => {
-		const { ctx, insertArtifact } = buildCtx();
-		const tool = makeCreateFile(ctx as never);
-		const result = await tool.execute({
-			content: `# T\n${"a".repeat(MAX_ARTIFACT_BYTES + 1)}`,
+	it("returns TOO_LARGE and does not persist when bound document exceeds byte cap", async () => {
+		const { ctx, insertArtifact } = buildCtx({
+			documentContent: `# T\n${"a".repeat(MAX_ARTIFACT_BYTES + 1)}`,
 		});
+		const tool = makeCreateFile(ctx as never);
+		const result = await tool.execute({});
 
 		expect(result).toMatchObject({ ok: false, errorCode: "TOO_LARGE" });
 		expect(insertArtifact).not.toHaveBeenCalled();

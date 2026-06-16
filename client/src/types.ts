@@ -223,7 +223,8 @@ export interface AgentEvent {
 		| "agent.tool.started"
 		| "agent.tool.result"
 		| "agent.tool.failed"
-		| "agent.artifact.ready";
+		| "agent.artifact.ready"
+		| "agent.execution.done";
 	columnSlug?: string;
 	token?: string;
 	boardId?: number;

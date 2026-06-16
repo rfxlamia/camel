@@ -698,7 +698,7 @@ export function createAgentRouter(
 
 				const result = await service.getArtifact({ boardId, workspaceId });
 
-				if ("status" in result && typeof result.status === "number") {
+				if ("status" in result) {
 					return res.status(result.status).json(result);
 				}
 

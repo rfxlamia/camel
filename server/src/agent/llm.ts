@@ -280,6 +280,7 @@ export async function executeCard(
 	// onThinking receives live thinking_delta text on both single-shot and
 	// tools paths. Optional for backward compat with existing callers.
 	onThinking?: (text: string) => void,
+	userContent?: string,
 ): Promise<ExecuteResult> {
 	const client = getClient();
 
@@ -289,9 +290,9 @@ export async function executeCard(
 	});
 
 	// Build the user message with any previous outputs
-	let userContent = intent;
+	let messageContent = userContent ?? intent;
 	if (previousOutputs.length > 0) {
-		userContent +=
+		messageContent +=
 			"\n\n<previous_outputs>\n" +
 			previousOutputs.join("\n---\n") +
 			"\n</previous_outputs>";
@@ -299,13 +300,13 @@ export async function executeCard(
 
 	// Empty tools → legacy single-shot path (no tools param)
 	if (tools.length === 0) {
-		return executeCardSingleShot(client, rendered, userContent, onToken, onThinking);
+		return executeCardSingleShot(client, rendered, messageContent, onToken, onThinking);
 	}
 
 	return executeCardWithTools(
 		client,
 		rendered,
-		userContent,
+		messageContent,
 		tools,
 		toolBudget,
 		onToken,
@@ -364,6 +365,25 @@ async function executeCardSingleShot(
 }
 
 type AnthropicMessage = Anthropic.MessageParam;
+
+function toolCallQuery(input: unknown): string | undefined {
+	if (!input || typeof input !== "object") return undefined;
+	const obj = input as Record<string, unknown>;
+	if (typeof obj.query === "string") return obj.query;
+	if (typeof obj.filename === "string") return obj.filename;
+	if (typeof obj.content === "string") {
+		const trimmed = obj.content.trim();
+		if (!trimmed) return undefined;
+		const preview = trimmed.slice(0, 60);
+		return preview.length < trimmed.length ? `${preview}…` : preview;
+	}
+	return undefined;
+}
+
+function toolResultCount(toolName: string, content: string): number | undefined {
+	if (toolName === "create_file") return undefined;
+	return countSearchResults(content);
+}
 
 async function executeCardWithTools(
 	client: Anthropic,
@@ -439,10 +459,8 @@ async function executeCardWithTools(
 				if (block.type !== "tool_use") continue;
 
 				const query =
-					typeof block.input === "object" &&
-					block.input !== null &&
-					"query" in block.input
-						? String((block.input as { query: unknown }).query)
+					typeof block.input === "object" && block.input !== null
+						? toolCallQuery(block.input)
 						: undefined;
 
 				if (remainingBudget > 0) {
@@ -477,11 +495,11 @@ async function executeCardWithTools(
 					);
 
 					if (result.ok) {
-						const resultCount = countSearchResults(result.content);
+						const resultCount = toolResultCount(block.name, result.content);
 						onToolEvent?.({
 							phase: "result",
 							toolName: block.name,
-							query,
+							query: query ?? (result.ok ? result.content : undefined),
 							resultCount,
 						});
 						toolResults.push({

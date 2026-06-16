@@ -5,6 +5,8 @@ export interface CreateFileCtx {
 	boardId: number;
 	workspaceId: number;
 	intent: string;
+	/** Server-bound clean document — LLM-supplied content is ignored. */
+	documentContent: string;
 	insertArtifact: (a: {
 		boardId: number;
 		workspaceId: number;
@@ -22,13 +24,19 @@ export function makeCreateFile(ctx: CreateFileCtx): Tool {
 		inputSchema: {
 			type: "object",
 			properties: {
-				content: { type: "string" },
-				filename: { type: "string" },
+				content: {
+					type: "string",
+					description:
+						"Ignored — the server persists the Editor Revised Document automatically.",
+				},
+				filename: {
+					type: "string",
+					description: "Ignored — filename is derived from the document H1.",
+				},
 			},
-			required: ["content"],
 		},
-		async execute(input: Record<string, unknown>): Promise<ToolResult> {
-			const content = String(input.content ?? "").trim();
+		async execute(_input: Record<string, unknown>): Promise<ToolResult> {
+			const content = ctx.documentContent.trim();
 
 			if (!content) {
 				return {

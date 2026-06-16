@@ -7,11 +7,13 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentBoard } from "../types";
 
-const { mockUseBoard, mockGetBoard, getAgentArtifact } = vi.hoisted(() => ({
-	mockUseBoard: vi.fn(),
-	mockGetBoard: vi.fn(),
-	getAgentArtifact: vi.fn(),
-}));
+const { mockUseBoard, mockGetBoard, getAgentArtifact, stableSearchParams } =
+	vi.hoisted(() => ({
+		mockUseBoard: vi.fn(),
+		mockGetBoard: vi.fn(),
+		getAgentArtifact: vi.fn(),
+		stableSearchParams: new URLSearchParams("boardId=2"),
+	}));
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
@@ -21,7 +23,7 @@ vi.mock("../context/BoardContext", () => ({
 // "boardId" (not "board"), or the load effect early-returns and no board
 // ever loads (all three tests would fail).
 vi.mock("react-router", () => ({
-	useSearchParams: () => [new URLSearchParams("boardId=2"), vi.fn()],
+	useSearchParams: () => [stableSearchParams, vi.fn()],
 }));
 
 vi.mock("../api", () => ({

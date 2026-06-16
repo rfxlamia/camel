@@ -13,6 +13,9 @@ export function deriveFilename(content: string, intent: string): string {
 	let slug: string;
 	if (h1Match) {
 		slug = slugify(h1Match[1]);
+		if (!slug && intent.trim()) {
+			slug = slugify(intent);
+		}
 	} else if (intent.trim()) {
 		slug = slugify(intent);
 	} else {
@@ -63,23 +66,18 @@ export function extractRevisedDocument(editorOutput: string): string {
 	return body;
 }
 
-const STATUS_LINE =
-	/^\s*\**status\**:?\**\s*(pass|needs[ -]?revision)/i;
+const PASS_STATUS_LINE = /^\s*\**status\**:?\**\s*pass\s*$/i;
+const NEEDS_REVISION_STATUS_LINE =
+	/^\s*\**status\**:?\**\s*needs[\s-]+revision\s*$/i;
 
 export function parseQaVerdict(
 	qaOutput: string,
 ): "pass" | "needs_revision" | "unknown" {
 	for (const line of qaOutput.split("\n")) {
-		const match = line.match(STATUS_LINE);
-		if (!match) {
-			continue;
-		}
-
-		const value = match[1].toLowerCase().replace(/[\s-]+/g, "_");
-		if (value === "pass") {
+		if (PASS_STATUS_LINE.test(line)) {
 			return "pass";
 		}
-		if (value === "needs_revision") {
+		if (NEEDS_REVISION_STATUS_LINE.test(line)) {
 			return "needs_revision";
 		}
 	}

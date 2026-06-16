@@ -11,6 +11,7 @@
 import {
 	deriveFilename,
 	extractRevisedDocument,
+	MAX_ARTIFACT_BYTES,
 	parseQaVerdict,
 } from "./artifact.js";
 import {
@@ -131,6 +132,7 @@ export interface AgentBoardServiceDeps {
 			text?: string;
 		}) => void,
 		onThinking?: (text: string) => void,
+		userContent?: string,
 	) => Promise<{ output: string; thinking?: string }>;
 
 	insertOutput?: (data: {
@@ -613,12 +615,20 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					artifactEnabled &&
 					(column.tools ?? []).includes("create_file")
 				) {
+					let editorBody = "";
+					for (const [, key] of slugToOutputKey) {
+						if (key === "editor_output" && accumulator[key]) {
+							editorBody = extractRevisedDocument(accumulator[key]);
+							break;
+						}
+					}
 					resolvedTools = [
 						...resolvedTools,
 						makeCreateFile({
 							boardId,
 							workspaceId,
 							intent: board.originalIntent,
+							documentContent: editorBody,
 							insertArtifact: deps.insertArtifact!,
 						}),
 					];
@@ -667,6 +677,11 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					});
 				};
 
+				const isQaColumn = (column.tools ?? []).includes("create_file");
+				const cardUserContent = isQaColumn
+					? "Validate the final document in your system instructions against the original intent. Output your QA verdict only — do not conduct new research or answer the user directly."
+					: undefined;
+
 				try {
 					const result = await deps.executeCard!(
 						rendered,
@@ -682,6 +697,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						(text: string) => {
 							thinkingBuffer += text;
 						},
+						cardUserContent,
 					);
 
 					clearInterval(batchInterval);
@@ -797,6 +813,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}
 
+			let artifactForNotify = false;
 			if (artifactEnabled) {
 				let artifact = await deps.getArtifact!(boardId);
 
@@ -826,7 +843,10 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
 						if (editorOutput) {
 							const content = extractRevisedDocument(editorOutput.output);
-							if (content.trim()) {
+							if (
+								content.trim() &&
+								Buffer.byteLength(content, "utf8") <= MAX_ARTIFACT_BYTES
+							) {
 								const filename = deriveFilename(
 									content,
 									board.originalIntent,
@@ -844,15 +864,20 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					}
 				}
 
-				if (artifact) {
-					await deps.publishEvent?.(workspaceId, {
-						type: "agent.artifact.ready",
-						boardId,
-					});
-				}
+				artifactForNotify = !!artifact;
 			}
 
 			await deps.updateBoard!(boardId, { execution_status: "done" });
+			await deps.publishEvent?.(workspaceId, {
+				type: "agent.execution.done",
+				boardId,
+			});
+			if (artifactForNotify) {
+				await deps.publishEvent?.(workspaceId, {
+					type: "agent.artifact.ready",
+					boardId,
+				});
+			}
 		},
 
 		// ---- getCardOutput ----

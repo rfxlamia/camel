@@ -24,6 +24,12 @@ describe("deriveFilename", () => {
 		expect(deriveFilename("Body with no heading", "")).toBe("deliverable.md");
 	});
 
+	it("falls back to slug(intent) when H1 slugifies to empty (non-ASCII title)", () => {
+		expect(deriveFilename("# 日本語テスト\nbody", "riset thailand")).toBe(
+			"riset-thailand.md",
+		);
+	});
+
 	it("caps the slug at 80 chars before the .md suffix", () => {
 		const long = `# ${"a".repeat(200)}`;
 		const name = deriveFilename(long, "x");
@@ -73,6 +79,14 @@ describe("parseQaVerdict", () => {
 
 	it("returns unknown when no labelled Status line exists (substring trap)", () => {
 		expect(parseQaVerdict("the document passes every check")).toBe("unknown");
+	});
+
+	it("does not treat PASS WITH CAVEATS as pass (exact status value only)", () => {
+		expect(parseQaVerdict("**Status:** PASS WITH CAVEATS")).toBe("unknown");
+	});
+
+	it("does not treat PASS — minor edits as pass", () => {
+		expect(parseQaVerdict("**Status:** PASS — minor edits")).toBe("unknown");
 	});
 
 	it("exports a positive byte cap", () => {

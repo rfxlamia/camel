@@ -1339,7 +1339,9 @@ describe("runPipeline artifact persistence", () => {
 		} as ColumnInfo,
 	];
 
-	it("primary path: bound create_file persists artifact and publishes agent.artifact.ready", async () => {
+	it("primary path: bound create_file persists editor document and publishes events", async () => {
+		const editorDoc =
+			"## Editorial Notes\n- n\n\n---\n\n## Revised Document\n# T\nBody";
 		const events: Array<Record<string, unknown>> = [];
 		const insertArtifact = vi.fn(async () => {});
 		const { service } = buildService({
@@ -1353,29 +1355,83 @@ describe("runPipeline artifact persistence", () => {
 				output: "**Status:** PASS",
 				thinking: null,
 			})),
-			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			getColumns: vi.fn().mockResolvedValue([
+				{
+					columnId: 20,
+					columnSlug: "editor",
+					systemPrompt: "Edit",
+					reasoning: false,
+					tools: [],
+				},
+				...QA_COLUMNS,
+			]),
 			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
 				events.push(event);
 			}),
 			executeCard: vi
 				.fn()
 				.mockImplementation(
-					async (_sys, _intent, _prev, _reasoning, _onToken, tools) => {
-						const tool = tools.find(
+					async (
+						_sys,
+						_intent,
+						_prev,
+						_reasoning,
+						_onToken,
+						tools,
+						_budget,
+						_onToolEvent,
+						_thinking,
+						_userContent,
+						// accumulator is simulated by running editor first via mock return
+					) => {
+						const createFile = tools.find(
 							(t: { name: string }) => t.name === "create_file",
 						);
-						await tool!.execute({ content: "# T\nBody" });
-						return { output: "**Status:** PASS" };
+						if (createFile) {
+							await createFile.execute({});
+							return { output: "**Status:** PASS" };
+						}
+						return { output: editorDoc };
 					},
 				),
 		});
 		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
 		await vi.runAllTimersAsync();
 		await promise;
+		expect(insertArtifact).toHaveBeenCalledWith(
+			expect.objectContaining({ content: "# T\nBody" }),
+		);
 		expect(insertArtifact).toHaveBeenCalledTimes(1);
+		expect(events).toContainEqual(
+			expect.objectContaining({ type: "agent.execution.done", boardId: 1 }),
+		);
 		expect(events).toContainEqual(
 			expect.objectContaining({ type: "agent.artifact.ready", boardId: 1 }),
 		);
+		const doneIdx = events.findIndex((e) => e.type === "agent.execution.done");
+		const readyIdx = events.findIndex((e) => e.type === "agent.artifact.ready");
+		expect(doneIdx).toBeGreaterThanOrEqual(0);
+		expect(readyIdx).toBeGreaterThan(doneIdx);
+	});
+
+	it("passes a validation-only user message to QA Guardian", async () => {
+		const { service, deps } = buildService({
+			insertArtifact: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getOutput: vi.fn(async () => ({
+				output: "**Status:** PASS",
+				thinking: null,
+			})),
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			executeCard: vi.fn().mockResolvedValue({ output: "**Status:** PASS" }),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		const userMessage = (deps.executeCard as ReturnType<typeof vi.fn>).mock
+			.calls[0][9] as string;
+		expect(userMessage).toContain("Validate");
+		expect(userMessage).toContain("do not conduct new research");
 	});
 
 	it("binds a create_file tool into the QA column's resolved tools", async () => {
@@ -1425,6 +1481,31 @@ describe("runPipeline artifact persistence", () => {
 		);
 	});
 
+	it("fallback skips insert when extracted content exceeds MAX_ARTIFACT_BYTES", async () => {
+		const insertArtifact = vi.fn(async () => {});
+		const getOutput = vi.fn(
+			async ({ columnSlug }: { columnSlug: string }) => {
+				if (columnSlug === "qa-guardian")
+					return { output: "**Status:** PASS", thinking: null };
+				return {
+					output: `## Revised Document\n${"x".repeat(1_000_001)}`,
+					thinking: null,
+				};
+			},
+		);
+		const { service } = buildService({
+			insertArtifact,
+			getArtifact: vi.fn(async () => null),
+			getOutput,
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			executeCard: vi.fn().mockResolvedValue({ output: "**Status:** PASS" }),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		expect(insertArtifact).not.toHaveBeenCalled();
+	});
+
 	it("fallback gated off: NEEDS REVISION creates no artifact and no ready event", async () => {
 		const events: Array<Record<string, unknown>> = [];
 		const insertArtifact = vi.fn(async () => {});
@@ -1448,6 +1529,7 @@ describe("runPipeline artifact persistence", () => {
 		await promise;
 		expect(insertArtifact).not.toHaveBeenCalled();
 		expect(events.some((e) => e.type === "agent.artifact.ready")).toBe(false);
+		expect(events.some((e) => e.type === "agent.execution.done")).toBe(true);
 	});
 
 	it("isolation: final output still goes to insertOutput, never via insertArtifact", async () => {

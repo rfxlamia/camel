@@ -37,6 +37,8 @@ export function ToolTrace({ steps }: ToolTraceProps) {
 		if (first.query) summaryParts.push(first.query);
 		if (first.resultCount !== undefined)
 			summaryParts.push(`${first.resultCount} results`);
+		else if (first.toolName === "create_file" && first.query)
+			summaryParts.push("saved");
 	}
 	const summary = summaryParts.join(" · ");
 
@@ -90,6 +92,11 @@ export function ToolTrace({ steps }: ToolTraceProps) {
 										· {step.resultCount} results
 									</span>
 								)}
+								{step.resultCount === undefined &&
+									step.toolName === "create_file" &&
+									step.query?.startsWith("saved ") && (
+										<span className="text-neutral-600"> · {step.query}</span>
+									)}
 								{step.errorCode && (
 									<span className="ml-2 rounded bg-error-100 px-1.5 py-0.5 text-xs font-medium text-error-700">
 										{step.errorCode}
