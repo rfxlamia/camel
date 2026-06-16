@@ -10,6 +10,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
+import ArtifactCard from "../components/ArtifactCard";
 import LoadingCamel from "../components/LoadingCamel";
 import SuccessAnimation from "../components/SuccessAnimation";
 import { useBoard } from "../context/BoardContext";
@@ -22,7 +23,7 @@ import {
 	routeNext,
 	settle,
 } from "../lib/agentQueue";
-import type { AgentBoard, AgentColumn, AgentEvent } from "../types";
+import type { AgentArtifact, AgentBoard, AgentColumn, AgentEvent } from "../types";
 import { formatRelativeTime } from "../types";
 
 // ---- Queue reducer ----
@@ -238,6 +239,7 @@ export default function AgentPage() {
 	const [input, setInput] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [detailColumn, setDetailColumn] = useState<AgentColumn | null>(null);
+	const [artifact, setArtifact] = useState<AgentArtifact | null>(null);
 
 	const [queueState, dispatch] = useReducer(queueReducer, initialQueue);
 	const queueStateRef = useRef(queueState);
@@ -301,6 +303,32 @@ export default function AgentPage() {
 			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring board fetch errors
 			.catch(() => {});
 	}, [agentEvents, activeWorkspaceId]);
+
+	// Fetch deliverable artifact when execution completes (reload-already-done + live).
+	useEffect(() => {
+		if (
+			!activeWorkspaceId ||
+			!board?.id ||
+			board.executionStatus !== "done"
+		) {
+			setArtifact(null);
+			return;
+		}
+
+		let cancelled = false;
+		api
+			.getAgentArtifact(activeWorkspaceId, board.id)
+			.then((a) => {
+				if (!cancelled) setArtifact(a);
+			})
+			.catch(() => {
+				if (!cancelled) setArtifact(null);
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [activeWorkspaceId, board?.id, board?.executionStatus]);
 
 	// Auto-scroll event log
 	useEffect(() => {
@@ -623,6 +651,16 @@ export default function AgentPage() {
 									: "Board generated. Use the chat below to refine."}
 							</p>
 						</div>
+					)}
+
+					{isDone && artifact && activeWorkspaceId !== null && board && (
+						<ArtifactCard
+							artifact={artifact}
+							downloadUrl={api.agentArtifactDownloadUrl(
+								activeWorkspaceId,
+								board.id,
+							)}
+						/>
 					)}
 
 					{/* Error message */}
