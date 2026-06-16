@@ -17,6 +17,7 @@ import {
 	persistWorkspaceId,
 	readSavedWorkspaceId,
 } from "../lib/workspaceSelection";
+import { shouldClearOnWorkspaceChange } from "../lib/agentStream";
 import {
 	applyCreatedWorkspaceSelection,
 	CAP_MESSAGE,
@@ -136,6 +137,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const [settingsVersion, setSettingsVersion] = useState(0);
 	const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const prevWorkspaceIdRef = useRef<number | null>(null);
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
 	const hasUnsavedRef = useRef(hasUnsavedCardEdits);
@@ -145,6 +147,19 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		activeWorkspaceId === null
 			? null
 			: (workspaces.find((w) => w.id === activeWorkspaceId) ?? null);
+
+	// Clear stale live agent events when switching workspaces (EC3).
+	useEffect(() => {
+		if (
+			shouldClearOnWorkspaceChange(
+				prevWorkspaceIdRef.current,
+				activeWorkspaceId,
+			)
+		) {
+			setAgentEvents([]);
+		}
+		prevWorkspaceIdRef.current = activeWorkspaceId;
+	}, [activeWorkspaceId]);
 
 	const membershipCount = workspaces.length;
 

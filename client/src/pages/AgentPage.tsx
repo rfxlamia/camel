@@ -244,6 +244,7 @@ export default function AgentPage() {
 	useEffect(() => {
 		const boardId = searchParams.get("boardId");
 		if (!boardId || !activeWorkspaceId) return;
+		clearAgentEvents();
 		let cancelled = false;
 		setLoading(true);
 		api
@@ -263,7 +264,7 @@ export default function AgentPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [activeWorkspaceId, searchParams, setSearchParams, showToast]);
+	}, [activeWorkspaceId, searchParams, setSearchParams, showToast, clearAgentEvents]);
 
 	// Re-fetch board when execution completes or fails so status and cards update.
 	// BoardContext returns early on agent.* events and never calls refresh(), so
