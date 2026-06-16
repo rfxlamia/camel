@@ -23,7 +23,7 @@ T7: AgentPage panel integration [depends: T6]
 ### Task 7: AgentPage panel integration [depends: T6]
 
 ## OBJECTIVE
-Render `ArtifactCard` in the right chat panel when `executionStatus === "done"` and an artifact exists; fetch it on the existing terminal-event watcher; show nothing on NEEDS REVISION / failed.
+Render `ArtifactCard` in the right chat panel when `executionStatus === "done"` and an artifact exists; fetch it in an effect keyed on the board's done-state (covers both reload-already-done and live-transition-to-done) without adding any new SSE/EventSource subscription; show nothing on NEEDS REVISION / failed.
 
 Files:
 - Modify: `client/src/pages/AgentPage.tsx`
@@ -49,8 +49,11 @@ Steps:
    	useBoard: () => mockUseBoard(),
    }));
 
+   // AgentPage reads searchParams.get("boardId") — the param name MUST be
+   // "boardId" (not "board"), or the load effect early-returns and no board
+   // ever loads (all three tests would fail).
    vi.mock("react-router", () => ({
-   	useSearchParams: () => [new URLSearchParams("board=2"), vi.fn()],
+   	useSearchParams: () => [new URLSearchParams("boardId=2"), vi.fn()],
    }));
 
    const getAgentArtifact = vi.fn();
@@ -96,7 +99,15 @@ Steps:
    beforeEach(() => {
    	getAgentArtifact.mockReset();
    	mockGetBoard.mockReset();
-   	mockUseBoard.mockReturnValue({ activeWorkspaceId: 1, agentEvents: [] });
+   	// AgentPage destructures showToast + clearAgentEvents from useBoard() and
+   	// calls clearAgentEvents() in the load effect — both MUST be stubbed or the
+   	// page crashes (undefined is not a function) once the board loads.
+   	mockUseBoard.mockReturnValue({
+   		activeWorkspaceId: 1,
+   		agentEvents: [],
+   		showToast: vi.fn(),
+   		clearAgentEvents: vi.fn(),
+   	});
    });
    afterEach(() => vi.clearAllMocks());
 
@@ -135,7 +146,9 @@ Steps:
    `npx vitest run client/src/pages/AgentPage.test.tsx`
    Expected failure: no artifact card rendered.
 3. Implement minimal code:
-   - In `AgentPage`, add state `artifact`; in the existing terminal-event effect (re-fetch on done/failed), when status becomes `done`, call `api.getAgentArtifact`; on success set state, on 404 leave null. Render `<ArtifactCard>` in the right panel below the "Agent" message block when `isDone && artifact`. Guard so failed/needs-revision show nothing.
+   - In `AgentPage`, add state `artifact`. Add an effect keyed on `[activeWorkspaceId, board?.id, board?.executionStatus]` that calls `api.getAgentArtifact(activeWorkspaceId, board.id)` when `board?.executionStatus === "done"` (clear to null otherwise). This covers BOTH reload-already-done (`agentEvents` is `[]` after the load effect's `clearAgentEvents()`, so the terminal-event watcher never fires) AND live transition to done — without adding any new SSE subscription. Do NOT hang the fetch off `shouldRefetchBoardOnTerminalEvent`: it returns `shouldFetch:false` on empty events, so a reloaded done board would never get its artifact.
+   - On fetch failure, **catch-all → leave `artifact` null** (do NOT gate on `instanceof ApiError`; the 404 rejection is a plain object and would escape an `instanceof` check).
+   - Render `<ArtifactCard artifact={artifact} downloadUrl={api.agentArtifactDownloadUrl(activeWorkspaceId, board.id)} />` in the right panel below the "Agent" message block (AgentPage.tsx:617–626) when `isDone && artifact`. `downloadUrl` is a required prop. Guard so failed/needs-revision show nothing.
 4. Run test — verify PASS:
    `npx vitest run client/src/pages/AgentPage.test.tsx`
 5. Commit:
@@ -153,14 +166,14 @@ Complexity: standard
 Justification: Single page modification but with async fetch on a state transition and conditional rendering across done/failed/needs-revision.
 
 ## SANDWICH CONTEXT
-[CRITICAL: Reuse the EXISTING terminal-event watcher — do not add a new SSE subscription. Card renders only when isDone AND an artifact is present; failed/needs-revision render nothing.]
+[CRITICAL: Do not add a new SSE/EventSource subscription — `agentEvents` already flows from context. Fetch the artifact in an effect keyed on the board's done-state so a reloaded already-done board also gets it. Card renders only when isDone AND an artifact is present; failed/needs-revision render nothing.]
 You are implementing the panel integration for the Agent File Artifact feature.
 Spec: docs/pocket/spec/2026-06-16-agent-file-artifact/create-file-tool.md
 Design decision: Delivery surface = right chat panel artifact card on done.
 Files in scope: client/src/pages/AgentPage.tsx, client/src/pages/AgentPage.test.tsx.
 Available after: T6 (ArtifactCard + api)
-Architecture rule: Reuse existing watcher; conditional render guarded on isDone + artifact.
-[RESTATE: Reuse existing terminal-event watcher; render card only when done + artifact present.]
+Architecture rule: No new SSE subscription; fetch via a done-state-keyed effect; conditional render guarded on isDone + artifact.
+[RESTATE: No new SSE subscription; fetch on board done-state (covers reload-already-done); render card only when done + artifact present.]
 
 ## DELIVERABLE
 Given done + artifact, When the panel renders, Then ArtifactCard appears below the Agent message.
@@ -172,10 +185,12 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ## QUALITY BAR
 Must-have:
   - Tests before implementation (TDD)
-  - Fetch on the existing terminal-event watcher only
-  - Card only when isDone && artifact present
+  - Fetch in a done-state-keyed effect (works on reload-already-done, not just live transition)
+  - Catch-all on fetch failure → artifact null (no `instanceof ApiError` gate)
+  - Card only when isDone && artifact present; pass required `downloadUrl` prop
 Must-not-have:
-  - New SSE subscription path
+  - New SSE/EventSource subscription path
+  - Fetch hung off `shouldRefetchBoardOnTerminalEvent` (false on empty events → reloaded done board never gets artifact)
   - Card shown on failed/needs-revision
 Open question risks:
   - none
