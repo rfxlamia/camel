@@ -1250,3 +1250,164 @@ describe("runPipeline tool wiring", () => {
 		expect(toolsArg[0].name).toBe("web_search");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// runPipeline artifact persistence — T4
+// ---------------------------------------------------------------------------
+
+describe("runPipeline artifact persistence", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const QA_COLUMNS: ColumnInfo[] = [
+		{
+			columnId: 30,
+			columnSlug: "qa-guardian",
+			systemPrompt: "Review. Intent: {original_intent}",
+			reasoning: false,
+			tools: ["create_file"],
+			toolBudget: 3,
+		} as ColumnInfo,
+	];
+
+	it("primary path: bound create_file persists artifact and publishes agent.artifact.ready", async () => {
+		const events: Array<Record<string, unknown>> = [];
+		const insertArtifact = vi.fn(async () => {});
+		const { service } = buildService({
+			insertArtifact,
+			getArtifact: vi.fn(async () => ({
+				filename: "t.md",
+				format: "md" as const,
+				content: "# T\nBody",
+			})),
+			getOutput: vi.fn(async () => ({
+				output: "**Status:** PASS",
+				thinking: null,
+			})),
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+				events.push(event);
+			}),
+			executeCard: vi
+				.fn()
+				.mockImplementation(
+					async (_sys, _intent, _prev, _reasoning, _onToken, tools) => {
+						const tool = tools.find(
+							(t: { name: string }) => t.name === "create_file",
+						);
+						await tool!.execute({ content: "# T\nBody" });
+						return { output: "**Status:** PASS" };
+					},
+				),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		expect(insertArtifact).toHaveBeenCalledTimes(1);
+		expect(events).toContainEqual(
+			expect.objectContaining({ type: "agent.artifact.ready", boardId: 1 }),
+		);
+	});
+
+	it("binds a create_file tool into the QA column's resolved tools", async () => {
+		const { service, deps } = buildService({
+			insertArtifact: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => ({ filename: "t.md" })),
+			getOutput: vi.fn(async () => ({
+				output: "**Status:** PASS",
+				thinking: null,
+			})),
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			executeCard: vi.fn().mockResolvedValue({ output: "**Status:** PASS" }),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		const toolsArg = (deps.executeCard as ReturnType<typeof vi.fn>).mock
+			.calls[0][5] as Array<{ name: string }>;
+		expect(toolsArg.some((t) => t.name === "create_file")).toBe(true);
+	});
+
+	it("fallback: PASS with no artifact extracts the Revised Document body", async () => {
+		const insertArtifact = vi.fn(async () => {});
+		const getOutput = vi.fn(
+			async ({ columnSlug }: { columnSlug: string }) => {
+				if (columnSlug === "qa-guardian")
+					return { output: "**Status:** PASS", thinking: null };
+				return {
+					output:
+						"## Editorial Notes\n- n\n\n---\n\n## Revised Document\n# T\nBody",
+					thinking: null,
+				};
+			},
+		);
+		const { service } = buildService({
+			insertArtifact,
+			getArtifact: vi.fn(async () => null),
+			getOutput,
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			executeCard: vi.fn().mockResolvedValue({ output: "**Status:** PASS" }),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		expect(insertArtifact).toHaveBeenCalledWith(
+			expect.objectContaining({ content: "# T\nBody" }),
+		);
+	});
+
+	it("fallback gated off: NEEDS REVISION creates no artifact and no ready event", async () => {
+		const events: Array<Record<string, unknown>> = [];
+		const insertArtifact = vi.fn(async () => {});
+		const { service } = buildService({
+			insertArtifact,
+			getArtifact: vi.fn(async () => null),
+			getOutput: vi.fn(async () => ({
+				output: "**Status:** NEEDS REVISION",
+				thinking: null,
+			})),
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			executeCard: vi
+				.fn()
+				.mockResolvedValue({ output: "**Status:** NEEDS REVISION" }),
+			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+				events.push(event);
+			}),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		expect(insertArtifact).not.toHaveBeenCalled();
+		expect(events.some((e) => e.type === "agent.artifact.ready")).toBe(false);
+	});
+
+	it("isolation: final output still goes to insertOutput, never via insertArtifact", async () => {
+		const insertOutput = vi.fn(async () => {});
+		const insertArtifact = vi.fn(async () => {});
+		const { service } = buildService({
+			insertOutput,
+			insertArtifact,
+			getArtifact: vi.fn(async () => null),
+			getOutput: vi.fn(async () => ({
+				output: "**Status:** NEEDS REVISION",
+				thinking: null,
+			})),
+			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
+			executeCard: vi
+				.fn()
+				.mockResolvedValue({ output: "**Status:** NEEDS REVISION" }),
+		});
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+		expect(insertOutput).toHaveBeenCalledWith(
+			expect.objectContaining({ columnSlug: "qa-guardian" }),
+		);
+		expect(insertArtifact).not.toHaveBeenCalled();
+	});
+});

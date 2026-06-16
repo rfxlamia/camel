@@ -9,11 +9,17 @@
  */
 
 import {
+	deriveFilename,
+	extractRevisedDocument,
+	parseQaVerdict,
+} from "./artifact.js";
+import {
 	buildVarsMap,
 	findUnresolvedPlaceholders,
 	getTemplate,
 	renderSystemPrompt,
 } from "./templates.js";
+import { makeCreateFile } from "./tools/createFile.js";
 import type { Tool } from "./tools/types.js";
 
 // ---------------------------------------------------------------------------
@@ -160,6 +166,20 @@ export interface AgentBoardServiceDeps {
 		boardId: number;
 		columnSlug: string;
 	}) => Promise<{ output: string; thinking: string | null } | null>;
+
+	insertArtifact?: (data: {
+		boardId: number;
+		workspaceId: number;
+		filename: string;
+		format: "md";
+		content: string;
+	}) => Promise<void>;
+
+	getArtifact?: (boardId: number) => Promise<{
+		filename: string;
+		format: "md";
+		content: string;
+	} | null>;
 
 	generateClarificationQuestion?: (
 		intent: string,
@@ -519,6 +539,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					.map((c) => [c.slug, c.output_key!]),
 			);
 
+			const artifactEnabled =
+				!!deps.insertArtifact && !!deps.getArtifact && !!deps.getOutput;
+
 			const accumulator: Record<string, string> = {};
 			let previousOutput = "";
 
@@ -584,8 +607,22 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					}
 				}, 200);
 
-				const resolvedTools =
+				let resolvedTools =
 					deps.toolRegistry?.resolveTools(column.tools ?? []) ?? [];
+				if (
+					artifactEnabled &&
+					(column.tools ?? []).includes("create_file")
+				) {
+					resolvedTools = [
+						...resolvedTools,
+						makeCreateFile({
+							boardId,
+							workspaceId,
+							intent: board.originalIntent,
+							insertArtifact: deps.insertArtifact!,
+						}),
+					];
+				}
 				const toolBudget = column.toolBudget ?? 3;
 
 				const onToolEvent = (e: ToolEventPayload) => {
@@ -757,6 +794,61 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						reason,
 					});
 					return;
+				}
+			}
+
+			if (artifactEnabled) {
+				let artifact = await deps.getArtifact!(boardId);
+
+				if (!artifact) {
+					const qaColumn = columns.find((c) =>
+						(c.tools ?? []).includes("create_file"),
+					);
+					const qaSlug = qaColumn?.columnSlug ?? "qa-guardian";
+					const qaOutput = await deps.getOutput!({
+						boardId,
+						columnSlug: qaSlug,
+					});
+
+					if (qaOutput && parseQaVerdict(qaOutput.output) === "pass") {
+						let editorSlug = "editor";
+						for (const [slug, key] of slugToOutputKey) {
+							if (key === "editor_output") {
+								editorSlug = slug;
+								break;
+							}
+						}
+
+						const editorOutput = await deps.getOutput!({
+							boardId,
+							columnSlug: editorSlug,
+						});
+
+						if (editorOutput) {
+							const content = extractRevisedDocument(editorOutput.output);
+							if (content.trim()) {
+								const filename = deriveFilename(
+									content,
+									board.originalIntent,
+								);
+								await deps.insertArtifact!({
+									boardId,
+									workspaceId,
+									filename,
+									format: "md",
+									content,
+								});
+								artifact = { filename, format: "md", content };
+							}
+						}
+					}
+				}
+
+				if (artifact) {
+					await deps.publishEvent?.(workspaceId, {
+						type: "agent.artifact.ready",
+						boardId,
+					});
 				}
 			}
 
