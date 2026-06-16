@@ -13,6 +13,7 @@ import AgentCardDetail from "../components/AgentCardDetail";
 import LoadingCamel from "../components/LoadingCamel";
 import SuccessAnimation from "../components/SuccessAnimation";
 import { useBoard } from "../context/BoardContext";
+import { deriveColumnState } from "../lib/agentColumnState";
 import {
 	initialQueue,
 	type QueueState,
@@ -84,28 +85,7 @@ function statusBadge(board: AgentBoard) {
 	);
 }
 
-// ---- Column state derivation (pure, boardId-scoped) ----
-
-export function deriveColumnState(
-	agentEvents: AgentEvent[],
-	boardId: number,
-	slug: string,
-	executionStatus: AgentBoard["executionStatus"],
-): "active" | "done" | "failed" | "pending" {
-	// Filter by boardId + columnSlug (mirror T4 derive*ForColumn + drop missing boardId).
-	// Precedence: failed > done > (active only if running) > pending.
-	// Never blanket based on board.executionStatus==="done" (EC4).
-	const scoped = agentEvents.filter(
-		(e) => e.boardId === boardId && e.columnSlug === slug,
-	);
-	const hasFailed = scoped.some((e) => e.type === "agent.card.failed");
-	if (hasFailed) return "failed";
-	const hasDone = scoped.some((e) => e.type === "agent.card.done");
-	if (hasDone) return "done";
-	const hasStarted = scoped.some((e) => e.type === "agent.card.started");
-	if (hasStarted && executionStatus === "running") return "active";
-	return "pending";
-}
+// ---- Column state derivation — see lib/agentColumnState.ts ----
 
 // ---- Event log entry ----
 
@@ -131,14 +111,16 @@ function EventEntry({ event }: { event: AgentEvent }) {
 					{event.columnSlug ?? "Card"} complete
 				</p>
 			);
-		case "agent.card.failed":
+		case "agent.card.failed": {
+			const failureText = event.error ?? event.reason;
 			return (
 				<p className="text-sm text-error-900">
 					<XCircle size={14} className="inline mr-1" aria-hidden />
 					{event.columnSlug ?? "Card"} failed
-					{event.error ? `: ${event.error}` : ""}
+					{failureText ? `: ${failureText}` : ""}
 				</p>
 			);
+		}
 		default:
 			return <p className="text-xs text-neutral-500">{event.type}</p>;
 	}
@@ -527,12 +509,18 @@ export default function AgentPage() {
 	const isDone = board?.executionStatus === "done";
 	const isFailed = board?.executionStatus === "failed";
 
-	// Determine if any agent.card.token events are streaming
+	// Streaming = output or thinking deltas (thinking can precede first token).
 	const isStreaming =
-		isRunning && agentEvents.some((e) => e.type === "agent.card.token");
+		isRunning &&
+		agentEvents.some(
+			(e) =>
+				e.type === "agent.card.token" || e.type === "agent.card.thinking",
+		);
 
-	// Filter out raw token events for the log view — show them as a block
-	const logEvents = agentEvents.filter((e) => e.type !== "agent.card.token");
+	// Filter batched stream chunks from the log — panel shows them in detail view.
+	const logEvents = agentEvents.filter(
+		(e) => e.type !== "agent.card.token" && e.type !== "agent.card.thinking",
+	);
 	const tokenCount = agentEvents.filter(
 		(e) => e.type === "agent.card.token",
 	).length;

@@ -45,7 +45,26 @@ export function deriveStreamedOutputForColumn(
  * Used by UI to decide render from agentEvents vs fetched agent_card_outputs.
  */
 export function pickContent(live: string, db: string): string {
-	return live && live.length > 0 ? live : db;
+	return live || db;
+}
+
+/** Latest failure message for a column (runPipeline publishes `reason`; legacy path uses `error`). */
+export function deriveColumnFailureMessage(
+	agentEvents: AgentEvent[],
+	boardId: number,
+	columnSlug: string,
+): string | null {
+	for (let i = agentEvents.length - 1; i >= 0; i--) {
+		const e = agentEvents[i];
+		if (
+			e.type === "agent.card.failed" &&
+			e.boardId === boardId &&
+			e.columnSlug === columnSlug
+		) {
+			return e.error ?? e.reason ?? "Unknown error";
+		}
+	}
+	return null;
 }
 
 /** Whether to clear accumulated agentEvents when the active workspace changes.

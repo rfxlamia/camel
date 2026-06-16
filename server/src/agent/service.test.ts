@@ -896,6 +896,64 @@ describe("runPipeline live thinking SSE", () => {
 			expect(ev!.boardId).toBe(1);
 		}
 	});
+
+	it("flushes pending thinking + token buffers BEFORE agent.card.done", async () => {
+		const events: Array<Record<string, unknown>> = [];
+		const { service } = buildService({
+			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+				events.push(event);
+			}),
+			getColumns: vi.fn().mockResolvedValue([
+				{
+					columnId: 10,
+					columnSlug: "research-specialist",
+					systemPrompt: "You are a researcher. Topic: {original_intent}",
+					reasoning: false,
+				},
+			] as ColumnInfo[]),
+			executeCard: vi
+				.fn()
+				.mockImplementation(
+					async (
+						_sys: string,
+						_intent: string,
+						_prev: string[],
+						_reasoning: boolean,
+						onToken: (t: string) => void,
+						_tools: unknown[],
+						_budget: number,
+						_onToolEvent: unknown,
+						onThinking?: (t: string) => void,
+					) => {
+						onThinking?.("final think");
+						onToken("final tok");
+						return { output: "final output" };
+					},
+				),
+		});
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const doneIdx = events.findIndex((e) => e.type === "agent.card.done");
+		expect(doneIdx).toBeGreaterThanOrEqual(0);
+
+		const thinkingIdx = events.findIndex(
+			(e) => e.type === "agent.card.thinking",
+		);
+		const tokenIdx = events.findIndex((e) => e.type === "agent.card.token");
+		expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+		expect(tokenIdx).toBeGreaterThanOrEqual(0);
+		expect(thinkingIdx).toBeLessThan(doneIdx);
+		expect(tokenIdx).toBeLessThan(doneIdx);
+
+		const afterDone = events.slice(doneIdx + 1);
+		expect(
+			afterDone.some((e) => e.type === "agent.card.thinking"),
+		).toBe(false);
+		expect(afterDone.some((e) => e.type === "agent.card.token")).toBe(false);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -993,6 +1051,7 @@ describe("runPipeline tool wiring", () => {
 		const toolStarted = events.find((e) => e.type === "agent.tool.started");
 		expect(toolStarted).toMatchObject({
 			columnSlug: "research-specialist",
+			boardId: 1,
 			toolName: "web_search",
 			query: "fintech",
 			attempt: 1,
@@ -1001,6 +1060,7 @@ describe("runPipeline tool wiring", () => {
 		const toolResult = events.find((e) => e.type === "agent.tool.result");
 		expect(toolResult).toMatchObject({
 			columnSlug: "research-specialist",
+			boardId: 1,
 			toolName: "web_search",
 			query: "fintech",
 			resultCount: 5,

@@ -1,16 +1,42 @@
 import type { AgentEvent, ToolTraceItem } from "../types";
 
-/** Map live SSE agent.tool.* events into merged logical trace steps. */
-export function deriveToolTrace(agentEvents: AgentEvent[]): ToolTraceItem[] {
+function isToolEvent(e: AgentEvent): boolean {
+	return (
+		e.type === "agent.tool.started" ||
+		e.type === "agent.tool.result" ||
+		e.type === "agent.tool.failed"
+	);
+}
+
+/** True when live tool SSE exists for this board+column (EC3 board scoping). */
+export function hasLiveToolActivityForColumn(
+	agentEvents: AgentEvent[],
+	boardId: number,
+	columnSlug: string,
+): boolean {
+	return agentEvents.some(
+		(e) =>
+			isToolEvent(e) &&
+			e.boardId === boardId &&
+			e.columnSlug === columnSlug,
+	);
+}
+
+/** Map live SSE agent.tool.* events into merged logical trace steps.
+ * When `boardId` is set, drops tool events missing boardId or from other boards (EC3).
+ */
+export function deriveToolTrace(
+	agentEvents: AgentEvent[],
+	boardId?: number,
+): ToolTraceItem[] {
 	const items: ToolTraceItem[] = [];
 	let pending: ToolTraceItem | null = null;
 
 	for (const e of agentEvents) {
-		if (
-			e.type !== "agent.tool.started" &&
-			e.type !== "agent.tool.result" &&
-			e.type !== "agent.tool.failed"
-		) {
+		if (!isToolEvent(e)) {
+			continue;
+		}
+		if (boardId !== undefined && e.boardId !== boardId) {
 			continue;
 		}
 

@@ -221,6 +221,7 @@ export interface AgentEvent {
 	token?: string;
 	boardId?: number;
 	error?: string;
+	reason?: string;
 	toolName?: string;
 	query?: string;
 	resultCount?: number;

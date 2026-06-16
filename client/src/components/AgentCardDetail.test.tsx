@@ -70,12 +70,41 @@ describe("AgentCardDetail live-vs-DB selection", () => {
 		expect(await screen.findByText(/LIVE OUTPUT STREAM/)).toBeTruthy();
 	});
 
+	it("skips DB fetch when only live tool events exist for the column", async () => {
+		setBoard([
+			{
+				type: "agent.tool.started",
+				boardId: 5,
+				columnSlug: "analysis-specialist",
+				toolName: "web_search",
+				query: "live query",
+			},
+		]);
+		render(<AgentCardDetail column={COLUMN} boardId={5} onClose={() => {}} />);
+		expect(await screen.findByText(/live query/)).toBeTruthy();
+		expect(getAgentCardOutput).not.toHaveBeenCalled();
+	});
+
 	it("falls back to DB output/thinking when no live events exist", async () => {
 		setBoard([]);
 		render(<AgentCardDetail column={COLUMN} boardId={5} onClose={() => {}} />);
 		await waitFor(() =>
 			expect(screen.getByText(/DB FINAL OUTPUT/)).toBeTruthy(),
 		);
+	});
+
+	it("shows runPipeline failure reason in panel (not Unknown error)", async () => {
+		getAgentCardOutput.mockResolvedValue(null);
+		setBoard([
+			{
+				type: "agent.card.failed",
+				boardId: 5,
+				columnSlug: "analysis-specialist",
+				reason: "LLM timeout",
+			},
+		]);
+		render(<AgentCardDetail column={COLUMN} boardId={5} onClose={() => {}} />);
+		expect(await screen.findByText(/LLM timeout/)).toBeTruthy();
 	});
 
 	it("shows a distinct failed state when the column failed (not generic empty)", async () => {

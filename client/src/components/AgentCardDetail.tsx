@@ -5,12 +5,17 @@ import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import {
+	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
 	deriveThinkingForColumn,
 	pickContent,
 } from "../lib/agentStream";
-import { deriveToolTrace, pickToolTraceForColumn } from "../lib/toolTrace";
-import type { AgentCardOutput, AgentColumn, AgentEvent, ToolTraceItem } from "../types";
+import {
+	deriveToolTrace,
+	hasLiveToolActivityForColumn,
+	pickToolTraceForColumn,
+} from "../lib/toolTrace";
+import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
 import { ToolTrace } from "./ToolTrace";
 
 interface AgentCardDetailProps {
@@ -21,24 +26,6 @@ interface AgentCardDetailProps {
 }
 
 const SCROLL_THRESHOLD = 32;
-
-function deriveColumnFailure(
-	agentEvents: AgentEvent[],
-	boardId: number,
-	columnSlug: string,
-): string | null {
-	for (let i = agentEvents.length - 1; i >= 0; i--) {
-		const e = agentEvents[i];
-		if (
-			e.type === "agent.card.failed" &&
-			e.boardId === boardId &&
-			e.columnSlug === columnSlug
-		) {
-			return e.error ?? "Unknown error";
-		}
-	}
-	return null;
-}
 
 export default function AgentCardDetail({
 	column,
@@ -64,10 +51,17 @@ export default function AgentCardDetail({
 		boardId,
 		column.slug,
 	);
-	const hasLiveContent = liveThinking.length > 0 || liveOutput.length > 0;
+	const hasLiveContent =
+		liveThinking.length > 0 ||
+		liveOutput.length > 0 ||
+		hasLiveToolActivityForColumn(agentEvents, boardId, column.slug);
 	const displayOutput = pickContent(liveOutput, output?.output ?? "");
 	const displayThinking = pickContent(liveThinking, output?.thinking ?? "");
-	const failureError = deriveColumnFailure(agentEvents, boardId, column.slug);
+	const failureError = deriveColumnFailureMessage(
+		agentEvents,
+		boardId,
+		column.slug,
+	);
 
 	useEffect(() => {
 		if (activeWorkspaceId === null || hasLiveContent) return;
@@ -100,7 +94,7 @@ export default function AgentCardDetail({
 
 	const traceSteps = pickToolTraceForColumn(
 		toolTrace,
-		deriveToolTrace(agentEvents),
+		deriveToolTrace(agentEvents, boardId),
 		column.slug,
 	);
 

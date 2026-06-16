@@ -237,6 +237,7 @@ function persistToolEvent(
 function publishToolSse(
 	deps: AgentBoardServiceDeps,
 	workspaceId: number,
+	boardId: number,
 	columnSlug: string,
 	e: ToolEventPayload,
 ): void {
@@ -244,6 +245,7 @@ function publishToolSse(
 		deps.publishEvent?.(workspaceId, {
 			type: "agent.tool.started",
 			columnSlug,
+			boardId,
 			toolName: e.toolName,
 			query: e.query,
 			attempt: e.attempt,
@@ -252,6 +254,7 @@ function publishToolSse(
 		deps.publishEvent?.(workspaceId, {
 			type: "agent.tool.result",
 			columnSlug,
+			boardId,
 			toolName: e.toolName,
 			query: e.query,
 			resultCount: e.resultCount,
@@ -261,6 +264,7 @@ function publishToolSse(
 		deps.publishEvent?.(workspaceId, {
 			type: "agent.tool.failed",
 			columnSlug,
+			boardId,
 			toolName: e.toolName,
 			query: e.query,
 			errorCode: e.errorCode,
@@ -372,6 +376,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			await deps.publishEvent?.(workspaceId, {
 				type: "agent.card.started",
 				columnSlug: firstCard.columnSlug,
+				boardId,
 			});
 
 			// Token batching via setInterval(200ms)
@@ -381,6 +386,8 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				if (tokenBuffer) {
 					deps.publishEvent?.(workspaceId, {
 						type: "agent.card.token",
+						columnSlug: firstCard.columnSlug,
+						boardId,
 						token: tokenBuffer,
 					});
 					tokenBuffer = "";
@@ -396,13 +403,21 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				if (tokenBuffer) {
 					deps.publishEvent?.(workspaceId, {
 						type: "agent.card.token",
+						columnSlug: firstCard.columnSlug,
+						boardId,
 						token: tokenBuffer,
 					});
 					tokenBuffer = "";
 				}
 
 				if (e.phase !== "reasoning") {
-					publishToolSse(deps, workspaceId, firstCard.columnSlug, e);
+					publishToolSse(
+						deps,
+						workspaceId,
+						boardId,
+						firstCard.columnSlug,
+						e,
+					);
 				}
 
 				if (e.phase !== "reasoning") {
@@ -436,6 +451,8 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				if (tokenBuffer) {
 					await deps.publishEvent?.(workspaceId, {
 						type: "agent.card.token",
+						columnSlug: firstCard.columnSlug,
+						boardId,
 						token: tokenBuffer,
 					});
 				}
@@ -466,6 +483,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				await deps.publishEvent?.(workspaceId, {
 					type: "agent.card.done",
 					columnSlug: firstCard.columnSlug,
+					boardId,
 				});
 			} catch (err) {
 				clearInterval(batchInterval);
@@ -473,6 +491,8 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				await deps.updateBoard!(boardId, { execution_status: "failed" });
 				await deps.publishEvent?.(workspaceId, {
 					type: "agent.card.failed",
+					columnSlug: firstCard.columnSlug,
+					boardId,
 					error: String(err),
 				});
 			}
@@ -590,7 +610,13 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					}
 
 					if (e.phase !== "reasoning") {
-						publishToolSse(deps, workspaceId, column.columnSlug, e);
+						publishToolSse(
+							deps,
+							workspaceId,
+							boardId,
+							column.columnSlug,
+							e,
+						);
 					}
 
 					if (e.phase !== "reasoning") {

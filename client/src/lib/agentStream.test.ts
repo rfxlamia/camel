@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../types";
 import {
+	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
 	deriveThinkingForColumn,
 	pickContent,
@@ -117,6 +118,65 @@ describe("pickContent", () => {
 	});
 	it("returns db when live is empty", () => {
 		expect(pickContent("", "db text")).toBe("db text");
+	});
+});
+
+describe("deriveColumnFailureMessage", () => {
+	it("reads runPipeline failure reason field (production SSE shape)", () => {
+		const events = [
+			{
+				type: "agent.card.failed",
+				boardId: 1,
+				columnSlug: "analysis-specialist",
+				reason: "LLM timeout",
+			},
+		] as AgentEvent[];
+
+		expect(
+			deriveColumnFailureMessage(events, 1, "analysis-specialist"),
+		).toBe("LLM timeout");
+	});
+
+	it("falls back to error field from legacy triggerExecution path", () => {
+		const events = [
+			{
+				type: "agent.card.failed",
+				boardId: 1,
+				columnSlug: "analysis-specialist",
+				error: "network error",
+			},
+		] as AgentEvent[];
+
+		expect(
+			deriveColumnFailureMessage(events, 1, "analysis-specialist"),
+		).toBe("network error");
+	});
+
+	it("scopes by boardId + columnSlug and uses the latest failure", () => {
+		const events = [
+			{
+				type: "agent.card.failed",
+				boardId: 1,
+				columnSlug: "analysis-specialist",
+				reason: "old",
+			},
+			{
+				type: "agent.card.failed",
+				boardId: 1,
+				columnSlug: "analysis-specialist",
+				reason: "latest",
+			},
+			{
+				type: "agent.card.failed",
+				boardId: 2,
+				columnSlug: "analysis-specialist",
+				reason: "other board",
+			},
+		] as AgentEvent[];
+
+		expect(
+			deriveColumnFailureMessage(events, 1, "analysis-specialist"),
+		).toBe("latest");
 	});
 });
 

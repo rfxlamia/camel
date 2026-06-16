@@ -1,9 +1,6 @@
-// client/src/pages/agentBoardVisual.test.tsx — NEW FILE.
-// Tests ONLY the extracted pure helper (no DOM render needed). Export
-// deriveColumnState from AgentPage.tsx so it is unit-testable in isolation.
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../types";
-import { deriveColumnState } from "./AgentPage";
+import { deriveColumnState } from "./agentColumnState";
 
 const SLUG = "analysis-specialist";
 const BOARD = 5;
