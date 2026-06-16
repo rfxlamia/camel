@@ -27,6 +27,17 @@ interface AgentCardDetailProps {
 
 const SCROLL_THRESHOLD = 32;
 
+// Module-level scroll position store — persists across mounts in the same session.
+// Capped at 50 entries to prevent unbounded growth across long sessions.
+const savedScrollPositions = new Map<string, number>();
+function saveScrollPosition(key: string, value: number) {
+	if (!savedScrollPositions.has(key) && savedScrollPositions.size >= 50) {
+		// Evict the oldest entry
+		savedScrollPositions.delete(savedScrollPositions.keys().next().value as string);
+	}
+	savedScrollPositions.set(key, value);
+}
+
 export default function AgentCardDetail({
 	column,
 	boardId,
@@ -38,8 +49,8 @@ export default function AgentCardDetail({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
 	const [isPromptOpen, setIsPromptOpen] = useState(false);
+	const [isThinkingOpen, setIsThinkingOpen] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const autoFollowRef = useRef(true);
 
 	const liveThinking = deriveThinkingForColumn(
 		agentEvents,
@@ -63,6 +74,27 @@ export default function AgentCardDetail({
 		column.slug,
 	);
 
+	// Scroll position key frozen at mount — never changes for the lifetime of this panel.
+	const scrollKeyRef = useRef(`${boardId}-${column.slug}`);
+
+	// Auto-follow is enabled immediately if content is already streaming at mount;
+	// otherwise starts false so historical content doesn't jump to the bottom.
+	const autoFollowRef = useRef(hasLiveContent);
+
+	// Guards the scroll restore so it only runs once per mount even if output refetches.
+	const restoredRef = useRef(false);
+
+	// Auto-open Thinking panel the first time live thinking arrives
+	useEffect(() => {
+		if (displayThinking) setIsThinkingOpen(true);
+	}, [displayThinking]);
+
+	// Enable auto-follow when live streaming begins (handles the case where streaming
+	// starts after the panel is already open).
+	useEffect(() => {
+		if (hasLiveContent) autoFollowRef.current = true;
+	}, [hasLiveContent]);
+
 	useEffect(() => {
 		if (activeWorkspaceId === null || hasLiveContent) return;
 		let cancelled = false;
@@ -83,6 +115,29 @@ export default function AgentCardDetail({
 			cancelled = true;
 		};
 	}, [activeWorkspaceId, boardId, column.slug, hasLiveContent]);
+
+	// Restore saved scroll position after DB content loads (historical view only).
+	// Runs once per mount thanks to restoredRef — ignores any subsequent refetches.
+	useEffect(() => {
+		if (!output || hasLiveContent || restoredRef.current) return;
+		restoredRef.current = true;
+		const el = scrollRef.current;
+		if (!el) return;
+		const saved = savedScrollPositions.get(scrollKeyRef.current);
+		if (saved !== undefined) {
+			el.scrollTop = saved;
+		}
+		// No saved position → stays at 0 (top), which is correct for a first open.
+	}, [output, hasLiveContent]);
+
+	// Save scroll position on unmount (for users who read without scrolling).
+	// Capture el at effect-run time to avoid concurrent-mode ref nullification.
+	useEffect(() => {
+		const el = scrollRef.current;
+		return () => {
+			if (el) saveScrollPosition(scrollKeyRef.current, el.scrollTop);
+		};
+	}, []);
 
 	useEffect(() => {
 		const handleKey = (e: KeyboardEvent) => {
@@ -110,6 +165,8 @@ export default function AgentCardDetail({
 		const atBottom =
 			el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_THRESHOLD;
 		autoFollowRef.current = atBottom;
+		// Continuously save position so reopening the panel restores where user left off.
+		saveScrollPosition(scrollKeyRef.current, el.scrollTop);
 	};
 
 	return (
@@ -178,6 +235,113 @@ export default function AgentCardDetail({
 						</div>
 					)}
 				</div>
+
+				{/* Thinking */}
+				{displayThinking && (
+					<div>
+						<button
+							type="button"
+							onClick={() => setIsThinkingOpen((v) => !v)}
+							className="flex w-full items-center gap-1.5 text-left"
+						>
+							{isThinkingOpen ? (
+								<ChevronDown
+									size={14}
+									className="shrink-0 text-neutral-500"
+									aria-hidden
+								/>
+							) : (
+								<ChevronRight
+									size={14}
+									className="shrink-0 text-neutral-500"
+									aria-hidden
+								/>
+							)}
+							<span className="text-xs font-medium text-neutral-600">
+								Thinking
+							</span>
+						</button>
+						{isThinkingOpen && (
+						<div className="mt-1 rounded-md border border-neutral-200 bg-neutral-100 p-3">
+							<div className="text-sm text-neutral-700 leading-relaxed">
+								<ReactMarkdown
+									remarkPlugins={[remarkGfm]}
+									components={{
+										h1: ({ children }) => (
+											<h1 className="text-lg font-semibold text-neutral-800 mt-3 mb-1.5 first:mt-0">
+												{children}
+											</h1>
+										),
+										h2: ({ children }) => (
+											<h2 className="text-base font-semibold text-neutral-800 mt-3 mb-1.5 first:mt-0">
+												{children}
+											</h2>
+										),
+										h3: ({ children }) => (
+											<h3 className="text-sm font-semibold text-neutral-800 mt-2 mb-1 first:mt-0">
+												{children}
+											</h3>
+										),
+										p: ({ children }) => (
+											<p className="text-sm text-neutral-700 leading-relaxed mb-1.5 last:mb-0">
+												{children}
+											</p>
+										),
+										ul: ({ children }) => (
+											<ul className="list-disc pl-5 mb-1.5 space-y-0.5 text-sm text-neutral-700">
+												{children}
+											</ul>
+										),
+										ol: ({ children }) => (
+											<ol className="list-decimal pl-5 mb-1.5 space-y-0.5 text-sm text-neutral-700">
+												{children}
+											</ol>
+										),
+										li: ({ children }) => (
+											<li className="text-sm text-neutral-700 leading-relaxed">
+												{children}
+											</li>
+										),
+										strong: ({ children }) => (
+											<strong className="font-semibold text-neutral-800">
+												{children}
+											</strong>
+										),
+										em: ({ children }) => (
+											<em className="italic text-neutral-600">{children}</em>
+										),
+										code: ({ children, className }) => {
+											const isBlock = className?.includes("language-");
+											if (isBlock) {
+												return (
+													<pre className="rounded-md bg-neutral-200/60 border border-neutral-200 p-2.5 mb-1.5 overflow-x-auto">
+														<code className="text-xs font-mono text-neutral-700">
+															{children}
+														</code>
+													</pre>
+												);
+											}
+											return (
+												<code className="rounded bg-neutral-200/60 px-1 py-0.5 text-xs font-mono text-neutral-700">
+													{children}
+												</code>
+											);
+										},
+										blockquote: ({ children }) => (
+											<blockquote className="border-l-2 border-neutral-300 pl-3 py-1 mb-1.5 text-sm text-neutral-600 italic">
+												{children}
+											</blockquote>
+										),
+										hr: () => <hr className="my-2 border-neutral-300" />,
+									}}
+								>
+									{displayThinking}
+								</ReactMarkdown>
+							</div>
+						</div>
+						)}
+					</div>
+				)}
 
 				{/* Output */}
 				<div>
@@ -322,91 +486,6 @@ export default function AgentCardDetail({
 					</div>
 				)}
 
-				{/* Thinking */}
-				{displayThinking && (
-					<div>
-						<h4 className="text-xs font-medium text-neutral-600 mb-1">
-							Thinking
-						</h4>
-						<div className="rounded-md border border-neutral-200 bg-neutral-100 p-3">
-							<div className="text-sm text-neutral-700 leading-relaxed">
-								<ReactMarkdown
-									remarkPlugins={[remarkGfm]}
-									components={{
-										h1: ({ children }) => (
-											<h1 className="text-lg font-semibold text-neutral-800 mt-3 mb-1.5 first:mt-0">
-												{children}
-											</h1>
-										),
-										h2: ({ children }) => (
-											<h2 className="text-base font-semibold text-neutral-800 mt-3 mb-1.5 first:mt-0">
-												{children}
-											</h2>
-										),
-										h3: ({ children }) => (
-											<h3 className="text-sm font-semibold text-neutral-800 mt-2 mb-1 first:mt-0">
-												{children}
-											</h3>
-										),
-										p: ({ children }) => (
-											<p className="text-sm text-neutral-700 leading-relaxed mb-1.5 last:mb-0">
-												{children}
-											</p>
-										),
-										ul: ({ children }) => (
-											<ul className="list-disc pl-5 mb-1.5 space-y-0.5 text-sm text-neutral-700">
-												{children}
-											</ul>
-										),
-										ol: ({ children }) => (
-											<ol className="list-decimal pl-5 mb-1.5 space-y-0.5 text-sm text-neutral-700">
-												{children}
-											</ol>
-										),
-										li: ({ children }) => (
-											<li className="text-sm text-neutral-700 leading-relaxed">
-												{children}
-											</li>
-										),
-										strong: ({ children }) => (
-											<strong className="font-semibold text-neutral-800">
-												{children}
-											</strong>
-										),
-										em: ({ children }) => (
-											<em className="italic text-neutral-600">{children}</em>
-										),
-										code: ({ children, className }) => {
-											const isBlock = className?.includes("language-");
-											if (isBlock) {
-												return (
-													<pre className="rounded-md bg-neutral-200/60 border border-neutral-200 p-2.5 mb-1.5 overflow-x-auto">
-														<code className="text-xs font-mono text-neutral-700">
-															{children}
-														</code>
-													</pre>
-												);
-											}
-											return (
-												<code className="rounded bg-neutral-200/60 px-1 py-0.5 text-xs font-mono text-neutral-700">
-													{children}
-												</code>
-											);
-										},
-										blockquote: ({ children }) => (
-											<blockquote className="border-l-2 border-neutral-300 pl-3 py-1 mb-1.5 text-sm text-neutral-600 italic">
-												{children}
-											</blockquote>
-										),
-										hr: () => <hr className="my-2 border-neutral-300" />,
-									}}
-								>
-									{displayThinking}
-								</ReactMarkdown>
-							</div>
-						</div>
-					</div>
-				)}
 			</div>
 		</div>
 	);

@@ -861,6 +861,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
 			{/* Footer */}
 			<div className="border-t border-neutral-200 p-2 space-y-1">
+				{/* Workspace switcher */}
+				<WorkspaceSwitcher collapsed={collapsed} placement="top" />
+
 				{/* Settings */}
 				<NavLink
 					to={SETTINGS_ITEM.to}
@@ -870,9 +873,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 					<SETTINGS_ITEM.icon size={18} className="shrink-0" aria-hidden />
 					<span className={labelClass}>{SETTINGS_ITEM.label}</span>
 				</NavLink>
-
-				{/* Workspace switcher */}
-				<WorkspaceSwitcher collapsed={collapsed} placement="top" />
 
 				{/* Sign out */}
 				<div className="relative">
