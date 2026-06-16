@@ -2,7 +2,7 @@
 	"name": "camel-kanban",
 	"private": true,
 	"version": "0.1.0",
-	"description": "Camel — a kanban board for small dev teams",
+	"description": "Camel — Agentic Kanban",
 	"workspaces": [
 		"client",
 		"server"
