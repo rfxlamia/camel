@@ -876,6 +876,23 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			return { output: output.output, thinking: output.thinking };
 		},
 
+		// ---- getArtifact ----
+		async getArtifact({
+			boardId,
+			workspaceId,
+		}: {
+			boardId: number;
+			workspaceId: number;
+		}) {
+			const board = await deps.getBoard!(boardId);
+			if (!board || board.workspaceId !== workspaceId)
+				return { status: 404 as const };
+
+			const artifact = await deps.getArtifact!(boardId);
+			if (!artifact) return { status: 404 as const };
+			return artifact;
+		},
+
 		// ---- sendMessage (Generate-Explain-Refine loop) ----
 		async sendMessage({
 			boardId,

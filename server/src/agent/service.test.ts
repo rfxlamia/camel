@@ -366,6 +366,70 @@ describe("card output retrieval", () => {
 	});
 });
 
+describe("getArtifact", () => {
+	it("returns the artifact for a member of the owning workspace", async () => {
+		const getArtifact = vi.fn(async () => ({
+			filename: "title.md",
+			format: "md" as const,
+			content: "# Title\nBody",
+		}));
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1,
+				status: "approved",
+				workspaceId: 1,
+				userId: 1,
+				originalIntent: "riset",
+			})),
+			getArtifact,
+		});
+		const result = await service.getArtifact({ boardId: 1, workspaceId: 1 });
+		expect(result).toMatchObject({
+			filename: "title.md",
+			format: "md",
+			content: "# Title\nBody",
+		});
+	});
+
+	it("returns 404 when no artifact exists", async () => {
+		const getArtifact = vi.fn(async () => null);
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1,
+				status: "approved",
+				workspaceId: 1,
+				userId: 1,
+				originalIntent: "riset",
+			})),
+			getArtifact,
+		});
+		const result = await service.getArtifact({ boardId: 1, workspaceId: 1 });
+		expect(result).toMatchObject({ status: 404 });
+	});
+
+	it("returns 404 (not 403, no leak) for a board in another workspace", async () => {
+		const getArtifact = vi.fn(async () => ({
+			filename: "secret.md",
+			format: "md" as const,
+			content: "cross-workspace",
+		}));
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1,
+				status: "approved",
+				workspaceId: 2,
+				userId: 1,
+				originalIntent: "riset",
+			})),
+			getArtifact,
+		});
+		const result = await service.getArtifact({ boardId: 1, workspaceId: 1 });
+		expect(result).toMatchObject({ status: 404 });
+		expect(result).not.toHaveProperty("content");
+		expect(getArtifact).not.toHaveBeenCalled();
+	});
+});
+
 describe("sendMessage", () => {
 	it("stores user message and returns clarification question for pending board", async () => {
 		const insertConversation = vi.fn(async () => {});

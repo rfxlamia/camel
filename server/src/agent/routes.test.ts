@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	buildArtifactDownload,
 	defaultToolRegistry,
 	getToolTrace,
+	realArtifactDeps,
 	runInsertColumns,
 } from "./routes.js";
 
@@ -143,5 +145,47 @@ describe("insertColumns tools serialization", () => {
 
 		expect(Array.isArray(toolsArg)).toBe(true);
 		expect(toolsArg).toEqual([]);
+	});
+});
+
+describe("artifact DB helpers", () => {
+	it("insertArtifact upserts keyed on board_id", async () => {
+		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
+		await realArtifactDeps.insertArtifact(fakeDb as never, {
+			boardId: 7,
+			workspaceId: 3,
+			filename: "title.md",
+			format: "md",
+			content: "# Title\nBody",
+		});
+		const sql = (fakeDb.query.mock.calls[0][0] as string).toLowerCase();
+		expect(sql).toContain("insert into agent_artifacts");
+		expect(sql).toMatch(/on conflict\s*\(\s*board_id\s*\)\s*do update/i);
+	});
+
+	it("getArtifact issues a single board-scoped SELECT", async () => {
+		const row = { filename: "title.md", format: "md", content: "# Title" };
+		const fakeDb = { query: vi.fn(async () => ({ rows: [row] })) };
+		const result = await realArtifactDeps.getArtifact(fakeDb as never, 7);
+		expect(fakeDb.query).toHaveBeenCalledTimes(1);
+		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [7]);
+		const sql = (fakeDb.query.mock.calls[0][0] as string).toLowerCase();
+		expect(sql).toContain("from agent_artifacts");
+		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
+		expect(result).toMatchObject({ filename: "title.md" });
+	});
+});
+
+describe("artifact download headers", () => {
+	it("sets attachment disposition with the .md filename and content body", () => {
+		const { headers, body } = buildArtifactDownload({
+			filename: "title.md",
+			content: "# Title\nBody",
+		});
+		expect(headers["Content-Disposition"]).toBe(
+			'attachment; filename="title.md"',
+		);
+		expect(headers["Content-Type"]).toMatch(/markdown/);
+		expect(body).toBe("# Title\nBody");
 	});
 });

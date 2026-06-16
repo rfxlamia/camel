@@ -8,6 +8,8 @@
  *   GET    /api/workspaces/:wid/agent/boards
  *   GET    /api/workspaces/:wid/agent/boards/:id
  *   GET    /api/workspaces/:wid/agent/boards/:bid/outputs/:slug
+ *   GET    /api/workspaces/:wid/agent/boards/:bid/artifact
+ *   GET    /api/workspaces/:wid/agent/boards/:bid/artifact/download
  *
  * requireAuth is per-route (NOT router-level) to avoid double-mounting
  * when both this and the existing api router are on /api.
@@ -112,6 +114,80 @@ export async function runInsertColumns(
 			],
 		);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Artifact DB helpers — exported for unit tests
+// ---------------------------------------------------------------------------
+
+export const realArtifactDeps = {
+	insertArtifact: async (
+		db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+		data: {
+			boardId: number;
+			workspaceId: number;
+			filename: string;
+			format: "md";
+			content: string;
+		},
+	): Promise<void> => {
+		await db.query(
+			`INSERT INTO agent_artifacts (board_id, workspace_id, filename, format, content)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (board_id) DO UPDATE SET
+         filename = EXCLUDED.filename,
+         content = EXCLUDED.content,
+         format = EXCLUDED.format,
+         created_at = now()`,
+			[
+				data.boardId,
+				data.workspaceId,
+				data.filename,
+				data.format,
+				data.content,
+			],
+		);
+	},
+
+	getArtifact: async (
+		db: {
+			query: (
+				sql: string,
+				params: unknown[],
+			) => Promise<{ rows: Array<Record<string, unknown>> }>;
+		},
+		boardId: number,
+	): Promise<{
+		filename: string;
+		format: "md";
+		content: string;
+	} | null> => {
+		const { rows } = await db.query(
+			`SELECT filename, format, content
+       FROM agent_artifacts
+       WHERE board_id = $1`,
+			[boardId],
+		);
+		if (rows.length === 0) return null;
+		return {
+			filename: rows[0].filename as string,
+			format: rows[0].format as "md",
+			content: rows[0].content as string,
+		};
+	},
+};
+
+export function buildArtifactDownload(data: {
+	filename: string;
+	content: string;
+}): { headers: Record<string, string>; body: string } {
+	return {
+		headers: {
+			"Content-Disposition": `attachment; filename="${data.filename}"`,
+			"Content-Type": "text/markdown; charset=utf-8",
+		},
+		body: data.content,
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +390,10 @@ const realDeps: AgentBoardServiceDeps = {
 		if (rows.length === 0) return null;
 		return { output: rows[0].output, thinking: rows[0].thinking };
 	},
+
+	insertArtifact: (data) => realArtifactDeps.insertArtifact(pool, data),
+
+	getArtifact: (boardId) => realArtifactDeps.getArtifact(pool, boardId),
 };
 
 // ---------------------------------------------------------------------------
@@ -571,6 +651,65 @@ export function createAgentRouter(
 			} catch (err) {
 				console.error("agent getCardOutput error:", err);
 				res.status(500).json({ error: "Failed to get output" });
+			}
+		},
+	);
+
+	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/artifact ----
+	router.get(
+		"/workspaces/:workspaceId/agent/boards/:boardId/artifact",
+		requireAuth,
+		async (req, res) => {
+			const workspaceId = Number(req.params.workspaceId);
+			const boardId = Number(req.params.boardId);
+			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
+				return res.status(400).json({ error: "Invalid params" });
+			}
+
+			try {
+				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
+				const result = await service.getArtifact({ boardId, workspaceId });
+
+				if ("status" in result && typeof result.status === "number") {
+					return res.status(result.status).json(result);
+				}
+				res.json(result);
+			} catch (err) {
+				console.error("agent getArtifact error:", err);
+				res.status(500).json({ error: "Failed to get artifact" });
+			}
+		},
+	);
+
+	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/artifact/download ----
+	router.get(
+		"/workspaces/:workspaceId/agent/boards/:boardId/artifact/download",
+		requireAuth,
+		async (req, res) => {
+			const workspaceId = Number(req.params.workspaceId);
+			const boardId = Number(req.params.boardId);
+			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
+				return res.status(400).json({ error: "Invalid params" });
+			}
+
+			try {
+				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
+				const result = await service.getArtifact({ boardId, workspaceId });
+
+				if ("status" in result && typeof result.status === "number") {
+					return res.status(result.status).json(result);
+				}
+
+				const { headers, body } = buildArtifactDownload({
+					filename: result.filename,
+					content: result.content,
+				});
+				res.set(headers).send(body);
+			} catch (err) {
+				console.error("agent downloadArtifact error:", err);
+				res.status(500).json({ error: "Failed to download artifact" });
 			}
 		},
 	);
