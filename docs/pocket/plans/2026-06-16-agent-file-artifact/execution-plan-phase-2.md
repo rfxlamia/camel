@@ -70,7 +70,15 @@ Steps:
    		const insertArtifact = vi.fn(async () => {});
    		const { service } = buildService({
    			insertArtifact,
-   			getArtifact: vi.fn(async () => null),
+   			// Read-after-write: the bound tool's insert is visible to the
+   			// finalize SELECT (same pool in prod). Returning the row here keeps
+   			// the gate from double-inserting via the fallback. Do NOT change the
+   			// fallback/gated-off tests below — those correctly return null.
+   			getArtifact: vi.fn(async () => ({
+   				filename: "t.md",
+   				format: "md" as const,
+   				content: "# T\nBody",
+   			})),
    			getOutput: vi.fn(async () => ({ output: "**Status:** PASS", thinking: null })),
    			getColumns: vi.fn().mockResolvedValue(QA_COLUMNS),
    			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
@@ -214,7 +222,14 @@ Steps:
    `npx vitest run server/src/agent/service.test.ts`
    Expected failure: insertArtifact/getArtifact deps undefined; no artifact.ready event.
 3. Implement minimal code:
-   - `service.ts`: extend `AgentBoardServiceDeps` with `insertArtifact?` and `getArtifact?(boardId)`. In `runPipeline`, after resolving `resolvedTools` for a column, if `(column.tools ?? []).includes("create_file")` append `makeCreateFile({ boardId, workspaceId, intent: board.originalIntent, insertArtifact: deps.insertArtifact! })`. After the for-loop (just before final `updateBoard done`), call a private finalize step: if `await deps.getArtifact!(boardId)` is null, read QA output via `deps.getOutput!({boardId, columnSlug:"qa-guardian"})`; if `parseQaVerdict(qaOutput) === "pass"`, read editor output (`columnSlug:"editor"`), `extractRevisedDocument`, and `insertArtifact` (filename via deriveFilename). If an artifact now exists (either path), `publishEvent(workspaceId, { type:"agent.artifact.ready", boardId })`.
+   - `service.ts`: extend `AgentBoardServiceDeps` with `insertArtifact?` and `getArtifact?(boardId)`. **Guard both the tool-binding and the finalize step behind a single presence check** so the default `buildService()` harness (which omits these optional deps) and the T4→T5 production window (where `realArtifactDeps` is wired only in T5) never deref an undefined dep:
+     ```ts
+     const artifactEnabled =
+       !!deps.insertArtifact && !!deps.getArtifact && !!deps.getOutput;
+     ```
+     - In `runPipeline`, after resolving `resolvedTools` for a column, if `artifactEnabled && (column.tools ?? []).includes("create_file")` append `makeCreateFile({ boardId, workspaceId, intent: board.originalIntent, insertArtifact: deps.insertArtifact! })`.
+     - After the for-loop (just before final `updateBoard done`), if `artifactEnabled` run a private finalize step: if `await deps.getArtifact!(boardId)` is null, read QA output via `deps.getOutput!({boardId, columnSlug:"qa-guardian"})`; if `parseQaVerdict(qaOutput) === "pass"`, read the editor output and `extractRevisedDocument` + `insertArtifact` (filename via deriveFilename). If an artifact now exists (either path), `publishEvent(workspaceId, { type:"agent.artifact.ready", boardId })`.
+     - **Derive the editor slug from the template** rather than hardcoding `"editor"`: reuse the `slugToOutputKey` map already built in runPipeline to find the slug whose `output_key === "editor_output"`, falling back to `"editor"`. Keeps the fallback alive if the template column is ever renamed (a hardcoded slug fails silently — no artifact, no error).
    - Import `makeCreateFile` from `./tools/createFile.js`; `parseQaVerdict`, `extractRevisedDocument`, `deriveFilename` from `./artifact.js`.
    - `templates.ts`: add `tools: ["create_file"]` to the `qa-guardian` column; extend its `system_prompt` `<your_job>`/`<output_format>` so that on PASS it calls `create_file` with ONLY the Editor's Revised Document body (no Editorial Notes), and on NEEDS REVISION it does not call the tool.
 4. Run test — verify PASS:
@@ -260,6 +275,7 @@ Must-have:
   - Fallback gated on parseQaVerdict === "pass"
   - QA template instructs clean-body create_file on PASS, no call on NEEDS REVISION
   - Existing empty-output guard + output isolation preserved
+  - Tool-binding AND finalize guarded on optional-dep presence — existing runPipeline tests (which use the artifact-free buildService harness) stay green
 Must-not-have:
   - Changes to classifyIntent, llm.ts tool-loop, or Tool.execute
   - create_file added to any non-QA column
@@ -398,13 +414,32 @@ Steps:
    });
    ```
 
-   > Note: `realArtifactDeps` is the exported holder for the artifact DB functions (matching the existing `getToolTrace`/`runInsertColumns` export-for-test convention). Wire `insertArtifact`/`getArtifact` into `realDeps` from it. The download header contract (`Content-Disposition: attachment; filename="<name>.md"`, body = content) is set inline in the `GET .../artifact/download` handler, which delegates to the same `service.getArtifact`; it carries no branching beyond the 200/404 already covered above, so it needs no separate unit (its auth + 404 path is identical to the metadata endpoint and asserted via the service method).
+   ```ts
+   // Add to server/src/agent/routes.test.ts — the download header contract.
+   import { buildArtifactDownload } from "./routes.js";
+
+   describe("artifact download headers", () => {
+   	it("sets attachment disposition with the .md filename and content body", () => {
+   		const { headers, body } = buildArtifactDownload({
+   			filename: "title.md",
+   			content: "# Title\nBody",
+   		});
+   		expect(headers["Content-Disposition"]).toBe(
+   			'attachment; filename="title.md"',
+   		);
+   		expect(headers["Content-Type"]).toMatch(/markdown/);
+   		expect(body).toBe("# Title\nBody");
+   	});
+   });
+   ```
+
+   > Note: `realArtifactDeps` is the exported holder for the artifact DB functions (matching the existing `getToolTrace`/`runInsertColumns` export-for-test convention). Wire `insertArtifact`/`getArtifact` into `realDeps` from it. The download header contract is **not** left untested: extract a pure `buildArtifactDownload({filename, content})` → `{headers, body}` helper (exported for test, same convention) and have the `GET .../artifact/download` handler apply its result. Auth + 404 branching is identical to the metadata endpoint and stays covered via the service method; only the header/body shaping is new, and the helper makes it unit-verifiable without supertest.
 2. Run test — verify FAIL:
    `npx vitest run server/src/agent/service.test.ts server/src/agent/routes.test.ts`
-   Expected failure: `service.getArtifact` undefined; `realArtifactDeps` not exported.
+   Expected failure: `service.getArtifact` undefined; `realArtifactDeps`/`buildArtifactDownload` not exported.
 3. Implement minimal code:
    - `service.ts`: add `getArtifact({boardId, workspaceId})` returning `{filename, format, content}` or `{status:404}` (reuse workspace-scoping pattern of getCardOutput).
-   - `routes.ts`: add an exported `realArtifactDeps` holder (matching the `getToolTrace`/`runInsertColumns` export-for-test convention) with `insertArtifact(db, {...})` (`INSERT ... ON CONFLICT (board_id) DO UPDATE SET filename=EXCLUDED.filename, content=EXCLUDED.content, format=EXCLUDED.format, created_at=now()`) and `getArtifact(db, boardId)` (`SELECT filename, format, content FROM agent_artifacts WHERE board_id=$1`); wire both into `realDeps`. Register `GET .../artifact` and `GET .../artifact/download`, both `requireAuth` + `requireWorkspaceMember`, delegating to `service.getArtifact`; the download handler sets `Content-Disposition: attachment; filename="<name>.md"` and writes `content` as the body.
+   - `routes.ts`: add an exported `realArtifactDeps` holder (matching the `getToolTrace`/`runInsertColumns` export-for-test convention) with `insertArtifact(db, {...})` (`INSERT ... ON CONFLICT (board_id) DO UPDATE SET filename=EXCLUDED.filename, content=EXCLUDED.content, format=EXCLUDED.format, created_at=now()`) and `getArtifact(db, boardId)` (`SELECT filename, format, content FROM agent_artifacts WHERE board_id=$1`); wire both into `realDeps`. Register `GET .../artifact` and `GET .../artifact/download`, both `requireAuth` + `requireWorkspaceMember`, delegating to `service.getArtifact`. Export a pure `buildArtifactDownload({filename, content})` → `{headers, body}` helper (`Content-Disposition: attachment; filename="<name>.md"`, `Content-Type: text/markdown; charset=utf-8`, body = content); the download handler applies its result so the header contract is unit-tested via the helper.
 4. Run test — verify PASS:
    `npx vitest run server/src/agent/service.test.ts server/src/agent/routes.test.ts`
 5. Commit:
@@ -532,7 +567,7 @@ Steps:
 3. Implement minimal code:
    - `types.ts`: `export interface AgentArtifact { filename: string; format: "md"; content: string }`; add `"agent.artifact.ready"` to the `AgentEvent["type"]` union.
    - `api.ts`: `getAgentArtifact(workspaceId, boardId)` → `request<AgentArtifact>(.../artifact)`; `agentArtifactDownloadUrl(workspaceId, boardId)` returning the download path.
-   - `ArtifactCard.tsx`: presentational; props `{artifact, downloadUrl}`. Card uses creative-brief tokens (surface neutral-100, border neutral-200, radius 6px, doc icon neutral-600, filename base, meta "Document · MD" sm neutral-500, Download = Button Secondary). Click opens a full-screen modal reusing `react-markdown` + `remark-gfm` (same as AgentCardDetail) with a close control. No localStorage.
+   - `ArtifactCard.tsx`: presentational; props `{artifact, downloadUrl}`. Card uses creative-brief tokens (surface neutral-100, border neutral-200, radius 6px, doc icon neutral-600, filename base, meta "Document · MD" sm neutral-500). The Download control MUST be an anchor `<a href={downloadUrl}>` styled as Button Secondary (not a `<button onClick>`) — the test asserts `a[href="..."]`. Click on the card body opens a full-screen modal reusing `react-markdown` + `remark-gfm` (same as AgentCardDetail) with a close control. No localStorage.
 4. Run test — verify PASS:
    `npx vitest run client/src/components/ArtifactCard.test.tsx`
 5. Commit:
