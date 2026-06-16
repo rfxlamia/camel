@@ -49,6 +49,7 @@ export interface BoardEvent {
 		| "agent.card.token"
 		| "agent.card.done"
 		| "agent.card.failed"
+		| "agent.card.thinking"
 		| "agent.tool.started"
 		| "agent.tool.result"
 		| "agent.tool.failed";
@@ -62,6 +63,9 @@ export interface BoardEvent {
 	resultCount?: number;
 	errorCode?: string;
 	attempt?: number;
+	columnSlug?: string;
+	token?: string;
+	boardId?: number;
 	at?: string;
 }
 

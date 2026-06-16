@@ -213,11 +213,13 @@ export interface AgentEvent {
 		| "agent.card.token"
 		| "agent.card.done"
 		| "agent.card.failed"
+		| "agent.card.thinking"
 		| "agent.tool.started"
 		| "agent.tool.result"
 		| "agent.tool.failed";
 	columnSlug?: string;
 	token?: string;
+	boardId?: number;
 	error?: string;
 	toolName?: string;
 	query?: string;

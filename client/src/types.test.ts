@@ -77,3 +77,28 @@ describe("workspace response types", () => {
 		expect(response.pendingInvites[0].workspaceName).toBe("Launch");
 	});
 });
+
+import type { AgentEvent } from "./types";
+
+describe("AgentEvent live-thinking shape", () => {
+	it("type-checks agent.card.thinking with boardId + columnSlug + token", () => {
+		const event: AgentEvent = {
+			type: "agent.card.thinking",
+			columnSlug: "analysis-specialist",
+			boardId: 42,
+			token: "reasoning chunk",
+		};
+		expect(event.type).toBe("agent.card.thinking");
+		expect(event.boardId).toBe(42);
+		expect(event.columnSlug).toBe("analysis-specialist");
+	});
+
+	it("type-checks boardId on existing agent.card.* events", () => {
+		const started: AgentEvent = {
+			type: "agent.card.started",
+			columnSlug: "research-specialist",
+			boardId: 7,
+		};
+		expect(started.boardId).toBe(7);
+	});
+});

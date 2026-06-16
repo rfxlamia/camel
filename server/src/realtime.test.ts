@@ -43,3 +43,26 @@ describe("workspace realtime isolation", () => {
 		});
 	});
 });
+
+describe("agent live-thinking event round-trip", () => {
+	it("preserves type, columnSlug, token, and boardId through local fan-out", async () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+		const client = hub.connectLocalClient({ workspaceId: 1 });
+
+		await hub.publishEvent(1, {
+			type: "agent.card.thinking",
+			columnSlug: "analysis-specialist",
+			token: "let me reason",
+			boardId: 42,
+		});
+
+		expect(client.drain()).toEqual([
+			{
+				type: "agent.card.thinking",
+				columnSlug: "analysis-specialist",
+				token: "let me reason",
+				boardId: 42,
+			},
+		]);
+	});
+});
