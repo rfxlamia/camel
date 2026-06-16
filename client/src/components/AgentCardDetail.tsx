@@ -1,11 +1,16 @@
 import { ChevronDown, ChevronRight, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
+import {
+	deriveStreamedOutputForColumn,
+	deriveThinkingForColumn,
+	pickContent,
+} from "../lib/agentStream";
 import { deriveToolTrace, pickToolTraceForColumn } from "../lib/toolTrace";
-import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
+import type { AgentCardOutput, AgentColumn, AgentEvent, ToolTraceItem } from "../types";
 import { ToolTrace } from "./ToolTrace";
 
 interface AgentCardDetailProps {
@@ -13,6 +18,26 @@ interface AgentCardDetailProps {
 	boardId: number;
 	toolTrace?: ToolTraceItem[];
 	onClose: () => void;
+}
+
+const SCROLL_THRESHOLD = 32;
+
+function deriveColumnFailure(
+	agentEvents: AgentEvent[],
+	boardId: number,
+	columnSlug: string,
+): string | null {
+	for (let i = agentEvents.length - 1; i >= 0; i--) {
+		const e = agentEvents[i];
+		if (
+			e.type === "agent.card.failed" &&
+			e.boardId === boardId &&
+			e.columnSlug === columnSlug
+		) {
+			return e.error ?? "Unknown error";
+		}
+	}
+	return null;
 }
 
 export default function AgentCardDetail({
@@ -26,9 +51,26 @@ export default function AgentCardDetail({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
 	const [isPromptOpen, setIsPromptOpen] = useState(false);
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const autoFollowRef = useRef(true);
+
+	const liveThinking = deriveThinkingForColumn(
+		agentEvents,
+		boardId,
+		column.slug,
+	);
+	const liveOutput = deriveStreamedOutputForColumn(
+		agentEvents,
+		boardId,
+		column.slug,
+	);
+	const hasLiveContent = liveThinking.length > 0 || liveOutput.length > 0;
+	const displayOutput = pickContent(liveOutput, output?.output ?? "");
+	const displayThinking = pickContent(liveThinking, output?.thinking ?? "");
+	const failureError = deriveColumnFailure(agentEvents, boardId, column.slug);
 
 	useEffect(() => {
-		if (activeWorkspaceId === null) return;
+		if (activeWorkspaceId === null || hasLiveContent) return;
 		let cancelled = false;
 		setLoading(true);
 		setError(false);
@@ -46,7 +88,7 @@ export default function AgentCardDetail({
 		return () => {
 			cancelled = true;
 		};
-	}, [activeWorkspaceId, boardId, column.slug]);
+	}, [activeWorkspaceId, boardId, column.slug, hasLiveContent]);
 
 	useEffect(() => {
 		const handleKey = (e: KeyboardEvent) => {
@@ -62,8 +104,26 @@ export default function AgentCardDetail({
 		column.slug,
 	);
 
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el || !autoFollowRef.current) return;
+		el.scrollTop = el.scrollHeight;
+	}, [displayThinking, displayOutput, traceSteps.length]);
+
+	const handleScroll = () => {
+		const el = scrollRef.current;
+		if (!el) return;
+		const atBottom =
+			el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_THRESHOLD;
+		autoFollowRef.current = atBottom;
+	};
+
 	return (
-		<div className="fixed inset-y-0 right-0 z-30 w-full max-w-md border-l border-neutral-200 bg-white shadow-lg overflow-y-auto">
+		<div
+			ref={scrollRef}
+			onScroll={handleScroll}
+			className="fixed inset-y-0 right-0 z-30 w-full max-w-md border-l border-neutral-200 bg-white shadow-lg overflow-y-auto"
+		>
 			{/* Header */}
 			<div className="sticky top-0 flex items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 py-3">
 				<div className="min-w-0">
@@ -82,19 +142,13 @@ export default function AgentCardDetail({
 			</div>
 
 			<div className="space-y-4 p-4">
-				{/* Reasoning badge */}
+				{/* Reasoning badge — extended thinking enabled for all columns */}
 				<div>
 					<span className="text-xs font-medium text-neutral-600">
 						Extended Thinking:
 					</span>
-					<span
-						className={`ml-2 rounded-md px-2 py-0.5 text-xs font-medium ${
-							column.reasoning
-								? "bg-success-100 text-success-900"
-								: "bg-neutral-200 text-neutral-700"
-						}`}
-					>
-						{column.reasoning ? "ON" : "OFF"}
+					<span className="ml-2 rounded-md px-2 py-0.5 text-xs font-medium bg-success-100 text-success-900">
+						ON
 					</span>
 				</div>
 
@@ -134,21 +188,29 @@ export default function AgentCardDetail({
 				{/* Output */}
 				<div>
 					<h4 className="text-xs font-medium text-neutral-600 mb-1">Output</h4>
-					{loading && (
+					{loading && !hasLiveContent && (
 						<p className="text-sm text-neutral-500">Loading output...</p>
 					)}
-					{error && (
+					{error && !hasLiveContent && (
 						<p className="text-sm text-error-600">
 							Couldn&apos;t load output. This card may not have been executed
 							yet.
 						</p>
 					)}
-					{!loading && !error && !output && (
-						<p className="text-sm text-neutral-500">
-							No output yet. Approve the board to start execution.
+					{failureError && !displayOutput && (
+						<p className="text-sm text-error-600">
+							This column failed: {failureError}
 						</p>
 					)}
-					{output && (
+					{!loading &&
+						!error &&
+						!displayOutput &&
+						!failureError && (
+							<p className="text-sm text-neutral-500">
+								No output yet. Approve the board to start execution.
+							</p>
+						)}
+					{displayOutput && (
 						<div className="rounded-md border border-neutral-200 bg-white p-3">
 							<div className="text-sm text-neutral-800 leading-relaxed">
 								<ReactMarkdown
@@ -249,7 +311,7 @@ export default function AgentCardDetail({
 										),
 									}}
 								>
-									{output.output}
+									{displayOutput}
 								</ReactMarkdown>
 							</div>
 						</div>
@@ -267,7 +329,7 @@ export default function AgentCardDetail({
 				)}
 
 				{/* Thinking */}
-				{output?.thinking && (
+				{displayThinking && (
 					<div>
 						<h4 className="text-xs font-medium text-neutral-600 mb-1">
 							Thinking
@@ -345,7 +407,7 @@ export default function AgentCardDetail({
 										hr: () => <hr className="my-2 border-neutral-300" />,
 									}}
 								>
-									{output.thinking}
+									{displayThinking}
 								</ReactMarkdown>
 							</div>
 						</div>
