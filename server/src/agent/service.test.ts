@@ -726,6 +726,179 @@ describe("runPipeline", () => {
 });
 
 // ---------------------------------------------------------------------------
+// runPipeline live thinking SSE — T3
+// ---------------------------------------------------------------------------
+
+describe("runPipeline live thinking SSE", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("publishes batched agent.card.thinking with columnSlug + boardId", async () => {
+		const events: Array<Record<string, unknown>> = [];
+		const { service } = buildService({
+			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+				events.push(event);
+			}),
+			getColumns: vi.fn().mockResolvedValue([
+				{
+					columnId: 10,
+					columnSlug: "research-specialist",
+					systemPrompt: "You are a researcher. Topic: {original_intent}",
+					reasoning: false,
+				},
+			] as ColumnInfo[]),
+			executeCard: vi
+				.fn()
+				.mockImplementation(
+					async (
+						_sys: string,
+						_intent: string,
+						_prev: string[],
+						_reasoning: boolean,
+						_onToken: (t: string) => void,
+						_tools: unknown[],
+						_budget: number,
+						_onToolEvent: unknown,
+						onThinking?: (t: string) => void,
+					) => {
+						onThinking?.("reason ");
+						onThinking?.("more");
+						return { output: "final output" };
+					},
+				),
+		});
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const thinking = events.find((e) => e.type === "agent.card.thinking");
+		expect(thinking).toMatchObject({
+			type: "agent.card.thinking",
+			columnSlug: "research-specialist",
+			boardId: 1,
+		});
+		expect(String(thinking!.token)).toContain("reason ");
+		expect(String(thinking!.token)).toContain("more");
+	});
+
+	it("flushes pending thinking + token buffers BEFORE a tool event", async () => {
+		const events: Array<Record<string, unknown>> = [];
+		const { service } = buildService({
+			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+				events.push(event);
+			}),
+			toolRegistry: {
+				resolveTools: vi.fn().mockReturnValue([
+					{
+						name: "web_search",
+						description: "Search",
+						inputSchema: { type: "object" },
+						riskTier: "read-only" as const,
+						execute: vi.fn(),
+					},
+				]),
+			},
+			getColumns: vi.fn().mockResolvedValue([
+				{
+					columnId: 10,
+					columnSlug: "research-specialist",
+					systemPrompt: "You are a researcher. Topic: {original_intent}",
+					reasoning: false,
+					tools: ["web_search"],
+					toolBudget: 3,
+				},
+			] as ColumnInfo[]),
+			executeCard: vi
+				.fn()
+				.mockImplementation(
+					async (
+						_sys: string,
+						_intent: string,
+						_prev: string[],
+						_reasoning: boolean,
+						onToken: (t: string) => void,
+						_tools: unknown[],
+						_budget: number,
+						onToolEvent: (e: { phase: string; toolName?: string }) => void,
+						onThinking?: (t: string) => void,
+					) => {
+						onThinking?.("thinking before tool");
+						onToken("token before tool");
+						onToolEvent({ phase: "started", toolName: "web_search" });
+						return { output: "final output" };
+					},
+				),
+		});
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const thinkingIdx = events.findIndex(
+			(e) => e.type === "agent.card.thinking",
+		);
+		const tokenIdx = events.findIndex((e) => e.type === "agent.card.token");
+		const toolIdx = events.findIndex((e) => e.type === "agent.tool.started");
+
+		expect(thinkingIdx).toBeGreaterThanOrEqual(0);
+		expect(tokenIdx).toBeGreaterThanOrEqual(0);
+		expect(toolIdx).toBeGreaterThan(thinkingIdx);
+		expect(toolIdx).toBeGreaterThan(tokenIdx);
+	});
+
+	it("stamps boardId on agent.card.started / token / done events", async () => {
+		const events: Array<Record<string, unknown>> = [];
+		const { service } = buildService({
+			publishEvent: vi.fn().mockImplementation(async (_wid, event) => {
+				events.push(event);
+			}),
+			getColumns: vi.fn().mockResolvedValue([
+				{
+					columnId: 10,
+					columnSlug: "research-specialist",
+					systemPrompt: "You are a researcher. Topic: {original_intent}",
+					reasoning: false,
+				},
+			] as ColumnInfo[]),
+			executeCard: vi
+				.fn()
+				.mockImplementation(
+					async (
+						_sys: string,
+						_intent: string,
+						_prev: string[],
+						_reasoning: boolean,
+						onToken: (t: string) => void,
+					) => {
+						onToken("hello");
+						return { output: "final output" };
+					},
+				),
+		});
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		for (const type of [
+			"agent.card.started",
+			"agent.card.token",
+			"agent.card.done",
+		]) {
+			const ev = events.find((e) => e.type === type);
+			expect(ev, `expected ${type} present`).toBeDefined();
+			expect(ev!.boardId).toBe(1);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
 // runPipeline tool wiring — T5
 // ---------------------------------------------------------------------------
 

@@ -124,6 +124,7 @@ export interface AgentBoardServiceDeps {
 			attempt?: number;
 			text?: string;
 		}) => void,
+		onThinking?: (text: string) => void,
 	) => Promise<{ output: string; thinking?: string }>;
 
 	insertOutput?: (data: {
@@ -507,6 +508,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				await deps.publishEvent?.(workspaceId, {
 					type: "agent.card.started",
 					columnSlug: column.columnSlug,
+					boardId,
 				});
 
 				const vars = buildVarsMap(
@@ -532,18 +534,30 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					await deps.publishEvent?.(workspaceId, {
 						type: "agent.card.failed",
 						columnSlug: column.columnSlug,
+						boardId,
 						reason,
 					});
 					return;
 				}
 
 				let tokenBuffer = "";
+				let thinkingBuffer = "";
 				let toolEventCount = 0;
 				const batchInterval = setInterval(() => {
+					if (thinkingBuffer) {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.card.thinking",
+							columnSlug: column.columnSlug,
+							boardId,
+							token: thinkingBuffer,
+						});
+						thinkingBuffer = "";
+					}
 					if (tokenBuffer) {
 						deps.publishEvent?.(workspaceId, {
 							type: "agent.card.token",
 							columnSlug: column.columnSlug,
+							boardId,
 							token: tokenBuffer,
 						});
 						tokenBuffer = "";
@@ -555,11 +569,21 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				const toolBudget = column.toolBudget ?? 3;
 
 				const onToolEvent = (e: ToolEventPayload) => {
-					// Flush token buffer before emitting tool event
+					// Flush thinking + token buffers before emitting tool event
+					if (thinkingBuffer) {
+						deps.publishEvent?.(workspaceId, {
+							type: "agent.card.thinking",
+							columnSlug: column.columnSlug,
+							boardId,
+							token: thinkingBuffer,
+						});
+						thinkingBuffer = "";
+					}
 					if (tokenBuffer) {
 						deps.publishEvent?.(workspaceId, {
 							type: "agent.card.token",
 							columnSlug: column.columnSlug,
+							boardId,
 							token: tokenBuffer,
 						});
 						tokenBuffer = "";
@@ -592,14 +616,27 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						resolvedTools,
 						toolBudget,
 						onToolEvent,
+						(text: string) => {
+							thinkingBuffer += text;
+						},
 					);
 
 					clearInterval(batchInterval);
 
+					if (thinkingBuffer) {
+						await deps.publishEvent?.(workspaceId, {
+							type: "agent.card.thinking",
+							columnSlug: column.columnSlug,
+							boardId,
+							token: thinkingBuffer,
+						});
+						thinkingBuffer = "";
+					}
 					if (tokenBuffer) {
 						await deps.publishEvent?.(workspaceId, {
 							type: "agent.card.token",
 							columnSlug: column.columnSlug,
+							boardId,
 							token: tokenBuffer,
 						});
 					}
@@ -620,6 +657,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						await deps.publishEvent?.(workspaceId, {
 							type: "agent.card.failed",
 							columnSlug: column.columnSlug,
+							boardId,
 							reason,
 						});
 						return;
@@ -647,6 +685,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					await deps.publishEvent?.(workspaceId, {
 						type: "agent.card.done",
 						columnSlug: column.columnSlug,
+						boardId,
 					});
 
 					const outputKey = slugToOutputKey.get(column.columnSlug);
@@ -656,6 +695,24 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					previousOutput = result.output;
 				} catch (err) {
 					clearInterval(batchInterval);
+					if (thinkingBuffer) {
+						await deps.publishEvent?.(workspaceId, {
+							type: "agent.card.thinking",
+							columnSlug: column.columnSlug,
+							boardId,
+							token: thinkingBuffer,
+						});
+						thinkingBuffer = "";
+					}
+					if (tokenBuffer) {
+						await deps.publishEvent?.(workspaceId, {
+							type: "agent.card.token",
+							columnSlug: column.columnSlug,
+							boardId,
+							token: tokenBuffer,
+						});
+						tokenBuffer = "";
+					}
 					const reason = String(err);
 					console.error(
 						`[runPipeline] card ${column.columnSlug} threw — ${reason}`,
@@ -670,6 +727,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					await deps.publishEvent?.(workspaceId, {
 						type: "agent.card.failed",
 						columnSlug: column.columnSlug,
+						boardId,
 						reason,
 					});
 					return;
