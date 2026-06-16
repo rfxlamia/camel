@@ -530,3 +530,203 @@ describe("executeCard tool loop", () => {
 		expect(execute).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("executeCard extended thinking + live streaming", () => {
+	beforeEach(() => {
+		mockStream.mockReset();
+	});
+
+	it("requests thinking enabled with budget_tokens=8192 and max_tokens=24576 (single-shot)", async () => {
+		mockStream.mockReturnValueOnce({
+			[Symbol.asyncIterator]: async function* () {
+				yield {
+					type: "content_block_delta",
+					delta: { type: "text_delta", text: "out" },
+				};
+			},
+			finalMessage: vi.fn().mockResolvedValue({
+				stop_reason: "end_turn",
+				content: [{ type: "text", text: "out" }],
+			}),
+		});
+
+		const { executeCard } = await import("./llm.js");
+		await executeCard("prompt", "intent", [], false, vi.fn());
+
+		const args = mockStream.mock.calls[0][0];
+		expect(args.max_tokens).toBe(24576);
+		expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
+	});
+
+	it("requests thinking enabled + max_tokens=24576 on the tools path too", async () => {
+		mockStream.mockReturnValueOnce(
+			makeTurn({ text: "Final.", stopReason: "end_turn" }),
+		);
+		const { executeCard } = await import("./llm.js");
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(vi.fn(async () => ({ ok: true, content: "hit" })))],
+			3,
+			vi.fn(),
+		);
+
+		const args = mockStream.mock.calls[0][0];
+		expect(args.max_tokens).toBe(24576);
+		expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
+	});
+
+	it("calls onThinking with thinking_delta text while streaming", async () => {
+		mockStream.mockReturnValueOnce({
+			[Symbol.asyncIterator]: async function* () {
+				yield {
+					type: "content_block_delta",
+					delta: { type: "thinking_delta", thinking: "step 1" },
+				};
+				yield {
+					type: "content_block_delta",
+					delta: { type: "thinking_delta", thinking: " step 2" },
+				};
+				yield {
+					type: "content_block_delta",
+					delta: { type: "text_delta", text: "answer" },
+				};
+			},
+			finalMessage: vi.fn().mockResolvedValue({
+				stop_reason: "end_turn",
+				content: [{ type: "text", text: "answer" }],
+			}),
+		});
+
+		const { executeCard } = await import("./llm.js");
+		const onThinking = vi.fn();
+		// onThinking is the LAST positional arg (after onToolEvent).
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[],
+			3,
+			undefined,
+			onThinking,
+		);
+
+		expect(onThinking).toHaveBeenCalledWith("step 1");
+		expect(onThinking).toHaveBeenCalledWith(" step 2");
+	});
+
+	it("streams tool-path text live via onToken DURING the turn, not only at the end", async () => {
+		// First turn: model emits text + a tool_use; that text must be streamed
+		// live via onToken (the delta), not buffered until the final turn.
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					text: "searching now",
+					stopReason: "tool_use",
+					toolUse: { id: "tu_1", name: "web_search", input: { query: "x" } },
+				}),
+			)
+			.mockReturnValueOnce(
+				makeTurn({ text: "Final answer.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({ ok: true, content: "hit" }));
+		const onToken = vi.fn();
+		const { executeCard } = await import("./llm.js");
+
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			onToken,
+			[mockTool(execute)],
+			3,
+			vi.fn(),
+		);
+
+		// The first (tool_use) turn's text reached onToken live, not just the final turn.
+		expect(onToken).toHaveBeenCalledWith("searching now");
+		expect(onToken).toHaveBeenCalledWith("Final answer.");
+	});
+
+	it("passes the signed thinking block back unstripped on the next tool-loop turn (regression)", async () => {
+		// Turn 1 finalMessage carries a thinking block + a tool_use; the assistant
+		// message pushed for turn 2 must include that thinking block verbatim.
+		const turn1Content = [
+			{ type: "thinking", thinking: "signed reasoning", signature: "sig" },
+			{ type: "text", text: "calling tool" },
+			{ type: "tool_use", id: "tu_1", name: "web_search", input: { query: "x" } },
+		];
+		mockStream
+			.mockReturnValueOnce({
+				[Symbol.asyncIterator]: async function* () {
+					yield {
+						type: "content_block_delta",
+						delta: { type: "text_delta", text: "calling tool" },
+					};
+				},
+				finalMessage: vi
+					.fn()
+					.mockResolvedValue({ stop_reason: "tool_use", content: turn1Content }),
+			})
+			.mockReturnValueOnce(
+				makeTurn({ text: "Done.", stopReason: "end_turn" }),
+			);
+
+		const execute = vi.fn(async () => ({ ok: true, content: "hit" }));
+		const { executeCard } = await import("./llm.js");
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[mockTool(execute)],
+			3,
+			vi.fn(),
+		);
+
+		// The SECOND stream call's messages must contain an assistant turn whose
+		// content still includes the signed thinking block (not stripped).
+		const secondCallMessages = mockStream.mock.calls[1][0].messages as Array<{
+			role: string;
+			content: unknown;
+		}>;
+		const assistantTurn = secondCallMessages.find(
+			(m) => m.role === "assistant",
+		);
+		expect(assistantTurn?.content).toEqual(turn1Content);
+		expect(
+			(assistantTurn?.content as Array<{ type: string }>).some(
+				(b) => b.type === "thinking",
+			),
+		).toBe(true);
+	});
+
+	it("does not truncate the happy-path output (stop_reason !== max_tokens)", async () => {
+		mockStream.mockReturnValueOnce({
+			[Symbol.asyncIterator]: async function* () {
+				yield {
+					type: "content_block_delta",
+					delta: { type: "text_delta", text: "a long report" },
+				};
+			},
+			finalMessage: vi.fn().mockResolvedValue({
+				stop_reason: "end_turn",
+				content: [{ type: "text", text: "a long report" }],
+			}),
+		});
+
+		const { executeCard } = await import("./llm.js");
+		const result = await executeCard("prompt", "intent", [], false, vi.fn());
+		// Budget asserts output headroom is preserved (OUTPUT_BUDGET=16384).
+		expect(mockStream.mock.calls[0][0].max_tokens).toBe(24576);
+		expect(result.output).toBe("a long report");
+	});
+});

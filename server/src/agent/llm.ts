@@ -25,6 +25,16 @@ import type { Tool, ToolEvent } from "./tools/types.js";
 const NATIVE = process.env.ANTHROPIC_BASE_URL ? false : true;
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
 
+// Token budgets for extended thinking (per live-thinking.md + commit f24f292).
+// OUTPUT_BUDGET preserved as headroom for report text; native Anthropic counts
+// thinking inside max_tokens, so we add THINKING_BUDGET to MAX_TOKENS.
+// Always send enabled+budget (MiMo accepts, native requires); never set
+// temperature when thinking is on. Design: enabled for ALL columns (ignore
+// _reasoning flag).
+export const OUTPUT_BUDGET = 16384;
+export const THINKING_BUDGET = 8192;
+export const MAX_TOKENS = OUTPUT_BUDGET + THINKING_BUDGET; // 24576
+
 let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
@@ -260,14 +270,16 @@ export async function executeCard(
 	systemPrompt: string,
 	intent: string,
 	previousOutputs: string[],
-	// `reasoning` is intentionally unused in Phase 1: extended-thinking /
-	// cache_control gating is deferred to a later phase. Kept in the signature
-	// so callers can pass it without a future breaking change.
+	// `reasoning` flag is ignored: per spec, extended thinking is enabled for
+	// ALL columns (design decision). Kept for caller compat.
 	_reasoning: boolean,
 	onToken: (token: string) => void,
 	tools: Tool[] = [],
 	toolBudget = 3,
 	onToolEvent?: (e: ToolEvent) => void,
+	// onThinking receives live thinking_delta text on both single-shot and
+	// tools paths. Optional for backward compat with existing callers.
+	onThinking?: (text: string) => void,
 ): Promise<ExecuteResult> {
 	const client = getClient();
 
@@ -287,7 +299,7 @@ export async function executeCard(
 
 	// Empty tools → legacy single-shot path (no tools param)
 	if (tools.length === 0) {
-		return executeCardSingleShot(client, rendered, userContent, onToken);
+		return executeCardSingleShot(client, rendered, userContent, onToken, onThinking);
 	}
 
 	return executeCardWithTools(
@@ -298,6 +310,7 @@ export async function executeCard(
 		toolBudget,
 		onToken,
 		onToolEvent,
+		onThinking,
 	);
 }
 
@@ -306,14 +319,15 @@ async function executeCardSingleShot(
 	system: string,
 	userContent: string,
 	onToken: (token: string) => void,
+	onThinking?: (text: string) => void,
 ): Promise<ExecuteResult> {
 	const stream = client.messages.stream({
 		model: MODEL,
-		// Reasoning models spend tokens on a thinking block before the report.
-		// 4096 truncated long reports mid-sentence (stop_reason=max_tokens).
-		// Streaming bypasses the SDK's non-streaming 10-min guard, so a generous
-		// cap is safe — max_tokens is a ceiling, billed only on tokens generated.
-		max_tokens: 16384,
+		// Extended thinking enabled for every card (design: all columns).
+		// MAX_TOKENS = OUTPUT_BUDGET + THINKING_BUDGET keeps output headroom
+		// >=16384 so stop_reason !== max_tokens on long reports (anti-truncation).
+		max_tokens: MAX_TOKENS,
+		thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
 		system,
 		messages: [{ role: "user", content: userContent }],
 	});
@@ -329,6 +343,12 @@ async function executeCardSingleShot(
 			const text = event.delta.text;
 			output += text;
 			onToken(text);
+		}
+		if (
+			event.type === "content_block_delta" &&
+			event.delta.type === "thinking_delta"
+		) {
+			onThinking?.(event.delta.thinking);
 		}
 	}
 
@@ -353,6 +373,7 @@ async function executeCardWithTools(
 	toolBudget: number,
 	onToken: (token: string) => void,
 	onToolEvent?: (e: ToolEvent) => void,
+	onThinking?: (text: string) => void,
 ): Promise<ExecuteResult> {
 	const toolsByName = new Map(tools.map((t) => [t.name, t]));
 	const messages: AnthropicMessage[] = [{ role: "user", content: userContent }];
@@ -366,9 +387,9 @@ async function executeCardWithTools(
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const stream = client.messages.stream({
 			model: MODEL,
-			// See executeCardSingleShot: 4096 truncated long reports. Generous cap
-			// is safe under streaming and billed only on tokens generated.
-			max_tokens: 16384,
+			// Extended thinking + budgeted max for tool path too (same math as single-shot).
+			max_tokens: MAX_TOKENS,
+			thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
 			system,
 			messages,
 			tools: toAnthropicToolDefs(tools),
@@ -383,6 +404,13 @@ async function executeCardWithTools(
 				event.delta.type === "text_delta"
 			) {
 				turnText += event.delta.text;
+				onToken(event.delta.text); // live during the turn (incl. pre-tool text), not buffered to final only
+			}
+			if (
+				event.type === "content_block_delta" &&
+				event.delta.type === "thinking_delta"
+			) {
+				onThinking?.(event.delta.thinking);
 			}
 		}
 
@@ -495,11 +523,9 @@ async function executeCardWithTools(
 			continue;
 		}
 
-		// Final turn — stream buffered text via onToken
-		if (turnText) {
-			onToken(turnText);
-		}
-
+		// Note: text deltas (incl final turn) are streamed live via onToken above;
+		// no re-emit of full turnText here (would duplicate). Passback of assistant
+		// content below is kept RAW so signed thinking blocks survive tool-loop turns.
 		return { output: turnText, thinking };
 	}
 
