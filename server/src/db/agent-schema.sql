@@ -56,3 +56,15 @@ CREATE INDEX IF NOT EXISTS idx_agent_boards_workspace ON agent_boards(workspace_
 CREATE INDEX IF NOT EXISTS idx_agent_conversations_board ON agent_conversations(board_id);
 CREATE INDEX IF NOT EXISTS idx_columns_board ON columns(board_id);
 CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_board ON agent_tool_calls(board_id);
+
+CREATE TABLE IF NOT EXISTS agent_artifacts (
+  id           SERIAL PRIMARY KEY,
+  board_id     INTEGER NOT NULL REFERENCES agent_boards(id) ON DELETE CASCADE,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  filename     TEXT NOT NULL,
+  format       TEXT NOT NULL DEFAULT 'md' CHECK (format IN ('md')),
+  content      TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (board_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_artifacts_board ON agent_artifacts(board_id);
