@@ -204,6 +204,12 @@ export interface AgentCardOutput {
 	thinking?: string;
 }
 
+export interface AgentArtifact {
+	filename: string;
+	format: "md";
+	content: string;
+}
+
 export interface AgentEvent {
 	type:
 		| "agent.board.generating"
@@ -216,7 +222,8 @@ export interface AgentEvent {
 		| "agent.card.thinking"
 		| "agent.tool.started"
 		| "agent.tool.result"
-		| "agent.tool.failed";
+		| "agent.tool.failed"
+		| "agent.artifact.ready";
 	columnSlug?: string;
 	token?: string;
 	boardId?: number;

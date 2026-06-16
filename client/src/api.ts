@@ -1,5 +1,6 @@
 import type {
 	ActivityEvent,
+	AgentArtifact,
 	AgentBoard,
 	AgentCardOutput,
 	Board,
@@ -262,6 +263,12 @@ export const api = {
 		request<AgentCardOutput>(
 			`/workspaces/${workspaceId}/agent/boards/${boardId}/outputs/${columnSlug}`,
 		),
+	getAgentArtifact: (workspaceId: number, boardId: number) =>
+		request<AgentArtifact>(
+			`/workspaces/${workspaceId}/agent/boards/${boardId}/artifact`,
+		),
+	agentArtifactDownloadUrl: (workspaceId: number, boardId: number) =>
+		`/api/workspaces/${workspaceId}/agent/boards/${boardId}/artifact/download`,
 };
 
 export { ApiError };
