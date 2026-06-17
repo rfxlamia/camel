@@ -104,3 +104,11 @@ Load `docs/pocket/rule/creative-brief.md` before making UI/design decisions. It 
 ## Other subprojects
 
 `camel-lottie/` — standalone Lottie animation player (Vite + CanvasKit/Skia). Has its own `package.json`, excluded from monorepo lint. See its `README.md` for details.
+
+## Pocket Enterprise
+
+```
+enterprise: true
+branch_strategy: branch
+create_pr: true
+```
