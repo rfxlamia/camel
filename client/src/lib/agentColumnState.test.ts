@@ -76,3 +76,63 @@ describe("deriveColumnState", () => {
 		).toBe("failed");
 	});
 });
+
+describe("deriveColumnState __notfirst__ filtering", () => {
+	it("ignores events with columnSlug __notfirst__ when deriving state for a regular column", () => {
+		const events: AgentEvent[] = [
+			{
+				type: "agent.card.started",
+				columnSlug: "research-specialist",
+				boardId: BOARD,
+			} as AgentEvent,
+			{
+				type: "agent.card.token",
+				columnSlug: "__notfirst__",
+				boardId: BOARD,
+				token: "follow-up text",
+			} as AgentEvent,
+			{
+				type: "agent.card.done",
+				columnSlug: "research-specialist",
+				boardId: BOARD,
+			} as AgentEvent,
+		];
+		expect(
+			deriveColumnState(events, BOARD, "research-specialist", "running"),
+		).toBe("done");
+	});
+
+	it("does not affect pending column state when only __notfirst__ events exist", () => {
+		const events: AgentEvent[] = [
+			{
+				type: "agent.card.token",
+				columnSlug: "__notfirst__",
+				boardId: BOARD,
+				token: "follow-up response",
+			} as AgentEvent,
+			{
+				type: "agent.card.done",
+				columnSlug: "__notfirst__",
+				boardId: BOARD,
+			} as AgentEvent,
+		];
+		expect(deriveColumnState(events, BOARD, SLUG, "running")).toBe("pending");
+	});
+
+	it("treats __notfirst__ events as invisible to column state derivation", () => {
+		const events: AgentEvent[] = [
+			{
+				type: "agent.card.started",
+				columnSlug: "__notfirst__",
+				boardId: BOARD,
+			} as AgentEvent,
+			{
+				type: "agent.card.token",
+				columnSlug: "__notfirst__",
+				boardId: BOARD,
+				token: "streaming...",
+			} as AgentEvent,
+		];
+		expect(deriveColumnState(events, BOARD, SLUG, "running")).toBe("pending");
+	});
+});

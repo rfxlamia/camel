@@ -12,7 +12,10 @@ export function deriveColumnState(
 	// Precedence: failed > done (live) > active > done (persisted) > pending.
 	// Never blanket based on board.executionStatus==="done" (EC4).
 	const scoped = agentEvents.filter(
-		(e) => e.boardId === boardId && e.columnSlug === slug,
+		(e) =>
+			e.boardId === boardId &&
+			e.columnSlug === slug &&
+			e.columnSlug !== "__notfirst__",
 	);
 	const hasFailed = scoped.some((e) => e.type === "agent.card.failed");
 	if (hasFailed) return "failed";

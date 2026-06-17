@@ -240,12 +240,17 @@ export const api = {
 	sendAgentBoardMessage: (
 		workspaceId: number,
 		boardId: number,
-		message: string,
-	) =>
-		request<{ explanation: string; boardUpdated: boolean }>(
+		payload: string | { action: "confirm_regenerate" | "cancel_regenerate" },
+	) => {
+		const body =
+			typeof payload === "string"
+				? { message: payload }
+				: { action: payload.action };
+		return request<{ explanation: string; boardUpdated: boolean }>(
 			`/workspaces/${workspaceId}/agent/boards/${boardId}/message`,
-			{ method: "POST", body: JSON.stringify({ message }) },
-		),
+			{ method: "POST", body: JSON.stringify(body) },
+		);
+	},
 	approveAgentBoard: (workspaceId: number, boardId: number) =>
 		request<void>(
 			`/workspaces/${workspaceId}/agent/boards/${boardId}/approve`,

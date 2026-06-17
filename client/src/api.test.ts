@@ -435,3 +435,75 @@ describe("Agent API methods", () => {
 		);
 	});
 });
+
+describe("sendAgentBoardMessage structured payloads", () => {
+	it("sends { message: string } body when called with a string argument", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve({ explanation: "Got it", boardUpdated: false }),
+		});
+		const { api } = await import("./api");
+
+		await api.sendAgentBoardMessage(7, 1, "What about subsidies?");
+
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ message: "What about subsidies?" });
+	});
+
+	it("sends { action: 'confirm_regenerate' } body when called with structured payload", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve({ explanation: "Regenerating...", boardUpdated: true }),
+		});
+		const { api } = await import("./api");
+
+		await api.sendAgentBoardMessage(7, 1, { action: "confirm_regenerate" });
+
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ action: "confirm_regenerate" });
+	});
+
+	it("sends { action: 'cancel_regenerate' } body when called with structured payload", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve({ explanation: "Cancelled.", boardUpdated: false }),
+		});
+		const { api } = await import("./api");
+
+		await api.sendAgentBoardMessage(7, 1, { action: "cancel_regenerate" });
+
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ action: "cancel_regenerate" });
+	});
+
+	it("preserves the POST method and correct URL for all payload types", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ explanation: "ok", boardUpdated: false }),
+		});
+		const { api } = await import("./api");
+
+		await api.sendAgentBoardMessage(7, 1, "hello");
+		await api.sendAgentBoardMessage(7, 1, { action: "confirm_regenerate" });
+
+		expect(mockFetch.mock.calls[0][0]).toBe(
+			"/api/workspaces/7/agent/boards/1/message",
+		);
+		expect(mockFetch.mock.calls[0][1]).toMatchObject({ method: "POST" });
+		expect(mockFetch.mock.calls[1][0]).toBe(
+			"/api/workspaces/7/agent/boards/1/message",
+		);
+		expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: "POST" });
+	});
+});
