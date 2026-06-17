@@ -10,9 +10,9 @@
 ## Test-Architect Summary
 
 - **Tasks enriched:** 5
-- **Integration test tasks added:** 2
-  - T6: Follow-up message integration (T1 + T2) — sendMessage on done board calls classifyFollowUpIntent end-to-end
-  - T7: Regenerate confirmation integration (T2 + T3) — route → service → DB mutations end-to-end
+- **Integration test tasks added:** 2 (both are **service-level** integration in `service.test.ts` — they exercise `sendMessage`/`confirmRegenerateBoard` with mocked deps; they do NOT cross the Express route layer. Route payload-branching is covered separately by `resolveMessageAction` unit tests in T3.)
+  - T6: Follow-up message flow (T2 over T1's `classifyFollowUpIntent` dep) — all 4 intents through `sendMessage`. NOTE: overlaps T2's own unit tests; kept as a consolidated all-intents pass, not a new layer.
+  - T7: Regenerate confirmation flow (T2) — `sendMessage(NEW_DIRECTION)` → `confirmRegenerateBoard` → DB mutations + fire-and-forget pipeline re-run (asserts `getColumns`/`executeCard` ran); plus cancel-without-mutation and history-preservation.
 - **TDD order corrections made:** 0 (all tasks already had correct TDD order)
 - **Test framework used:** Vitest
 - **Coverage areas:**
@@ -327,8 +327,8 @@ Steps:
    - System prompt: the full scope guard prompt from spec (role, intent_classification, scope_guard_rules, response_guidelines) + Few-Shot examples
    - User message context: inject originalIntent + artifactContent + conversationHistory + userMessage into a structured prompt
    - LLM call: `client.messages.create()` with `max_tokens: 2048`, `temperature: 0`
-   - JSON parsing: reuse the multi-strategy parsing pattern from `classifyIntentOnce` (direct parse → code block extraction → greedy match → field extraction)
-   - Retry: up to 3 attempts (same pattern as classifyIntent)
+   - JSON parsing: reuse the multi-strategy parsing **strategies** from `classifyIntentOnce` (direct parse → code block extraction → greedy match → field extraction)
+   - Retry — NOTE: the retry *decision* differs from `classifyIntent`. `classifyIntent` short-circuits on a semantic null (null templateId + non-empty explanation → do NOT retry). `classifyFollowUpIntent` has no such semantic null: retry **only on parse failure**, up to 3 attempts, then return a fixed `OFF_TOPIC` fallback (`{ intent: "OFF_TOPIC", response: "<message could not be processed>", confidence: ... }`). Reuse the parse strategies, NOT the short-circuit branch.
 
 4. Run tests — verify PASS:
    `npx vitest run server/src/agent/llm.test.ts`
@@ -756,6 +756,53 @@ Steps:
        );
        expect(confirmCall).toBeDefined();
      });
+
+     it("rejects with 404 and performs no mutation when board is in a different workspace", async () => {
+       const updateBoard = vi.fn(async () => {});
+       const deleteOutputsForBoard = vi.fn(async () => {});
+       const deleteCardsForBoard = vi.fn(async () => {});
+       const service = createAgentBoardService({
+         // Board belongs to workspace 1, caller claims workspace 999
+         getBoard: vi.fn(async () => ({
+           id: 1,
+           status: "approved",
+           executionStatus: "done",
+           workspaceId: 1,
+           userId: 1,
+           originalIntent: "old",
+         })),
+         updateBoard,
+         deleteOutputsForBoard,
+         deleteCardsForBoard,
+         insertConversation: vi.fn(async () => {}),
+         publishEvent: vi.fn(async () => {}),
+         getArtifact: vi.fn(async () => null),
+         getConversationHistory: vi.fn(async () => []),
+         classifyFollowUpIntent: vi.fn(async () => ({
+           intent: "NEW_DIRECTION" as const,
+           response: "Regenerating...",
+           confidence: 0.9,
+         })),
+       });
+
+       // Establish pending state via the legitimate owner first
+       await service.sendMessage({
+         boardId: 1,
+         userId: 1,
+         workspaceId: 1,
+         message: "Research scooters",
+       });
+
+       const result = await service.confirmRegenerateBoard({
+         boardId: 1,
+         workspaceId: 999,
+       });
+
+       expect(result).toMatchObject({ status: 404 });
+       expect(updateBoard).not.toHaveBeenCalled();
+       expect(deleteOutputsForBoard).not.toHaveBeenCalled();
+       expect(deleteCardsForBoard).not.toHaveBeenCalled();
+     });
    });
 
    describe("cancelRegenerateBoard", () => {
@@ -794,7 +841,7 @@ Steps:
        });
 
        // Cancel
-       await service.cancelRegenerateBoard({ boardId: 1 });
+       await service.cancelRegenerateBoard({ boardId: 1, workspaceId: 1 });
 
        // Cancellation message stored
        const calls = insertConversation.mock.calls;
@@ -836,7 +883,7 @@ Steps:
          workspaceId: 1,
          message: "Research scooters",
        });
-       await service.cancelRegenerateBoard({ boardId: 1 });
+       await service.cancelRegenerateBoard({ boardId: 1, workspaceId: 1 });
 
        expect(updateBoard).not.toHaveBeenCalled();
        expect(deleteOutputsForBoard).not.toHaveBeenCalled();
@@ -852,27 +899,29 @@ Steps:
    File: `server/src/agent/service.ts`
    Implement:
    - Add to AgentBoardServiceDeps: `classifyFollowUpIntent?: (originalIntent: string, artifactContent: string | null, conversationHistory: Array<{ role: string; content: string }>, userMessage: string) => Promise<FollowUpResult>`, `getConversationHistory?: (boardId: number) => Promise<Array<{ role: string; content: string }>>`, `deleteOutputsForBoard?: (boardId: number) => Promise<void>`, `deleteCardsForBoard?: (boardId: number) => Promise<void>`
-   - Add `pendingRegenerate` Map field to service (in-memory: `Map<number, string>` — boardId → new intent)
-   - Upgrade sendMessage:
-     - If board.executionStatus === "running" → return static "Board sedang dalam eksekusi" message
+   - Add `pendingRegenerate` Map field to service (in-memory: `Map<number, string>` — boardId → new intent, where **new intent = the raw user `message`** that triggered NEW_DIRECTION; `FollowUpResult` carries no extracted topic)
+   - Upgrade sendMessage (keep the existing 404/403 ownership guards + the existing user-message store at the top of the method — store happens BEFORE any status branch, so a "running" board still records the message per spec Rule 1):
+     - If board.executionStatus === "running" → return static "Board sedang dalam eksekusi. Tunggu hingga selesai." message (user message already stored above; no LLM call)
      - If board.status === "approved" && board.executionStatus === "done":
        - Load artifact via deps.getArtifact(boardId)
        - Load conversation history via deps.getConversationHistory(boardId)
        - Call deps.classifyFollowUpIntent(board.originalIntent, artifact?.content ?? null, history, message)
        - Switch on result.intent:
-         - ASK / REFINE: stream response via publishEvent with columnSlug "__notfirst__", store in agent_conversations
-         - NEW_DIRECTION: set pendingRegenerate.set(boardId, newIntent), return confirmation response with button metadata
-         - OFF_TOPIC: return static rejection response, store in agent_conversations
+         - ASK / REFINE: emit the response via publishEvent with columnSlug "__notfirst__", then store in agent_conversations. NOTE — this is **synthetic streaming**: `classifyFollowUpIntent` is a single non-streaming call returning the complete `result.response`, so emit the already-complete text as one (or chunked) `agent.card.token` event(s); there is no live LLM token stream here (unlike executeCard).
+         - NEW_DIRECTION: `pendingRegenerate.set(boardId, message)`, store the confirmation response in agent_conversations, return confirmation response with `pendingRegenerate: true` (button metadata). Do NOT stream.
+         - OFF_TOPIC: return static rejection response, store in agent_conversations. Do NOT stream.
      - If board.status === "pending": existing behavior (generateClarificationQuestion)
    - Add `confirmRegenerateBoard({ boardId, workspaceId })`:
-     - Check pendingRegenerate has this boardId
+     - **Ownership guard (security invariant — match getCardOutput/sendMessage):** load board via deps.getBoard(boardId); if `!board || board.workspaceId !== workspaceId` return `{ status: 404 }`. Do this BEFORE any mutation.
+     - Check pendingRegenerate has this boardId (if not → no-op / return)
      - Store confirmation response in agent_conversations
-     - Update board.original_intent via deps.updateBoard
+     - Update board.original_intent via deps.updateBoard(boardId, { original_intent: <pending value> })
      - Delete old agent_card_outputs via deps.deleteOutputsForBoard
      - Delete old cards via deps.deleteCardsForBoard
      - Clear pendingRegenerate.delete(boardId)
-     - Call this.runPipeline({ boardId, workspaceId })
-   - Add `cancelRegenerateBoard({ boardId })`:
+     - Fire `this.runPipeline({ boardId, workspaceId })` **non-awaited** with `.catch(...)` (fire-and-forget inside the service, mirroring the approve route's fire-and-forget). The method returns promptly so the request does not block on a multi-minute pipeline; the client tracks progress via SSE.
+   - Add `cancelRegenerateBoard({ boardId, workspaceId })`:
+     - **Ownership guard:** load board; if `!board || board.workspaceId !== workspaceId` return `{ status: 404 }`.
      - Store cancellation message in agent_conversations
      - Clear pendingRegenerate.delete(boardId)
      - Return { ok: true }
@@ -933,6 +982,9 @@ Must-have:
 - OFF_TOPIC returns static rejection without streaming
 - NEW_DIRECTION stores pending state and returns confirmation response
 - confirmRegenerateBoard deletes old outputs + cards and re-runs pipeline
+- confirmRegenerateBoard AND cancelRegenerateBoard validate `board.workspaceId === workspaceId` before any mutation (return 404 on mismatch) — matches the ownership guard on every other service method
+- runPipeline is fired non-awaited (`.catch`) from confirmRegenerateBoard so the request returns promptly (mirrors approve route)
+- User message is stored even for a "running" board (store happens before the status branch)
 - cancelRegenerateBoard clears pending state
 - Conversation history preserved across regenerations
 - Tests written BEFORE implementation (TDD — not after)
@@ -976,112 +1028,120 @@ Files:
 
 Steps:
 
-1. Write failing tests for: message endpoint accepts structured payloads and routes to correct service method
+1. Write failing tests for: payload-detection decision + new realDeps SQL wiring
    File: `server/src/agent/routes.test.ts`
+
+   The Express handler is wired inside `createAgentRouter` and there is **no existing precedent (nor supertest dependency) for testing a mounted route** — `routes.test.ts` tests *exported pure helpers* (`getToolTrace`, `runInsertColumns`, `defaultToolRegistry`). Match that convention: extract the payload→action decision into an **exported pure function** `resolveMessageAction(body)` and test it directly, and export the new DB-backed dep functions so their SQL can be verified with a `fakeDb` exactly like `getToolTrace`.
+
+   > **Honest scope:** these tests cover (a) the branch *decision* and (b) the SQL *shape* — they do NOT cover the full Express request→service→response wiring (the handler reads params, calls `requireWorkspaceMember`, then delegates to `resolveMessageAction`'s result). That last hop is thin glue and is left to manual verification; the tests must not overclaim otherwise.
+
    Test verifies:
-   - Given a POST to message endpoint with `{ action: "confirm_regenerate" }`, When processed, Then service.confirmRegenerateBoard is called with boardId and workspaceId
-   - Given a POST to message endpoint with `{ action: "cancel_regenerate" }`, When processed, Then service.cancelRegenerateBoard is called with boardId
-   - Given a POST to message endpoint with `{ message: "some text" }`, When processed, Then existing sendMessage flow is used (backward compatible)
-   - Given a POST to message endpoint with empty body, When processed, Then returns 400 error
-   - Given new deps (getConversationHistory, deleteOutputsForBoard, deleteCardsForBoard), When realDeps is constructed, Then all deps are wired to pool.query
+   - `resolveMessageAction({ message: "text" })` → `{ kind: "send", message: "text" }` (trimmed, backward compatible)
+   - `resolveMessageAction({ action: "confirm_regenerate" })` → `{ kind: "confirm" }`
+   - `resolveMessageAction({ action: "cancel_regenerate" })` → `{ kind: "cancel" }`
+   - `resolveMessageAction({})` / `undefined` / `{ message: "   " }` / `{ action: "bogus" }` → `{ kind: "invalid" }`
+   - `selectConversationHistory(fakeDb, boardId)` issues a SELECT on `agent_conversations` scoped by `board_id = $1`, ordered by `created_at`, returning `{ role, content }[]`
+   - `deleteOutputsForBoard(fakeDb, boardId)` issues `DELETE FROM agent_card_outputs WHERE board_id = $1`
+   - `deleteCardsForBoard(fakeDb, boardId)` issues a DELETE on `cards` scoped via `column_id IN (SELECT id FROM columns WHERE board_id = $1)`
 
    ```typescript
    // Add to server/src/agent/routes.test.ts — after existing describe blocks
+   // Import the new exported helpers alongside the existing ones:
+   //   import { resolveMessageAction, selectConversationHistory,
+   //            deleteOutputsForBoard, deleteCardsForBoard } from "./routes.js";
 
-   describe("message endpoint structured payloads", () => {
-     it("routes { action: 'confirm_regenerate' } to service.confirmRegenerateBoard", async () => {
-       const confirmRegenerateBoard = vi.fn(async () => ({ ok: true }));
-       const sendMessage = vi.fn(async () => ({ explanation: "ok", boardUpdated: false }));
-       const getBoard = vi.fn(async () => ({
-         id: 1,
-         status: "approved",
-         executionStatus: "done",
-         workspaceId: 1,
-         userId: 1,
-         originalIntent: "riset",
-       }));
-
-       // We test the route handler logic directly by inspecting the router's
-       // message endpoint. Since createAgentRouter wires realDeps + overrides,
-       // we verify the service method is called correctly.
-       const { createAgentRouter } = await import("./routes.js");
-
-       // The route handler calls service.sendMessage or service.confirmRegenerateBoard
-       // based on req.body. We verify the service interface contract.
-       // This test ensures the handler detects action payloads.
-       // Full integration with Express req/res is tested via the service mock.
-       expect(confirmRegenerateBoard).toBeDefined();
-       expect(sendMessage).toBeDefined();
+   describe("resolveMessageAction (pure payload detection)", () => {
+     it("maps a string message to a trimmed send action", () => {
+       expect(resolveMessageAction({ message: "  hello  " })).toEqual({
+         kind: "send",
+         message: "hello",
+       });
      });
 
-     it("routes { action: 'cancel_regenerate' } to service.cancelRegenerateBoard", async () => {
-       const cancelRegenerateBoard = vi.fn(async () => ({ ok: true }));
-       expect(cancelRegenerateBoard).toBeDefined();
+     it("maps confirm_regenerate action", () => {
+       expect(resolveMessageAction({ action: "confirm_regenerate" })).toEqual({
+         kind: "confirm",
+       });
      });
 
-     it("routes { message: 'text' } to existing sendMessage (backward compatible)", async () => {
-       // Existing sendMessage signature is preserved
-       const sendMessage = vi.fn(async () => ({
-         explanation: "clarification question",
-         boardUpdated: false,
-       }));
-       expect(sendMessage).toBeDefined();
+     it("maps cancel_regenerate action", () => {
+       expect(resolveMessageAction({ action: "cancel_regenerate" })).toEqual({
+         kind: "cancel",
+       });
      });
 
-     it("returns 400 for empty body (no message, no action)", async () => {
-       // Empty body should be rejected
-       const emptyBody = {};
-       const hasMessage = typeof (emptyBody as any).message === "string";
-       const hasAction = typeof (emptyBody as any).action === "string";
-       expect(hasMessage || hasAction).toBe(false);
+     it("rejects empty / whitespace / unknown-action / missing bodies as invalid", () => {
+       expect(resolveMessageAction({})).toEqual({ kind: "invalid" });
+       expect(resolveMessageAction(undefined)).toEqual({ kind: "invalid" });
+       expect(resolveMessageAction({ message: "   " })).toEqual({ kind: "invalid" });
+       expect(resolveMessageAction({ action: "bogus" })).toEqual({ kind: "invalid" });
      });
    });
 
-   describe("realDeps wiring", () => {
-     it("wires getConversationHistory to pool.query SELECT", async () => {
-       // realDeps.getConversationHistory should query agent_conversations
-       // This test documents the expected SQL pattern
-       const expectedSql = /SELECT.*role.*content.*FROM agent_conversations.*WHERE board_id/i;
-       expect(expectedSql).toBeDefined();
+   describe("realDeps SQL wiring (fakeDb)", () => {
+     it("selectConversationHistory queries agent_conversations scoped + ordered", async () => {
+       const rows = [
+         { role: "user", content: "What about subsidies?" },
+         { role: "assistant", content: "Subsidies are..." },
+       ];
+       const fakeDb = { query: vi.fn(async () => ({ rows })) };
+
+       const history = await selectConversationHistory(fakeDb as any, 42);
+
+       expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+       const sql = fakeDb.query.mock.calls[0][0] as string;
+       expect(sql).toMatch(/from\s+agent_conversations/i);
+       expect(sql).toMatch(/board_id\s*=\s*\$1/i);
+       expect(sql).toMatch(/order by\s+created_at/i);
+       expect(history).toEqual([
+         { role: "user", content: "What about subsidies?" },
+         { role: "assistant", content: "Subsidies are..." },
+       ]);
      });
 
-     it("wires deleteOutputsForBoard to pool.query DELETE", async () => {
-       const expectedSql = /DELETE FROM agent_card_outputs WHERE board_id/i;
-       expect(expectedSql).toBeDefined();
+     it("deleteOutputsForBoard issues a scoped DELETE on agent_card_outputs", async () => {
+       const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
+       await deleteOutputsForBoard(fakeDb as any, 42);
+       expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+       const sql = fakeDb.query.mock.calls[0][0] as string;
+       expect(sql).toMatch(/delete from\s+agent_card_outputs/i);
+       expect(sql).toMatch(/board_id\s*=\s*\$1/i);
      });
 
-     it("wires deleteCardsForBoard to pool.query DELETE via columns subquery", async () => {
-       const expectedSql = /DELETE FROM cards WHERE column_id IN.*SELECT.*FROM columns.*WHERE board_id/i;
-       expect(expectedSql).toBeDefined();
-     });
-
-     it("wires classifyFollowUpIntent import from llm.js", async () => {
-       // The route file should import classifyFollowUpIntent from ./llm.js
-       // and wire it into realDeps
-       expect(true).toBe(true); // Structural check — actual wiring verified by integration
+     it("deleteCardsForBoard deletes cards via columns subquery", async () => {
+       const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
+       await deleteCardsForBoard(fakeDb as any, 42);
+       expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+       const sql = fakeDb.query.mock.calls[0][0] as string;
+       expect(sql).toMatch(/delete from\s+cards/i);
+       expect(sql).toMatch(/column_id\s+in\s*\(\s*select\s+id\s+from\s+columns\s+where\s+board_id\s*=\s*\$1/i);
      });
    });
    ```
 
-   > **Note to implementer:** The route tests above are lightweight structural guards. The real validation for routes comes from the integration tests (T7) which exercise the full request → service → response cycle. Route handler logic is thin — payload detection + service delegation — so the unit test focus is on ensuring the wiring contracts are documented.
-
 2. Run tests — verify FAIL:
    `npx vitest run server/src/agent/routes.test.ts`
-   Expected failure: structured payload handling does not exist yet
+   Expected failure: `resolveMessageAction`, `selectConversationHistory`, `deleteOutputsForBoard`, `deleteCardsForBoard` are not exported yet (import error / undefined)
 
 3. Implement structured payload handling in routes.ts:
    File: `server/src/agent/routes.ts`
    Implement:
-   - Update message endpoint handler to detect payload type:
-     - If `req.body.action === "confirm_regenerate"` → call service.confirmRegenerateBoard({ boardId, workspaceId })
-     - If `req.body.action === "cancel_regenerate"` → call service.cancelRegenerateBoard({ boardId })
-     - If `req.body.message` exists → existing sendMessage flow
-     - Else → return 400 error
-   - Add to realDeps:
-     - `getConversationHistory`: query `SELECT role, content FROM agent_conversations WHERE board_id = $1 ORDER BY created_at`
-     - `deleteOutputsForBoard`: query `DELETE FROM agent_card_outputs WHERE board_id = $1`
-     - `deleteCardsForBoard`: query `DELETE FROM cards WHERE column_id IN (SELECT id FROM columns WHERE board_id = $1)`
-     - `classifyFollowUpIntent`: import from `./llm.js`
+   - Export pure `resolveMessageAction(body: unknown): { kind: "send"; message: string } | { kind: "confirm" } | { kind: "cancel" } | { kind: "invalid" }`:
+     - `body.action === "confirm_regenerate"` → `{ kind: "confirm" }`
+     - `body.action === "cancel_regenerate"` → `{ kind: "cancel" }`
+     - `typeof body.message === "string"` && trimmed non-empty → `{ kind: "send", message: body.message.trim() }`
+     - everything else (no body, empty/whitespace message, unknown action) → `{ kind: "invalid" }`
+   - Update the message endpoint handler to be thin glue over `resolveMessageAction`:
+     - `confirm` → `service.confirmRegenerateBoard({ boardId, workspaceId })`
+     - `cancel` → `service.cancelRegenerateBoard({ boardId, workspaceId })`
+     - `send` → existing `service.sendMessage({ boardId, userId, workspaceId, message })` flow
+     - `invalid` → `res.status(400).json({ error: "message or action is required" })`
+     - confirm/cancel results may carry `{ status: 404 }` (ownership mismatch from the service) — forward the status like the other endpoints do
+   - Export the new DB-backed dep functions (factory style, like `getToolTrace(db, …)`) and wire them into `realDeps` using `pool`:
+     - `selectConversationHistory(db, boardId)`: `SELECT role, content FROM agent_conversations WHERE board_id = $1 ORDER BY created_at` → map rows to `{ role, content }[]`
+     - `deleteOutputsForBoard(db, boardId)`: `DELETE FROM agent_card_outputs WHERE board_id = $1`
+     - `deleteCardsForBoard(db, boardId)`: `DELETE FROM cards WHERE column_id IN (SELECT id FROM columns WHERE board_id = $1)`
+     - In `realDeps`: `getConversationHistory: (boardId) => selectConversationHistory(pool, boardId)`, `deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(pool, boardId)`, `deleteCardsForBoard: (boardId) => deleteCardsForBoard(pool, boardId)`, `classifyFollowUpIntent` imported from `./llm.js`
 
 4. Run tests — verify PASS:
    `npx vitest run server/src/agent/routes.test.ts`
@@ -1119,11 +1179,14 @@ Architecture rule: routes.ts is a thin layer — no business logic, only payload
 
 Verification — task is DONE when all pass:
 
-Given a POST to message endpoint with `{ action: "confirm_regenerate" }`, When processed, Then service.confirmRegenerateBoard is called with boardId and workspaceId
-Given a POST to message endpoint with `{ action: "cancel_regenerate" }`, When processed, Then service.cancelRegenerateBoard is called with boardId
-Given a POST to message endpoint with `{ message: "some text" }`, When processed, Then existing sendMessage flow is used (backward compatible)
-Given a POST to message endpoint with empty body, When processed, Then returns 400 error
-Given realDeps is constructed, Then getConversationHistory, deleteOutputsForBoard, deleteCardsForBoard, classifyFollowUpIntent are all wired
+Given `resolveMessageAction({ action: "confirm_regenerate" })`, Then it returns `{ kind: "confirm" }`
+Given `resolveMessageAction({ action: "cancel_regenerate" })`, Then it returns `{ kind: "cancel" }`
+Given `resolveMessageAction({ message: "  text  " })`, Then it returns `{ kind: "send", message: "text" }` (backward compatible)
+Given `resolveMessageAction` receives an empty body, whitespace-only message, missing body, or unknown action, Then it returns `{ kind: "invalid" }` (handler maps this to HTTP 400)
+Given `selectConversationHistory(fakeDb, 42)`, Then SQL targets `agent_conversations`, is scoped `board_id = $1`, ordered by `created_at`
+Given `deleteOutputsForBoard(fakeDb, 42)`, Then SQL is `DELETE FROM agent_card_outputs WHERE board_id = $1`
+Given `deleteCardsForBoard(fakeDb, 42)`, Then SQL deletes from `cards` via `column_id IN (SELECT id FROM columns WHERE board_id = $1)`
+Given the message endpoint, Then it delegates confirm→confirmRegenerateBoard / cancel→cancelRegenerateBoard / send→sendMessage and forwards a `{ status: 404 }` service result (thin glue — verified manually, not unit-tested per the honest-scope note above)
 
 All tests PASS. Commit exists with message matching `feat(agent): add structured payload handling for regenerate confirmation`.
 
@@ -1341,7 +1404,9 @@ Steps:
    });
    ```
 
-   > **Note:** Some tests above are structural/contract tests. The full rendering behavior is validated by the integration test (T7) and by the component's interaction with the mock API. The key contract is: `api.sendAgentBoardMessage` is called with structured payloads for confirm/cancel actions.
+   > **Note (mock setup — IMPORTANT):** `AgentPage.test.tsx` mocks the api via a `vi.mock("../api", …)` factory that currently exposes only `getAgentBoard` + `getAgentArtifact`. The runtime-mutation approach shown above (`(apiModule.api as any).sendAgentBoardMessage = …`) diverges from the file's pattern. Instead, **add `sendAgentBoardMessage` to the `vi.mock("../api")` factory** backed by a hoisted `vi.fn` (mirror the existing `getAgentBoard: (...a) => mockGetBoard(...a)` style), then assert on that hoisted mock. This matches the established mock convention and avoids relying on singleton mutation.
+   >
+   > Some tests above are contract-level (they document the structured-payload API shape). The confirm/cancel *button-click → api call* path is the meaningful assertion; full board re-render after regenerate is observed via SSE events in the component, not asserted here.
 
 2. Run tests — verify FAIL:
    `npx vitest run client/src/pages/AgentPage.test.tsx`
@@ -1712,7 +1777,7 @@ Escalate when: if AgentEvent type needs new fields (check with T4 first)
 
 ## OBJECTIVE
 
-Verify the end-to-end follow-up message flow from service through LLM classification to SSE streaming and conversation storage. This integration test spans T1 (classifyFollowUpIntent) + T2 (sendMessage upgrade) and validates that the mocked deps chain works correctly.
+Verify the follow-up message flow at the **service level** (mocked `classifyFollowUpIntent` dep, no Express route) from `sendMessage` through intent switch to synthetic SSE emission and conversation storage. Exercises T2's `sendMessage` over T1's contract. NOTE: this consolidates all four intents into one pass and **overlaps T2's own unit tests** — it is a coverage backstop, not a new layer. If T2's tests already cover an intent identically, this is acceptable redundancy; do not duplicate beyond the all-intents sweep.
 
 Files:
 
@@ -1992,7 +2057,7 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ## OBJECTIVE
 
-Verify the end-to-end regeneration flow: sendMessage with NEW_DIRECTION stores pending state, then confirmRegenerateBoard performs the full mutation chain (update intent → delete outputs → delete cards → re-run pipeline). Also verify cancelRegenerateBoard clears state without mutations.
+Verify the regeneration flow at the **service level** (mocked deps, no Express route): sendMessage with NEW_DIRECTION stores pending state, then confirmRegenerateBoard performs the full mutation chain (update intent → delete outputs → delete cards → fire-and-forget re-run pipeline). The re-run is asserted via `getColumns`/`executeCard` being invoked (flushed with fake timers), not just the deletes. Also verify cancelRegenerateBoard clears state without mutations. (Route delegation is covered by `resolveMessageAction` in T3.)
 
 Files:
 
@@ -2023,6 +2088,16 @@ Steps:
          userId: 1,
          originalIntent: "EV market research in Indonesia",
        }));
+       // runPipeline deps — hoisted so we can assert the pipeline re-ran
+       const getColumns = vi.fn(async () => [
+         {
+           columnId: 10,
+           columnSlug: "research-specialist",
+           systemPrompt: "Research: {original_intent}",
+           reasoning: false,
+         },
+       ]);
+       const executeCard = vi.fn(async () => ({ output: "New research output" }));
 
        const service = createAgentBoardService({
          getBoard,
@@ -2038,16 +2113,8 @@ Steps:
            response: "This is a different topic. I will regenerate the board.",
            confidence: 0.93,
          })),
-         // runPipeline deps
-         getColumns: vi.fn(async () => [
-           {
-             columnId: 10,
-             columnSlug: "research-specialist",
-             systemPrompt: "Research: {original_intent}",
-             reasoning: false,
-           },
-         ]),
-         executeCard: vi.fn(async () => ({ output: "New research output" })),
+         getColumns,
+         executeCard,
          insertOutput: vi.fn(async () => {}),
          insertCard: vi.fn(async () => {}),
        });
@@ -2076,9 +2143,11 @@ Steps:
        expect(deleteOutputsForBoard).toHaveBeenCalledWith(42);
        expect(deleteCardsForBoard).toHaveBeenCalledWith(42);
 
-       // Step 4: Pipeline re-ran (executeCard called)
-       // Note: runPipeline is fire-and-forget in routes, but in service test
-       // we can verify it was called by checking executeCard was invoked
+       // Step 4: Pipeline actually re-ran. confirmRegenerateBoard fires
+       // this.runPipeline non-awaited; vi.runAllTimersAsync() flushes it.
+       // Assert the re-execution really happened (Rule 4), not just the deletes.
+       expect(getColumns).toHaveBeenCalledWith(42);
+       expect(executeCard).toHaveBeenCalled();
        vi.useRealTimers();
      });
 
@@ -2119,7 +2188,7 @@ Steps:
        });
 
        // Cancel
-       await service.cancelRegenerateBoard({ boardId: 42 });
+       await service.cancelRegenerateBoard({ boardId: 42, workspaceId: 7 });
 
        // No mutations
        expect(updateBoard).not.toHaveBeenCalled();
