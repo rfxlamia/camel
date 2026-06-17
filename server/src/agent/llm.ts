@@ -203,6 +203,292 @@ export async function classifyIntent(intent: string): Promise<ClassifyResult> {
 }
 
 // ---------------------------------------------------------------------------
+// classifyFollowUpIntent — route follow-up messages with scope guard
+// ---------------------------------------------------------------------------
+
+export type FollowUpIntent = "ASK" | "REFINE" | "NEW_DIRECTION" | "OFF_TOPIC";
+
+export interface FollowUpResult {
+	intent: FollowUpIntent;
+	response: string;
+	confidence: number;
+}
+
+export interface ConversationMessage {
+	role: "user" | "assistant";
+	content: string;
+}
+
+const VALID_FOLLOW_UP_INTENTS = new Set<FollowUpIntent>([
+	"ASK",
+	"REFINE",
+	"NEW_DIRECTION",
+	"OFF_TOPIC",
+]);
+
+// Sandwich prompt: JSON-only constraint in FIRST line, repeated near END
+const FOLLOW_UP_SYSTEM_PROMPT = `CRITICAL: Respond with ONLY a raw JSON object {"intent":"ASK"|"REFINE"|"NEW_DIRECTION"|"OFF_TOPIC","response":"<text>","confidence":0.0-1.0}. No preamble, no markdown, no code fences.
+
+<role>
+You are a follow-up message handler for an agent board that has completed its
+research pipeline. You receive the user's new message along with full context
+(original intent, final artifact, conversation history).
+</role>
+
+<intent_classification>
+Classify the user's message into EXACTLY ONE of these types:
+
+1. ASK — User wants to understand, question, or get clarification about the
+   board's existing outputs. No modification requested.
+   Examples: "Explain the research section", "What did the analysis find?",
+   "Why was this recommendation made?"
+
+2. REFINE — User wants to modify, improve, or iterate on the existing
+   artifact or specific column outputs. The scope stays within the
+   original intent.
+   Examples: "Add more data about 2025 trends", "Make the executive
+   summary shorter", "The competitor analysis needs more depth"
+
+3. NEW_DIRECTION — User wants to pivot to a DIFFERENT topic that is outside
+   the current board's scope. This is NOT a refinement — it's a fundamentally
+   different research question.
+   Examples: "Now analyze the competitor landscape for product Y",
+   "Switch to researching market trends in Southeast Asia",
+   "Actually, I want to study supply chain instead"
+
+4. OFF_TOPIC — User's message has NO relation to research, analysis, or the
+   board's domain. Nonsense, unrelated tasks, or requests that cannot be
+   fulfilled by an agent board.
+   Examples: "Write me a Python script", "What's the weather today?",
+   "Help me move to a new apartment"
+</intent_classification>
+
+<scope_guard_rules>
+CRITICAL RULES:
+- When in doubt between ASK and REFINE → classify as ASK (safer, cheaper)
+- When in doubt between REFINE and NEW_DIRECTION → classify as REFINE
+  (keep scope narrow; user will clarify if they meant new topic)
+- OFF_TOPIC is only for clearly unrelated requests. If there's ANY plausible
+  connection to the board's domain, do NOT classify as OFF_TOPIC.
+- For NEW_DIRECTION: respond with a natural language message that informs the
+  user the board will be regenerated. Do NOT attempt to answer the new topic.
+- For OFF_TOPIC: respond politely, explain you can only help with the board's
+  topic, and suggest creating a new board.
+</scope_guard_rules>
+
+<response_guidelines>
+- Keep responses concise (2-4 sentences max)
+- Be helpful and direct
+- For ASK: answer the question using the board's outputs as context
+- For REFINE: acknowledge the request and explain what will be improved
+- For NEW_DIRECTION: confirm the new topic and state that the board will
+  be regenerated
+- For OFF_TOPIC: politely decline and redirect
+</response_guidelines>
+
+<examples>
+<example>
+  <context>Board topic: "Market research for electric vehicles in Indonesia"</context>
+  <user_message>What were the key findings about consumer preferences?</user_message>
+  <classification>ASK</classification>
+  <response>The research identified three key consumer preferences: (1) price
+  sensitivity under 300M IDR, (2) charging infrastructure availability as the
+  top concern, and (3) preference for local brands with government subsidies.
+  Would you like me to elaborate on any of these?</response>
+</example>
+
+<example>
+  <context>Board topic: "Market research for electric vehicles in Indonesia"</context>
+  <user_message>Add a section about government regulations and subsidies</user_message>
+  <classification>REFINE</classification>
+  <response>I'll update the research to include a dedicated section on
+  government regulations and subsidies for electric vehicles in Indonesia.
+  This will cover current policies, recent changes, and their impact on
+  market adoption.</response>
+</example>
+
+<example>
+  <context>Board topic: "Market research for electric vehicles in Indonesia"</context>
+  <user_message>Now research the competitor landscape for electric scooters</user_message>
+  <classification>NEW_DIRECTION</classification>
+  <response>This is a different research topic from the current board (electric
+  vehicles → electric scooters). I'll regenerate the board with this new focus.
+  The pipeline will re-run with the updated topic.</response>
+</example>
+
+<example>
+  <context>Board topic: "Market research for electric vehicles in Indonesia"</context>
+  <user_message>Write me a Python script to scrape EV prices</user_message>
+  <classification>OFF_TOPIC</classification>
+  <response>I can help with research and analysis for your board, but writing
+  code is outside my scope. If you'd like to research EV pricing data, I can
+  include that in the current board — or you can create a new board for a
+  different task.</response>
+</example>
+</examples>
+
+REMINDER: Your entire response must be valid JSON only — {"intent":"...","response":"...","confidence":0.0-1.0}. No other text.`;
+
+function buildFollowUpUserMessage(
+	originalIntent: string,
+	artifactContent: string | null,
+	conversationHistory: ConversationMessage[],
+	userMessage: string,
+): string {
+	const historyText =
+		conversationHistory.length > 0
+			? conversationHistory
+					.map((m) => `<${m.role}>${m.content}</${m.role}>`)
+					.join("\n")
+			: "(no prior messages)";
+
+	return `<board_context>
+<original_intent>${originalIntent}</original_intent>
+<artifact>${artifactContent ?? "(no artifact)"}</artifact>
+<conversation_history>
+${historyText}
+</conversation_history>
+</board_context>
+
+<user_message>${userMessage}</user_message>`;
+}
+
+function normalizeFollowUpResult(parsed: {
+	intent?: string;
+	response?: string;
+	confidence?: number;
+}): FollowUpResult | null {
+	const intent = parsed.intent;
+	if (!intent || !VALID_FOLLOW_UP_INTENTS.has(intent as FollowUpIntent)) {
+		return null;
+	}
+	const response = parsed.response ?? "";
+	if (!response) return null;
+	return {
+		intent: intent as FollowUpIntent,
+		response,
+		confidence:
+			typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+	};
+}
+
+async function classifyFollowUpIntentOnce(
+	client: Anthropic,
+	originalIntent: string,
+	artifactContent: string | null,
+	conversationHistory: ConversationMessage[],
+	userMessage: string,
+): Promise<FollowUpResult | null> {
+	const response = await client.messages.create({
+		model: MODEL,
+		max_tokens: 2048,
+		temperature: 0,
+		system: FOLLOW_UP_SYSTEM_PROMPT,
+		messages: [
+			{
+				role: "user",
+				content: buildFollowUpUserMessage(
+					originalIntent,
+					artifactContent,
+					conversationHistory,
+					userMessage,
+				),
+			},
+		],
+	});
+
+	const text = extractText(response);
+
+	try {
+		const parsed = JSON.parse(text) as FollowUpResult;
+		const result = normalizeFollowUpResult(parsed);
+		if (result) return result;
+	} catch {
+		// Strategy 2: Extract JSON from markdown code blocks
+		const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+		if (jsonMatch) {
+			try {
+				const parsed = JSON.parse(jsonMatch[1].trim()) as FollowUpResult;
+				const result = normalizeFollowUpResult(parsed);
+				if (result) return result;
+			} catch {
+				// Fall through
+			}
+		}
+
+		// Strategy 3: Greedy JSON object match
+		const jsonObjectMatch = text.match(/\{[\s\S]*\}/);
+		if (jsonObjectMatch) {
+			try {
+				const parsed = JSON.parse(jsonObjectMatch[0]) as FollowUpResult;
+				const result = normalizeFollowUpResult(parsed);
+				if (result) return result;
+			} catch {
+				// Fall through
+			}
+		}
+
+		// Strategy 4: Field extraction
+		const intentMatch = text.match(
+			/"intent"\s*:\s*"(ASK|REFINE|NEW_DIRECTION|OFF_TOPIC)"/,
+		);
+		const responseMatch = text.match(/"response"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+		const confidenceMatch = text.match(/"confidence"\s*:\s*([\d.]+)/);
+		if (intentMatch && responseMatch) {
+			const result = normalizeFollowUpResult({
+				intent: intentMatch[1],
+				response: responseMatch[1].replace(/\\"/g, '"'),
+				confidence: confidenceMatch
+					? Number.parseFloat(confidenceMatch[1])
+					: 0.5,
+			});
+			if (result) return result;
+		}
+	}
+
+	console.error("classifyFollowUpIntentOnce: failed to parse LLM response:", text);
+	return null;
+}
+
+const FOLLOW_UP_MAX_ATTEMPTS = 3;
+
+export async function classifyFollowUpIntent(
+	originalIntent: string,
+	artifactContent: string | null,
+	conversationHistory: ConversationMessage[],
+	userMessage: string,
+): Promise<FollowUpResult> {
+	const client = getClient();
+
+	for (let attempt = 1; attempt <= FOLLOW_UP_MAX_ATTEMPTS; attempt++) {
+		const result = await classifyFollowUpIntentOnce(
+			client,
+			originalIntent,
+			artifactContent,
+			conversationHistory,
+			userMessage,
+		);
+
+		if (result) return result;
+
+		if (attempt < FOLLOW_UP_MAX_ATTEMPTS) {
+			console.warn(
+				`classifyFollowUpIntent: attempt ${attempt} parse failed, retrying (${FOLLOW_UP_MAX_ATTEMPTS - attempt} left)...`,
+			);
+		}
+	}
+
+	console.error(
+		`classifyFollowUpIntent: all ${FOLLOW_UP_MAX_ATTEMPTS} attempts failed for message: "${userMessage}"`,
+	);
+	return {
+		intent: "OFF_TOPIC",
+		response: "Your message could not be processed. Please try again.",
+		confidence: 0,
+	};
+}
+
+// ---------------------------------------------------------------------------
 // generateExplanation — produce a human-readable explanation of the plan
 // ---------------------------------------------------------------------------
 

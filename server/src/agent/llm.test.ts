@@ -202,6 +202,217 @@ describe("classifyIntent", () => {
 	});
 });
 
+describe("classifyFollowUpIntent", () => {
+	beforeEach(() => {
+		mockCreate.mockReset();
+	});
+
+	it("returns ASK intent when message questions existing artifact", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"intent":"ASK","response":"The research found three key consumer preferences: price sensitivity under 300M IDR, charging infrastructure as top concern, and preference for local brands with government subsidies.","confidence":0.92}',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"Market research for EV in Indonesia",
+			"# EV Market Research\n\nConsumer preferences...",
+			[
+				{
+					role: "user",
+					content: "What were the key findings about consumer preferences?",
+				},
+			],
+			"What were the key findings about consumer preferences?",
+		);
+		expect(result.intent).toBe("ASK");
+		expect(result.response).toContain("consumer preferences");
+		expect(result.confidence).toBeGreaterThanOrEqual(0.8);
+	});
+
+	it("returns REFINE intent when message requests modification within scope", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"intent":"REFINE","response":"I will update the research to include a dedicated section on government regulations and subsidies for electric vehicles in Indonesia.","confidence":0.88}',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"Market research for EV in Indonesia",
+			"# EV Market Research\n\n...",
+			[
+				{
+					role: "user",
+					content: "Add a section about government regulations and subsidies",
+				},
+			],
+			"Add a section about government regulations and subsidies",
+		);
+		expect(result.intent).toBe("REFINE");
+		expect(result.response).toContain("regulations");
+		expect(result.confidence).toBeGreaterThanOrEqual(0.8);
+	});
+
+	it("returns NEW_DIRECTION intent when message requests fundamentally different topic", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"intent":"NEW_DIRECTION","response":"This is a different research topic from the current board (electric vehicles → electric scooters). I will regenerate the board with this new focus.","confidence":0.95}',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"Market research for EV in Indonesia",
+			"# EV Market Research\n\n...",
+			[],
+			"Now research the competitor landscape for electric scooters",
+		);
+		expect(result.intent).toBe("NEW_DIRECTION");
+		expect(result.response).toContain("regenerate");
+		expect(result.confidence).toBeGreaterThanOrEqual(0.8);
+	});
+
+	it("returns OFF_TOPIC intent when message is clearly unrelated", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"intent":"OFF_TOPIC","response":"I can help with research and analysis for your board, but writing code is outside my scope. If you would like to research EV pricing data, I can include that in the current board — or you can create a new board for a different task.","confidence":0.97}',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"Market research for EV in Indonesia",
+			"# EV Market Research\n\n...",
+			[],
+			"Write me a Python script to scrape EV prices",
+		);
+		expect(result.intent).toBe("OFF_TOPIC");
+		expect(result.response).toContain("outside my scope");
+		expect(result.confidence).toBeGreaterThanOrEqual(0.9);
+	});
+
+	it("parses JSON from markdown code blocks", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '```json\n{"intent":"ASK","response":"The analysis found...","confidence":0.85}\n```',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"riset",
+			null,
+			[],
+			"What did the analysis find?",
+		);
+		expect(result.intent).toBe("ASK");
+		expect(result.response).toBe("The analysis found...");
+	});
+
+	it("parses JSON embedded in preamble text via greedy match", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: 'Based on the context provided, here is my classification: {"intent":"REFINE","response":"I will add that section.","confidence":0.82} Hope this helps!',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"riset",
+			null,
+			[],
+			"Add more data about 2025 trends",
+		);
+		expect(result.intent).toBe("REFINE");
+		expect(result.response).toBe("I will add that section.");
+	});
+
+	it("retries on parse failure and succeeds on second attempt", async () => {
+		mockCreate
+			.mockResolvedValueOnce({
+				content: [{ type: "text", text: "I cannot classify this." }],
+			})
+			.mockResolvedValueOnce({
+				content: [
+					{
+						type: "text",
+						text: '{"intent":"ASK","response":"Here is the answer.","confidence":0.8}',
+					},
+				],
+			});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"riset",
+			null,
+			[],
+			"Tell me more",
+		);
+		expect(result.intent).toBe("ASK");
+		expect(mockCreate).toHaveBeenCalledTimes(2);
+	});
+
+	it("returns OFF_TOPIC fallback after all retries fail", async () => {
+		const unparseable = {
+			content: [{ type: "text", text: "Cannot process." }],
+		};
+		mockCreate
+			.mockResolvedValueOnce(unparseable)
+			.mockResolvedValueOnce(unparseable)
+			.mockResolvedValueOnce(unparseable);
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		const result = await classifyFollowUpIntent(
+			"riset",
+			null,
+			[],
+			"hello",
+		);
+		expect(result.intent).toBe("OFF_TOPIC");
+		expect(result.response).toContain("could not be processed");
+		expect(mockCreate).toHaveBeenCalledTimes(3);
+	});
+
+	it("passes originalIntent, artifact, and conversation history in context", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"intent":"ASK","response":"ok","confidence":0.8}',
+				},
+			],
+		});
+		const { classifyFollowUpIntent } = await import("./llm.js");
+		await classifyFollowUpIntent(
+			"EV market research",
+			"# EV Research\nKey findings...",
+			[
+				{ role: "user", content: "What about subsidies?" },
+				{ role: "assistant", content: "Subsidies are..." },
+			],
+			"Tell me more about subsidies",
+		);
+		const userMsg = mockCreate.mock.calls[0][0].messages[0].content as string;
+		expect(userMsg).toContain("EV market research");
+		expect(userMsg).toContain("EV Research");
+		expect(userMsg).toContain("What about subsidies?");
+		expect(userMsg).toContain("Subsidies are...");
+		expect(userMsg).toContain("Tell me more about subsidies");
+	});
+});
+
 describe("executeCard", () => {
 	beforeEach(() => {
 		mockStream.mockReset();
