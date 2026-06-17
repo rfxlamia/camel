@@ -454,13 +454,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 
 				if (e.phase !== "reasoning") {
-					publishToolSse(
-						deps,
-						workspaceId,
-						boardId,
-						firstCard.columnSlug,
-						e,
-					);
+					publishToolSse(deps, workspaceId, boardId, firstCard.columnSlug, e);
 				}
 
 				if (e.phase !== "reasoning") {
@@ -632,10 +626,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
 				let resolvedTools =
 					deps.toolRegistry?.resolveTools(column.tools ?? []) ?? [];
-				if (
-					artifactEnabled &&
-					(column.tools ?? []).includes("create_file")
-				) {
+				if (artifactEnabled && (column.tools ?? []).includes("create_file")) {
 					let editorBody = "";
 					for (const [, key] of slugToOutputKey) {
 						if (key === "editor_output" && accumulator[key]) {
@@ -678,13 +669,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					}
 
 					if (e.phase !== "reasoning") {
-						publishToolSse(
-							deps,
-							workspaceId,
-							boardId,
-							column.columnSlug,
-							e,
-						);
+						publishToolSse(deps, workspaceId, boardId, column.columnSlug, e);
 					}
 
 					if (e.phase !== "reasoning") {
@@ -868,10 +853,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 								content.trim() &&
 								Buffer.byteLength(content, "utf8") <= MAX_ARTIFACT_BYTES
 							) {
-								const filename = deriveFilename(
-									content,
-									board.originalIntent,
-								);
+								const filename = deriveFilename(content, board.originalIntent);
 								await deps.insertArtifact!({
 									boardId,
 									workspaceId,
@@ -965,8 +947,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
 			if (board.executionStatus === "running") {
 				return {
-					explanation:
-						"Board sedang dalam eksekusi. Tunggu hingga selesai.",
+					explanation: "Board sedang dalam eksekusi. Tunggu hingga selesai.",
 					boardUpdated: false,
 				};
 			}
@@ -980,13 +961,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				return { explanation: question, boardUpdated: false };
 			}
 
-			if (
-				board.status === "approved" &&
-				board.executionStatus === "done"
-			) {
+			if (board.status === "approved" && board.executionStatus === "done") {
 				const artifact = await deps.getArtifact?.(boardId);
-				const history =
-					(await deps.getConversationHistory?.(boardId)) ?? [];
+				const history = (await deps.getConversationHistory?.(boardId)) ?? [];
 
 				const result = await deps.classifyFollowUpIntent!(
 					board.originalIntent,

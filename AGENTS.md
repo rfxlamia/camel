@@ -108,7 +108,7 @@ Load `docs/pocket/rule/creative-brief.md` before making UI/design decisions. It 
 ## Pocket Enterprise
 
 ```
-enterprise: true
+enterprise: false
 branch_strategy: branch
-create_pr: true
+create_pr: false
 ```

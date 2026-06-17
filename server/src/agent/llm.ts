@@ -67,9 +67,7 @@ function getClient(): Anthropic {
 // never lose the answer to a thinking block sitting in front of it.
 function extractText(response: Anthropic.Message): string {
 	return response.content
-		.filter(
-			(block): block is Anthropic.TextBlock => block.type === "text",
-		)
+		.filter((block): block is Anthropic.TextBlock => block.type === "text")
 		.map((block) => block.text)
 		.join("");
 }
@@ -367,8 +365,7 @@ function normalizeFollowUpResult(parsed: {
 	return {
 		intent: intent as FollowUpIntent,
 		response,
-		confidence:
-			typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+		confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
 	};
 }
 
@@ -446,7 +443,10 @@ async function classifyFollowUpIntentOnce(
 		}
 	}
 
-	console.error("classifyFollowUpIntentOnce: failed to parse LLM response:", text);
+	console.error(
+		"classifyFollowUpIntentOnce: failed to parse LLM response:",
+		text,
+	);
 	return null;
 }
 
@@ -586,7 +586,13 @@ export async function executeCard(
 
 	// Empty tools → legacy single-shot path (no tools param)
 	if (tools.length === 0) {
-		return executeCardSingleShot(client, rendered, messageContent, onToken, onThinking);
+		return executeCardSingleShot(
+			client,
+			rendered,
+			messageContent,
+			onToken,
+			onThinking,
+		);
 	}
 
 	return executeCardWithTools(
@@ -666,7 +672,10 @@ function toolCallQuery(input: unknown): string | undefined {
 	return undefined;
 }
 
-function toolResultCount(toolName: string, content: string): number | undefined {
+function toolResultCount(
+	toolName: string,
+	content: string,
+): number | undefined {
 	if (toolName === "create_file") return undefined;
 	return countSearchResults(content);
 }

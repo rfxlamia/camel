@@ -550,9 +550,7 @@ export function createAgentRouter(
 			const action = resolveMessageAction(req.body);
 
 			if (action.kind === "invalid") {
-				return res
-					.status(400)
-					.json({ error: "message or action is required" });
+				return res.status(400).json({ error: "message or action is required" });
 			}
 
 			try {
