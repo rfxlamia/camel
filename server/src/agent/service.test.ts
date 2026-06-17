@@ -728,6 +728,247 @@ describe("sendMessage follow-up on done board", () => {
 	});
 });
 
+describe("integration: follow-up message flow (T1 + T2)", () => {
+	it("ASK flow: classify → stream with __notfirst__ slug → store both user + assistant in conversations", async () => {
+		const publishEvent = vi.fn(async () => {});
+		const insertConversation = vi.fn(async () => {});
+		const getArtifact = vi.fn(async () => ({
+			filename: "ev-research.md",
+			format: "md" as const,
+			content:
+				"# EV Market Research\n\nKey findings about charging infrastructure.",
+		}));
+		const getConversationHistory = vi.fn(async () => [
+			{ role: "user" as const, content: "What about subsidies?" },
+			{ role: "assistant" as const, content: "Subsidies are a key factor..." },
+		]);
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "ASK" as const,
+			response:
+				"The research identified three key findings about charging infrastructure: (1) limited public charging network, (2) home charging as primary method, (3) fast-charging demand increasing.",
+			confidence: 0.92,
+		}));
+
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV market research in Indonesia",
+			})),
+			getArtifact,
+			getConversationHistory,
+			classifyFollowUpIntent,
+			insertConversation,
+			publishEvent,
+		});
+
+		const result = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "What were the key findings about charging infrastructure?",
+		});
+
+		expect(classifyFollowUpIntent).toHaveBeenCalledWith(
+			"EV market research in Indonesia",
+			"# EV Market Research\n\nKey findings about charging infrastructure.",
+			expect.arrayContaining([
+				expect.objectContaining({
+					role: "user",
+					content: "What about subsidies?",
+				}),
+				expect.objectContaining({
+					role: "assistant",
+					content: "Subsidies are a key factor...",
+				}),
+			]),
+			"What were the key findings about charging infrastructure?",
+		);
+
+		expect(publishEvent).toHaveBeenCalledWith(
+			7,
+			expect.objectContaining({
+				type: "agent.card.token",
+				columnSlug: "__notfirst__",
+				boardId: 42,
+			}),
+		);
+
+		expect(insertConversation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				boardId: 42,
+				role: "user",
+				content: "What were the key findings about charging infrastructure?",
+			}),
+		);
+
+		expect(insertConversation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				boardId: 42,
+				role: "assistant",
+				content: expect.stringContaining("charging infrastructure"),
+			}),
+		);
+
+		expect(result).toMatchObject({
+			explanation: expect.stringContaining("charging infrastructure"),
+		});
+	});
+
+	it("NEW_DIRECTION flow: classify → store pending → return confirmation with button metadata", async () => {
+		const insertConversation = vi.fn(async () => {});
+		const publishEvent = vi.fn(async () => {});
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "NEW_DIRECTION" as const,
+			response:
+				"This is a different research topic. I will regenerate the board with focus on scooter competitor analysis.",
+			confidence: 0.95,
+		}));
+
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV market research",
+			})),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent,
+			insertConversation,
+			publishEvent,
+		});
+
+		const result = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Now analyze competitor landscape for electric scooters",
+		});
+
+		expect(result).toMatchObject({
+			explanation: expect.stringContaining("regenerate"),
+			pendingRegenerate: true,
+		});
+
+		const streamCalls = publishEvent.mock.calls.filter(
+			(c: unknown[]) =>
+				(c[1] as { type?: string }).type === "agent.card.token",
+		);
+		expect(streamCalls).toHaveLength(0);
+	});
+
+	it("OFF_TOPIC flow: classify → return static rejection → no streaming → still stored in conversations", async () => {
+		const publishEvent = vi.fn(async () => {});
+		const insertConversation = vi.fn(async () => {});
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "OFF_TOPIC" as const,
+			response:
+				"I can help with research for your board, but writing code is outside my scope. You can create a new board for a different task.",
+			confidence: 0.97,
+		}));
+
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV market research",
+			})),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent,
+			insertConversation,
+			publishEvent,
+		});
+
+		const result = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Write me a Python script to scrape data",
+		});
+
+		expect(result).toMatchObject({
+			explanation: expect.stringContaining("outside my scope"),
+		});
+
+		expect(publishEvent).not.toHaveBeenCalled();
+
+		expect(insertConversation).toHaveBeenCalledTimes(2);
+		expect(insertConversation).toHaveBeenCalledWith(
+			expect.objectContaining({ role: "user" }),
+		);
+		expect(insertConversation).toHaveBeenCalledWith(
+			expect.objectContaining({ role: "assistant" }),
+		);
+	});
+
+	it("REFINE flow: classify → stream response → store in conversations", async () => {
+		const publishEvent = vi.fn(async () => {});
+		const insertConversation = vi.fn(async () => {});
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "REFINE" as const,
+			response:
+				"I will add a section on 2025 government regulations and subsidies for EV adoption in Indonesia.",
+			confidence: 0.88,
+		}));
+
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV market research",
+			})),
+			getArtifact: vi.fn(async () => ({
+				filename: "ev.md",
+				format: "md" as const,
+				content: "# EV Research",
+			})),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent,
+			insertConversation,
+			publishEvent,
+		});
+
+		const result = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Add a section about 2025 government regulations",
+		});
+
+		expect(publishEvent).toHaveBeenCalledWith(
+			7,
+			expect.objectContaining({
+				type: "agent.card.token",
+				columnSlug: "__notfirst__",
+			}),
+		);
+
+		expect(insertConversation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				role: "assistant",
+				content: expect.stringContaining("regulations"),
+			}),
+		);
+
+		expect(result).toMatchObject({
+			explanation: expect.stringContaining("regulations"),
+		});
+	});
+});
+
 describe("confirmRegenerateBoard", () => {
 	it("updates intent, deletes old outputs + cards, re-runs pipeline", async () => {
 		const updateBoard = vi.fn(async () => {});
