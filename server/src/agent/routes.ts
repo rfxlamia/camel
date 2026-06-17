@@ -28,7 +28,6 @@ import {
 	classifyIntent as realClassifyIntent,
 	executeCard as realExecuteCard,
 	generateClarificationQuestion as realGenerateClarificationQuestion,
-	type ConversationMessage,
 } from "./llm.js";
 import {
 	type AgentBoardServiceDeps,
@@ -227,7 +226,7 @@ export async function selectConversationHistory(
 		) => Promise<{ rows: Array<Record<string, unknown>> }>;
 	},
 	boardId: number,
-): Promise<ConversationMessage[]> {
+): Promise<Array<{ role: string; content: string }>> {
 	const { rows } = await db.query(
 		`SELECT role, content
      FROM agent_conversations
@@ -236,7 +235,7 @@ export async function selectConversationHistory(
 		[boardId],
 	);
 	return rows.map((r) => ({
-		role: r.role as ConversationMessage["role"],
+		role: r.role as string,
 		content: r.content as string,
 	}));
 }

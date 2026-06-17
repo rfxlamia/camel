@@ -332,7 +332,7 @@ REMINDER: Your entire response must be valid JSON only — {"intent":"...","resp
 function buildFollowUpUserMessage(
 	originalIntent: string,
 	artifactContent: string | null,
-	conversationHistory: ConversationMessage[],
+	conversationHistory: Array<{ role: string; content: string }>,
 	userMessage: string,
 ): string {
 	const historyText =
@@ -376,7 +376,7 @@ async function classifyFollowUpIntentOnce(
 	client: Anthropic,
 	originalIntent: string,
 	artifactContent: string | null,
-	conversationHistory: ConversationMessage[],
+	conversationHistory: Array<{ role: string; content: string }>,
 	userMessage: string,
 ): Promise<FollowUpResult | null> {
 	const response = await client.messages.create({
@@ -455,7 +455,7 @@ const FOLLOW_UP_MAX_ATTEMPTS = 3;
 export async function classifyFollowUpIntent(
 	originalIntent: string,
 	artifactContent: string | null,
-	conversationHistory: ConversationMessage[],
+	conversationHistory: Array<{ role: string; content: string }>,
 	userMessage: string,
 ): Promise<FollowUpResult> {
 	const client = getClient();

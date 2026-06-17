@@ -20,7 +20,6 @@ import {
 	getTemplate,
 	renderSystemPrompt,
 } from "./templates.js";
-import type { ConversationMessage } from "./llm.js";
 import { makeCreateFile } from "./tools/createFile.js";
 import type { Tool } from "./tools/types.js";
 
@@ -193,7 +192,7 @@ export interface AgentBoardServiceDeps {
 	classifyFollowUpIntent?: (
 		originalIntent: string,
 		artifactContent: string | null,
-		conversationHistory: ConversationMessage[],
+		conversationHistory: Array<{ role: string; content: string }>,
 		userMessage: string,
 	) => Promise<{
 		intent: "ASK" | "REFINE" | "NEW_DIRECTION" | "OFF_TOPIC";
@@ -203,7 +202,7 @@ export interface AgentBoardServiceDeps {
 
 	getConversationHistory?: (
 		boardId: number,
-	) => Promise<ConversationMessage[]>;
+	) => Promise<Array<{ role: string; content: string }>>;
 
 	deleteOutputsForBoard?: (boardId: number) => Promise<void>;
 
