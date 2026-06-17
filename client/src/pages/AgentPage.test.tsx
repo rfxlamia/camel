@@ -16,6 +16,7 @@ const {
 	stableSetSearchParams,
 	stableShowToast,
 	stableClearAgentEvents,
+	stableClearFollowUpAgentEvents,
 } = vi.hoisted(() => ({
 	mockUseBoard: vi.fn(),
 	mockGetBoard: vi.fn(),
@@ -25,6 +26,7 @@ const {
 	stableSetSearchParams: vi.fn(),
 	stableShowToast: vi.fn(),
 	stableClearAgentEvents: vi.fn(),
+	stableClearFollowUpAgentEvents: vi.fn(),
 }));
 
 vi.mock("../context/BoardContext", () => ({
@@ -108,6 +110,7 @@ beforeEach(() => {
 		agentEvents: [],
 		showToast: stableShowToast,
 		clearAgentEvents: stableClearAgentEvents,
+		clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
 	});
 });
 afterEach(() => {
@@ -334,6 +337,104 @@ describe("AgentPage NEW_DIRECTION buttons", () => {
 
 		const inputAfter = screen.getByPlaceholderText(/Waiting for confirmation/i);
 		expect((inputAfter as HTMLInputElement).disabled).toBe(true);
+	});
+});
+
+describe("bug-hunting: multi-turn conversation", () => {
+	it("disables follow-up input on failed boards", async () => {
+		mockGetBoard.mockResolvedValue(makeBoard("failed"));
+		render(<AgentPage />);
+		await waitForAgentPanel();
+		const input = screen.getByPlaceholderText(/Refine the board/i);
+		expect((input as HTMLInputElement).disabled).toBe(true);
+	});
+
+	it("clears follow-up SSE events before each follow-up send", async () => {
+		mockGetBoard.mockResolvedValue(makeBoard("done"));
+		getAgentArtifact.mockResolvedValue(null);
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 1,
+			agentEvents: [
+				{
+					type: "agent.card.token",
+					columnSlug: "__notfirst__",
+					boardId: 2,
+					token: "Previous answer.",
+				},
+			],
+			showToast: stableShowToast,
+			clearAgentEvents: stableClearAgentEvents,
+			clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
+		});
+
+		render(<AgentPage />);
+		await waitForAgentPanel();
+
+		const input = screen.getByPlaceholderText(/Follow up/i);
+		fireEvent.change(input, { target: { value: "Another question?" } });
+		fireEvent.click(screen.getByRole("button", { name: /Send/i }));
+
+		await waitFor(() => {
+			expect(mockSendAgentBoardMessage).toHaveBeenCalled();
+		});
+
+		expect(stableClearFollowUpAgentEvents).toHaveBeenCalled();
+	});
+
+	it("hydrates follow-up chat from server conversations (skipping create pair)", async () => {
+		mockGetBoard.mockResolvedValue({
+			...makeBoard("done"),
+			conversations: [
+				{ role: "user", content: "riset thailand" },
+				{ role: "assistant", content: "Board created." },
+				{ role: "user", content: "What were the findings?" },
+				{ role: "assistant", content: "Stored assistant reply from DB" },
+			],
+		});
+		getAgentArtifact.mockResolvedValue(null);
+		render(<AgentPage />);
+		await waitForAgentPanel();
+
+		expect(screen.getByText("What were the findings?")).toBeTruthy();
+		expect(screen.getByText("Stored assistant reply from DB")).toBeTruthy();
+	});
+
+	it("shows streamed ASK response once via SSE when streamed flag is set", async () => {
+		const answer = "The research found three key findings.";
+		mockGetBoard.mockResolvedValue(makeBoard("done"));
+		getAgentArtifact.mockResolvedValue(null);
+		mockSendAgentBoardMessage.mockResolvedValue({
+			explanation: answer,
+			streamed: true,
+			boardUpdated: false,
+		});
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 1,
+			agentEvents: [
+				{
+					type: "agent.card.token",
+					columnSlug: "__notfirst__",
+					boardId: 2,
+					token: answer,
+				},
+			],
+			showToast: stableShowToast,
+			clearAgentEvents: stableClearAgentEvents,
+			clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
+		});
+
+		render(<AgentPage />);
+		await waitForAgentPanel();
+
+		const input = screen.getByPlaceholderText(/Follow up/i);
+		fireEvent.change(input, { target: { value: "What were the findings?" } });
+		fireEvent.click(screen.getByRole("button", { name: /Send/i }));
+
+		await waitFor(() => {
+			expect(mockSendAgentBoardMessage).toHaveBeenCalled();
+		});
+
+		expect(screen.getAllByText(answer)).toHaveLength(1);
 	});
 });
 

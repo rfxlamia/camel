@@ -1025,6 +1025,7 @@ describe("integration: regenerate confirmation flow (T2 + T3)", () => {
 
 		const confirmPromise = service.confirmRegenerateBoard({
 			boardId: 42,
+			userId: 1,
 			workspaceId: 7,
 		});
 		await vi.runAllTimersAsync();
@@ -1079,7 +1080,7 @@ describe("integration: regenerate confirmation flow (T2 + T3)", () => {
 			message: "Research scooters",
 		});
 
-		await service.cancelRegenerateBoard({ boardId: 42, workspaceId: 7 });
+		await service.cancelRegenerateBoard({ boardId: 42, userId: 1, workspaceId: 7 });
 
 		expect(updateBoard).not.toHaveBeenCalled();
 		expect(deleteOutputsForBoard).not.toHaveBeenCalled();
@@ -1136,6 +1137,7 @@ describe("integration: regenerate confirmation flow (T2 + T3)", () => {
 		});
 		const confirmPromise = service.confirmRegenerateBoard({
 			boardId: 42,
+			userId: 1,
 			workspaceId: 7,
 		});
 		await vi.runAllTimersAsync();
@@ -1186,10 +1188,11 @@ describe("confirmRegenerateBoard", () => {
 			message: "Research scooters instead",
 		});
 
-		await service.confirmRegenerateBoard({ boardId: 1, workspaceId: 1 });
+		await service.confirmRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 });
 
 		expect(updateBoard).toHaveBeenCalledWith(1, {
 			original_intent: expect.stringContaining("scooter"),
+			execution_status: "running",
 		});
 		expect(deleteOutputsForBoard).toHaveBeenCalledWith(1);
 		expect(deleteCardsForBoard).toHaveBeenCalledWith(1);
@@ -1227,7 +1230,7 @@ describe("confirmRegenerateBoard", () => {
 			message: "Research scooters",
 		});
 
-		await service.confirmRegenerateBoard({ boardId: 1, workspaceId: 1 });
+		await service.confirmRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 });
 
 		const calls = insertConversation.mock.calls;
 		const confirmCall = calls.find(
@@ -1274,6 +1277,7 @@ describe("confirmRegenerateBoard", () => {
 
 		const result = await service.confirmRegenerateBoard({
 			boardId: 1,
+			userId: 1,
 			workspaceId: 999,
 		});
 
@@ -1318,7 +1322,7 @@ describe("cancelRegenerateBoard", () => {
 			message: "Research scooters",
 		});
 
-		await service.cancelRegenerateBoard({ boardId: 1, workspaceId: 1 });
+		await service.cancelRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 });
 
 		const calls = insertConversation.mock.calls;
 		const cancelCall = calls.find(
@@ -1361,7 +1365,7 @@ describe("cancelRegenerateBoard", () => {
 			workspaceId: 1,
 			message: "Research scooters",
 		});
-		await service.cancelRegenerateBoard({ boardId: 1, workspaceId: 1 });
+		await service.cancelRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 });
 
 		expect(updateBoard).not.toHaveBeenCalled();
 		expect(deleteOutputsForBoard).not.toHaveBeenCalled();
@@ -2415,5 +2419,344 @@ describe("runPipeline artifact persistence", () => {
 			expect.objectContaining({ columnSlug: "qa-guardian" }),
 		);
 		expect(insertArtifact).not.toHaveBeenCalled();
+	});
+});
+
+// ---- Bug-hunting: multi-turn conversation gaps (fixed) ----
+
+describe("bug-hunting: multi-turn conversation", () => {
+	it("classifyFollowUpIntent receives history without current user message before insert", async () => {
+		const priorHistory = [
+			{ role: "user", content: "Earlier question" },
+			{ role: "assistant", content: "Earlier answer" },
+		];
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "ASK" as const,
+			response: "Answer.",
+			confidence: 0.9,
+		}));
+		const insertConversation = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 1,
+				userId: 1,
+				originalIntent: "EV research",
+			})),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => [...priorHistory]),
+			insertConversation,
+			classifyFollowUpIntent,
+			publishEvent: vi.fn(async () => {}),
+		});
+
+		await service.sendMessage({
+			boardId: 1,
+			userId: 1,
+			workspaceId: 1,
+			message: "What about subsidies?",
+		});
+
+		const historyArg = classifyFollowUpIntent.mock.calls[0][2] as Array<{
+			role: string;
+			content: string;
+		}>;
+		expect(historyArg).toEqual(priorHistory);
+		expect(historyArg).not.toContainEqual({
+			role: "user",
+			content: "What about subsidies?",
+		});
+		expect(insertConversation).toHaveBeenCalledWith({
+			boardId: 1,
+			role: "user",
+			content: "What about subsidies?",
+		});
+	});
+
+	it("does not call classifyFollowUpIntent on failed boards", async () => {
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "ASK" as const,
+			response: "Should not run.",
+			confidence: 0.9,
+		}));
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1,
+				status: "approved",
+				executionStatus: "failed",
+				workspaceId: 1,
+				userId: 1,
+				originalIntent: "EV research",
+			})),
+			insertConversation: vi.fn(async () => {}),
+			classifyFollowUpIntent,
+		});
+
+		const result = await service.sendMessage({
+			boardId: 1,
+			userId: 1,
+			workspaceId: 1,
+			message: "What went wrong?",
+		});
+
+		expect(classifyFollowUpIntent).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			explanation: expect.stringContaining("approved and executing"),
+		});
+	});
+
+	it("confirmRegenerateBoard sets execution_status to running before pipeline", async () => {
+		vi.useFakeTimers();
+		const updateBoard = vi.fn(async () => {});
+		const publishEvent = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV research",
+			})),
+			updateBoard,
+			publishEvent,
+			deleteOutputsForBoard: vi.fn(async () => {}),
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "NEW_DIRECTION" as const,
+				response: "Regenerate?",
+				confidence: 0.9,
+			})),
+			getColumns: vi.fn(async () => []),
+			executeCard: vi.fn(async () => ({ output: "" })),
+			insertOutput: vi.fn(async () => {}),
+			insertCard: vi.fn(async () => {}),
+		});
+
+		await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Research scooters instead",
+		});
+
+		const confirmPromise = service.confirmRegenerateBoard({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+		});
+		await vi.runAllTimersAsync();
+		await confirmPromise;
+
+		expect(updateBoard).toHaveBeenCalledWith(
+			42,
+			expect.objectContaining({ execution_status: "running" }),
+		);
+		expect(publishEvent).toHaveBeenCalledWith(
+			7,
+			expect.objectContaining({ type: "agent.board.generating" }),
+		);
+		vi.useRealTimers();
+	});
+
+	it("rejects follow-up while regenerate pipeline runs", async () => {
+		vi.useFakeTimers();
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "ASK" as const,
+			response: "During regenerate.",
+			confidence: 0.9,
+		}));
+		const getBoard = vi.fn(async () => ({
+			id: 42,
+			status: "approved",
+			executionStatus: "running",
+			workspaceId: 7,
+			userId: 1,
+			originalIntent: "EV research",
+		}));
+		const service = createAgentBoardService({
+			getBoard,
+			updateBoard: vi.fn(async () => {}),
+			deleteOutputsForBoard: vi.fn(async () => {}),
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation: vi.fn(async () => {}),
+			publishEvent: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent,
+			getColumns: vi.fn(async () => []),
+			executeCard: vi.fn(async () => ({ output: "out" })),
+			insertOutput: vi.fn(async () => {}),
+			insertCard: vi.fn(async () => {}),
+		});
+
+		const duringResult = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Can I ask something?",
+		});
+
+		expect(classifyFollowUpIntent).not.toHaveBeenCalled();
+		expect(duringResult).toMatchObject({
+			explanation: expect.stringContaining("eksekusi"),
+		});
+		vi.useRealTimers();
+	});
+
+	it("confirmRegenerateBoard silently succeeds when pending state is missing", async () => {
+		const updateBoard = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV research",
+			})),
+			updateBoard,
+			deleteOutputsForBoard: vi.fn(async () => {}),
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation: vi.fn(async () => {}),
+		});
+
+		const result = await service.confirmRegenerateBoard({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+		});
+
+		expect(result).toEqual({ ok: true });
+		expect(updateBoard).not.toHaveBeenCalled();
+	});
+
+	it("rejects sendMessage while pending regeneration", async () => {
+		const classifyFollowUpIntent = vi.fn(async () => ({
+			intent: "NEW_DIRECTION" as const,
+			response: "Second topic.",
+			confidence: 0.9,
+		}));
+		const insertConversation = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV research",
+			})),
+			updateBoard: vi.fn(async () => {}),
+			deleteOutputsForBoard: vi.fn(async () => {}),
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation,
+			publishEvent: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent,
+		});
+
+		await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "First new topic",
+		});
+
+		classifyFollowUpIntent.mockClear();
+		insertConversation.mockClear();
+
+		const blocked = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Second new topic",
+		});
+
+		expect(classifyFollowUpIntent).not.toHaveBeenCalled();
+		expect(insertConversation).not.toHaveBeenCalled();
+		expect(blocked.explanation).toMatch(/konfirmasi regenerate/i);
+	});
+
+	it("confirmRegenerateBoard returns 403 for non-owner", async () => {
+		const updateBoard = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 99,
+				originalIntent: "EV research",
+			})),
+			updateBoard,
+			deleteOutputsForBoard: vi.fn(async () => {}),
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "NEW_DIRECTION" as const,
+				response: "Regenerate?",
+				confidence: 0.9,
+			})),
+			getColumns: vi.fn(async () => []),
+			executeCard: vi.fn(async () => ({ output: "" })),
+			insertOutput: vi.fn(async () => {}),
+			insertCard: vi.fn(async () => {}),
+		});
+
+		await service.sendMessage({
+			boardId: 42,
+			userId: 99,
+			workspaceId: 7,
+			message: "Pivot to scooters",
+		});
+
+		const result = await service.confirmRegenerateBoard({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+		});
+
+		expect(result).toMatchObject({ status: 403 });
+		expect(updateBoard).not.toHaveBeenCalled();
+	});
+
+	it("ASK responses include streamed flag", async () => {
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 1,
+				userId: 1,
+				originalIntent: "EV research",
+			})),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			insertConversation: vi.fn(async () => {}),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "ASK" as const,
+				response: "Answer.",
+				confidence: 0.9,
+			})),
+			publishEvent: vi.fn(async () => {}),
+		});
+
+		const result = await service.sendMessage({
+			boardId: 1,
+			userId: 1,
+			workspaceId: 1,
+			message: "Question?",
+		});
+
+		expect(result).toMatchObject({ streamed: true, explanation: "Answer." });
 	});
 });

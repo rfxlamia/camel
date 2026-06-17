@@ -69,6 +69,7 @@ type AgentBoardMessagePayload =
 type AgentBoardMessageResult = {
 	explanation: string;
 	boardUpdated: boolean;
+	streamed?: boolean;
 	pendingRegenerate?: boolean;
 };
 
@@ -80,6 +81,31 @@ const sendBoardMessage = api.sendAgentBoardMessage as (
 
 function isFollowUpSlug(slug: string | undefined): boolean {
 	return slug === "__notfirst__";
+}
+
+function conversationsToFollowUpMessages(
+	conversations: Array<{ role: string; content: string }> | undefined,
+): FollowUpMessage[] {
+	if (!conversations || conversations.length <= 2) return [];
+	return conversations.slice(2).map((m) => ({
+		role: m.role as "user" | "assistant",
+		content: m.content,
+	}));
+}
+
+function getStreamingFollowUpText(
+	events: AgentEvent[],
+	boardId: number,
+): string {
+	return events
+		.filter(
+			(e) =>
+				e.type === "agent.card.token" &&
+				isFollowUpSlug(e.columnSlug) &&
+				e.boardId === boardId,
+		)
+		.map((e) => e.token ?? "")
+		.join("");
 }
 
 function statusBadge(board: AgentBoard) {
@@ -255,8 +281,13 @@ function AgentBoardVisual({
 // ---- Main page ----
 
 export default function AgentPage() {
-	const { activeWorkspaceId, showToast, agentEvents, clearAgentEvents } =
-		useBoard();
+	const {
+		activeWorkspaceId,
+		showToast,
+		agentEvents,
+		clearAgentEvents,
+		clearFollowUpAgentEvents,
+	} = useBoard();
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const [board, setBoard] = useState<AgentBoard | null>(null);
@@ -265,6 +296,8 @@ export default function AgentPage() {
 	// state instead of a stale closure captured while board was null.
 	const boardRef = useRef<AgentBoard | null>(board);
 	boardRef.current = board;
+	const agentEventsRef = useRef(agentEvents);
+	agentEventsRef.current = agentEvents;
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [input, setInput] = useState("");
@@ -298,7 +331,10 @@ export default function AgentPage() {
 		api
 			.getAgentBoard(activeWorkspaceId, Number(boardId))
 			.then((b) => {
-				if (!cancelled) setBoard(b);
+				if (!cancelled) {
+					setBoard(b);
+					setFollowUpMessages(conversationsToFollowUpMessages(b.conversations));
+				}
 			})
 			.catch(() => {
 				if (!cancelled) {
@@ -336,7 +372,10 @@ export default function AgentPage() {
 		lastSyncedTerminalIdxRef.current = eventIndex;
 		api
 			.getAgentBoard(activeWorkspaceId, boardId)
-			.then(setBoard)
+			.then((b) => {
+				setBoard(b);
+				setFollowUpMessages(conversationsToFollowUpMessages(b.conversations));
+			})
 			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring board fetch errors
 			.catch(() => {});
 	}, [agentEvents, activeWorkspaceId]);
@@ -392,6 +431,27 @@ export default function AgentPage() {
 							intent: "NEW_DIRECTION",
 						},
 					]);
+				} else if (result.streamed && result.explanation) {
+					const streamedText =
+						getStreamingFollowUpText(
+							agentEventsRef.current,
+							currentBoard.id,
+						) || result.explanation;
+					setFollowUpMessages((prev) => {
+						if (
+							prev.some(
+								(m) =>
+									m.role === "assistant" && m.content === streamedText,
+							)
+						) {
+							return prev;
+						}
+						return [
+							...prev,
+							{ role: "assistant", content: streamedText },
+						];
+					});
+					clearFollowUpAgentEvents();
 				} else if (result.explanation) {
 					setFollowUpMessages((prev) => [
 						...prev,
@@ -421,7 +481,7 @@ export default function AgentPage() {
 				}
 			}
 		},
-		[activeWorkspaceId, showToast],
+		[activeWorkspaceId, showToast, clearFollowUpAgentEvents],
 	);
 
 	const handleConfirmRegenerate = useCallback(async () => {
@@ -429,29 +489,25 @@ export default function AgentPage() {
 		if (!activeWorkspaceId || !currentBoard || !pendingRegenerate) return;
 		setBusy(true);
 		try {
-			const result = await sendBoardMessage(activeWorkspaceId, currentBoard.id, {
+			clearAgentEvents();
+			await sendBoardMessage(activeWorkspaceId, currentBoard.id, {
 				action: "confirm_regenerate",
 			});
 			setPendingRegenerate(false);
-			if (result.explanation) {
-				setFollowUpMessages((prev) => [
-					...prev,
-					{ role: "assistant", content: result.explanation },
-				]);
-			}
-			if (result.boardUpdated) {
-				const updated = await api.getAgentBoard(
-					activeWorkspaceId,
-					currentBoard.id,
-				);
-				setBoard(updated);
-			}
+			const updated = await api.getAgentBoard(
+				activeWorkspaceId,
+				currentBoard.id,
+			);
+			setBoard(updated);
+			setFollowUpMessages(
+				conversationsToFollowUpMessages(updated.conversations),
+			);
 		} catch {
 			showToast("Couldn't confirm regeneration. Try again.");
 		} finally {
 			setBusy(false);
 		}
-	}, [activeWorkspaceId, pendingRegenerate, showToast]);
+	}, [activeWorkspaceId, pendingRegenerate, showToast, clearAgentEvents]);
 
 	const handleCancelRegenerate = useCallback(async () => {
 		const currentBoard = boardRef.current;
@@ -542,10 +598,19 @@ export default function AgentPage() {
 		setError(null);
 		setLastIntent(trimmed);
 
-		const isFollowUp =
-			board?.executionStatus === "done" || board?.executionStatus === "failed";
+		const isFollowUp = board?.executionStatus === "done";
 
 		if (isFollowUp) {
+			const streamed = board
+				? getStreamingFollowUpText(agentEventsRef.current, board.id)
+				: "";
+			if (streamed) {
+				setFollowUpMessages((prev) => [
+					...prev,
+					{ role: "assistant", content: streamed },
+				]);
+			}
+			clearFollowUpAgentEvents();
 			setFollowUpMessages((prev) => [
 				...prev,
 				{ role: "user", content: trimmed },
@@ -575,7 +640,7 @@ export default function AgentPage() {
 			}
 			void sendMessage(result.fire);
 		}
-	}, [input, busy, board, clearAgentEvents, sendMessage, createBoard]);
+	}, [input, busy, board, clearAgentEvents, clearFollowUpAgentEvents, sendMessage, createBoard]);
 
 	// Settle → auto-fire effect (after queue reducer settles)
 	// The settle effect in the agentEvents watcher handles firing the next queued message.
@@ -642,7 +707,7 @@ export default function AgentPage() {
 	const isPending = board?.status === "pending";
 	const isDone = board?.executionStatus === "done";
 	const isFailed = board?.executionStatus === "failed";
-	const canFollowUp = isDone || isFailed;
+	const canFollowUp = isDone;
 
 	// Exclude follow-up stream events from column state + execution log metrics.
 	const columnAgentEvents = useMemo(
@@ -652,16 +717,17 @@ export default function AgentPage() {
 
 	const streamingFollowUpText = useMemo(() => {
 		if (!board) return "";
-		return agentEvents
-			.filter(
-				(e) =>
-					e.type === "agent.card.token" &&
-					isFollowUpSlug(e.columnSlug) &&
-					e.boardId === board.id,
+		const text = getStreamingFollowUpText(agentEvents, board.id);
+		if (!text) return "";
+		if (
+			followUpMessages.some(
+				(m) => m.role === "assistant" && m.content === text,
 			)
-			.map((e) => e.token ?? "")
-			.join("");
-	}, [agentEvents, board]);
+		) {
+			return "";
+		}
+		return text;
+	}, [agentEvents, board, followUpMessages]);
 
 	// Streaming = output or thinking deltas (thinking can precede first token).
 	const isStreaming =

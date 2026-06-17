@@ -90,6 +90,7 @@ interface BoardContextValue {
 	refreshSettings: () => Promise<void>;
 	agentEvents: AgentEvent[];
 	clearAgentEvents: () => void;
+	clearFollowUpAgentEvents: () => void;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -170,6 +171,14 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	}, []);
 
 	const clearAgentEvents = useCallback(() => setAgentEvents([]), []);
+
+	const clearFollowUpAgentEvents = useCallback(
+		() =>
+			setAgentEvents((prev) =>
+				prev.filter((e) => e.columnSlug !== "__notfirst__"),
+			),
+		[],
+	);
 
 	const refresh = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
@@ -545,6 +554,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				refreshSettings,
 				agentEvents,
 				clearAgentEvents,
+				clearFollowUpAgentEvents,
 			}}
 		>
 			{children}

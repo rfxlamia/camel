@@ -558,9 +558,17 @@ export function createAgentRouter(
 
 				const result =
 					action.kind === "confirm"
-						? await service.confirmRegenerateBoard({ boardId, workspaceId })
+						? await service.confirmRegenerateBoard({
+								boardId,
+								userId: req.user!.id,
+								workspaceId,
+							})
 						: action.kind === "cancel"
-							? await service.cancelRegenerateBoard({ boardId, workspaceId })
+							? await service.cancelRegenerateBoard({
+									boardId,
+									userId: req.user!.id,
+									workspaceId,
+								})
 							: await service.sendMessage({
 									boardId,
 									userId: req.user!.id,
@@ -697,8 +705,9 @@ export function createAgentRouter(
 
 				// Fetch stored tool trace (read-only replay)
 				const toolTrace = await getToolTrace(pool, boardId);
+				const conversations = await selectConversationHistory(pool, boardId);
 
-				res.json({ ...result, columns, toolTrace });
+				res.json({ ...result, columns, toolTrace, conversations });
 			} catch (err) {
 				console.error("agent getBoardById error:", err);
 				res.status(500).json({ error: "Failed to get board" });

@@ -246,7 +246,12 @@ export const api = {
 			typeof payload === "string"
 				? { message: payload }
 				: { action: payload.action };
-		return request<{ explanation: string; boardUpdated: boolean }>(
+		return request<{
+			explanation: string;
+			boardUpdated: boolean;
+			streamed?: boolean;
+			pendingRegenerate?: boolean;
+		}>(
 			`/workspaces/${workspaceId}/agent/boards/${boardId}/message`,
 			{ method: "POST", body: JSON.stringify(body) },
 		);

@@ -938,14 +938,20 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (board.workspaceId !== workspaceId) return { status: 404 as const };
 			if (board.userId !== userId) return { status: 403 as const };
 
-			// Store user message
-			await deps.insertConversation!({
-				boardId,
-				role: "user",
-				content: message,
-			});
+			if (pendingRegenerate.has(boardId)) {
+				return {
+					explanation:
+						"Menunggu konfirmasi regenerate. Gunakan tombol Ya, Regenerate atau Batal.",
+					boardUpdated: false,
+				};
+			}
 
 			if (board.executionStatus === "running") {
+				await deps.insertConversation!({
+					boardId,
+					role: "user",
+					content: message,
+				});
 				return {
 					explanation: "Board sedang dalam eksekusi. Tunggu hingga selesai.",
 					boardUpdated: false,
@@ -953,6 +959,11 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			}
 
 			if (board.status === "pending") {
+				await deps.insertConversation!({
+					boardId,
+					role: "user",
+					content: message,
+				});
 				const question = await deps.generateClarificationQuestion!(
 					board.originalIntent,
 					board,
@@ -972,6 +983,12 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					message,
 				);
 
+				await deps.insertConversation!({
+					boardId,
+					role: "user",
+					content: message,
+				});
+
 				switch (result.intent) {
 					case "ASK":
 					case "REFINE": {
@@ -988,6 +1005,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						});
 						return {
 							explanation: result.response,
+							streamed: true as const,
 							boardUpdated: false,
 						};
 					}
@@ -1018,6 +1036,11 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}
 
+			await deps.insertConversation!({
+				boardId,
+				role: "user",
+				content: message,
+			});
 			return {
 				explanation:
 					"Message received. The board is already approved and executing.",
@@ -1028,14 +1051,17 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		// ---- confirmRegenerateBoard ----
 		async confirmRegenerateBoard({
 			boardId,
+			userId,
 			workspaceId,
 		}: {
 			boardId: number;
+			userId: number;
 			workspaceId: number;
 		}) {
 			const board = await deps.getBoard!(boardId);
 			if (!board || board.workspaceId !== workspaceId)
 				return { status: 404 as const };
+			if (board.userId !== userId) return { status: 403 as const };
 
 			const newIntent = pendingRegenerate.get(boardId);
 			if (!newIntent) return { ok: true as const };
@@ -1046,10 +1072,17 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				content: `Regenerating board with new direction: ${newIntent}`,
 			});
 
-			await deps.updateBoard!(boardId, { original_intent: newIntent });
+			await deps.updateBoard!(boardId, {
+				original_intent: newIntent,
+				execution_status: "running",
+			});
 			await deps.deleteOutputsForBoard!(boardId);
 			await deps.deleteCardsForBoard!(boardId);
 			pendingRegenerate.delete(boardId);
+
+			await deps.publishEvent?.(workspaceId, {
+				type: "agent.board.generating",
+			});
 
 			this.runPipeline({ boardId, workspaceId }).catch((err: unknown) => {
 				console.error("[confirmRegenerateBoard] runPipeline failed:", err);
@@ -1061,14 +1094,17 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		// ---- cancelRegenerateBoard ----
 		async cancelRegenerateBoard({
 			boardId,
+			userId,
 			workspaceId,
 		}: {
 			boardId: number;
+			userId: number;
 			workspaceId: number;
 		}) {
 			const board = await deps.getBoard!(boardId);
 			if (!board || board.workspaceId !== workspaceId)
 				return { status: 404 as const };
+			if (board.userId !== userId) return { status: 403 as const };
 
 			pendingRegenerate.delete(boardId);
 

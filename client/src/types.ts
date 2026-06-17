@@ -196,6 +196,7 @@ export interface AgentBoard {
 	createdAt: string;
 	columns: AgentColumn[];
 	toolTrace?: ToolTraceItem[];
+	conversations?: Array<{ role: string; content: string }>;
 }
 
 export interface AgentCardOutput {
