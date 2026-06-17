@@ -969,6 +969,183 @@ describe("integration: follow-up message flow (T1 + T2)", () => {
 	});
 });
 
+describe("integration: regenerate confirmation flow (T2 + T3)", () => {
+	it("full confirm flow: sendMessage(NEW_DIRECTION) → confirmRegenerateBoard updates intent, clears outputs, re-runs pipeline", async () => {
+		vi.useFakeTimers();
+		const updateBoard = vi.fn(async () => {});
+		const deleteOutputsForBoard = vi.fn(async () => {});
+		const deleteCardsForBoard = vi.fn(async () => {});
+		const insertConversation = vi.fn(async () => {});
+		const publishEvent = vi.fn(async () => {});
+		const getBoard = vi.fn(async () => ({
+			id: 42,
+			status: "approved",
+			executionStatus: "done",
+			workspaceId: 7,
+			userId: 1,
+			originalIntent: "EV market research in Indonesia",
+		}));
+		const getColumns = vi.fn(async () => [
+			{
+				columnId: 10,
+				columnSlug: "research-specialist",
+				systemPrompt: "Research: {original_intent}",
+				reasoning: false,
+			},
+		]);
+		const executeCard = vi.fn(async () => ({ output: "New research output" }));
+
+		const service = createAgentBoardService({
+			getBoard,
+			updateBoard,
+			deleteOutputsForBoard,
+			deleteCardsForBoard,
+			insertConversation,
+			publishEvent,
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "NEW_DIRECTION" as const,
+				response: "This is a different topic. I will regenerate the board.",
+				confidence: 0.93,
+			})),
+			getColumns,
+			executeCard,
+			insertOutput: vi.fn(async () => {}),
+			insertCard: vi.fn(async () => {}),
+		});
+
+		const sendResult = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Now research competitor landscape for electric scooters",
+		});
+		expect(sendResult).toMatchObject({ pendingRegenerate: true });
+
+		const confirmPromise = service.confirmRegenerateBoard({
+			boardId: 42,
+			workspaceId: 7,
+		});
+		await vi.runAllTimersAsync();
+		await confirmPromise;
+
+		expect(updateBoard).toHaveBeenCalledWith(
+			42,
+			expect.objectContaining({
+				original_intent: expect.stringContaining("scooter"),
+			}),
+		);
+		expect(deleteOutputsForBoard).toHaveBeenCalledWith(42);
+		expect(deleteCardsForBoard).toHaveBeenCalledWith(42);
+
+		expect(getColumns).toHaveBeenCalledWith(42);
+		expect(executeCard).toHaveBeenCalled();
+		vi.useRealTimers();
+	});
+
+	it("cancel flow: sendMessage(NEW_DIRECTION) → cancelRegenerateBoard clears pending without mutations", async () => {
+		const updateBoard = vi.fn(async () => {});
+		const deleteOutputsForBoard = vi.fn(async () => {});
+		const insertConversation = vi.fn(async () => {});
+
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV market research",
+			})),
+			updateBoard,
+			deleteOutputsForBoard,
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation,
+			publishEvent: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "NEW_DIRECTION" as const,
+				response: "Regenerating...",
+				confidence: 0.9,
+			})),
+		});
+
+		await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Research scooters",
+		});
+
+		await service.cancelRegenerateBoard({ boardId: 42, workspaceId: 7 });
+
+		expect(updateBoard).not.toHaveBeenCalled();
+		expect(deleteOutputsForBoard).not.toHaveBeenCalled();
+
+		expect(insertConversation).toHaveBeenCalledWith(
+			expect.objectContaining({
+				boardId: 42,
+				role: "assistant",
+				content: expect.stringMatching(/cancel|batal/i),
+			}),
+		);
+	});
+
+	it("conversation history preserved after regeneration", async () => {
+		vi.useFakeTimers();
+		const existingHistory = [
+			{ role: "user" as const, content: "What about subsidies?" },
+			{ role: "assistant" as const, content: "Subsidies are important..." },
+		];
+		const insertConversation = vi.fn(async () => {});
+
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 42,
+				status: "approved",
+				executionStatus: "done",
+				workspaceId: 7,
+				userId: 1,
+				originalIntent: "EV market research",
+			})),
+			updateBoard: vi.fn(async () => {}),
+			deleteOutputsForBoard: vi.fn(async () => {}),
+			deleteCardsForBoard: vi.fn(async () => {}),
+			insertConversation,
+			publishEvent: vi.fn(async () => {}),
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => existingHistory),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "NEW_DIRECTION" as const,
+				response: "Regenerating...",
+				confidence: 0.9,
+			})),
+			getColumns: vi.fn(async () => []),
+			executeCard: vi.fn(async () => ({ output: "new output" })),
+			insertOutput: vi.fn(async () => {}),
+			insertCard: vi.fn(async () => {}),
+		});
+
+		await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "Research scooters",
+		});
+		const confirmPromise = service.confirmRegenerateBoard({
+			boardId: 42,
+			workspaceId: 7,
+		});
+		await vi.runAllTimersAsync();
+		await confirmPromise;
+
+		expect(insertConversation).toHaveBeenCalled();
+		vi.useRealTimers();
+	});
+});
+
 describe("confirmRegenerateBoard", () => {
 	it("updates intent, deletes old outputs + cards, re-runs pipeline", async () => {
 		const updateBoard = vi.fn(async () => {});
