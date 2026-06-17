@@ -188,6 +188,25 @@ export interface AgentBoardServiceDeps {
 		board: unknown,
 		feedback: string,
 	) => Promise<string>;
+
+	classifyFollowUpIntent?: (
+		originalIntent: string,
+		artifactContent: string | null,
+		conversationHistory: Array<{ role: string; content: string }>,
+		userMessage: string,
+	) => Promise<{
+		intent: "ASK" | "REFINE" | "NEW_DIRECTION" | "OFF_TOPIC";
+		response: string;
+		confidence: number;
+	}>;
+
+	getConversationHistory?: (
+		boardId: number,
+	) => Promise<Array<{ role: string; content: string }>>;
+
+	deleteOutputsForBoard?: (boardId: number) => Promise<void>;
+
+	deleteCardsForBoard?: (boardId: number) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +315,8 @@ function publishToolSse(
 }
 
 export function createAgentBoardService(deps: AgentBoardServiceDeps) {
+	const pendingRegenerate = new Map<number, string>();
+
 	return {
 		// ---- createBoard ----
 		async createBoard({
@@ -942,8 +963,15 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				content: message,
 			});
 
+			if (board.executionStatus === "running") {
+				return {
+					explanation:
+						"Board sedang dalam eksekusi. Tunggu hingga selesai.",
+					boardUpdated: false,
+				};
+			}
+
 			if (board.status === "pending") {
-				// Generate 1 clarification question via LLM
 				const question = await deps.generateClarificationQuestion!(
 					board.originalIntent,
 					board,
@@ -952,12 +980,128 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				return { explanation: question, boardUpdated: false };
 			}
 
-			// Approved boards — no LLM call, just acknowledge
+			if (
+				board.status === "approved" &&
+				board.executionStatus === "done"
+			) {
+				const artifact = await deps.getArtifact?.(boardId);
+				const history =
+					(await deps.getConversationHistory?.(boardId)) ?? [];
+
+				const result = await deps.classifyFollowUpIntent!(
+					board.originalIntent,
+					artifact?.content ?? null,
+					history,
+					message,
+				);
+
+				switch (result.intent) {
+					case "ASK":
+					case "REFINE": {
+						await deps.publishEvent?.(workspaceId, {
+							type: "agent.card.token",
+							columnSlug: "__notfirst__",
+							boardId,
+							token: result.response,
+						});
+						await deps.insertConversation!({
+							boardId,
+							role: "assistant",
+							content: result.response,
+						});
+						return {
+							explanation: result.response,
+							boardUpdated: false,
+						};
+					}
+					case "NEW_DIRECTION": {
+						pendingRegenerate.set(boardId, message);
+						await deps.insertConversation!({
+							boardId,
+							role: "assistant",
+							content: result.response,
+						});
+						return {
+							explanation: result.response,
+							pendingRegenerate: true,
+							boardUpdated: false,
+						};
+					}
+					case "OFF_TOPIC": {
+						await deps.insertConversation!({
+							boardId,
+							role: "assistant",
+							content: result.response,
+						});
+						return {
+							explanation: result.response,
+							boardUpdated: false,
+						};
+					}
+				}
+			}
+
 			return {
 				explanation:
 					"Message received. The board is already approved and executing.",
 				boardUpdated: false,
 			};
+		},
+
+		// ---- confirmRegenerateBoard ----
+		async confirmRegenerateBoard({
+			boardId,
+			workspaceId,
+		}: {
+			boardId: number;
+			workspaceId: number;
+		}) {
+			const board = await deps.getBoard!(boardId);
+			if (!board || board.workspaceId !== workspaceId)
+				return { status: 404 as const };
+
+			const newIntent = pendingRegenerate.get(boardId);
+			if (!newIntent) return { ok: true as const };
+
+			await deps.insertConversation!({
+				boardId,
+				role: "assistant",
+				content: `Regenerating board with new direction: ${newIntent}`,
+			});
+
+			await deps.updateBoard!(boardId, { original_intent: newIntent });
+			await deps.deleteOutputsForBoard!(boardId);
+			await deps.deleteCardsForBoard!(boardId);
+			pendingRegenerate.delete(boardId);
+
+			this.runPipeline({ boardId, workspaceId }).catch((err: unknown) => {
+				console.error("[confirmRegenerateBoard] runPipeline failed:", err);
+			});
+
+			return { ok: true as const };
+		},
+
+		// ---- cancelRegenerateBoard ----
+		async cancelRegenerateBoard({
+			boardId,
+			workspaceId,
+		}: {
+			boardId: number;
+			workspaceId: number;
+		}) {
+			const board = await deps.getBoard!(boardId);
+			if (!board || board.workspaceId !== workspaceId)
+				return { status: 404 as const };
+
+			pendingRegenerate.delete(boardId);
+
+			await deps.insertConversation!({
+				boardId,
+				role: "assistant",
+				content: "Regeneration cancelled.",
+			});
+
+			return { ok: true as const };
 		},
 
 		// ---- getBoards (workspace-scoped, sorted newest first) ----
