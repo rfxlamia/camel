@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	buildArtifactDownload,
 	defaultToolRegistry,
+	deleteCardsForBoard,
+	deleteOutputsForBoard,
 	getToolTrace,
 	realArtifactDeps,
+	resolveMessageAction,
 	runInsertColumns,
+	selectConversationHistory,
 } from "./routes.js";
 
 describe("defaultToolRegistry", () => {
@@ -187,5 +191,75 @@ describe("artifact download headers", () => {
 		);
 		expect(headers["Content-Type"]).toMatch(/markdown/);
 		expect(body).toBe("# Title\nBody");
+	});
+});
+
+describe("resolveMessageAction (pure payload detection)", () => {
+	it("maps a string message to a trimmed send action", () => {
+		expect(resolveMessageAction({ message: "  hello  " })).toEqual({
+			kind: "send",
+			message: "hello",
+		});
+	});
+
+	it("maps confirm_regenerate action", () => {
+		expect(resolveMessageAction({ action: "confirm_regenerate" })).toEqual({
+			kind: "confirm",
+		});
+	});
+
+	it("maps cancel_regenerate action", () => {
+		expect(resolveMessageAction({ action: "cancel_regenerate" })).toEqual({
+			kind: "cancel",
+		});
+	});
+
+	it("rejects empty / whitespace / unknown-action / missing bodies as invalid", () => {
+		expect(resolveMessageAction({})).toEqual({ kind: "invalid" });
+		expect(resolveMessageAction(undefined)).toEqual({ kind: "invalid" });
+		expect(resolveMessageAction({ message: "   " })).toEqual({ kind: "invalid" });
+		expect(resolveMessageAction({ action: "bogus" })).toEqual({ kind: "invalid" });
+	});
+});
+
+describe("realDeps SQL wiring (fakeDb)", () => {
+	it("selectConversationHistory queries agent_conversations scoped + ordered", async () => {
+		const rows = [
+			{ role: "user", content: "What about subsidies?" },
+			{ role: "assistant", content: "Subsidies are..." },
+		];
+		const fakeDb = { query: vi.fn(async () => ({ rows })) };
+
+		const history = await selectConversationHistory(fakeDb as any, 42);
+
+		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+		const sql = fakeDb.query.mock.calls[0][0] as string;
+		expect(sql).toMatch(/from\s+agent_conversations/i);
+		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
+		expect(sql).toMatch(/order by\s+created_at/i);
+		expect(history).toEqual([
+			{ role: "user", content: "What about subsidies?" },
+			{ role: "assistant", content: "Subsidies are..." },
+		]);
+	});
+
+	it("deleteOutputsForBoard issues a scoped DELETE on agent_card_outputs", async () => {
+		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
+		await deleteOutputsForBoard(fakeDb as any, 42);
+		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+		const sql = fakeDb.query.mock.calls[0][0] as string;
+		expect(sql).toMatch(/delete from\s+agent_card_outputs/i);
+		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
+	});
+
+	it("deleteCardsForBoard deletes cards via columns subquery", async () => {
+		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
+		await deleteCardsForBoard(fakeDb as any, 42);
+		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
+		const sql = fakeDb.query.mock.calls[0][0] as string;
+		expect(sql).toMatch(/delete from\s+cards/i);
+		expect(sql).toMatch(
+			/column_id\s+in\s*\(\s*select\s+id\s+from\s+columns\s+where\s+board_id\s*=\s*\$1/i,
+		);
 	});
 });

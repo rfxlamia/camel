@@ -24,6 +24,7 @@ import { requireAuth } from "../auth.js";
 import { pool } from "../db/pool.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
+	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,
 	executeCard as realExecuteCard,
 	generateClarificationQuestion as realGenerateClarificationQuestion,
@@ -191,6 +192,75 @@ export function buildArtifactDownload(data: {
 }
 
 // ---------------------------------------------------------------------------
+// Message payload detection — exported for unit tests
+// ---------------------------------------------------------------------------
+
+export type MessageAction =
+	| { kind: "send"; message: string }
+	| { kind: "confirm" }
+	| { kind: "cancel" }
+	| { kind: "invalid" };
+
+export function resolveMessageAction(body: unknown): MessageAction {
+	if (body && typeof body === "object") {
+		const record = body as Record<string, unknown>;
+		if (record.action === "confirm_regenerate") return { kind: "confirm" };
+		if (record.action === "cancel_regenerate") return { kind: "cancel" };
+		if (typeof record.message === "string") {
+			const trimmed = record.message.trim();
+			if (trimmed) return { kind: "send", message: trimmed };
+		}
+	}
+	return { kind: "invalid" };
+}
+
+// ---------------------------------------------------------------------------
+// Conversation / regenerate DB helpers — exported for unit tests
+// ---------------------------------------------------------------------------
+
+export async function selectConversationHistory(
+	db: {
+		query: (
+			sql: string,
+			params: unknown[],
+		) => Promise<{ rows: Array<Record<string, unknown>> }>;
+	},
+	boardId: number,
+): Promise<Array<{ role: string; content: string }>> {
+	const { rows } = await db.query(
+		`SELECT role, content
+     FROM agent_conversations
+     WHERE board_id = $1
+     ORDER BY created_at`,
+		[boardId],
+	);
+	return rows.map((r) => ({
+		role: r.role as string,
+		content: r.content as string,
+	}));
+}
+
+export async function deleteOutputsForBoard(
+	db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+	boardId: number,
+): Promise<void> {
+	await db.query(`DELETE FROM agent_card_outputs WHERE board_id = $1`, [
+		boardId,
+	]);
+}
+
+export async function deleteCardsForBoard(
+	db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+	boardId: number,
+): Promise<void> {
+	await db.query(
+		`DELETE FROM cards
+     WHERE column_id IN (SELECT id FROM columns WHERE board_id = $1)`,
+		[boardId],
+	);
+}
+
+// ---------------------------------------------------------------------------
 // Real dependency implementations
 // ---------------------------------------------------------------------------
 
@@ -211,6 +281,7 @@ async function lookupMembership(
 
 const realDeps: AgentBoardServiceDeps = {
 	classifyIntent: realClassifyIntent,
+	classifyFollowUpIntent: realClassifyFollowUpIntent,
 	executeCard: realExecuteCard,
 	generateClarificationQuestion: realGenerateClarificationQuestion,
 	toolRegistry: defaultToolRegistry,
@@ -394,6 +465,12 @@ const realDeps: AgentBoardServiceDeps = {
 	insertArtifact: (data) => realArtifactDeps.insertArtifact(pool, data),
 
 	getArtifact: (boardId) => realArtifactDeps.getArtifact(pool, boardId),
+
+	getConversationHistory: (boardId) => selectConversationHistory(pool, boardId),
+
+	deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(pool, boardId),
+
+	deleteCardsForBoard: (boardId) => deleteCardsForBoard(pool, boardId),
 };
 
 // ---------------------------------------------------------------------------
@@ -470,20 +547,28 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			const { message } = req.body ?? {};
-			if (typeof message !== "string" || !message.trim()) {
-				return res.status(400).json({ error: "message is required" });
+			const action = resolveMessageAction(req.body);
+
+			if (action.kind === "invalid") {
+				return res
+					.status(400)
+					.json({ error: "message or action is required" });
 			}
 
 			try {
 				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.sendMessage({
-					boardId,
-					userId: req.user!.id,
-					workspaceId,
-					message: message.trim(),
-				});
+				const result =
+					action.kind === "confirm"
+						? await service.confirmRegenerateBoard({ boardId, workspaceId })
+						: action.kind === "cancel"
+							? await service.cancelRegenerateBoard({ boardId, workspaceId })
+							: await service.sendMessage({
+									boardId,
+									userId: req.user!.id,
+									workspaceId,
+									message: action.message,
+								});
 
 				if ("status" in result && typeof result.status === "number") {
 					return res.status(result.status).json(result);
