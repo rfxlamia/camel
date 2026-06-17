@@ -6,7 +6,7 @@ import {
 	Send,
 	XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
@@ -55,6 +55,32 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 }
 
 // ---- Helpers ----
+
+type FollowUpMessage = {
+	role: "user" | "assistant";
+	content: string;
+	intent?: string;
+};
+
+type AgentBoardMessagePayload =
+	| string
+	| { action: "confirm_regenerate" | "cancel_regenerate" };
+
+type AgentBoardMessageResult = {
+	explanation: string;
+	boardUpdated: boolean;
+	pendingRegenerate?: boolean;
+};
+
+const sendBoardMessage = api.sendAgentBoardMessage as (
+	workspaceId: number,
+	boardId: number,
+	payload: AgentBoardMessagePayload,
+) => Promise<AgentBoardMessageResult>;
+
+function isFollowUpSlug(slug: string | undefined): boolean {
+	return slug === "__notfirst__";
+}
 
 function statusBadge(board: AgentBoard) {
 	if (board.executionStatus === "done") {
@@ -254,6 +280,10 @@ export default function AgentPage() {
 	const lastSyncedTerminalIdxRef = useRef(-1);
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const [isLogExpanded, setIsLogExpanded] = useState(false);
+	const [followUpMessages, setFollowUpMessages] = useState<FollowUpMessage[]>(
+		[],
+	);
+	const [pendingRegenerate, setPendingRegenerate] = useState(false);
 
 	// Load board from URL param when workspace or boardId changes.
 	useEffect(() => {
@@ -261,6 +291,8 @@ export default function AgentPage() {
 		if (!boardId || !activeWorkspaceId) return;
 		lastSyncedTerminalIdxRef.current = -1;
 		clearAgentEvents();
+		setFollowUpMessages([]);
+		setPendingRegenerate(false);
 		let cancelled = false;
 		setLoading(true);
 		api
@@ -345,11 +377,27 @@ export default function AgentPage() {
 			const currentBoard = boardRef.current;
 			if (!activeWorkspaceId || !currentBoard) return;
 			try {
-				const result = await api.sendAgentBoardMessage(
+				const result = await sendBoardMessage(
 					activeWorkspaceId,
 					currentBoard.id,
 					msg,
 				);
+				if (result.pendingRegenerate) {
+					setPendingRegenerate(true);
+					setFollowUpMessages((prev) => [
+						...prev,
+						{
+							role: "assistant",
+							content: result.explanation,
+							intent: "NEW_DIRECTION",
+						},
+					]);
+				} else if (result.explanation) {
+					setFollowUpMessages((prev) => [
+						...prev,
+						{ role: "assistant", content: result.explanation },
+					]);
+				}
 				if (result.boardUpdated) {
 					const updated = await api.getAgentBoard(
 						activeWorkspaceId,
@@ -375,6 +423,57 @@ export default function AgentPage() {
 		},
 		[activeWorkspaceId, showToast],
 	);
+
+	const handleConfirmRegenerate = useCallback(async () => {
+		const currentBoard = boardRef.current;
+		if (!activeWorkspaceId || !currentBoard || !pendingRegenerate) return;
+		setBusy(true);
+		try {
+			const result = await sendBoardMessage(activeWorkspaceId, currentBoard.id, {
+				action: "confirm_regenerate",
+			});
+			setPendingRegenerate(false);
+			if (result.explanation) {
+				setFollowUpMessages((prev) => [
+					...prev,
+					{ role: "assistant", content: result.explanation },
+				]);
+			}
+			if (result.boardUpdated) {
+				const updated = await api.getAgentBoard(
+					activeWorkspaceId,
+					currentBoard.id,
+				);
+				setBoard(updated);
+			}
+		} catch {
+			showToast("Couldn't confirm regeneration. Try again.");
+		} finally {
+			setBusy(false);
+		}
+	}, [activeWorkspaceId, pendingRegenerate, showToast]);
+
+	const handleCancelRegenerate = useCallback(async () => {
+		const currentBoard = boardRef.current;
+		if (!activeWorkspaceId || !currentBoard || !pendingRegenerate) return;
+		setBusy(true);
+		try {
+			const result = await sendBoardMessage(activeWorkspaceId, currentBoard.id, {
+				action: "cancel_regenerate",
+			});
+			setPendingRegenerate(false);
+			if (result.explanation) {
+				setFollowUpMessages((prev) => [
+					...prev,
+					{ role: "assistant", content: result.explanation },
+				]);
+			}
+		} catch {
+			showToast("Couldn't cancel regeneration. Try again.");
+		} finally {
+			setBusy(false);
+		}
+	}, [activeWorkspaceId, pendingRegenerate, showToast]);
 
 	// Holds the latest createBoard so its own finally can re-enter createBoard
 	// (instead of sendMessage) when a create failed and the next queued item is
@@ -443,6 +542,16 @@ export default function AgentPage() {
 		setError(null);
 		setLastIntent(trimmed);
 
+		const isFollowUp =
+			board?.executionStatus === "done" || board?.executionStatus === "failed";
+
+		if (isFollowUp) {
+			setFollowUpMessages((prev) => [
+				...prev,
+				{ role: "user", content: trimmed },
+			]);
+		}
+
 		if (!board) {
 			// Route through queue
 			const qResult = queueSubmit(queueStateRef.current, trimmed);
@@ -460,8 +569,10 @@ export default function AgentPage() {
 		setBusy(false);
 
 		if (result.fire) {
-			// Fire immediately
-			clearAgentEvents();
+			// Follow-up on done/failed boards keeps column SSE state intact.
+			if (!isFollowUp) {
+				clearAgentEvents();
+			}
 			void sendMessage(result.fire);
 		}
 	}, [input, busy, board, clearAgentEvents, sendMessage, createBoard]);
@@ -518,12 +629,61 @@ export default function AgentPage() {
 		clearAgentEvents();
 		setError(null);
 		setInput("");
+		setFollowUpMessages([]);
+		setPendingRegenerate(false);
 	}, [setSearchParams, clearAgentEvents]);
 
 	// Auto-expand log when execution starts
 	useEffect(() => {
 		if (board?.executionStatus === "running") setIsLogExpanded(true);
 	}, [board?.executionStatus]);
+
+	const isRunning = board?.executionStatus === "running";
+	const isPending = board?.status === "pending";
+	const isDone = board?.executionStatus === "done";
+	const isFailed = board?.executionStatus === "failed";
+	const canFollowUp = isDone || isFailed;
+
+	// Exclude follow-up stream events from column state + execution log metrics.
+	const columnAgentEvents = useMemo(
+		() => agentEvents.filter((e) => !isFollowUpSlug(e.columnSlug)),
+		[agentEvents],
+	);
+
+	const streamingFollowUpText = useMemo(() => {
+		if (!board) return "";
+		return agentEvents
+			.filter(
+				(e) =>
+					e.type === "agent.card.token" &&
+					isFollowUpSlug(e.columnSlug) &&
+					e.boardId === board.id,
+			)
+			.map((e) => e.token ?? "")
+			.join("");
+	}, [agentEvents, board]);
+
+	// Streaming = output or thinking deltas (thinking can precede first token).
+	const isStreaming =
+		isRunning &&
+		columnAgentEvents.some(
+			(e) => e.type === "agent.card.token" || e.type === "agent.card.thinking",
+		);
+
+	// Filter batched stream chunks from the log — panel shows them in detail view.
+	const logEvents = columnAgentEvents.filter(
+		(e) => e.type !== "agent.card.token" && e.type !== "agent.card.thinking",
+	);
+	const tokenCount = columnAgentEvents.filter(
+		(e) => e.type === "agent.card.token",
+	).length;
+
+	const inputDisabled =
+		busy ||
+		isRunning ||
+		pendingRegenerate ||
+		(board !== null && !canFollowUp && !isPending);
+	const sendDisabled = inputDisabled || !input.trim();
 
 	if (activeWorkspaceId === null) {
 		return (
@@ -542,26 +702,6 @@ export default function AgentPage() {
 			</div>
 		);
 	}
-
-	const isRunning = board?.executionStatus === "running";
-	const isPending = board?.status === "pending";
-	const isDone = board?.executionStatus === "done";
-	const isFailed = board?.executionStatus === "failed";
-
-	// Streaming = output or thinking deltas (thinking can precede first token).
-	const isStreaming =
-		isRunning &&
-		agentEvents.some(
-			(e) => e.type === "agent.card.token" || e.type === "agent.card.thinking",
-		);
-
-	// Filter batched stream chunks from the log — panel shows them in detail view.
-	const logEvents = agentEvents.filter(
-		(e) => e.type !== "agent.card.token" && e.type !== "agent.card.thinking",
-	);
-	const tokenCount = agentEvents.filter(
-		(e) => e.type === "agent.card.token",
-	).length;
 
 	return (
 		<div className="flex h-full">
@@ -608,7 +748,7 @@ export default function AgentPage() {
 						<AgentBoardVisual
 							board={board}
 							onCardClick={setDetailColumn}
-							agentEvents={agentEvents}
+							agentEvents={columnAgentEvents}
 						/>
 					</div>
 				)}
@@ -651,6 +791,70 @@ export default function AgentPage() {
 									? `Created ${board.columns.length} columns. Review the structure and approve to start execution.`
 									: "Board generated. Use the chat below to refine."}
 							</p>
+						</div>
+					)}
+
+					{followUpMessages.map((msg, i) => (
+						<div
+							key={`follow-up-${i}`}
+							className={
+								msg.role === "user" ? "flex justify-end" : "flex justify-start"
+							}
+						>
+							<div
+								className={
+									msg.role === "user"
+										? "max-w-[80%] rounded-lg bg-primary-600 px-3 py-2"
+										: "max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2"
+								}
+							>
+								{msg.role === "assistant" && (
+									<p className="text-xs font-medium text-neutral-500 mb-1">
+										Agent
+									</p>
+								)}
+								<p
+									className={
+										msg.role === "user"
+											? "text-sm text-white break-words"
+											: "text-sm text-neutral-800 whitespace-pre-wrap break-words"
+									}
+								>
+									{msg.content}
+								</p>
+							</div>
+						</div>
+					))}
+
+					{streamingFollowUpText && (
+						<div className="flex justify-start">
+							<div className="max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2">
+								<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
+								<p className="text-sm text-neutral-800 whitespace-pre-wrap break-words">
+									{streamingFollowUpText}
+								</p>
+							</div>
+						</div>
+					)}
+
+					{pendingRegenerate && (
+						<div className="flex gap-2">
+							<button
+								type="button"
+								onClick={() => void handleConfirmRegenerate()}
+								disabled={busy}
+								className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								Ya, Regenerate
+							</button>
+							<button
+								type="button"
+								onClick={() => void handleCancelRegenerate()}
+								disabled={busy}
+								className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								Batal
+							</button>
 						</div>
 					)}
 
@@ -798,19 +1002,18 @@ export default function AgentPage() {
 									? "Describe what you want to research..."
 									: isRunning
 										? "Execution in progress..."
-										: "Refine the board..."
+										: pendingRegenerate
+											? "Waiting for confirmation..."
+											: canFollowUp
+												? "Follow up about this board..."
+												: "Refine the board..."
 							}
-							disabled={busy || isRunning || board?.status === "approved"}
+							disabled={inputDisabled}
 							className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-400"
 						/>
 						<button
 							type="submit"
-							disabled={
-								!input.trim() ||
-								busy ||
-								isRunning ||
-								board?.status === "approved"
-							}
+							disabled={sendDisabled}
 							aria-label="Send"
 							className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
