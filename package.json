@@ -17,10 +17,13 @@
 		"test": "npm run test --workspace=server && npm run test --workspace=client",
 		"lint": "biome lint .",
 		"lint:fix": "biome check --write .",
-		"build": "npm run build --workspace=server && npm run build --workspace=client"
+		"typecheck": "npm run typecheck --workspace=server && npm run typecheck --workspace=client",
+		"build": "npm run build --workspace=server && npm run build --workspace=client",
+		"prepare": "husky"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.0",
+		"husky": "^9.1.7",
 		"wait-on": "^9.0.10"
 	}
 }
