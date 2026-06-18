@@ -202,6 +202,7 @@ async function createSession(res: Response, userId: number): Promise<void> {
 	res.cookie(SESSION_COOKIE, token, {
 		httpOnly: true,
 		sameSite: "lax",
+		secure: process.env.NODE_ENV === "production",
 		expires: expiresAt,
 		path: "/",
 	});
