@@ -6,13 +6,9 @@ import {
 	onlineUsers,
 	sseHandler,
 } from "../realtime.js";
+import { parseWorkspaceId } from "./helpers.js";
 
 type WorkspaceRouteParams = { workspaceId: string };
-
-function parseWorkspaceId(raw: string): number | null {
-	const workspaceId = Number(raw);
-	return Number.isInteger(workspaceId) ? workspaceId : null;
-}
 
 export const presenceRouter = Router({ mergeParams: true });
 

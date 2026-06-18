@@ -9,7 +9,7 @@ import {
 
 export const workspacesRouter = Router({ mergeParams: true });
 
-workspacesRouter.get("/workspaces", async (req, res) => {
+workspacesRouter.get("/", async (req, res) => {
 	const userId = req.user!.id;
 	const username = req.user!.username;
 
@@ -51,7 +51,7 @@ workspacesRouter.get("/workspaces", async (req, res) => {
 	);
 });
 
-workspacesRouter.post("/workspaces", async (req, res) => {
+workspacesRouter.post("/", async (req, res) => {
 	const { name } = req.body ?? {};
 	if (typeof name !== "string" || name.trim() === "") {
 		return res.status(400).json({ error: "name is required" });
@@ -131,3 +131,63 @@ workspacesRouter.delete("/:workspaceId", async (req, res) => {
 	await pool.query("DELETE FROM workspaces WHERE id = $1", [workspaceId]);
 	res.status(204).end();
 });
+
+workspacesRouter.post(
+	"/:workspaceId/transfer-ownership",
+	async (req, res) => {
+		const workspaceId = Number(req.params.workspaceId);
+		if (!Number.isInteger(workspaceId)) {
+			return res.status(400).json({ error: "workspaceId must be an integer" });
+		}
+
+		const actorRole = await lookupMembership(req.user!.id, workspaceId);
+		if (!actorRole || actorRole !== "owner") {
+			return res.status(404).json({ error: "Not found" });
+		}
+
+		const { newOwnerId, previousOwnerRole } = req.body ?? {};
+		if (!Number.isInteger(newOwnerId)) {
+			return res.status(400).json({ error: "newOwnerId is required" });
+		}
+		if (newOwnerId === req.user!.id) {
+			return res
+				.status(400)
+				.json({ error: "Cannot transfer ownership to yourself" });
+		}
+		const demotedRole =
+			previousOwnerRole === "admin" || previousOwnerRole === "member"
+				? previousOwnerRole
+				: "admin";
+
+		const newOwnerRole = await lookupMembership(newOwnerId, workspaceId);
+		if (!newOwnerRole) {
+			return res.status(404).json({ error: "Not found" });
+		}
+
+		const client = await pool.connect();
+		try {
+			await client.query("BEGIN");
+			await client.query(
+				`UPDATE workspace_members SET role = 'owner'
+       WHERE workspace_id = $1 AND user_id = $2`,
+				[workspaceId, newOwnerId],
+			);
+			await client.query(
+				`UPDATE workspace_members SET role = $3
+       WHERE workspace_id = $1 AND user_id = $2`,
+				[workspaceId, req.user!.id, demotedRole],
+			);
+			await client.query(
+				"UPDATE workspaces SET owner_user_id = $2 WHERE id = $1",
+				[workspaceId, newOwnerId],
+			);
+			await client.query("COMMIT");
+			res.json({ ok: true });
+		} catch (err) {
+			await client.query("ROLLBACK");
+			throw err;
+		} finally {
+			client.release();
+		}
+	},
+);

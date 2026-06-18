@@ -3,6 +3,9 @@ import { computeFlowMetrics, computeMetricsHistory } from "../core/metrics.js";
 import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 
+const CARD_TIMELINE_SQL =
+	"SELECT created_at, started_at, done_at FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL";
+
 export const metricsRouter = Router({ mergeParams: true });
 
 metricsRouter.get("/metrics", requireWorkspaceMember, async (req, res) => {
@@ -11,10 +14,7 @@ metricsRouter.get("/metrics", requireWorkspaceMember, async (req, res) => {
 	const windowDays = req.query.windowDays
 		? Number(req.query.windowDays)
 		: undefined;
-	const { rows } = await pool.query(
-		"SELECT created_at, started_at, done_at FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL",
-		[workspaceId],
-	);
+	const { rows } = await pool.query(CARD_TIMELINE_SQL, [workspaceId]);
 	const metrics = computeFlowMetrics(
 		rows.map((r) => ({
 			createdAt: r.created_at,
@@ -41,10 +41,7 @@ metricsRouter.get(
 				.status(400)
 				.json({ error: "weeks must be an integer between 1 and 26" });
 		}
-		const { rows } = await pool.query(
-			"SELECT created_at, started_at, done_at FROM cards WHERE workspace_id = $1 AND deleted_at IS NULL",
-			[workspaceId],
-		);
+		const { rows } = await pool.query(CARD_TIMELINE_SQL, [workspaceId]);
 		const history = computeMetricsHistory(
 			rows.map((r) => ({
 				createdAt: r.created_at,
