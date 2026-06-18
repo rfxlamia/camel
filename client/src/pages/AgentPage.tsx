@@ -6,16 +6,25 @@ import {
 	Send,
 	XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useReducer,
+	useRef,
+	useState,
+} from "react";
+import ReactMarkdown from "react-markdown";
 import { useSearchParams } from "react-router";
+import remarkGfm from "remark-gfm";
 import { ApiError, api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
 import ArtifactCard from "../components/ArtifactCard";
 import LoadingCamel from "../components/LoadingCamel";
 import SuccessAnimation from "../components/SuccessAnimation";
 import { useBoard } from "../context/BoardContext";
-import { deriveColumnState } from "../lib/agentColumnState";
 import { shouldRefetchBoardOnTerminalEvent } from "../lib/agentBoardSync";
+import { deriveColumnState } from "../lib/agentColumnState";
 import {
 	initialQueue,
 	type QueueState,
@@ -56,6 +65,8 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 
 // ---- Helpers ----
 
+const ROLE_ASSISTANT = "assistant" as const;
+
 type FollowUpMessage = {
 	role: "user" | "assistant";
 	content: string;
@@ -82,6 +93,102 @@ const sendBoardMessage = api.sendAgentBoardMessage as (
 function isFollowUpSlug(slug: string | undefined): boolean {
 	return slug === "__notfirst__";
 }
+
+// ---- Chat markdown components (compact style for chat bubbles) ----
+
+const chatMarkdownComponents = {
+	h1: ({ children }: { children?: React.ReactNode }) => (
+		<h1 className="text-base font-semibold text-neutral-900 mt-2 mb-1 first:mt-0">
+			{children}
+		</h1>
+	),
+	h2: ({ children }: { children?: React.ReactNode }) => (
+		<h2 className="text-sm font-semibold text-neutral-900 mt-2 mb-1 first:mt-0">
+			{children}
+		</h2>
+	),
+	h3: ({ children }: { children?: React.ReactNode }) => (
+		<h3 className="text-sm font-semibold text-neutral-800 mt-1.5 mb-0.5 first:mt-0">
+			{children}
+		</h3>
+	),
+	p: ({ children }: { children?: React.ReactNode }) => (
+		<p className="text-sm text-neutral-800 leading-relaxed mb-1 last:mb-0">
+			{children}
+		</p>
+	),
+	ul: ({ children }: { children?: React.ReactNode }) => (
+		<ul className="list-disc pl-4 mb-1 space-y-0.5 text-sm text-neutral-800">
+			{children}
+		</ul>
+	),
+	ol: ({ children }: { children?: React.ReactNode }) => (
+		<ol className="list-decimal pl-4 mb-1 space-y-0.5 text-sm text-neutral-800">
+			{children}
+		</ol>
+	),
+	li: ({ children }: { children?: React.ReactNode }) => (
+		<li className="text-sm text-neutral-800 leading-relaxed">{children}</li>
+	),
+	strong: ({ children }: { children?: React.ReactNode }) => (
+		<strong className="font-semibold text-neutral-900">{children}</strong>
+	),
+	em: ({ children }: { children?: React.ReactNode }) => (
+		<em className="italic text-neutral-600">{children}</em>
+	),
+	a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+		<a
+			href={href}
+			target="_blank"
+			rel="noopener noreferrer"
+			className="text-primary-600 hover:text-primary-700 underline underline-offset-2"
+		>
+			{children}
+		</a>
+	),
+	code: ({
+		children,
+		className,
+	}: {
+		children?: React.ReactNode;
+		className?: string;
+	}) => {
+		const isBlock = className?.includes("language-");
+		if (isBlock) {
+			return (
+				<pre className="rounded-md bg-neutral-100 border border-neutral-200 p-2 mb-1 overflow-x-auto">
+					<code className="text-xs font-mono text-neutral-800">{children}</code>
+				</pre>
+			);
+		}
+		return (
+			<code className="rounded bg-neutral-100 px-1 py-0.5 text-xs font-mono text-neutral-800">
+				{children}
+			</code>
+		);
+	},
+	blockquote: ({ children }: { children?: React.ReactNode }) => (
+		<blockquote className="border-l-2 border-primary-300 pl-2.5 py-0.5 mb-1 text-sm text-neutral-600 italic">
+			{children}
+		</blockquote>
+	),
+	hr: () => <hr className="my-1.5 border-neutral-200" />,
+	table: ({ children }: { children?: React.ReactNode }) => (
+		<div className="overflow-x-auto mb-1">
+			<table className="w-full text-xs border-collapse">{children}</table>
+		</div>
+	),
+	th: ({ children }: { children?: React.ReactNode }) => (
+		<th className="border-b border-neutral-200 px-2 py-1 text-left text-xs font-semibold text-neutral-700">
+			{children}
+		</th>
+	),
+	td: ({ children }: { children?: React.ReactNode }) => (
+		<td className="border-b border-neutral-200 px-2 py-1 text-sm text-neutral-800">
+			{children}
+		</td>
+	),
+};
 
 function conversationsToFollowUpMessages(
 	conversations: Array<{ role: string; content: string }> | undefined,
@@ -426,36 +533,30 @@ export default function AgentPage() {
 					setFollowUpMessages((prev) => [
 						...prev,
 						{
-							role: "assistant",
+							role: ROLE_ASSISTANT,
 							content: result.explanation,
 							intent: "NEW_DIRECTION",
 						},
 					]);
 				} else if (result.streamed && result.explanation) {
 					const streamedText =
-						getStreamingFollowUpText(
-							agentEventsRef.current,
-							currentBoard.id,
-						) || result.explanation;
+						getStreamingFollowUpText(agentEventsRef.current, currentBoard.id) ||
+						result.explanation;
 					setFollowUpMessages((prev) => {
 						if (
 							prev.some(
-								(m) =>
-									m.role === "assistant" && m.content === streamedText,
+								(m) => m.role === ROLE_ASSISTANT && m.content === streamedText,
 							)
 						) {
 							return prev;
 						}
-						return [
-							...prev,
-							{ role: "assistant", content: streamedText },
-						];
+						return [...prev, { role: ROLE_ASSISTANT, content: streamedText }];
 					});
 					clearFollowUpAgentEvents();
 				} else if (result.explanation) {
 					setFollowUpMessages((prev) => [
 						...prev,
-						{ role: "assistant", content: result.explanation },
+						{ role: ROLE_ASSISTANT, content: result.explanation },
 					]);
 				}
 				if (result.boardUpdated) {
@@ -486,7 +587,9 @@ export default function AgentPage() {
 
 	const handleConfirmRegenerate = useCallback(async () => {
 		const currentBoard = boardRef.current;
-		if (!activeWorkspaceId || !currentBoard || !pendingRegenerate) return;
+		const cannotRegenerate =
+			!activeWorkspaceId || !currentBoard || !pendingRegenerate;
+		if (cannotRegenerate) return;
 		setBusy(true);
 		try {
 			clearAgentEvents();
@@ -511,17 +614,23 @@ export default function AgentPage() {
 
 	const handleCancelRegenerate = useCallback(async () => {
 		const currentBoard = boardRef.current;
-		if (!activeWorkspaceId || !currentBoard || !pendingRegenerate) return;
+		const cannotRegenerate =
+			!activeWorkspaceId || !currentBoard || !pendingRegenerate;
+		if (cannotRegenerate) return;
 		setBusy(true);
 		try {
-			const result = await sendBoardMessage(activeWorkspaceId, currentBoard.id, {
-				action: "cancel_regenerate",
-			});
+			const result = await sendBoardMessage(
+				activeWorkspaceId,
+				currentBoard.id,
+				{
+					action: "cancel_regenerate",
+				},
+			);
 			setPendingRegenerate(false);
 			if (result.explanation) {
 				setFollowUpMessages((prev) => [
 					...prev,
-					{ role: "assistant", content: result.explanation },
+					{ role: ROLE_ASSISTANT, content: result.explanation },
 				]);
 			}
 		} catch {
@@ -590,7 +699,7 @@ export default function AgentPage() {
 	createBoardRef.current = createBoard;
 
 	// Submit handler — uses queue
-	const handleSend = useCallback(async () => {
+	const handleSend = useCallback(() => {
 		const trimmed = input.trim();
 		if (!trimmed || busy) return;
 		setInput("");
@@ -607,7 +716,7 @@ export default function AgentPage() {
 			if (streamed) {
 				setFollowUpMessages((prev) => [
 					...prev,
-					{ role: "assistant", content: streamed },
+					{ role: ROLE_ASSISTANT, content: streamed },
 				]);
 			}
 			clearFollowUpAgentEvents();
@@ -640,7 +749,15 @@ export default function AgentPage() {
 			}
 			void sendMessage(result.fire);
 		}
-	}, [input, busy, board, clearAgentEvents, clearFollowUpAgentEvents, sendMessage, createBoard]);
+	}, [
+		input,
+		busy,
+		board,
+		clearAgentEvents,
+		clearFollowUpAgentEvents,
+		sendMessage,
+		createBoard,
+	]);
 
 	// Settle → auto-fire effect (after queue reducer settles)
 	// The settle effect in the agentEvents watcher handles firing the next queued message.
@@ -721,7 +838,7 @@ export default function AgentPage() {
 		if (!text) return "";
 		if (
 			followUpMessages.some(
-				(m) => m.role === "assistant" && m.content === text,
+				(m) => m.role === ROLE_ASSISTANT && m.content === text,
 			)
 		) {
 			return "";
@@ -874,20 +991,25 @@ export default function AgentPage() {
 										: "max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2"
 								}
 							>
-								{msg.role === "assistant" && (
+								{msg.role === ROLE_ASSISTANT && (
 									<p className="text-xs font-medium text-neutral-500 mb-1">
 										Agent
 									</p>
 								)}
-								<p
-									className={
-										msg.role === "user"
-											? "text-sm text-white break-words"
-											: "text-sm text-neutral-800 whitespace-pre-wrap break-words"
-									}
-								>
-									{msg.content}
-								</p>
+								{msg.role === "user" ? (
+									<p className="text-sm text-white break-words">
+										{msg.content}
+									</p>
+								) : (
+									<div className="text-sm text-neutral-800 break-words">
+										<ReactMarkdown
+											remarkPlugins={[remarkGfm]}
+											components={chatMarkdownComponents}
+										>
+											{msg.content}
+										</ReactMarkdown>
+									</div>
+								)}
 							</div>
 						</div>
 					))}
@@ -895,10 +1017,17 @@ export default function AgentPage() {
 					{streamingFollowUpText && (
 						<div className="flex justify-start">
 							<div className="max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2">
-								<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
-								<p className="text-sm text-neutral-800 whitespace-pre-wrap break-words">
-									{streamingFollowUpText}
+								<p className="text-xs font-medium text-neutral-500 mb-1">
+									Agent
 								</p>
+								<div className="text-sm text-neutral-800 break-words">
+									<ReactMarkdown
+										remarkPlugins={[remarkGfm]}
+										components={chatMarkdownComponents}
+									>
+										{streamingFollowUpText}
+									</ReactMarkdown>
+								</div>
 							</div>
 						</div>
 					)}
