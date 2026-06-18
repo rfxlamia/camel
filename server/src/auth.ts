@@ -3,10 +3,14 @@ import bcrypt from "bcryptjs";
 import {
 	type NextFunction,
 	type Request,
+	type RequestHandler,
 	type Response,
 	Router,
 } from "express";
+import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
 import { pool } from "./db/pool.js";
+import { getRedisClient } from "./db/redis.js";
 
 export interface AuthUser {
 	id: number;
@@ -60,6 +64,124 @@ const BCRYPT_ROUNDS = 10;
 
 const USERNAME_RE = /^[a-z0-9_]{3,32}$/i;
 
+// ---- Rate limiting ----------------------------------------------------------
+
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const LOGIN_FAILURE_MAX = 5; // max failures per username per window
+const AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const AUTH_RATE_LIMIT_MAX = 100; // max requests per IP per window
+
+const RATE_LIMIT_PREFIX = "ratelimit:login:";
+
+/**
+ * Check if a username is currently locked out due to too many failed login attempts.
+ * Returns true if locked out, false otherwise.
+ * Fails open (returns false) if Redis is unavailable.
+ */
+export async function isLoginLockedOut(username: string): Promise<boolean> {
+	const client = getRedisClient();
+	if (!client) return false; // fail-open
+
+	try {
+		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
+		const count = await client.get(key);
+		return count !== null && Number.parseInt(count, 10) >= LOGIN_FAILURE_MAX;
+	} catch {
+		return false; // fail-open
+	}
+}
+
+/**
+ * Atomically check and record a login attempt for a username.
+ * Returns true if the account is now locked out, false otherwise.
+ * Uses INCR to avoid TOCTOU race conditions.
+ * Fails open (returns false) if Redis is unavailable.
+ */
+export async function checkAndRecordLoginAttempt(
+	username: string,
+): Promise<boolean> {
+	const client = getRedisClient();
+	if (!client) return false; // fail-open
+
+	try {
+		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
+		const count = await client.incr(key);
+		if (count === 1) {
+			await client.expire(key, LOGIN_FAILURE_WINDOW_MS / 1000);
+		}
+		return count > LOGIN_FAILURE_MAX;
+	} catch {
+		return false; // fail-open
+	}
+}
+
+/**
+ * Clear login failure count for a username (call on successful login).
+ * No-op if Redis is unavailable.
+ */
+export async function clearLoginFailures(username: string): Promise<void> {
+	const client = getRedisClient();
+	if (!client) return;
+
+	try {
+		await client.del(`${RATE_LIMIT_PREFIX}${username.toLowerCase()}`);
+	} catch {
+		// best-effort
+	}
+}
+
+/**
+ * Create the IP-scoped rate limiter for auth endpoints.
+ * Returns a no-op middleware if Redis is unavailable (fail-open).
+ */
+export function createAuthRateLimiter() {
+	const client = getRedisClient();
+	if (!client) {
+		// Fail-open: return no-op middleware when Redis is down
+		return (_req: Request, _res: Response, next: NextFunction) => next();
+	}
+
+	return rateLimit({
+		windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+		max: AUTH_RATE_LIMIT_MAX,
+		standardHeaders: true,
+		legacyHeaders: false,
+		passOnStoreError: true,
+		store: new RedisStore({
+			sendCommand: (...args: string[]) => client.sendCommand(args),
+			prefix: "ratelimit:auth:ip:",
+		}),
+		message: { error: "Too many requests — please try again later." },
+	});
+}
+
+/**
+ * Middleware that atomically checks and records login attempts.
+ * Returns 429 if the username has exceeded the failure limit.
+ * Uses atomic INCR to prevent TOCTOU race conditions.
+ */
+export async function accountLockoutMiddleware(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+): Promise<void> {
+	const { username } = req.body ?? {};
+	if (typeof username !== "string") {
+		next();
+		return;
+	}
+
+	const isLockedOut = await checkAndRecordLoginAttempt(username);
+	if (isLockedOut) {
+		res.status(429).json({
+			error: "Too many failed login attempts — please try again later.",
+		});
+		return;
+	}
+
+	next();
+}
+
 function toUser(row: {
 	id: number;
 	username: string;
@@ -110,118 +232,132 @@ export async function requireAuth(
 	}
 }
 
-export const auth = Router();
+export function createAuthRouter(rateLimiter?: RequestHandler): Router {
+	const auth = Router();
 
-auth.post("/register", async (req, res) => {
-	const { username, password, displayName } = req.body ?? {};
-	if (typeof username !== "string" || !USERNAME_RE.test(username)) {
-		return res.status(400).json({
-			error: "Username must be 3-32 characters: letters, numbers, underscore.",
-		});
+	// Apply rate limiter before routes if provided
+	if (rateLimiter) {
+		auth.use(rateLimiter);
 	}
-	if (typeof password !== "string" || password.length < 8) {
-		return res
-			.status(400)
-			.json({ error: "Password must be at least 8 characters." });
-	}
-	const name =
-		typeof displayName === "string" && displayName.trim() !== ""
-			? displayName.trim()
-			: username;
 
-	const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-	const normalizedUsername = username.toLowerCase();
-	const client = await pool.connect();
-	try {
-		await client.query("BEGIN");
+	auth.post("/register", async (req, res) => {
+		const { username, password, displayName } = req.body ?? {};
+		if (typeof username !== "string" || !USERNAME_RE.test(username)) {
+			return res.status(400).json({
+				error:
+					"Username must be 3-32 characters: letters, numbers, underscore.",
+			});
+		}
+		if (typeof password !== "string" || password.length < 8) {
+			return res
+				.status(400)
+				.json({ error: "Password must be at least 8 characters." });
+		}
+		const name =
+			typeof displayName === "string" && displayName.trim() !== ""
+				? displayName.trim()
+				: username;
 
-		const { rows } = await client.query(
-			`INSERT INTO users (username, display_name, password_hash)
+		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+		const normalizedUsername = username.toLowerCase();
+		const client = await pool.connect();
+		try {
+			await client.query("BEGIN");
+
+			const { rows } = await client.query(
+				`INSERT INTO users (username, display_name, password_hash)
        VALUES ($1, $2, $3)
        RETURNING id, username, display_name`,
-			[normalizedUsername, name, hash],
-		);
-		const user = toUser(rows[0]);
+				[normalizedUsername, name, hash],
+			);
+			const user = toUser(rows[0]);
 
-		const pendingRes = await client.query(
-			`SELECT id, workspace_id, username, role
+			const pendingRes = await client.query(
+				`SELECT id, workspace_id, username, role
        FROM workspace_invites WHERE username = $1`,
-			[normalizedUsername],
-		);
-		const pendingInvites: PendingInvite[] = pendingRes.rows.map((row) => ({
-			id: row.id,
-			workspaceId: row.workspace_id,
-			username: row.username,
-			role: row.role,
-		}));
+				[normalizedUsername],
+			);
+			const pendingInvites: PendingInvite[] = pendingRes.rows.map((row) => ({
+				id: row.id,
+				workspaceId: row.workspace_id,
+				username: row.username,
+				role: row.role,
+			}));
 
-		const plan = createSignupWorkspacePlan({ user, pendingInvites });
+			const plan = createSignupWorkspacePlan({ user, pendingInvites });
 
-		const wsRes = await client.query(
-			`INSERT INTO workspaces (name, owner_user_id, is_personal)
+			const wsRes = await client.query(
+				`INSERT INTO workspaces (name, owner_user_id, is_personal)
        VALUES ($1, $2, $3)
        RETURNING id`,
-			[
-				plan.personalWorkspace.name,
-				plan.personalWorkspace.ownerUserId,
-				plan.personalWorkspace.isPersonal,
-			],
-		);
-		const workspaceId = wsRes.rows[0].id;
-
-		for (const membership of plan.memberships) {
-			await client.query(
-				`INSERT INTO workspace_members (workspace_id, user_id, role)
-         VALUES ($1, $2, $3)`,
-				[workspaceId, membership.userId, membership.role],
+				[
+					plan.personalWorkspace.name,
+					plan.personalWorkspace.ownerUserId,
+					plan.personalWorkspace.isPersonal,
+				],
 			);
-		}
+			const workspaceId = wsRes.rows[0].id;
 
-		await client.query("COMMIT");
-		await createSession(res, user.id);
-		res.status(201).json({ user });
-	} catch (err) {
-		await client.query("ROLLBACK");
-		if ((err as { code?: string }).code === "23505") {
+			for (const membership of plan.memberships) {
+				await client.query(
+					`INSERT INTO workspace_members (workspace_id, user_id, role)
+         VALUES ($1, $2, $3)`,
+					[workspaceId, membership.userId, membership.role],
+				);
+			}
+
+			await client.query("COMMIT");
+			await createSession(res, user.id);
+			res.status(201).json({ user });
+		} catch (err) {
+			await client.query("ROLLBACK");
+			if ((err as { code?: string }).code === "23505") {
+				return res
+					.status(409)
+					.json({ error: "That username's already taken — try another." });
+			}
+			throw err;
+		} finally {
+			client.release();
+		}
+	});
+
+	auth.post("/login", accountLockoutMiddleware, async (req, res) => {
+		const { username, password } = req.body ?? {};
+		if (typeof username !== "string" || typeof password !== "string") {
 			return res
-				.status(409)
-				.json({ error: "That username's already taken — try another." });
+				.status(400)
+				.json({ error: "Username and password are required." });
 		}
-		throw err;
-	} finally {
-		client.release();
-	}
-});
+		const { rows } = await pool.query(
+			"SELECT id, username, display_name, password_hash FROM users WHERE username = $1",
+			[username.toLowerCase()],
+		);
+		const ok =
+			rows.length > 0 &&
+			(await bcrypt.compare(password, rows[0].password_hash));
+		if (!ok) {
+			// Failure already recorded by accountLockoutMiddleware
+			return res
+				.status(401)
+				.json({ error: "Wrong username or password — try again." });
+		}
+		await clearLoginFailures(username);
+		await createSession(res, rows[0].id);
+		res.json({ user: toUser(rows[0]) });
+	});
 
-auth.post("/login", async (req, res) => {
-	const { username, password } = req.body ?? {};
-	if (typeof username !== "string" || typeof password !== "string") {
-		return res
-			.status(400)
-			.json({ error: "Username and password are required." });
-	}
-	const { rows } = await pool.query(
-		"SELECT id, username, display_name, password_hash FROM users WHERE username = $1",
-		[username.toLowerCase()],
-	);
-	const ok =
-		rows.length > 0 && (await bcrypt.compare(password, rows[0].password_hash));
-	if (!ok) {
-		return res
-			.status(401)
-			.json({ error: "Wrong username or password — try again." });
-	}
-	await createSession(res, rows[0].id);
-	res.json({ user: toUser(rows[0]) });
-});
+	auth.post("/logout", async (req, res) => {
+		const token = req.cookies?.[SESSION_COOKIE];
+		if (token)
+			await pool.query("DELETE FROM sessions WHERE token = $1", [token]);
+		res.clearCookie(SESSION_COOKIE, { path: "/" });
+		res.status(204).end();
+	});
 
-auth.post("/logout", async (req, res) => {
-	const token = req.cookies?.[SESSION_COOKIE];
-	if (token) await pool.query("DELETE FROM sessions WHERE token = $1", [token]);
-	res.clearCookie(SESSION_COOKIE, { path: "/" });
-	res.status(204).end();
-});
+	auth.get("/me", requireAuth, (req, res) => {
+		res.json({ user: req.user });
+	});
 
-auth.get("/me", requireAuth, (req, res) => {
-	res.json({ user: req.user });
-});
+	return auth;
+}

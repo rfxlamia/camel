@@ -16,16 +16,18 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.104.1",
+		"@tavily/core": "^0.5.0",
 		"@types/multer": "^2.1.0",
 		"bcryptjs": "^3.0.3",
 		"cookie-parser": "^1.4.7",
 		"cors": "^2.8.5",
 		"dotenv": "^17.4.2",
 		"express": "^5.1.0",
+		"express-rate-limit": "^8.5.2",
 		"multer": "^2.1.1",
 		"pg": "^8.13.1",
-		"redis": "^6.0.0",
-		"@tavily/core": "^0.5.0"
+		"rate-limit-redis": "^5.0.0",
+		"redis": "^6.0.0"
 	},
 	"devDependencies": {
 		"@types/cookie-parser": "^1.4.10",
