@@ -89,7 +89,7 @@
 				"noUnassignedVariables": "error",
 				"noUnsafeDeclarationMerging": "error",
 				"noUnsafeNegation": "error",
-				"noUnusedExpressions": "off",
+				"noUnusedExpressions": "error",
 				"noUselessRegexBackrefs": "error",
 				"noWith": "error",
 				"useGetterReturn": "error",
