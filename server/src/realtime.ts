@@ -112,7 +112,7 @@ interface LocalTestClient {
 }
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
-	const redisAvailable = deps.publisher !== null;
+	let redisAvailable = deps.publisher !== null;
 	const presence = (deps.presence ?? deps.publisher) as PresenceLike | null;
 	const sseClients = new Set<SseClient>();
 	const localTestClients = new Set<LocalTestClient>();
@@ -146,12 +146,30 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 	}
 
 	return {
+		setRedisAvailable(val: boolean): void {
+			if (redisAvailable !== val) {
+				console.log(`Redis availability changed: ${redisAvailable} → ${val}`);
+				redisAvailable = val;
+			}
+		},
+
 		async connectSubscriber(): Promise<void> {
 			if (!deps.subscriber) return;
 			await deps.subscriber.pSubscribe(
 				WORKSPACE_EVENTS_PATTERN,
 				onRedisMessage,
 			);
+		},
+
+		async reconnectSubscriber(): Promise<void> {
+			try {
+				await this.connectSubscriber();
+				console.log(
+					"Redis subscriber reconnected — re-subscribed to workspace events",
+				);
+			} catch (err) {
+				console.error("Redis re-subscribe failed:", err);
+			}
 		},
 
 		connectLocalClient({ workspaceId }: { workspaceId: number }) {
@@ -295,6 +313,19 @@ export async function initRealtime(): Promise<void> {
 			presence: client,
 		});
 		await activeHub.connectSubscriber();
+
+		// Reconnection handlers — attach AFTER initial setup to avoid
+		// firing during the first connect.
+		client.on("ready", () => {
+			activeHub.setRedisAvailable(true);
+		});
+		client.on("error", () => {
+			activeHub.setRedisAvailable(false);
+		});
+		sub.on("ready", () => {
+			activeHub.reconnectSubscriber();
+		});
+
 		console.log("Redis connected — real-time layer active");
 	} catch {
 		console.warn(
