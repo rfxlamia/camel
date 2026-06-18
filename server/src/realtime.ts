@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { createClient } from "redis";
 import type { AuthUser } from "./auth.js";
 import { config } from "./config.js";
+import { getRedisClient } from "./db/redis.js";
 
 // Redis carries the real-time layer (presence + pub/sub). If it is down the
 // app must keep working: presence degrades to "just me" and events fall back
@@ -267,42 +267,37 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 
 // ---- Production singleton ----------------------------------------------------
 
-let redisAvailable = false;
-
-const publisher = createClient({ url: REDIS_URL });
-const subscriber = publisher.duplicate();
-
-publisher.on("error", () => {
-	if (redisAvailable)
-		console.error("Redis unavailable — real-time degraded to local fan-out");
-	redisAvailable = false;
-});
-subscriber.on(
-	"error",
-	// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring redis subscriber errors
-	() => {},
-);
-
 let activeHub = createRealtimeHub({
 	publisher: null,
 	subscriber: null,
 	presence: null,
 });
 
-export async function connectRedis(): Promise<void> {
+export { connectRedis } from "./db/redis.js";
+
+export async function initRealtime(): Promise<void> {
+	const client = getRedisClient();
+	if (!client) {
+		console.warn(
+			"Redis not reachable — presence/real-time degraded (board still works)",
+		);
+		return;
+	}
+
 	try {
-		await publisher.connect();
-		await subscriber.connect();
-		redisAvailable = true;
+		const sub = client.duplicate();
+		sub.on("error", (err) => {
+			console.error("Redis subscriber error:", err.message);
+		});
+		await sub.connect();
 		activeHub = createRealtimeHub({
-			publisher,
-			subscriber,
-			presence: publisher,
+			publisher: client,
+			subscriber: sub,
+			presence: client,
 		});
 		await activeHub.connectSubscriber();
 		console.log("Redis connected — real-time layer active");
 	} catch {
-		redisAvailable = false;
 		console.warn(
 			"Redis not reachable — presence/real-time degraded (board still works)",
 		);
