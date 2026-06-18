@@ -208,6 +208,26 @@ async function createSession(res: Response, userId: number): Promise<void> {
 	});
 }
 
+/**
+ * Delete expired sessions from the database.
+ * Safe to call frequently — no-ops when there's nothing to clean.
+ */
+export async function cleanupExpiredSessions(): Promise<number> {
+	try {
+		const result = await pool.query(
+			"DELETE FROM sessions WHERE expires_at < now()",
+		);
+		const count = result.rowCount ?? 0;
+		if (count > 0) {
+			console.log(`[auth] cleaned up ${count} expired session(s)`);
+		}
+		return count;
+	} catch (err) {
+		console.error("[auth] failed to cleanup expired sessions:", err);
+		return 0;
+	}
+}
+
 export async function requireAuth(
 	req: Request,
 	res: Response,
