@@ -1,9 +1,9 @@
 import { Router } from "express";
 import {
+	neighborsAt,
 	POSITION_GAP,
 	positionBetween,
 	rebalance,
-	neighborsAt,
 } from "../core/position.js";
 import { checkWipLimit } from "../core/wip.js";
 import { pool } from "../db/pool.js";
@@ -27,6 +27,9 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 	}
 
 	const cardId = Number(req.params.id);
+	if (Number.isNaN(cardId)) {
+		return res.status(400).json({ error: "invalid card id" });
+	}
 	const result = await createScopedBoardService({
 		getMembership: async (wsId, userId) => {
 			const r = await lookupMembership(userId, wsId);
@@ -122,6 +125,9 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 
 	const { title, description, version } = req.body ?? {};
 	const id = Number(req.params.id);
+	if (Number.isNaN(id)) {
+		return res.status(400).json({ error: "invalid card id" });
+	}
 	if (version !== undefined && !Number.isInteger(version)) {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
@@ -171,6 +177,9 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const id = Number(req.params.id);
+	if (Number.isNaN(id)) {
+		return res.status(400).json({ error: "invalid card id" });
+	}
 	const { rows } = await pool.query(
 		"UPDATE cards SET deleted_at = now() WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL RETURNING title, column_id",
 		[id, workspaceId],
@@ -198,6 +207,9 @@ cardsRouter.post(
 		const { workspaceId } = req.workspace!;
 
 		const cardId = Number(req.params.id);
+		if (Number.isNaN(cardId)) {
+			return res.status(400).json({ error: "invalid card id" });
+		}
 		const { toColumnId, index, version } = req.body ?? {};
 		if (
 			!Number.isInteger(toColumnId) ||
