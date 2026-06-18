@@ -58,7 +58,7 @@ jobs:
     env:
       DATABASE_URL: postgres://camel:camel@localhost:5432/camel_kanban
       REDIS_URL: redis://localhost:6379
-      RUN_LLM_IT: '1'
+      RUN_LLM_IT: "1"
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
