@@ -1,5 +1,5 @@
-import "dotenv/config";
 import cookieParser from "cookie-parser";
+import { config } from "./config.js";
 import cors from "cors";
 import express from "express";
 import { createAgentRouter } from "./agent/routes.js";
@@ -32,7 +32,7 @@ app.use(
 	},
 );
 
-const port = Number(process.env.PORT ?? 3001);
+const port = config.PORT;
 app.listen(port, async () => {
 	console.log(`Camel Kanban API listening on http://localhost:${port}`);
 	await connectRedis();
