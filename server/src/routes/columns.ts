@@ -33,6 +33,9 @@ columnsRouter.patch(
 		const { workspaceId } = req.workspace!;
 
 		const id = Number(req.params.id);
+		if (Number.isNaN(id)) {
+			return res.status(400).json({ error: "invalid column id" });
+		}
 		const { title, wipLimit, policy } = req.body ?? {};
 		if (wipLimit !== undefined && wipLimit !== null) {
 			if (!Number.isInteger(wipLimit) || wipLimit < 1) {
@@ -73,9 +76,13 @@ columnsRouter.delete(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 
+		const id = Number(req.params.id);
+		if (Number.isNaN(id)) {
+			return res.status(400).json({ error: "invalid column id" });
+		}
 		const { rowCount } = await pool.query(
 			"DELETE FROM columns WHERE id = $1 AND workspace_id = $2",
-			[Number(req.params.id), workspaceId],
+			[id, workspaceId],
 		);
 		if (rowCount === 0)
 			return res.status(404).json({ error: "column not found" });
