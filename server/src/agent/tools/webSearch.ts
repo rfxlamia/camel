@@ -1,4 +1,5 @@
 import { tavily } from "@tavily/core";
+import { config } from "../../config.js";
 import type { Tool, ToolResult } from "./types.js";
 
 const MAX_RESULTS = 10;
@@ -111,7 +112,7 @@ export const webSearch: Tool = {
 		try {
 			const query = String(input.query ?? "");
 
-			const apiKey = process.env.TAVILY_API_KEY;
+			const apiKey = config.TAVILY_API_KEY;
 			if (!apiKey) {
 				return {
 					ok: false,

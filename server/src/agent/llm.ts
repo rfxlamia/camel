@@ -5,14 +5,15 @@
  * fully unit-testable via mocked Anthropic client.
  *
  * Architecture:
- *   - API key: `process.env.ANTHROPIC_API_KEY` (never hardcoded)
- *   - Base URL: `process.env.ANTHROPIC_BASE_URL` (optional, for MiMo etc.)
- *   - Model: `process.env.ANTHROPIC_MODEL` (optional override)
+ *   - API key: `config.ANTHROPIC_API_KEY` (validated at startup)
+ *   - Base URL: `config.ANTHROPIC_BASE_URL` (optional, for MiMo etc.)
+ *   - Model: `config.ANTHROPIC_MODEL` (optional override)
  *   - NATIVE flag: true when using real Anthropic API (enables thinking/cache_control)
  *                  false when using compatible endpoint like MiMo
  */
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
+import { config } from "../config.js";
 import { renderSystemPrompt } from "./templates.js";
 import { toAnthropicToolDefs } from "./tools/registry.js";
 import { countSearchResults } from "./tools/trace.js";
@@ -22,8 +23,8 @@ import type { Tool, ToolEvent } from "./tools/types.js";
 // Client singleton — lazy-initialized on first call
 // ---------------------------------------------------------------------------
 
-const NATIVE = process.env.ANTHROPIC_BASE_URL ? false : true;
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
+const NATIVE = config.ANTHROPIC_BASE_URL ? false : true;
+const MODEL = config.ANTHROPIC_MODEL;
 
 // Token budgets for extended thinking (per live-thinking.md + commit f24f292).
 // OUTPUT_BUDGET preserved as headroom for report text; native Anthropic counts
@@ -40,17 +41,17 @@ let _client: Anthropic | null = null;
 function getClient(): Anthropic {
 	if (!_client) {
 		const opts: ClientOptions = {
-			apiKey: process.env.ANTHROPIC_API_KEY,
+			apiKey: config.ANTHROPIC_API_KEY,
 		};
 		// Support custom base URL for MiMo-compatible endpoints
-		if (process.env.ANTHROPIC_BASE_URL) {
-			opts.baseURL = process.env.ANTHROPIC_BASE_URL;
+		if (config.ANTHROPIC_BASE_URL) {
+			opts.baseURL = config.ANTHROPIC_BASE_URL;
 		}
 		// Dual headers for MiMo compatibility: some endpoints expect `api-key`
 		// instead of the default `x-api-key` Authorization header.
 		if (!NATIVE) {
 			opts.defaultHeaders = {
-				"api-key": process.env.ANTHROPIC_API_KEY ?? "",
+				"api-key": config.ANTHROPIC_API_KEY,
 			};
 		}
 		_client = new Anthropic(opts);

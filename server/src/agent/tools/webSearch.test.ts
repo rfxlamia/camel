@@ -5,6 +5,11 @@ vi.mock("@tavily/core", () => ({
 	tavily: vi.fn(() => ({ search: mockSearch })),
 }));
 
+const mockConfig: Record<string, unknown> = {
+	TAVILY_API_KEY: "test-key",
+};
+vi.mock("../../config.js", () => ({ config: mockConfig }));
+
 function makeResults(n: number) {
 	return Array.from({ length: n }, (_, i) => ({
 		title: `Title ${i}`,
@@ -16,10 +21,10 @@ function makeResults(n: number) {
 describe("web_search tool", () => {
 	beforeEach(() => {
 		mockSearch.mockReset();
-		process.env.TAVILY_API_KEY = "test-key";
+		mockConfig.TAVILY_API_KEY = "test-key";
 	});
 	afterEach(() => {
-		delete process.env.TAVILY_API_KEY;
+		mockConfig.TAVILY_API_KEY = "test-key";
 	});
 
 	it("caps to ≤10 results and size-caps each snippet (R2/R8)", async () => {
@@ -49,7 +54,7 @@ describe("web_search tool", () => {
 	});
 
 	it("returns ENV_VAR_MISSING without calling Tavily when key unset (R3)", async () => {
-		delete process.env.TAVILY_API_KEY;
+		delete mockConfig.TAVILY_API_KEY;
 		const { webSearch } = await import("./webSearch.js");
 		const result = await webSearch.execute({ query: "fintech" });
 

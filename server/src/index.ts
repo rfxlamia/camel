@@ -1,5 +1,5 @@
-import "dotenv/config";
 import cookieParser from "cookie-parser";
+import { config } from "./config.js";
 import cors from "cors";
 import express from "express";
 import { createOriginValidator } from "./core/cors.js";
@@ -19,7 +19,7 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-const port = Number(process.env.PORT ?? 3001);
+const port = config.PORT;
 app.listen(port, async () => {
 	console.log(`Camel Kanban API listening on http://localhost:${port}`);
 

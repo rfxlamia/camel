@@ -1,10 +1,8 @@
-import "dotenv/config";
 import pg from "pg";
+import { config } from "../config.js";
 
 const { Pool } = pg;
 
 export const pool = new Pool({
-	connectionString:
-		process.env.DATABASE_URL ??
-		"postgres://camel:camel@localhost:5432/camel_kanban",
+	connectionString: config.DATABASE_URL,
 });
