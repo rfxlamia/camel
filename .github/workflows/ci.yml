@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   primary:
     name: Lint, Typecheck & Test
@@ -17,6 +20,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -56,12 +61,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      # Test-only credentials for local service containers (intentionally non-sensitive)
       DATABASE_URL: postgres://camel:camel@localhost:5432/camel_kanban
       REDIS_URL: redis://localhost:6379
       RUN_LLM_IT: "1"
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
