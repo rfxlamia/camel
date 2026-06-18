@@ -104,9 +104,7 @@ describe("Redis reconnection", () => {
 		const pSubscribe = vi.fn(async () => {
 			throw new Error("connection lost");
 		});
-		const consoleSpy = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const hub = createRealtimeHub({
 			publisher: null,
 			subscriber: { pSubscribe },
@@ -135,5 +133,21 @@ describe("Redis reconnection", () => {
 
 		await hub.publishEvent(1, { type: "card.created", cardId: 1 });
 		expect(publish).toHaveBeenCalled();
+	});
+
+	it("publishEvent falls back to local fan-out when redisAvailable is false", async () => {
+		const publish = vi.fn(async () => 1);
+		const hub = createRealtimeHub({
+			publisher: { publish },
+			subscriber: null,
+		});
+		const client = hub.connectLocalClient({ workspaceId: 1 });
+
+		// Flip to unavailable
+		hub.setRedisAvailable(false);
+
+		await hub.publishEvent(1, { type: "card.created", cardId: 1 });
+		expect(publish).not.toHaveBeenCalled();
+		expect(client.drain()).toHaveLength(1);
 	});
 });

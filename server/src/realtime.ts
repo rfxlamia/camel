@@ -164,7 +164,9 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 		async reconnectSubscriber(): Promise<void> {
 			try {
 				await this.connectSubscriber();
-				console.log("Redis subscriber reconnected — re-subscribed to workspace events");
+				console.log(
+					"Redis subscriber reconnected — re-subscribed to workspace events",
+				);
 			} catch (err) {
 				console.error("Redis re-subscribe failed:", err);
 			}
@@ -316,6 +318,9 @@ export async function initRealtime(): Promise<void> {
 		// firing during the first connect.
 		client.on("ready", () => {
 			activeHub.setRedisAvailable(true);
+		});
+		client.on("error", () => {
+			activeHub.setRedisAvailable(false);
 		});
 		sub.on("ready", () => {
 			activeHub.reconnectSubscriber();
