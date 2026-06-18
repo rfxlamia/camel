@@ -18,6 +18,11 @@ jobs:
     name: Lint, Typecheck & Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Fallback values for unit tests — tests mock DB/LLM, so these are never
+      # used for real connections. Required because config.ts validates at import.
+      DATABASE_URL: postgres://localhost:5432/camel_kanban
+      ANTHROPIC_API_KEY: test-not-a-real-key
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
