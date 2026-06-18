@@ -21,10 +21,16 @@ export async function connectRedis(): Promise<void> {
 	if (connected && client) return;
 
 	client = createClient({ url: REDIS_URL });
-	client.on("error", () => {
+	client.on("error", (err) => {
 		if (connected) {
-			console.error("Redis unavailable — rate limiting degraded");
+			console.error("Redis unavailable — rate limiting degraded:", err.message);
 			connected = false;
+		}
+	});
+	client.on("ready", () => {
+		if (!connected) {
+			connected = true;
+			console.log("Redis reconnected — rate limiting restored");
 		}
 	});
 

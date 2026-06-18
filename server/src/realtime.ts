@@ -283,6 +283,9 @@ export async function initRealtime(): Promise<void> {
 
 	try {
 		const sub = client.duplicate();
+		sub.on("error", (err) => {
+			console.error("Redis subscriber error:", err.message);
+		});
 		await sub.connect();
 		activeHub = createRealtimeHub({
 			publisher: client,
