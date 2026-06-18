@@ -4,7 +4,11 @@ import cors from "cors";
 import express from "express";
 import { createOriginValidator } from "./core/cors.js";
 import { createAgentRouter } from "./agent/routes.js";
-import { createAuthRouter, createAuthRateLimiter } from "./auth.js";
+import {
+	createAuthRouter,
+	createAuthRateLimiter,
+	cleanupExpiredSessions,
+} from "./auth.js";
 import { connectRedis } from "./db/redis.js";
 import { initRealtime } from "./realtime.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
@@ -48,4 +52,19 @@ app.listen(port, async () => {
 	);
 
 	await initRealtime();
+
+	// Cleanup expired sessions on startup, then every 24 hours.
+	await cleanupExpiredSessions();
+	const cleanupInterval = setInterval(
+		cleanupExpiredSessions,
+		24 * 60 * 60 * 1000,
+	);
+
+	// Graceful shutdown: clear the interval so the process can exit cleanly.
+	const shutdown = () => {
+		clearInterval(cleanupInterval);
+		process.exit(0);
+	};
+	process.on("SIGTERM", shutdown);
+	process.on("SIGINT", shutdown);
 });
