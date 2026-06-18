@@ -313,24 +313,26 @@ cardsRouter.post(
 				[cardId, toColumnId, position, target.is_done, target.is_first],
 			);
 
-			if (!isSameColumn) {
-				await recordActivity(client, req.user!, workspaceId, "move", {
+			await recordActivity(
+				client,
+				req.user!,
+				workspaceId,
+				isSameColumn ? "reorder" : "move",
+				{
 					cardId,
 					fromColumnId: card.column_id,
 					toColumnId,
 					payload: { cardTitle: card.title },
-				});
-			}
+				},
+			);
 
 			await client.query("COMMIT");
 
-			if (!isSameColumn) {
-				await publishEvent(workspaceId, {
-					type: "card.moved",
-					actor: req.user!,
-					cardId,
-				});
-			}
+			await publishEvent(workspaceId, {
+				type: isSameColumn ? "card.reordered" : "card.moved",
+				actor: req.user!,
+				cardId,
+			});
 
 			const updated = await pool.query(
 				`SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
