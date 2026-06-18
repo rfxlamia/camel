@@ -1,12 +1,10 @@
 import type { Request, Response } from "express";
-import { createClient } from "redis";
 import type { AuthUser } from "./auth.js";
+import { getRedisClient } from "./db/redis.js";
 
 // Redis carries the real-time layer (presence + pub/sub). If it is down the
 // app must keep working: presence degrades to "just me" and events fall back
 // to direct in-process fan-out (fine for a single server instance).
-
-const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const PRESENCE_TTL_SECONDS = 60;
 const WORKSPACE_EVENTS_PATTERN = "camel:workspace:*:events";
 
@@ -266,42 +264,34 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 
 // ---- Production singleton ----------------------------------------------------
 
-let redisAvailable = false;
-
-const publisher = createClient({ url: REDIS_URL });
-const subscriber = publisher.duplicate();
-
-publisher.on("error", () => {
-	if (redisAvailable)
-		console.error("Redis unavailable — real-time degraded to local fan-out");
-	redisAvailable = false;
-});
-subscriber.on(
-	"error",
-	// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring redis subscriber errors
-	() => {},
-);
-
 let activeHub = createRealtimeHub({
 	publisher: null,
 	subscriber: null,
 	presence: null,
 });
 
-export async function connectRedis(): Promise<void> {
+export { connectRedis } from "./db/redis.js";
+
+export async function initRealtime(): Promise<void> {
+	const client = getRedisClient();
+	if (!client) {
+		console.warn(
+			"Redis not reachable — presence/real-time degraded (board still works)",
+		);
+		return;
+	}
+
 	try {
-		await publisher.connect();
-		await subscriber.connect();
-		redisAvailable = true;
+		const sub = client.duplicate();
+		await sub.connect();
 		activeHub = createRealtimeHub({
-			publisher,
-			subscriber,
-			presence: publisher,
+			publisher: client,
+			subscriber: sub,
+			presence: client,
 		});
 		await activeHub.connectSubscriber();
 		console.log("Redis connected — real-time layer active");
 	} catch {
-		redisAvailable = false;
 		console.warn(
 			"Redis not reachable — presence/real-time degraded (board still works)",
 		);

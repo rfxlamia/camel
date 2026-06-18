@@ -6,7 +6,10 @@ import {
 	type Response,
 	Router,
 } from "express";
+import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
 import { pool } from "./db/pool.js";
+import { getRedisClient } from "./db/redis.js";
 
 export interface AuthUser {
 	id: number;
@@ -59,6 +62,118 @@ const SESSION_TTL_DAYS = 30;
 const BCRYPT_ROUNDS = 10;
 
 const USERNAME_RE = /^[a-z0-9_]{3,32}$/i;
+
+// ---- Rate limiting ----------------------------------------------------------
+
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const LOGIN_FAILURE_MAX = 5; // max failures per username per window
+const AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const AUTH_RATE_LIMIT_MAX = 100; // max requests per IP per window
+
+const RATE_LIMIT_PREFIX = "ratelimit:login:";
+
+/**
+ * Check if a username is currently locked out due to too many failed login attempts.
+ * Returns true if locked out, false otherwise.
+ * Fails open (returns false) if Redis is unavailable.
+ */
+export async function isLoginLockedOut(username: string): Promise<boolean> {
+	const client = getRedisClient();
+	if (!client) return false; // fail-open
+
+	try {
+		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
+		const count = await client.get(key);
+		return count !== null && Number.parseInt(count, 10) >= LOGIN_FAILURE_MAX;
+	} catch {
+		return false; // fail-open
+	}
+}
+
+/**
+ * Record a failed login attempt for a username.
+ * Sets/increments a Redis key with TTL.
+ * No-op if Redis is unavailable.
+ */
+export async function recordLoginFailure(username: string): Promise<void> {
+	const client = getRedisClient();
+	if (!client) return; // fail-open
+
+	try {
+		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
+		const count = await client.incr(key);
+		if (count === 1) {
+			await client.expire(key, LOGIN_FAILURE_WINDOW_MS / 1000);
+		}
+	} catch {
+		// best-effort
+	}
+}
+
+/**
+ * Clear login failure count for a username (call on successful login).
+ * No-op if Redis is unavailable.
+ */
+export async function clearLoginFailures(username: string): Promise<void> {
+	const client = getRedisClient();
+	if (!client) return;
+
+	try {
+		await client.del(`${RATE_LIMIT_PREFIX}${username.toLowerCase()}`);
+	} catch {
+		// best-effort
+	}
+}
+
+/**
+ * Create the IP-scoped rate limiter for auth endpoints.
+ * Returns a no-op middleware if Redis is unavailable (fail-open).
+ */
+export function createAuthRateLimiter() {
+	const client = getRedisClient();
+	if (!client) {
+		// Fail-open: return no-op middleware when Redis is down
+		return (_req: Request, _res: Response, next: NextFunction) => next();
+	}
+
+	return rateLimit({
+		windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+		max: AUTH_RATE_LIMIT_MAX,
+		standardHeaders: true,
+		legacyHeaders: false,
+		store: new RedisStore({
+			sendCommand: (...args: string[]) => client.sendCommand(args),
+			prefix: "ratelimit:auth:ip:",
+		}),
+		message: { error: "Too many requests — please try again later." },
+	});
+}
+
+/**
+ * Middleware that checks account-scoped login lockout.
+ * Returns 429 if the username has exceeded the failure limit.
+ */
+export async function accountLockoutMiddleware(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+): Promise<void> {
+	const { username } = req.body ?? {};
+	if (typeof username !== "string") {
+		next();
+		return;
+	}
+
+	const lockedOut = await isLoginLockedOut(username);
+	if (lockedOut) {
+		res.status(429).json({
+			error: "Too many failed login attempts — please try again later.",
+		});
+		return;
+	}
+
+	next();
+}
 
 function toUser(row: {
 	id: number;
@@ -193,7 +308,7 @@ auth.post("/register", async (req, res) => {
 	}
 });
 
-auth.post("/login", async (req, res) => {
+auth.post("/login", accountLockoutMiddleware, async (req, res) => {
 	const { username, password } = req.body ?? {};
 	if (typeof username !== "string" || typeof password !== "string") {
 		return res
@@ -207,10 +322,12 @@ auth.post("/login", async (req, res) => {
 	const ok =
 		rows.length > 0 && (await bcrypt.compare(password, rows[0].password_hash));
 	if (!ok) {
+		await recordLoginFailure(username);
 		return res
 			.status(401)
 			.json({ error: "Wrong username or password — try again." });
 	}
+	await clearLoginFailures(username);
 	await createSession(res, rows[0].id);
 	res.json({ user: toUser(rows[0]) });
 });
