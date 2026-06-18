@@ -240,13 +240,19 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 			if (!workspace) return { status: 404 as const, error: "Not found" };
 
 			const removed = await deps.removeMember(workspaceId, userId);
-			await deps.clearPresence(workspaceId, userId);
-			await deps.publishEvent(workspaceId, {
-				type: "membership.removed",
-				userId: removed.userId,
-				workspaceId,
-				workspaceName: workspace.name,
+			deps.clearPresence(workspaceId, userId).catch(() => {
+				// best-effort; member already removed
 			});
+			deps
+				.publishEvent(workspaceId, {
+					type: "membership.removed",
+					userId: removed.userId,
+					workspaceId,
+					workspaceName: workspace.name,
+				})
+				.catch(() => {
+					// best-effort; member already removed
+				});
 			return { status: 204 as const };
 		},
 	};
