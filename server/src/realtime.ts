@@ -7,7 +7,6 @@ import { getRedisClient } from "./db/redis.js";
 // app must keep working: presence degrades to "just me" and events fall back
 // to direct in-process fan-out (fine for a single server instance).
 
-const REDIS_URL = config.REDIS_URL;
 const PRESENCE_TTL_SECONDS = 60;
 const WORKSPACE_EVENTS_PATTERN = "camel:workspace:*:events";
 
