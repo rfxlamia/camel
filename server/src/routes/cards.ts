@@ -12,13 +12,19 @@ import { publishEvent } from "../realtime.js";
 import {
 	createScopedBoardService,
 	lookupMembership,
+	parseWorkspaceId,
 	recordActivity,
 } from "./helpers.js";
 
 export const cardsRouter = Router({ mergeParams: true });
 
-cardsRouter.get("/cards/:id", requireWorkspaceMember, async (req, res) => {
-	const { workspaceId } = req.workspace!;
+cardsRouter.get("/cards/:id", async (req, res) => {
+	const workspaceId = parseWorkspaceId(
+		(req.params as { workspaceId: string; id: string }).workspaceId,
+	);
+	if (workspaceId === null) {
+		return res.status(400).json({ error: "workspaceId must be an integer" });
+	}
 
 	const cardId = Number(req.params.id);
 	const result = await createScopedBoardService({
