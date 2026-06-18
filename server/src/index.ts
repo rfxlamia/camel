@@ -2,6 +2,7 @@ import "dotenv/config";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
+import { createOriginValidator } from "./core/cors.js";
 import { createAgentRouter } from "./agent/routes.js";
 import { auth } from "./auth.js";
 import { connectRedis } from "./realtime.js";
@@ -9,7 +10,7 @@ import { UPLOADS_DIR } from "./routes/settings.js";
 import { api } from "./routes.js";
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: createOriginValidator(), credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
