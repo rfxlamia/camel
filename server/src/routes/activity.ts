@@ -45,7 +45,9 @@ export const activityRouter = Router({ mergeParams: true });
 activityRouter.get("/activity", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
-	const limit = Math.min(Number(req.query.limit) || 50, 200);
+	const rawLimit = Number(req.query.limit);
+	const limit =
+		Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
 	const { rows } = await pool.query(
 		`${ACTIVITY_SELECT}
      WHERE e.workspace_id = $1
