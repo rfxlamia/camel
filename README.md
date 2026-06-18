@@ -1,7 +1,7 @@
 <div align="center">
   <img src="client/public/logo.png" alt="Camel Kanban logo" width="128" />
 
-  # Camel Kanban
+# Camel Kanban
 
   A kanban board for small dev teams, built around the six essential kanban
   practices: visualize workflow, WIP limits, flow management, explicit
@@ -64,7 +64,7 @@ make db-seed
 make dev
 ```
 
-Open http://localhost:5173 and create an account (username + password).
+Open <http://localhost:5173> and create an account (username + password).
 
 > [!TIP]
 > Run `make help` to see all available targets. You can also reset the database with `make db-reset` or do a hard reset with `make db-reset-hard` (destructive — removes volumes).
@@ -155,7 +155,7 @@ The server reads the following environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgres://camel:camel@localhost:5432/camel_kanban` | PostgreSQL connection string |
+| `DATABASE_URL` | *(required)* | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `PORT` | `3001` | Server port |
 
