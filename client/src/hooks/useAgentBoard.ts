@@ -18,16 +18,13 @@ export function useAgentBoard() {
 	const [artifact, setArtifact] = useState<AgentArtifact | null>(null);
 	const lastSyncedTerminalIdxRef = useRef(-1);
 
-	// Holds the latest createBoard so its own finally can re-enter createBoard
-	// when a create failed and the next queued item is itself an intent.
-	const createBoardRef = useRef<((intent: string) => Promise<void>) | null>(
-		null,
-	);
-
 	// Load board from URL param when workspace or boardId changes.
 	useEffect(() => {
 		const boardId = searchParams.get("boardId");
-		if (!boardId || !activeWorkspaceId) return;
+		if (!boardId || !activeWorkspaceId) {
+			setBoard(null);
+			return;
+		}
 		lastSyncedTerminalIdxRef.current = -1;
 		clearAgentEvents();
 		let cancelled = false;
@@ -41,12 +38,13 @@ export function useAgentBoard() {
 			})
 			.catch(() => {
 				if (!cancelled) {
+					setBoard(null);
 					showToast("Couldn't load the board.");
 					setSearchParams({}, { replace: true });
 				}
 			})
 			.finally(() => {
-				if (!cancelled) setLoading(false);
+				setLoading(false);
 			});
 		return () => {
 			cancelled = true;
@@ -125,9 +123,6 @@ export function useAgentBoard() {
 		[activeWorkspaceId, clearAgentEvents, setSearchParams, showToast],
 	);
 
-	// Mirror the latest createBoard into the ref.
-	createBoardRef.current = createBoard;
-
 	// Approve or retry execution (merged — identical logic, different toast).
 	// Manages busy state internally.
 	const [approveBusy, setApproveBusy] = useState(false);
@@ -175,7 +170,6 @@ export function useAgentBoard() {
 		setError,
 		artifact,
 		createBoard,
-		createBoardRef,
 		approveBusy,
 		handleApproveOrRetry,
 		handleNewBoard,

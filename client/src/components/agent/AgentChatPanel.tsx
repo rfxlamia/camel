@@ -312,7 +312,7 @@ export default function AgentChatPanel({
 							disabled={busy}
 							className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
-							Ya, Regenerate
+							Yes, Regenerate
 						</button>
 						<button
 							type="button"
@@ -320,7 +320,7 @@ export default function AgentChatPanel({
 							disabled={busy}
 							className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
-							Batal
+							Cancel
 						</button>
 					</div>
 				)}
@@ -331,6 +331,7 @@ export default function AgentChatPanel({
 						<p className="text-sm text-error-900">{error}</p>
 						{!board && (
 							<button
+								type="button"
 								onClick={onResetError}
 								className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 							>
@@ -347,6 +348,7 @@ export default function AgentChatPanel({
 							Ready to start? Approve to begin execution.
 						</p>
 						<button
+							type="button"
 							onClick={onApprove}
 							disabled={busy}
 							className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
@@ -405,6 +407,7 @@ export default function AgentChatPanel({
 											Execution failed
 										</div>
 										<button
+											type="button"
 											onClick={onRetryExecution}
 											disabled={busy}
 											className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"

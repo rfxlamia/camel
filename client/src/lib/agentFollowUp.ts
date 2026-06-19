@@ -14,8 +14,12 @@ export function conversationsToFollowUpMessages(
 	conversations: Array<{ role: string; content: string }> | undefined,
 ): FollowUpMessage[] {
 	if (!conversations || conversations.length <= 2) return [];
-	return conversations.slice(2).map((m) => ({
-		role: m.role as "user" | "assistant",
-		content: m.content,
-	}));
+	const VALID_ROLES = new Set(["user", "assistant"]);
+	return conversations
+		.slice(2)
+		.filter((m) => VALID_ROLES.has(m.role))
+		.map((m) => ({
+			role: m.role as "user" | "assistant",
+			content: m.content,
+		}));
 }

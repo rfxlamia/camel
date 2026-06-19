@@ -171,11 +171,15 @@ export function useAgentChat(config: UseAgentChatConfig) {
 			} catch {
 				showToast("Couldn't send message. Try again.");
 			} finally {
-				// Settlement bridge — fire next queued message if any.
+				// Settlement bridge — route next queued message if any.
 				const settleResult = settle(queueStateRef.current);
 				dispatch({ type: "settle" });
 				if (settleResult.fire) {
-					void createBoardWithQueueRef.current?.(settleResult.fire);
+					const route = routeNext(settleResult.fire, boardRef.current !== null);
+					if (route === "createBoard")
+						void createBoardWithQueueRef.current?.(settleResult.fire);
+					else if (route === "sendMessage")
+						void sendMessageRef.current?.(settleResult.fire);
 				}
 			}
 		},
@@ -232,11 +236,6 @@ export function useAgentChat(config: UseAgentChatConfig) {
 	useEffect(() => {
 		if (board?.executionStatus === "running") setIsLogExpanded(true);
 	}, [board?.executionStatus]);
-
-	// Auto-scroll event log when events change.
-	useEffect(() => {
-		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, []);
 
 	// ---- Actions ----
 
@@ -407,6 +406,17 @@ export function useAgentChat(config: UseAgentChatConfig) {
 	const tokenCount = columnAgentEvents.filter(
 		(e) => e.type === "agent.card.token",
 	).length;
+
+	// Auto-scroll event log when events change.
+	useEffect(() => {
+		void logEvents.length; // trigger scroll on new events
+		if (
+			isLogExpanded &&
+			typeof logEndRef.current?.scrollIntoView === "function"
+		) {
+			logEndRef.current.scrollIntoView({ behavior: "smooth" });
+		}
+	}, [logEvents.length, isLogExpanded]);
 
 	const inputDisabled =
 		busy ||
