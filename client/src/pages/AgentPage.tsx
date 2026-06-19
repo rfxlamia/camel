@@ -36,6 +36,9 @@ export default function AgentPage() {
 	const agentEventsRef = useRef(agentEvents);
 	agentEventsRef.current = agentEvents;
 
+	// Stable error-clearing callback shared by the chat hook and reset handler.
+	const clearError = useCallback(() => setError(null), [setError]);
+
 	// ---- Chat domain hook (owns sendMessage + queue internally) ----
 	const chat = useAgentChat({
 		board,
@@ -44,6 +47,7 @@ export default function AgentPage() {
 		setBoard,
 		activeWorkspaceId,
 		showToast,
+		clearError,
 		clearAgentEvents,
 		clearFollowUpAgentEvents,
 		agentEvents,
@@ -63,7 +67,7 @@ export default function AgentPage() {
 	}, [handleApproveOrRetry]);
 
 	const handleResetError = useCallback(() => {
-		setError(null);
+		clearError();
 		clearAgentEvents();
 		chat.setLastIntent(null);
 		chat.setBusy(false);
@@ -71,7 +75,15 @@ export default function AgentPage() {
 		if (chat.lastIntent) {
 			chat.setInput(chat.lastIntent);
 		}
-	}, [setError, clearAgentEvents, chat]);
+	}, [
+		clearError,
+		clearAgentEvents,
+		chat.setLastIntent,
+		chat.setBusy,
+		chat.resetQueue,
+		chat.setInput,
+		chat.lastIntent,
+	]);
 
 	// ---- Early returns ----
 	if (activeWorkspaceId === null) {

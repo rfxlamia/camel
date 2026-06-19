@@ -74,6 +74,7 @@ export interface UseAgentChatConfig {
 	setBoard: Dispatch<SetStateAction<AgentBoard | null>>;
 	activeWorkspaceId: number | null;
 	showToast: (msg: string) => void;
+	clearError: () => void;
 	clearAgentEvents: () => void;
 	clearFollowUpAgentEvents: () => void;
 	agentEvents: AgentEvent[];
@@ -90,6 +91,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		setBoard,
 		activeWorkspaceId,
 		showToast,
+		clearError,
 		clearAgentEvents,
 		clearFollowUpAgentEvents,
 		agentEvents,
@@ -308,6 +310,8 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		const trimmed = input.trim();
 		if (!trimmed || busy) return;
 		setInput("");
+		// Clear any stale error from a prior failed attempt before resubmitting.
+		clearError();
 		setLastIntent(trimmed);
 
 		const isFollowUp = board?.executionStatus === "done";
@@ -351,6 +355,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		input,
 		busy,
 		board,
+		clearError,
 		clearAgentEvents,
 		clearFollowUpAgentEvents,
 		sendMessage,
