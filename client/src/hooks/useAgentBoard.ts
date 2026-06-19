@@ -129,9 +129,13 @@ export function useAgentBoard() {
 	createBoardRef.current = createBoard;
 
 	// Approve or retry execution (merged — identical logic, different toast).
+	// Manages busy state internally.
+	const [approveBusy, setApproveBusy] = useState(false);
 	const handleApproveOrRetry = useCallback(
 		async (mode?: "retry") => {
 			if (!activeWorkspaceId || !board) return;
+			setApproveBusy(true);
+			setError(null);
 			try {
 				clearAgentEvents();
 				await api.approveAgentBoard(activeWorkspaceId, board.id);
@@ -147,6 +151,8 @@ export function useAgentBoard() {
 							: "Couldn't approve the board. Try again.",
 					);
 				}
+			} finally {
+				setApproveBusy(false);
 			}
 		},
 		[activeWorkspaceId, board, clearAgentEvents, showToast],
@@ -170,6 +176,7 @@ export function useAgentBoard() {
 		artifact,
 		createBoard,
 		createBoardRef,
+		approveBusy,
 		handleApproveOrRetry,
 		handleNewBoard,
 		searchParams,

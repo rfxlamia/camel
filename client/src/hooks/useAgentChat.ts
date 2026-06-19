@@ -1,21 +1,46 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useReducer,
+	useRef,
+	useState,
+} from "react";
 import { api } from "../api";
 import type { FollowUpMessage } from "../lib/agentFollowUp";
 import { conversationsToFollowUpMessages } from "../lib/agentFollowUp";
 import {
+	initialQueue,
 	type QueueState,
 	submit as queueSubmit,
+	routeNext,
 	settle,
 } from "../lib/agentQueue";
 import type { AgentBoard, AgentEvent } from "../types";
 
-// ---- Queue action type ----
+// ---- Queue reducer (owned by this hook) ----
 
-export type QueueAction =
+type QueueAction =
 	| { type: "submit"; message: string }
 	| { type: "settle" }
 	| { type: "reset" };
+
+function queueReducer(state: QueueState, action: QueueAction): QueueState {
+	switch (action.type) {
+		case "submit": {
+			const result = queueSubmit(state, action.message);
+			return result.state;
+		}
+		case "settle": {
+			const result = settle(state);
+			return result.state;
+		}
+		case "reset": {
+			return initialQueue;
+		}
+	}
+}
 
 // ---- Helpers ----
 
@@ -45,8 +70,7 @@ export function getStreamingFollowUpText(
 export interface UseAgentChatConfig {
 	board: AgentBoard | null;
 	boardRef: MutableRefObject<AgentBoard | null>;
-	createBoardWithQueue: (intent: string) => Promise<void>;
-	sendMessage: (msg: string) => Promise<void>;
+	createBoard: (intent: string) => Promise<void>;
 	setBoard: Dispatch<SetStateAction<AgentBoard | null>>;
 	activeWorkspaceId: number | null;
 	showToast: (msg: string) => void;
@@ -54,9 +78,6 @@ export interface UseAgentChatConfig {
 	clearFollowUpAgentEvents: () => void;
 	agentEvents: AgentEvent[];
 	agentEventsRef: MutableRefObject<AgentEvent[]>;
-	queueState: QueueState;
-	dispatch: Dispatch<QueueAction>;
-	queueStateRef: MutableRefObject<QueueState>;
 }
 
 // ---- Hook ----
@@ -65,8 +86,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 	const {
 		board,
 		boardRef,
-		createBoardWithQueue,
-		sendMessage,
+		createBoard,
 		setBoard,
 		activeWorkspaceId,
 		showToast,
@@ -74,9 +94,6 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		clearFollowUpAgentEvents,
 		agentEvents,
 		agentEventsRef,
-		queueState,
-		dispatch,
-		queueStateRef,
 	} = config;
 
 	const [input, setInput] = useState("");
@@ -88,6 +105,113 @@ export function useAgentChat(config: UseAgentChatConfig) {
 	const [lastIntent, setLastIntent] = useState<string | null>(null);
 	const [isLogExpanded, setIsLogExpanded] = useState(false);
 	const logEndRef = useRef<HTMLDivElement>(null);
+
+	// Queue state — fully owned by this hook.
+	const [queueState, dispatch] = useReducer(queueReducer, initialQueue);
+	const queueStateRef = useRef(queueState);
+	queueStateRef.current = queueState;
+
+	// Refs for cross-wiring sendMessage ↔ createBoardWithQueue.
+	const sendMessageRef = useRef<((msg: string) => Promise<void>) | null>(null);
+	const createBoardWithQueueRef = useRef<
+		((intent: string) => Promise<void>) | null
+	>(null);
+
+	// ---- sendMessage (API call + settlement) ----
+	const sendMessage = useCallback(
+		async (msg: string) => {
+			const currentBoard = boardRef.current;
+			if (!activeWorkspaceId || !currentBoard) return;
+			try {
+				const result = await api.sendAgentBoardMessage(
+					activeWorkspaceId,
+					currentBoard.id,
+					msg,
+				);
+				if (result.pendingRegenerate) {
+					setPendingRegenerate(true);
+					setFollowUpMessages((prev) => [
+						...prev,
+						{
+							role: ROLE_ASSISTANT,
+							content: result.explanation,
+							intent: "NEW_DIRECTION",
+						},
+					]);
+				} else if (result.streamed && result.explanation) {
+					const streamedText =
+						getStreamingFollowUpText(
+							agentEventsRef.current ?? [],
+							currentBoard.id,
+						) || result.explanation;
+					setFollowUpMessages((prev) => {
+						if (
+							prev.some(
+								(m) => m.role === ROLE_ASSISTANT && m.content === streamedText,
+							)
+						) {
+							return prev;
+						}
+						return [...prev, { role: ROLE_ASSISTANT, content: streamedText }];
+					});
+					clearFollowUpAgentEvents();
+				} else if (result.explanation) {
+					setFollowUpMessages((prev) => [
+						...prev,
+						{ role: ROLE_ASSISTANT, content: result.explanation },
+					]);
+				}
+				if (result.boardUpdated) {
+					const updated = await api.getAgentBoard(
+						activeWorkspaceId,
+						currentBoard.id,
+					);
+					setBoard(updated);
+				}
+			} catch {
+				showToast("Couldn't send message. Try again.");
+			} finally {
+				// Settlement bridge — fire next queued message if any.
+				const settleResult = settle(queueStateRef.current);
+				dispatch({ type: "settle" });
+				if (settleResult.fire) {
+					void createBoardWithQueueRef.current?.(settleResult.fire);
+				}
+			}
+		},
+		[
+			activeWorkspaceId,
+			boardRef,
+			setBoard,
+			showToast,
+			clearFollowUpAgentEvents,
+			agentEventsRef,
+		],
+	);
+
+	sendMessageRef.current = sendMessage;
+
+	// ---- createBoardWithQueue (settlement bridge over createBoard) ----
+	const createBoardWithQueue = useCallback(
+		async (intent: string) => {
+			await createBoard(intent);
+			// Settlement bridge — route next queued item.
+			const settleResult = settle(queueStateRef.current);
+			dispatch({ type: "settle" });
+			if (settleResult.fire) {
+				const route = routeNext(settleResult.fire, boardRef.current !== null);
+				if (route === "createBoard")
+					void createBoardWithQueueRef.current?.(settleResult.fire);
+				else if (route === "sendMessage")
+					void sendMessageRef.current?.(settleResult.fire);
+			}
+		},
+		[createBoard, boardRef],
+	);
+
+	createBoardWithQueueRef.current = createBoardWithQueue;
+
+	// ---- Effects ----
 
 	// Load follow-up messages when board changes.
 	useEffect(() => {
@@ -109,25 +233,12 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		if (board?.executionStatus === "running") setIsLogExpanded(true);
 	}, [board?.executionStatus]);
 
-	// Auto-scroll event log.
+	// Auto-scroll event log when events change.
 	useEffect(() => {
 		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, []);
 
-	// Streaming follow-up text (live chat bubble).
-	const streamingFollowUpText = useMemo(() => {
-		if (!board) return "";
-		const text = getStreamingFollowUpText(agentEvents, board.id);
-		if (!text) return "";
-		if (
-			followUpMessages.some(
-				(m) => m.role === ROLE_ASSISTANT && m.content === text,
-			)
-		) {
-			return "";
-		}
-		return text;
-	}, [agentEvents, board, followUpMessages]);
+	// ---- Actions ----
 
 	// Confirm regenerate.
 	const handleConfirmRegenerate = useCallback(async () => {
@@ -193,12 +304,11 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		}
 	}, [activeWorkspaceId, pendingRegenerate, showToast, boardRef]);
 
-	// Submit handler — uses queue.
+	// Submit handler — routes through queue.
 	const handleSend = useCallback(() => {
 		const trimmed = input.trim();
 		if (!trimmed || busy) return;
 		setInput("");
-		setBusy(true);
 		setLastIntent(trimmed);
 
 		const isFollowUp = board?.executionStatus === "done";
@@ -223,7 +333,6 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		if (!board) {
 			const qResult = queueSubmit(queueStateRef.current, trimmed);
 			dispatch({ type: "submit", message: trimmed });
-			setBusy(false);
 			if (qResult.fire) {
 				void createBoardWithQueue(qResult.fire);
 			}
@@ -232,7 +341,6 @@ export function useAgentChat(config: UseAgentChatConfig) {
 
 		const result = queueSubmit(queueStateRef.current, trimmed);
 		dispatch({ type: "submit", message: trimmed });
-		setBusy(false);
 
 		if (result.fire) {
 			if (!isFollowUp) {
@@ -249,11 +357,15 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		sendMessage,
 		createBoardWithQueue,
 		agentEventsRef,
-		queueStateRef,
-		dispatch,
 	]);
 
-	// Compute log-related values.
+	// Reset queue and error state (used by parent on error retry).
+	const resetQueue = useCallback(() => {
+		dispatch({ type: "reset" });
+	}, []);
+
+	// ---- Computed values ----
+
 	const isRunning = board?.executionStatus === "running";
 	const isPending = board?.status === "pending";
 	const isDone = board?.executionStatus === "done";
@@ -265,6 +377,21 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		() => agentEvents.filter((e) => !isFollowUpSlug(e.columnSlug)),
 		[agentEvents],
 	);
+
+	// Streaming follow-up text (live chat bubble).
+	const streamingFollowUpText = useMemo(() => {
+		if (!board) return "";
+		const text = getStreamingFollowUpText(agentEvents, board.id);
+		if (!text) return "";
+		if (
+			followUpMessages.some(
+				(m) => m.role === ROLE_ASSISTANT && m.content === text,
+			)
+		) {
+			return "";
+		}
+		return text;
+	}, [agentEvents, board, followUpMessages]);
 
 	// Streaming = output or thinking deltas.
 	const isStreaming =
@@ -288,36 +415,25 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		(board !== null && !canFollowUp && !isPending);
 	const sendDisabled = inputDisabled || !input.trim();
 
-	// Settle queue — returns the next message to fire, if any.
-	const settleQueue = useCallback(() => {
-		const settleResult = settle(queueStateRef.current);
-		dispatch({ type: "settle" });
-		return settleResult.fire;
-	}, [queueStateRef, dispatch]);
-
-	// Reset queue to initial state.
-	const resetQueue = useCallback(() => {
-		dispatch({ type: "reset" });
-	}, [dispatch]);
-
 	return {
+		// Input state
 		input,
 		setInput,
+		// Chat state
 		busy,
 		setBusy,
 		followUpMessages,
-		setFollowUpMessages,
 		pendingRegenerate,
-		setPendingRegenerate,
 		lastIntent,
 		setLastIntent,
-		error: null as string | null, // error state managed in parent
+		// Queue state
 		queueState,
-		dispatch,
-		queueStateRef,
+		resetQueue,
+		// Log state
 		isLogExpanded,
 		setIsLogExpanded,
 		logEndRef,
+		// Actions
 		handleSend,
 		handleConfirmRegenerate,
 		handleCancelRegenerate,
@@ -334,7 +450,5 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		inputDisabled,
 		sendDisabled,
 		streamingFollowUpText,
-		settleQueue,
-		resetQueue,
 	};
 }
