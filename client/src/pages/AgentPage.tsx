@@ -1,873 +1,91 @@
-import {
-	Bot,
-	CheckCircle,
-	ChevronDown,
-	ChevronRight,
-	Send,
-	XCircle,
-} from "lucide-react";
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useReducer,
-	useRef,
-	useState,
-} from "react";
-import ReactMarkdown from "react-markdown";
-import { useSearchParams } from "react-router";
-import remarkGfm from "remark-gfm";
-import { ApiError, api } from "../api";
+import { Bot } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
-import ArtifactCard from "../components/ArtifactCard";
-import LoadingCamel from "../components/LoadingCamel";
-import SuccessAnimation from "../components/SuccessAnimation";
+import AgentBoardHeader from "../components/agent/AgentBoardHeader";
+import AgentBoardVisual from "../components/agent/AgentBoardVisual";
+import AgentChatPanel from "../components/agent/AgentChatPanel";
 import { useBoard } from "../context/BoardContext";
-import { shouldRefetchBoardOnTerminalEvent } from "../lib/agentBoardSync";
-import { deriveColumnState } from "../lib/agentColumnState";
-import {
-	initialQueue,
-	type QueueState,
-	submit as queueSubmit,
-	routeNext,
-	settle,
-} from "../lib/agentQueue";
-import type {
-	AgentArtifact,
-	AgentBoard,
-	AgentColumn,
-	AgentEvent,
-} from "../types";
-import { formatRelativeTime } from "../types";
-
-// ---- Queue reducer ----
-
-type QueueAction =
-	| { type: "submit"; message: string }
-	| { type: "settle" }
-	| { type: "reset" };
-
-function queueReducer(state: QueueState, action: QueueAction): QueueState {
-	switch (action.type) {
-		case "submit": {
-			const result = queueSubmit(state, action.message);
-			return result.state;
-		}
-		case "settle": {
-			const result = settle(state);
-			return result.state;
-		}
-		case "reset": {
-			return initialQueue;
-		}
-	}
-}
-
-// ---- Helpers ----
-
-const ROLE_ASSISTANT = "assistant" as const;
-
-type FollowUpMessage = {
-	role: "user" | "assistant";
-	content: string;
-	intent?: string;
-};
-
-type AgentBoardMessagePayload =
-	| string
-	| { action: "confirm_regenerate" | "cancel_regenerate" };
-
-type AgentBoardMessageResult = {
-	explanation: string;
-	boardUpdated: boolean;
-	streamed?: boolean;
-	pendingRegenerate?: boolean;
-};
-
-const sendBoardMessage = api.sendAgentBoardMessage as (
-	workspaceId: number,
-	boardId: number,
-	payload: AgentBoardMessagePayload,
-) => Promise<AgentBoardMessageResult>;
-
-function isFollowUpSlug(slug: string | undefined): boolean {
-	return slug === "__notfirst__";
-}
-
-// ---- Chat markdown components (compact style for chat bubbles) ----
-
-const chatMarkdownComponents = {
-	h1: ({ children }: { children?: React.ReactNode }) => (
-		<h1 className="text-base font-semibold text-neutral-900 mt-2 mb-1 first:mt-0">
-			{children}
-		</h1>
-	),
-	h2: ({ children }: { children?: React.ReactNode }) => (
-		<h2 className="text-sm font-semibold text-neutral-900 mt-2 mb-1 first:mt-0">
-			{children}
-		</h2>
-	),
-	h3: ({ children }: { children?: React.ReactNode }) => (
-		<h3 className="text-sm font-semibold text-neutral-800 mt-1.5 mb-0.5 first:mt-0">
-			{children}
-		</h3>
-	),
-	p: ({ children }: { children?: React.ReactNode }) => (
-		<p className="text-sm text-neutral-800 leading-relaxed mb-1 last:mb-0">
-			{children}
-		</p>
-	),
-	ul: ({ children }: { children?: React.ReactNode }) => (
-		<ul className="list-disc pl-4 mb-1 space-y-0.5 text-sm text-neutral-800">
-			{children}
-		</ul>
-	),
-	ol: ({ children }: { children?: React.ReactNode }) => (
-		<ol className="list-decimal pl-4 mb-1 space-y-0.5 text-sm text-neutral-800">
-			{children}
-		</ol>
-	),
-	li: ({ children }: { children?: React.ReactNode }) => (
-		<li className="text-sm text-neutral-800 leading-relaxed">{children}</li>
-	),
-	strong: ({ children }: { children?: React.ReactNode }) => (
-		<strong className="font-semibold text-neutral-900">{children}</strong>
-	),
-	em: ({ children }: { children?: React.ReactNode }) => (
-		<em className="italic text-neutral-600">{children}</em>
-	),
-	a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
-		<a
-			href={href}
-			target="_blank"
-			rel="noopener noreferrer"
-			className="text-primary-600 hover:text-primary-700 underline underline-offset-2"
-		>
-			{children}
-		</a>
-	),
-	code: ({
-		children,
-		className,
-	}: {
-		children?: React.ReactNode;
-		className?: string;
-	}) => {
-		const isBlock = className?.includes("language-");
-		if (isBlock) {
-			return (
-				<pre className="rounded-md bg-neutral-100 border border-neutral-200 p-2 mb-1 overflow-x-auto">
-					<code className="text-xs font-mono text-neutral-800">{children}</code>
-				</pre>
-			);
-		}
-		return (
-			<code className="rounded bg-neutral-100 px-1 py-0.5 text-xs font-mono text-neutral-800">
-				{children}
-			</code>
-		);
-	},
-	blockquote: ({ children }: { children?: React.ReactNode }) => (
-		<blockquote className="border-l-2 border-primary-300 pl-2.5 py-0.5 mb-1 text-sm text-neutral-600 italic">
-			{children}
-		</blockquote>
-	),
-	hr: () => <hr className="my-1.5 border-neutral-200" />,
-	table: ({ children }: { children?: React.ReactNode }) => (
-		<div className="overflow-x-auto mb-1">
-			<table className="w-full text-xs border-collapse">{children}</table>
-		</div>
-	),
-	th: ({ children }: { children?: React.ReactNode }) => (
-		<th className="border-b border-neutral-200 px-2 py-1 text-left text-xs font-semibold text-neutral-700">
-			{children}
-		</th>
-	),
-	td: ({ children }: { children?: React.ReactNode }) => (
-		<td className="border-b border-neutral-200 px-2 py-1 text-sm text-neutral-800">
-			{children}
-		</td>
-	),
-};
-
-function conversationsToFollowUpMessages(
-	conversations: Array<{ role: string; content: string }> | undefined,
-): FollowUpMessage[] {
-	if (!conversations || conversations.length <= 2) return [];
-	return conversations.slice(2).map((m) => ({
-		role: m.role as "user" | "assistant",
-		content: m.content,
-	}));
-}
-
-function getStreamingFollowUpText(
-	events: AgentEvent[],
-	boardId: number,
-): string {
-	return events
-		.filter(
-			(e) =>
-				e.type === "agent.card.token" &&
-				isFollowUpSlug(e.columnSlug) &&
-				e.boardId === boardId,
-		)
-		.map((e) => e.token ?? "")
-		.join("");
-}
-
-function statusBadge(board: AgentBoard) {
-	if (board.executionStatus === "done") {
-		return (
-			<span className="rounded-md bg-success-100 px-2 py-0.5 text-xs font-medium text-success-900">
-				Done
-			</span>
-		);
-	}
-	if (board.executionStatus === "failed") {
-		return (
-			<span className="rounded-md bg-error-100 px-2 py-0.5 text-xs font-medium text-error-900">
-				Failed
-			</span>
-		);
-	}
-	if (board.executionStatus === "running") {
-		return (
-			<span className="rounded-md bg-info-100 px-2 py-0.5 text-xs font-medium text-info-900">
-				Running
-			</span>
-		);
-	}
-	if (board.status === "approved") {
-		return (
-			<span className="rounded-md bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-800">
-				Approved
-			</span>
-		);
-	}
-	return (
-		<span className="rounded-md bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-900">
-			Pending
-		</span>
-	);
-}
-
-// ---- Column state derivation — see lib/agentColumnState.ts ----
-
-// ---- Event log entry ----
-
-function EventEntry({ event }: { event: AgentEvent }) {
-	switch (event.type) {
-		case "agent.card.started":
-			return (
-				<p className="text-sm text-neutral-700">
-					<span className="font-medium">Started</span>{" "}
-					{event.columnSlug ?? "card"}
-				</p>
-			);
-		case "agent.card.token":
-			return (
-				<p className="text-xs text-neutral-500 font-mono break-all">
-					{event.token}
-				</p>
-			);
-		case "agent.card.done":
-			return (
-				<p className="text-sm text-success-900">
-					<CheckCircle size={14} className="inline mr-1" aria-hidden />
-					{event.columnSlug ?? "Card"} complete
-				</p>
-			);
-		case "agent.card.failed": {
-			const failureText = event.error ?? event.reason;
-			return (
-				<p className="text-sm text-error-900">
-					<XCircle size={14} className="inline mr-1" aria-hidden />
-					{event.columnSlug ?? "Card"} failed
-					{failureText ? `: ${failureText}` : ""}
-				</p>
-			);
-		}
-		default:
-			return <p className="text-xs text-neutral-500">{event.type}</p>;
-	}
-}
-
-// ---- Read-only board visual ----
-
-function AgentBoardVisual({
-	board,
-	onCardClick,
-	agentEvents,
-}: {
-	board: AgentBoard;
-	onCardClick: (column: AgentColumn) => void;
-	agentEvents: AgentEvent[];
-}) {
-	return (
-		<div className="flex gap-4 overflow-x-auto p-4">
-			{board.columns.map((col) => {
-				const state = deriveColumnState(
-					agentEvents,
-					board.id,
-					col.slug,
-					board.executionStatus,
-					col.cards.length > 0,
-				);
-				const isDone = state === "done";
-				const isActive = state === "active";
-				const isFailed = state === "failed";
-
-				// All column states (active/pending/failed/done) are interactive:
-				// the tile (and inner cards when pending) open the column panel.
-				// State derived per-col + boardId (no blanket on board done; EC4).
-				const interactiveProps = {
-					onClick: () => onCardClick(col),
-					role: "button" as const,
-					tabIndex: 0,
-					onKeyDown: (e: React.KeyboardEvent) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault(); // prevent scroll on Space
-							onCardClick(col);
-						}
-					},
-				};
-
-				return (
-					<div
-						key={col.id}
-						className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white cursor-pointer hover:border-primary-300 hover:shadow-sm transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-						{...interactiveProps}
-					>
-						<div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2">
-							<h3 className="text-sm font-medium text-neutral-900 truncate">
-								{col.name}
-							</h3>
-							<span className="rounded-md bg-neutral-200 px-1.5 py-0.5 text-xs font-semibold text-neutral-700">
-								{col.cards.length}
-							</span>
-						</div>
-						<div className="min-h-[60px] space-y-2 p-2">
-							{isDone && (
-								<div className="flex justify-center py-1">
-									<SuccessAnimation size={48} />
-								</div>
-							)}
-							{isActive && (
-								<div className="flex justify-center py-1">
-									<LoadingCamel size={48} />
-								</div>
-							)}
-							{isFailed && (
-								<div className="flex justify-center py-1">
-									<XCircle size={48} className="text-error-900" aria-hidden />
-								</div>
-							)}
-							{state === "pending" && col.cards.length === 0 && (
-								<p className="py-4 text-center text-xs text-neutral-400">
-									No cards
-								</p>
-							)}
-							{state === "pending" &&
-								col.cards.map((card) => (
-									<button
-										key={card.id}
-										onClick={() => onCardClick(col)}
-										className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 hover:border-primary-300 hover:bg-primary-100/30 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-									>
-										{card.title}
-									</button>
-								))}
-						</div>
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-// ---- Main page ----
+import { useAgentBoard } from "../hooks/useAgentBoard";
+import { useAgentChat } from "../hooks/useAgentChat";
+import type { AgentColumn } from "../types";
 
 export default function AgentPage() {
-	const {
-		activeWorkspaceId,
-		showToast,
-		agentEvents,
-		clearAgentEvents,
-		clearFollowUpAgentEvents,
-	} = useBoard();
-	const [searchParams, setSearchParams] = useSearchParams();
+	const { clearFollowUpAgentEvents } = useBoard();
 
-	const [board, setBoard] = useState<AgentBoard | null>(null);
-	// Always holds the latest board so synchronous queue handoffs (e.g.
-	// createBoard's finally firing a queued refine message) read current
-	// state instead of a stale closure captured while board was null.
-	const boardRef = useRef<AgentBoard | null>(board);
-	boardRef.current = board;
+	// ---- Board domain hook ----
+	const {
+		board,
+		setBoard,
+		boardRef,
+		loading,
+		error,
+		setError,
+		artifact,
+		createBoard,
+		approveBusy,
+		handleApproveOrRetry,
+		handleNewBoard,
+		activeWorkspaceId,
+		clearAgentEvents,
+		agentEvents,
+		showToast,
+	} = useAgentBoard();
+
+	// ---- Refs for stable access in effects/callbacks ----
 	const agentEventsRef = useRef(agentEvents);
 	agentEventsRef.current = agentEvents;
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [input, setInput] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [detailColumn, setDetailColumn] = useState<AgentColumn | null>(null);
-	const [artifact, setArtifact] = useState<AgentArtifact | null>(null);
 
-	const [queueState, dispatch] = useReducer(queueReducer, initialQueue);
-	const queueStateRef = useRef(queueState);
-	queueStateRef.current = queueState;
+	// Stable error-clearing callback shared by the chat hook and reset handler.
+	const clearError = useCallback(() => setError(null), [setError]);
 
-	const logEndRef = useRef<HTMLDivElement>(null);
-	const lastSyncedTerminalIdxRef = useRef(-1);
-	const [lastIntent, setLastIntent] = useState<string | null>(null);
-	const [isLogExpanded, setIsLogExpanded] = useState(false);
-	const [followUpMessages, setFollowUpMessages] = useState<FollowUpMessage[]>(
-		[],
-	);
-	const [pendingRegenerate, setPendingRegenerate] = useState(false);
-
-	// Load board from URL param when workspace or boardId changes.
-	useEffect(() => {
-		const boardId = searchParams.get("boardId");
-		if (!boardId || !activeWorkspaceId) return;
-		lastSyncedTerminalIdxRef.current = -1;
-		clearAgentEvents();
-		setFollowUpMessages([]);
-		setPendingRegenerate(false);
-		let cancelled = false;
-		setLoading(true);
-		api
-			.getAgentBoard(activeWorkspaceId, Number(boardId))
-			.then((b) => {
-				if (!cancelled) {
-					setBoard(b);
-					setFollowUpMessages(conversationsToFollowUpMessages(b.conversations));
-				}
-			})
-			.catch(() => {
-				if (!cancelled) {
-					showToast("Couldn't load the board.");
-					setSearchParams({}, { replace: true });
-				}
-			})
-			.finally(() => {
-				if (!cancelled) setLoading(false);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [
-		activeWorkspaceId,
-		searchParams,
-		setSearchParams,
-		showToast,
-		clearAgentEvents,
-	]);
-
-	// Re-fetch board once per terminal agent event (done/failed).
-	// Must NOT depend on `board` — setBoard would retrigger this effect forever.
-	useEffect(() => {
-		if (!activeWorkspaceId) return;
-		const boardId = boardRef.current?.id;
-		if (!boardId) return;
-
-		const { shouldFetch, eventIndex } = shouldRefetchBoardOnTerminalEvent(
-			agentEvents,
-			lastSyncedTerminalIdxRef.current,
-		);
-		if (!shouldFetch) return;
-
-		lastSyncedTerminalIdxRef.current = eventIndex;
-		api
-			.getAgentBoard(activeWorkspaceId, boardId)
-			.then((b) => {
-				setBoard(b);
-				setFollowUpMessages(conversationsToFollowUpMessages(b.conversations));
-			})
-			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring board fetch errors
-			.catch(() => {});
-	}, [agentEvents, activeWorkspaceId]);
-
-	// Fetch deliverable artifact when execution completes (reload-already-done + live).
-	useEffect(() => {
-		if (!activeWorkspaceId || !board?.id || board.executionStatus !== "done") {
-			setArtifact(null);
-			return;
-		}
-
-		let cancelled = false;
-		api
-			.getAgentArtifact(activeWorkspaceId, board.id)
-			.then((a) => {
-				if (!cancelled) setArtifact(a);
-			})
-			.catch(() => {
-				if (!cancelled) setArtifact(null);
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [activeWorkspaceId, board?.id, board?.executionStatus]);
-
-	// Auto-scroll event log
-	useEffect(() => {
-		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, []);
-
-	// Actually handle the queue fire
-	const sendMessage = useCallback(
-		async (msg: string) => {
-			// Resolve the board from the ref, not the captured `board` variable:
-			// createBoard fires the first queued refine synchronously while its
-			// own `board` closure is still null, so a captured value would be stale.
-			const currentBoard = boardRef.current;
-			if (!activeWorkspaceId || !currentBoard) return;
-			try {
-				const result = await sendBoardMessage(
-					activeWorkspaceId,
-					currentBoard.id,
-					msg,
-				);
-				if (result.pendingRegenerate) {
-					setPendingRegenerate(true);
-					setFollowUpMessages((prev) => [
-						...prev,
-						{
-							role: ROLE_ASSISTANT,
-							content: result.explanation,
-							intent: "NEW_DIRECTION",
-						},
-					]);
-				} else if (result.streamed && result.explanation) {
-					const streamedText =
-						getStreamingFollowUpText(agentEventsRef.current, currentBoard.id) ||
-						result.explanation;
-					setFollowUpMessages((prev) => {
-						if (
-							prev.some(
-								(m) => m.role === ROLE_ASSISTANT && m.content === streamedText,
-							)
-						) {
-							return prev;
-						}
-						return [...prev, { role: ROLE_ASSISTANT, content: streamedText }];
-					});
-					clearFollowUpAgentEvents();
-				} else if (result.explanation) {
-					setFollowUpMessages((prev) => [
-						...prev,
-						{ role: ROLE_ASSISTANT, content: result.explanation },
-					]);
-				}
-				if (result.boardUpdated) {
-					const updated = await api.getAgentBoard(
-						activeWorkspaceId,
-						currentBoard.id,
-					);
-					setBoard(updated);
-				}
-				// Settle on success — fire next queued message if any
-				const settleResult = settle(queueStateRef.current);
-				dispatch({ type: "settle" });
-				if (settleResult.fire) {
-					void sendMessage(settleResult.fire);
-				}
-			} catch {
-				showToast("Couldn't send message. Try again.");
-				// Settle on error too — queue must continue
-				const settleResult = settle(queueStateRef.current);
-				dispatch({ type: "settle" });
-				if (settleResult.fire) {
-					void sendMessage(settleResult.fire);
-				}
-			}
-		},
-		[activeWorkspaceId, showToast, clearFollowUpAgentEvents],
-	);
-
-	const handleConfirmRegenerate = useCallback(async () => {
-		const currentBoard = boardRef.current;
-		const cannotRegenerate =
-			!activeWorkspaceId || !currentBoard || !pendingRegenerate;
-		if (cannotRegenerate) return;
-		setBusy(true);
-		try {
-			clearAgentEvents();
-			await sendBoardMessage(activeWorkspaceId, currentBoard.id, {
-				action: "confirm_regenerate",
-			});
-			setPendingRegenerate(false);
-			const updated = await api.getAgentBoard(
-				activeWorkspaceId,
-				currentBoard.id,
-			);
-			setBoard(updated);
-			setFollowUpMessages(
-				conversationsToFollowUpMessages(updated.conversations),
-			);
-		} catch {
-			showToast("Couldn't confirm regeneration. Try again.");
-		} finally {
-			setBusy(false);
-		}
-	}, [activeWorkspaceId, pendingRegenerate, showToast, clearAgentEvents]);
-
-	const handleCancelRegenerate = useCallback(async () => {
-		const currentBoard = boardRef.current;
-		const cannotRegenerate =
-			!activeWorkspaceId || !currentBoard || !pendingRegenerate;
-		if (cannotRegenerate) return;
-		setBusy(true);
-		try {
-			const result = await sendBoardMessage(
-				activeWorkspaceId,
-				currentBoard.id,
-				{
-					action: "cancel_regenerate",
-				},
-			);
-			setPendingRegenerate(false);
-			if (result.explanation) {
-				setFollowUpMessages((prev) => [
-					...prev,
-					{ role: ROLE_ASSISTANT, content: result.explanation },
-				]);
-			}
-		} catch {
-			showToast("Couldn't cancel regeneration. Try again.");
-		} finally {
-			setBusy(false);
-		}
-	}, [activeWorkspaceId, pendingRegenerate, showToast]);
-
-	// Holds the latest createBoard so its own finally can re-enter createBoard
-	// (instead of sendMessage) when a create failed and the next queued item is
-	// itself an intent. A ref avoids the self-reference / stale-closure problem.
-	const createBoardRef = useRef<((intent: string) => Promise<void>) | null>(
-		null,
-	);
-
-	// Create a new board (extracted for queue lifecycle)
-	const createBoard = useCallback(
-		async (intent: string) => {
-			if (!activeWorkspaceId) return;
-			try {
-				clearAgentEvents();
-				const result = await api.createAgentBoard(activeWorkspaceId, intent);
-				const b = await api.getAgentBoard(activeWorkspaceId, result.boardId);
-				setBoard(b);
-				// Update the ref imperatively: the finally block below fires the
-				// next queued message synchronously, before the setBoard re-render
-				// commits, so sendMessage must see the new board now (not null).
-				boardRef.current = b;
-				setSearchParams({ boardId: String(result.boardId) }, { replace: true });
-			} catch (err) {
-				if (err instanceof ApiError && err.status === 422) {
-					setError(err.message);
-				} else {
-					showToast("Couldn't create the board. Try again.");
-				}
-			} finally {
-				// Settle queue — fire next if any.
-				const settleResult = settle(queueStateRef.current);
-				dispatch({ type: "settle" });
-				if (settleResult.fire) {
-					// On a successful create a board now exists, so the next item is a
-					// refine message → sendMessage. On a FAILED create no board exists
-					// yet, so the next item is itself an intent that must re-enter
-					// createBoard; routing it to sendMessage would early-return and
-					// strand the queue (isGenerating stuck true).
-					const route = routeNext(settleResult.fire, boardRef.current !== null);
-					if (route === "createBoard") {
-						void createBoardRef.current?.(settleResult.fire);
-					} else if (route === "sendMessage") {
-						void sendMessage(settleResult.fire);
-					}
-				}
-			}
-		},
-		[
-			activeWorkspaceId,
-			clearAgentEvents,
-			setSearchParams,
-			showToast,
-			sendMessage,
-		],
-	);
-
-	// Mirror the latest createBoard into the ref (same pattern as boardRef).
-	createBoardRef.current = createBoard;
-
-	// Submit handler — uses queue
-	const handleSend = useCallback(() => {
-		const trimmed = input.trim();
-		if (!trimmed || busy) return;
-		setInput("");
-		setBusy(true);
-		setError(null);
-		setLastIntent(trimmed);
-
-		const isFollowUp = board?.executionStatus === "done";
-
-		if (isFollowUp) {
-			const streamed = board
-				? getStreamingFollowUpText(agentEventsRef.current, board.id)
-				: "";
-			if (streamed) {
-				setFollowUpMessages((prev) => [
-					...prev,
-					{ role: ROLE_ASSISTANT, content: streamed },
-				]);
-			}
-			clearFollowUpAgentEvents();
-			setFollowUpMessages((prev) => [
-				...prev,
-				{ role: "user", content: trimmed },
-			]);
-		}
-
-		if (!board) {
-			// Route through queue
-			const qResult = queueSubmit(queueStateRef.current, trimmed);
-			dispatch({ type: "submit", message: trimmed });
-			setBusy(false);
-			if (qResult.fire) {
-				void createBoard(qResult.fire);
-			}
-			return;
-		}
-
-		// Queue the message
-		const result = queueSubmit(queueStateRef.current, trimmed);
-		dispatch({ type: "submit", message: trimmed });
-		setBusy(false);
-
-		if (result.fire) {
-			// Follow-up on done/failed boards keeps column SSE state intact.
-			if (!isFollowUp) {
-				clearAgentEvents();
-			}
-			void sendMessage(result.fire);
-		}
-	}, [
-		input,
-		busy,
+	// ---- Chat domain hook (owns sendMessage + queue internally) ----
+	const chat = useAgentChat({
 		board,
+		boardRef,
+		createBoard,
+		setBoard,
+		activeWorkspaceId,
+		showToast,
+		clearError,
 		clearAgentEvents,
 		clearFollowUpAgentEvents,
-		sendMessage,
-		createBoard,
+		agentEvents,
+		agentEventsRef,
+	});
+
+	// ---- Detail column state (third panel) ----
+	const [detailColumn, setDetailColumn] = useState<AgentColumn | null>(null);
+
+	// ---- Handlers ----
+	const handleApprove = useCallback(() => {
+		void handleApproveOrRetry();
+	}, [handleApproveOrRetry]);
+
+	const handleRetryExecution = useCallback(() => {
+		void handleApproveOrRetry("retry");
+	}, [handleApproveOrRetry]);
+
+	const handleResetError = useCallback(() => {
+		clearError();
+		clearAgentEvents();
+		chat.setLastIntent(null);
+		chat.setBusy(false);
+		chat.resetQueue();
+		if (chat.lastIntent) {
+			chat.setInput(chat.lastIntent);
+		}
+	}, [
+		clearError,
+		clearAgentEvents,
+		chat.setLastIntent,
+		chat.setBusy,
+		chat.resetQueue,
+		chat.setInput,
+		chat.lastIntent,
 	]);
 
-	// Settle → auto-fire effect (after queue reducer settles)
-	// The settle effect in the agentEvents watcher handles firing the next queued message.
-
-	// Approve handler
-	const handleApprove = useCallback(async () => {
-		if (!activeWorkspaceId || !board) return;
-		setBusy(true);
-		setError(null);
-		try {
-			clearAgentEvents();
-			await api.approveAgentBoard(activeWorkspaceId, board.id);
-			const updated = await api.getAgentBoard(activeWorkspaceId, board.id);
-			setBoard(updated);
-		} catch (err) {
-			if (err instanceof ApiError) {
-				setError(err.message);
-			} else {
-				showToast("Couldn't approve the board. Try again.");
-			}
-		} finally {
-			setBusy(false);
-		}
-	}, [activeWorkspaceId, board, clearAgentEvents, showToast]);
-
-	// Retry execution (re-approve after failure)
-	const handleRetryExecution = useCallback(async () => {
-		if (!activeWorkspaceId || !board) return;
-		setBusy(true);
-		setError(null);
-		try {
-			clearAgentEvents();
-			await api.approveAgentBoard(activeWorkspaceId, board.id);
-			const updated = await api.getAgentBoard(activeWorkspaceId, board.id);
-			setBoard(updated);
-		} catch (err) {
-			if (err instanceof ApiError) {
-				setError(err.message);
-			} else {
-				showToast("Couldn't retry. Try again.");
-			}
-		} finally {
-			setBusy(false);
-		}
-	}, [activeWorkspaceId, board, clearAgentEvents, showToast]);
-
-	// New board handler
-	const handleNewBoard = useCallback(() => {
-		setBoard(null);
-		setSearchParams({}, { replace: true });
-		clearAgentEvents();
-		setError(null);
-		setInput("");
-		setFollowUpMessages([]);
-		setPendingRegenerate(false);
-	}, [setSearchParams, clearAgentEvents]);
-
-	// Auto-expand log when execution starts
-	useEffect(() => {
-		if (board?.executionStatus === "running") setIsLogExpanded(true);
-	}, [board?.executionStatus]);
-
-	const isRunning = board?.executionStatus === "running";
-	const isPending = board?.status === "pending";
-	const isDone = board?.executionStatus === "done";
-	const isFailed = board?.executionStatus === "failed";
-	const canFollowUp = isDone;
-
-	// Exclude follow-up stream events from column state + execution log metrics.
-	const columnAgentEvents = useMemo(
-		() => agentEvents.filter((e) => !isFollowUpSlug(e.columnSlug)),
-		[agentEvents],
-	);
-
-	const streamingFollowUpText = useMemo(() => {
-		if (!board) return "";
-		const text = getStreamingFollowUpText(agentEvents, board.id);
-		if (!text) return "";
-		if (
-			followUpMessages.some(
-				(m) => m.role === ROLE_ASSISTANT && m.content === text,
-			)
-		) {
-			return "";
-		}
-		return text;
-	}, [agentEvents, board, followUpMessages]);
-
-	// Streaming = output or thinking deltas (thinking can precede first token).
-	const isStreaming =
-		isRunning &&
-		columnAgentEvents.some(
-			(e) => e.type === "agent.card.token" || e.type === "agent.card.thinking",
-		);
-
-	// Filter batched stream chunks from the log — panel shows them in detail view.
-	const logEvents = columnAgentEvents.filter(
-		(e) => e.type !== "agent.card.token" && e.type !== "agent.card.thinking",
-	);
-	const tokenCount = columnAgentEvents.filter(
-		(e) => e.type === "agent.card.token",
-	).length;
-
-	const inputDisabled =
-		busy ||
-		isRunning ||
-		pendingRegenerate ||
-		(board !== null && !canFollowUp && !isPending);
-	const sendDisabled = inputDisabled || !input.trim();
-
+	// ---- Early returns ----
 	if (activeWorkspaceId === null) {
 		return (
 			<div className="flex min-h-[50vh] items-center justify-center">
@@ -891,7 +109,6 @@ export default function AgentPage() {
 			{/* Left panel — board visual or empty state */}
 			<div className="flex-1 overflow-auto border-r border-neutral-200">
 				{!board ? (
-					/* Empty state CTA */
 					<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 translate-x-[48px] pt-32">
 						<div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
 							<Bot size={32} className="text-primary-600" aria-hidden />
@@ -907,316 +124,56 @@ export default function AgentPage() {
 						</div>
 					</div>
 				) : (
-					/* Board visual (read-only) */
 					<div>
-						<div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
-							<div className="min-w-0">
-								<p className="text-sm font-medium text-neutral-900 truncate">
-									{board.originalIntent}
-								</p>
-								<p className="text-xs text-neutral-500">
-									{formatRelativeTime(board.createdAt)}
-								</p>
-							</div>
-							<div className="flex items-center gap-2">
-								{statusBadge(board)}
-								<button
-									onClick={handleNewBoard}
-									className="rounded-md px-2.5 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-								>
-									New
-								</button>
-							</div>
-						</div>
+						<AgentBoardHeader board={board} onNewBoard={handleNewBoard} />
 						<AgentBoardVisual
 							board={board}
 							onCardClick={setDetailColumn}
-							agentEvents={columnAgentEvents}
+							agentEvents={chat.columnAgentEvents}
 						/>
 					</div>
 				)}
 			</div>
 
 			{/* Right panel — chat + execution log */}
-			<div className="flex w-96 flex-col bg-neutral-100">
-				{/* Chat / explanation area */}
-				<div className="flex-1 overflow-y-auto p-4 space-y-3">
-					{/* The user's intent message. Once a board exists it survives via
-					    board.originalIntent (persists across reloads); before the board
-					    is created it falls back to the pending lastIntent. Gating this on
-					    `!board` made the message vanish the moment the agent replied. */}
-					{(() => {
-						const userMessage = board?.originalIntent ?? lastIntent;
-						if (!userMessage) {
-							return (
-								<p className="text-sm text-neutral-600">
-									Describe what you want to build. The agent will generate a
-									board structure you can review and approve.
-								</p>
-							);
-						}
-						return (
-							<div className="flex justify-end">
-								<div className="max-w-[80%] rounded-lg bg-primary-600 px-3 py-2">
-									<p className="text-sm text-white break-words">
-										{userMessage}
-									</p>
-								</div>
-							</div>
-						);
-					})()}
-
-					{board && (
-						<div className="rounded-lg border border-neutral-200 bg-white p-3">
-							<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
-							<p className="text-sm text-neutral-800 whitespace-pre-wrap">
-								{board.columns.length > 0
-									? `Created ${board.columns.length} columns. Review the structure and approve to start execution.`
-									: "Board generated. Use the chat below to refine."}
-							</p>
-						</div>
-					)}
-
-					{followUpMessages.map((msg, i) => (
-						<div
-							key={`follow-up-${i}`}
-							className={
-								msg.role === "user" ? "flex justify-end" : "flex justify-start"
-							}
-						>
-							<div
-								className={
-									msg.role === "user"
-										? "max-w-[80%] rounded-lg bg-primary-600 px-3 py-2"
-										: "max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2"
-								}
-							>
-								{msg.role === ROLE_ASSISTANT && (
-									<p className="text-xs font-medium text-neutral-500 mb-1">
-										Agent
-									</p>
-								)}
-								{msg.role === "user" ? (
-									<p className="text-sm text-white break-words">
-										{msg.content}
-									</p>
-								) : (
-									<div className="text-sm text-neutral-800 break-words">
-										<ReactMarkdown
-											remarkPlugins={[remarkGfm]}
-											components={chatMarkdownComponents}
-										>
-											{msg.content}
-										</ReactMarkdown>
-									</div>
-								)}
-							</div>
-						</div>
-					))}
-
-					{streamingFollowUpText && (
-						<div className="flex justify-start">
-							<div className="max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2">
-								<p className="text-xs font-medium text-neutral-500 mb-1">
-									Agent
-								</p>
-								<div className="text-sm text-neutral-800 break-words">
-									<ReactMarkdown
-										remarkPlugins={[remarkGfm]}
-										components={chatMarkdownComponents}
-									>
-										{streamingFollowUpText}
-									</ReactMarkdown>
-								</div>
-							</div>
-						</div>
-					)}
-
-					{pendingRegenerate && (
-						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={() => void handleConfirmRegenerate()}
-								disabled={busy}
-								className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								Ya, Regenerate
-							</button>
-							<button
-								type="button"
-								onClick={() => void handleCancelRegenerate()}
-								disabled={busy}
-								className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								Batal
-							</button>
-						</div>
-					)}
-
-					{/* Error message */}
-					{error && (
-						<div className="rounded-lg border border-error-200 bg-error-100 p-3 space-y-2">
-							<p className="text-sm text-error-900">{error}</p>
-							{!board && (
-								<button
-									onClick={() => {
-										// Cleanup state and put intent back in input for user to review/edit
-										setError(null);
-										clearAgentEvents();
-										setLastIntent(null);
-										setBusy(false);
-										// Reset queue to initial state
-										dispatch({ type: "reset" });
-										if (lastIntent) {
-											setInput(lastIntent);
-										}
-									}}
-									className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-								>
-									Retry
-								</button>
-							)}
-						</div>
-					)}
-
-					{/* Approval section */}
-					{board && isPending && (
-						<div className="rounded-lg border border-primary-200 bg-primary-100/50 p-3 space-y-2">
-							<p className="text-sm text-primary-800">
-								Ready to start? Approve to begin execution.
-							</p>
-							<button
-								onClick={handleApprove}
-								disabled={busy}
-								className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								{busy ? "Approving..." : "Approve"}
-							</button>
-						</div>
-					)}
-
-					{/* Execution log — collapsible */}
-					{board && (isRunning || isDone || isFailed) && (
-						<div className="rounded-lg border border-neutral-200 bg-white">
-							<button
-								type="button"
-								onClick={() => setIsLogExpanded((prev) => !prev)}
-								className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors"
-								aria-expanded={isLogExpanded}
-							>
-								{isLogExpanded ? (
-									<ChevronDown size={14} aria-hidden />
-								) : (
-									<ChevronRight size={14} aria-hidden />
-								)}
-								Execution Log
-								{isRunning && !isLogExpanded && (
-									<span className="ml-auto text-info-700">Running…</span>
-								)}
-							</button>
-							{isLogExpanded && (
-								<div className="space-y-2 border-t border-neutral-200 p-3">
-									{isRunning && (
-										<p className="text-xs text-info-700">
-											Running...{" "}
-											{tokenCount > 0 && `(${tokenCount} tokens received)`}
-										</p>
-									)}
-									{logEvents.map((event, i) => (
-										<EventEntry key={i} event={event} />
-									))}
-									{isStreaming && (
-										<div className="flex items-center gap-1.5 text-xs text-neutral-500">
-											<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary-600" />
-											Streaming...
-										</div>
-									)}
-									{isDone && (
-										<div className="flex items-center gap-1.5 text-sm text-success-900">
-											<CheckCircle size={16} aria-hidden />
-											Execution complete
-										</div>
-									)}
-									{isFailed && (
-										<div className="space-y-2">
-											<div className="flex items-center gap-1.5 text-sm text-error-900">
-												<XCircle size={16} aria-hidden />
-												Execution failed
-											</div>
-											<button
-												onClick={handleRetryExecution}
-												disabled={busy}
-												className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-											>
-												{busy ? "Retrying..." : "Retry Execution"}
-											</button>
-										</div>
-									)}
-									<div ref={logEndRef} />
-								</div>
-							)}
-						</div>
-					)}
-
-					{isDone && artifact && activeWorkspaceId !== null && board && (
-						<ArtifactCard
-							artifact={artifact}
-							downloadUrl={api.agentArtifactDownloadUrl(
-								activeWorkspaceId,
-								board.id,
-							)}
-						/>
-					)}
-
-					{/* Queue indicator */}
-					{queueState.queue.length > 0 && (
-						<div className="rounded-lg border border-warning-200 bg-warning-100/50 p-2">
-							<p className="text-xs text-warning-900">
-								{queueState.queue.length} message
-								{queueState.queue.length !== 1 ? "s" : ""} queued
-							</p>
-						</div>
-					)}
-				</div>
-
-				{/* Input area */}
-				<div className="border-t border-neutral-200 p-3">
-					<form
-						onSubmit={(e) => {
-							e.preventDefault();
-							void handleSend();
-						}}
-						className="flex gap-2"
-					>
-						<input
-							type="text"
-							value={input}
-							onChange={(e) => setInput(e.target.value)}
-							placeholder={
-								!board
-									? "Describe what you want to research..."
-									: isRunning
-										? "Execution in progress..."
-										: pendingRegenerate
-											? "Waiting for confirmation..."
-											: canFollowUp
-												? "Follow up about this board..."
-												: "Refine the board..."
-							}
-							disabled={inputDisabled}
-							className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-400"
-						/>
-						<button
-							type="submit"
-							disabled={sendDisabled}
-							aria-label="Send"
-							className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-						>
-							<Send size={16} aria-hidden />
-						</button>
-					</form>
-				</div>
-			</div>
+			<AgentChatPanel
+				board={board}
+				lastIntent={chat.lastIntent}
+				followUpMessages={chat.followUpMessages}
+				streamingFollowUpText={chat.streamingFollowUpText}
+				pendingRegenerate={chat.pendingRegenerate}
+				error={error}
+				artifact={artifact}
+				queueState={chat.queueState}
+				input={chat.input}
+				setInput={chat.setInput}
+				busy={chat.busy || approveBusy}
+				inputDisabled={chat.inputDisabled}
+				sendDisabled={chat.sendDisabled}
+				isRunning={chat.isRunning}
+				isPending={chat.isPending}
+				isDone={chat.isDone}
+				isFailed={chat.isFailed}
+				canFollowUp={chat.canFollowUp}
+				isStreaming={chat.isStreaming}
+				logEvents={chat.logEvents}
+				tokenCount={chat.tokenCount}
+				isLogExpanded={chat.isLogExpanded}
+				setIsLogExpanded={chat.setIsLogExpanded}
+				logEndRef={chat.logEndRef}
+				activeWorkspaceId={activeWorkspaceId}
+				onSend={chat.handleSend}
+				onApprove={handleApprove}
+				onRetryExecution={handleRetryExecution}
+				onConfirmRegenerate={chat.handleConfirmRegenerate}
+				onCancelRegenerate={chat.handleCancelRegenerate}
+				onResetError={handleResetError}
+				agentArtifactDownloadUrl={
+					board && activeWorkspaceId
+						? api.agentArtifactDownloadUrl(activeWorkspaceId, board.id)
+						: ""
+				}
+			/>
 
 			{/* Card detail panel */}
 			{detailColumn && board && (
