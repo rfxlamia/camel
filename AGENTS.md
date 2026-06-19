@@ -63,8 +63,8 @@ Tests use **Vitest**. Client tests run in **jsdom** environment.
 |---|---|
 | `index.ts` | Express setup: CORS, cookie-parser, mounts `/api/auth`, `/api`, and agent routes |
 | `auth.ts` | bcrypt auth, `requireAuth` middleware, session cookie (30-day) |
-| `routes.ts` | Board API routes under `requireAuth` |
-| `routes/` | Additional route modules (settings, workspace access) |
+| `routes.ts` | Router aggregator: mounts all sub-routers under `/api` |
+| `routes/` | Resource modules: workspaces, members, invites, board, cards, columns, activity, metrics, presence, settings, helpers |
 | `realtime.ts` | Redis Pub/Sub fan-out to SSE; degrades to in-process if Redis down |
 | `agent/` | LLM pipeline: routes, service, templates, tool registry, web search (Tavily) |
 | `core/` | Pure functions: fractional positioning, WIP limits, flow metrics |

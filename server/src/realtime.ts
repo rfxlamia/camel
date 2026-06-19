@@ -35,6 +35,7 @@ export interface BoardEvent {
 		| "card.created"
 		| "card.updated"
 		| "card.moved"
+		| "card.reordered"
 		| "card.deleted"
 		| "column.created"
 		| "column.updated"
