@@ -5,7 +5,12 @@ import type { Tool, ToolResult } from "./types.js";
 const MAX_RESULTS = 10;
 const SNIPPET_MAX = 300;
 const MAX_ATTEMPTS = 3;
-const BACKOFF_MS = 10;
+const BACKOFF_MS: Record<SearchErrorCode, number> = {
+	RATE_LIMIT: 1000,
+	NETWORK_ERROR: 100,
+	UNKNOWN: 50,
+	API_ERROR: 0,
+};
 
 type SearchErrorCode = "RATE_LIMIT" | "API_ERROR" | "NETWORK_ERROR" | "UNKNOWN";
 
@@ -81,25 +86,34 @@ async function searchWithRetry(
 			if (!isRetryable(lastErrorCode) || attempt === MAX_ATTEMPTS) {
 				return {
 					ok: false,
-					content: err instanceof Error ? err.message : String(err),
+					content:
+						lastErrorCode === "RATE_LIMIT" && attempt === MAX_ATTEMPTS
+							? `Rate limit reached after ${MAX_ATTEMPTS} attempts. STOP — do not retry. Inform the user the search limit has been hit.`
+							: err instanceof Error
+								? err.message
+								: String(err),
 					errorCode: lastErrorCode,
 				};
 			}
 
-			await sleep(BACKOFF_MS * attempt);
+			await sleep(BACKOFF_MS[lastErrorCode] * attempt);
 		}
 	}
 
+	// Should never reach here due to return in catch block
 	return {
 		ok: false,
 		content: `Search failed after ${MAX_ATTEMPTS} attempts`,
-		errorCode: lastErrorCode,
+		errorCode: "UNKNOWN",
 	};
 }
 
 export const webSearch: Tool = {
 	name: "web_search",
-	description: "Search the web for current information on a topic.",
+	description:
+		"Search the web for current information on a topic. " +
+		"Maximum 3 retry attempts per query. " +
+		"Use judiciously to avoid hitting rate limits.",
 	riskTier: "read-only",
 	inputSchema: {
 		type: "object",

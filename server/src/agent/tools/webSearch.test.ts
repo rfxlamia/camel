@@ -68,6 +68,8 @@ describe("web_search tool", () => {
 		const result = await webSearch.execute({ query: "fintech" });
 
 		expect(result).toMatchObject({ ok: false, errorCode: "RATE_LIMIT" });
+		expect(result.content).toContain("Rate limit reached");
+		expect(result.content).toContain("STOP");
 		expect(mockSearch).toHaveBeenCalledTimes(3);
 	});
 
@@ -96,5 +98,10 @@ describe("web_search tool", () => {
 		await expect(webSearch.execute({ query: "x" })).resolves.toMatchObject({
 			ok: false,
 		});
+	});
+
+	it("description warns about retry limits", async () => {
+		const { webSearch } = await import("./webSearch.js");
+		expect(webSearch.description).toMatch(/retry|limit/i);
 	});
 });
