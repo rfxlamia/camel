@@ -23,33 +23,35 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+// Rate limiter starts as no-op; upgraded to Redis-backed after connectRedis().
+let rateLimiterInstance: express.RequestHandler = (_req, _res, next) => next();
+const delegatingLimiter: express.RequestHandler = (req, res, next) =>
+	rateLimiterInstance(req, res, next);
+
+// Mount routes before async boot so they're always available immediately.
+app.use("/api/auth", createAuthRouter(delegatingLimiter));
+app.use("/api", api);
+app.use("/api", createAgentRouter());
+
+app.use(
+	(
+		err: Error,
+		_req: express.Request,
+		res: express.Response,
+		_next: express.NextFunction,
+	) => {
+		console.error(err);
+		res.status(500).json({ error: "internal server error" });
+	},
+);
+
 const port = config.PORT;
 app.listen(port, async () => {
 	console.log(`Camel Kanban API listening on http://localhost:${port}`);
 
-	// Boot sequence: connect Redis first, then init rate limiters and realtime.
+	// Connect Redis, then upgrade the rate limiter to use it.
 	await connectRedis();
-
-	// Create auth router with rate limiter applied before routes.
-	const authRateLimiter = createAuthRateLimiter();
-	const auth = createAuthRouter(authRateLimiter);
-
-	// Mount routes
-	app.use("/api/auth", auth);
-	app.use("/api", api);
-	app.use("/api", createAgentRouter());
-
-	app.use(
-		(
-			err: Error,
-			_req: express.Request,
-			res: express.Response,
-			_next: express.NextFunction,
-		) => {
-			console.error(err);
-			res.status(500).json({ error: "internal server error" });
-		},
-	);
+	rateLimiterInstance = createAuthRateLimiter();
 
 	await initRealtime();
 

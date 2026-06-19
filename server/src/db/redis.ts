@@ -20,7 +20,10 @@ export function getRedisClient(): RedisClientType | null {
 export async function connectRedis(): Promise<void> {
 	if (connected && client) return;
 
-	client = createClient({ url: REDIS_URL });
+	client = createClient({
+		url: REDIS_URL,
+		socket: { connectTimeout: 3000 },
+	});
 	client.on("error", (err) => {
 		if (connected) {
 			console.error("Redis unavailable — rate limiting degraded:", err.message);
