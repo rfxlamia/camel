@@ -221,6 +221,10 @@ export interface AgentBoardServiceDeps {
 		workspaceId: number,
 		limit: number,
 	) => Promise<ActivityItem[]>;
+
+	detectReportPeriod?: (
+		intent: string,
+	) => Promise<{ hasPeriod: boolean; question?: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +355,19 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				};
 			}
 
+			let explanation = classifyResult.explanation;
+			if (
+				classifyResult.templateId === "status-report" &&
+				deps.detectReportPeriod
+			) {
+				const periodResult = await deps.detectReportPeriod(intent);
+				if (!periodResult.hasPeriod) {
+					explanation =
+						periodResult.question ??
+						"Which time period should this status report cover?";
+				}
+			}
+
 			const board = await deps.insertBoard!({
 				workspaceId,
 				userId,
@@ -368,7 +385,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			await deps.insertConversation!({
 				boardId: board.id,
 				role: "assistant",
-				content: classifyResult.explanation,
+				content: explanation,
 			});
 
 			// Insert template columns with board_id linkage
@@ -385,7 +402,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				type: "agent.board.ready",
 			});
 
-			return { boardId: board.id, explanation: classifyResult.explanation };
+			return { boardId: board.id, explanation };
 		},
 
 		// ---- approveBoard ----
@@ -992,6 +1009,27 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					role: "user",
 					content: message,
 				});
+
+				if (board.templateId === "status-report" && deps.detectReportPeriod) {
+					const mergedIntent =
+						`${board.originalIntent}\n${message}`.trim();
+					const periodResult =
+						await deps.detectReportPeriod(mergedIntent);
+					if (periodResult.hasPeriod) {
+						await deps.updateBoard!(boardId, {
+							original_intent: mergedIntent,
+						});
+						const reply =
+							"Period noted. You can approve the board when ready.";
+						await deps.insertConversation!({
+							boardId,
+							role: "assistant",
+							content: reply,
+						});
+						return { explanation: reply, boardUpdated: true };
+					}
+				}
+
 				const question = await deps.generateClarificationQuestion!(
 					board.originalIntent,
 					board,

@@ -520,6 +520,53 @@ export async function generateExplanation(
 }
 
 // ---------------------------------------------------------------------------
+// detectReportPeriod — check whether a status-report intent names a time window
+// ---------------------------------------------------------------------------
+
+export interface ReportPeriodResult {
+	hasPeriod: boolean;
+	question?: string;
+}
+
+const DETECT_PERIOD_SYSTEM_PROMPT = `You detect whether a status-report request specifies a time period (e.g. "last 2 weeks", "Q1 2026", "this month", "past 30 days").
+
+CRITICAL RULES:
+1. Respond with ONLY a raw JSON object. No preamble, no markdown, no code fences.
+2. If a time period is present or clearly implied, respond: {"hasPeriod": true}
+3. If no time period is specified, respond: {"hasPeriod": false, "question": "<one focused question asking which period the report should cover>"}`;
+
+export async function detectReportPeriod(
+	intent: string,
+): Promise<ReportPeriodResult> {
+	const client = getClient();
+
+	const response = await client.messages.create({
+		model: MODEL,
+		max_tokens: 512,
+		temperature: 0,
+		system: DETECT_PERIOD_SYSTEM_PROMPT,
+		messages: [{ role: "user", content: intent }],
+	});
+
+	const text = extractText(response);
+
+	try {
+		const parsed = JSON.parse(text) as ReportPeriodResult;
+		if (typeof parsed.hasPeriod === "boolean") {
+			return parsed;
+		}
+	} catch {
+		// fall through to default
+	}
+
+	// Conservative fallback: treat unparseable as missing period
+	return {
+		hasPeriod: false,
+		question: "Which time period should this status report cover?",
+	};
+}
+
+// ---------------------------------------------------------------------------
 // generateClarificationQuestion — ask user to refine ambiguous intent
 // ---------------------------------------------------------------------------
 

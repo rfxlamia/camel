@@ -26,6 +26,7 @@ import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,
+	detectReportPeriod as realDetectReportPeriod,
 	executeCard as realExecuteCard,
 	generateClarificationQuestion as realGenerateClarificationQuestion,
 } from "./llm.js";
@@ -284,6 +285,7 @@ const realDeps: AgentBoardServiceDeps = {
 	classifyFollowUpIntent: realClassifyFollowUpIntent,
 	executeCard: realExecuteCard,
 	generateClarificationQuestion: realGenerateClarificationQuestion,
+	detectReportPeriod: realDetectReportPeriod,
 	toolRegistry: defaultToolRegistry,
 	publishEvent: realPublishEvent as (
 		workspaceId: number,

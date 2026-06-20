@@ -2845,3 +2845,129 @@ describe("bug-hunting: multi-turn conversation", () => {
     expect(result).toMatchObject({ streamed: true, explanation: "Answer." });
   });
 });
+
+// ---------------------------------------------------------------------------
+// status-report missing-period clarification (T5)
+// ---------------------------------------------------------------------------
+
+describe("status-report missing-period clarification (T5)", () => {
+  function classifyStatusReport() {
+    return vi.fn(async () => ({
+      templateId: "status-report",
+      explanation: "I made a Status Report board for you.",
+    }));
+  }
+
+  it("no resolvable period → clarification returned, board created pending, no pipeline", async () => {
+    const insertBoard = vi.fn(async () => ({ id: 42 }));
+    const detectReportPeriod = vi.fn(async () => ({
+      hasPeriod: false,
+      question: "Which time period should this status report cover?",
+    }));
+    const service = createAgentBoardService({
+      classifyIntent: classifyStatusReport(),
+      insertBoard,
+      insertConversation: vi.fn(async () => {}),
+      insertColumns: vi.fn(async () => {}),
+      publishEvent: vi.fn(async () => {}),
+      detectReportPeriod,
+    });
+
+    const result = await service.createBoard({
+      workspaceId: 1,
+      userId: 1,
+      intent: "give me a status report",
+    });
+
+    expect(detectReportPeriod).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      boardId: 42,
+      explanation: expect.stringContaining("period"),
+    });
+    expect(insertBoard).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "pending" }),
+    );
+  });
+
+  it("resolvable period → no clarification, normal pending board", async () => {
+    const detectReportPeriod = vi.fn(async () => ({ hasPeriod: true }));
+    const service = createAgentBoardService({
+      classifyIntent: classifyStatusReport(),
+      insertBoard: vi.fn(async () => ({ id: 7 })),
+      insertConversation: vi.fn(async () => {}),
+      insertColumns: vi.fn(async () => {}),
+      publishEvent: vi.fn(async () => {}),
+      detectReportPeriod,
+    });
+
+    const result = await service.createBoard({
+      workspaceId: 1,
+      userId: 1,
+      intent: "status report for the last 2 weeks",
+    });
+
+    expect(detectReportPeriod).toHaveBeenCalled();
+    expect(result).toMatchObject({ boardId: 7 });
+  });
+
+  it("non-status-report intent does not run period logic", async () => {
+    const detectReportPeriod = vi.fn(async () => ({ hasPeriod: false }));
+    const service = createAgentBoardService({
+      classifyIntent: vi.fn(async () => ({
+        templateId: "research-report",
+        explanation: "Research board.",
+      })),
+      insertBoard: vi.fn(async () => ({ id: 9 })),
+      insertConversation: vi.fn(async () => {}),
+      insertColumns: vi.fn(async () => {}),
+      publishEvent: vi.fn(async () => {}),
+      detectReportPeriod,
+    });
+
+    await service.createBoard({
+      workspaceId: 1,
+      userId: 1,
+      intent: "riset kompetitor fintech",
+    });
+
+    expect(detectReportPeriod).not.toHaveBeenCalled();
+  });
+
+  it("[derived] pending status-report board: supplied period folds into original_intent, board stays pending", async () => {
+    const updateBoard = vi.fn(async () => {});
+    const detectReportPeriod = vi.fn(async () => ({ hasPeriod: true }));
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "pending",
+        templateId: "status-report",
+        workspaceId: 1,
+        userId: 1,
+        originalIntent: "give me a status report",
+      })),
+      insertConversation: vi.fn(async () => {}),
+      generateClarificationQuestion: vi.fn(async () => "Which period?"),
+      updateBoard,
+      detectReportPeriod,
+    });
+
+    await service.sendMessage({
+      boardId: 1,
+      userId: 1,
+      workspaceId: 1,
+      message: "the last 2 weeks",
+    });
+
+    expect(updateBoard).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        original_intent: expect.stringContaining("last 2 weeks"),
+      }),
+    );
+    // No auto-run: approval remains the only pipeline trigger.
+    expect(updateBoard).not.toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ execution_status: "running" }),
+    );
+  });
+});
