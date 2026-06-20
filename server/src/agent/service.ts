@@ -14,6 +14,7 @@ import {
 	MAX_ARTIFACT_BYTES,
 	parseQaVerdict,
 } from "./artifact.js";
+import type { CardTimestamps } from "../core/metrics.js";
 import {
 	buildVarsMap,
 	findUnresolvedPlaceholders,
@@ -21,6 +22,10 @@ import {
 	renderSystemPrompt,
 } from "./templates.js";
 import { makeCreateFile } from "./tools/createFile.js";
+import {
+	type ActivityItem,
+	makeQueryBoardData,
+} from "./tools/queryBoardData.js";
 import type { Tool } from "./tools/types.js";
 
 // ---------------------------------------------------------------------------
@@ -207,6 +212,15 @@ export interface AgentBoardServiceDeps {
 	deleteOutputsForBoard?: (boardId: number) => Promise<void>;
 
 	deleteCardsForBoard?: (boardId: number) => Promise<void>;
+
+	fetchCardTimestamps?: (
+		workspaceId: number,
+	) => Promise<CardTimestamps[]>;
+
+	fetchActivityEvents?: (
+		workspaceId: number,
+		limit: number,
+	) => Promise<ActivityItem[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -642,6 +656,20 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 							intent: board.originalIntent,
 							documentContent: editorBody,
 							insertArtifact: deps.insertArtifact!,
+						}),
+					];
+				}
+				if (
+					(column.tools ?? []).includes("query_board_data") &&
+					deps.fetchCardTimestamps &&
+					deps.fetchActivityEvents
+				) {
+					resolvedTools = [
+						...resolvedTools,
+						makeQueryBoardData({
+							workspaceId,
+							fetchCardTimestamps: deps.fetchCardTimestamps,
+							fetchActivityEvents: deps.fetchActivityEvents,
 						}),
 					];
 				}

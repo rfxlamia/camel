@@ -2436,6 +2436,77 @@ describe("runPipeline artifact persistence", () => {
   });
 });
 
+describe("runPipeline — query_board_data injection (T2)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const QBD_COLUMN: ColumnInfo = {
+    columnId: 30,
+    columnSlug: "analyst",
+    systemPrompt: "Report on: {original_intent}",
+    reasoning: true,
+    tools: ["query_board_data"],
+  };
+
+  it("injects a query_board_data tool bound to the board workspaceId when the column declares it", async () => {
+    const fetchCardTimestamps = vi.fn(async (_wid: number) => []);
+    const fetchActivityEvents = vi.fn(
+      async (_wid: number, _limit: number) => [],
+    );
+    const { service, deps } = buildService({
+      getBoard: vi.fn().mockResolvedValue({ ...DEFAULT_BOARD, workspaceId: 7 }),
+      getColumns: vi.fn().mockResolvedValue([QBD_COLUMN]),
+      fetchCardTimestamps,
+      fetchActivityEvents,
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 7 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    const toolsArg = (deps.executeCard as ReturnType<typeof vi.fn>).mock
+      .calls[0][5];
+    const qbd = toolsArg.find(
+      (t: { name: string }) => t.name === "query_board_data",
+    );
+    expect(qbd).toBeDefined();
+
+    await qbd!.execute({ data_types: ["metrics"], workspaceId: 99 });
+    expect(fetchCardTimestamps).toHaveBeenCalledWith(7);
+    expect(fetchCardTimestamps).not.toHaveBeenCalledWith(99);
+  });
+
+  it("does NOT inject query_board_data when the column omits it", async () => {
+    const { service, deps } = buildService({
+      fetchCardTimestamps: vi.fn(async () => []),
+      fetchActivityEvents: vi.fn(async () => []),
+      getColumns: vi.fn().mockResolvedValue([
+        {
+          columnId: 10,
+          columnSlug: "research-specialist",
+          systemPrompt: "Topic: {original_intent}",
+          reasoning: false,
+        },
+      ] as ColumnInfo[]),
+    });
+
+    const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    const toolsArg =
+      (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls[0][5] ?? [];
+    expect(
+      toolsArg.some((t: { name: string }) => t.name === "query_board_data"),
+    ).toBe(false);
+  });
+});
+
 // ---- Bug-hunting: multi-turn conversation gaps (fixed) ----
 
 describe("bug-hunting: multi-turn conversation", () => {

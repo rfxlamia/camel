@@ -471,6 +471,44 @@ const realDeps: AgentBoardServiceDeps = {
 	deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(pool, boardId),
 
 	deleteCardsForBoard: (boardId) => deleteCardsForBoard(pool, boardId),
+
+	fetchCardTimestamps: async (workspaceId) => {
+		const { rows } = await pool.query(
+			`SELECT created_at, started_at, done_at
+       FROM cards
+       WHERE workspace_id = $1 AND deleted_at IS NULL`,
+			[workspaceId],
+		);
+		return rows.map((r: Record<string, unknown>) => ({
+			createdAt: r.created_at as Date,
+			startedAt: r.started_at as Date | null,
+			doneAt: r.done_at as Date | null,
+		}));
+	},
+
+	fetchActivityEvents: async (workspaceId, limit) => {
+		const { rows } = await pool.query(
+			`SELECT e.event_type, e.payload, e.created_at,
+              c.title AS current_card_title
+       FROM card_events e
+       LEFT JOIN cards c ON c.id = e.card_id AND c.deleted_at IS NULL
+       WHERE e.workspace_id = $1
+       ORDER BY e.created_at DESC, e.id DESC
+       LIMIT $2`,
+			[workspaceId, limit],
+		);
+		return rows.map((r: Record<string, unknown>) => {
+			const payload = r.payload as { cardTitle?: string } | null;
+			return {
+				type: r.event_type as string,
+				cardTitle:
+					(r.current_card_title as string | null) ??
+					payload?.cardTitle ??
+					null,
+				at: (r.created_at as Date).toISOString(),
+			};
+		});
+	},
 };
 
 // ---------------------------------------------------------------------------
