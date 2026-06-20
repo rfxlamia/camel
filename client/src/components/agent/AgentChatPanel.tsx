@@ -2,6 +2,9 @@ import {
 	CheckCircle,
 	ChevronDown,
 	ChevronRight,
+	MessagesSquare,
+	Play,
+	RefreshCw,
 	Send,
 	XCircle,
 } from "lucide-react";
@@ -221,9 +224,27 @@ export default function AgentChatPanel({
 	onResetError,
 	agentArtifactDownloadUrl,
 }: AgentChatPanelProps) {
+	// The single most important next action, surfaced in the docked bar so it is
+	// never lost in the scrolling transcript.
+	const showApprove = board != null && isPending;
+	const showRegenerate = board != null && pendingRegenerate;
+	const showRetry = board != null && isFailed;
+
 	return (
-		<div className="flex w-96 flex-col bg-neutral-100">
-			{/* Chat / explanation area */}
+		<div className="flex h-[50vh] w-full shrink-0 flex-col border-t border-neutral-200 bg-neutral-100 md:h-auto md:w-96 md:border-l md:border-t-0">
+			{/* Rail header — gives the panel a clear identity */}
+			<div className="flex items-center gap-2 border-b border-neutral-200 bg-white px-4 py-3">
+				<MessagesSquare size={15} className="text-primary-600" aria-hidden />
+				<p className="text-sm font-semibold text-neutral-800">Conversation</p>
+				{isRunning && (
+					<span className="ml-auto flex items-center gap-1.5 text-xs text-info-700">
+						<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info-500" />
+						Running
+					</span>
+				)}
+			</div>
+
+			{/* Transcript */}
 			<div className="flex-1 overflow-y-auto p-4 space-y-3">
 				{(() => {
 					const userMessage = board?.originalIntent ?? lastIntent;
@@ -237,7 +258,7 @@ export default function AgentChatPanel({
 					}
 					return (
 						<div className="flex justify-end">
-							<div className="max-w-[80%] rounded-lg bg-primary-600 px-3 py-2">
+							<div className="max-w-[80%] rounded-lg rounded-br-sm bg-primary-600 px-3 py-2 shadow-sm">
 								<p className="text-sm text-white break-words">{userMessage}</p>
 							</div>
 						</div>
@@ -259,7 +280,7 @@ export default function AgentChatPanel({
 				)}
 
 				{board && (
-					<div className="rounded-lg border border-neutral-200 bg-white p-3">
+					<div className="rounded-lg rounded-tl-sm border border-neutral-200 bg-white p-3 shadow-sm">
 						<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
 						<p className="text-sm text-neutral-800 whitespace-pre-wrap">
 							{board.columns.length > 0
@@ -279,8 +300,8 @@ export default function AgentChatPanel({
 						<div
 							className={
 								msg.role === "user"
-									? "max-w-[80%] rounded-lg bg-primary-600 px-3 py-2"
-									: "max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2"
+									? "max-w-[80%] rounded-lg rounded-br-sm bg-primary-600 px-3 py-2 shadow-sm"
+									: "max-w-[80%] rounded-lg rounded-tl-sm border border-neutral-200 bg-white px-3 py-2 shadow-sm"
 							}
 						>
 							{msg.role === "assistant" && (
@@ -306,7 +327,7 @@ export default function AgentChatPanel({
 
 				{streamingFollowUpText && (
 					<div className="flex justify-start">
-						<div className="max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2">
+						<div className="max-w-[80%] rounded-lg rounded-tl-sm border border-neutral-200 bg-white px-3 py-2 shadow-sm">
 							<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
 							<div className="text-sm text-neutral-800 break-words">
 								<ReactMarkdown
@@ -320,30 +341,9 @@ export default function AgentChatPanel({
 					</div>
 				)}
 
-				{pendingRegenerate && (
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={() => void onConfirmRegenerate()}
-							disabled={busy}
-							className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-						>
-							Yes, Regenerate
-						</button>
-						<button
-							type="button"
-							onClick={() => void onCancelRegenerate()}
-							disabled={busy}
-							className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-						>
-							Cancel
-						</button>
-					</div>
-				)}
-
 				{/* Error message */}
 				{error && (
-					<div className="rounded-lg border border-error-200 bg-error-100 p-3 space-y-2">
+					<div className="rounded-lg border border-error-500/30 bg-error-100 p-3 space-y-2">
 						<p className="text-sm text-error-900">{error}</p>
 						{!board && (
 							<button
@@ -357,24 +357,7 @@ export default function AgentChatPanel({
 					</div>
 				)}
 
-				{/* Approval section */}
-				{board && isPending && (
-					<div className="rounded-lg border border-primary-200 bg-primary-100/50 p-3 space-y-2">
-						<p className="text-sm text-primary-800">
-							Ready to start? Approve to begin execution.
-						</p>
-						<button
-							type="button"
-							onClick={onApprove}
-							disabled={busy}
-							className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-						>
-							{busy ? "Approving..." : "Approve"}
-						</button>
-					</div>
-				)}
-
-				{/* Execution log — collapsible */}
+				{/* Execution log — collapsible telemetry */}
 				{board && (isRunning || isDone || isFailed) && (
 					<div className="rounded-lg border border-neutral-200 bg-white">
 						<button
@@ -417,19 +400,9 @@ export default function AgentChatPanel({
 									</div>
 								)}
 								{isFailed && (
-									<div className="space-y-2">
-										<div className="flex items-center gap-1.5 text-sm text-error-900">
-											<XCircle size={16} aria-hidden />
-											Execution failed
-										</div>
-										<button
-											type="button"
-											onClick={onRetryExecution}
-											disabled={busy}
-											className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-										>
-											{busy ? "Retrying..." : "Retry Execution"}
-										</button>
+									<div className="flex items-center gap-1.5 text-sm text-error-900">
+										<XCircle size={16} aria-hidden />
+										Execution failed
 									</div>
 								)}
 								<div ref={logEndRef} />
@@ -447,7 +420,7 @@ export default function AgentChatPanel({
 
 				{/* Queue indicator */}
 				{queueState.queue.length > 0 && (
-					<div className="rounded-lg border border-warning-200 bg-warning-100/50 p-2">
+					<div className="rounded-lg border border-warning-500/30 bg-warning-100/60 p-2">
 						<p className="text-xs text-warning-900">
 							{queueState.queue.length} message
 							{queueState.queue.length !== 1 ? "s" : ""} queued
@@ -456,42 +429,107 @@ export default function AgentChatPanel({
 				)}
 			</div>
 
-			{/* Input area */}
-			<div className="border-t border-neutral-200 p-3">
-				<form
-					onSubmit={(e) => {
-						e.preventDefault();
-						void onSend();
-					}}
-					className="flex gap-2"
-				>
-					<input
-						type="text"
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						placeholder={
-							!board
-								? "Describe what you want to research..."
-								: isRunning
-									? "Execution in progress..."
-									: pendingRegenerate
-										? "Waiting for confirmation..."
-										: canFollowUp
-											? "Follow up about this board..."
-											: "Refine the board..."
-						}
-						disabled={inputDisabled}
-						className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-400"
-					/>
-					<button
-						type="submit"
-						disabled={sendDisabled}
-						aria-label="Send"
-						className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+			{/* Docked action + input */}
+			<div className="border-t border-neutral-200 bg-neutral-100">
+				{/* Contextual primary action — at most one shows at a time */}
+				{showApprove && (
+					<div className="animate-rise-in border-b border-neutral-200 bg-primary-100/60 px-3 py-3">
+						<p className="mb-2 text-sm text-primary-900">
+							Looks good? Approve to start the run.
+						</p>
+						<button
+							type="button"
+							onClick={onApprove}
+							disabled={busy}
+							className="flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							<Play size={15} aria-hidden />
+							{busy ? "Approving..." : "Approve & run"}
+						</button>
+					</div>
+				)}
+
+				{showRegenerate && (
+					<div className="animate-rise-in border-b border-neutral-200 bg-warning-100/60 px-3 py-3">
+						<p className="mb-2 text-sm text-warning-900">
+							That looks like a new topic. Regenerate the board?
+						</p>
+						<div className="flex gap-2">
+							<button
+								type="button"
+								onClick={() => void onConfirmRegenerate()}
+								disabled={busy}
+								className="flex-1 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								Yes, Regenerate
+							</button>
+							<button
+								type="button"
+								onClick={() => void onCancelRegenerate()}
+								disabled={busy}
+								className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				)}
+
+				{showRetry && (
+					<div className="animate-rise-in border-b border-neutral-200 bg-error-100/60 px-3 py-3">
+						<p className="mb-2 flex items-center gap-1.5 text-sm text-error-900">
+							<XCircle size={15} aria-hidden />
+							Execution failed.
+						</p>
+						<button
+							type="button"
+							onClick={onRetryExecution}
+							disabled={busy}
+							className="flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							<RefreshCw size={14} aria-hidden />
+							{busy ? "Retrying..." : "Retry execution"}
+						</button>
+					</div>
+				)}
+
+				{/* Input */}
+				<div className="p-3">
+					<form
+						onSubmit={(e) => {
+							e.preventDefault();
+							void onSend();
+						}}
+						className="flex gap-2"
 					>
-						<Send size={16} aria-hidden />
-					</button>
-				</form>
+						<input
+							type="text"
+							value={input}
+							onChange={(e) => setInput(e.target.value)}
+							placeholder={
+								!board
+									? "Describe what you want to research..."
+									: isRunning
+										? "Execution in progress..."
+										: pendingRegenerate
+											? "Waiting for confirmation..."
+											: canFollowUp
+												? "Follow up about this board..."
+												: "Refine the board..."
+							}
+							disabled={inputDisabled}
+							className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-400"
+						/>
+						<button
+							type="submit"
+							disabled={sendDisabled}
+							aria-label="Send"
+							className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							<Send size={16} aria-hidden />
+						</button>
+					</form>
+				</div>
 			</div>
 		</div>
 	);

@@ -1,10 +1,10 @@
-import { Bot } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
 import AgentBoardHeader from "../components/agent/AgentBoardHeader";
 import AgentBoardVisual from "../components/agent/AgentBoardVisual";
 import AgentChatPanel from "../components/agent/AgentChatPanel";
+import AgentComposer from "../components/agent/AgentComposer";
 import LoadingCamel from "../components/LoadingCamel";
 import { useBoard } from "../context/BoardContext";
 import { useAgentBoard } from "../hooks/useAgentBoard";
@@ -56,7 +56,7 @@ export default function AgentPage() {
 		agentEventsRef,
 	});
 
-	// ---- Detail column state (third panel) ----
+	// ---- Detail column state (slide-over drawer) ----
 	const [detailColumn, setDetailColumn] = useState<AgentColumn | null>(null);
 
 	// ---- Handlers ----
@@ -106,47 +106,59 @@ export default function AgentPage() {
 		);
 	}
 
-	return (
-		<div className="flex h-full">
-			{/* Left panel — board visual or empty state */}
-			<div className="flex-1 overflow-auto border-r border-neutral-200">
-				{!board ? (
-					creating ? (
-						<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
-							<LoadingCamel size={80} />
-							<p className="text-sm text-neutral-500 animate-pulse">
-								Generating board...
+	// ---- Empty / generating state — single focused surface, no split ----
+	if (!board) {
+		if (creating) {
+			return (
+				<div className="flex min-h-full items-center justify-center p-8">
+					<div className="flex w-full max-w-md flex-col items-center gap-5 text-center">
+						<LoadingCamel size={88} />
+						<div>
+							<h2 className="text-lg font-semibold text-neutral-900">
+								Designing your board…
+							</h2>
+							<p className="mt-1 text-sm text-neutral-500">
+								Drafting specialist columns for your request.
 							</p>
 						</div>
-					) : (
-						<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 translate-x-[48px] pt-32">
-							<div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
-								<Bot size={32} className="text-primary-600" aria-hidden />
-							</div>
-							<div className="text-center">
-								<h2 className="text-lg font-semibold text-neutral-900">
-									Create an Agent Board
-								</h2>
-								<p className="mt-1 max-w-sm text-sm text-neutral-600">
-									Describe what you want to research or analyze. The agent will
-									generate a structured board with specialist columns.
-								</p>
-							</div>
-						</div>
-					)
-				) : (
-					<div className="animate-fade-in">
-						<AgentBoardHeader board={board} onNewBoard={handleNewBoard} />
-						<AgentBoardVisual
-							board={board}
-							onCardClick={setDetailColumn}
-							agentEvents={chat.columnAgentEvents}
-						/>
+						{chat.lastIntent && (
+							<p className="max-w-sm rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-sm italic text-neutral-600 shadow-sm">
+								“{chat.lastIntent}”
+							</p>
+						)}
 					</div>
-				)}
+				</div>
+			);
+		}
+		return (
+			<AgentComposer
+				input={chat.input}
+				setInput={chat.setInput}
+				onSend={chat.handleSend}
+				inputDisabled={chat.inputDisabled}
+				sendDisabled={chat.sendDisabled}
+				error={error}
+				onResetError={handleResetError}
+			/>
+		);
+	}
+
+	// ---- Working state — board pipeline + conversation rail ----
+	return (
+		<div className="flex h-full min-h-0 flex-col md:flex-row">
+			{/* Board area */}
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+				<AgentBoardHeader board={board} onNewBoard={handleNewBoard} />
+				<div className="animate-fade-in min-h-0 flex-1 overflow-auto">
+					<AgentBoardVisual
+						board={board}
+						onCardClick={setDetailColumn}
+						agentEvents={chat.columnAgentEvents}
+					/>
+				</div>
 			</div>
 
-			{/* Right panel — chat + execution log */}
+			{/* Conversation rail */}
 			<AgentChatPanel
 				board={board}
 				creating={creating}
@@ -187,7 +199,7 @@ export default function AgentPage() {
 				}
 			/>
 
-			{/* Card detail panel */}
+			{/* Card detail drawer */}
 			{detailColumn && board && (
 				<AgentCardDetail
 					column={detailColumn}

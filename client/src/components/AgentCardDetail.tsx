@@ -177,10 +177,13 @@ export default function AgentCardDetail({
 	};
 
 	return (
+		// Slide-over drawer. No backdrop scrim on purpose: during execution the
+		// board keeps streaming/animating behind it, and clicking another column
+		// must switch the detail (a scrim would intercept that and close instead).
 		<div
 			ref={scrollRef}
 			onScroll={handleScroll}
-			className="fixed inset-y-0 right-0 z-30 w-full max-w-md border-l border-neutral-200 bg-white shadow-lg overflow-y-auto"
+			className="animate-panel-in fixed inset-y-0 right-0 z-30 w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white shadow-xl"
 		>
 			{/* Header */}
 			<div className="sticky top-0 flex items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 py-3">
