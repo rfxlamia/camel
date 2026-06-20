@@ -14,7 +14,12 @@ interface Props {
 	onAddCard: (columnId: number, title: string) => Promise<void>;
 	onUpdateColumn: (
 		id: number,
-		patch: { title?: string; wipLimit?: number | null; policy?: string },
+		patch: {
+			title?: string;
+			wipLimit?: number | null;
+			policy?: string;
+			isDone?: boolean;
+		},
 	) => Promise<void>;
 }
 
@@ -57,6 +62,7 @@ function ColumnSettings({
 		column.wipLimit === null ? "" : String(column.wipLimit),
 	);
 	const [policy, setPolicy] = useState(column.policy);
+	const [isDone, setIsDone] = useState(column.isDone);
 
 	const save = async () => {
 		const limit = wipLimit.trim() === "" ? null : Number(wipLimit);
@@ -67,6 +73,7 @@ function ColumnSettings({
 					? null
 					: limit,
 			policy,
+			isDone,
 		});
 		onClose();
 	};
@@ -110,6 +117,20 @@ function ColumnSettings({
 					placeholder="When does a card belong here?"
 				/>
 			</label>
+			<label className="flex items-center gap-2">
+				<input
+					type="checkbox"
+					checked={isDone}
+					onChange={(e) => setIsDone(e.target.checked)}
+					className="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+				/>
+				<span className="text-xs font-medium text-neutral-700">
+					Mark as Done column
+				</span>
+			</label>
+			<p className="-mt-1 text-xs text-neutral-500">
+				Cards moved here will be marked as completed
+			</p>
 			<div className="flex gap-2">
 				<button
 					onClick={save}

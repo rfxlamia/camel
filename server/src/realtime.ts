@@ -67,6 +67,7 @@ export interface BoardEvent {
 	columnSlug?: string;
 	token?: string;
 	boardId?: number;
+	payload?: Record<string, unknown>;
 	at?: string;
 }
 

@@ -12,7 +12,16 @@
  */
 
 import "dotenv/config";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks — vi.hoisted() is required because vi.mock factories
@@ -91,7 +100,12 @@ async function setupFixtures() {
 	await pool.query(
 		`INSERT INTO users (id, username, display_name, password_hash)
      VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING`,
-		[mockTestUser.id, mockTestUser.username, mockTestUser.displayName, "hashed"],
+		[
+			mockTestUser.id,
+			mockTestUser.username,
+			mockTestUser.displayName,
+			"hashed",
+		],
 	);
 
 	// Workspace
@@ -120,7 +134,7 @@ async function setupFixtures() {
 	);
 	const cols = colRes.rows;
 	col1Id = cols.find((c) => c.title === "Backlog")!.id;
-col2Id = cols.find((c) => c.title === "In Progress")!.id;
+	col2Id = cols.find((c) => c.title === "In Progress")!.id;
 }
 
 async function insertCard(
@@ -155,7 +169,9 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-	await pool.query("TRUNCATE users, workspaces, columns, cards, card_events CASCADE");
+	await pool.query(
+		"TRUNCATE users, workspaces, columns, cards, card_events CASCADE",
+	);
 	await pool.end();
 });
 
@@ -334,6 +350,92 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const res = await request(app)
 				.post(`/api/workspaces/1/cards/${cardId}/move`)
 				.send({ toColumnId: 99999, index: 0 });
+
+			expect(res.status).toBe(404);
+		});
+	},
+);
+
+// ---------------------------------------------------------------------------
+// PATCH /api/workspaces/:wid/columns/:id
+// ---------------------------------------------------------------------------
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"PATCH /api/workspaces/:wid/columns/:id",
+	() => {
+		beforeEach(async () => {
+			// Reset all columns to is_done = false before each test
+			await pool.query(
+				"UPDATE columns SET is_done = false WHERE workspace_id = 1",
+			);
+		});
+
+		it("sets isDone to true and returns updated column", async () => {
+			const res = await request(app)
+				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.send({ isDone: true });
+
+			expect(res.status).toBe(200);
+			expect(res.body.is_done).toBe(true);
+		});
+
+		it("unsets isDone when set to false", async () => {
+			// First set to true
+			await request(app)
+				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.send({ isDone: true });
+
+			// Then unset
+			const res = await request(app)
+				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.send({ isDone: false });
+
+			expect(res.status).toBe(200);
+			expect(res.body.is_done).toBe(false);
+		});
+
+		it("enforces single Done column per workspace", async () => {
+			// col1Id becomes Done
+			await request(app)
+				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.send({ isDone: true });
+
+			// col2Id also becomes Done - should unset col1Id
+			const res = await request(app)
+				.patch(`/api/workspaces/1/columns/${col2Id}`)
+				.send({ isDone: true });
+
+			expect(res.status).toBe(200);
+			expect(res.body.is_done).toBe(true);
+
+			// Verify col1Id is no longer Done
+			const check = await pool.query(
+				"SELECT is_done FROM columns WHERE id = $1",
+				[col1Id],
+			);
+			expect(check.rows[0].is_done).toBe(false);
+		});
+
+		it("returns 400 for invalid isDone type", async () => {
+			const res = await request(app)
+				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.send({ isDone: "yes" });
+
+			expect(res.status).toBe(400);
+			expect(res.body.error).toMatch(/isDone must be a boolean/i);
+		});
+
+		it("returns 400 for invalid column id", async () => {
+			const res = await request(app)
+				.patch("/api/workspaces/1/columns/abc")
+				.send({ isDone: true });
+
+			expect(res.status).toBe(400);
+		});
+
+		it("returns 404 for non-existent column", async () => {
+			const res = await request(app)
+				.patch("/api/workspaces/1/columns/99999")
+				.send({ isDone: true });
 
 			expect(res.status).toBe(404);
 		});

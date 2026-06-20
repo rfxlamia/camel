@@ -304,7 +304,12 @@ export default function BoardPage() {
 
 	const onUpdateColumn = async (
 		id: number,
-		patch: { title?: string; wipLimit?: number | null; policy?: string },
+		patch: {
+			title?: string;
+			wipLimit?: number | null;
+			policy?: string;
+			isDone?: boolean;
+		},
 	) => {
 		if (activeWorkspaceId === null) return;
 		try {
