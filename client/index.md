@@ -59,6 +59,21 @@ Reusable UI components.
 - **[LoadingCamel.tsx](./src/components/LoadingCamel.tsx)** - Lottie loading animation
 - **[SuccessAnimation.tsx](./src/components/SuccessAnimation.tsx)** - Lottie success animation
 
+### src/components/agent/
+
+Agent-specific sub-components.
+
+- **[AgentBoardHeader.tsx](./src/components/agent/AgentBoardHeader.tsx)** - Status badge and metadata header for agent board
+- **[AgentBoardVisual.tsx](./src/components/agent/AgentBoardVisual.tsx)** - Column grid visualizing per-column execution state
+- **[AgentChatPanel.tsx](./src/components/agent/AgentChatPanel.tsx)** - Chat input and conversation thread for agent follow-ups
+
+### src/hooks/
+
+Custom React hooks.
+
+- **[useAgentBoard.ts](./src/hooks/useAgentBoard.ts)** - Agent board fetch and SSE event-driven re-fetch
+- **[useAgentChat.ts](./src/hooks/useAgentChat.ts)** - Agent chat send, queue, and conversation state
+
 ### src/lib/
 
 Utility modules.
@@ -73,6 +88,7 @@ Utility modules.
 - **[workspaceSelection.ts](./src/lib/workspaceSelection.ts)** - Workspace selection with localStorage persistence
 - **[workspaceSwitcher.ts](./src/lib/workspaceSwitcher.ts)** - Workspace switching with limit enforcement
 - **[settingsValidation.ts](./src/lib/settingsValidation.ts)** - Settings form validation rules
+- **[agentFollowUp.ts](./src/lib/agentFollowUp.ts)** - Converts server conversations to follow-up message format
 
 ### src/assets/
 
