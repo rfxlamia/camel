@@ -200,6 +200,50 @@ describe("classifyIntent", () => {
     const result = await classifyIntent("riset batas konsumsi kopi");
     expect(result.templateId).toBe("research-report");
   });
+
+  it("offers status-report as a classifiable template in the system prompt", async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: '{"templateId":"status-report","explanation":"ok"}',
+        },
+      ],
+    });
+    const { classifyIntent } = await import("./llm.js");
+    await classifyIntent("give me a status report for the last 2 weeks");
+    expect(mockCreate.mock.calls[0][0].system).toMatch(/status-report/);
+  });
+
+  it("classifies a status-report intent as templateId=status-report", async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: '{"templateId":"status-report","explanation":"Status report detected."}',
+        },
+      ],
+    });
+    const { classifyIntent } = await import("./llm.js");
+    const result = await classifyIntent(
+      "give me a status report for the last 2 weeks",
+    );
+    expect(result.templateId).toBe("status-report");
+  });
+
+  it("still classifies research intents as research-report (no regression)", async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: '{"templateId":"research-report","explanation":"Research task."}',
+        },
+      ],
+    });
+    const { classifyIntent } = await import("./llm.js");
+    const result = await classifyIntent("riset kompetitor fintech");
+    expect(result.templateId).toBe("research-report");
+  });
 });
 
 describe("classifyFollowUpIntent", () => {
