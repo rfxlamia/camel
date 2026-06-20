@@ -10,6 +10,7 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
+import { Plus } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Outlet, useNavigate } from "react-router";
 import { ApiError, api } from "../api";
@@ -48,9 +49,10 @@ function AddColumn({
 		return (
 			<button
 				onClick={() => setOpen(true)}
-				className="w-72 shrink-0 rounded-lg px-3 py-2 text-left text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				className="flex w-72 shrink-0 items-center gap-1.5 self-start rounded-xl border border-dashed border-neutral-300 px-3 py-2.5 text-left text-sm font-medium text-neutral-500 transition-colors hover:border-primary-300 hover:bg-primary-100/50 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 			>
-				+ Add column
+				<Plus size={16} className="shrink-0" aria-hidden />
+				Add column
 			</button>
 		);
 	}
@@ -63,7 +65,7 @@ function AddColumn({
 	};
 
 	return (
-		<div className="w-72 shrink-0 space-y-2 rounded-lg border border-neutral-200 bg-neutral-200/50 p-2">
+		<div className="w-72 shrink-0 self-start space-y-2 rounded-xl border border-neutral-200 bg-neutral-100 p-3 shadow-sm">
 			<input
 				autoFocus
 				value={title}
@@ -333,7 +335,7 @@ export default function BoardPage() {
 	};
 
 	return (
-		<div className="h-full p-6">
+		<div className="h-full bg-neutral-200/40 p-6">
 			{loadError && (
 				<div className="mx-auto max-w-md rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
 					Couldn't load the board. Check that the server is running, then
@@ -363,22 +365,27 @@ export default function BoardPage() {
 							<AddColumn onAddColumn={onAddColumn} />
 						</div>
 					) : (
-						<div className="flex h-full items-start gap-4">
-							{columns.map((column) => (
-								<ColumnView
+						<div className="flex h-full items-start gap-5 pb-2">
+							{columns.map((column, i) => (
+								<div
 									key={column.id}
-									column={column}
-									onOpenCard={onOpenCard}
-									onAddCard={onAddCard}
-									onUpdateColumn={onUpdateColumn}
-								/>
+									className="animate-rise-in shrink-0"
+									style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+								>
+									<ColumnView
+										column={column}
+										onOpenCard={onOpenCard}
+										onAddCard={onAddCard}
+										onUpdateColumn={onUpdateColumn}
+									/>
+								</div>
 							))}
 							<AddColumn onAddColumn={onAddColumn} />
 						</div>
 					)}
 					<DragOverlay>
 						{activeCard && (
-							<div className="rounded-md border border-primary-300 bg-white px-3 py-2.5 shadow-md">
+							<div className="rotate-2 cursor-grabbing rounded-md border border-primary-300 bg-white py-2.5 pr-3 pl-3.5 shadow-lg ring-1 ring-primary-600/10">
 								<CardBody card={activeCard} />
 							</div>
 						)}
