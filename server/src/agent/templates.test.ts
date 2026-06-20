@@ -158,3 +158,36 @@ describe("RESEARCH_REPORT_COLUMNS", () => {
 		}
 	});
 });
+
+describe("status-report template", () => {
+	it("returns exactly 2 columns: Analyst then QA/Persist", () => {
+		const t = getTemplate("status-report");
+		expect(t).not.toBeNull();
+		expect(t!.columns).toHaveLength(2);
+		expect(t!.columns.map((c) => c.slug)).toEqual(["analyst", "qa-guardian"]);
+	});
+
+	it("Analyst column uses query_board_data + editor_output under ## Revised Document", () => {
+		const t = getTemplate("status-report")!;
+		const analyst = t.columns[0];
+		expect(analyst.tools).toEqual(["query_board_data"]);
+		expect(analyst.reasoning).toBe(true);
+		expect(analyst.output_key).toBe("editor_output");
+		expect(analyst.system_prompt).toContain("## Revised Document");
+	});
+
+	it("Analyst prompt encodes honesty rules + the on-track objective (substrings only)", () => {
+		const analyst = getTemplate("status-report")!.columns[0];
+		const prompt = analyst.system_prompt;
+		expect(prompt).toMatch(/not yet measurable/i);
+		expect(prompt).toMatch(/insufficient/i);
+		expect(prompt).toMatch(/on track/i);
+	});
+
+	it("QA column persists via create_file and emits a parseQaVerdict-compatible Status line", () => {
+		const qa = getTemplate("status-report")!.columns[1];
+		expect(qa.tools).toEqual(["create_file"]);
+		expect(qa.system_prompt).toMatch(/PASS/);
+		expect(qa.system_prompt).toMatch(/NEEDS REVISION/);
+	});
+});
