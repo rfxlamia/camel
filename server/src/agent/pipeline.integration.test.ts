@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { describe, expect, it, vi } from "vitest";
+import type { CardTimestamps } from "../core/metrics.js";
 import { executeCard as realExecuteCard } from "./llm.js";
 import type { ColumnInfo } from "./service.js";
 import { createAgentBoardService } from "./service.js";
@@ -137,5 +138,122 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
         boardId: 1,
       });
     }, 900_000);
+  },
+);
+
+describe.skipIf(!process.env.RUN_LLM_IT)(
+  "Live-LLM: status-report honesty + on-track behavior",
+  { timeout: 900_000 },
+  () => {
+    const statusTemplate = getTemplate("status-report")!;
+    const statusColumns: ColumnInfo[] = statusTemplate.columns.map((c) => ({
+      columnId: c.position,
+      columnSlug: c.slug,
+      systemPrompt: c.system_prompt,
+      reasoning: c.reasoning,
+      tools: c.tools,
+    }));
+
+    const DAY = 24 * 60 * 60 * 1000;
+    const NOW = new Date();
+
+    function runStatusReport(cards: CardTimestamps[], intent: string) {
+      const captured: { artifact?: string; qaOutput?: string } = {};
+      const service = createAgentBoardService({
+        getBoard: async () => ({
+          id: 1,
+          workspaceId: 1,
+          userId: 1,
+          templateId: "status-report",
+          originalIntent: intent,
+          status: "approved",
+          executionStatus: "running",
+        }),
+        getColumns: async () => statusColumns,
+        executeCard: realExecuteCard,
+        fetchCardTimestamps: async () => cards,
+        fetchActivityEvents: async () => [],
+        insertOutput: async (data) => {
+          if (data.columnSlug === statusColumns[1].columnSlug) {
+            captured.qaOutput = data.output;
+          }
+        },
+        insertCard: async () => {},
+        insertArtifact: async (a) => {
+          captured.artifact = a.content;
+        },
+        updateBoard: async () => {},
+        publishEvent: async () => {},
+      });
+      return { service, captured };
+    }
+
+    it("Rule 2.2: on-track report saves an artifact and QA passes", async () => {
+      // Rising throughput + falling cycle time over recent weeks.
+      const cards: CardTimestamps[] = Array.from({ length: 8 }, (_, i) => ({
+        createdAt: new Date(NOW.getTime() - (i + 3) * DAY),
+        startedAt: new Date(NOW.getTime() - (i + 2) * DAY),
+        doneAt: new Date(NOW.getTime() - (i + 1) * DAY),
+      }));
+      const { service, captured } = runStatusReport(
+        cards,
+        "status report for the last 2 weeks",
+      );
+      await service.runPipeline({ boardId: 1, workspaceId: 1 });
+
+      // Structural outcome: artifact persisted (QA returned PASS).
+      expect(captured.artifact).toBeTruthy();
+      expect(captured.artifact!.length).toBeGreaterThan(0);
+    });
+
+    it("Rule 2.4: no completed cards → honest insufficient-data report, QA passes", async () => {
+      // WIP only: started but never done.
+      const cards: CardTimestamps[] = [
+        {
+          createdAt: new Date(NOW.getTime() - 2 * DAY),
+          startedAt: new Date(NOW.getTime() - 1 * DAY),
+          doneAt: null,
+        },
+      ];
+      const { service, captured } = runStatusReport(
+        cards,
+        "status report for the last 2 weeks",
+      );
+      await service.runPipeline({ boardId: 1, workspaceId: 1 });
+
+      // Artifact saved (no-data honesty is a PASS per Rule 2.4).
+      expect(captured.artifact).toBeTruthy();
+      // States insufficiency rather than inventing flow metrics.
+      expect(captured.artifact!).toMatch(
+        /insufficient|not yet measurable|no completed/i,
+      );
+    });
+
+    it("Rule 2.5: avgCycleTimeMs=null → states not-yet-measurable, no cycle-time number", async () => {
+      // Done but never started → cycle time is null (lead time exists).
+      const cards: CardTimestamps[] = [
+        {
+          createdAt: new Date(NOW.getTime() - 3 * DAY),
+          startedAt: null,
+          doneAt: new Date(NOW.getTime() - 1 * DAY),
+        },
+      ];
+      const { service, captured } = runStatusReport(
+        cards,
+        "status report for the last 2 weeks",
+      );
+      await service.runPipeline({ boardId: 1, workspaceId: 1 });
+
+      expect(captured.artifact).toBeTruthy();
+      const report = captured.artifact!;
+      // Honesty phrase present.
+      expect(report).toMatch(/cycle time[^.]*not yet measurable/i);
+      // MUST NOT fabricate a cycle-time figure: no "cycle time ... <number>"
+      // in the same clause. Structural check, not prose equality.
+      const cycleClaim = report.match(
+        /cycle time[^.]*?(\d[\d.,]*\s*(?:d|h|m|days|hours|ms)\b)/i,
+      );
+      expect(cycleClaim, cycleClaim?.[0]).toBeNull();
+    });
   },
 );
