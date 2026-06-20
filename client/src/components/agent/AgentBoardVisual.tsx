@@ -30,7 +30,16 @@ export default function AgentBoardVisual({
 				return (
 					<div
 						key={col.id}
-						className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white hover:border-primary-300 hover:shadow-sm transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						className="w-64 shrink-0 rounded-lg border border-neutral-200 bg-white cursor-pointer hover:border-primary-300 hover:shadow-sm transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						onClick={() => onCardClick(col)}
+						role="button"
+						tabIndex={0}
+						onKeyDown={(e: React.KeyboardEvent) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onCardClick(col);
+							}
+						}}
 					>
 						<div className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2">
 							<h3 className="text-sm font-medium text-neutral-900 truncate">
