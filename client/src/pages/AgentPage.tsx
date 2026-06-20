@@ -135,7 +135,7 @@ export default function AgentPage() {
 						</div>
 					)
 				) : (
-					<div className="transition-opacity duration-300">
+					<div className="animate-fade-in">
 						<AgentBoardHeader board={board} onNewBoard={handleNewBoard} />
 						<AgentBoardVisual
 							board={board}

@@ -248,11 +248,12 @@ export default function AgentChatPanel({
 					<div className="flex justify-start">
 						<div className="max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2">
 							<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
-							<div className="flex items-center gap-1.5">
+							<div className="flex items-center gap-1.5" aria-hidden="true">
 								<span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary-600" />
 								<span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary-600 [animation-delay:150ms]" />
 								<span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary-600 [animation-delay:300ms]" />
 							</div>
+							<span className="sr-only">Agent is thinking</span>
 						</div>
 					</div>
 				)}

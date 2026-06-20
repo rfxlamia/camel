@@ -106,6 +106,7 @@ export function useAgentBoard() {
 	const createBoard = useCallback(
 		async (intent: string) => {
 			if (!activeWorkspaceId) return;
+			if (creating) return;
 			setCreating(true);
 			try {
 				clearAgentEvents();
@@ -124,7 +125,7 @@ export function useAgentBoard() {
 				setCreating(false);
 			}
 		},
-		[activeWorkspaceId, clearAgentEvents, setSearchParams, showToast],
+		[activeWorkspaceId, clearAgentEvents, creating, setSearchParams, showToast],
 	);
 
 	// Approve or retry execution (merged — identical logic, different toast).
