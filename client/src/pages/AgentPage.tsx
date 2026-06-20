@@ -5,6 +5,7 @@ import AgentCardDetail from "../components/AgentCardDetail";
 import AgentBoardHeader from "../components/agent/AgentBoardHeader";
 import AgentBoardVisual from "../components/agent/AgentBoardVisual";
 import AgentChatPanel from "../components/agent/AgentChatPanel";
+import LoadingCamel from "../components/LoadingCamel";
 import { useBoard } from "../context/BoardContext";
 import { useAgentBoard } from "../hooks/useAgentBoard";
 import { useAgentChat } from "../hooks/useAgentChat";
@@ -19,6 +20,7 @@ export default function AgentPage() {
 		setBoard,
 		boardRef,
 		loading,
+		creating,
 		error,
 		setError,
 		artifact,
@@ -109,22 +111,31 @@ export default function AgentPage() {
 			{/* Left panel — board visual or empty state */}
 			<div className="flex-1 overflow-auto border-r border-neutral-200">
 				{!board ? (
-					<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 translate-x-[48px] pt-32">
-						<div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
-							<Bot size={32} className="text-primary-600" aria-hidden />
-						</div>
-						<div className="text-center">
-							<h2 className="text-lg font-semibold text-neutral-900">
-								Create an Agent Board
-							</h2>
-							<p className="mt-1 max-w-sm text-sm text-neutral-600">
-								Describe what you want to research or analyze. The agent will
-								generate a structured board with specialist columns.
+					creating ? (
+						<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
+							<LoadingCamel size={80} />
+							<p className="text-sm text-neutral-500 animate-pulse">
+								Generating board...
 							</p>
 						</div>
-					</div>
+					) : (
+						<div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 translate-x-[48px] pt-32">
+							<div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
+								<Bot size={32} className="text-primary-600" aria-hidden />
+							</div>
+							<div className="text-center">
+								<h2 className="text-lg font-semibold text-neutral-900">
+									Create an Agent Board
+								</h2>
+								<p className="mt-1 max-w-sm text-sm text-neutral-600">
+									Describe what you want to research or analyze. The agent will
+									generate a structured board with specialist columns.
+								</p>
+							</div>
+						</div>
+					)
 				) : (
-					<div>
+					<div className="transition-opacity duration-300">
 						<AgentBoardHeader board={board} onNewBoard={handleNewBoard} />
 						<AgentBoardVisual
 							board={board}
@@ -138,6 +149,7 @@ export default function AgentPage() {
 			{/* Right panel — chat + execution log */}
 			<AgentChatPanel
 				board={board}
+				creating={creating}
 				lastIntent={chat.lastIntent}
 				followUpMessages={chat.followUpMessages}
 				streamingFollowUpText={chat.streamingFollowUpText}

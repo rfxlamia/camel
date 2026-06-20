@@ -14,6 +14,7 @@ export function useAgentBoard() {
 	const boardRef = useRef<AgentBoard | null>(board);
 	boardRef.current = board;
 	const [loading, setLoading] = useState(false);
+	const [creating, setCreating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [artifact, setArtifact] = useState<AgentArtifact | null>(null);
 	const lastSyncedTerminalIdxRef = useRef(-1);
@@ -105,6 +106,7 @@ export function useAgentBoard() {
 	const createBoard = useCallback(
 		async (intent: string) => {
 			if (!activeWorkspaceId) return;
+			setCreating(true);
 			try {
 				clearAgentEvents();
 				const result = await api.createAgentBoard(activeWorkspaceId, intent);
@@ -118,6 +120,8 @@ export function useAgentBoard() {
 				} else {
 					showToast("Couldn't create the board. Try again.");
 				}
+			} finally {
+				setCreating(false);
 			}
 		},
 		[activeWorkspaceId, clearAgentEvents, setSearchParams, showToast],
@@ -166,6 +170,7 @@ export function useAgentBoard() {
 		setBoard,
 		boardRef,
 		loading,
+		creating,
 		error,
 		setError,
 		artifact,

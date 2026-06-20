@@ -152,6 +152,7 @@ function EventEntry({ event }: { event: AgentEvent }) {
 
 interface AgentChatPanelProps {
 	board: AgentBoard | null;
+	creating: boolean;
 	lastIntent: string | null;
 	followUpMessages: FollowUpMessage[];
 	streamingFollowUpText: string;
@@ -187,6 +188,7 @@ interface AgentChatPanelProps {
 
 export default function AgentChatPanel({
 	board,
+	creating,
 	lastIntent,
 	followUpMessages,
 	streamingFollowUpText,
@@ -241,6 +243,19 @@ export default function AgentChatPanel({
 						</div>
 					);
 				})()}
+
+				{creating && !board && (
+					<div className="flex justify-start">
+						<div className="max-w-[80%] rounded-lg border border-neutral-200 bg-white px-3 py-2">
+							<p className="text-xs font-medium text-neutral-500 mb-1">Agent</p>
+							<div className="flex items-center gap-1.5">
+								<span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary-600" />
+								<span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary-600 [animation-delay:150ms]" />
+								<span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary-600 [animation-delay:300ms]" />
+							</div>
+						</div>
+					</div>
+				)}
 
 				{board && (
 					<div className="rounded-lg border border-neutral-200 bg-white p-3">
