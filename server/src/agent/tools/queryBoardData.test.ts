@@ -118,4 +118,62 @@ describe("query_board_data tool factory", () => {
 		const result = await tool.execute({ data_types: ["metrics"] });
 		expect(result).toMatchObject({ ok: false, errorCode: "DB_ERROR" });
 	});
+
+	it("activity-only fetcher throws → ok:false, errorCode:DB_ERROR", async () => {
+		const { ctx } = buildCtx({
+			fetchActivityEvents: vi.fn(async () => {
+				throw new Error("connection refused");
+			}),
+		});
+		const tool = makeQueryBoardData(ctx as never);
+		const result = await tool.execute({ data_types: ["activity"] });
+		expect(result).toMatchObject({ ok: false, errorCode: "DB_ERROR" });
+	});
+
+	it("numeric string windowDays is coerced", async () => {
+		const recentDone: CardTimestamps[] = [
+			{
+				createdAt: new Date(NOW.getTime() - 12 * DAY),
+				startedAt: new Date(NOW.getTime() - 11 * DAY),
+				doneAt: new Date(NOW.getTime() - 10 * DAY),
+			},
+		];
+		const { ctx } = buildCtx({
+			fetchCardTimestamps: vi.fn(async () => recentDone),
+		});
+		const tool = makeQueryBoardData(ctx as never);
+		const payload = JSON.parse(
+			(await tool.execute({ data_types: ["metrics"], windowDays: "30" as never }))
+				.content,
+		);
+		expect(payload.metrics.throughput).toBe(1);
+		expect(payload.metrics.hasData).toBe(true);
+	});
+
+	it("hasData reflects workspace completions even when window excludes them", async () => {
+		const oldDone: CardTimestamps[] = [
+			{
+				createdAt: new Date(NOW.getTime() - 40 * DAY),
+				startedAt: new Date(NOW.getTime() - 39 * DAY),
+				doneAt: new Date(NOW.getTime() - 35 * DAY),
+			},
+		];
+		const { ctx } = buildCtx({
+			fetchCardTimestamps: vi.fn(async () => oldDone),
+		});
+		const tool = makeQueryBoardData(ctx as never);
+		const payload = JSON.parse(
+			(await tool.execute({ data_types: ["metrics"], windowDays: 30 })).content,
+		);
+		expect(payload.metrics.throughput).toBe(0);
+		expect(payload.metrics.hasData).toBe(true);
+	});
+
+	it("all-invalid data_types → ok:false, errorCode:INVALID_INPUT", async () => {
+		const { ctx, fetchCardTimestamps } = buildCtx();
+		const tool = makeQueryBoardData(ctx as never);
+		const result = await tool.execute({ data_types: ["bogus"] });
+		expect(result).toMatchObject({ ok: false, errorCode: "INVALID_INPUT" });
+		expect(fetchCardTimestamps).not.toHaveBeenCalled();
+	});
 });

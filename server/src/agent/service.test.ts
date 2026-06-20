@@ -2970,4 +2970,76 @@ describe("status-report missing-period clarification (T5)", () => {
       expect.objectContaining({ execution_status: "running" }),
     );
   });
+
+  it("still-missing period re-asks period question, not generic clarification", async () => {
+    const detectReportPeriod = vi.fn(async () => ({
+      hasPeriod: false,
+      question: "Which time period should this status report cover?",
+    }));
+    const generateClarificationQuestion = vi.fn(
+      async () => "Can you clarify your research topic?",
+    );
+    const insertConversation = vi.fn(async () => {});
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "pending",
+        templateId: "status-report",
+        workspaceId: 1,
+        userId: 1,
+        originalIntent: "give me a status report",
+      })),
+      insertConversation,
+      generateClarificationQuestion,
+      detectReportPeriod,
+    });
+
+    const result = await service.sendMessage({
+      boardId: 1,
+      userId: 1,
+      workspaceId: 1,
+      message: "not sure yet",
+    });
+
+    expect(detectReportPeriod).toHaveBeenCalled();
+    expect(generateClarificationQuestion).not.toHaveBeenCalled();
+    expect(result.explanation).toMatch(/period/i);
+    expect(insertConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        content: expect.stringMatching(/period/i),
+      }),
+    );
+  });
+
+  it("approveBoard blocks when status-report intent still has no period", async () => {
+    const detectReportPeriod = vi.fn(async () => ({ hasPeriod: false }));
+    const updateBoard = vi.fn(async () => {});
+    const service = createAgentBoardService({
+      getBoard: vi.fn(async () => ({
+        id: 1,
+        status: "pending",
+        templateId: "status-report",
+        workspaceId: 1,
+        userId: 1,
+        originalIntent: "give me a status report",
+      })),
+      updateBoard,
+      detectReportPeriod,
+      publishEvent: vi.fn(async () => {}),
+    });
+
+    const result = await service.approveBoard({
+      boardId: 1,
+      userId: 1,
+      workspaceId: 1,
+    });
+
+    expect(detectReportPeriod).toHaveBeenCalledWith("give me a status report");
+    expect(result).toMatchObject({
+      status: 422,
+      message: expect.stringMatching(/period/i),
+    });
+    expect(updateBoard).not.toHaveBeenCalled();
+  });
 });

@@ -33,16 +33,27 @@ const MAX_WEEKS = 26;
 const MIN_WINDOW_DAYS = 1;
 const MAX_WINDOW_DAYS = 365;
 
-function parseDataTypes(input: Record<string, unknown>): DataType[] {
+type ParseDataTypesResult =
+	| { ok: true; dataTypes: DataType[] }
+	| { ok: false; error: string };
+
+function parseDataTypes(input: Record<string, unknown>): ParseDataTypesResult {
 	const raw = input.data_types;
 	if (!Array.isArray(raw) || raw.length === 0) {
-		return [...ALL_DATA_TYPES];
+		return { ok: true, dataTypes: [...ALL_DATA_TYPES] };
 	}
 	const valid = raw.filter(
 		(v): v is DataType =>
 			v === "metrics" || v === "activity" || v === "history",
 	);
-	return valid.length > 0 ? valid : [...ALL_DATA_TYPES];
+	if (valid.length === 0) {
+		return {
+			ok: false,
+			error:
+				"data_types must include at least one of: metrics, activity, history",
+		};
+	}
+	return { ok: true, dataTypes: valid };
 }
 
 function clampInt(
@@ -51,10 +62,16 @@ function clampInt(
 	max: number,
 	fallback: number,
 ): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) {
+	const n =
+		typeof value === "number"
+			? value
+			: typeof value === "string"
+				? Number(value)
+				: Number.NaN;
+	if (!Number.isFinite(n)) {
 		return fallback;
 	}
-	return Math.min(max, Math.max(min, Math.floor(value)));
+	return Math.min(max, Math.max(min, Math.floor(n)));
 }
 
 export function makeQueryBoardData(ctx: QueryBoardDataCtx): Tool {
@@ -88,7 +105,15 @@ export function makeQueryBoardData(ctx: QueryBoardDataCtx): Tool {
 			},
 		},
 		async execute(input: Record<string, unknown>): Promise<ToolResult> {
-			const dataTypes = parseDataTypes(input);
+			const parsed = parseDataTypes(input);
+			if (!parsed.ok) {
+				return {
+					ok: false,
+					content: parsed.error,
+					errorCode: "INVALID_INPUT",
+				};
+			}
+			const dataTypes = parsed.dataTypes;
 			const now = ctx.now ?? new Date();
 			const windowDays =
 				input.windowDays !== undefined
@@ -111,20 +136,23 @@ export function makeQueryBoardData(ctx: QueryBoardDataCtx): Tool {
 					cards = await ctx.fetchCardTimestamps(ctx.workspaceId);
 				}
 
+				const cardList = cards ?? [];
+
 				if (dataTypes.includes("metrics")) {
-					const metrics = computeFlowMetrics(cards as CardTimestamps[], {
+					const metrics = computeFlowMetrics(cardList, {
 						windowDays,
 						now,
 					});
+					const hasCompletedCards = cardList.some((c) => c.doneAt !== null);
 					payload.metrics = {
 						...metrics,
 						completedCount: metrics.throughput,
-						hasData: metrics.throughput > 0,
+						hasData: hasCompletedCards,
 					};
 				}
 
 				if (dataTypes.includes("history")) {
-					payload.history = computeMetricsHistory(cards as CardTimestamps[], {
+					payload.history = computeMetricsHistory(cardList, {
 						weeks,
 						now,
 					});

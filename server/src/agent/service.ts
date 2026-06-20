@@ -421,6 +421,20 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (board.userId !== userId) return { status: 403 as const };
 			if (board.status !== "pending") return { status: 409 as const };
 
+			if (board.templateId === "status-report" && deps.detectReportPeriod) {
+				const periodResult = await deps.detectReportPeriod(
+					board.originalIntent,
+				);
+				if (!periodResult.hasPeriod) {
+					return {
+						status: 422 as const,
+						message:
+							periodResult.question ??
+							"Which time period should this status report cover?",
+					};
+				}
+			}
+
 			await deps.updateBoard!(boardId, {
 				status: "approved",
 				execution_status: "running",
@@ -1028,6 +1042,16 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						});
 						return { explanation: reply, boardUpdated: true };
 					}
+
+					const reply =
+						periodResult.question ??
+						"Which time period should this status report cover?";
+					await deps.insertConversation!({
+						boardId,
+						role: "assistant",
+						content: reply,
+					});
+					return { explanation: reply, boardUpdated: false };
 				}
 
 				const question = await deps.generateClarificationQuestion!(
