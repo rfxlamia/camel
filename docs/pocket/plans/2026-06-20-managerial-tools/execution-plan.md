@@ -969,6 +969,7 @@ Must-not-have:
 
 Open question risks:
 - Period round-trip via `original_intent` is `[derived]`, not in spec GWT → headline assumption (see plan). If reviewer/user rejects the fold-in approach, report NEEDS_CONTEXT.
+- **DECIDE BEFORE STARTING T5 (approval-gate blocker):** a missing-period board and a normal board both end up `status:"pending"`, distinguishable only by the explanation text — there is no explicit "awaiting clarification" state. Confirm with the user/reviewer whether (a) the explanation-only signal is acceptable, or (b) a distinct marker is needed (e.g. a `needsClarification` flag / status). If (b), this expands scope beyond the current `original_intent`-only mutation and the spec/AC must be updated first. Do not implement the fold-in until this is settled.
 
 Rollback note:
 - Revert the `createBoard` missing-period branch, the pending-branch fold-in, and `detectReportPeriod` (llm.ts + routes wiring). No DB migration to undo.
