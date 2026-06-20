@@ -87,13 +87,15 @@ const CLASSIFY_SYSTEM_PROMPT = `You are a board-template classifier. Given a use
 
 Available templates:
 - "research-report": Research & Report — for research, analysis, investigation, competitive analysis, market reports, or any fact-finding task. This includes requests in Indonesian (riset, analisis, investigasi), Spanish, French, or any other language.
+- "status-report": Status Report — for progress updates, "are we on track?" assessments, sprint or weekly status summaries, and team/project health reports based on current work. This includes requests in Indonesian (laporan status, laporan progress), Spanish, French, or any other language.
 
 CRITICAL RULES:
 1. Respond with ONLY a raw JSON object. No preamble, no explanation text, no markdown, no code fences.
 2. Your entire response must be valid JSON that can be parsed directly.
 3. If the intent is research-related in ANY language, use "research-report".
+4. If the intent is a status or progress report in ANY language, use "status-report".
 
-{"templateId": "research-report" | null, "explanation": "<one sentence in English>"}`;
+{"templateId": "research-report" | "status-report" | null, "explanation": "<one sentence in English>"}`;
 
 // Internal single-attempt classifier — extracted so retry wrapper can call it cleanly
 async function classifyIntentOnce(
