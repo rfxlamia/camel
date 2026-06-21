@@ -254,7 +254,7 @@ export async function mintCamelSession(
 	);
 	res.cookie(SESSION_COOKIE, token, {
 		httpOnly: true,
-		sameSite: "strict",
+		sameSite: "lax",
 		secure: process.env.NODE_ENV === "production",
 		expires: expiresAt,
 		path: "/",

@@ -146,8 +146,9 @@ export function createOAuthBridgeRouter(): Router {
 
 		const baUserId = Number(baSession.user.id);
 
-		// Detect link collision (Rule 4)
+		// Detect existing camel session
 		const oldToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
+		console.log("[complete-oauth] baUserId=%d oldToken=%s cookies=%j", baUserId, oldToken ? oldToken.slice(0, 8) + "..." : "NONE", Object.keys(req.cookies ?? {}));
 		if (oldToken) {
 			const { rows: oldRows } = await pool.query<{ user_id: number }>(
 				"SELECT user_id FROM sessions WHERE token = $1 AND expires_at > now()",
@@ -155,6 +156,64 @@ export function createOAuthBridgeRouter(): Router {
 			);
 			const oldUserId = oldRows[0]?.user_id;
 			if (oldUserId && oldUserId !== baUserId) {
+				// Check if the logged-in user already has a username (password-auth user
+				// linking OAuth for the first time via EmailGatePage).
+				const { rows: oldUserRows } = await pool.query<{
+					username: string | null;
+				}>(
+					"SELECT username FROM users WHERE id = $1",
+					[oldUserId],
+				);
+				const oldUsername = oldUserRows[0]?.username ?? null;
+
+				if (oldUsername) {
+					// Transfer the BA OAuth account to the existing user, then delete the
+					// orphan user Better Auth created (it couldn't match by email because
+					// password-registered users have email=NULL).
+					const client = await pool.connect();
+					try {
+						await client.query("BEGIN");
+						const { rows: baUserRows } = await client.query<{
+							email: string | null;
+							email_verified: boolean;
+						}>("SELECT email, email_verified FROM users WHERE id = $1", [
+							baUserId,
+						]);
+						const baEmail = baUserRows[0]?.email ?? null;
+						const baEmailVerified = baUserRows[0]?.email_verified ?? false;
+
+						// Move OAuth link to existing user (must happen before DELETE to
+						// avoid FK cascade destroying the ba_accounts row).
+						await client.query(
+							"UPDATE ba_accounts SET user_id = $1 WHERE user_id = $2",
+							[oldUserId, baUserId],
+						);
+						// Delete orphan user — cascades ba_sessions.
+						await client.query("DELETE FROM users WHERE id = $1", [baUserId]);
+						// Set email on existing user now that orphan row is gone (unique
+						// index allows this only after the conflicting row is deleted).
+						if (baEmail) {
+							await client.query(
+								`UPDATE users SET email = $1, email_verified = $2, updated_at = now()
+                 WHERE id = $3 AND email IS NULL`,
+								[baEmail, baEmailVerified, oldUserId],
+							);
+						}
+						await client.query("COMMIT");
+					} catch (err) {
+						await client.query("ROLLBACK");
+						throw err;
+					} finally {
+						client.release();
+					}
+
+					// Old camel session still valid; mint a fresh one to refresh TTL.
+					await mintCamelSession(res, oldUserId);
+					res.redirect(config.CLIENT_URL);
+					return;
+				}
+
+				// True link collision (Rule 4): different user, not an OAuth link attempt.
 				await pool.query("DELETE FROM sessions WHERE token = $1", [oldToken]);
 				await pool.query(
 					`INSERT INTO auth_audit (actor_id, event_type, payload)
