@@ -1,9 +1,10 @@
 import { mkdirSync } from "node:fs";
-import { unlink } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type RequestHandler, Router } from "express";
 import { pool } from "../db/pool.js";
+import { validateFileContent } from "../lib/file-validator.js";
 import { publishEvent } from "../realtime.js";
 
 export const VALID_SETTING_KEYS = new Set(["board_name", "logo_path"]);
@@ -520,6 +521,14 @@ settingsRouter.post(
 
 		if (!req.file) {
 			return res.status(400).json({ error: "No file uploaded" });
+		}
+
+		// Validate file content matches declared MIME type (H-002)
+		const fileBuffer = await readFile(req.file.path);
+		const validation = await validateFileContent(fileBuffer, req.file.mimetype);
+		if (!validation.valid) {
+			await unlink(req.file.path);
+			return res.status(400).json({ error: validation.error });
 		}
 
 		const newRelativePath = `/uploads/${req.file.filename}`;

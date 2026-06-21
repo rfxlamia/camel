@@ -34,7 +34,12 @@ app.use((req, res, next) => {
 	return csrfProtection(req, res, next);
 });
 
-app.use("/uploads", express.static(UPLOADS_DIR));
+// Security headers for uploaded files to prevent content-type sniffing
+app.use("/uploads", (req, res, next) => {
+	res.setHeader("X-Content-Type-Options", "nosniff");
+	res.setHeader("Content-Disposition", "inline");
+	next();
+}, express.static(UPLOADS_DIR));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
