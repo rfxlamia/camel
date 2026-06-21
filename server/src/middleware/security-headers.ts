@@ -21,7 +21,7 @@ export function securityHeaders(options: SecurityHeadersOptions = {}) {
 		enablePermissionsPolicy = true,
 	} = options;
 
-	return (req: Request, res: Response, next: NextFunction): void => {
+	return (_req: Request, res: Response, next: NextFunction): void => {
 		if (enableContentTypeOptions) {
 			res.setHeader("X-Content-Type-Options", "nosniff");
 		}
@@ -38,9 +38,11 @@ export function securityHeaders(options: SecurityHeadersOptions = {}) {
 		}
 
 		if (enableCSP) {
+			// 'unsafe-inline' kept for style-src (CSS-in-JS compatibility)
+			// 'unsafe-eval' removed — not needed and weakens XSS protection
 			const csp = [
 				"default-src 'self'",
-				"script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+				"script-src 'self' 'unsafe-inline'",
 				"style-src 'self' 'unsafe-inline'",
 				"img-src 'self' data: blob:",
 				"font-src 'self'",

@@ -48,6 +48,12 @@ describe("Security Headers", () => {
 		expect(response.headers["content-security-policy"]).toBeDefined();
 	});
 
+	it("should not include unsafe-eval in CSP", async () => {
+		const response = await request(app).get("/test").expect(200);
+		const csp = response.headers["content-security-policy"];
+		expect(csp).not.toContain("'unsafe-eval'");
+	});
+
 	it("should set X-XSS-Protection header to 0", async () => {
 		const response = await request(app).get("/test").expect(200);
 		expect(response.headers["x-xss-protection"]).toBe("0");

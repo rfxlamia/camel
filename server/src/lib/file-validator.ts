@@ -103,29 +103,3 @@ export async function validateFileContent(
 		detectedType,
 	};
 }
-
-export async function validateUploadedFile(
-	file: { buffer: Buffer; mimetype: string; size: number },
-	options: { maxSize?: number; allowedMimeTypes?: string[] } = {},
-): Promise<FileValidationResult> {
-	const {
-		maxSize = 10 * 1024 * 1024,
-		allowedMimeTypes = ["image/png", "image/jpeg"],
-	} = options;
-
-	if (file.size > maxSize) {
-		return {
-			valid: false,
-			error: `file size exceeds maximum allowed size of ${maxSize / (1024 * 1024)}MB`,
-		};
-	}
-
-	if (!allowedMimeTypes.includes(file.mimetype)) {
-		return {
-			valid: false,
-			error: `invalid file type: ${file.mimetype}. Allowed types: ${allowedMimeTypes.join(", ")}`,
-		};
-	}
-
-	return validateFileContent(file.buffer, file.mimetype);
-}
