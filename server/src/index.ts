@@ -19,8 +19,10 @@ import {
 	generateCsrfToken,
 } from "./middleware/csrf.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
+import { securityHeaders } from "./middleware/security-headers.js";
 
 const app = express();
+app.use(securityHeaders());
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
@@ -38,7 +40,7 @@ app.use((req, res, next) => {
 // Security headers for uploaded files to prevent content-type sniffing
 app.use(
 	"/uploads",
-	(req, res, next) => {
+	(_req, res, next) => {
 		res.setHeader("X-Content-Type-Options", "nosniff");
 		res.setHeader("Content-Disposition", "inline");
 		next();
