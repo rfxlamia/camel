@@ -13,15 +13,36 @@ import { connectRedis } from "./db/redis.js";
 import { initRealtime } from "./realtime.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
 import { api } from "./routes.js";
+import {
+	csrfProtection,
+	setCsrfToken,
+	generateCsrfToken,
+} from "./middleware/csrf.js";
 
 const app = express();
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
+// Issue CSRF cookie on every response
+app.use(setCsrfToken);
+
+// Enforce CSRF on mutating /api requests, EXCEPT auth bootstrap
+app.use((req, res, next) => {
+	if (!req.path.startsWith("/api/")) return next();
+	if (req.path.startsWith("/api/auth/")) return next();
+	return csrfProtection(req, res, next);
+});
+
 app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// CSRF token endpoint for client to retrieve the token
+app.get("/api/csrf-token", (req, res) => {
+	const token = req.cookies?.csrf_token || generateCsrfToken();
+	res.json({ csrfToken: token });
+});
 
 // Rate limiter starts as no-op; upgraded to Redis-backed after connectRedis().
 let rateLimiterInstance: express.RequestHandler = (_req, _res, next) => next();
