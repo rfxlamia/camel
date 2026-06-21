@@ -117,3 +117,15 @@
 body {
 	@apply bg-neutral-100 text-neutral-900 font-sans antialiased;
 }
+
+/* Board canvas — faint dotted grid for quiet depth (calm, per brief).
+   Tokens only: neutral-100 surface, neutral-300 dots at low alpha. */
+.board-canvas {
+	background-color: var(--color-neutral-100);
+	background-image: radial-gradient(
+		color-mix(in oklch, var(--color-neutral-300) 55%, transparent) 1px,
+		transparent 1.4px
+	);
+	background-size: 22px 22px;
+	background-position: -11px -11px;
+}

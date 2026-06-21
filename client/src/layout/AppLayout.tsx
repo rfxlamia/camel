@@ -1,4 +1,4 @@
-import { Menu } from "lucide-react";
+import { Menu, SquareKanban } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import PresenceBar from "../components/PresenceBar";
@@ -40,9 +40,11 @@ export default function AppLayout() {
 		link.href = getFaviconLink(settings.logoPath);
 	}, [settings.boardName, settings.logoPath, onSettings]);
 
-	const pageTitle =
-		NAV_ITEMS.find((item) => location.pathname.startsWith(item.to))?.label ??
-		"Board";
+	const activeItem = NAV_ITEMS.find((item) =>
+		location.pathname.startsWith(item.to),
+	);
+	const PageIcon = activeItem?.icon ?? SquareKanban;
+	const pageTitle = activeItem?.label ?? "Board";
 
 	return (
 		<div className="flex h-screen">
@@ -60,19 +62,14 @@ export default function AppLayout() {
 						>
 							<Menu size={20} aria-hidden />
 						</button>
-						<h1 className="text-md font-semibold text-primary-900">
+						<span className="flex items-center gap-1.5 text-sm font-medium text-neutral-700">
+							<PageIcon size={15} className="text-neutral-400" aria-hidden />
 							{pageTitle}
-						</h1>
+						</span>
 					</div>
 
 					<div className="flex items-center gap-3">
 						<PresenceBar users={presence} self={user} />
-						<span
-							className="hidden text-sm text-neutral-700 sm:inline"
-							title={`@${user.username}`}
-						>
-							{user.displayName}
-						</span>
 					</div>
 				</header>
 

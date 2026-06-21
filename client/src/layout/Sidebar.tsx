@@ -41,8 +41,10 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 ];
 
 // Items grouped by mode (Settings lives in footer, kept in NAV_ITEMS for AppLayout pageTitle)
+// Activity is intentionally not a top-level nav item — it's a board changelog,
+// reachable from the Dashboard "View all" drill-down rather than a primary peer.
 const KANBAN_NAV = NAV_ITEMS.filter((i) =>
-	["/board", "/dashboard", "/activity"].includes(i.to),
+	["/board", "/dashboard"].includes(i.to),
 );
 const AGENT_NAV = NAV_ITEMS.filter((i) =>
 	["/agent", "/history"].includes(i.to),

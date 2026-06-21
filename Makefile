@@ -90,6 +90,22 @@ clean: ## ⚠️  Remove node_modules, dist, and stop containers (destructive)
 	@$(DOCKER_COMPOSE) down -v 2>/dev/null || true
 	@echo "✓ Cleaned"
 
+# ---- Docs (separate remote) -----------------------------------------------
+
+.PHONY: docs-commit docs-push docs-pull docs-sync
+
+docs-commit: ## Commit all docs changes (auto-generate message via comma)
+	@cd docs && git add -A && comma
+
+docs-push: ## Push docs to remote
+	@cd docs && git push
+
+docs-pull: ## Pull docs from remote
+	@cd docs && git pull
+
+docs-sync: ## Pull then push docs (sync with remote)
+	@cd docs && git pull --rebase && git push
+
 # ---- Help ------------------------------------------------------------------
 
 .PHONY: help

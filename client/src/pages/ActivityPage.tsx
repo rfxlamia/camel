@@ -1,3 +1,7 @@
+import { Activity as ActivityIcon, ArrowRight } from "lucide-react";
+import { Link } from "react-router";
+import EmptyState from "../components/EmptyState";
+import PageHeader from "../components/PageHeader";
 import { useBoard } from "../context/BoardContext";
 import type { ActivityEvent } from "../types";
 import { formatRelativeTime } from "../types";
@@ -20,59 +24,100 @@ export function describeEvent(e: ActivityEvent): string {
 	}
 }
 
-const TYPE_BADGE: Record<
+const TYPE_META: Record<
 	ActivityEvent["type"],
-	{ label: string; className: string }
+	{ label: string; badge: string; dot: string }
 > = {
-	create: { label: "Added", className: "bg-success-100 text-success-900" },
-	move: { label: "Moved", className: "bg-info-100 text-info-900" },
-	update: { label: "Updated", className: "bg-primary-100 text-primary-800" },
-	delete: { label: "Deleted", className: "bg-error-100 text-error-900" },
+	create: {
+		label: "Added",
+		badge: "bg-success-100 text-success-900",
+		dot: "bg-success-500",
+	},
+	move: {
+		label: "Moved",
+		badge: "bg-info-100 text-info-900",
+		dot: "bg-info-500",
+	},
+	update: {
+		label: "Updated",
+		badge: "bg-primary-100 text-primary-800",
+		dot: "bg-primary-500",
+	},
+	delete: {
+		label: "Deleted",
+		badge: "bg-error-100 text-error-900",
+		dot: "bg-error-500",
+	},
 };
 
 export default function ActivityPage() {
 	const { activity } = useBoard();
 
 	return (
-		<div className="mx-auto max-w-2xl p-6">
-			<h2 className="text-lg font-semibold text-neutral-900">Activity</h2>
-			<p className="mt-1 text-sm text-neutral-600">
-				Everything your team changed on the board, newest first.
-			</p>
+		<div className="mx-auto max-w-2xl p-6 md:p-8">
+			<PageHeader
+				icon={ActivityIcon}
+				title="Activity"
+				subtitle="Everything your team changed on the board, newest first."
+				actions={
+					<Link
+						to="/board"
+						className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					>
+						Back to board
+						<ArrowRight size={14} aria-hidden />
+					</Link>
+				}
+			/>
 
-			<ol className="mt-6 rounded-md border border-neutral-200 bg-white">
-				{activity.length === 0 && (
-					<li className="px-4 py-6 text-sm text-neutral-500">
-						Nothing here yet. Changes your team makes will show up here.
-					</li>
-				)}
-				{activity.map((e) => {
-					const badge = TYPE_BADGE[e.type] ?? TYPE_BADGE.update;
-					return (
-						<li
-							key={e.id}
-							className="flex items-start gap-3 border-b border-neutral-100 px-4 py-3 last:border-b-0"
-						>
-							<span
-								className={`mt-0.5 shrink-0 rounded-md px-2 py-0.5 text-xs font-medium uppercase tracking-wide ${badge.className}`}
+			{activity.length === 0 ? (
+				<div className="mt-10 rounded-xl border border-neutral-200 bg-white px-6 py-14">
+					<EmptyState
+						icon={ActivityIcon}
+						title="No activity yet"
+						description="Once your team starts adding and moving cards, every change lands here as a running timeline."
+						action={
+							<Link
+								to="/board"
+								className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 							>
-								{badge.label}
-							</span>
-							<div className="min-w-0">
-								<p className="text-sm text-neutral-800">
-									<span className="font-medium text-neutral-900">
-										{e.actor?.displayName ?? "Someone"}
-									</span>{" "}
-									{describeEvent(e)}
-								</p>
-								<p className="mt-0.5 text-xs text-neutral-500">
+								Go to board
+								<ArrowRight size={14} aria-hidden />
+							</Link>
+						}
+					/>
+				</div>
+			) : (
+				<ol className="mt-8 ml-1.5 border-l border-neutral-200">
+					{activity.map((e) => {
+						const meta = TYPE_META[e.type] ?? TYPE_META.update;
+						return (
+							<li key={e.id} className="relative py-3 pl-6 last:pb-0">
+								<span
+									className={`absolute -left-[5px] top-4 h-2.5 w-2.5 rounded-full ring-4 ring-neutral-100 ${meta.dot}`}
+									aria-hidden
+								/>
+								<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+									<span
+										className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${meta.badge}`}
+									>
+										{meta.label}
+									</span>
+									<p className="min-w-0 text-sm text-neutral-800">
+										<span className="font-medium text-neutral-900">
+											{e.actor?.displayName ?? "Someone"}
+										</span>{" "}
+										{describeEvent(e)}
+									</p>
+								</div>
+								<p className="mt-1 text-xs text-neutral-500">
 									{formatRelativeTime(e.createdAt)}
 								</p>
-							</div>
-						</li>
-					);
-				})}
-			</ol>
+							</li>
+						);
+					})}
+				</ol>
+			)}
 		</div>
 	);
 }

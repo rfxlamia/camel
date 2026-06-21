@@ -10,15 +10,91 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { Plus } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { Columns3, Plus } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate } from "react-router";
 import { ApiError, api } from "../api";
 import { CardBody } from "../components/CardView";
 import ColumnView from "../components/ColumnView";
+import EmptyState from "../components/EmptyState";
 import TrashZone from "../components/TrashZone";
 import { useBoard } from "../context/BoardContext";
 import type { Card, Column } from "../types";
+
+/* ------------------------------------------------------------------ */
+/*  Board toolbar — live flow summary, gives the board a sense of place */
+/* ------------------------------------------------------------------ */
+
+function StatChip({
+	dot,
+	value,
+	label,
+}: {
+	dot: string;
+	value: number | string;
+	label: string;
+}) {
+	return (
+		<span className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs text-neutral-600">
+			<span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+			<span className="font-semibold tabular-nums text-neutral-900">
+				{value}
+			</span>
+			{label}
+		</span>
+	);
+}
+
+function BoardToolbar({ columns }: { columns: Column[] }) {
+	const s = useMemo(() => {
+		let total = 0;
+		let active = 0;
+		let done = 0;
+		let over = 0;
+		for (const col of columns) {
+			total += col.cards.length;
+			if (col.wipLimit !== null && col.cards.length > col.wipLimit) over++;
+			for (const c of col.cards) {
+				if (c.doneAt) done++;
+				else if (c.startedAt) active++;
+			}
+		}
+		return { total, active, done, over, cols: columns.length };
+	}, [columns]);
+
+	return (
+		<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-4 py-2.5 md:px-6">
+			<StatChip dot="bg-neutral-300" value={s.total} label="cards" />
+			<StatChip dot="bg-primary-400" value={s.active} label="in progress" />
+			<StatChip dot="bg-success-500" value={s.done} label="done" />
+			<span className="hidden text-neutral-300 sm:inline" aria-hidden>
+				·
+			</span>
+			<span className="hidden text-xs text-neutral-500 sm:inline">
+				{s.cols} column{s.cols === 1 ? "" : "s"}
+			</span>
+			<div className="ml-auto">
+				{s.over > 0 ? (
+					<span className="inline-flex items-center gap-1.5 rounded-md bg-error-100 px-2.5 py-1 text-xs font-medium text-error-900">
+						<span
+							className="h-1.5 w-1.5 rounded-full bg-error-500"
+							aria-hidden
+						/>
+						WIP over in {s.over} column{s.over === 1 ? "" : "s"}
+					</span>
+				) : (
+					<span className="inline-flex items-center gap-1.5 rounded-md bg-success-100 px-2.5 py-1 text-xs font-medium text-success-900">
+						<span
+							className="h-1.5 w-1.5 rounded-full bg-success-500"
+							aria-hidden
+						/>
+						Flow healthy
+					</span>
+				)}
+			</div>
+		</div>
+	);
+}
 
 function cardIdFrom(dndId: string | number): number | null {
 	const s = String(dndId);
@@ -335,64 +411,73 @@ export default function BoardPage() {
 	};
 
 	return (
-		<div className="h-full bg-neutral-200/40 p-6">
-			{loadError && (
-				<div className="mx-auto max-w-md rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
-					Couldn't load the board. Check that the server is running, then
-					refresh.
-				</div>
-			)}
-			{!loadError && columns === null && (
-				<p className="text-sm text-neutral-500">Loading board...</p>
-			)}
-			{columns && (
-				<DndContext
-					sensors={sensors}
-					collisionDetection={closestCorners}
-					onDragStart={onDragStart}
-					onDragOver={onDragOver}
-					onDragEnd={onDragEnd}
-					onDragCancel={() => {
-						setActiveCard(null);
-						revert();
-					}}
-				>
-					{columns.length === 0 ? (
-						<div className="flex h-full flex-col items-center justify-center gap-3">
-							<p className="text-sm text-neutral-500">
-								No columns yet. Add one to get started.
-							</p>
-							<AddColumn onAddColumn={onAddColumn} />
-						</div>
-					) : (
-						<div className="flex h-full items-start gap-5 pb-2">
-							{columns.map((column, i) => (
-								<div
-									key={column.id}
-									className="animate-rise-in shrink-0"
-									style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
-								>
-									<ColumnView
-										column={column}
-										onOpenCard={onOpenCard}
-										onAddCard={onAddCard}
-										onUpdateColumn={onUpdateColumn}
-									/>
-								</div>
-							))}
-							<AddColumn onAddColumn={onAddColumn} />
-						</div>
-					)}
-					<DragOverlay>
-						{activeCard && (
-							<div className="rotate-2 cursor-grabbing rounded-md border border-primary-300 bg-white py-2.5 pr-3 pl-3.5 shadow-lg ring-1 ring-primary-600/10">
-								<CardBody card={activeCard} />
+		<div className="flex h-full flex-col">
+			{/* Board identity heading — visually carried by the toolbar/columns, but
+			    kept in the document so heading order starts at h1 (topbar is a span). */}
+			<h1 className="sr-only">Board</h1>
+			{columns && columns.length > 0 && <BoardToolbar columns={columns} />}
+
+			<div className="board-canvas relative flex-1 overflow-x-auto p-6">
+				{loadError && (
+					<div className="mx-auto max-w-md rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
+						Couldn't load the board. Check that the server is running, then
+						refresh.
+					</div>
+				)}
+				{!loadError && columns === null && (
+					<p className="text-sm text-neutral-500">Loading board...</p>
+				)}
+				{columns && (
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCorners}
+						onDragStart={onDragStart}
+						onDragOver={onDragOver}
+						onDragEnd={onDragEnd}
+						onDragCancel={() => {
+							setActiveCard(null);
+							revert();
+						}}
+					>
+						{columns.length === 0 ? (
+							<div className="flex h-full items-center justify-center">
+								<EmptyState
+									icon={Columns3}
+									title="Start your board"
+									description="Columns are the stages your work moves through — like To do, In progress, and Done. Add your first one to get going."
+									action={<AddColumn onAddColumn={onAddColumn} />}
+								/>
+							</div>
+						) : (
+							<div className="flex h-full items-start gap-5 pb-2">
+								{columns.map((column, i) => (
+									<div
+										key={column.id}
+										className="animate-rise-in shrink-0"
+										style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+									>
+										<ColumnView
+											column={column}
+											onOpenCard={onOpenCard}
+											onAddCard={onAddCard}
+											onUpdateColumn={onUpdateColumn}
+										/>
+									</div>
+								))}
+								<AddColumn onAddColumn={onAddColumn} />
 							</div>
 						)}
-					</DragOverlay>
-					<TrashZone visible={activeCard !== null} />
-				</DndContext>
-			)}
+						<DragOverlay>
+							{activeCard && (
+								<div className="rotate-2 cursor-grabbing rounded-md border border-primary-300 bg-white py-2.5 pr-3 pl-3.5 shadow-lg ring-1 ring-primary-600/10">
+									<CardBody card={activeCard} />
+								</div>
+							)}
+						</DragOverlay>
+						<TrashZone visible={activeCard !== null} />
+					</DndContext>
+				)}
+			</div>
 
 			{/* Context panel route (/board/card/:id) renders here. */}
 			<Outlet />
