@@ -2,7 +2,7 @@
 
 > **REQUIRED SUB-SKILL:** Use the executing-plans skill to implement this plan task-by-task.
 
-**Goal:** Address all critical, high, and medium severity findings from the Red Team Security Assessment to achieve production-ready security posture.
+**Goal:** Address the critical and high-severity findings from the Red Team Security Assessment in full, plus the practical subset of medium findings (M-001, M-002, M-006, M-007). The remaining medium findings (M-003, M-004, M-005, M-008) and H-004 (move in-memory state to Redis) are **explicitly deferred** and tracked separately — see the Summary. C-002 and M-002 are already mitigated by existing code and are covered here by verification rather than new code.
 
 **Architecture:** Security hardening approach focusing on defense-in-depth with fail-closed defaults, input validation, output sanitization, and comprehensive security headers. Each finding will be addressed with minimal code changes and maximum test coverage.
 
@@ -26,9 +26,11 @@
 
 **Files:**
 
-- Modify: `server/src/auth.ts:42-80`
+- Modify: `server/src/auth.ts` (`isLoginLockedOut` ~L81–92, `checkAndRecordLoginAttempt` ~L100–116, `createAuthRateLimiter` ~L137–156)
 - Create: `server/src/lib/in-memory-rate-limiter.ts`
 - Test: `server/src/__tests__/auth-rate-limit.test.ts`
+
+> Note: `isLoginLockedOut` must remain a **read-only** check — it must not record an attempt. The limiter therefore exposes a separate `peek()` method used by the check path, while `checkAndRecord()` is the only writer (called by `accountLockoutMiddleware`).
 
 **Step 1: Write the failing test for in-memory rate limiter**
 
@@ -89,6 +91,27 @@ describe('InMemoryRateLimiter', () => {
     const result = await limiter.checkAndRecord('user1');
     expect(result.isLocked).toBe(false);
     expect(result.remainingAttempts).toBe(4);
+  });
+
+  it('peek should report lock state WITHOUT recording an attempt', async () => {
+    // Five recorded attempts (the limit) — not yet over.
+    for (let i = 0; i < 5; i++) {
+      await limiter.checkAndRecord('user1');
+    }
+    // Peek repeatedly: must not increment the counter.
+    expect((await limiter.peek('user1')).isLocked).toBe(false);
+    expect((await limiter.peek('user1')).isLocked).toBe(false);
+    // A real attempt (the 6th) crosses the limit.
+    expect((await limiter.checkAndRecord('user1')).isLocked).toBe(true);
+    // Peek now reflects locked state, still without mutating.
+    expect((await limiter.peek('user1')).isLocked).toBe(true);
+    expect((await limiter.peek('user1')).isLocked).toBe(true);
+  });
+
+  it('peek returns not-locked for an unknown key', async () => {
+    const result = await limiter.peek('never-seen');
+    expect(result.isLocked).toBe(false);
+    expect(result.remainingAttempts).toBe(5);
   });
 
   it('should handle concurrent requests safely', async () => {
@@ -160,6 +183,25 @@ export class InMemoryRateLimiter {
     };
   }
 
+  /**
+   * Read-only check: report the current lock state for a key WITHOUT
+   * recording an attempt. Used by isLoginLockedOut so that checking
+   * lockout never itself counts as a failed attempt.
+   */
+  async peek(key: string): Promise<CheckResult> {
+    const now = Date.now();
+    const entry = this.store.get(key);
+
+    if (!entry || entry.expiresAt < now) {
+      return { isLocked: false, remainingAttempts: this.maxAttempts };
+    }
+
+    return {
+      isLocked: entry.count > this.maxAttempts,
+      remainingAttempts: Math.max(0, this.maxAttempts - entry.count),
+    };
+  }
+
   async clear(key: string): Promise<void> {
     this.store.delete(key);
   }
@@ -197,7 +239,9 @@ const IN_MEMORY_LOGIN_LIMITER = new InMemoryRateLimiter({
   maxAttempts: LOGIN_FAILURE_MAX,
 });
 
-// Update isLoginLockedOut function (line 42-48)
+// Update isLoginLockedOut function (~L81-92)
+// IMPORTANT: this is a READ-ONLY check. It must never record an attempt,
+// so the in-memory fallback uses peek(), not checkAndRecord().
 export async function isLoginLockedOut(username: string): Promise<boolean> {
   const client = getRedisClient();
   
@@ -213,12 +257,13 @@ export async function isLoginLockedOut(username: string): Promise<boolean> {
     }
   }
 
-  // Fail-closed: use in-memory limiter when Redis unavailable
-  const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(username.toLowerCase());
+  // Fail-closed: use in-memory limiter when Redis unavailable.
+  // peek() reports state without recording an attempt.
+  const result = await IN_MEMORY_LOGIN_LIMITER.peek(username.toLowerCase());
   return result.isLocked;
 }
 
-// Update checkAndRecordLoginAttempt function (line 75-80)
+// Update checkAndRecordLoginAttempt function (~L100-116)
 export async function checkAndRecordLoginAttempt(username: string): Promise<boolean> {
   const client = getRedisClient();
   
@@ -354,315 +399,87 @@ Closes: C-001"
 
 ### Task 2: SSE Endpoint Authentication (C-002)
 
+**Status of the finding:** On review of the current code, the SSE stream is **already authenticated and membership-checked** (verification below). This task therefore reduces to *pinning that behavior with a regression test* and auditing that no unauthenticated entry point exists. Do **not** add a new `/presence` SSE route or a second auth layer — that would duplicate existing middleware and shadow the real route.
+
+**What already protects the stream (verified against the code):**
+
+- `server/src/routes.ts` mounts the whole board API behind auth: `api.use(requireAuth)` (~L37), then `api.use("/workspaces/:workspaceId", presenceRouter)` (~L48).
+- `server/src/routes/presence.ts` mounts the stream at `GET /workspaces/:workspaceId/events/stream`, guarded by `requireWorkspaceMember`.
+- `server/src/middleware/workspace.ts` → `requireWorkspaceMember` validates the `workspaceId` param, looks up `workspace_members(workspace_id, user_id)`, returns **400** for a non-integer id and **404** for a non-member, and only then is `sseHandler` reached.
+
+An unauthenticated or non-member request never reaches `sseHandler`. The original premise ("the SSE endpoint is unauthenticated") does not hold, so the realtime/index refactor is dropped.
+
 **Files:**
 
-- Modify: `server/src/realtime.ts:167-183`
-- Modify: `server/src/index.ts` (mount auth middleware before SSE)
 - Test: `server/src/__tests__/sse-auth.test.ts`
+- (Only if Step 3 finds a gap) Modify: `server/src/routes/presence.ts`
 
-**Step 1: Write the failing test for SSE authentication**
+**Step 1: Write a regression test that pins the auth + membership contract**
 
 ```typescript
 // server/src/__tests__/sse-auth.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { createRealtimeHub } from '../realtime';
-import { requireAuth } from '../auth';
 
-describe('SSE Authentication', () => {
+// Reproduce the real wiring: requireAuth at the /api boundary, then
+// requireWorkspaceMember on the stream route — exactly as routes.ts does.
+import { requireAuth } from '../auth';
+import { requireWorkspaceMember } from '../middleware/workspace';
+import { sseHandler } from '../realtime';
+
+describe('SSE stream auth contract (/events/stream)', () => {
   let app: express.Application;
-  let hub: ReturnType<typeof createRealtimeHub>;
 
   beforeEach(() => {
     app = express();
     app.use(cookieParser());
-    hub = createRealtimeHub({
-      publisher: null,
-      subscriber: null,
-      presence: null,
-    });
-
-    // Mount SSE endpoint with auth middleware
-    app.get('/api/workspaces/:workspaceId/presence', requireAuth, (req, res) => {
-      hub.sseHandler(req, res);
-    });
+    const api = express.Router();
+    api.use(requireAuth);
+    api.get(
+      '/workspaces/:workspaceId/events/stream',
+      requireWorkspaceMember,
+      (req, res) => sseHandler(req, res),
+    );
+    app.use('/api', api);
   });
 
-  it('should reject SSE connection without authentication', async () => {
-    const response = await request(app)
-      .get('/api/workspaces/1/presence')
+  it('rejects the stream with no session cookie (401)', async () => {
+    const res = await request(app)
+      .get('/api/workspaces/1/events/stream')
       .expect(401);
-
-    expect(response.body).toEqual({
-      error: 'authentication required',
-    });
-  });
-
-  it('should reject SSE connection with invalid session', async () => {
-    const response = await request(app)
-      .get('/api/workspaces/1/presence')
-      .set('Cookie', ['camel_session=invalid_token'])
-      .expect(401);
-
-    expect(response.body).toEqual({
-      error: 'session expired — sign in again',
-    });
-  });
-
-  it('should accept SSE connection with valid authentication', async () => {
-    // This test requires a valid session in the database
-    // For unit testing, we'll mock requireAuth
-    const mockRequireAuth = (req: any, res: any, next: any) => {
-      req.user = { id: 1, username: 'testuser', displayName: 'Test User' };
-      next();
-    };
-
-    app.get('/api/workspaces/:workspaceId/presence-mock', mockRequireAuth, (req, res) => {
-      hub.sseHandler(req, res);
-    });
-
-    const response = await request(app)
-      .get('/api/workspaces/1/presence-mock')
-      .expect(200);
-
-    expect(response.headers['content-type']).toBe('text/event-stream');
-    expect(response.text).toContain(': connected');
-  });
-
-  it('should validate workspaceId parameter', async () => {
-    const mockRequireAuth = (req: any, res: any, next: any) => {
-      req.user = { id: 1, username: 'testuser', displayName: 'Test User' };
-      next();
-    };
-
-    app.get('/api/workspaces/:workspaceId/presence-validate', mockRequireAuth, (req, res) => {
-      hub.sseHandler(req, res);
-    });
-
-    const response = await request(app)
-      .get('/api/workspaces/invalid/presence-validate')
-      .expect(400);
-
-    expect(response.body).toEqual({
-      error: 'workspaceId must be an integer',
-    });
+    expect(res.body).toEqual({ error: 'authentication required' });
   });
 });
 ```
 
-**Step 2: Run test to verify it fails**
+> The "no cookie" branch of `requireAuth` needs no database. The invalid-session and member/non-member cases require a DB session row, so assert those in `routes.integration.test.ts` (which already has authenticated fixtures) or behind `RUN_LLM_IT` — do not add DB-dependent cases to the default unit suite (see Task 7).
+
+**Step 2: Run the test**
 
 Run: `npx vitest run server/src/__tests__/sse-auth.test.ts`
-Expected: FAIL with "Cannot find module" or auth middleware not applied
+Expected: PASS — unauthenticated requests are rejected before `sseHandler` runs.
 
-**Step 3: Update realtime.ts to accept auth middleware**
+**Step 3: Audit for any unauthenticated entry point and close it**
 
-```typescript
-// server/src/realtime.ts - Add auth middleware support
-
-export interface RealtimeHubDeps {
-  publisher: PublisherLike | null;
-  subscriber: SubscriberLike | null;
-  presence?: PresenceLike | null;
-}
-
-// Update sseHandler to accept optional auth middleware
-export function createRealtimeHub(deps: RealtimeHubDeps) {
-  // ... existing code ...
-
-  return {
-    // ... existing methods ...
-
-    // Create SSE handler with optional auth middleware
-    createSseHandler(authMiddleware?: RequestHandler) {
-      return (req: Request, res: Response): void => {
-        const workspaceId = Number(req.params.workspaceId);
-        if (!Number.isInteger(workspaceId)) {
-          res.status(400).json({ error: "workspaceId must be an integer" });
-          return;
-        }
-
-        // Apply auth middleware if provided
-        if (authMiddleware) {
-          return authMiddleware(req, res, () => {
-            this.handleSseConnection(workspaceId, req, res);
-          });
-        }
-
-        this.handleSseConnection(workspaceId, req, res);
-      };
-    },
-
-    // Separate connection handling logic
-    handleSseConnection(workspaceId: number, req: Request, res: Response): void {
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
-      res.write(": connected\n\n");
-
-      const client: SseClient = { workspaceId, res };
-      sseClients.add(client);
-
-      const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
-      req.on("close", () => {
-        clearInterval(keepAlive);
-        sseClients.delete(client);
-      });
-    },
-
-    // Keep original sseHandler for backward compatibility
-    sseHandler(req: Request, res: Response): void {
-      const workspaceId = Number(req.params.workspaceId);
-      if (!Number.isInteger(workspaceId)) {
-        res.status(400).json({ error: "workspaceId must be an integer" });
-        return;
-      }
-
-      // WARNING: This is unauthenticated - use createSseHandler with auth for production
-      console.warn('[realtime] Using unauthenticated SSE handler - consider using createSseHandler with auth middleware');
-      
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
-      res.write(": connected\n\n");
-
-      const client: SseClient = { workspaceId, res };
-      sseClients.add(client);
-
-      const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
-      req.on("close", () => {
-        clearInterval(keepAlive);
-        sseClients.delete(client);
-      });
-    },
-  };
-}
-```
-
-**Step 4: Update index.ts to mount authenticated SSE endpoint**
-
-```typescript
-// server/src/index.ts - Update SSE route mounting
-
-// Import requireAuth at top
-import { requireAuth } from './auth.js';
-
-// Update the SSE endpoint mounting
-// Replace the existing SSE route with authenticated version
-app.get('/api/workspaces/:workspaceId/presence', requireAuth, (req, res) => {
-  activeHub.sseHandler(req, res);
-});
-
-// Or use the new createSseHandler method
-const authenticatedSseHandler = activeHub.createSseHandler(requireAuth);
-app.get('/api/workspaces/:workspaceId/presence', authenticatedSseHandler);
-```
-
-**Step 5: Run test to verify it passes**
-
-Run: `npx vitest run server/src/__tests__/sse-auth.test.ts`
-Expected: PASS
-
-**Step 6: Add workspace membership validation**
-
-```typescript
-// server/src/realtime.ts - Add workspace membership check
-
-export function createRealtimeHub(deps: RealtimeHubDeps) {
-  // ... existing code ...
-
-  return {
-    // ... existing methods ...
-
-    createSseHandlerWithMembership(
-      authMiddleware: RequestHandler,
-      membershipCheck: (workspaceId: number, userId: number) => Promise<boolean>
-    ) {
-      return async (req: Request, res: Response): Promise<void> => {
-        const workspaceId = Number(req.params.workspaceId);
-        if (!Number.isInteger(workspaceId)) {
-          res.status(400).json({ error: "workspaceId must be an integer" });
-          return;
-        }
-
-        // Apply auth middleware
-        authMiddleware(req, res, async () => {
-          // Check workspace membership
-          if (req.user) {
-            const isMember = await membershipCheck(workspaceId, req.user.id);
-            if (!isMember) {
-              return res.status(403).json({ error: "Not a member of this workspace" });
-            }
-          }
-
-          this.handleSseConnection(workspaceId, req, res);
-        });
-      };
-    },
-  };
-}
-```
-
-**Step 7: Update index.ts with membership check**
-
-```typescript
-// server/src/index.ts - Add workspace membership check
-
-// Import pool for membership check
-import { pool } from './db/pool.js';
-
-// Create membership check function
-const checkWorkspaceMembership = async (workspaceId: number, userId: number): Promise<boolean> => {
-  const { rows } = await pool.query(
-    'SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2',
-    [workspaceId, userId]
-  );
-  return rows.length > 0;
-};
-
-// Mount authenticated SSE with membership check
-app.get('/api/workspaces/:workspaceId/presence',
-  requireAuth,
-  async (req, res, next) => {
-    const workspaceId = Number(req.params.workspaceId);
-    if (!Number.isInteger(workspaceId)) {
-      return res.status(400).json({ error: "workspaceId must be an integer" });
-    }
-
-    const isMember = await checkWorkspaceMembership(workspaceId, req.user!.id);
-    if (!isMember) {
-      return res.status(403).json({ error: "Not a member of this workspace" });
-    }
-
-    next();
-  },
-  (req, res) => {
-    activeHub.sseHandler(req, res);
-  }
-);
-```
-
-**Step 8: Run all SSE tests**
-
-Run: `npx vitest run server/src/__tests__/sse*.test.ts`
-Expected: All PASS
-
-**Step 9: Commit**
+Confirm `sseHandler` (and the test-only `connectLocalClient`) is never mounted on an app route without `requireAuth` + `requireWorkspaceMember`:
 
 ```bash
-git add server/src/realtime.ts server/src/index.ts server/src/__tests__/sse-auth.test.ts
-git commit -m "fix(security): add authentication to SSE endpoint
+grep -rnE "sseHandler|events/stream|connectLocalClient" server/src
+```
 
-- Add requireAuth middleware before SSE handler
-- Add workspace membership validation
-- Reject unauthenticated SSE connections
-- Add comprehensive tests for SSE authentication
+Expected: the only route-level mount is the `requireWorkspaceMember`-guarded one in `routes/presence.ts`. If any other mount exists, add the same two-middleware guard there. No changes to `realtime.ts` are required.
+
+**Step 4: Commit**
+
+```bash
+git add server/src/__tests__/sse-auth.test.ts
+git commit -m "test(security): pin SSE stream auth + membership contract
+
+- Add regression test: /events/stream rejects unauthenticated requests
+- Document that requireAuth + requireWorkspaceMember already protect the stream
+- No duplicate route or second auth layer introduced
 
 Closes: C-002"
 ```
@@ -837,9 +654,12 @@ const INJECTION_PATTERNS = [
   /\bwhat\s+(are|is)\s+your\s+(system\s+)?(prompt|instructions?|rules?|initial\s+message)\b/i,
   /\btranslate\s+(the|your)\s+(system\s+)?(prompt|instructions?)\b/i,
 
-  // Role manipulation attempts
+  // Role manipulation attempts.
+  // NOTE: keep these anchored to clearly adversarial roles. A bare
+  // /act\s+as\s+(a|an)/ matches innocuous research prose ("act as a catalyst"),
+  // so require a jailbreak-style role noun to fire.
   /\byou\s+are\s+now\s+(a|an)\b/i,
-  /\bact\s+as\s+(a|an)\b/i,
+  /\bact\s+as\s+(a|an)\s+(jailbroken|unrestricted|unfiltered|uncensored|hacker|admin|root|developer|dan)\b/i,
   /\bpretend\s+(you|that)\s+(are|is)\b/i,
   /\bfrom\s+now\s+on\b/i,
   /\benter\s+(developer|debug|admin)\s+mode\b/i,
@@ -1005,7 +825,10 @@ async function classifyIntentOnce(
   // ... rest of parsing logic ...
 }
 
-// Update executeCard function
+// Update executeCard function.
+// IMPORTANT: preserve BOTH execution paths (single-shot AND tools). The original
+// function dispatches to executeCardWithTools whenever tools.length > 0; collapsing
+// to single-shot would silently disable web search / createFile / queryBoardData.
 export async function executeCard(
   systemPrompt: string,
   intent: string,
@@ -1020,43 +843,44 @@ export async function executeCard(
 ): Promise<ExecuteResult> {
   const client = getClient();
 
-  // Check for prompt injection
+  // Defense-in-depth: flag obvious injection in the raw intent, then LOG AND
+  // CONTINUE rather than throw. Hard-failing here turns a noisy heuristic into a
+  // denial-of-service against legitimate research that merely sounds suspicious.
   if (detectPromptInjection(intent)) {
-    console.warn('[llm] Prompt injection detected in executeCard:', intent.substring(0, 100));
-    throw new Error('Your request could not be processed due to security concerns.');
+    console.warn('[llm] possible prompt injection in executeCard intent:', intent.substring(0, 100));
   }
 
-  // Create safe system prompt with injection defense
-  const safeSystemPrompt = createSafeSystemPrompt(systemPrompt);
-
-  // Substitute {original_intent} before calling LLM
-  const rendered = renderSystemPrompt(safeSystemPrompt, {
+  // Inject security guidance into the system prompt, then substitute {original_intent}.
+  const rendered = renderSystemPrompt(createSafeSystemPrompt(systemPrompt), {
     original_intent: intent,
   });
 
-  // Sanitize user content
-  const sanitizedUserContent = userContent
-    ? sanitizeUserContent(userContent)
-    : sanitizeUserInput(intent);
-
-  // Build the user message with any previous outputs
-  let messageContent = sanitizedUserContent;
+  // Build the user message with any previous outputs (unchanged from current behavior).
+  let messageContent = userContent ?? intent;
   if (previousOutputs.length > 0) {
-    const sanitizedOutputs = previousOutputs.map(sanitizeLLMOutput);
     messageContent +=
       "\n\n<previous_outputs>\n" +
-      sanitizedOutputs.join("\n---\n") +
+      previousOutputs.join("\n---\n") +
       "\n</previous_outputs>";
   }
 
-  // ... rest of executeCard logic ...
+  // Preserve BOTH paths. Tokens still stream raw via onToken; only the final
+  // persisted output is passed through the (narrow, secret-only) sanitizer.
+  const raw =
+    tools.length === 0
+      ? await executeCardSingleShot(client, rendered, messageContent, onToken, onThinking)
+      : await executeCardWithTools(
+          client,
+          rendered,
+          messageContent,
+          tools,
+          toolBudget,
+          onToken,
+          onToolEvent,
+          onThinking,
+        );
 
-  // Sanitize final output
-  const result = await executeCardSingleShot(client, rendered, messageContent, onToken, onThinking);
-  return {
-    output: sanitizeLLMOutput(result.output),
-    thinking: result.thinking,
-  };
+  return { output: sanitizeLLMOutput(raw.output), thinking: raw.thinking };
 }
 
 // Update classifyFollowUpIntentOnce function
@@ -1101,65 +925,13 @@ async function classifyFollowUpIntentOnce(
 }
 ```
 
-**Step 6: Add output validation for sensitive data**
+**Step 6: Deliberately scope output redaction to secrets only (no PII redaction)**
 
-```typescript
-// server/src/agent/prompt-sanitizer.ts - Add PII detection
+Do **not** add regex PII redaction to `sanitizeLLMOutput`. The agent's product *is* its research output; a blanket pass that rewrites every email, phone number, SSN-shaped string, or 16-digit run to `[REDACTED_PII]` would corrupt legitimate reports (e.g. a market analysis citing a company contact, or any figure that happens to be 16 digits). The same applies to the leakage regex — keep it narrow and accept that it is best-effort.
 
-// PII patterns (simplified - in production use a proper PII detection library)
-const PII_PATTERNS = [
-  // Email addresses
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
-  // Phone numbers (US format)
-  /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
-  // Social Security Numbers
-  /\b\d{3}-\d{2}-\d{4}\b/g,
-  // Credit card numbers (simplified)
-  /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
-];
+`sanitizeLLMOutput` therefore stays exactly as defined in Step 3: redact only **API-key / bearer-token patterns** and obvious **system-prompt leakage**, and otherwise pass content through untouched. There is no `redactPII` function and no `PII_PATTERNS` array.
 
-/**
- * Detect and redact PII from LLM output
- */
-export function redactPII(output: string): string {
-  let sanitized = output;
-
-  for (const pattern of PII_PATTERNS) {
-    sanitized = sanitized.replace(pattern, '[REDACTED_PII]');
-  }
-
-  return sanitized;
-}
-
-// Update sanitizeLLMOutput to include PII redaction
-export function sanitizeLLMOutput(output: string): string {
-  if (!output) {
-    return output;
-  }
-
-  let sanitized = output;
-
-  // Redact system prompt leakage
-  for (const pattern of LEAKAGE_PATTERNS) {
-    if (pattern.test(sanitized)) {
-      sanitized = sanitized.replace(
-        /[^.!?\n]*\b(system\s+prompt|initial\s+(prompt|instructions?|message))\b[^.!?\n]*/gi,
-        '[Content redacted for security reasons]'
-      );
-    }
-  }
-
-  // Redact API keys
-  for (const pattern of API_KEY_PATTERNS) {
-    sanitized = sanitized.replace(pattern, '[REDACTED_API_KEY]');
-  }
-
-  // Redact PII
-  sanitized = redactPII(sanitized);
-
-  return sanitized;
-}
-```
+If a future requirement genuinely needs PII handling, do it at the storage/display boundary with an opt-in flag and a proper PII library — not as an always-on transform over model output. The existing unit tests in Step 1 (`sanitizeLLMOutput` preserves a benign research sentence) guard against this regression.
 
 **Step 7: Run all LLM-related tests**
 
@@ -1192,7 +964,11 @@ Closes: C-003"
 
 - Create: `server/src/middleware/csrf.ts`
 - Modify: `server/src/index.ts`
+- Modify: `client/src/api.ts` (send the `X-CSRF-Token` header on every mutating request — **without this the browser app cannot do any writes, including login**)
 - Test: `server/src/__tests__/csrf.test.ts`
+- Modify: `server/src/routes.integration.test.ts` (its POSTs must carry a CSRF token, or they will start returning 403)
+
+> **Double-submit pattern + bootstrap.** The CSRF cookie is readable by JS (`httpOnly: false`); the client echoes it in the `X-CSRF-Token` header and the server checks the two match. The auth endpoints (`/api/auth/login`, `/api/auth/register`) are **exempt** from the header check: they are the bootstrap, are already protected by `SameSite` cookies, and a first-time visitor has no token yet. `setCsrfToken` runs on every response so the token cookie is present before the first write.
 
 **Step 1: Write the failing test for CSRF protection**
 
@@ -1401,15 +1177,28 @@ Expected: PASS
 ```typescript
 // server/src/index.ts - Add CSRF protection
 
-import { csrfProtection, setCsrfToken } from './middleware/csrf.js';
+import {
+  csrfProtection,
+  setCsrfToken,
+  generateCsrfToken,
+} from './middleware/csrf.js';
 
-// Add after cookieParser middleware
+// Register these immediately after cookieParser and BEFORE the route mounts
+// (app.use("/api/auth", ...), app.use("/api", api), app.use("/api", agent)).
+
+// Issue a CSRF cookie on every response so the client always has one to echo.
 app.use(setCsrfToken);
 
-// Apply CSRF protection to all state-changing routes
-app.use('/api', csrfProtection);
+// Enforce CSRF on mutating /api requests, EXCEPT the auth bootstrap routes.
+// A first-time visitor must reach login/register before they hold a token,
+// and those routes are already protected by the SameSite session cookie.
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (req.path.startsWith('/api/auth/')) return next();
+  return csrfProtection(req, res, next);
+});
 
-// Add CSRF token endpoint
+// Token endpoint (GET is a safe method, so csrfProtection lets it through).
 app.get('/api/csrf-token', (req, res) => {
   const token = req.cookies?.csrf_token || generateCsrfToken();
   res.json({ csrfToken: token });
@@ -1426,22 +1215,57 @@ res.cookie(SESSION_COOKIE, token, {
 });
 ```
 
-**Step 6: Run all CSRF tests**
+> If `auth.test.ts` asserts the session cookie uses `SameSite=Lax`, update that assertion to `Strict` in the same commit.
+
+**Step 6: Update the client to send the CSRF header (REQUIRED — the app breaks without it)**
+
+`csrfProtection` rejects any mutating request that lacks a matching `X-CSRF-Token` header. The browser app must read the `csrf_token` cookie and attach it to every non-GET request. Add this to the typed fetch wrapper.
+
+```typescript
+// client/src/api.ts
+
+// Read a cookie value by name (csrf_token is httpOnly:false so JS can read it).
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(
+    new RegExp('(?:^|; )' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'),
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// In the shared request helper, set the header for state-changing methods.
+const method = (init.method ?? 'GET').toUpperCase();
+const headers = new Headers(init.headers);
+if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+  const csrf = readCookie('csrf_token');
+  if (csrf) headers.set('X-CSRF-Token', csrf);
+}
+// ...pass `headers` into fetch(...); keep credentials: 'include' as today.
+```
+
+> The token cookie is set by `setCsrfToken` on the first response (e.g. the initial `GET /api/auth/me` session check), so it is already present before the first write. If a write ever returns 403 `CSRF token missing`, call `GET /api/csrf-token` once and retry.
+
+**Step 7: Run CSRF tests and fix the existing integration suite**
 
 Run: `npx vitest run server/src/__tests__/csrf.test.ts`
 Expected: All PASS
 
-**Step 7: Commit**
+Then update `server/src/routes.integration.test.ts`: its authenticated POSTs (e.g. `/cards/:id/move`) now need a CSRF token. Add a small helper that performs `GET /api/csrf-token`, then sends the value in both the `csrf_token` cookie and the `X-CSRF-Token` header on each mutating request (or assert these endpoints return 403 without it). Re-run:
+
+Run: `RUN_LLM_IT=1 npm run test:integration --workspace=server`
+Expected: PASS (no 403s from the new CSRF layer).
+
+**Step 8: Commit**
 
 ```bash
-git add server/src/middleware/csrf.ts server/src/index.ts server/src/__tests__/csrf.test.ts
+git add server/src/middleware/csrf.ts server/src/index.ts client/src/api.ts \
+  server/src/__tests__/csrf.test.ts server/src/routes.integration.test.ts
 git commit -m "fix(security): implement CSRF protection
 
-- Add CSRF token generation and validation middleware
-- Require CSRF token in both cookie and header for state-changing requests
-- Update session cookie to use sameSite: 'strict'
-- Add /api/csrf-token endpoint for clients
-- Comprehensive tests for CSRF protection
+- Add CSRF token generation and validation middleware (double-submit cookie)
+- Require X-CSRF-Token header on mutating /api requests; exempt auth bootstrap
+- Send the header from the client fetch wrapper (writes fail closed without it)
+- Update session cookie to sameSite: 'strict'
+- Update integration tests to carry a CSRF token
 
 Closes: H-001"
 ```
@@ -1562,9 +1386,10 @@ const FILE_SIGNATURES: Record<string, Buffer[]> = {
     Buffer.from([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]), // GIF87a
     Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]), // GIF89a
   ],
-  webp: [
-    Buffer.from([0x52, 0x49, 0x46, 0x46]), // RIFF (WebP container)
-  ],
+  // NOTE: WebP is intentionally NOT listed here. Its container begins with
+  // "RIFF", which also matches WAV and AVI — so a bare RIFF check would accept
+  // an audio/video file as an image. WebP is detected separately in
+  // getFileSignature() by additionally requiring the "WEBP" FourCC at offset 8.
 };
 
 // Map MIME types to expected signatures
@@ -1587,6 +1412,16 @@ export interface FileValidationResult {
 export function getFileSignature(buffer: Buffer): string | null {
   if (!buffer || buffer.length < 4) {
     return null;
+  }
+
+  // WebP: "RIFF" <4-byte size> "WEBP". RIFF alone is ambiguous (WAV/AVI),
+  // so require the WEBP FourCC at offset 8 before accepting it as an image.
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('latin1') === 'WEBP'
+  ) {
+    return 'webp';
   }
 
   for (const [type, signatures] of Object.entries(FILE_SIGNATURES)) {
@@ -1958,25 +1793,34 @@ export interface SanitizedError {
  * - Removes implementation details
  * - Preserves user-facing validation errors
  * - Returns generic message for internal errors
+ *
+ * NOTE: the safe-message check must run regardless of statusCode. Many call
+ * sites throw a bare `Error('Username must be ...')` with no statusCode, so
+ * gating preservation on `statusCode < 500` would (wrongly) genericize every
+ * validation message — which is exactly what the Step-1 test guards against.
  */
 export function sanitizeError(error: Error & { statusCode?: number; code?: string }): SanitizedError {
-  const statusCode = error.statusCode || 500;
+  const statusCode = error.statusCode ?? 0;
   const originalMessage = error.message || '';
 
-  // For 4xx errors, check if message is safe to expose
-  if (statusCode >= 400 && statusCode < 500) {
-    // Check if message matches safe patterns
-    const isSafe = SAFE_ERROR_PATTERNS.some(pattern => pattern.test(originalMessage));
-    if (isSafe) {
-      return {
-        message: originalMessage,
-        statusCode,
-        code: error.code,
-      };
-    }
+  // Anything that looks like an implementation detail is always generic,
+  // even if it incidentally contains a "safe" word.
+  const looksSensitive = SENSITIVE_PATTERNS.some((p) => p.test(originalMessage));
+
+  // Preserve genuinely user-facing messages (validation, not-found, conflicts)
+  // whether or not a statusCode was attached.
+  const isSafe =
+    !looksSensitive && SAFE_ERROR_PATTERNS.some((p) => p.test(originalMessage));
+
+  if (isSafe) {
+    return {
+      message: originalMessage,
+      statusCode: statusCode >= 400 && statusCode < 500 ? statusCode : 400,
+      code: error.code,
+    };
   }
 
-  // For 5xx errors or unsafe 4xx messages, return generic message
+  // 5xx, unknown, or sensitive → generic message.
   return {
     message: 'internal server error',
     statusCode: 500,
@@ -2077,107 +1921,90 @@ Closes: H-003"
 **Files:**
 
 - Modify: `server/src/auth.ts`
-- Test: `server/src/__tests__/session-rotation.test.ts`
+- Test: `server/src/__tests__/session-rotation.integration.test.ts` (DB-dependent → gated behind `RUN_LLM_IT`, matching the project's integration-test convention; it must NOT run in the default `npm test`, which has no database)
 
-**Step 1: Write the failing test for session token rotation**
+> Scope note: "rotation" means *issue a fresh token and retire the old one*. It does **not** mean "one session per user." Deleting all of a user's other sessions on login would silently sign them out on every other device — a behavior change nobody asked for — so this task rotates a **single** session and leaves the rest intact.
+
+**Step 1: Write the failing (DB-gated) test for session token rotation**
 
 ```typescript
-// server/src/__tests__/session-rotation.test.ts
+// server/src/__tests__/session-rotation.integration.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rotateSessionToken, invalidatePreviousSessions } from '../auth';
+import { rotateSessionToken } from '../auth';
 import { pool } from '../db/pool';
 
-describe('Session Token Rotation', () => {
+// Gate the whole suite (hooks included) on RUN_LLM_IT so the default unit
+// suite stays green without a database.
+describe.skipIf(!process.env.RUN_LLM_IT)('Session token rotation', () => {
   beforeEach(async () => {
-    // Clean up test data
-    await pool.query('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', ['test_%']);
+    await pool.query(
+      'DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)',
+      ['test_%'],
+    );
     await pool.query('DELETE FROM users WHERE username LIKE $1', ['test_%']);
   });
 
   afterEach(async () => {
-    // Clean up test data
-    await pool.query('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', ['test_%']);
+    await pool.query(
+      'DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)',
+      ['test_%'],
+    );
     await pool.query('DELETE FROM users WHERE username LIKE $1', ['test_%']);
   });
 
-  it('should rotate session token on login', async () => {
-    // Create test user
-    const userResult = await pool.query(
+  it('rotates a session token and invalidates the old one', async () => {
+    const { rows: u } = await pool.query(
       `INSERT INTO users (username, display_name, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING id`,
-      ['test_user', 'Test User', 'hashed_password']
+       VALUES ($1, $2, $3) RETURNING id`,
+      ['test_user', 'Test User', 'hashed_password'],
     );
-    const userId = userResult.rows[0].id;
+    const userId = u[0].id;
 
-    // Create initial session
-    const initialSession = await pool.query(
+    await pool.query(
       `INSERT INTO sessions (token, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '30 days')
-       RETURNING token`,
-      ['initial_token', userId]
+       VALUES ($1, $2, now() + interval '30 days')`,
+      ['initial_token', userId],
     );
-    const initialToken = initialSession.rows[0].token;
 
-    // Rotate token
-    const newToken = await rotateSessionToken(userId, initialToken);
+    const newToken = await rotateSessionToken(userId, 'initial_token');
+    expect(newToken).not.toBeNull();
 
-    // Verify new token exists
-    const newSession = await pool.query(
-      'SELECT * FROM sessions WHERE token = $1',
-      [newToken]
-    );
-    expect(newSession.rows.length).toBe(1);
-    expect(newSession.rows[0].user_id).toBe(userId);
+    const fresh = await pool.query('SELECT user_id FROM sessions WHERE token = $1', [newToken]);
+    expect(fresh.rows.length).toBe(1);
+    expect(fresh.rows[0].user_id).toBe(userId);
 
-    // Verify old token is invalidated
-    const oldSession = await pool.query(
-      'SELECT * FROM sessions WHERE token = $1',
-      [initialToken]
-    );
-    expect(oldSession.rows.length).toBe(0);
+    const old = await pool.query('SELECT 1 FROM sessions WHERE token = $1', ['initial_token']);
+    expect(old.rows.length).toBe(0);
   });
 
-  it('should invalidate all previous sessions on new login', async () => {
-    // Create test user
-    const userResult = await pool.query(
+  it('does NOT affect the user\'s other sessions (multi-device preserved)', async () => {
+    const { rows: u } = await pool.query(
       `INSERT INTO users (username, display_name, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING id`,
-      ['test_user2', 'Test User 2', 'hashed_password']
+       VALUES ($1, $2, $3) RETURNING id`,
+      ['test_multi', 'Test Multi', 'hashed_password'],
     );
-    const userId = userResult.rows[0].id;
+    const userId = u[0].id;
+    for (const t of ['dev_a', 'dev_b', 'dev_c']) {
+      await pool.query(
+        `INSERT INTO sessions (token, user_id, expires_at)
+         VALUES ($1, $2, now() + interval '30 days')`,
+        [t, userId],
+      );
+    }
 
-    // Create multiple sessions
-    await pool.query(
-      `INSERT INTO sessions (token, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '30 days')`,
-      ['session_1', userId]
-    );
-    await pool.query(
-      `INSERT INTO sessions (token, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '30 days')`,
-      ['session_2', userId]
-    );
-    await pool.query(
-      `INSERT INTO sessions (token, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '30 days')`,
-      ['session_3', userId]
-    );
+    const newToken = await rotateSessionToken(userId, 'dev_b');
+    expect(newToken).not.toBeNull();
 
-    // Invalidate previous sessions
-    await invalidatePreviousSessions(userId, 'new_session');
-
-    // Verify only new session exists
-    const sessions = await pool.query(
-      'SELECT * FROM sessions WHERE user_id = $1',
-      [userId]
-    );
-    expect(sessions.rows.length).toBe(1);
-    expect(sessions.rows[0].token).toBe('new_session');
+    const { rows } = await pool.query('SELECT token FROM sessions WHERE user_id = $1', [userId]);
+    const tokens = rows.map((r) => r.token);
+    expect(tokens).toContain('dev_a');           // untouched
+    expect(tokens).toContain('dev_c');           // untouched
+    expect(tokens).not.toContain('dev_b');       // rotated away
+    expect(tokens).toContain(newToken as string); // replacement present
+    expect(tokens.length).toBe(3);
   });
 
-  it('should handle rotation for non-existent session', async () => {
+  it('returns null for a non-existent session', async () => {
     const result = await rotateSessionToken(99999, 'non_existent_token');
     expect(result).toBeNull();
   });
@@ -2186,49 +2013,50 @@ describe('Session Token Rotation', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `npx vitest run server/src/__tests__/session-rotation.test.ts`
+Run: `RUN_LLM_IT=1 npx vitest run server/src/__tests__/session-rotation.integration.test.ts`
 Expected: FAIL with "rotateSessionToken is not a function"
 
-**Step 3: Implement session token rotation**
+**Step 3: Implement single-session rotation (reuse `createSession`; no multi-device wipe)**
 
 ```typescript
-// server/src/auth.ts - Add session rotation functions
+// server/src/auth.ts - Add session rotation primitive.
+// NOTE: there is NO invalidatePreviousSessions / createSessionWithRotation.
+// Login already mints a fresh token via the existing createSession(), so each
+// login rotates the active token. rotateSessionToken covers explicit rotation
+// (e.g. after a password change) for a single session only.
 
 /**
- * Rotate session token - invalidates old token and creates new one
- * Returns new token or null if rotation failed
+ * Rotate ONE session token: delete the presented token (if it belongs to the
+ * user) and issue a fresh one in the same transaction. Returns the new token,
+ * or null if the old token was not a valid session for this user.
+ *
+ * Deliberately scoped to a single session — the user's other sessions are left
+ * intact so a new login/rotation does not sign them out on other devices.
  */
 export async function rotateSessionToken(
   userId: number,
-  oldToken: string
+  oldToken: string,
 ): Promise<string | null> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Verify old token exists and belongs to user
     const { rows: existing } = await client.query(
-      'SELECT id FROM sessions WHERE token = $1 AND user_id = $2',
-      [oldToken, userId]
+      'SELECT 1 FROM sessions WHERE token = $1 AND user_id = $2',
+      [oldToken, userId],
     );
-
     if (existing.length === 0) {
       await client.query('ROLLBACK');
       return null;
     }
 
-    // Delete old session
     await client.query('DELETE FROM sessions WHERE token = $1', [oldToken]);
 
-    // Create new session
     const newToken = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(
-      Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
-    );
-
+    const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
     await client.query(
       'INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)',
-      [newToken, userId, expiresAt]
+      [newToken, userId, expiresAt],
     );
 
     await client.query('COMMIT');
@@ -2241,129 +2069,69 @@ export async function rotateSessionToken(
     client.release();
   }
 }
-
-/**
- * Invalidate all previous sessions for a user except the current one
- * Used on new login to ensure single active session
- */
-export async function invalidatePreviousSessions(
-  userId: number,
-  currentToken: string
-): Promise<void> {
-  try {
-    await pool.query(
-      'DELETE FROM sessions WHERE user_id = $1 AND token != $2',
-      [userId, currentToken]
-    );
-  } catch (err) {
-    console.error('[auth] failed to invalidate previous sessions:', err);
-  }
-}
-
-/**
- * Create a new session with token rotation
- * - Invalidates any existing sessions for the user
- * - Returns new session token
- */
-export async function createSessionWithRotation(
-  res: Response,
-  userId: number
-): Promise<string> {
-  const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(
-    Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
-  );
-
-  // Invalidate all existing sessions for this user
-  await invalidatePreviousSessions(userId, token);
-
-  // Create new session
-  await pool.query(
-    'INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)',
-    [token, userId, expiresAt]
-  );
-
-  // Set cookie
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
-    expires: expiresAt,
-    path: '/',
-  });
-
-  return token;
-}
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `npx vitest run server/src/__tests__/session-rotation.test.ts`
+Run: `RUN_LLM_IT=1 npx vitest run server/src/__tests__/session-rotation.integration.test.ts`
 Expected: PASS
 
-**Step 5: Integrate session rotation into login flow**
+**Step 5: Integrate into the login flow (reuse `createSession`, drop only the stale cookie)**
 
 ```typescript
-// server/src/auth.ts - Update login route
+// server/src/auth.ts - login route (createSession is unchanged and already
+// issues a brand-new random token + overwrites the cookie = rotation on login).
 
 auth.post("/login", accountLockoutMiddleware, async (req, res) => {
   const { username, password } = req.body ?? {};
   if (typeof username !== "string" || typeof password !== "string") {
-    return res
-      .status(400)
-      .json({ error: "Username and password are required." });
+    return res.status(400).json({ error: "Username and password are required." });
   }
 
   const { rows } = await pool.query(
     "SELECT id, username, display_name, password_hash FROM users WHERE username = $1",
     [username.toLowerCase()],
   );
-
-  const ok =
-    rows.length > 0 &&
-    (await bcrypt.compare(password, rows[0].password_hash));
-
+  const ok = rows.length > 0 && (await bcrypt.compare(password, rows[0].password_hash));
   if (!ok) {
-    return res
-      .status(401)
-      .json({ error: "Wrong username or password — try again." });
+    return res.status(401).json({ error: "Wrong username or password — try again." });
   }
 
   await clearLoginFailures(username);
 
-  // Use session rotation instead of createSession
-  await createSessionWithRotation(res, rows[0].id);
+  // Rotation: if the client presented a stale session cookie, retire just that
+  // one row (not the user's other devices), then mint a fresh session.
+  const presented = req.cookies?.[SESSION_COOKIE];
+  if (presented) {
+    await pool.query('DELETE FROM sessions WHERE token = $1 AND user_id = $2', [
+      presented,
+      rows[0].id,
+    ]);
+  }
+  await createSession(res, rows[0].id);
 
   res.json({ user: toUser(rows[0]) });
 });
-
-// Update register route similarly
-auth.post("/register", async (req, res) => {
-  // ... existing registration logic ...
-
-  // After successful registration, use session rotation
-  await createSessionWithRotation(res, user.id);
-
-  res.status(201).json({ user });
-});
 ```
 
-**Step 6: Run all session tests**
+> `register` already calls `createSession` (a new user has no prior session), so no change is needed there.
 
-Run: `npx vitest run server/src/__tests__/session*.test.ts`
-Expected: All PASS
+**Step 6: Run the session tests**
+
+Run: `RUN_LLM_IT=1 npx vitest run server/src/__tests__/session-rotation.integration.test.ts`
+Expected: All PASS. Also run the default suite without a DB to confirm the gated suite is skipped: `npm test` → green.
 
 **Step 7: Commit**
 
 ```bash
-git add server/src/auth.ts server/src/__tests__/session-rotation.test.ts
-git commit -m "fix(security): implement session token rotation
+git add server/src/auth.ts server/src/__tests__/session-rotation.integration.test.ts
+git commit -m "fix(security): rotate session token on login (single-session)
 
-- Add rotateSessionToken function for token rotation
-- Add invalidatePreviousSessions for single-session enforcement
-- Update login and register to use session rotation
-- Invalidate all previous sessions on new login
-- Comprehensive tests for session rotation
+- Add rotateSessionToken: retire one token, issue a fresh one transactionally
+- Login retires the presented stale cookie, then mints a new session
+- Reuse existing createSession (no duplicated session logic)
+- Do NOT wipe other devices' sessions (multi-device preserved)
+- DB tests gated behind RUN_LLM_IT (kept out of the default unit suite)
 
 Closes: H-005"
 ```
@@ -2377,8 +2145,10 @@ Closes: H-005"
 **Files:**
 
 - Create: `server/src/validators/input-length.ts`
-- Modify: Multiple route files
+- Modify: `server/src/routes/cards.ts` (card title/description — replaces the inline `title.trim() === ""` check at ~L74), `server/src/routes/board.ts` and `server/src/routes/columns.ts` (board/column names), `server/src/auth.ts` (display name; username length is already enforced by `USERNAME_RE`)
 - Test: `server/src/__tests__/input-length.test.ts`
+
+> Avoid double validation: where a validator replaces an existing inline check (e.g. `cards.ts` already rejects an empty title), remove the old check so there is a single source of truth. `username` is already constrained to 3–32 chars by `USERNAME_RE` in `auth.ts` — `validateUsername` should mirror that, not add a second, divergent rule. Zod is already a dependency (used in `config.ts`); these validators are intentionally plain functions for reuse in route guards, but a Zod schema is an acceptable alternative if preferred.
 
 **Step 1: Write the failing test for input length validation**
 
@@ -2760,12 +2530,15 @@ describe('Security Headers', () => {
     expect(response.headers['content-security-policy']).toBeDefined();
   });
 
-  it('should set X-XSS-Protection header', async () => {
+  it('should set X-XSS-Protection header to 0 (disabled, per current guidance)', async () => {
     const response = await request(app)
       .get('/test')
       .expect(200);
 
-    expect(response.headers['x-xss-protection']).toBe('1; mode=block');
+    // Modern guidance (OWASP) is to disable the legacy auditor: setting it to
+    // "1; mode=block" has itself caused XSS in some browsers. CSP is the real
+    // defense; this header is set to "0" explicitly.
+    expect(response.headers['x-xss-protection']).toBe('0');
   });
 
   it('should set Referrer-Policy header', async () => {
@@ -2857,9 +2630,11 @@ export function securityHeaders(options: SecurityHeadersOptions = {}) {
       res.setHeader('Content-Security-Policy', csp);
     }
 
-    // X-XSS-Protection: Legacy XSS protection (for older browsers)
+    // X-XSS-Protection: explicitly DISABLE the legacy auditor. "1; mode=block"
+    // is deprecated and has introduced vulnerabilities in some browsers; OWASP
+    // recommends "0". CSP (above) is the actual XSS defense.
     if (enableXSSProtection) {
-      res.setHeader('X-XSS-Protection', '1; mode=block');
+      res.setHeader('X-XSS-Protection', '0');
     }
 
     // Referrer-Policy: Control referrer information
@@ -3134,24 +2909,38 @@ export function llmTimeout(timeoutMs: number = 60000) {
 Run: `npx vitest run server/src/__tests__/timeout.test.ts`
 Expected: PASS
 
-**Step 5: Integrate timeout middleware**
+**Step 5: Integrate timeout middleware (scoped — NOT global)**
+
+The agent endpoints (`/workspaces/:id/agent/...`) are **buffered**: they `await` a full LLM pipeline (multiple model calls + web search + tools) and only then `res.json(...)`. A real research run routinely exceeds 30s. The presence SSE route (`/events/stream`) is **long-lived** by design. A global `requestTimeout(30000)` would send a `503` to the client mid-run for both. So the request timeout is applied to the standard board API only, with agent and SSE routes exempt.
 
 ```typescript
 // server/src/index.ts - Add timeout configuration
 
 import { requestTimeout, serverTimeout } from './middleware/timeout.js';
 
-// Add request timeout middleware
-app.use(requestTimeout(30000)); // 30 seconds
+// 30s request timeout for the STANDARD board API only. Skip agent endpoints
+// (buffered, long-running) and the SSE stream (long-lived) — they manage their
+// own timeouts (Step 6) and must not be cut off by this timer.
+const isTimeoutExempt = (path: string) =>
+  path.includes('/agent/') || path.endsWith('/events/stream');
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (isTimeoutExempt(req.path)) return next();
+  return requestTimeout(30000)(req, res, next);
+});
 
 // Configure server timeouts after app.listen
 const port = config.PORT;
 const server = app.listen(port, async () => {
   console.log(`Camel Kanban API listening on http://localhost:${port}`);
 
-  // Configure server-level timeouts
+  // IMPORTANT: leave the socket-level request timeout DISABLED (0). Setting
+  // server.timeout to 30s would destroy the socket of an in-flight agent run
+  // (>30s, buffered) regardless of the route-level exemption above. keepAlive
+  // and headers timeouts are safe to set.
   serverTimeout(server, {
-    timeout: 30000,
+    timeout: 0, // no global socket timeout; per-route guards apply instead
     keepAliveTimeout: 65000,
     headersTimeout: 66000,
   });
@@ -3160,13 +2949,15 @@ const server = app.listen(port, async () => {
 });
 ```
 
-**Step 6: Add longer timeout for LLM endpoints**
+**Step 6: Give the agent router its own (longer) socket timeout**
 
 ```typescript
-// server/src/agent/routes.ts - Add LLM-specific timeout
+// server/src/agent/routes.ts - LLM-specific timeout for the agent router.
+// This sets the per-request socket timeout (req.setTimeout) for agent routes,
+// which are exempt from the board-API requestTimeout above.
 import { llmTimeout } from '../middleware/timeout.js';
 
-// Apply longer timeout to agent routes
+// Apply to the agent router so every agent endpoint gets the longer budget.
 router.use(llmTimeout(120000)); // 2 minutes for LLM calls
 ```
 
@@ -3179,12 +2970,12 @@ Expected: All PASS
 
 ```bash
 git add server/src/middleware/timeout.ts server/src/index.ts server/src/agent/routes.ts server/src/__tests__/timeout.test.ts
-git commit -m "fix(security): add request timeout configuration
+git commit -m "fix(security): add scoped request timeout configuration
 
-- Add request timeout middleware (30 seconds default)
-- Add server-level timeout configuration
-- Add longer timeout for LLM endpoints (2 minutes)
-- Return 503 for timed-out requests
+- Add request timeout middleware (30s) for the standard board API only
+- Exempt agent endpoints (buffered, long-running) and the SSE stream
+- Leave server.timeout disabled; agent router gets a 120s socket budget
+- Return 503 for timed-out board-API requests
 - Comprehensive tests for timeout handling
 
 Closes: M-007"
@@ -3232,32 +3023,37 @@ git commit -m "chore(security): verify all security hardening changes
 
 ## Summary
 
-This plan addresses all findings from the Red Team Security Assessment:
+This plan implements the critical and high-priority findings from the Red Team
+Security Assessment in full. Several medium findings, and one high finding, are
+**explicitly deferred** and called out below rather than marked done — the plan
+should not claim coverage it does not deliver.
+
+Legend: ✅ implemented in this plan · 🔎 verified already handled (no code change) · ☐ deferred / not in this plan
 
 ### Phase 1: Critical (P0) - 3 findings
 
 - ✅ C-001: Rate limiting fail-closed with in-memory fallback
-- ✅ C-002: SSE endpoint authentication
-- ✅ C-003: LLM prompt injection protection
+- 🔎 C-002: SSE endpoint authentication — the stream is **already** behind `requireAuth` + `requireWorkspaceMember`; this plan adds a regression test to pin that contract (no new auth code)
+- ✅ C-003: LLM prompt injection protection (narrowed to avoid corrupting research output)
 
 ### Phase 2: High (P1) - 5 findings
 
-- ✅ H-001: CSRF protection
+- ✅ H-001: CSRF protection (server middleware **and** client header — both required)
 - ✅ H-002: File upload content validation
 - ✅ H-003: Error message sanitization
-- ✅ H-004: In-memory state moved to Redis (covered by C-001)
-- ✅ H-005: Session token rotation
+- ☐ H-004: Move in-memory state to Redis — **not addressed here.** Note C-001 adds an in-memory *fallback* (the opposite direction); H-004 needs its own task and is tracked separately.
+- ✅ H-005: Session token rotation (single-session rotation; multi-device sessions preserved)
 
 ### Phase 3: Medium (P2) - 8 findings
 
 - ✅ M-001: Input length validation
-- ✅ M-002: CORS server-to-server (covered by existing implementation)
-- ✅ M-003: Database pool tuning (documented but not in this plan)
-- ✅ M-004: Redis authentication (documented but not in this plan)
-- ✅ M-005: Tool budget mismatch (documented but not in this plan)
+- 🔎 M-002: CORS server-to-server — already handled by the existing origin validator (`core/cors.ts`); no change
+- ☐ M-003: Database pool tuning — deferred, not in this plan
+- ☐ M-004: Redis authentication — deferred, not in this plan
+- ☐ M-005: Tool budget mismatch — deferred, not in this plan
 - ✅ M-006: Security headers
-- ✅ M-007: Request timeout configuration
-- ✅ M-008: API versioning (documented but not in this plan)
+- ✅ M-007: Request timeout configuration (scoped off agent + SSE routes)
+- ☐ M-008: API versioning — deferred, not in this plan
 
 ### Post-Implementation Tasks
 
