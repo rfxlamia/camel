@@ -14,6 +14,12 @@
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../config.js";
+import {
+	detectPromptInjection,
+	sanitizeUserInput,
+	sanitizeLLMOutput,
+	createSafeSystemPrompt,
+} from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
 import { toAnthropicToolDefs } from "./tools/registry.js";
 import { countSearchResults } from "./tools/trace.js";
@@ -102,6 +108,16 @@ async function classifyIntentOnce(
 	client: Anthropic,
 	intent: string,
 ): Promise<ClassifyResult> {
+	// Security: Check for prompt injection attempts
+	if (detectPromptInjection(intent)) {
+		console.warn("classifyIntentOnce: prompt injection detected:", intent);
+		return {
+			templateId: null,
+			explanation:
+				"Your request contains patterns that look like prompt injection. Please rephrase your research question.",
+		};
+	}
+
 	// Fix #1: temperature: 0 — classification is deterministic, variance is unwanted
 	// Budget: reasoning models spend tokens on a thinking block before the JSON.
 	// 256 truncated the answer (stop_reason=max_tokens) → unparseable → 422.
@@ -379,6 +395,21 @@ async function classifyFollowUpIntentOnce(
 	conversationHistory: Array<{ role: string; content: string }>,
 	userMessage: string,
 ): Promise<FollowUpResult | null> {
+	// Security: Check for prompt injection attempts
+	if (detectPromptInjection(userMessage)) {
+		console.warn("classifyFollowUpIntentOnce: prompt injection detected:", userMessage);
+		// Return a safe fallback instead of processing potentially malicious input
+		return {
+			intent: "OFF_TOPIC",
+			response:
+				"Your message contains patterns that look like prompt injection. Please rephrase your question.",
+			confidence: 0,
+		};
+	}
+
+	// Security: Sanitize user input before sending to LLM
+	const sanitizedMessage = sanitizeUserInput(userMessage);
+
 	const response = await client.messages.create({
 		model: MODEL,
 		max_tokens: 2048,
@@ -391,7 +422,7 @@ async function classifyFollowUpIntentOnce(
 					originalIntent,
 					artifactContent,
 					conversationHistory,
-					userMessage,
+					sanitizedMessage,
 				),
 			},
 		],
@@ -472,7 +503,13 @@ export async function classifyFollowUpIntent(
 			userMessage,
 		);
 
-		if (result) return result;
+		if (result) {
+			// Security: Sanitize the response to prevent leakage
+			return {
+				...result,
+				response: sanitizeLLMOutput(result.response),
+			};
+		}
 
 		if (attempt < FOLLOW_UP_MAX_ATTEMPTS) {
 			console.warn(
@@ -620,10 +657,19 @@ export async function executeCard(
 ): Promise<ExecuteResult> {
 	const client = getClient();
 
+	// Security: Check for prompt injection attempts (LOG AND CONTINUE, don't hard-fail)
+	if (detectPromptInjection(intent)) {
+		console.warn("executeCard: prompt injection detected in intent:", intent);
+		// Continue execution — don't turn a noisy heuristic into a denial-of-service
+	}
+
 	// Substitute {original_intent} before calling LLM
 	const rendered = renderSystemPrompt(systemPrompt, {
 		original_intent: intent,
 	});
+
+	// Security: Add security constraints to system prompt
+	const safeSystemPrompt = createSafeSystemPrompt(rendered);
 
 	// Build the user message with any previous outputs
 	let messageContent = userContent ?? intent;
@@ -634,27 +680,38 @@ export async function executeCard(
 			"\n</previous_outputs>";
 	}
 
+	// Security: Sanitize user input
+	const sanitizedContent = sanitizeUserInput(messageContent);
+
+	let result: ExecuteResult;
+
 	// Empty tools → legacy single-shot path (no tools param)
 	if (tools.length === 0) {
-		return executeCardSingleShot(
+		result = await executeCardSingleShot(
 			client,
-			rendered,
-			messageContent,
+			safeSystemPrompt,
+			sanitizedContent,
 			onToken,
+			onThinking,
+		);
+	} else {
+		result = await executeCardWithTools(
+			client,
+			safeSystemPrompt,
+			sanitizedContent,
+			tools,
+			toolBudget,
+			onToken,
+			onToolEvent,
 			onThinking,
 		);
 	}
 
-	return executeCardWithTools(
-		client,
-		rendered,
-		messageContent,
-		tools,
-		toolBudget,
-		onToken,
-		onToolEvent,
-		onThinking,
-	);
+	// Security: Sanitize LLM output to prevent leakage
+	return {
+		...result,
+		output: sanitizeLLMOutput(result.output),
+	};
 }
 
 async function executeCardSingleShot(
