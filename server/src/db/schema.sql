@@ -219,6 +219,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAU
 -- Partial unique index: multiple NULL emails allowed; non-NULL emails must be unique.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
 
+-- Better Auth expects an `image` column for OAuth avatar URLs (not remapped in fields config).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS image TEXT;
+
 -- Better Auth OAuth identity table (one row per provider-link per user).
 CREATE TABLE IF NOT EXISTS ba_accounts (
   id                        TEXT PRIMARY KEY,

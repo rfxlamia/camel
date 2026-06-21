@@ -30,14 +30,21 @@ if (config.GITHUB_CLIENT_ID && config.GITHUB_CLIENT_SECRET) {
 		clientId: config.GITHUB_CLIENT_ID,
 		clientSecret: config.GITHUB_CLIENT_SECRET,
 		scope: ["user:email"],
-		mapProfileToUser: (profile: { email?: string | null; name?: string | null; login?: string }) => {
+		mapProfileToUser: (profile: {
+			email?: string | null;
+			name?: string | null;
+			login?: string;
+		}) => {
 			if (!profile.email) {
 				throw new Error(
 					"GitHub didn't provide a verified email — verify your GitHub email or use Google",
 				);
 			}
 			// Fallback: use login username if profile name is missing (display_name is NOT NULL)
-			return { email: profile.email, name: profile.name ?? profile.login ?? "GitHub User" };
+			return {
+				email: profile.email,
+				name: profile.name ?? profile.login ?? "GitHub User",
+			};
 		},
 	};
 }
@@ -47,19 +54,41 @@ export const auth = betterAuth({
 	secret: config.BETTER_AUTH_SECRET,
 	baseURL: config.APP_BASE_URL,
 	basePath: "/api/auth",
+	trustedOrigins: [config.CLIENT_URL],
 	user: {
 		modelName: "users",
 		fields: {
 			name: "display_name",
 			emailVerified: "email_verified",
+			createdAt: "created_at",
 			updatedAt: "updated_at",
 		},
 	},
 	session: {
 		modelName: "ba_sessions",
+		fields: {
+			expiresAt: "expires_at",
+			createdAt: "created_at",
+			updatedAt: "updated_at",
+			ipAddress: "ip_address",
+			userAgent: "user_agent",
+			userId: "user_id",
+		},
 	},
 	account: {
 		modelName: "ba_accounts",
+		fields: {
+			accountId: "account_id",
+			providerId: "provider_id",
+			userId: "user_id",
+			accessToken: "access_token",
+			refreshToken: "refresh_token",
+			idToken: "id_token",
+			accessTokenExpiresAt: "access_token_expires_at",
+			refreshTokenExpiresAt: "refresh_token_expires_at",
+			createdAt: "created_at",
+			updatedAt: "updated_at",
+		},
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github"],
@@ -67,6 +96,11 @@ export const auth = betterAuth({
 	},
 	verification: {
 		modelName: "ba_verifications",
+		fields: {
+			expiresAt: "expires_at",
+			createdAt: "created_at",
+			updatedAt: "updated_at",
+		},
 	},
 	advanced: {
 		database: {
@@ -94,12 +128,19 @@ export const betterAuthHandler = toNodeHandler(auth);
 export function createOAuthBridgeRouter(): Router {
 	const router = Router();
 
+	// Better Auth redirects here on OAuth failure: /api/auth/error?error=<code>
+	// Forward the error to the client app so the user sees a meaningful message.
+	router.get("/error", (req, res) => {
+		const code = req.query.error ?? "oauth_failed";
+		res.redirect(`${config.CLIENT_URL}/?oauth_error=${encodeURIComponent(String(code))}`);
+	});
+
 	router.get("/complete-oauth", async (req, res) => {
 		const baSession = await auth.api.getSession({
 			headers: fromNodeHeaders(req.headers),
 		});
 		if (!baSession?.user) {
-			res.redirect("/?oauth_error=cancelled");
+			res.redirect(`${config.CLIENT_URL}/?oauth_error=cancelled`);
 			return;
 		}
 
@@ -140,9 +181,9 @@ export function createOAuthBridgeRouter(): Router {
 		);
 		const username = userRows[0]?.username ?? null;
 		if (!username) {
-			res.redirect("/?oauth=pick-username");
+			res.redirect(`${config.CLIENT_URL}/?oauth=pick-username`);
 		} else {
-			res.redirect("/");
+			res.redirect(config.CLIENT_URL);
 		}
 	});
 

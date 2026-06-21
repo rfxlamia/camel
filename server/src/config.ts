@@ -33,6 +33,7 @@ const envSchema = z.object({
 	GITHUB_CLIENT_SECRET: z.string().optional(),
 	BETTER_AUTH_SECRET: z.string().default("dev-secret-change-in-production"),
 	APP_BASE_URL: z.string().default("http://localhost:3001"),
+	CLIENT_URL: z.string().default("http://localhost:5173"),
 	OAUTH_ENABLED: z.enum(["true", "false"]).default("false"),
 	EMAIL_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
 });

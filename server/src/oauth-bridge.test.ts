@@ -25,10 +25,7 @@ vi.mock("./config.js", () => ({
 	},
 }));
 
-import {
-	getGitHubPrimaryEmail,
-	isOAuthPendingUser,
-} from "./oauth-bridge.js";
+import { getGitHubPrimaryEmail, isOAuthPendingUser } from "./oauth-bridge.js";
 
 describe("getGitHubPrimaryEmail", () => {
 	it("returns null for an empty emails array", () => {

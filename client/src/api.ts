@@ -171,11 +171,18 @@ export const api = {
 			method: "POST",
 			body: JSON.stringify({ password }),
 		}),
-	startOAuth: (
-		provider: "google" | "github",
-		callbackURL = "/auth/complete",
-	) => {
-		window.location.href = `/api/auth/sign-in/social?provider=${provider}&callbackURL=${encodeURIComponent(callbackURL)}`;
+	startOAuth: async (provider: "google" | "github") => {
+		const res = await fetch("/api/auth/sign-in/social", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				provider,
+				callbackURL: "/api/auth/complete-oauth",
+				redirect: false,
+			}),
+		});
+		const data = await res.json();
+		if (data.url) window.location.href = data.url;
 	},
 
 	// ---- Collaboration ----

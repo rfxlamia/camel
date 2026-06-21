@@ -28,9 +28,12 @@ const app = express();
 app.use(securityHeaders());
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
 
-// Better Auth handler MUST be mounted BEFORE express.json() — mandatory per Better Auth docs
+// Better Auth handler MUST be mounted BEFORE express.json() — mandatory per Better Auth docs.
+// Spike B confirmed: toNodeHandler does NOT call next() for unrecognized routes — it returns 404.
+// Mount only the specific paths Better Auth owns, so existing routes (/login, /me, etc.) are unaffected.
 if (config.OAUTH_ENABLED === "true") {
-	app.all("/api/auth/*splat", betterAuthHandler);
+	app.all("/api/auth/sign-in/*splat", betterAuthHandler);
+	app.all("/api/auth/callback/*splat", betterAuthHandler);
 }
 
 app.use(express.json());

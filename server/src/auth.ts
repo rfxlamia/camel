@@ -240,7 +240,10 @@ function toUser(row: {
 	};
 }
 
-export async function mintCamelSession(res: Response, userId: number): Promise<void> {
+export async function mintCamelSession(
+	res: Response,
+	userId: number,
+): Promise<void> {
 	const token = randomBytes(32).toString("base64url");
 	const expiresAt = new Date(
 		Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
