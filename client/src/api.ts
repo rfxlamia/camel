@@ -161,6 +161,22 @@ export const api = {
 		}),
 	logout: () => request<void>("/auth/logout", { method: "POST" }),
 	me: () => request<{ user: User }>("/auth/me"),
+	setUsername: (username: string, displayName?: string) =>
+		request<{ ok: boolean }>("/auth/set-username", {
+			method: "POST",
+			body: JSON.stringify({ username, displayName }),
+		}),
+	setPassword: (password: string) =>
+		request<{ ok: boolean }>("/auth/set-password", {
+			method: "POST",
+			body: JSON.stringify({ password }),
+		}),
+	startOAuth: (
+		provider: "google" | "github",
+		callbackURL = "/auth/complete",
+	) => {
+		window.location.href = `/api/auth/sign-in/social?provider=${provider}&callbackURL=${encodeURIComponent(callbackURL)}`;
+	},
 
 	// ---- Collaboration ----
 	getActivity: (workspaceId: number, limit?: number) =>

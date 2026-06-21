@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { api } from "./api";
 import AuthPage from "./components/AuthPage";
+import EmailGatePage from "./components/EmailGatePage";
+import PickUsernamePage from "./components/PickUsernamePage";
 import ContextPanel from "./components/ContextPanel";
 import LoadingCamel from "./components/LoadingCamel";
 import { BoardProvider, useBoard } from "./context/BoardContext";
@@ -84,18 +86,29 @@ function AuthenticatedApp() {
 export default function App() {
 	const [user, setUser] = useState<User | null>(null);
 	const [authChecked, setAuthChecked] = useState(false);
+	const [oauthError, setOauthError] = useState<string | null>(null);
 
 	// Session check on first load.
 	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const oauthErr = params.get("oauth_error");
+		if (params.has("oauth") || params.has("oauth_error")) {
+			window.history.replaceState({}, "", window.location.pathname);
+		}
 		api
 			.me()
-			.then(({ user }) => setUser(user))
+			.then(({ user }) => {
+				setUser(user);
+				if (oauthErr) setOauthError(oauthErr);
+			})
 			.catch(() => setUser(null))
 			.finally(() => setAuthChecked(true));
 	}, []);
 
 	if (!authChecked) return <LoadingScreen />;
-	if (!user) return <AuthPage onAuth={setUser} />;
+	if (!user) return <AuthPage onAuth={setUser} oauthError={oauthError} />;
+	if (user.needsUsername) return <PickUsernamePage onComplete={setUser} />;
+	if (!user.emailVerified) return <EmailGatePage user={user} onComplete={setUser} />;
 
 	return (
 		<BoardProvider user={user} onSignedOut={() => setUser(null)}>

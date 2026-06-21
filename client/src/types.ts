@@ -22,8 +22,10 @@ export interface Card {
 
 export interface User {
 	id: number;
-	username: string;
+	username: string | null;
 	displayName: string;
+	emailVerified: boolean;
+	needsUsername: boolean;
 }
 
 export interface PresenceUser extends User {
