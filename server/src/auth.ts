@@ -243,6 +243,50 @@ async function createSession(res: Response, userId: number): Promise<void> {
 }
 
 /**
+ * Rotate ONE session token: delete the presented token (if it belongs to the
+ * user) and issue a fresh one in the same transaction. Returns the new token,
+ * or null if the old token was not a valid session for this user.
+ */
+export async function rotateSessionToken(
+	userId: number,
+	oldToken: string,
+): Promise<string | null> {
+	const client = await pool.connect();
+	try {
+		await client.query("BEGIN");
+
+		const { rows: existing } = await client.query(
+			"SELECT 1 FROM sessions WHERE token = $1 AND user_id = $2",
+			[oldToken, userId],
+		);
+		if (existing.length === 0) {
+			await client.query("ROLLBACK");
+			return null;
+		}
+
+		await client.query("DELETE FROM sessions WHERE token = $1", [oldToken]);
+
+		const newToken = randomBytes(32).toString("base64url");
+		const expiresAt = new Date(
+			Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+		);
+		await client.query(
+			"INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)",
+			[newToken, userId, expiresAt],
+		);
+
+		await client.query("COMMIT");
+		return newToken;
+	} catch (err) {
+		await client.query("ROLLBACK");
+		console.error("[auth] session rotation failed:", err);
+		return null;
+	} finally {
+		client.release();
+	}
+}
+
+/**
  * Delete expired sessions from the database.
  * Safe to call frequently — no-ops when there's nothing to clean.
  */
@@ -398,6 +442,15 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.json({ error: "Wrong username or password — try again." });
 		}
 		await clearLoginFailures(username);
+		// Retire the presented stale session cookie (if any) before minting a new one.
+		// This prevents session fixation — only the current login gets a fresh token.
+		const presented = req.cookies?.[SESSION_COOKIE];
+		if (presented) {
+			await pool.query('DELETE FROM sessions WHERE token = $1 AND user_id = $2', [
+				presented,
+				rows[0].id,
+			]);
+		}
 		await createSession(res, rows[0].id);
 		res.json({ user: toUser(rows[0]) });
 	});
