@@ -11,6 +11,7 @@ import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import { pool } from "./db/pool.js";
 import { getRedisClient } from "./db/redis.js";
+import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
 
 export interface AuthUser {
 	id: number;
@@ -73,21 +74,33 @@ const AUTH_RATE_LIMIT_MAX = 100; // max requests per IP per window
 
 const RATE_LIMIT_PREFIX = "ratelimit:login:";
 
+// In-memory fallback limiter for when Redis is unavailable
+const IN_MEMORY_LOGIN_LIMITER = new InMemoryRateLimiter({
+	windowMs: LOGIN_FAILURE_WINDOW_MS,
+	maxAttempts: LOGIN_FAILURE_MAX,
+});
+
 /**
  * Check if a username is currently locked out due to too many failed login attempts.
  * Returns true if locked out, false otherwise.
- * Fails open (returns false) if Redis is unavailable.
+ * Fails closed (returns true) if Redis is unavailable and in-memory limit exceeded.
  */
 export async function isLoginLockedOut(username: string): Promise<boolean> {
 	const client = getRedisClient();
-	if (!client) return false; // fail-open
+	if (!client) {
+		// Fail-closed: use in-memory limiter
+		const result = await IN_MEMORY_LOGIN_LIMITER.peek(username.toLowerCase());
+		return result.isLocked;
+	}
 
 	try {
 		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
 		const count = await client.get(key);
 		return count !== null && Number.parseInt(count, 10) >= LOGIN_FAILURE_MAX;
 	} catch {
-		return false; // fail-open
+		// Fail-closed: use in-memory limiter when Redis errors
+		const result = await IN_MEMORY_LOGIN_LIMITER.peek(username.toLowerCase());
+		return result.isLocked;
 	}
 }
 
@@ -95,13 +108,17 @@ export async function isLoginLockedOut(username: string): Promise<boolean> {
  * Atomically check and record a login attempt for a username.
  * Returns true if the account is now locked out, false otherwise.
  * Uses INCR to avoid TOCTOU race conditions.
- * Fails open (returns false) if Redis is unavailable.
+ * Fails closed if Redis is unavailable (uses in-memory fallback).
  */
 export async function checkAndRecordLoginAttempt(
 	username: string,
 ): Promise<boolean> {
 	const client = getRedisClient();
-	if (!client) return false; // fail-open
+	if (!client) {
+		// Fail-closed: use in-memory limiter
+		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(username.toLowerCase());
+		return result.isLocked;
+	}
 
 	try {
 		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
@@ -111,20 +128,27 @@ export async function checkAndRecordLoginAttempt(
 		}
 		return count > LOGIN_FAILURE_MAX;
 	} catch {
-		return false; // fail-open
+		// Fail-closed: use in-memory limiter when Redis errors
+		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(username.toLowerCase());
+		return result.isLocked;
 	}
 }
 
 /**
  * Clear login failure count for a username (call on successful login).
- * No-op if Redis is unavailable.
+ * Clears from both Redis and in-memory limiter.
  */
 export async function clearLoginFailures(username: string): Promise<void> {
+	const normalizedUsername = username.toLowerCase();
+
+	// Always clear from in-memory limiter
+	await IN_MEMORY_LOGIN_LIMITER.clear(normalizedUsername);
+
 	const client = getRedisClient();
 	if (!client) return;
 
 	try {
-		await client.del(`${RATE_LIMIT_PREFIX}${username.toLowerCase()}`);
+		await client.del(`${RATE_LIMIT_PREFIX}${normalizedUsername}`);
 	} catch {
 		// best-effort
 	}
@@ -132,13 +156,19 @@ export async function clearLoginFailures(username: string): Promise<void> {
 
 /**
  * Create the IP-scoped rate limiter for auth endpoints.
- * Returns a no-op middleware if Redis is unavailable (fail-open).
+ * Uses more restrictive limits when Redis is unavailable (fail-closed).
  */
 export function createAuthRateLimiter() {
 	const client = getRedisClient();
 	if (!client) {
-		// Fail-open: return no-op middleware when Redis is down
-		return (_req: Request, _res: Response, next: NextFunction) => next();
+		// Fail-closed: use more restrictive limits with in-memory store
+		return rateLimit({
+			windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+			max: Math.floor(AUTH_RATE_LIMIT_MAX / 2), // More restrictive when Redis is down
+			standardHeaders: true,
+			legacyHeaders: false,
+			message: { error: "Too many requests — please try again later." },
+		});
 	}
 
 	return rateLimit({
