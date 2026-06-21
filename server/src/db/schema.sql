@@ -201,3 +201,74 @@ END $$;
 -- from HTML date inputs; serialized to text as 'YYYY-MM-DD'.
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS due_date DATE;
+
+-- OAuth integration: Better Auth support (2026-06: additive, non-destructive)
+-- Make username / password_hash nullable to support OAuth-only users.
+ALTER TABLE users ALTER COLUMN username DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+
+-- Email is captured ONLY via OAuth (always provider-verified).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+-- updated_at required by Better Auth user model adapter.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+-- NOTE: NO backfill. Per spec (Scope + Rule 3), existing password users have
+-- email_verified=false and ARE intentionally gated until they link a provider.
+-- Do not flip email_verified for password users — that defeats the email gate.
+
+-- Partial unique index: multiple NULL emails allowed; non-NULL emails must be unique.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
+
+-- Better Auth OAuth identity table (one row per provider-link per user).
+CREATE TABLE IF NOT EXISTS ba_accounts (
+  id                        TEXT PRIMARY KEY,
+  account_id                TEXT NOT NULL,
+  provider_id               TEXT NOT NULL,
+  user_id                   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  access_token              TEXT,
+  refresh_token             TEXT,
+  id_token                  TEXT,
+  access_token_expires_at   TIMESTAMPTZ,
+  refresh_token_expires_at  TIMESTAMPTZ,
+  scope                     TEXT,
+  password                  TEXT,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ba_accounts_user ON ba_accounts(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ba_accounts_provider ON ba_accounts(provider_id, account_id);
+
+-- Better Auth verification tokens (OAuth state, PKCE, etc.).
+CREATE TABLE IF NOT EXISTS ba_verifications (
+  id           TEXT PRIMARY KEY,
+  identifier   TEXT NOT NULL,
+  value        TEXT NOT NULL,
+  expires_at   TIMESTAMPTZ NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT now(),
+  updated_at   TIMESTAMPTZ DEFAULT now()
+);
+
+-- Better Auth internal sessions (separate from camel_session authority → sessions table).
+CREATE TABLE IF NOT EXISTS ba_sessions (
+  id          TEXT PRIMARY KEY,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  token       TEXT NOT NULL UNIQUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ip_address  TEXT,
+  user_agent  TEXT,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_ba_sessions_user ON ba_sessions(user_id);
+
+-- Account-level auth/security audit log. Distinct from card_events (which is the
+-- card activity log, FK to cards + workspace_id NOT NULL). Used for events that
+-- have no card/workspace context — e.g. the Rule 4 link-collision orphan event.
+CREATE TABLE IF NOT EXISTS auth_audit (
+  id          SERIAL PRIMARY KEY,
+  actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  event_type  TEXT NOT NULL,
+  payload     JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_auth_audit_actor ON auth_audit(actor_id);
