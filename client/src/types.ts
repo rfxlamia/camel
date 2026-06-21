@@ -39,6 +39,17 @@ export interface BoardEvent {
 	at: string;
 }
 
+// ---- Agent Template Names (shared across components) ----
+
+export const TEMPLATE_NAMES: Record<string, string> = {
+	"research-report": "Research & Report",
+	"status-report": "Status Report",
+};
+
+export function templateName(templateId: string): string {
+	return TEMPLATE_NAMES[templateId] ?? templateId;
+}
+
 export function formatRelativeTime(iso: string): string {
 	const ms = Date.now() - new Date(iso).getTime();
 	const minute = 60 * 1000;

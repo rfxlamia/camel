@@ -56,21 +56,31 @@ export function sanitizeError(
 }
 
 export function createErrorHandler() {
+	// Sanitize CRLF characters to prevent log forging
+	const sanitizeForLog = (value: string | undefined): string =>
+		(value ?? "").replace(/[\r\n\u2028\u2029]/g, "_");
+
 	return (
 		err: Error & { statusCode?: number; code?: string },
 		req: Request,
 		res: Response,
 		_next: NextFunction,
 	): void => {
+		// Guard: if headers already sent, delegate to Express default error handler
+		if (res.headersSent) {
+			_next(err);
+			return;
+		}
+
 		console.error("Error:", {
-			message: err.message,
+			message: sanitizeForLog(err.message),
 			stack: err.stack,
 			statusCode: err.statusCode,
 			code: err.code,
-			path: req.path,
-			method: req.method,
+			path: sanitizeForLog(req.path),
+			method: sanitizeForLog(req.method),
 			ip: req.ip,
-			userAgent: req.get("user-agent"),
+			userAgent: sanitizeForLog(req.get("user-agent")),
 		});
 
 		const sanitized = sanitizeError(err);

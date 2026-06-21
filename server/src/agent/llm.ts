@@ -110,7 +110,10 @@ async function classifyIntentOnce(
 ): Promise<ClassifyResult> {
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(intent)) {
-		console.warn("classifyIntentOnce: prompt injection detected:", intent);
+		console.warn(
+			"classifyIntentOnce: prompt injection detected, intent length:",
+			intent.length,
+		);
 		return {
 			templateId: null,
 			explanation:
@@ -210,7 +213,7 @@ export async function classifyIntent(intent: string): Promise<ClassifyResult> {
 	}
 
 	console.error(
-		`classifyIntent: all ${CLASSIFY_MAX_ATTEMPTS} attempts failed for intent: "${intent}"`,
+		`classifyIntent: all ${CLASSIFY_MAX_ATTEMPTS} attempts failed for intent length: ${intent.length}`,
 	);
 	return {
 		templateId: null,
@@ -398,8 +401,8 @@ async function classifyFollowUpIntentOnce(
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(userMessage)) {
 		console.warn(
-			"classifyFollowUpIntentOnce: prompt injection detected:",
-			userMessage,
+			"classifyFollowUpIntentOnce: prompt injection detected, message length:",
+			userMessage.length,
 		);
 		// Return a safe fallback instead of processing potentially malicious input
 		return {
@@ -522,7 +525,7 @@ export async function classifyFollowUpIntent(
 	}
 
 	console.error(
-		`classifyFollowUpIntent: all ${FOLLOW_UP_MAX_ATTEMPTS} attempts failed for message: "${userMessage}"`,
+		`classifyFollowUpIntent: all ${FOLLOW_UP_MAX_ATTEMPTS} attempts failed for message length: ${userMessage.length}`,
 	);
 	return {
 		intent: "OFF_TOPIC",
@@ -580,19 +583,37 @@ export async function detectReportPeriod(
 ): Promise<ReportPeriodResult> {
 	const client = getClient();
 
+	// Security: Check for prompt injection attempts
+	if (detectPromptInjection(intent)) {
+		console.warn(
+			"detectReportPeriod: prompt injection detected, intent length:",
+			intent.length,
+		);
+		return {
+			hasPeriod: false,
+			question: "Which time period should this status report cover?",
+		};
+	}
+
+	// Security: Sanitize user input before sending to LLM
+	const sanitizedIntent = sanitizeUserInput(intent);
+
 	const response = await client.messages.create({
 		model: MODEL,
 		max_tokens: 512,
 		temperature: 0,
 		system: DETECT_PERIOD_SYSTEM_PROMPT,
-		messages: [{ role: "user", content: intent }],
+		messages: [{ role: "user", content: sanitizedIntent }],
 	});
 
 	const text = extractText(response);
 
 	try {
 		const parsed = JSON.parse(text) as ReportPeriodResult;
-		if (typeof parsed.hasPeriod === "boolean") {
+		if (
+			typeof parsed.hasPeriod === "boolean" &&
+			(parsed.question === undefined || typeof parsed.question === "string")
+		) {
 			return parsed;
 		}
 	} catch {
@@ -662,7 +683,10 @@ export async function executeCard(
 
 	// Security: Check for prompt injection attempts (LOG AND CONTINUE, don't hard-fail)
 	if (detectPromptInjection(intent)) {
-		console.warn("executeCard: prompt injection detected in intent:", intent);
+		console.warn(
+			"executeCard: prompt injection detected in intent, length:",
+			intent.length,
+		);
 		// Continue execution — don't turn a noisy heuristic into a denial-of-service
 	}
 

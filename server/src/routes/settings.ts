@@ -527,7 +527,11 @@ settingsRouter.post(
 		const fileBuffer = await readFile(req.file.path);
 		const validation = await validateFileContent(fileBuffer, req.file.mimetype);
 		if (!validation.valid) {
-			await unlink(req.file.path);
+			try {
+				await unlink(req.file.path);
+			} catch {
+				// Best-effort cleanup
+			}
 			return res.status(400).json({ error: validation.error });
 		}
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import express from "express";
-import { securityHeaders } from "../middleware/security-headers";
+import { securityHeaders } from "../middleware/security-headers.js";
 
 describe("Security Headers", () => {
 	let app: express.Application;

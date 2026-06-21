@@ -122,9 +122,9 @@ describe("sanitizeLLMOutput", () => {
 
 	it("should redact bearer tokens", () => {
 		const output =
-			"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+			"Authorization: Bearer eyJhbGciOiJ0ZXN0In0.eyJ0ZXN0IjoxMjN0ZXN0dGVzdA.test_signature";
 		const result = sanitizeLLMOutput(output);
-		expect(result).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
+		expect(result).not.toContain("eyJhbGciOiJ0ZXN0In0");
 		expect(result).toContain("[REDACTED_BEARER_TOKEN]");
 	});
 

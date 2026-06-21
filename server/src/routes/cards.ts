@@ -140,6 +140,21 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	if (version !== undefined && !Number.isInteger(version)) {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
+
+	// Validate title and description if provided
+	if (title !== undefined) {
+		const titleValidation = validateCardTitle(title);
+		if (!titleValidation.valid) {
+			return res.status(400).json({ error: titleValidation.error });
+		}
+	}
+	if (description !== undefined) {
+		const descValidation = validateCardDescription(description);
+		if (!descValidation.valid) {
+			return res.status(400).json({ error: descValidation.error });
+		}
+	}
+
 	const { rows } = await pool.query(
 		`UPDATE cards SET
        title = COALESCE($2, title),

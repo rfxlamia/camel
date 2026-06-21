@@ -91,6 +91,26 @@ export function validateDisplayName(name: string): ValidationResult {
 	return { valid: true, trimmed: trimmed || undefined };
 }
 
+export function validateColumnName(name: string): ValidationResult {
+	if (typeof name !== "string") {
+		return { valid: false, error: "name must be a string" };
+	}
+
+	const trimmed = name.trim();
+	if (trimmed === "") {
+		return { valid: false, error: "Column name is required" };
+	}
+
+	if (trimmed.length > MAX_LENGTHS.columnName) {
+		return {
+			valid: false,
+			error: `Column name must be ${MAX_LENGTHS.columnName} characters or less`,
+		};
+	}
+
+	return { valid: true, trimmed };
+}
+
 export function validateUsername(username: string): ValidationResult {
 	if (typeof username !== "string") {
 		return { valid: false, error: "username must be a string" };

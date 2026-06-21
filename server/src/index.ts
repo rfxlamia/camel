@@ -45,7 +45,9 @@ app.use(setCsrfToken);
 // Enforce CSRF on mutating /api requests, EXCEPT auth bootstrap
 app.use((req, res, next) => {
 	if (!req.path.startsWith("/api/")) return next();
-	if (req.path.startsWith("/api/auth/")) return next();
+	// Explicit allowlist for auth endpoints that need to bypass CSRF
+	const csrfExemptPaths = ["/api/auth/login", "/api/auth/register"];
+	if (csrfExemptPaths.includes(req.path)) return next();
 	return csrfProtection(req, res, next);
 });
 
@@ -64,7 +66,8 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // CSRF token endpoint for client to retrieve the token
 app.get("/api/csrf-token", (req, res) => {
-	const token = req.cookies?.csrf_token || generateCsrfToken();
+	// Use the token from cookie (set by setCsrfToken middleware) or generate new one
+	const token = req.cookies?.["csrf_token"] || generateCsrfToken();
 	res.json({ csrfToken: token });
 });
 

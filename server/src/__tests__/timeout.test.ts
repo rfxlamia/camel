@@ -47,14 +47,16 @@ describe("Request Timeout", () => {
 	});
 
 	it("should not timeout when disabled", async () => {
-		app.use(requestTimeout(0));
-		app.get("/no-timeout", (req, res) => {
+		// Create fresh app without the 1000ms timeout middleware
+		const freshApp = express();
+		freshApp.use(requestTimeout(0));
+		freshApp.get("/no-timeout", (req, res) => {
 			setTimeout(() => {
 				res.json({ ok: true });
-			}, 100);
+			}, 1500); // More than 1000ms to prove timeout is disabled
 		});
 
-		const response = await request(app).get("/no-timeout").expect(200);
+		const response = await request(freshApp).get("/no-timeout").expect(200);
 		expect(response.body).toEqual({ ok: true });
 	});
 });

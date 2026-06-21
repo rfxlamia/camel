@@ -3,7 +3,7 @@ import { POSITION_GAP } from "../core/position.js";
 import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
-import { validateBoardName } from "../validators/input-length.js";
+import { validateColumnName } from "../validators/input-length.js";
 
 export const columnsRouter = Router({ mergeParams: true });
 
@@ -11,7 +11,7 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const { title } = req.body ?? {};
-	const titleValidation = validateBoardName(title ?? "");
+	const titleValidation = validateColumnName(title ?? "");
 	if (!titleValidation.valid) {
 		return res.status(400).json({ error: titleValidation.error });
 	}
@@ -39,6 +39,15 @@ columnsRouter.patch(
 			return res.status(400).json({ error: "invalid column id" });
 		}
 		const { title, wipLimit, policy, isDone } = req.body ?? {};
+
+		// Validate title if provided
+		if (title !== undefined) {
+			const titleValidation = validateColumnName(title);
+			if (!titleValidation.valid) {
+				return res.status(400).json({ error: titleValidation.error });
+			}
+		}
+
 		if (wipLimit !== undefined && wipLimit !== null) {
 			if (!Number.isInteger(wipLimit) || wipLimit < 1) {
 				return res
@@ -50,12 +59,65 @@ columnsRouter.patch(
 			return res.status(400).json({ error: "isDone must be a boolean" });
 		}
 
-		// Enforce single Done column per workspace: unset other columns first
+		// Use transaction for isDone enforcement to ensure atomicity
 		if (isDone === true) {
-			await pool.query(
-				"UPDATE columns SET is_done = false WHERE workspace_id = $1 AND id != $2 AND is_done = true",
-				[workspaceId, id],
-			);
+			const client = await pool.connect();
+			try {
+				await client.query("BEGIN");
+
+				// First verify column exists
+				const checkRes = await client.query(
+					"SELECT id FROM columns WHERE id = $1 AND workspace_id = $2",
+					[id, workspaceId],
+				);
+				if (checkRes.rows.length === 0) {
+					await client.query("ROLLBACK");
+					return res.status(404).json({ error: "column not found" });
+				}
+
+				// Unset other columns
+				await client.query(
+					"UPDATE columns SET is_done = false WHERE workspace_id = $1 AND id != $2 AND is_done = true",
+					[workspaceId, id],
+				);
+
+				// Set target column
+				const { rows } = await client.query(
+					`UPDATE columns SET
+					 title = COALESCE($2, title),
+					 wip_limit = CASE WHEN $3 THEN $4 ELSE wip_limit END,
+					 policy = COALESCE($5, policy),
+					 is_done = true
+					 WHERE id = $1 AND workspace_id = $6
+					 RETURNING id, title, position, wip_limit, policy, is_done`,
+					[
+						id,
+						title ?? null,
+						wipLimit !== undefined,
+						wipLimit ?? null,
+						policy ?? null,
+						workspaceId,
+					],
+				);
+
+				await client.query("COMMIT");
+
+				await publishEvent(workspaceId, {
+					type: "column.updated",
+					actor: req.user!,
+					payload: {
+						columnTitle: rows[0].title,
+						isDone: true,
+					},
+				} as BoardEvent);
+				res.json(rows[0]);
+			} catch (err) {
+				await client.query("ROLLBACK");
+				throw err;
+			} finally {
+				client.release();
+			}
+			return;
 		}
 
 		const { rows } = await pool.query(

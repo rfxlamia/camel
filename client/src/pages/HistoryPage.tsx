@@ -11,15 +11,7 @@ import { Link, useNavigate } from "react-router";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import type { AgentBoard } from "../types";
-import { formatRelativeTime } from "../types";
-
-const TEMPLATE_NAMES: Record<string, string> = {
-	"research-report": "Research & Report",
-};
-
-function templateName(templateId: string): string {
-	return TEMPLATE_NAMES[templateId] ?? templateId;
-}
+import { formatRelativeTime, templateName } from "../types";
 
 // ---- Status model ----
 

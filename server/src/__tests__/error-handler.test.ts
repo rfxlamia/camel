@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { sanitizeError, createErrorHandler } from "../middleware/error-handler";
+import {
+	sanitizeError,
+	createErrorHandler,
+} from "../middleware/error-handler.js";
 
 describe("Error Sanitization", () => {
 	describe("sanitizeError", () => {

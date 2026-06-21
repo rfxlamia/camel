@@ -38,11 +38,17 @@ export function securityHeaders(options: SecurityHeadersOptions = {}) {
 		}
 
 		if (enableCSP) {
-			// 'unsafe-inline' kept for style-src (CSS-in-JS compatibility)
-			// 'unsafe-eval' removed — not needed and weakens XSS protection
+			const isProduction = process.env.NODE_ENV === "production";
+
+			// In production, remove unsafe-inline from script-src for better XSS protection
+			// Keep unsafe-inline for style-src (CSS-in-JS compatibility)
+			const scriptSrc = isProduction
+				? "script-src 'self'"
+				: "script-src 'self' 'unsafe-inline'";
+
 			const csp = [
 				"default-src 'self'",
-				"script-src 'self' 'unsafe-inline'",
+				scriptSrc,
 				"style-src 'self' 'unsafe-inline'",
 				"img-src 'self' data: blob:",
 				"font-src 'self'",

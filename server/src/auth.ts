@@ -370,7 +370,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		const name = displayNameValidation.trimmed ?? usernameValidation.trimmed!;
 
 		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-		const normalizedUsername = username.toLowerCase();
+		const normalizedUsername = usernameValidation.trimmed!.toLowerCase();
 		const client = await pool.connect();
 		try {
 			await client.query("BEGIN");

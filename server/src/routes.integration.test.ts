@@ -359,7 +359,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 // ---------------------------------------------------------------------------
 // PATCH /api/workspaces/:wid/columns/:id
 // ---------------------------------------------------------------------------
-describe.skipIf(!process.env.RUN_INTEGRATION)(
+describe.skipIf(!process.env.RUN_LLM_IT)(
 	"PATCH /api/workspaces/:wid/columns/:id",
 	() => {
 		beforeEach(async () => {

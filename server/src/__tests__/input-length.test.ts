@@ -5,7 +5,7 @@ import {
 	validateBoardName,
 	validateDisplayName,
 	validateUsername,
-} from "../validators/input-length";
+} from "../validators/input-length.js";
 
 describe("Input Length Validation", () => {
 	describe("validateCardTitle", () => {
