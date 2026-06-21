@@ -11,6 +11,11 @@ import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import { pool } from "./db/pool.js";
 import { getRedisClient } from "./db/redis.js";
+import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
+import {
+	validateDisplayName,
+	validateUsername,
+} from "./validators/input-length.js";
 
 export interface AuthUser {
 	id: number;
@@ -73,21 +78,33 @@ const AUTH_RATE_LIMIT_MAX = 100; // max requests per IP per window
 
 const RATE_LIMIT_PREFIX = "ratelimit:login:";
 
+// In-memory fallback limiter for when Redis is unavailable
+const IN_MEMORY_LOGIN_LIMITER = new InMemoryRateLimiter({
+	windowMs: LOGIN_FAILURE_WINDOW_MS,
+	maxAttempts: LOGIN_FAILURE_MAX,
+});
+
 /**
  * Check if a username is currently locked out due to too many failed login attempts.
  * Returns true if locked out, false otherwise.
- * Fails open (returns false) if Redis is unavailable.
+ * Fails closed (returns true) if Redis is unavailable and in-memory limit exceeded.
  */
 export async function isLoginLockedOut(username: string): Promise<boolean> {
 	const client = getRedisClient();
-	if (!client) return false; // fail-open
+	if (!client) {
+		// Fail-closed: use in-memory limiter
+		const result = await IN_MEMORY_LOGIN_LIMITER.peek(username.toLowerCase());
+		return result.isLocked;
+	}
 
 	try {
 		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
 		const count = await client.get(key);
 		return count !== null && Number.parseInt(count, 10) >= LOGIN_FAILURE_MAX;
 	} catch {
-		return false; // fail-open
+		// Fail-closed: use in-memory limiter when Redis errors
+		const result = await IN_MEMORY_LOGIN_LIMITER.peek(username.toLowerCase());
+		return result.isLocked;
 	}
 }
 
@@ -95,13 +112,19 @@ export async function isLoginLockedOut(username: string): Promise<boolean> {
  * Atomically check and record a login attempt for a username.
  * Returns true if the account is now locked out, false otherwise.
  * Uses INCR to avoid TOCTOU race conditions.
- * Fails open (returns false) if Redis is unavailable.
+ * Fails closed if Redis is unavailable (uses in-memory fallback).
  */
 export async function checkAndRecordLoginAttempt(
 	username: string,
 ): Promise<boolean> {
 	const client = getRedisClient();
-	if (!client) return false; // fail-open
+	if (!client) {
+		// Fail-closed: use in-memory limiter
+		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(
+			username.toLowerCase(),
+		);
+		return result.isLocked;
+	}
 
 	try {
 		const key = `${RATE_LIMIT_PREFIX}${username.toLowerCase()}`;
@@ -111,20 +134,29 @@ export async function checkAndRecordLoginAttempt(
 		}
 		return count > LOGIN_FAILURE_MAX;
 	} catch {
-		return false; // fail-open
+		// Fail-closed: use in-memory limiter when Redis errors
+		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(
+			username.toLowerCase(),
+		);
+		return result.isLocked;
 	}
 }
 
 /**
  * Clear login failure count for a username (call on successful login).
- * No-op if Redis is unavailable.
+ * Clears from both Redis and in-memory limiter.
  */
 export async function clearLoginFailures(username: string): Promise<void> {
+	const normalizedUsername = username.toLowerCase();
+
+	// Always clear from in-memory limiter
+	await IN_MEMORY_LOGIN_LIMITER.clear(normalizedUsername);
+
 	const client = getRedisClient();
 	if (!client) return;
 
 	try {
-		await client.del(`${RATE_LIMIT_PREFIX}${username.toLowerCase()}`);
+		await client.del(`${RATE_LIMIT_PREFIX}${normalizedUsername}`);
 	} catch {
 		// best-effort
 	}
@@ -132,13 +164,19 @@ export async function clearLoginFailures(username: string): Promise<void> {
 
 /**
  * Create the IP-scoped rate limiter for auth endpoints.
- * Returns a no-op middleware if Redis is unavailable (fail-open).
+ * Uses more restrictive limits when Redis is unavailable (fail-closed).
  */
 export function createAuthRateLimiter() {
 	const client = getRedisClient();
 	if (!client) {
-		// Fail-open: return no-op middleware when Redis is down
-		return (_req: Request, _res: Response, next: NextFunction) => next();
+		// Fail-closed: use more restrictive limits with in-memory store
+		return rateLimit({
+			windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+			max: Math.floor(AUTH_RATE_LIMIT_MAX / 2), // More restrictive when Redis is down
+			standardHeaders: true,
+			legacyHeaders: false,
+			message: { error: "Too many requests — please try again later." },
+		});
 	}
 
 	return rateLimit({
@@ -201,11 +239,55 @@ async function createSession(res: Response, userId: number): Promise<void> {
 	);
 	res.cookie(SESSION_COOKIE, token, {
 		httpOnly: true,
-		sameSite: "lax",
+		sameSite: "strict",
 		secure: process.env.NODE_ENV === "production",
 		expires: expiresAt,
 		path: "/",
 	});
+}
+
+/**
+ * Rotate ONE session token: delete the presented token (if it belongs to the
+ * user) and issue a fresh one in the same transaction. Returns the new token,
+ * or null if the old token was not a valid session for this user.
+ */
+export async function rotateSessionToken(
+	userId: number,
+	oldToken: string,
+): Promise<string | null> {
+	const client = await pool.connect();
+	try {
+		await client.query("BEGIN");
+
+		const { rows: existing } = await client.query(
+			"SELECT 1 FROM sessions WHERE token = $1 AND user_id = $2",
+			[oldToken, userId],
+		);
+		if (existing.length === 0) {
+			await client.query("ROLLBACK");
+			return null;
+		}
+
+		await client.query("DELETE FROM sessions WHERE token = $1", [oldToken]);
+
+		const newToken = randomBytes(32).toString("base64url");
+		const expiresAt = new Date(
+			Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+		);
+		await client.query(
+			"INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)",
+			[newToken, userId, expiresAt],
+		);
+
+		await client.query("COMMIT");
+		return newToken;
+	} catch (err) {
+		await client.query("ROLLBACK");
+		console.error("[auth] session rotation failed:", err);
+		return null;
+	} finally {
+		client.release();
+	}
 }
 
 /**
@@ -263,7 +345,14 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 
 	auth.post("/register", async (req, res) => {
 		const { username, password, displayName } = req.body ?? {};
-		if (typeof username !== "string" || !USERNAME_RE.test(username)) {
+		const usernameValidation = validateUsername(username ?? "");
+		if (!usernameValidation.valid) {
+			return res.status(400).json({
+				error:
+					"Username must be 3-32 characters: letters, numbers, underscore.",
+			});
+		}
+		if (!USERNAME_RE.test(usernameValidation.trimmed!)) {
 			return res.status(400).json({
 				error:
 					"Username must be 3-32 characters: letters, numbers, underscore.",
@@ -274,13 +363,14 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.status(400)
 				.json({ error: "Password must be at least 8 characters." });
 		}
-		const name =
-			typeof displayName === "string" && displayName.trim() !== ""
-				? displayName.trim()
-				: username;
+		const displayNameValidation = validateDisplayName(displayName ?? "");
+		if (!displayNameValidation.valid) {
+			return res.status(400).json({ error: displayNameValidation.error });
+		}
+		const name = displayNameValidation.trimmed ?? usernameValidation.trimmed!;
 
 		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-		const normalizedUsername = username.toLowerCase();
+		const normalizedUsername = usernameValidation.trimmed!.toLowerCase();
 		const client = await pool.connect();
 		try {
 			await client.query("BEGIN");
@@ -364,6 +454,15 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.json({ error: "Wrong username or password — try again." });
 		}
 		await clearLoginFailures(username);
+		// Retire the presented stale session cookie (if any) before minting a new one.
+		// This prevents session fixation — only the current login gets a fresh token.
+		const presented = req.cookies?.[SESSION_COOKIE];
+		if (presented) {
+			await pool.query(
+				"DELETE FROM sessions WHERE token = $1 AND user_id = $2",
+				[presented, rows[0].id],
+			);
+		}
 		await createSession(res, rows[0].id);
 		res.json({ user: toUser(rows[0]) });
 	});

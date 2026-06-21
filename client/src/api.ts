@@ -26,10 +26,33 @@ class ApiError extends Error {
 	}
 }
 
+function readCookie(name: string): string | null {
+	if (typeof document === "undefined") return null;
+	const match = document.cookie.match(
+		new RegExp(
+			"(?:^|; )" + name.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&") + "=([^;]*)",
+		),
+	);
+	return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+	const method = (init?.method ?? "GET").toUpperCase();
+	const headers = new Headers(init?.headers);
+
+	if (!headers.has("Content-Type")) {
+		headers.set("Content-Type", "application/json");
+	}
+
+	// Add CSRF token for mutating requests
+	if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+		const csrf = readCookie("csrf_token");
+		if (csrf) headers.set("X-CSRF-Token", csrf);
+	}
+
 	const res = await fetch(`/api${path}`, {
-		headers: { "Content-Type": "application/json" },
 		...init,
+		headers,
 	});
 	if (!res.ok) {
 		let message = `Request failed (${res.status})`;
@@ -168,8 +191,12 @@ export const api = {
 	uploadLogo: async (workspaceId: number, file: File): Promise<SettingsMap> => {
 		const formData = new FormData();
 		formData.append("logo", file);
+		const headers = new Headers();
+		const csrf = readCookie("csrf_token");
+		if (csrf) headers.set("X-CSRF-Token", csrf);
 		const res = await fetch(`/api/workspaces/${workspaceId}/settings/logo`, {
 			method: "POST",
+			headers,
 			body: formData,
 		});
 		if (!res.ok) {

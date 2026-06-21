@@ -14,6 +14,7 @@ export function useAgentBoard() {
 	const boardRef = useRef<AgentBoard | null>(board);
 	boardRef.current = board;
 	const [loading, setLoading] = useState(false);
+	const creatingRef = useRef(false);
 	const [creating, setCreating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [artifact, setArtifact] = useState<AgentArtifact | null>(null);
@@ -106,7 +107,9 @@ export function useAgentBoard() {
 	const createBoard = useCallback(
 		async (intent: string) => {
 			if (!activeWorkspaceId) return;
-			if (creating) return;
+			// Use ref for synchronous guard to prevent race condition
+			if (creatingRef.current) return;
+			creatingRef.current = true;
 			setCreating(true);
 			try {
 				clearAgentEvents();
@@ -122,10 +125,11 @@ export function useAgentBoard() {
 					showToast("Couldn't create the board. Try again.");
 				}
 			} finally {
+				creatingRef.current = false;
 				setCreating(false);
 			}
 		},
-		[activeWorkspaceId, clearAgentEvents, creating, setSearchParams, showToast],
+		[activeWorkspaceId, clearAgentEvents, setSearchParams, showToast],
 	);
 
 	// Approve or retry execution (merged — identical logic, different toast).

@@ -213,9 +213,7 @@ export interface AgentBoardServiceDeps {
 
 	deleteCardsForBoard?: (boardId: number) => Promise<void>;
 
-	fetchCardTimestamps?: (
-		workspaceId: number,
-	) => Promise<CardTimestamps[]>;
+	fetchCardTimestamps?: (workspaceId: number) => Promise<CardTimestamps[]>;
 
 	fetchActivityEvents?: (
 		workspaceId: number,
@@ -360,11 +358,16 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				classifyResult.templateId === "status-report" &&
 				deps.detectReportPeriod
 			) {
-				const periodResult = await deps.detectReportPeriod(intent);
-				if (!periodResult.hasPeriod) {
-					explanation =
-						periodResult.question ??
-						"Which time period should this status report cover?";
+				try {
+					const periodResult = await deps.detectReportPeriod(intent);
+					if (!periodResult.hasPeriod) {
+						explanation =
+							periodResult.question ??
+							"Which time period should this status report cover?";
+					}
+				} catch (err) {
+					console.error("[createBoard] detectReportPeriod failed:", err);
+					explanation = "Which time period should this status report cover?";
 				}
 			}
 
@@ -422,15 +425,23 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (board.status !== "pending") return { status: 409 as const };
 
 			if (board.templateId === "status-report" && deps.detectReportPeriod) {
-				const periodResult = await deps.detectReportPeriod(
-					board.originalIntent,
-				);
-				if (!periodResult.hasPeriod) {
+				try {
+					const periodResult = await deps.detectReportPeriod(
+						board.originalIntent,
+					);
+					if (!periodResult.hasPeriod) {
+						return {
+							status: 422 as const,
+							message:
+								periodResult.question ??
+								"Which time period should this status report cover?",
+						};
+					}
+				} catch (err) {
+					console.error("[approveBoard] detectReportPeriod failed:", err);
 					return {
 						status: 422 as const,
-						message:
-							periodResult.question ??
-							"Which time period should this status report cover?",
+						message: "Which time period should this status report cover?",
 					};
 				}
 			}
@@ -1025,33 +1036,42 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				});
 
 				if (board.templateId === "status-report" && deps.detectReportPeriod) {
-					const mergedIntent =
-						`${board.originalIntent}\n${message}`.trim();
-					const periodResult =
-						await deps.detectReportPeriod(mergedIntent);
-					if (periodResult.hasPeriod) {
-						await deps.updateBoard!(boardId, {
-							original_intent: mergedIntent,
-						});
+					const mergedIntent = `${board.originalIntent}\n${message}`.trim();
+					try {
+						const periodResult = await deps.detectReportPeriod(mergedIntent);
+						if (periodResult.hasPeriod) {
+							await deps.updateBoard!(boardId, {
+								original_intent: mergedIntent,
+							});
+							const reply =
+								"Period noted. You can approve the board when ready.";
+							await deps.insertConversation!({
+								boardId,
+								role: "assistant",
+								content: reply,
+							});
+							return { explanation: reply, boardUpdated: true };
+						}
+
 						const reply =
-							"Period noted. You can approve the board when ready.";
+							periodResult.question ??
+							"Which time period should this status report cover?";
 						await deps.insertConversation!({
 							boardId,
 							role: "assistant",
 							content: reply,
 						});
-						return { explanation: reply, boardUpdated: true };
+						return { explanation: reply, boardUpdated: false };
+					} catch (err) {
+						console.error("[sendMessage] detectReportPeriod failed:", err);
+						const reply = "Which time period should this status report cover?";
+						await deps.insertConversation!({
+							boardId,
+							role: "assistant",
+							content: reply,
+						});
+						return { explanation: reply, boardUpdated: false };
 					}
-
-					const reply =
-						periodResult.question ??
-						"Which time period should this status report cover?";
-					await deps.insertConversation!({
-						boardId,
-						role: "assistant",
-						content: reply,
-					});
-					return { explanation: reply, boardUpdated: false };
 				}
 
 				const question = await deps.generateClarificationQuestion!(

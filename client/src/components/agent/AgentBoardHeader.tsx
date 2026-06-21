@@ -1,14 +1,6 @@
 import { Check, Plus } from "lucide-react";
 import type { AgentBoard } from "../../types";
-import { formatRelativeTime } from "../../types";
-
-const TEMPLATE_NAMES: Record<string, string> = {
-	"research-report": "Research & Report",
-};
-
-function templateName(templateId: string): string {
-	return TEMPLATE_NAMES[templateId] ?? templateId;
-}
+import { formatRelativeTime, templateName } from "../../types";
 
 // ---- Status pill ----
 
@@ -72,7 +64,7 @@ function deriveStage(board: AgentBoard): {
 		return { current: 2, complete: false, failed: false };
 	if (board.status === "approved")
 		return { current: 2, complete: false, failed: false };
-	return { current: 1, complete: false, failed: false };
+	return { current: 0, complete: false, failed: false };
 }
 
 function StageStepper({ board }: { board: AgentBoard }) {

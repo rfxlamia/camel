@@ -498,7 +498,7 @@ export default function AgentChatPanel({
 					<form
 						onSubmit={(e) => {
 							e.preventDefault();
-							void onSend();
+							if (!sendDisabled) void onSend();
 						}}
 						className="flex gap-2"
 					>

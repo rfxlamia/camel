@@ -51,7 +51,6 @@ describe("Settings API methods", () => {
 			"/api/workspaces/7/settings",
 			expect.objectContaining({
 				method: "PATCH",
-				headers: { "Content-Type": "application/json" },
 			}),
 		);
 	});

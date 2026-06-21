@@ -10,6 +10,10 @@ import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import {
+	validateCardTitle,
+	validateCardDescription,
+} from "../validators/input-length.js";
+import {
 	createScopedBoardService,
 	lookupMembership,
 	parseWorkspaceId,
@@ -71,8 +75,13 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const { columnId, title, description } = req.body ?? {};
-	if (typeof title !== "string" || title.trim() === "") {
-		return res.status(400).json({ error: "title is required" });
+	const titleValidation = validateCardTitle(title ?? "");
+	if (!titleValidation.valid) {
+		return res.status(400).json({ error: titleValidation.error });
+	}
+	const descValidation = validateCardDescription(description ?? "");
+	if (!descValidation.valid) {
+		return res.status(400).json({ error: descValidation.error });
 	}
 	const col = await pool.query(
 		"SELECT id, wip_limit FROM columns WHERE id = $1 AND workspace_id = $2",
@@ -101,8 +110,8 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
 		[
 			Number(columnId),
-			title.trim(),
-			description ?? "",
+			titleValidation.trimmed,
+			descValidation.trimmed ?? "",
 			POSITION_GAP,
 			workspaceId,
 		],
@@ -131,6 +140,21 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	if (version !== undefined && !Number.isInteger(version)) {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
+
+	// Validate title and description if provided
+	if (title !== undefined) {
+		const titleValidation = validateCardTitle(title);
+		if (!titleValidation.valid) {
+			return res.status(400).json({ error: titleValidation.error });
+		}
+	}
+	if (description !== undefined) {
+		const descValidation = validateCardDescription(description);
+		if (!descValidation.valid) {
+			return res.status(400).json({ error: descValidation.error });
+		}
+	}
+
 	const { rows } = await pool.query(
 		`UPDATE cards SET
        title = COALESCE($2, title),
