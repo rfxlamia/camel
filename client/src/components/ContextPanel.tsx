@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api } from "../api";
@@ -9,7 +9,7 @@ import {
 	getMissingCardRedirect,
 	parseCardId,
 } from "../lib/cardPanel";
-import type { ActivityEvent, Card } from "../types";
+import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 
 const inputClass =
@@ -35,14 +35,25 @@ function DetailsSection({
 	card: Card;
 	saveCard: (
 		id: number,
-		patch: { title?: string; description?: string; version?: number },
+		patch: {
+			title?: string;
+			description?: string;
+			assigneeId?: number | null;
+			dueDate?: string | null;
+			version?: number;
+		},
 	) => Promise<SaveCardResult>;
 	onDelete: () => Promise<void>;
 	onClose: () => void;
 }) {
-	const { setHasUnsavedCardEdits } = useBoard();
+	const { setHasUnsavedCardEdits, activeWorkspaceId } = useBoard();
 	const [title, setTitle] = useState(card.title);
 	const [description, setDescription] = useState(card.description);
+	const [assigneeId, setAssigneeId] = useState<number | null>(
+		card.assignee?.id ?? null,
+	);
+	const [dueDate, setDueDate] = useState<string | null>(card.dueDate);
+	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	// Card snapshot the draft is based on — "dirty" means the draft differs
 	// from it, and a dirty draft is never overwritten by a teammate's refresh.
 	// Save sends the baseline version (not the live one), so a concurrent edit
@@ -50,45 +61,95 @@ function DetailsSection({
 	const baselineRef = useRef({
 		title: card.title,
 		description: card.description,
+		assigneeId: card.assignee?.id ?? null,
+		dueDate: card.dueDate,
 		version: card.version,
 	});
 	const forceSyncRef = useRef(false);
 	const [_syncNonce, setSyncNonce] = useState(0);
 
+	// Workspace members populate the assignee picker.
+	useEffect(() => {
+		if (activeWorkspaceId === null) return;
+		let active = true;
+		api
+			.getWorkspaceMembers(activeWorkspaceId)
+			.then(({ members }) => {
+				if (active) setMembers(members);
+			})
+			// biome-ignore lint/suspicious/noEmptyBlockStatements: assignee list is non-critical
+			.catch(() => {});
+		return () => {
+			active = false;
+		};
+	}, [activeWorkspaceId]);
+
 	useEffect(() => {
 		const base = baselineRef.current;
-		const dirty = title !== base.title || description !== base.description;
+		const dirty =
+			title !== base.title ||
+			description !== base.description ||
+			assigneeId !== base.assigneeId ||
+			dueDate !== base.dueDate;
 		if (dirty && !forceSyncRef.current) return;
 		forceSyncRef.current = false;
 		baselineRef.current = {
 			title: card.title,
 			description: card.description,
+			assigneeId: card.assignee?.id ?? null,
+			dueDate: card.dueDate,
 			version: card.version,
 		};
 		setTitle(card.title);
 		setDescription(card.description);
-	}, [card.title, card.description, card.version, title, description]);
+		setAssigneeId(card.assignee?.id ?? null);
+		setDueDate(card.dueDate);
+	}, [
+		card.title,
+		card.description,
+		card.assignee?.id,
+		card.dueDate,
+		card.version,
+		title,
+		description,
+		assigneeId,
+		dueDate,
+	]);
 
 	useEffect(() => {
 		const base = baselineRef.current;
-		const dirty = title !== base.title || description !== base.description;
+		const dirty =
+			title !== base.title ||
+			description !== base.description ||
+			assigneeId !== base.assigneeId ||
+			dueDate !== base.dueDate;
 		setHasUnsavedCardEdits(dirty);
 		return () => setHasUnsavedCardEdits(false);
-	}, [title, description, setHasUnsavedCardEdits]);
+	}, [title, description, assigneeId, dueDate, setHasUnsavedCardEdits]);
 
 	const save = async () => {
 		const trimmed = title.trim();
 		if (trimmed === "") return;
-		const result = await saveCard(card.id, {
-			title: trimmed,
-			description,
-			version: baselineRef.current.version,
-		});
+		const base = baselineRef.current;
+		const patch: {
+			title: string;
+			description: string;
+			assigneeId?: number | null;
+			dueDate?: string | null;
+			version?: number;
+		} = { title: trimmed, description, version: base.version };
+		// Only send assignee/due when changed, so the activity log records the
+		// real edit (and an explicit null clears the field server-side).
+		if (assigneeId !== base.assigneeId) patch.assigneeId = assigneeId;
+		if (dueDate !== base.dueDate) patch.dueDate = dueDate;
+		const result = await saveCard(card.id, patch);
 		if (result === "saved") {
 			baselineRef.current = {
 				...baselineRef.current,
 				title: trimmed,
 				description,
+				assigneeId,
+				dueDate,
 			};
 			setTitle(trimmed);
 		} else if (result === "conflict") {
@@ -97,6 +158,21 @@ function DetailsSection({
 			setSyncNonce((n) => n + 1);
 		}
 	};
+
+	// Keep the current assignee selectable even if they've since left the
+	// workspace (otherwise the <select> would silently show "Unassigned").
+	const assigneeOptions = [...members];
+	if (
+		card.assignee &&
+		!assigneeOptions.some((m) => m.userId === card.assignee?.id)
+	) {
+		assigneeOptions.unshift({
+			userId: card.assignee.id,
+			username: card.assignee.username,
+			displayName: card.assignee.displayName,
+			role: "member",
+		});
+	}
 
 	return (
 		<section aria-label="Details" className="space-y-3 px-4 py-4">
@@ -124,6 +200,45 @@ function DetailsSection({
 					placeholder="Add details..."
 				/>
 			</label>
+			<div className="flex gap-3">
+				<label className="block flex-1">
+					<span className="text-sm font-medium text-neutral-700">Assignee</span>
+					<div className="relative mt-1">
+						<select
+							className="w-full appearance-none rounded-md border border-neutral-300 bg-white py-2 pr-9 pl-3 text-base text-neutral-900 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none"
+							value={assigneeId === null ? "" : String(assigneeId)}
+							onChange={(e) =>
+								setAssigneeId(
+									e.target.value === "" ? null : Number(e.target.value),
+								)
+							}
+						>
+							<option value="">Unassigned</option>
+							{assigneeOptions.map((m) => (
+								<option key={m.userId} value={String(m.userId)}>
+									{m.displayName}
+								</option>
+							))}
+						</select>
+						<ChevronDown
+							size={16}
+							aria-hidden
+							className="pointer-events-none absolute inset-y-0 right-2.5 my-auto text-neutral-500"
+						/>
+					</div>
+				</label>
+				<label className="block flex-1">
+					<span className="text-sm font-medium text-neutral-700">Due date</span>
+					<input
+						type="date"
+						className={inputClass}
+						value={dueDate ?? ""}
+						onChange={(e) =>
+							setDueDate(e.target.value === "" ? null : e.target.value)
+						}
+					/>
+				</label>
+			</div>
 
 			<dl className="space-y-1 rounded-md border border-neutral-200 bg-neutral-100 px-3 py-2">
 				<MetaRow label="Created" value={card.createdAt} />

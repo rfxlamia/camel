@@ -99,7 +99,13 @@ export const api = {
 	updateCard: (
 		workspaceId: number,
 		id: number,
-		patch: { title?: string; description?: string; version?: number },
+		patch: {
+			title?: string;
+			description?: string;
+			assigneeId?: number | null;
+			dueDate?: string | null;
+			version?: number;
+		},
 	) =>
 		request<Card>(`/workspaces/${workspaceId}/cards/${id}`, {
 			method: "PATCH",

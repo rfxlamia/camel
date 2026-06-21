@@ -91,6 +91,33 @@ export function validateDisplayName(name: string): ValidationResult {
 	return { valid: true, trimmed: trimmed || undefined };
 }
 
+/**
+ * Validates a due date as a calendar date string "YYYY-MM-DD" (the format an
+ * HTML <input type="date"> emits). Rejects malformed strings and impossible
+ * dates (e.g. 2026-02-30). Returns the normalized "YYYY-MM-DD" on success.
+ */
+export function validateDueDate(dueDate: string): ValidationResult {
+	if (typeof dueDate !== "string") {
+		return { valid: false, error: "due date must be a string" };
+	}
+	const trimmed = dueDate.trim();
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+		return { valid: false, error: "due date must be in YYYY-MM-DD format" };
+	}
+	// Round-trip through UTC to reject impossible calendar dates without
+	// timezone drift (e.g. Feb 30 normalizes to Mar 2, which won't match).
+	const [y, m, d] = trimmed.split("-").map(Number);
+	const dt = new Date(Date.UTC(y, m - 1, d));
+	if (
+		dt.getUTCFullYear() !== y ||
+		dt.getUTCMonth() !== m - 1 ||
+		dt.getUTCDate() !== d
+	) {
+		return { valid: false, error: "due date is not a valid calendar date" };
+	}
+	return { valid: true, trimmed };
+}
+
 export function validateColumnName(name: string): ValidationResult {
 	if (typeof name !== "string") {
 		return { valid: false, error: "name must be a string" };

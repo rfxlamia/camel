@@ -79,7 +79,13 @@ interface BoardContextValue {
   refresh: () => Promise<void>;
   saveCard: (
     id: number,
-    patch: { title?: string; description?: string; version?: number },
+    patch: {
+      title?: string;
+      description?: string;
+      assigneeId?: number | null;
+      dueDate?: string | null;
+      version?: number;
+    },
   ) => Promise<SaveCardResult>;
   deleteCard: (id: number) => Promise<void>;
   toast: string | null;
@@ -463,7 +469,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   const saveCard = useCallback(
     async (
       id: number,
-      patch: { title?: string; description?: string; version?: number },
+      patch: {
+        title?: string;
+        description?: string;
+        assigneeId?: number | null;
+        dueDate?: string | null;
+        version?: number;
+      },
     ): Promise<SaveCardResult> => {
       if (activeWorkspaceId === null) return "error";
       const current = columns

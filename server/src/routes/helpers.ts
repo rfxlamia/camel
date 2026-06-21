@@ -117,7 +117,13 @@ export type ScopedBoardDeps = {
 	getCardById: (
 		workspaceId: number,
 		cardId: number,
-	) => Promise<{ id: number; workspaceId: number; title: string } | null>;
+	) => Promise<{
+		id: number;
+		workspaceId: number;
+		title: string;
+		assignee?: { id: number; username: string; displayName: string } | null;
+		dueDate?: string | null;
+	} | null>;
 	getBoardRows: (workspaceId: number) => Promise<
 		Array<{
 			id: number;

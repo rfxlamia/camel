@@ -194,3 +194,10 @@ BEGIN
 EXCEPTION
   WHEN undefined_column THEN NULL;
 END $$;
+
+-- Card ownership & scheduling (2026-06: assignee + due date for team PM).
+-- assignee_id: who owns the card; SET NULL if the user row is deleted.
+-- due_date: a calendar DATE (no time-of-day) — avoids timezone off-by-one
+-- from HTML date inputs; serialized to text as 'YYYY-MM-DD'.
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS due_date DATE;

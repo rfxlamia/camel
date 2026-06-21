@@ -10,8 +10,9 @@ import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import {
-	validateCardTitle,
 	validateCardDescription,
+	validateCardTitle,
+	validateDueDate,
 } from "../validators/input-length.js";
 import {
 	createScopedBoardService,
@@ -41,9 +42,14 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 		},
 		getCardById: async (wsId, cId) => {
 			const { rows } = await pool.query(
-				`SELECT id, workspace_id, column_id, title, description, position, version,
-                created_at, started_at, done_at
-         FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+				`SELECT c.id, c.workspace_id, c.column_id, c.title, c.description,
+                c.position, c.version, c.created_at, c.started_at, c.done_at,
+                c.due_date::text AS due_date, c.assignee_id,
+                u.username AS assignee_username,
+                u.display_name AS assignee_display_name
+         FROM cards c
+         LEFT JOIN users u ON u.id = c.assignee_id
+         WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
 				[cId, wsId],
 			);
 			if (rows.length === 0) return null;
@@ -59,6 +65,14 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 				createdAt: c.created_at,
 				startedAt: c.started_at,
 				doneAt: c.done_at,
+				dueDate: c.due_date,
+				assignee: c.assignee_id
+					? {
+							id: c.assignee_id,
+							username: c.assignee_username,
+							displayName: c.assignee_display_name,
+						}
+					: null,
 			};
 		},
 		getBoardRows: async () => [],
@@ -132,7 +146,8 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
-	const { title, description, version } = req.body ?? {};
+	const body = (req.body ?? {}) as Record<string, unknown>;
+	const { title, description, version } = body;
 	const id = Number(req.params.id);
 	if (Number.isNaN(id)) {
 		return res.status(400).json({ error: "invalid card id" });
@@ -141,32 +156,86 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
 
-	// Validate title and description if provided
-	if (title !== undefined) {
-		const titleValidation = validateCardTitle(title);
-		if (!titleValidation.valid) {
-			return res.status(400).json({ error: titleValidation.error });
+	// Presence (not null) decides whether a field is touched: an explicit null
+	// clears a nullable column, an absent key leaves it untouched. COALESCE
+	// can't express "clear", so the SET clause is built from present keys only.
+	const hasTitle = "title" in body;
+	const hasDescription = "description" in body;
+	const hasAssignee = "assigneeId" in body;
+	const hasDueDate = "dueDate" in body;
+
+	const sets: string[] = [];
+	const vals: unknown[] = [];
+
+	if (hasTitle) {
+		const v = validateCardTitle(title as string);
+		if (!v.valid) return res.status(400).json({ error: v.error });
+		vals.push(v.trimmed);
+		sets.push(`title = $${vals.length}`);
+	}
+	if (hasDescription) {
+		const v = validateCardDescription(description as string);
+		if (!v.valid) return res.status(400).json({ error: v.error });
+		vals.push(v.trimmed);
+		sets.push(`description = $${vals.length}`);
+	}
+	if (hasAssignee) {
+		const assigneeId = body.assigneeId;
+		if (assigneeId === null) {
+			vals.push(null);
+			sets.push(`assignee_id = $${vals.length}`);
+		} else if (Number.isInteger(assigneeId)) {
+			const role = await lookupMembership(assigneeId as number, workspaceId);
+			if (!role) {
+				return res
+					.status(400)
+					.json({ error: "assignee must be a member of this workspace" });
+			}
+			vals.push(assigneeId);
+			sets.push(`assignee_id = $${vals.length}`);
+		} else {
+			return res
+				.status(400)
+				.json({ error: "assigneeId must be an integer or null" });
 		}
 	}
-	if (description !== undefined) {
-		const descValidation = validateCardDescription(description);
-		if (!descValidation.valid) {
-			return res.status(400).json({ error: descValidation.error });
+	if (hasDueDate) {
+		const dueDate = body.dueDate;
+		if (dueDate === null) {
+			vals.push(null);
+			sets.push(`due_date = $${vals.length}`);
+		} else {
+			const v = validateDueDate(dueDate as string);
+			if (!v.valid) return res.status(400).json({ error: v.error });
+			vals.push(v.trimmed);
+			sets.push(`due_date = $${vals.length}`);
 		}
 	}
 
+	if (sets.length === 0) {
+		return res.status(400).json({ error: "no updatable fields provided" });
+	}
+	sets.push("version = version + 1");
+
+	vals.push(id);
+	const idP = vals.length;
+	vals.push(workspaceId);
+	const wsP = vals.length;
+	vals.push(version ?? null);
+	const verP = vals.length;
+
 	const { rows } = await pool.query(
-		`UPDATE cards SET
-       title = COALESCE($2, title),
-       description = COALESCE($3, description),
-       version = version + 1
-     WHERE id = $1 AND workspace_id = $4 AND deleted_at IS NULL AND ($5::int IS NULL OR version = $5)
-     RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
-		[id, title ?? null, description ?? null, workspaceId, version ?? null],
+		`UPDATE cards SET ${sets.join(", ")}
+     WHERE id = $${idP} AND workspace_id = $${wsP} AND deleted_at IS NULL
+       AND ($${verP}::int IS NULL OR version = $${verP})
+     RETURNING id, column_id, title, description, position, version,
+               created_at, started_at, done_at, due_date::text AS due_date, assignee_id`,
+		vals,
 	);
 	if (rows.length === 0) {
 		const current = await pool.query(
-			`SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
+			`SELECT id, column_id, title, description, position, version,
+              created_at, started_at, done_at, due_date::text AS due_date, assignee_id
        FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
 			[id, workspaceId],
 		);
@@ -184,8 +253,10 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		payload: {
 			cardTitle: rows[0].title,
 			changed: [
-				title != null && "title",
-				description != null && "description",
+				hasTitle && "title",
+				hasDescription && "description",
+				hasAssignee && "assignee",
+				hasDueDate && "dueDate",
 			].filter(Boolean),
 		},
 	});

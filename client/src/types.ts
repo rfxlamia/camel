@@ -1,3 +1,9 @@
+export interface CardAssignee {
+	id: number;
+	username: string;
+	displayName: string;
+}
+
 export interface Card {
 	id: number;
 	columnId: number;
@@ -8,6 +14,9 @@ export interface Card {
 	createdAt: string;
 	startedAt: string | null;
 	doneAt: string | null;
+	// Calendar date "YYYY-MM-DD" (no time-of-day) or null when unset.
+	dueDate: string | null;
+	assignee: CardAssignee | null;
 	workspaceId?: number;
 }
 
