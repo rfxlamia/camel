@@ -27,7 +27,7 @@ describe("Request Timeout", () => {
 	it("should timeout slow requests", async () => {
 		app.get("/slow", (req, res) => {
 			setTimeout(() => {
-				res.json({ ok: true });
+				if (!res.headersSent) res.json({ ok: true });
 			}, 2000);
 		});
 
@@ -38,7 +38,7 @@ describe("Request Timeout", () => {
 	it("should allow custom timeout per route", async () => {
 		app.get("/custom-timeout", requestTimeout(500), (req, res) => {
 			setTimeout(() => {
-				res.json({ ok: true });
+				if (!res.headersSent) res.json({ ok: true });
 			}, 1000);
 		});
 
