@@ -29,10 +29,7 @@ class ApiError extends Error {
 function readCookie(name: string): string | null {
 	const match = document.cookie.match(
 		new RegExp(
-			"(?:^|; )" +
-				name
-					.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&") +
-				"=([^;]*)",
+			"(?:^|; )" + name.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&") + "=([^;]*)",
 		),
 	);
 	return match ? decodeURIComponent(match[1]) : null;
@@ -193,8 +190,12 @@ export const api = {
 	uploadLogo: async (workspaceId: number, file: File): Promise<SettingsMap> => {
 		const formData = new FormData();
 		formData.append("logo", file);
+		const headers = new Headers();
+		const csrf = readCookie("csrf_token");
+		if (csrf) headers.set("X-CSRF-Token", csrf);
 		const res = await fetch(`/api/workspaces/${workspaceId}/settings/logo`, {
 			method: "POST",
+			headers,
 			body: formData,
 		});
 		if (!res.ok) {
