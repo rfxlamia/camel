@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "./auth.js";
+import { config } from "./config.js";
+import { requireEmailVerified } from "./middleware/email-gate.js";
 import { activityRouter } from "./routes/activity.js";
 import { boardRouter } from "./routes/board.js";
 import { cardsRouter } from "./routes/cards.js";
@@ -35,6 +37,10 @@ import { createScopedBoardService } from "./routes/helpers.js";
 export const api = Router();
 
 api.use(requireAuth);
+
+if (config.EMAIL_GATE_ENABLED === "true") {
+	api.use(requireEmailVerified);
+}
 
 api.use("/workspaces/:workspaceId/settings", settingsRouter);
 api.use("/workspaces", workspacesRouter);

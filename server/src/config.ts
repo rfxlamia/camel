@@ -34,6 +34,7 @@ const envSchema = z.object({
 	BETTER_AUTH_SECRET: z.string().default("dev-secret-change-in-production"),
 	APP_BASE_URL: z.string().default("http://localhost:3001"),
 	OAUTH_ENABLED: z.enum(["true", "false"]).default("false"),
+	EMAIL_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
 });
 
 const parsed = envSchema.safeParse(process.env);

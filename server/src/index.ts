@@ -9,10 +9,8 @@ import {
 	createAuthRateLimiter,
 	cleanupExpiredSessions,
 } from "./auth.js";
-import {
-	betterAuthHandler,
-	createOAuthBridgeRouter,
-} from "./oauth-bridge.js";
+import { oauthRouter } from "./routes/oauth.js";
+import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
 import { connectRedis } from "./db/redis.js";
 import { initRealtime } from "./realtime.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
@@ -92,6 +90,7 @@ const delegatingLimiter: express.RequestHandler = (req, res, next) =>
 
 // Mount routes before async boot so they're always available immediately.
 app.use("/api/auth", createOAuthBridgeRouter()); // camel_session bridge
+app.use("/api/auth", oauthRouter); // set-username, set-password (outside email gate)
 app.use("/api/auth", createAuthRouter(delegatingLimiter));
 app.use("/api", api);
 app.use("/api", createAgentRouter());
