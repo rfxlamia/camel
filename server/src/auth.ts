@@ -116,7 +116,9 @@ export async function checkAndRecordLoginAttempt(
 	const client = getRedisClient();
 	if (!client) {
 		// Fail-closed: use in-memory limiter
-		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(username.toLowerCase());
+		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(
+			username.toLowerCase(),
+		);
 		return result.isLocked;
 	}
 
@@ -129,7 +131,9 @@ export async function checkAndRecordLoginAttempt(
 		return count > LOGIN_FAILURE_MAX;
 	} catch {
 		// Fail-closed: use in-memory limiter when Redis errors
-		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(username.toLowerCase());
+		const result = await IN_MEMORY_LOGIN_LIMITER.checkAndRecord(
+			username.toLowerCase(),
+		);
 		return result.isLocked;
 	}
 }
@@ -231,7 +235,7 @@ async function createSession(res: Response, userId: number): Promise<void> {
 	);
 	res.cookie(SESSION_COOKIE, token, {
 		httpOnly: true,
-		sameSite: "lax",
+		sameSite: "strict",
 		secure: process.env.NODE_ENV === "production",
 		expires: expiresAt,
 		path: "/",
