@@ -25,6 +25,15 @@ const envSchema = z.object({
 	PORT: z.coerce.number().int().positive().default(3001),
 
 	TAVILY_API_KEY: z.string().optional(),
+
+	// OAuth / Better Auth
+	GOOGLE_CLIENT_ID: z.string().optional(),
+	GOOGLE_CLIENT_SECRET: z.string().optional(),
+	GITHUB_CLIENT_ID: z.string().optional(),
+	GITHUB_CLIENT_SECRET: z.string().optional(),
+	BETTER_AUTH_SECRET: z.string().default("dev-secret-change-in-production"),
+	APP_BASE_URL: z.string().default("http://localhost:3001"),
+	OAUTH_ENABLED: z.enum(["true", "false"]).default("false"),
 });
 
 const parsed = envSchema.safeParse(process.env);

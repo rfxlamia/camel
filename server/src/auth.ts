@@ -19,8 +19,11 @@ import {
 
 export interface AuthUser {
 	id: number;
-	username: string;
+	username: string | null;
 	displayName: string;
+	email: string | null;
+	emailVerified: boolean;
+	needsUsername: boolean;
 }
 
 export interface PendingInvite {
@@ -63,11 +66,11 @@ declare global {
 	}
 }
 
-const SESSION_COOKIE = "camel_session";
+export const SESSION_COOKIE = "camel_session";
 const SESSION_TTL_DAYS = 30;
-const BCRYPT_ROUNDS = 10;
+export const BCRYPT_ROUNDS = 10;
 
-const USERNAME_RE = /^[a-z0-9_]{3,32}$/i;
+export const USERNAME_RE = /^[a-z0-9_]{3,32}$/i;
 
 // ---- Rate limiting ----------------------------------------------------------
 
@@ -222,13 +225,22 @@ export async function accountLockoutMiddleware(
 
 function toUser(row: {
 	id: number;
-	username: string;
+	username: string | null;
 	display_name: string;
+	email?: string | null;
+	email_verified?: boolean;
 }): AuthUser {
-	return { id: row.id, username: row.username, displayName: row.display_name };
+	return {
+		id: row.id,
+		username: row.username,
+		displayName: row.display_name,
+		email: row.email ?? null,
+		emailVerified: row.email_verified ?? false,
+		needsUsername: row.username === null,
+	};
 }
 
-async function createSession(res: Response, userId: number): Promise<void> {
+export async function mintCamelSession(res: Response, userId: number): Promise<void> {
 	const token = randomBytes(32).toString("base64url");
 	const expiresAt = new Date(
 		Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
@@ -320,7 +332,7 @@ export async function requireAuth(
 		if (!token)
 			return res.status(401).json({ error: "authentication required" });
 		const { rows } = await pool.query(
-			`SELECT u.id, u.username, u.display_name
+			`SELECT u.id, u.username, u.display_name, u.email, u.email_verified
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token = $1 AND s.expires_at > now()`,
 			[token],
@@ -418,7 +430,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 			}
 
 			await client.query("COMMIT");
-			await createSession(res, user.id);
+			await mintCamelSession(res, user.id);
 			res.status(201).json({ user });
 		} catch (err) {
 			await client.query("ROLLBACK");
@@ -463,7 +475,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				[presented, rows[0].id],
 			);
 		}
-		await createSession(res, rows[0].id);
+		await mintCamelSession(res, rows[0].id);
 		res.json({ user: toUser(rows[0]) });
 	});
 

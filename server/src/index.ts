@@ -9,6 +9,10 @@ import {
 	createAuthRateLimiter,
 	cleanupExpiredSessions,
 } from "./auth.js";
+import {
+	betterAuthHandler,
+	createOAuthBridgeRouter,
+} from "./oauth-bridge.js";
 import { connectRedis } from "./db/redis.js";
 import { initRealtime } from "./realtime.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
@@ -25,6 +29,12 @@ import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 const app = express();
 app.use(securityHeaders());
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
+
+// Better Auth handler MUST be mounted BEFORE express.json() — mandatory per Better Auth docs
+if (config.OAUTH_ENABLED === "true") {
+	app.all("/api/auth/*splat", betterAuthHandler);
+}
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -47,7 +57,11 @@ app.use((req, res, next) => {
 	if (!req.path.startsWith("/api/")) return next();
 	// Explicit allowlist for auth endpoints that need to bypass CSRF
 	const csrfExemptPaths = ["/api/auth/login", "/api/auth/register"];
-	if (csrfExemptPaths.includes(req.path)) return next();
+	const isBetterAuthOAuthRoute =
+		req.path.startsWith("/api/auth/sign-in/") ||
+		req.path.startsWith("/api/auth/callback/");
+	if (csrfExemptPaths.includes(req.path) || isBetterAuthOAuthRoute)
+		return next();
 	return csrfProtection(req, res, next);
 });
 
@@ -77,6 +91,7 @@ const delegatingLimiter: express.RequestHandler = (req, res, next) =>
 	rateLimiterInstance(req, res, next);
 
 // Mount routes before async boot so they're always available immediately.
+app.use("/api/auth", createOAuthBridgeRouter()); // camel_session bridge
 app.use("/api/auth", createAuthRouter(delegatingLimiter));
 app.use("/api", api);
 app.use("/api", createAgentRouter());
