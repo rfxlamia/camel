@@ -20,12 +20,24 @@ import {
 } from "./middleware/csrf.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
+import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 
 const app = express();
 app.use(securityHeaders());
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+// 30s request timeout for the STANDARD board API only.
+// Skip agent endpoints (buffered, long-running) and the SSE stream.
+const isTimeoutExempt = (path: string) =>
+	path.includes("/agent/") || path.endsWith("/events/stream");
+
+app.use((req, res, next) => {
+	if (!req.path.startsWith("/api/")) return next();
+	if (isTimeoutExempt(req.path)) return next();
+	return requestTimeout(30000)(req, res, next);
+});
 
 // Issue CSRF cookie on every response
 app.use(setCsrfToken);
@@ -69,8 +81,15 @@ app.use("/api", createAgentRouter());
 app.use(createErrorHandler());
 
 const port = config.PORT;
-app.listen(port, async () => {
+const server = app.listen(port, async () => {
 	console.log(`Camel Kanban API listening on http://localhost:${port}`);
+
+	// Configure server timeouts
+	serverTimeout(server, {
+		timeout: 0, // no global socket timeout
+		keepAliveTimeout: 65000,
+		headersTimeout: 66000,
+	});
 
 	// Connect Redis, then upgrade the rate limiter to use it.
 	await connectRedis();

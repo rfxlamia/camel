@@ -22,6 +22,7 @@ import type { Request } from "express";
 import { Router } from "express";
 import { requireAuth } from "../auth.js";
 import { pool } from "../db/pool.js";
+import { llmTimeout } from "../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
@@ -522,6 +523,9 @@ export function createAgentRouter(
 ): Router {
 	const router = Router();
 	const service = createAgentBoardService({ ...realDeps, ...overrides });
+
+	// 2-minute socket timeout for agent routes (LLM calls can be slow)
+	router.use(llmTimeout(120000));
 
 	// Helper: check workspace membership and short-circuit with 404
 	async function requireWorkspaceMember(
