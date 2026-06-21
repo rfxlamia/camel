@@ -12,6 +12,7 @@ import { RedisStore } from "rate-limit-redis";
 import { pool } from "./db/pool.js";
 import { getRedisClient } from "./db/redis.js";
 import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
+import { validateDisplayName, validateUsername } from "./validators/input-length.js";
 
 export interface AuthUser {
 	id: number;
@@ -341,7 +342,13 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 
 	auth.post("/register", async (req, res) => {
 		const { username, password, displayName } = req.body ?? {};
-		if (typeof username !== "string" || !USERNAME_RE.test(username)) {
+		const usernameValidation = validateUsername(username ?? "");
+		if (!usernameValidation.valid) {
+			return res.status(400).json({
+				error: "Username must be 3-32 characters: letters, numbers, underscore.",
+			});
+		}
+		if (!USERNAME_RE.test(usernameValidation.trimmed!)) {
 			return res.status(400).json({
 				error:
 					"Username must be 3-32 characters: letters, numbers, underscore.",
@@ -352,10 +359,12 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.status(400)
 				.json({ error: "Password must be at least 8 characters." });
 		}
+		const displayNameValidation = validateDisplayName(displayName ?? "");
+		if (!displayNameValidation.valid) {
+			return res.status(400).json({ error: displayNameValidation.error });
+		}
 		const name =
-			typeof displayName === "string" && displayName.trim() !== ""
-				? displayName.trim()
-				: username;
+			displayNameValidation.trimmed ?? usernameValidation.trimmed!;
 
 		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 		const normalizedUsername = username.toLowerCase();
@@ -446,10 +455,10 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		// This prevents session fixation — only the current login gets a fresh token.
 		const presented = req.cookies?.[SESSION_COOKIE];
 		if (presented) {
-			await pool.query('DELETE FROM sessions WHERE token = $1 AND user_id = $2', [
-				presented,
-				rows[0].id,
-			]);
+			await pool.query(
+				"DELETE FROM sessions WHERE token = $1 AND user_id = $2",
+				[presented, rows[0].id],
+			);
 		}
 		await createSession(res, rows[0].id);
 		res.json({ user: toUser(rows[0]) });

@@ -10,6 +10,10 @@ import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import {
+	validateCardTitle,
+	validateCardDescription,
+} from "../validators/input-length.js";
+import {
 	createScopedBoardService,
 	lookupMembership,
 	parseWorkspaceId,
@@ -71,8 +75,13 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const { columnId, title, description } = req.body ?? {};
-	if (typeof title !== "string" || title.trim() === "") {
-		return res.status(400).json({ error: "title is required" });
+	const titleValidation = validateCardTitle(title ?? "");
+	if (!titleValidation.valid) {
+		return res.status(400).json({ error: titleValidation.error });
+	}
+	const descValidation = validateCardDescription(description ?? "");
+	if (!descValidation.valid) {
+		return res.status(400).json({ error: descValidation.error });
 	}
 	const col = await pool.query(
 		"SELECT id, wip_limit FROM columns WHERE id = $1 AND workspace_id = $2",
@@ -93,20 +102,20 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	if (!wip.allowed) {
 		return res.status(409).json({ error: "WIP limit reached for this column" });
 	}
-	const { rows } = await pool.query(
-		`INSERT INTO cards (column_id, title, description, position, workspace_id)
+		const { rows } = await pool.query(
+			`INSERT INTO cards (column_id, title, description, position, workspace_id)
      VALUES ($1, $2, $3,
              COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
              $5)
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
-		[
-			Number(columnId),
-			title.trim(),
-			description ?? "",
-			POSITION_GAP,
-			workspaceId,
-		],
-	);
+			[
+				Number(columnId),
+				titleValidation.trimmed,
+				descValidation.trimmed ?? "",
+				POSITION_GAP,
+				workspaceId,
+			],
+		);
 	await recordActivity(pool, req.user!, workspaceId, "create", {
 		cardId: rows[0].id,
 		toColumnId: Number(columnId),

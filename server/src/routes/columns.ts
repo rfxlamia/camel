@@ -3,6 +3,7 @@ import { POSITION_GAP } from "../core/position.js";
 import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
+import { validateBoardName } from "../validators/input-length.js";
 
 export const columnsRouter = Router({ mergeParams: true });
 
@@ -10,14 +11,15 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const { title } = req.body ?? {};
-	if (typeof title !== "string" || title.trim() === "") {
-		return res.status(400).json({ error: "title is required" });
+	const titleValidation = validateBoardName(title ?? "");
+	if (!titleValidation.valid) {
+		return res.status(400).json({ error: titleValidation.error });
 	}
 	const { rows } = await pool.query(
 		`INSERT INTO columns (title, position, workspace_id)
      VALUES ($1, COALESCE((SELECT MAX(position) FROM columns WHERE workspace_id = $2), 0) + $3, $2)
      RETURNING id, title, position, wip_limit, policy, is_done`,
-		[title.trim(), workspaceId, POSITION_GAP],
+		[titleValidation.trimmed, workspaceId, POSITION_GAP],
 	);
 	await publishEvent(workspaceId, {
 		type: "column.created",
