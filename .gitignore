@@ -30,6 +30,7 @@ coverage/
 .claude/
 .worktree/
 .agents/
+.bob/
 .codex/
 .claude.globals/
 _bmad/
