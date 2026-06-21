@@ -18,6 +18,7 @@ import {
 	setCsrfToken,
 	generateCsrfToken,
 } from "./middleware/csrf.js";
+import { createErrorHandler } from "./middleware/error-handler.js";
 
 const app = express();
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
@@ -35,11 +36,15 @@ app.use((req, res, next) => {
 });
 
 // Security headers for uploaded files to prevent content-type sniffing
-app.use("/uploads", (req, res, next) => {
-	res.setHeader("X-Content-Type-Options", "nosniff");
-	res.setHeader("Content-Disposition", "inline");
-	next();
-}, express.static(UPLOADS_DIR));
+app.use(
+	"/uploads",
+	(req, res, next) => {
+		res.setHeader("X-Content-Type-Options", "nosniff");
+		res.setHeader("Content-Disposition", "inline");
+		next();
+	},
+	express.static(UPLOADS_DIR),
+);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -59,17 +64,7 @@ app.use("/api/auth", createAuthRouter(delegatingLimiter));
 app.use("/api", api);
 app.use("/api", createAgentRouter());
 
-app.use(
-	(
-		err: Error,
-		_req: express.Request,
-		res: express.Response,
-		_next: express.NextFunction,
-	) => {
-		console.error(err);
-		res.status(500).json({ error: "internal server error" });
-	},
-);
+app.use(createErrorHandler());
 
 const port = config.PORT;
 app.listen(port, async () => {
