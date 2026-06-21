@@ -95,12 +95,10 @@ export default function App() {
 		if (params.has("oauth") || params.has("oauth_error")) {
 			window.history.replaceState({}, "", window.location.pathname);
 		}
+		if (oauthErr) setOauthError(oauthErr);
 		api
 			.me()
-			.then(({ user }) => {
-				setUser(user);
-				if (oauthErr) setOauthError(oauthErr);
-			})
+			.then(({ user }) => setUser(user))
 			.catch(() => setUser(null))
 			.finally(() => setAuthChecked(true));
 	}, []);
@@ -108,7 +106,8 @@ export default function App() {
 	if (!authChecked) return <LoadingScreen />;
 	if (!user) return <AuthPage onAuth={setUser} oauthError={oauthError} />;
 	if (user.needsUsername) return <PickUsernamePage onComplete={setUser} />;
-	if (!user.emailVerified) return <EmailGatePage user={user} onComplete={setUser} />;
+	if (!user.emailVerified)
+		return <EmailGatePage user={user} onComplete={setUser} />;
 
 	return (
 		<BoardProvider user={user} onSignedOut={() => setUser(null)}>
