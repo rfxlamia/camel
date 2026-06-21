@@ -13,7 +13,8 @@ import { validateUsername } from "../validators/input-length.js";
 export const oauthRouter = Router();
 
 oauthRouter.post("/set-username", requireAuth, async (req, res) => {
-	if (!req.user) return res.status(401).json({ error: "authentication required" });
+	if (!req.user)
+		return res.status(401).json({ error: "authentication required" });
 	if (req.user.username !== null) {
 		return res.status(409).json({ error: "Username already set." });
 	}
@@ -57,6 +58,9 @@ oauthRouter.post("/set-username", requireAuth, async (req, res) => {
 				id: req.user.id,
 				username: normalizedUsername,
 				displayName: displayNameFinal,
+				email: req.user.email,
+				emailVerified: req.user.emailVerified,
+				needsUsername: false,
 			},
 			pendingInvites,
 		});
@@ -101,7 +105,8 @@ oauthRouter.post("/set-username", requireAuth, async (req, res) => {
 });
 
 oauthRouter.post("/set-password", requireAuth, async (req, res) => {
-	if (!req.user) return res.status(401).json({ error: "authentication required" });
+	if (!req.user)
+		return res.status(401).json({ error: "authentication required" });
 	const { password } = req.body ?? {};
 	if (typeof password !== "string" || password.length < 8) {
 		return res
