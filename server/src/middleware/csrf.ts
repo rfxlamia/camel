@@ -5,12 +5,16 @@ const CSRF_TOKEN_LENGTH = 32;
 const CSRF_COOKIE_NAME = "csrf_token";
 const CSRF_HEADER_NAME = "x-csrf-token";
 
-const CSRF_SECRET = process.env.CSRF_SECRET || (() => {
-	if (process.env.NODE_ENV === "production") {
-		throw new Error("CSRF_SECRET environment variable is required in production");
-	}
-	return "csrf-dev-secret-not-for-production";
-})();
+const CSRF_SECRET =
+	process.env.CSRF_SECRET ||
+	(() => {
+		if (process.env.NODE_ENV === "production") {
+			throw new Error(
+				"CSRF_SECRET environment variable is required in production",
+			);
+		}
+		return "csrf-dev-secret-not-for-production";
+	})();
 
 function signToken(token: string): string {
 	const hmac = createHmac("sha256", CSRF_SECRET);

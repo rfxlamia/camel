@@ -12,7 +12,10 @@ import { RedisStore } from "rate-limit-redis";
 import { pool } from "./db/pool.js";
 import { getRedisClient } from "./db/redis.js";
 import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
-import { validateDisplayName, validateUsername } from "./validators/input-length.js";
+import {
+	validateDisplayName,
+	validateUsername,
+} from "./validators/input-length.js";
 
 export interface AuthUser {
 	id: number;
@@ -345,7 +348,8 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		const usernameValidation = validateUsername(username ?? "");
 		if (!usernameValidation.valid) {
 			return res.status(400).json({
-				error: "Username must be 3-32 characters: letters, numbers, underscore.",
+				error:
+					"Username must be 3-32 characters: letters, numbers, underscore.",
 			});
 		}
 		if (!USERNAME_RE.test(usernameValidation.trimmed!)) {
@@ -363,8 +367,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		if (!displayNameValidation.valid) {
 			return res.status(400).json({ error: displayNameValidation.error });
 		}
-		const name =
-			displayNameValidation.trimmed ?? usernameValidation.trimmed!;
+		const name = displayNameValidation.trimmed ?? usernameValidation.trimmed!;
 
 		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 		const normalizedUsername = username.toLowerCase();

@@ -505,9 +505,7 @@ const realDeps: AgentBoardServiceDeps = {
 			return {
 				type: r.event_type as string,
 				cardTitle:
-					(r.current_card_title as string | null) ??
-					payload?.cardTitle ??
-					null,
+					(r.current_card_title as string | null) ?? payload?.cardTitle ?? null,
 				at: (r.created_at as Date).toISOString(),
 			};
 		});

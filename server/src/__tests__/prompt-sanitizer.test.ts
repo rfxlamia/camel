@@ -121,7 +121,8 @@ describe("sanitizeLLMOutput", () => {
 	});
 
 	it("should redact bearer tokens", () => {
-		const output = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+		const output =
+			"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
 		const result = sanitizeLLMOutput(output);
 		expect(result).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
 		expect(result).toContain("[REDACTED_BEARER_TOKEN]");
@@ -141,7 +142,8 @@ describe("sanitizeLLMOutput", () => {
 	});
 
 	it("should NOT redact legitimate research data containing emails or numbers", () => {
-		const output = "Contact john@example.com at 555-123-4567 or SSN 123-45-6789 for details.";
+		const output =
+			"Contact john@example.com at 555-123-4567 or SSN 123-45-6789 for details.";
 		const result = sanitizeLLMOutput(output);
 		expect(result).toBe(output);
 	});

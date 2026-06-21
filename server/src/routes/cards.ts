@@ -102,20 +102,20 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	if (!wip.allowed) {
 		return res.status(409).json({ error: "WIP limit reached for this column" });
 	}
-		const { rows } = await pool.query(
-			`INSERT INTO cards (column_id, title, description, position, workspace_id)
+	const { rows } = await pool.query(
+		`INSERT INTO cards (column_id, title, description, position, workspace_id)
      VALUES ($1, $2, $3,
              COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
              $5)
      RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
-			[
-				Number(columnId),
-				titleValidation.trimmed,
-				descValidation.trimmed ?? "",
-				POSITION_GAP,
-				workspaceId,
-			],
-		);
+		[
+			Number(columnId),
+			titleValidation.trimmed,
+			descValidation.trimmed ?? "",
+			POSITION_GAP,
+			workspaceId,
+		],
+	);
 	await recordActivity(pool, req.user!, workspaceId, "create", {
 		cardId: rows[0].id,
 		toColumnId: Number(columnId),

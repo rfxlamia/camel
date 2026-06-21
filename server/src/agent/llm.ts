@@ -397,7 +397,10 @@ async function classifyFollowUpIntentOnce(
 ): Promise<FollowUpResult | null> {
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(userMessage)) {
-		console.warn("classifyFollowUpIntentOnce: prompt injection detected:", userMessage);
+		console.warn(
+			"classifyFollowUpIntentOnce: prompt injection detected:",
+			userMessage,
+		);
 		// Return a safe fallback instead of processing potentially malicious input
 		return {
 			intent: "OFF_TOPIC",
