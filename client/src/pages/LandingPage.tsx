@@ -22,36 +22,42 @@ import { useNavigate } from "react-router";
 
 const FEATURES = [
 	{
+		key: "board",
 		icon: LayoutGrid,
 		title: "Visualize the work",
 		body: "Drag-and-drop columns and cards with fractional positioning. Editable policies live under every column header.",
 	},
 	{
+		key: "wip",
 		icon: Gauge,
 		title: "WIP limits that hold",
 		body: "Per-column limits enforced on the server. Moves past the cap are rejected with a clean 409 — never silently dropped.",
 	},
 	{
+		key: "realtime",
 		icon: Radio,
 		title: "Real-time, gracefully",
 		body: "Presence and live updates over SSE + Redis Pub/Sub. If Redis drops, the board degrades quietly instead of breaking.",
 	},
 	{
+		key: "flow",
 		icon: LineChart,
 		title: "Flow you can measure",
 		body: "Lead time, cycle time, throughput and WIP — recomputed on every change, charted over an 8-week trend.",
 	},
 	{
+		key: "version",
 		icon: ShieldCheck,
 		title: "Conflict-free editing",
 		body: "Optimistic locking with a version on every card. Stale writes return 409 and the client refreshes — no lost work.",
 	},
 	{
+		key: "team",
 		icon: Users,
 		title: "Built for small teams",
 		body: "Invite-based workspaces (up to ten), card assignees and due dates, and a full activity feed of every change.",
 	},
-];
+] as const;
 
 const PIPELINE = ["Research", "Analysis", "Writer", "Editor", "QA Guardian"];
 
@@ -63,6 +69,181 @@ const PRACTICES = [
 	"Build feedback loops",
 	"Improve continuously",
 ];
+
+// ── Card preview visuals ────────────────────────────────────────────
+// Each feature card opens with a uniform inset "preview pane" holding a
+// small, true-to-product diagram (a mini board, a WIP chip, a sparkline).
+// Consistent frame keeps the grid calm; distinct content keeps it from
+// reading as a generic feature wall. Tokens only, mostly static.
+
+function PaneFrame({ children }: { children: React.ReactNode }) {
+	return (
+		<div className="relative h-28 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100">
+			<div className="board-canvas absolute inset-0 opacity-50" aria-hidden />
+			<div className="relative flex h-full items-center justify-center px-4">
+				{children}
+			</div>
+		</div>
+	);
+}
+
+// Skeleton card line used across several previews.
+function MiniCard({ tone = "neutral" }: { tone?: "neutral" | "primary" | "success" }) {
+	const bar =
+		tone === "primary"
+			? "bg-primary-300"
+			: tone === "success"
+				? "bg-success-200"
+				: "bg-neutral-200";
+	return (
+		<div className="rounded-sm border border-neutral-200 bg-white px-1.5 py-1 shadow-[0_1px_2px_oklch(28%_0.044_250_/_0.06)]">
+			<div className={`h-1 w-full rounded-full ${bar}`} />
+			<div className="mt-1 h-1 w-3/5 rounded-full bg-neutral-200" />
+		</div>
+	);
+}
+
+function FeaturePreview({ kind }: { kind: (typeof FEATURES)[number]["key"] }) {
+	switch (kind) {
+		case "board":
+			return (
+				<PaneFrame>
+					<div className="relative grid w-full grid-cols-3 gap-2">
+						{[
+							{ label: "To do", cards: ["neutral", "neutral"] as const },
+							{ label: "Doing", cards: ["primary"] as const },
+							{ label: "Done", cards: ["success", "neutral"] as const },
+						].map((col) => (
+							<div key={col.label} className="space-y-1">
+								<div className="mb-1 flex items-center justify-between">
+									<span className="text-[8px] font-semibold uppercase tracking-wide text-neutral-500">
+										{col.label}
+									</span>
+									<span className="h-1 w-1 rounded-full bg-neutral-300" />
+								</div>
+								{col.cards.map((t, i) => (
+									<MiniCard key={`${col.label}-${i}`} tone={t} />
+								))}
+							</div>
+						))}
+						{/* Card mid-drag — lifted, tilted, casting a soft shadow. */}
+						<div className="absolute left-[28%] top-1 w-1/3 rotate-[-5deg] rounded-sm border border-primary-300 bg-white px-1.5 py-1 shadow-[0_8px_16px_-6px_oklch(28%_0.044_250_/_0.5)]">
+							<div className="h-1 w-full rounded-full bg-primary-400" />
+							<div className="mt-1 h-1 w-2/3 rounded-full bg-neutral-200" />
+						</div>
+					</div>
+				</PaneFrame>
+			);
+		case "wip":
+			return (
+				<PaneFrame>
+					<div className="w-3/4 space-y-1">
+						<div className="flex items-center justify-between">
+							<span className="text-[9px] font-semibold uppercase tracking-wide text-neutral-600">
+								In progress
+							</span>
+							<span className="rounded-full bg-primary-700 px-1.5 py-px text-[9px] font-bold tabular-nums text-white">
+								3 / 3
+							</span>
+						</div>
+						<MiniCard tone="primary" />
+						<MiniCard />
+						{/* Rejected drop — dashed ghost with a clean 409. */}
+						<div className="flex items-center justify-between rounded-sm border border-dashed border-error-500/70 bg-error-100 px-1.5 py-1">
+							<div className="h-1 w-2/5 rounded-full bg-error-500/40" />
+							<span className="text-[9px] font-bold tabular-nums text-error-700">
+								409
+							</span>
+						</div>
+					</div>
+				</PaneFrame>
+			);
+		case "realtime":
+			return (
+				<PaneFrame>
+					<div className="flex flex-col items-center gap-3">
+						<div className="flex -space-x-2">
+							{[
+								{ bg: "bg-primary-600", t: "AR" },
+								{ bg: "bg-accent-600", t: "MK" },
+								{ bg: "bg-success-500", t: "JD" },
+							].map((a) => (
+								<span
+									key={a.t}
+									className={`inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-neutral-100 text-[8px] font-bold text-white ${a.bg}`}
+								>
+									{a.t}
+								</span>
+							))}
+							<span className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-neutral-100 bg-white text-[8px] font-bold text-neutral-500">
+								+2
+							</span>
+						</div>
+						<span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[9px] font-semibold text-neutral-600">
+							<span className="pulse-dot relative inline-flex h-1.5 w-1.5 rounded-full bg-success-500" />
+							SSE · live
+						</span>
+					</div>
+				</PaneFrame>
+			);
+		case "flow":
+			return (
+				<PaneFrame>
+					<div className="flex h-14 w-3/4 items-end justify-between gap-1">
+						{[40, 55, 35, 62, 50, 72, 58, 84].map((h, i) => (
+							<div
+								key={`${h}-${i}`}
+								className={`w-full rounded-sm ${i === 7 ? "bg-accent-500" : "bg-primary-300"}`}
+								style={{ height: `${h}%` }}
+							/>
+						))}
+					</div>
+				</PaneFrame>
+			);
+		case "version":
+			return (
+				<PaneFrame>
+					<div className="relative w-3/5">
+						<div className="absolute -right-3 -top-3 w-full rotate-3 rounded-md border border-neutral-200 bg-white/70 p-2 shadow-sm" />
+						<div className="relative rounded-md border border-neutral-200 bg-white p-2 shadow-[0_4px_12px_-4px_oklch(28%_0.044_250_/_0.25)]">
+							<div className="flex items-center justify-between">
+								<div className="h-1.5 w-1/2 rounded-full bg-neutral-200" />
+								<span className="rounded bg-primary-100 px-1.5 py-px text-[9px] font-bold tabular-nums text-primary-800">
+									v.7
+								</span>
+							</div>
+							<div className="mt-2 inline-flex items-center gap-1 rounded bg-success-100 px-1.5 py-px text-[9px] font-semibold text-success-900">
+								<Check className="h-2.5 w-2.5" /> 409 → refreshed
+							</div>
+						</div>
+					</div>
+				</PaneFrame>
+			);
+		case "team":
+			return (
+				<PaneFrame>
+					<div className="w-3/4 rounded-md border border-neutral-200 bg-white p-2 shadow-sm">
+						<div className="h-1.5 w-3/5 rounded-full bg-neutral-200" />
+						<div className="mt-2.5 flex items-center justify-between">
+							<div className="flex -space-x-1.5">
+								{["bg-primary-500", "bg-accent-500", "bg-success-500"].map(
+									(bg) => (
+										<span
+											key={bg}
+											className={`h-4 w-4 rounded-full border-2 border-white ${bg}`}
+										/>
+									),
+								)}
+							</div>
+							<span className="rounded bg-accent-100 px-1.5 py-px text-[9px] font-semibold text-accent-800">
+								Due Fri
+							</span>
+						</div>
+					</div>
+				</PaneFrame>
+			);
+	}
+}
 
 export default function LandingPage() {
 	const navigate = useNavigate();
@@ -250,7 +431,7 @@ export default function LandingPage() {
 				<div className="mt-10 grid gap-4 md:grid-cols-3">
 					{/* Wide spotlight card: the agentic pipeline */}
 					<article
-						className="reveal group relative col-span-1 overflow-hidden rounded-xl border border-primary-300 bg-primary-900 p-7 text-neutral-100 md:col-span-2"
+						className="reveal group relative col-span-1 flex flex-col overflow-hidden rounded-xl border border-primary-700 bg-primary-900 p-7 text-neutral-100 md:col-span-2"
 						id="agent"
 					>
 						<div
@@ -269,61 +450,109 @@ export default function LandingPage() {
 								that run in sequence — gathering facts, extracting insight, and
 								writing a polished, QA-validated document.
 							</p>
+						</div>
 
-							<div className="mt-6 flex flex-wrap items-center gap-2">
-								{PIPELINE.map((stage, i) => (
-									<span key={stage} className="flex items-center gap-2">
-										<span className="rounded-md border border-primary-600 bg-primary-800 px-3 py-1.5 text-sm font-medium text-primary-100">
+						{/* Pipeline rendered as connected mini board columns. */}
+						<div className="relative mt-6 grid grid-cols-5 gap-2">
+							{PIPELINE.map((stage, i) => (
+								<div key={stage} className="relative">
+									<div className="rounded-md border border-primary-700 bg-primary-800/80 p-2">
+										<div className="mb-1.5 flex items-center justify-between">
+											<span className="text-[10px] font-semibold uppercase tracking-wide text-primary-300">
+												{`0${i + 1}`}
+											</span>
+											{i === 0 && (
+												<span className="pulse-dot relative inline-flex h-1.5 w-1.5 rounded-full bg-accent-400" />
+											)}
+										</div>
+										<div className="text-[11px] font-semibold leading-tight text-primary-100">
 											{stage}
-										</span>
-										{i < PIPELINE.length - 1 && (
-											<ArrowRight className="h-3.5 w-3.5 text-primary-400" />
-										)}
-									</span>
-								))}
-							</div>
+										</div>
+										<div className="mt-2 space-y-1">
+											<div className="h-1 w-full rounded-full bg-primary-700" />
+											<div className="h-1 w-2/3 rounded-full bg-primary-700" />
+										</div>
+									</div>
+									{i < PIPELINE.length - 1 && (
+										<ArrowRight className="absolute -right-[7px] top-1/2 z-10 h-3 w-3 -translate-y-1/2 text-primary-500" />
+									)}
+								</div>
+							))}
+						</div>
 
-							<div className="mt-5 flex flex-wrap gap-4 text-sm text-primary-300">
-								<span className="inline-flex items-center gap-1.5">
-									<Search className="h-3.5 w-3.5" /> web_search via Tavily
-								</span>
-								<span className="inline-flex items-center gap-1.5">
-									<FileText className="h-3.5 w-3.5" /> create_file artifacts
-								</span>
-								<span className="inline-flex items-center gap-1.5">
-									<Workflow className="h-3.5 w-3.5" /> extended thinking
-								</span>
-							</div>
+						<div className="relative mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-primary-300">
+							<span className="inline-flex items-center gap-1.5">
+								<Search className="h-3.5 w-3.5" /> web_search via Tavily
+							</span>
+							<span className="inline-flex items-center gap-1.5">
+								<FileText className="h-3.5 w-3.5" /> create_file artifacts
+							</span>
+							<span className="inline-flex items-center gap-1.5">
+								<Workflow className="h-3.5 w-3.5" /> extended thinking
+							</span>
 						</div>
 					</article>
 
-					{/* Tall accent card */}
-					<article className="reveal flex flex-col justify-between rounded-xl border border-accent-300 bg-accent-100 p-7">
-						<LineChart className="h-7 w-7 text-accent-700" />
-						<div className="mt-6">
+					{/* Tall accent card: live flow metrics */}
+					<article className="reveal flex flex-col rounded-xl border border-accent-300 bg-accent-100 p-7">
+						<div className="flex items-center gap-2">
+							<span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent-200 text-accent-700">
+								<LineChart className="h-5 w-5" />
+							</span>
+							<span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-700">
+								<span className="pulse-dot relative inline-flex h-1.5 w-1.5 rounded-full bg-accent-600" />
+								Recomputed live
+							</span>
+						</div>
+
+						{/* Metric readouts — fills the card body, no dead zone. */}
+						<dl className="mt-6 space-y-2.5">
+							{[
+								{ k: "Lead time", v: "2.4d", w: "62%" },
+								{ k: "Cycle time", v: "1.1d", w: "38%" },
+								{ k: "Throughput", v: "9 / wk", w: "80%" },
+							].map((m) => (
+								<div key={m.k} className="flex items-center gap-3">
+									<dt className="w-20 shrink-0 text-sm text-accent-800/80">
+										{m.k}
+									</dt>
+									<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-accent-200">
+										<div
+											className="h-full rounded-full bg-accent-600"
+											style={{ width: m.w }}
+										/>
+									</div>
+									<dd className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-accent-900">
+										{m.v}
+									</dd>
+								</div>
+							))}
+						</dl>
+
+						<div className="mt-auto pt-6">
 							<h3 className="text-md font-bold text-accent-900">
 								Feedback, not guesswork
 							</h3>
-							<p className="mt-2 text-base text-accent-800/80">
-								A metrics bar in the header recomputes lead time, cycle time and
-								throughput on every change.
+							<p className="mt-1.5 text-base leading-relaxed text-accent-800/80">
+								Lead time, cycle time and throughput, recomputed on every change.
 							</p>
 						</div>
 					</article>
 
-					{/* Standard feature cards */}
+					{/* Standard feature cards — each opens with a product preview. */}
 					{FEATURES.map((f) => (
 						<article
 							key={f.title}
-							className="reveal rounded-xl border border-neutral-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-md"
+							className="reveal group/card flex flex-col rounded-xl border border-neutral-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-[0_12px_28px_-12px_oklch(28%_0.044_250_/_0.35)]"
 						>
-							<span className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-primary-100 text-primary-700">
-								<f.icon className="h-5 w-5" />
-							</span>
-							<h3 className="mt-4 text-md font-bold text-neutral-900">
-								{f.title}
-							</h3>
-							<p className="mt-2 text-base leading-relaxed text-neutral-600">
+							<FeaturePreview kind={f.key} />
+							<div className="mt-5 flex items-center gap-2.5">
+								<span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-100 text-primary-700 transition-colors group-hover/card:bg-primary-600 group-hover/card:text-white">
+									<f.icon className="h-4 w-4" />
+								</span>
+								<h3 className="text-md font-bold text-neutral-900">{f.title}</h3>
+							</div>
+							<p className="mt-2.5 text-base leading-relaxed text-neutral-600">
 								{f.body}
 							</p>
 						</article>
