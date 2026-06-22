@@ -24,38 +24,38 @@ const FEATURES = [
 	{
 		key: "board",
 		icon: LayoutGrid,
-		title: "Visualize the work",
-		body: "Drag-and-drop columns and cards with fractional positioning. Editable policies live under every column header.",
+		title: "See all your work at glance",
+		body: "Drag tasks across clean kanban columns and watch progress move in real time. Set the rules for each column right where your team can see them.",
 	},
 	{
 		key: "wip",
 		icon: Gauge,
-		title: "WIP limits that hold",
-		body: "Per-column limits enforced on the server. Moves past the cap are rejected with a clean 409 — never silently dropped.",
+		title: "Keep your team focused",
+		body: "Cap how much work each column can hold, so tasks get finished instead of piling up. Camel stops overload before it starts — nothing slips through.",
 	},
 	{
 		key: "realtime",
 		icon: Radio,
-		title: "Real-time, gracefully",
-		body: "Presence and live updates over SSE + Redis Pub/Sub. If Redis drops, the board degrades quietly instead of breaking.",
+		title: "Always in sync",
+		body: "See who's online and watch every update appear the moment a teammate makes it. No refreshing, no stepping on each other's changes.",
 	},
 	{
 		key: "flow",
 		icon: LineChart,
-		title: "Flow you can measure",
-		body: "Lead time, cycle time, throughput and WIP — recomputed on every change, charted over an 8-week trend.",
+		title: "Know how fast you ship",
+		body: "Track lead time, cycle time, and throughput on a simple 8-week trend — so you can spot bottlenecks early and keep delivery steady.",
 	},
 	{
 		key: "version",
 		icon: ShieldCheck,
-		title: "Conflict-free editing",
-		body: "Optimistic locking with a version on every card. Stale writes return 409 and the client refreshes — no lost work.",
+		title: "Edit together, lose nothing",
+		body: "Two people on the same card? Camel keeps every edit safe and shows the latest version automatically. No overwritten work, ever.",
 	},
 	{
 		key: "team",
 		icon: Users,
-		title: "Built for small teams",
-		body: "Invite-based workspaces (up to ten), card assignees and due dates, and a full activity feed of every change.",
+		title: "Made for small teams",
+		body: "Invite your team to a shared workspace, assign cards, set due dates, and follow every change in one clear activity feed.",
 	},
 ] as const;
 
@@ -339,9 +339,9 @@ export default function LandingPage() {
 							className="reveal mt-5 max-w-md text-md leading-relaxed text-neutral-600"
 							style={{ transitionDelay: "160ms" }}
 						>
-							Camel is a kanban board for small dev teams — WIP limits that
-							hold, live flow metrics, real-time presence, and an LLM pipeline
-							that researches and reports so you don&apos;t have to.
+							Camel is a kanban board for small dev teams — work-in-progress
+							limits that keep everyone focused, live delivery metrics,
+							real-time collaboration, and built-in AI that work on repetitive tasks, so you don&apos;t have to.
 						</p>
 						<div
 							className="reveal mt-8 flex flex-wrap items-center gap-3"
@@ -423,8 +423,8 @@ export default function LandingPage() {
 						Everything a small team needs to stay in flow
 					</h2>
 					<p className="mt-3 text-base text-neutral-600">
-						The six essential kanban practices, made concrete — plus the
-						real-time and agentic machinery that keeps a busy board honest.
+						Six proven kanban practices, built right into the board — plus
+						real-time collaboration and AI that handles the busywork for you.
 					</p>
 				</div>
 
@@ -443,12 +443,13 @@ export default function LandingPage() {
 								<Sparkles className="h-3.5 w-3.5" /> Agentic Kanban
 							</span>
 							<h3 className="mt-4 text-lg font-bold text-white">
-								A five-agent pipeline, on your board
+								Let AI do the thing for you
 							</h3>
 							<p className="mt-2 max-w-lg text-base text-primary-200">
-								Describe an intent and Camel spins up a board of agent columns
-								that run in sequence — gathering facts, extracting insight, and
-								writing a polished, QA-validated document.
+								Describe what you need and Camel puts a team of AI agents to
+								work on your board — researching the facts, pulling out the
+								insights, and writing a polished, fact-checked document, step by
+								step.
 							</p>
 						</div>
 
@@ -482,13 +483,13 @@ export default function LandingPage() {
 
 						<div className="relative mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-primary-300">
 							<span className="inline-flex items-center gap-1.5">
-								<Search className="h-3.5 w-3.5" /> web_search via Tavily
+								<Search className="h-3.5 w-3.5" /> Live web research
 							</span>
 							<span className="inline-flex items-center gap-1.5">
-								<FileText className="h-3.5 w-3.5" /> create_file artifacts
+								<FileText className="h-3.5 w-3.5" /> Real documents, drafted
 							</span>
 							<span className="inline-flex items-center gap-1.5">
-								<Workflow className="h-3.5 w-3.5" /> extended thinking
+								<Workflow className="h-3.5 w-3.5" /> Reasons it through
 							</span>
 						</div>
 					</article>
@@ -531,10 +532,11 @@ export default function LandingPage() {
 
 						<div className="mt-auto pt-6">
 							<h3 className="text-md font-bold text-accent-900">
-								Feedback, not guesswork
+								Decisions backed by data
 							</h3>
 							<p className="mt-1.5 text-base leading-relaxed text-accent-800/80">
-								Lead time, cycle time and throughput, recomputed on every change.
+								See lead time, cycle time, and throughput update live with every
+								move — so you lead with facts, not guesswork.
 							</p>
 						</div>
 					</article>
