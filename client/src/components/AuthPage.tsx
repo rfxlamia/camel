@@ -5,6 +5,7 @@ import type { User } from "../types";
 interface Props {
 	onAuth: (user: User) => void;
 	oauthError?: string | null;
+	initialMode?: "login" | "register";
 }
 
 const inputClass =
@@ -13,8 +14,12 @@ const inputClass =
 const errorInputClass =
 	"mt-1 w-full rounded-md border border-error-500 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 focus:shadow-[0_0_0_3px_oklch(55%_0.1_25_/_0.15)] focus:outline-none";
 
-export default function AuthPage({ onAuth, oauthError }: Props) {
-	const [mode, setMode] = useState<"login" | "register">("login");
+export default function AuthPage({
+	onAuth,
+	oauthError,
+	initialMode = "login",
+}: Props) {
+	const [mode, setMode] = useState<"login" | "register">(initialMode);
 	const [username, setUsername] = useState("");
 	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");

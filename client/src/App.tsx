@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { api } from "./api";
 import AuthPage from "./components/AuthPage";
-import EmailGatePage from "./components/EmailGatePage";
-import PickUsernamePage from "./components/PickUsernamePage";
 import ContextPanel from "./components/ContextPanel";
+import EmailGatePage from "./components/EmailGatePage";
 import LoadingCamel from "./components/LoadingCamel";
+import PickUsernamePage from "./components/PickUsernamePage";
 import { BoardProvider, useBoard } from "./context/BoardContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
+import LandingPage from "./pages/LandingPage";
 import SettingsPage from "./pages/SettingsPage";
 import type { User } from "./types";
 
@@ -83,6 +84,26 @@ function AuthenticatedApp() {
 	return <RouterProvider router={router} />;
 }
 
+// Logged-out shell: marketing landing at "/", auth form at "/login" + "/signup".
+// onAuth is stable (setUser), so the router is built once.
+function UnauthenticatedApp({ onAuth }: { onAuth: (user: User) => void }) {
+	const publicRouter = useMemo(
+		() =>
+			createBrowserRouter([
+				{ path: "/", element: <LandingPage /> },
+				{ path: "/login", element: <AuthPage onAuth={onAuth} /> },
+				{
+					path: "/signup",
+					element: <AuthPage onAuth={onAuth} initialMode="register" />,
+				},
+				{ path: "*", element: <Navigate to="/" replace /> },
+			]),
+		[onAuth],
+	);
+
+	return <RouterProvider router={publicRouter} />;
+}
+
 export default function App() {
 	const [user, setUser] = useState<User | null>(null);
 	const [authChecked, setAuthChecked] = useState(false);
@@ -104,7 +125,11 @@ export default function App() {
 	}, []);
 
 	if (!authChecked) return <LoadingScreen />;
-	if (!user) return <AuthPage onAuth={setUser} oauthError={oauthError} />;
+	// OAuth failures must surface the auth form with the error visible — never
+	// drop the user on the marketing page (see commit d78c1b0).
+	if (!user && oauthError)
+		return <AuthPage onAuth={setUser} oauthError={oauthError} />;
+	if (!user) return <UnauthenticatedApp onAuth={setUser} />;
 	if (user.needsUsername) return <PickUsernamePage onComplete={setUser} />;
 	if (!user.emailVerified)
 		return <EmailGatePage user={user} onComplete={setUser} />;

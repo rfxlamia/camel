@@ -56,7 +56,7 @@ describe("App — oauth_error wiring", () => {
 		expect(screen.getByText(/login cancelled — try again/i)).toBeTruthy();
 	});
 
-	it("renders AuthPage without oauth error when no oauth_error param and api.me() rejects", async () => {
+	it("renders the landing page (not the auth form) at / when logged out and no oauth_error", async () => {
 		Object.defineProperty(window, "location", {
 			value: new URL("http://localhost/"),
 			writable: true,
@@ -64,11 +64,15 @@ describe("App — oauth_error wiring", () => {
 
 		render(<App />);
 
+		// Logged-out visitors land on the marketing page, not the sign-in form.
 		await waitFor(() => {
-			expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+			expect(
+				screen.getByRole("button", { name: /create your board/i }),
+			).toBeTruthy();
 		});
 
-		// Should NOT show the cancelled message
+		// Auth form is gated behind the CTAs, so it should not be on screen yet.
+		expect(screen.queryByRole("heading", { name: "Sign in" })).toBeNull();
 		expect(screen.queryByText(/login cancelled/i)).toBeNull();
 	});
 });

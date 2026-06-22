@@ -132,6 +132,65 @@ body {
 	@apply bg-neutral-100 text-neutral-900 font-sans antialiased;
 }
 
+/* ── Landing page (logged-out marketing) ──────────────────────────────
+   Tokens only. Calm motion, gated behind prefers-reduced-motion per the
+   brand emotional goal (tenang). */
+
+/* Soft brand aura — layered radial tints over the neutral surface. */
+.landing-aura {
+	background:
+		radial-gradient(
+			62% 52% at 78% 14%,
+			color-mix(in oklch, var(--color-accent-200) 60%, transparent),
+			transparent 70%
+		),
+		radial-gradient(
+			58% 48% at 12% 32%,
+			color-mix(in oklch, var(--color-primary-200) 62%, transparent),
+			transparent 70%
+		),
+		var(--color-neutral-100);
+}
+
+/* Gentle vertical float for the hero mascot. */
+.float-soft {
+	animation: float-soft 7s ease-in-out infinite;
+}
+@keyframes float-soft {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-12px);
+	}
+}
+
+/* Scroll reveal — set is-visible via IntersectionObserver. */
+.reveal {
+	opacity: 0;
+	transform: translateY(18px);
+	transition:
+		opacity 600ms cubic-bezier(0.22, 1, 0.36, 1),
+		transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+	will-change: opacity, transform;
+}
+.reveal.is-visible {
+	opacity: 1;
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.float-soft {
+		animation: none;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+}
+
 /* Board canvas — faint dotted grid for quiet depth (calm, per brief).
    Tokens only: neutral-100 surface, neutral-300 dots at low alpha. */
 .board-canvas {
