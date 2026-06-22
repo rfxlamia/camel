@@ -308,17 +308,24 @@ function ActivitySection({ cardId }: { cardId: number }) {
 				<p className="mt-3 text-sm text-neutral-500">No activity yet.</p>
 			)}
 			{events !== null && events.length > 0 && (
-				<ol className="mt-3 space-y-2.5">
+				<ol className="mt-3 divide-y divide-neutral-100">
 					{events.map((e) => (
-						<li key={e.id} className="text-sm text-neutral-800">
-							<span className="font-medium text-neutral-900">
-								{e.actor?.displayName ?? "Someone"}
-							</span>{" "}
-							{describeCardEvent(e)}
-							<span className="text-neutral-500">
-								{" "}
-								· {formatRelativeTime(e.createdAt)}
+						<li
+							key={e.id}
+							className="flex items-baseline justify-between gap-4 py-2.5"
+						>
+							<span className="min-w-0 text-sm leading-snug text-neutral-700">
+								<span className="font-medium text-neutral-900">
+									{e.actor?.displayName ?? "Someone"}
+								</span>{" "}
+								{describeCardEvent(e)}
 							</span>
+							<time
+								dateTime={e.createdAt}
+								className="shrink-0 tabular-nums text-xs text-neutral-400"
+							>
+								{formatRelativeTime(e.createdAt)}
+							</time>
 						</li>
 					))}
 				</ol>

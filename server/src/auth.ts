@@ -456,7 +456,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.json({ error: "Username and password are required." });
 		}
 		const { rows } = await pool.query(
-			"SELECT id, username, display_name, password_hash FROM users WHERE username = $1",
+			"SELECT id, username, display_name, email, email_verified, password_hash FROM users WHERE username = $1",
 			[username.toLowerCase()],
 		);
 		const ok =

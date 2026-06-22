@@ -117,15 +117,6 @@ export default function CardView({ card, onOpen }: Props) {
 		data: { type: "card", card },
 	});
 
-	const done = card.doneAt !== null;
-	const active = card.startedAt !== null && !done;
-	// Left accent rail encodes lifecycle: done (green) → active (blue) → idle (none).
-	const rail = done
-		? "before:bg-success-500"
-		: active
-			? "before:bg-primary-400"
-			: "before:bg-transparent";
-
 	return (
 		<div
 			ref={setNodeRef}
@@ -136,7 +127,7 @@ export default function CardView({ card, onOpen }: Props) {
 			{...attributes}
 			{...listeners}
 			onClick={() => onOpen(card)}
-			className={`group relative cursor-grab touch-none rounded-md border border-neutral-200 bg-white py-2.5 pr-3 pl-3.5 shadow-xs transition-[border-color,box-shadow,transform] duration-150 before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[''] ${rail} hover:-translate-y-px hover:border-neutral-300 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 active:cursor-grabbing ${
+			className={`group relative cursor-grab touch-none rounded-md border border-neutral-200 bg-white py-2.5 pr-3 pl-3.5 shadow-xs transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-neutral-300 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 active:cursor-grabbing ${
 				isDragging ? "opacity-40" : ""
 			}`}
 		>
