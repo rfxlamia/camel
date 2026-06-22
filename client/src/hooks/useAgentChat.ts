@@ -17,6 +17,7 @@ import {
 	routeNext,
 	settle,
 } from "../lib/agentQueue";
+import type { ToastType } from "../context/BoardContext";
 import type { AgentBoard, AgentEvent } from "../types";
 
 // ---- Queue reducer (owned by this hook) ----
@@ -73,7 +74,7 @@ export interface UseAgentChatConfig {
 	createBoard: (intent: string) => Promise<void>;
 	setBoard: Dispatch<SetStateAction<AgentBoard | null>>;
 	activeWorkspaceId: number | null;
-	showToast: (msg: string) => void;
+	showToast: (msg: string, type?: ToastType) => void;
 	clearError: () => void;
 	clearAgentEvents: () => void;
 	clearFollowUpAgentEvents: () => void;
@@ -171,7 +172,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 					setBoard(updated);
 				}
 			} catch {
-				showToast("Couldn't send message. Try again.");
+				showToast("Couldn't send message. Try again.", "error");
 			} finally {
 				// Settlement bridge — route next queued message if any.
 				const settleResult = settle(queueStateRef.current);
@@ -263,7 +264,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 				conversationsToFollowUpMessages(updated.conversations),
 			);
 		} catch {
-			showToast("Couldn't confirm regeneration. Try again.");
+			showToast("Couldn't confirm regeneration. Try again.", "error");
 		} finally {
 			setBusy(false);
 		}
@@ -299,7 +300,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 				]);
 			}
 		} catch {
-			showToast("Couldn't cancel regeneration. Try again.");
+			showToast("Couldn't cancel regeneration. Try again.", "error");
 		} finally {
 			setBusy(false);
 		}

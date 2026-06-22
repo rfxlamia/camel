@@ -44,6 +44,8 @@ const PRESENCE_REFRESH_MS = 30_000;
 /** Outcome of a save, so callers (e.g. the context panel) can react to a 409. */
 export type SaveCardResult = "saved" | "conflict" | "error";
 
+export type ToastType = "success" | "error" | "warning" | "info";
+
 interface BoardContextValue {
   user: User;
   activeWorkspaceId: number | null;
@@ -88,8 +90,8 @@ interface BoardContextValue {
     },
   ) => Promise<SaveCardResult>;
   deleteCard: (id: number) => Promise<void>;
-  toast: string | null;
-  showToast: (message: string) => void;
+  toast: { message: string; type: ToastType } | null;
+  showToast: (message: string, type?: ToastType) => void;
   logout: () => Promise<void>;
   settings: SettingsMap;
   settingsVersion: number;
@@ -135,7 +137,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [settings, setSettings] = useState<SettingsMap>({
     boardName: "Camel",
     logoPath: "/logo.png",
@@ -170,8 +172,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 
   const membershipCount = workspaces.length;
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  const showToast = useCallback((message: string, type: ToastType = "info") => {
+    setToast({ message, type });
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   }, []);
@@ -276,10 +278,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         );
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-          showToast(err.message || CAP_MESSAGE);
+          showToast(err.message || CAP_MESSAGE, "error");
           return;
         }
-        showToast("Couldn't accept the invite. Try again.");
+        showToast("Couldn't accept the invite. Try again.", "error");
       }
     },
     [reloadWorkspaces, showToast, switchWorkspace],
@@ -291,7 +293,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         await api.declineInvite(invite.workspaceId, invite.id);
         await reloadWorkspaces();
       } catch {
-        showToast("Couldn't decline the invite. Try again.");
+        showToast("Couldn't decline the invite. Try again.", "error");
       }
     },
     [reloadWorkspaces, showToast],
@@ -329,13 +331,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         });
         switchWorkspace(selection.activeWorkspaceId);
         setCreateWorkspaceOpen(false);
-        showToast(selection.toast);
+        showToast(selection.toast, "success");
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-          showToast(err.message || CAP_MESSAGE);
+          showToast(err.message || CAP_MESSAGE, "error");
           return;
         }
-        showToast("Couldn't create the workspace. Try again.");
+        showToast("Couldn't create the workspace. Try again.", "error");
       }
     },
     [reloadWorkspaces, showToast, switchWorkspace],
@@ -433,7 +435,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
             workspaces: workspacesRef.current,
           });
           if (redirect) {
-            showToast(redirect.toast);
+            showToast(redirect.toast, "warning");
             void reloadWorkspaces().then(() => {
               switchWorkspace(redirect.nextWorkspaceId);
             });
@@ -490,12 +492,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
         return "saved";
       } catch (err) {
         if (err instanceof ApiError && err.code === "version_conflict") {
-          showToast("Someone else updated this card first — board refreshed.");
+          showToast("Someone else updated this card first — board refreshed.", "warning");
           await refresh();
           return "conflict";
         }
         showToast(
           "Couldn't save the card. Check your connection and try again.",
+          "error",
         );
         return "error";
       }

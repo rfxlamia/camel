@@ -353,7 +353,7 @@ export default function ContextPanel() {
 			return;
 		}
 		if (hadCardRef.current && !selfDeleteRef.current) {
-			showToast("This card was deleted.");
+			showToast("This card was deleted.", "info");
 			navigate("/board", { replace: true });
 			return;
 		}
@@ -386,7 +386,7 @@ export default function ContextPanel() {
 			// effect above closes the panel silently.
 		} catch {
 			selfDeleteRef.current = false;
-			showToast("Couldn't delete the card. Try again.");
+			showToast("Couldn't delete the card. Try again.", "error");
 		}
 	}, [cardId, deleteCard, showToast]);
 

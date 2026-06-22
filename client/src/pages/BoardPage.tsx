@@ -284,6 +284,7 @@ export default function BoardPage() {
 				revert();
 				showToast(
 					"Couldn't delete the card. Check your connection and try again.",
+					"error",
 				);
 			}
 			return;
@@ -352,13 +353,14 @@ export default function BoardPage() {
 		} catch (err) {
 			revert();
 			if (err instanceof ApiError && err.code === "version_conflict") {
-				showToast("Someone else moved this card first — board refreshed.");
+				showToast("Someone else moved this card first — board refreshed.", "warning");
 				await refresh();
 			} else if (err instanceof ApiError && err.status === 409) {
-				showToast("WIP limit reached — finish something first.");
+				showToast("WIP limit reached — finish something first.", "warning");
 			} else {
 				showToast(
 					"Couldn't move the card. Check your connection and try again.",
+					"error",
 				);
 			}
 		}
@@ -371,10 +373,11 @@ export default function BoardPage() {
 			await refresh();
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
-				showToast("WIP limit reached — finish something first.");
+				showToast("WIP limit reached — finish something first.", "warning");
 			} else {
 				showToast(
 					"Couldn't add the card. Check your connection and try again.",
+					"error",
 				);
 			}
 		}
@@ -394,7 +397,7 @@ export default function BoardPage() {
 			await api.updateColumn(activeWorkspaceId, id, patch);
 			await refresh();
 		} catch {
-			showToast("Couldn't update the column. Try again.");
+			showToast("Couldn't update the column. Try again.", "error");
 		}
 	};
 
@@ -406,6 +409,7 @@ export default function BoardPage() {
 		} catch {
 			showToast(
 				"Couldn't add the column. Check your connection and try again.",
+				"error",
 			);
 		}
 	};

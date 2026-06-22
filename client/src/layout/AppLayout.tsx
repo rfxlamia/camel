@@ -78,7 +78,7 @@ export default function AppLayout() {
 				</main>
 			</div>
 
-			{toast && <Toast message={toast} />}
+			{toast && <Toast message={toast.message} type={toast.type} />}
 		</div>
 	);
 }

@@ -143,16 +143,17 @@ export default function SettingsPage() {
 				},
 			]);
 			await refreshSettings();
-			showToast("Settings saved");
+			showToast("Settings saved", "success");
 		} catch (err: unknown) {
 			if (err instanceof ApiError && err.code === "version_conflict") {
-				showToast("Someone else updated settings first");
+				showToast("Someone else updated settings first", "warning");
 				await refreshSettings();
 			} else if (err instanceof ApiError && err.status === 403) {
-				showToast("You don't have permission to edit workspace settings");
+				showToast("You don't have permission to edit workspace settings", "error");
 			} else {
 				showToast(
 					"Couldn't save the settings. Check your connection and try again.",
+					"error",
 				);
 			}
 		} finally {
@@ -189,14 +190,14 @@ export default function SettingsPage() {
 		try {
 			await api.uploadLogo(activeWorkspaceId, file);
 			await refreshSettings();
-			showToast("Settings saved");
+			showToast("Settings saved", "success");
 		} catch (err: unknown) {
 			const msg =
 				err instanceof ApiError
 					? err.message
 					: "Upload failed. Please try again.";
 			setLogoError(msg);
-			showToast(msg);
+			showToast(msg, "error");
 		} finally {
 			if (urlToRevoke) URL.revokeObjectURL(urlToRevoke);
 		}
@@ -213,12 +214,12 @@ export default function SettingsPage() {
 		try {
 			await api.resetSettings(activeWorkspaceId);
 			await refreshSettings();
-			showToast("Settings reset to defaults");
+			showToast("Settings reset to defaults", "success");
 		} catch (err: unknown) {
 			if (err instanceof ApiError && err.status === 403) {
-				showToast("You don't have permission to edit workspace settings");
+				showToast("You don't have permission to edit workspace settings", "error");
 			} else {
-				showToast("Failed to reset settings. Try again.");
+				showToast("Failed to reset settings. Try again.", "error");
 			}
 		}
 	}
@@ -231,13 +232,13 @@ export default function SettingsPage() {
 			const list = await reloadWorkspaces();
 			const fallback = list.find((w) => w.isPersonal) ?? list[0];
 			if (fallback) switchWorkspace(fallback.id);
-			showToast("Workspace deleted");
+			showToast("Workspace deleted", "success");
 		} catch (err: unknown) {
 			const msg =
 				err instanceof ApiError
 					? err.message
 					: "Failed to delete workspace. Try again.";
-			showToast(msg);
+			showToast(msg, "error");
 		} finally {
 			setIsDeleting(false);
 			setShowDeleteConfirm(false);
@@ -258,16 +259,16 @@ export default function SettingsPage() {
 				username: trimmed,
 				role: inviteRole,
 			});
-			showToast("Invite sent");
+			showToast("Invite sent", "success");
 			setInviteUsername("");
 		} catch (err: unknown) {
 			if (err instanceof ApiError) {
 				setInviteError(err.message);
-				showToast(err.message);
+				showToast(err.message, "error");
 			} else {
 				const msg = "Couldn't send the invite. Try again.";
 				setInviteError(msg);
-				showToast(msg);
+				showToast(msg, "error");
 			}
 		} finally {
 			setIsInviting(false);
@@ -283,7 +284,7 @@ export default function SettingsPage() {
 		setIsSettingPassword(true);
 		try {
 			await api.setPassword(newPassword);
-			showToast("Password set");
+			showToast("Password set", "success");
 			setNewPassword("");
 		} catch (err: unknown) {
 			const msg =
@@ -291,7 +292,7 @@ export default function SettingsPage() {
 					? err.message
 					: "Couldn't set password. Try again.";
 			setPasswordError(msg);
-			showToast(msg);
+			showToast(msg, "error");
 		} finally {
 			setIsSettingPassword(false);
 		}

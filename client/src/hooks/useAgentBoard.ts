@@ -41,7 +41,7 @@ export function useAgentBoard() {
 			.catch(() => {
 				if (!cancelled) {
 					setBoard(null);
-					showToast("Couldn't load the board.");
+					showToast("Couldn't load the board.", "error");
 					setSearchParams({}, { replace: true });
 				}
 			})
@@ -122,7 +122,7 @@ export function useAgentBoard() {
 				if (err instanceof ApiError && err.status === 422) {
 					setError(err.message);
 				} else {
-					showToast("Couldn't create the board. Try again.");
+					showToast("Couldn't create the board. Try again.", "error");
 				}
 			} finally {
 				creatingRef.current = false;
@@ -153,6 +153,7 @@ export function useAgentBoard() {
 						mode === "retry"
 							? "Couldn't retry. Try again."
 							: "Couldn't approve the board. Try again.",
+						"error",
 					);
 				}
 			} finally {
