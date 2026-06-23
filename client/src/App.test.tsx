@@ -47,9 +47,11 @@ describe("App — oauth_error wiring", () => {
 		render(<App />);
 
 		// Wait for authChecked to flip (api.me() rejects → .finally sets authChecked)
-		// AuthPage renders a <h2>Sign in</h2> when user is null
+		// AuthPage renders <h1>Welcome back</h1> in login mode when user is null
 		await waitFor(() => {
-			expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+			expect(
+				screen.getByRole("heading", { name: "Welcome back" }),
+			).toBeTruthy();
 		});
 
 		// AuthPage should have received oauthError="cancelled" and render the message
@@ -72,7 +74,7 @@ describe("App — oauth_error wiring", () => {
 		});
 
 		// Auth form is gated behind the CTAs, so it should not be on screen yet.
-		expect(screen.queryByRole("heading", { name: "Sign in" })).toBeNull();
+		expect(screen.queryByRole("heading", { name: "Welcome back" })).toBeNull();
 		expect(screen.queryByText(/login cancelled/i)).toBeNull();
 	});
 });
