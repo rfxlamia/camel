@@ -358,6 +358,17 @@ const realDeps: AgentBoardServiceDeps = {
 		);
 	},
 
+	approveBoardAtomic: async (boardId) => {
+		const { rowCount } = await pool.query(
+			`UPDATE agent_boards
+			 SET status = 'approved', execution_status = 'running', updated_at = now()
+			 WHERE id = $1 AND status = 'pending'
+			 RETURNING id`,
+			[boardId],
+		);
+		return { rowCount: rowCount ?? 0 };
+	},
+
 	listBoards: async (workspaceId) => {
 		const { rows } = await pool.query(
 			`SELECT id, original_intent, template_id, status, execution_status, created_at

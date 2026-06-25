@@ -113,6 +113,8 @@ export interface AgentBoardServiceDeps {
 		data: Record<string, unknown>,
 	) => Promise<void>;
 
+	approveBoardAtomic?: (boardId: number) => Promise<{ rowCount: number }>;
+
 	listBoards?: (workspaceId: number) => Promise<BoardListItem[]>;
 
 	getFirstCard?: (boardId: number) => Promise<FirstCardInfo | null>;
@@ -422,7 +424,6 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (!board) return { status: 404 as const };
 			if (board.workspaceId !== workspaceId) return { status: 404 as const };
 			if (board.userId !== userId) return { status: 403 as const };
-			if (board.status !== "pending") return { status: 409 as const };
 
 			if (board.templateId === "status-report" && deps.detectReportPeriod) {
 				try {
@@ -446,10 +447,18 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}
 
-			await deps.updateBoard!(boardId, {
-				status: "approved",
-				execution_status: "running",
-			});
+			// Atomic status transition: only one concurrent request wins
+			if (deps.approveBoardAtomic) {
+				const { rowCount } = await deps.approveBoardAtomic(boardId);
+				if (rowCount === 0) return { status: 409 as const };
+			} else {
+				// Fallback for tests that don't provide approveBoardAtomic
+				if (board.status !== "pending") return { status: 409 as const };
+				await deps.updateBoard!(boardId, {
+					status: "approved",
+					execution_status: "running",
+				});
+			}
 
 			await deps.publishEvent?.(workspaceId, {
 				type: "agent.board.generating",
@@ -1173,8 +1182,11 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				return { status: 404 as const };
 			if (board.userId !== userId) return { status: 403 as const };
 
+			// Atomic claim: delete() returns true only for the first caller
 			const newIntent = pendingRegenerate.get(boardId);
-			if (!newIntent) return { ok: true as const };
+			if (!newIntent || !pendingRegenerate.delete(boardId)) {
+				return { ok: true as const };
+			}
 
 			await deps.insertConversation!({
 				boardId,
@@ -1188,7 +1200,6 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			});
 			await deps.deleteOutputsForBoard!(boardId);
 			await deps.deleteCardsForBoard!(boardId);
-			pendingRegenerate.delete(boardId);
 
 			await deps.publishEvent?.(workspaceId, {
 				type: "agent.board.generating",
