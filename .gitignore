@@ -35,6 +35,7 @@ coverage/
 .claude.globals/
 _bmad/
 _bmad-output/
+piolium/
 
 # Documentation (local only)
 docs/
