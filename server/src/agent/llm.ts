@@ -682,12 +682,17 @@ export async function executeCard(
 	const client = getClient();
 
 	// Security: Check for prompt injection attempts (LOG AND CONTINUE, don't hard-fail)
+	//
+	// This is intentionally a soft, logging-only layer — NOT a blocking control.
+	// The real defense is boundary escaping (sanitizeUserInput wraps untrusted content
+	// in XML boundaries with escaped special chars) plus createSafeSystemPrompt.
+	// Blocking here would reintroduce the false-positive DoS risk that the heuristic
+	// is designed to avoid. See also: prompt-sanitizer.ts for multilingual coverage.
 	if (detectPromptInjection(intent)) {
 		console.warn(
 			"executeCard: prompt injection detected in intent, length:",
 			intent.length,
 		);
-		// Continue execution — don't turn a noisy heuristic into a denial-of-service
 	}
 
 	// Substitute {original_intent} before calling LLM
