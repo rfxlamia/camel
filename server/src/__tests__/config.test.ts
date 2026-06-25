@@ -29,7 +29,9 @@ describe("BETTER_AUTH_SECRET production guard", () => {
 		await import("../config.js");
 
 		expect(exitSpy).toHaveBeenCalledWith(1);
-		expect(errorSpy).toHaveBeenCalled();
+		expect(errorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("BETTER_AUTH_SECRET must be set in production"),
+		);
 	});
 
 	it("crashes in production with empty secret", async () => {
@@ -43,7 +45,25 @@ describe("BETTER_AUTH_SECRET production guard", () => {
 		await import("../config.js");
 
 		expect(exitSpy).toHaveBeenCalledWith(1);
-		expect(errorSpy).toHaveBeenCalled();
+		expect(errorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("BETTER_AUTH_SECRET must be set in production"),
+		);
+	});
+
+	it("crashes in production when BETTER_AUTH_SECRET is not set", async () => {
+		process.env.NODE_ENV = "production";
+		delete process.env.BETTER_AUTH_SECRET;
+		const exitSpy = vi
+			.spyOn(process, "exit")
+			.mockImplementation(() => undefined as never);
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await import("../config.js");
+
+		expect(exitSpy).toHaveBeenCalledWith(1);
+		expect(errorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("BETTER_AUTH_SECRET must be set in production"),
+		);
 	});
 
 	it("passes in production with custom secret", async () => {
