@@ -43,7 +43,7 @@ export const INJECTION_PATTERNS: RegExp[] = [
 	/ignorez\s+les\s+instructions\s+pr[eé]c[eé]dentes/i,
 	/ignoriere\s+vorherige\s+anweisungen/i,
 	/ignore\s+as\s+instru[çc][oõ]es\s+anteriores/i,
-	/忽略之前的指令/,
+	/忽略\s*之\s*前\s*的\s*指\s*令/,
 ];
 
 /**
