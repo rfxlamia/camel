@@ -19,6 +19,7 @@ import {
 	sanitizeUserInput,
 	sanitizeLLMOutput,
 	createSafeSystemPrompt,
+	escapeXml,
 } from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
 import { toAnthropicToolDefs } from "./tools/registry.js";
@@ -358,13 +359,20 @@ function buildFollowUpUserMessage(
 	const historyText =
 		conversationHistory.length > 0
 			? conversationHistory
-					.map((m) => `<${m.role}>${m.content}</${m.role}>`)
+					.map((m) => {
+						const safeRole =
+							m.role === "user" || m.role === "assistant" || m.role === "system"
+								? m.role
+								: "user";
+						return `<${safeRole}>${escapeXml(m.content)}</${safeRole}>`;
+					})
 					.join("\n")
 			: "(no prior messages)";
 
+	// userMessage is pre-sanitized by sanitizeUserInput() in the caller — do NOT re-escape
 	return `<board_context>
-<original_intent>${originalIntent}</original_intent>
-<artifact>${artifactContent ?? "(no artifact)"}</artifact>
+<original_intent>${escapeXml(originalIntent)}</original_intent>
+<artifact>${artifactContent != null ? escapeXml(artifactContent) : "(no artifact)"}</artifact>
 <conversation_history>
 ${historyText}
 </conversation_history>
