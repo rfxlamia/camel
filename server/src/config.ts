@@ -47,3 +47,11 @@ if (!parsed.success) {
 }
 
 export const config = Object.freeze(parsed.data);
+
+if (
+	process.env.NODE_ENV === "production" &&
+	config.BETTER_AUTH_SECRET === "dev-secret-change-in-production"
+) {
+	console.error("❌ BETTER_AUTH_SECRET must be set in production");
+	process.exit(1);
+}
