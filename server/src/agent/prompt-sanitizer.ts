@@ -43,6 +43,9 @@ export const INJECTION_PATTERNS: RegExp[] = [
 	/ignorez\s+les\s+instructions\s+pr[eé]c[eé]dentes/i,
 	/ignoriere\s+vorherige\s+anweisungen/i,
 	/ignore\s+as\s+instru[çc][oõ]es\s+anteriores/i,
+	// The inner \s* is redundant when called via detectPromptInjection (the caller
+	// already strips inter-CJK whitespace), but INJECTION_PATTERNS is exported and may
+	// be tested directly — keep \s* so the standalone path still tolerates spacing.
 	/忽略\s*之\s*前\s*的\s*指\s*令/,
 ];
 
@@ -80,11 +83,23 @@ export const API_KEY_PATTERNS: RegExp[] = [
  * but false positives should be rare.
  */
 export function detectPromptInjection(input: string): boolean {
-	// Normalize: collapse whitespace, lowercase for comparison
-	const normalized = input.toLowerCase().replace(/\s+/g, " ").trim();
+	// Unicode-normalize first (NFKC), then collapse whitespace and lowercase.
+	// NFKC folds decomposed accents (e + U+0301 -> \u00e9) and fullwidth Latin
+	// (\uff49\uff47\uff4e\uff4f\uff52\uff45 -> ignore) into canonical forms, defeating character-substitution
+	// bypasses that would otherwise slip past the literal patterns.
+	const normalized = input
+		.normalize("NFKC")
+		.toLowerCase()
+		.replace(/\s+/g, " ")
+		.trim();
 
-	// Strip whitespace between CJK characters to defeat character-insertion bypasses
-	const cjkNormalized = normalized.replace(/(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '');
+	// Strip whitespace between CJK characters to defeat character-insertion bypasses.
+	// NFKC folds the ideographic space (U+3000) into a regular space but does NOT
+	// remove ordinary spaces between ideographs, so this dedicated strip is still needed.
+	const cjkNormalized = normalized.replace(
+		/(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g,
+		"",
+	);
 
 	return INJECTION_PATTERNS.some((pattern) => pattern.test(cjkNormalized));
 }
