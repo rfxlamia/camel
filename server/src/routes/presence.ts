@@ -6,9 +6,6 @@ import {
 	onlineUsers,
 	sseHandler,
 } from "../realtime.js";
-import { parseWorkspaceId } from "./helpers.js";
-
-type WorkspaceRouteParams = { workspaceId: string };
 
 export const presenceRouter = Router({ mergeParams: true });
 
@@ -29,13 +26,8 @@ presenceRouter.get("/presence", requireWorkspaceMember, async (req, res) => {
 	res.json({ users: await onlineUsers(workspaceId, req.user!) });
 });
 
-presenceRouter.delete("/presence", async (req, res) => {
-	const workspaceId = parseWorkspaceId(
-		(req.params as WorkspaceRouteParams).workspaceId,
-	);
-	if (workspaceId === null) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+presenceRouter.delete("/presence", requireWorkspaceMember, async (req, res) => {
+	const { workspaceId } = req.workspace!;
 
 	await clearPresence(workspaceId, req.user!.id);
 	res.status(204).end();
