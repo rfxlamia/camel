@@ -1141,7 +1141,7 @@ describe("integration: regenerate confirmation flow (T2 + T3)", () => {
 		expect(sendResult).toMatchObject({ pendingRegenerate: true });
 
 		// Fire two concurrent confirmRegenerateBoard calls
-		await Promise.all([
+		const [result1, result2] = await Promise.all([
 			service.confirmRegenerateBoard({
 				boardId: 42,
 				userId: 1,
@@ -1155,6 +1155,10 @@ describe("integration: regenerate confirmation flow (T2 + T3)", () => {
 		]);
 
 		await vi.runAllTimersAsync();
+
+		// Both callers receive { ok: true } — the winner explicitly, the loser via idempotent early return
+		expect(result1).toEqual({ ok: true });
+		expect(result2).toEqual({ ok: true });
 
 		// Exactly one confirmRegenerateBoard should trigger the pipeline
 		// The other returns { ok: true } idempotently (TOCTOU guard)
