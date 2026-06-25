@@ -543,34 +543,6 @@ export async function classifyFollowUpIntent(
 }
 
 // ---------------------------------------------------------------------------
-// generateExplanation — produce a human-readable explanation of the plan
-// ---------------------------------------------------------------------------
-
-export async function generateExplanation(
-	board: { columns: Array<{ name: string }> },
-	intent: string,
-): Promise<string> {
-	const client = getClient();
-
-	const columnList = board.columns.map((c) => c.name).join(" → ");
-
-	const response = await client.messages.create({
-		model: MODEL,
-		max_tokens: 2048,
-		system:
-			"You explain kanban board plans in 2-3 concise sentences for a non-technical user.",
-		messages: [
-			{
-				role: "user",
-				content: `User intent: "${intent}"\n\nBoard columns: ${columnList}\n\nExplain what this board will do and why these steps are needed.`,
-			},
-		],
-	});
-
-	return extractText(response);
-}
-
-// ---------------------------------------------------------------------------
 // detectReportPeriod — check whether a status-report intent names a time window
 // ---------------------------------------------------------------------------
 
@@ -644,6 +616,26 @@ export async function generateClarificationQuestion(
 	_board: unknown,
 	feedback: string,
 ): Promise<string> {
+	// Security: Check for prompt injection attempts
+	if (detectPromptInjection(intent)) {
+		console.warn(
+			"generateClarificationQuestion: prompt injection detected in intent, length:",
+			intent.length,
+		);
+		return "I could not process your request. Could you rephrase your question?";
+	}
+	if (detectPromptInjection(feedback)) {
+		console.warn(
+			"generateClarificationQuestion: prompt injection detected in feedback, length:",
+			feedback.length,
+		);
+		return "I could not process your request. Could you rephrase your question?";
+	}
+
+	// Security: Sanitize user input before sending to LLM
+	const safeIntent = sanitizeUserInput(intent);
+	const safeFeedback = sanitizeUserInput(feedback);
+
 	const client = getClient();
 
 	const response = await client.messages.create({
@@ -654,12 +646,12 @@ export async function generateClarificationQuestion(
 		messages: [
 			{
 				role: "user",
-				content: `Original intent: "${intent}"\nUser feedback: "${feedback}"\n\nAsk one clarification question to help refine the request.`,
+				content: `Original intent: "${safeIntent}"\nUser feedback: "${safeFeedback}"\n\nAsk one clarification question to help refine the request.`,
 			},
 		],
 	});
 
-	return extractText(response);
+	return sanitizeLLMOutput(extractText(response));
 }
 
 // ---------------------------------------------------------------------------
