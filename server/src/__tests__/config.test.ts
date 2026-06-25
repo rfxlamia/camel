@@ -32,6 +32,20 @@ describe("BETTER_AUTH_SECRET production guard", () => {
 		expect(errorSpy).toHaveBeenCalled();
 	});
 
+	it("crashes in production with empty secret", async () => {
+		process.env.NODE_ENV = "production";
+		process.env.BETTER_AUTH_SECRET = "";
+		const exitSpy = vi
+			.spyOn(process, "exit")
+			.mockImplementation(() => undefined as never);
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await import("../config.js");
+
+		expect(exitSpy).toHaveBeenCalledWith(1);
+		expect(errorSpy).toHaveBeenCalled();
+	});
+
 	it("passes in production with custom secret", async () => {
 		process.env.NODE_ENV = "production";
 		process.env.BETTER_AUTH_SECRET = "my-real-secret";
