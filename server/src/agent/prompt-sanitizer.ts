@@ -83,7 +83,10 @@ export function detectPromptInjection(input: string): boolean {
 	// Normalize: collapse whitespace, lowercase for comparison
 	const normalized = input.toLowerCase().replace(/\s+/g, " ").trim();
 
-	return INJECTION_PATTERNS.some((pattern) => pattern.test(normalized));
+	// Strip whitespace between CJK characters to defeat character-insertion bypasses
+	const cjkNormalized = normalized.replace(/(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, '');
+
+	return INJECTION_PATTERNS.some((pattern) => pattern.test(cjkNormalized));
 }
 
 /**
