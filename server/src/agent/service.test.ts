@@ -1087,6 +1087,87 @@ describe("integration: regenerate confirmation flow (T2 + T3)", () => {
 		vi.useRealTimers();
 	});
 
+	it("concurrent confirmRegenerateBoard does not double-trigger pipeline (TOCTOU guard)", async () => {
+		vi.useFakeTimers();
+		const updateBoard = vi.fn(async () => {});
+		const deleteOutputsForBoard = vi.fn(async () => {});
+		const deleteCardsForBoard = vi.fn(async () => {});
+		const publishEvent = vi.fn(async () => {});
+		const getBoard = vi.fn(async () => ({
+			id: 42,
+			status: "approved",
+			executionStatus: "done",
+			workspaceId: 7,
+			userId: 1,
+			originalIntent: "riset",
+		}));
+		const getColumns = vi.fn(async () => [
+			{
+				columnId: 10,
+				columnSlug: "research-specialist",
+				systemPrompt: "Research: {original_intent}",
+				reasoning: false,
+			},
+		]);
+		const executeCard = vi.fn(async () => ({ output: "Research output" }));
+
+		const service = createAgentBoardService({
+			getBoard,
+			updateBoard,
+			deleteOutputsForBoard,
+			deleteCardsForBoard,
+			insertConversation: vi.fn(async () => {}),
+			publishEvent,
+			getArtifact: vi.fn(async () => null),
+			getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent: vi.fn(async () => ({
+				intent: "NEW_DIRECTION" as const,
+				response: "This is a different topic.",
+				confidence: 0.93,
+			})),
+			getColumns,
+			executeCard,
+			insertOutput: vi.fn(async () => {}),
+			insertCard: vi.fn(async () => {}),
+		});
+
+		// Set up pendingRegenerate via sendMessage
+		const sendResult = await service.sendMessage({
+			boardId: 42,
+			userId: 1,
+			workspaceId: 7,
+			message: "research competitor landscape",
+		});
+		expect(sendResult).toMatchObject({ pendingRegenerate: true });
+
+		// Fire two concurrent confirmRegenerateBoard calls
+		await Promise.all([
+			service.confirmRegenerateBoard({
+				boardId: 42,
+				userId: 1,
+				workspaceId: 7,
+			}),
+			service.confirmRegenerateBoard({
+				boardId: 42,
+				userId: 1,
+				workspaceId: 7,
+			}),
+		]);
+
+		await vi.runAllTimersAsync();
+
+		// Exactly one confirmRegenerateBoard should trigger the pipeline
+		// The other returns { ok: true } idempotently (TOCTOU guard)
+		expect(deleteOutputsForBoard).toHaveBeenCalledTimes(1);
+		expect(deleteCardsForBoard).toHaveBeenCalledTimes(1);
+		expect(executeCard).toHaveBeenCalledTimes(1);
+		// updateBoard called 2x: once in confirmRegenerateBoard (status=running), once in runPipeline (status=done)
+		expect(updateBoard).toHaveBeenCalledTimes(2);
+		expect(publishEvent).toHaveBeenCalled();
+
+		vi.useRealTimers();
+	});
+
 	it("cancel flow: sendMessage(NEW_DIRECTION) → cancelRegenerateBoard clears pending without mutations", async () => {
 		const updateBoard = vi.fn(async () => {});
 		const deleteOutputsForBoard = vi.fn(async () => {});

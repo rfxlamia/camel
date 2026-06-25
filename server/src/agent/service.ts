@@ -1183,6 +1183,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (board.userId !== userId) return { status: 403 as const };
 
 			// Atomic claim: delete() returns true only for the first caller
+			// CRITICAL: get() and delete() must remain synchronous and adjacent — do not insert await between them
 			const newIntent = pendingRegenerate.get(boardId);
 			if (!newIntent || !pendingRegenerate.delete(boardId)) {
 				return { ok: true as const };
