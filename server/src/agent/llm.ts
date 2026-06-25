@@ -359,10 +359,17 @@ function buildFollowUpUserMessage(
 	const historyText =
 		conversationHistory.length > 0
 			? conversationHistory
-					.map((m) => `<${m.role}>${escapeXml(m.content)}</${m.role}>`)
+					.map((m) => {
+						const safeRole =
+							m.role === "user" || m.role === "assistant" || m.role === "system"
+								? m.role
+								: "user";
+						return `<${safeRole}>${escapeXml(m.content)}</${safeRole}>`;
+					})
 					.join("\n")
 			: "(no prior messages)";
 
+	// userMessage is pre-sanitized by sanitizeUserInput() in the caller — do NOT re-escape
 	return `<board_context>
 <original_intent>${escapeXml(originalIntent)}</original_intent>
 <artifact>${artifactContent != null ? escapeXml(artifactContent) : "(no artifact)"}</artifact>
@@ -935,7 +942,7 @@ async function executeCardWithTools(
 						toolResults.push({
 							type: "tool_result",
 							tool_use_id: block.id,
-							content: escapeXml(result.content),
+							content: result.content,
 						});
 					} else {
 						onToolEvent?.({
@@ -947,7 +954,7 @@ async function executeCardWithTools(
 						toolResults.push({
 							type: "tool_result",
 							tool_use_id: block.id,
-							content: escapeXml(result.content),
+							content: result.content,
 							is_error: true,
 						});
 					}
