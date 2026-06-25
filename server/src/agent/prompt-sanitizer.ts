@@ -36,6 +36,14 @@ export const INJECTION_PATTERNS: RegExp[] = [
 	/(?:pretend|imagine|roleplay)\s+(?:you\s+(?:have|are)\s+)?(?:no\s+)?(?:restrictions?|limitations?|rules?|constraints?|filters?)/i,
 	/dan\s*\(?\s*do\s+anything\s+now\s*\)?/i,
 	/your\s+new\s+role\s+is/i,
+
+	// Non-English instruction override attempts (best-effort logging coverage)
+	/abaikan\s+instruksi\s+sebelumnya/i,
+	/ignora\s+las\s+instrucciones\s+anteriores/i,
+	/ignorez\s+les\s+instructions\s+pr[eé]c[eé]dentes/i,
+	/ignoriere\s+vorherige\s+anweisungen/i,
+	/ignore\s+as\s+instru[çc][oõ]es\s+anteriores/i,
+	/忽略之前的指令/,
 ];
 
 /**
