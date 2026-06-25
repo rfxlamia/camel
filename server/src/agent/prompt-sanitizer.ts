@@ -79,6 +79,14 @@ export function detectPromptInjection(input: string): boolean {
 }
 
 /**
+ * Escape XML special characters to prevent boundary breaking.
+ * Used for untrusted content interpolated into XML-structured prompts.
+ */
+export function escapeXml(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
  * Sanitize user input before sending to LLM.
  *
  * - Wraps input in XML boundaries to isolate it from system prompt
@@ -94,10 +102,7 @@ export function sanitizeUserInput(input: string, maxLength = 10000): string {
 	}
 
 	// Escape XML special characters
-	sanitized = sanitized
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
+	sanitized = escapeXml(sanitized);
 
 	// Wrap in XML boundaries
 	return `<user_input>\n${sanitized}\n</user_input>`;

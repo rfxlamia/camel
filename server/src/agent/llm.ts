@@ -19,6 +19,7 @@ import {
 	sanitizeUserInput,
 	sanitizeLLMOutput,
 	createSafeSystemPrompt,
+	escapeXml,
 } from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
 import { toAnthropicToolDefs } from "./tools/registry.js";
@@ -358,13 +359,13 @@ function buildFollowUpUserMessage(
 	const historyText =
 		conversationHistory.length > 0
 			? conversationHistory
-					.map((m) => `<${m.role}>${m.content}</${m.role}>`)
+					.map((m) => `<${m.role}>${escapeXml(m.content)}</${m.role}>`)
 					.join("\n")
 			: "(no prior messages)";
 
 	return `<board_context>
-<original_intent>${originalIntent}</original_intent>
-<artifact>${artifactContent ?? "(no artifact)"}</artifact>
+<original_intent>${escapeXml(originalIntent)}</original_intent>
+<artifact>${artifactContent != null ? escapeXml(artifactContent) : "(no artifact)"}</artifact>
 <conversation_history>
 ${historyText}
 </conversation_history>
@@ -934,7 +935,7 @@ async function executeCardWithTools(
 						toolResults.push({
 							type: "tool_result",
 							tool_use_id: block.id,
-							content: result.content,
+							content: escapeXml(result.content),
 						});
 					} else {
 						onToolEvent?.({
@@ -946,7 +947,7 @@ async function executeCardWithTools(
 						toolResults.push({
 							type: "tool_result",
 							tool_use_id: block.id,
-							content: result.content,
+							content: escapeXml(result.content),
 							is_error: true,
 						});
 					}
