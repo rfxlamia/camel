@@ -25,6 +25,10 @@ import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 
 const app = express();
+// Trust the first proxy hop (reverse proxy / LB) so req.ip reflects the real client IP.
+// Adjust the number if the deployment has more than one proxy hop.
+// See: https://expressjs.com/en/guide/behind-proxies.html
+app.set("trust proxy", 1);
 app.use(securityHeaders());
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
 

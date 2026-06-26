@@ -12,7 +12,8 @@ This file provides guidance to agents when working with code in this repository.
 
 **Integration tests**: Require `RUN_LLM_IT=1` env var AND running DB. Not run by default `make test`.
 
-**Single test execution**: Run from repo root with full path: `npx vitest run server/src/core/position.test.ts`
+**Running tests**: Always use `npm run test` from repo root. Do NOT use `npx vitest run` directly — it skips important setup.
+**Single test execution**: Run from repo root with full path: `npm run test -- server/src/core/position.test.ts`
 
 **Client typecheck**: `noUnusedLocals` and `noUnusedParameters` enabled — unused imports WILL fail typecheck.
 
