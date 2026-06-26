@@ -1,4 +1,4 @@
-import { ArrowUp, Sparkles } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
 
@@ -84,10 +84,6 @@ export default function AgentComposer({
 
 			<div className="relative w-full max-w-2xl">
 				<div className="animate-rise-in [animation-delay:40ms] flex flex-col items-center text-center">
-					<span className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white/70 px-3 py-1 text-xs font-medium tracking-wide text-neutral-500 backdrop-blur-sm">
-						<Sparkles size={12} className="text-accent-600" aria-hidden />
-						CAMEL AGENT
-					</span>
 					<h1 className="text-balance text-2xl font-semibold tracking-tight text-neutral-900">
 						What should the agent look into?
 					</h1>
