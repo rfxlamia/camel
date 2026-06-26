@@ -530,6 +530,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					...patch,
 					version: patch.version ?? current?.version,
 				});
+				cancelScheduledRefresh();
 				await refresh();
 				return "saved";
 			} catch (err) {
@@ -538,6 +539,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 						"Someone else updated this card first — board refreshed.",
 						"warning",
 					);
+					cancelScheduledRefresh();
 					await refresh();
 					return "conflict";
 				}
@@ -548,16 +550,17 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				return "error";
 			}
 		},
-		[activeWorkspaceId, columns, refresh, showToast],
+		[activeWorkspaceId, columns, refresh, showToast, cancelScheduledRefresh],
 	);
 
 	const deleteCard = useCallback(
 		async (id: number) => {
 			if (activeWorkspaceId === null) return;
 			await api.deleteCard(activeWorkspaceId, id);
+			cancelScheduledRefresh();
 			await refresh();
 		},
-		[activeWorkspaceId, refresh],
+		[activeWorkspaceId, refresh, cancelScheduledRefresh],
 	);
 
 	const logout = useCallback(async () => {
