@@ -12,6 +12,7 @@ type MockRequest = {
 type MockResponse = {
 	writeHead: ReturnType<typeof vi.fn>;
 	write: ReturnType<typeof vi.fn>;
+	end: ReturnType<typeof vi.fn>;
 	status: ReturnType<typeof vi.fn>;
 	json: ReturnType<typeof vi.fn>;
 };
@@ -27,6 +28,7 @@ function mockSseResponse(): MockResponse {
 	return {
 		writeHead: vi.fn(),
 		write: vi.fn(),
+		end: vi.fn(),
 		status: vi.fn().mockReturnThis(),
 		json: vi.fn(),
 	};
@@ -222,5 +224,56 @@ describe("Redis reconnection", () => {
 		await hub.publishEvent(1, { type: "card.created", cardId: 1 });
 		expect(publish).not.toHaveBeenCalled();
 		expect(client.drain()).toHaveLength(1);
+	});
+});
+
+describe("shutdown", () => {
+	it("ends all SSE clients and clears intervals on shutdown", () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+
+		const req1 = mockSseRequest(1);
+		const res1 = mockSseResponse();
+		hub.sseHandler(req1 as never, res1 as never);
+
+		const req2 = mockSseRequest(1);
+		const res2 = mockSseResponse();
+		hub.sseHandler(req2 as never, res2 as never);
+
+		hub.shutdown();
+
+		expect(res1.end).toHaveBeenCalled();
+		expect(res2.end).toHaveBeenCalled();
+
+		// After shutdown, publishing should not crash (map is cleared)
+		hub.publishEvent(1, { type: "card.created", cardId: 1 });
+	});
+
+	it("returns 503 for new SSE connections after shutdown", () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+
+		// Shutdown first
+		hub.shutdown();
+
+		// New SSE request should get 503
+		const req = mockSseRequest(1);
+		const res = mockSseResponse();
+		hub.sseHandler(req as never, res as never);
+
+		expect(res.status).toHaveBeenCalledWith(503);
+		expect(res.json).toHaveBeenCalledWith({ error: "Server is shutting down" });
+		expect(res.writeHead).not.toHaveBeenCalled();
+	});
+
+	it("is idempotent — calling shutdown twice does not throw", () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+
+		const req = mockSseRequest(1);
+		const res = mockSseResponse();
+		hub.sseHandler(req as never, res as never);
+
+		expect(() => {
+			hub.shutdown();
+			hub.shutdown();
+		}).not.toThrow();
 	});
 });

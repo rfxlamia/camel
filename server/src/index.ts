@@ -19,9 +19,10 @@ import { createErrorHandler } from "./middleware/error-handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
-import { initRealtime } from "./realtime.js";
+import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
+import { pool } from "./db/pool.js";
 import { api } from "./routes.js";
 
 const app = express();
@@ -81,7 +82,10 @@ app.use(
 	express.static(UPLOADS_DIR),
 );
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => {
+	if (isShuttingDown) return res.status(503).json({ status: "shutting_down" });
+	res.json({ ok: true });
+});
 
 // CSRF token endpoint for client to retrieve the token
 app.get("/api/csrf-token", (req, res) => {
@@ -107,12 +111,63 @@ app.use("/api", createAgentRouter());
 
 app.use(createErrorHandler());
 
+// Module-scope flag so health endpoint and shutdown handler share state.
+let isShuttingDown = false;
+let cleanupInterval: ReturnType<typeof setInterval> | undefined;
+let server: ReturnType<typeof app.listen> | undefined;
+
+// Graceful shutdown: drain connections, close resources, then exit.
+// Registered at module scope so signals during startup are handled.
+const shutdown = async () => {
+	if (isShuttingDown) return;
+	isShuttingDown = true;
+	console.log("Shutting down gracefully...");
+
+	// Start forced-exit timer BEFORE async cleanup.
+	const forceExit = setTimeout(() => {
+		console.error("Graceful shutdown timed out — forcing exit");
+		process.exit(1);
+	}, 5000);
+	// Don't hold the process open just for the timer.
+	forceExit.unref();
+
+	if (!server) {
+		console.error(
+			"Signal received before server started — exiting immediately",
+		);
+		process.exit(1);
+	}
+
+	// Shorten timeouts so idle sockets drain quickly.
+	server.keepAliveTimeout = 1000;
+	server.headersTimeout = 2000;
+
+	// Drain realtime SSE connections BEFORE server.close() so the
+	// callback can fire (server.close waits for all sockets to end,
+	// and SSE sockets only end once shutdownRealtime() calls res.end()).
+	try {
+		await shutdownRealtime();
+	} catch (err) {
+		console.error("shutdownRealtime() failed:", err);
+	}
+
+	server.close(async () => {
+		if (cleanupInterval) clearInterval(cleanupInterval);
+		await pool.end();
+		clearTimeout(forceExit);
+		console.log("Shutdown complete — exiting cleanly");
+		process.exit(0);
+	});
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
 const port = config.PORT;
-const server = app.listen(port, async () => {
+server = app.listen(port, async () => {
 	console.log(`Camel Kanban API listening on http://localhost:${port}`);
 
 	// Configure server timeouts
-	serverTimeout(server, {
+	serverTimeout(server!, {
 		timeout: 0, // no global socket timeout
 		keepAliveTimeout: 65000,
 		headersTimeout: 66000,
@@ -126,16 +181,5 @@ const server = app.listen(port, async () => {
 
 	// Cleanup expired sessions on startup, then every 24 hours.
 	await cleanupExpiredSessions();
-	const cleanupInterval = setInterval(
-		cleanupExpiredSessions,
-		24 * 60 * 60 * 1000,
-	);
-
-	// Graceful shutdown: clear the interval so the process can exit cleanly.
-	const shutdown = () => {
-		clearInterval(cleanupInterval);
-		process.exit(0);
-	};
-	process.on("SIGTERM", shutdown);
-	process.on("SIGINT", shutdown);
+	cleanupInterval = setInterval(cleanupExpiredSessions, 24 * 60 * 60 * 1000);
 });
