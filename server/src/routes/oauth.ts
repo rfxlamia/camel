@@ -1,11 +1,11 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import {
-	requireAuth,
+	BCRYPT_ROUNDS,
 	createSignupWorkspacePlan,
 	type PendingInvite,
+	requireAuth,
 	USERNAME_RE,
-	BCRYPT_ROUNDS,
 } from "../auth.js";
 import { pool } from "../db/pool.js";
 import { validateUsername } from "../validators/input-length.js";

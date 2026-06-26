@@ -1,28 +1,28 @@
 import cookieParser from "cookie-parser";
-import { config } from "./config.js";
 import cors from "cors";
 import express from "express";
-import { createOriginValidator } from "./core/cors.js";
 import { createAgentRouter } from "./agent/routes.js";
 import {
-	createAuthRouter,
-	createAuthRateLimiter,
 	cleanupExpiredSessions,
+	createAuthRateLimiter,
+	createAuthRouter,
 } from "./auth.js";
-import { oauthRouter } from "./routes/oauth.js";
-import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
+import { config } from "./config.js";
+import { createOriginValidator } from "./core/cors.js";
 import { connectRedis } from "./db/redis.js";
-import { initRealtime } from "./realtime.js";
-import { UPLOADS_DIR } from "./routes/settings.js";
-import { api } from "./routes.js";
 import {
 	csrfProtection,
-	setCsrfToken,
 	generateCsrfToken,
+	setCsrfToken,
 } from "./middleware/csrf.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
+import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
+import { initRealtime } from "./realtime.js";
+import { oauthRouter } from "./routes/oauth.js";
+import { UPLOADS_DIR } from "./routes/settings.js";
+import { api } from "./routes.js";
 
 const app = express();
 // Trust the first proxy hop (reverse proxy / LB) so req.ip reflects the real client IP.

@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db/redis.js", () => ({
 	getRedisClient: vi.fn(() => null),
 }));
 
-import { isLoginLockedOut, checkAndRecordLoginAttempt } from "./auth.js";
+import { checkAndRecordLoginAttempt, isLoginLockedOut } from "./auth.js";
 
 describe("Auth Redis Fallback", () => {
 	beforeEach(() => {

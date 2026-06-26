@@ -15,21 +15,21 @@ import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility
 export {
-	WORKSPACE_LIMIT,
-	CAP_ERROR_MESSAGE,
-	type WorkspaceCapacity,
-	getWorkspaceCapacity,
-	serializeWorkspaceList,
 	type AuthCheck,
+	CAP_ERROR_MESSAGE,
 	checkActorCanManage,
 	checkCanRemoveUser,
 	checkInviteeCap,
-	type ScopedBoardDeps,
 	createScopedBoardService,
-	type WorkspaceAccessDeps,
 	createWorkspaceAccessService,
-	type HumanColumn,
 	getHumanColumns,
+	getWorkspaceCapacity,
+	type HumanColumn,
+	type ScopedBoardDeps,
+	serializeWorkspaceList,
+	WORKSPACE_LIMIT,
+	type WorkspaceAccessDeps,
+	type WorkspaceCapacity,
 } from "./routes/helpers.js";
 
 import { createScopedBoardService } from "./routes/helpers.js";

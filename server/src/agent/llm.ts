@@ -15,11 +15,11 @@
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import {
-	detectPromptInjection,
-	sanitizeUserInput,
-	sanitizeLLMOutput,
 	createSafeSystemPrompt,
+	detectPromptInjection,
 	escapeXml,
+	sanitizeLLMOutput,
+	sanitizeUserInput,
 } from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
 import { toAnthropicToolDefs } from "./tools/registry.js";

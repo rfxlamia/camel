@@ -6,14 +6,10 @@ interface Props {
 	type?: ToastType;
 }
 
-const config: Record<
-	ToastType,
-	{ icon: React.ReactNode; classes: string }
-> = {
+const config: Record<ToastType, { icon: React.ReactNode; classes: string }> = {
 	success: {
 		icon: <CheckCircle2 size={15} className="shrink-0 text-success-500" />,
-		classes:
-			"border-success-500/30 bg-success-100 text-success-900",
+		classes: "border-success-500/30 bg-success-100 text-success-900",
 	},
 	error: {
 		icon: <XCircle size={15} className="shrink-0 text-error-500" />,
@@ -21,8 +17,7 @@ const config: Record<
 	},
 	warning: {
 		icon: <AlertTriangle size={15} className="shrink-0 text-warning-500" />,
-		classes:
-			"border-warning-500/30 bg-warning-100 text-warning-900",
+		classes: "border-warning-500/30 bg-warning-100 text-warning-900",
 	},
 	info: {
 		icon: <Info size={15} className="shrink-0 text-info-500" />,

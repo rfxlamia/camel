@@ -149,7 +149,10 @@ export default function SettingsPage() {
 				showToast("Someone else updated settings first", "warning");
 				await refreshSettings();
 			} else if (err instanceof ApiError && err.status === 403) {
-				showToast("You don't have permission to edit workspace settings", "error");
+				showToast(
+					"You don't have permission to edit workspace settings",
+					"error",
+				);
 			} else {
 				showToast(
 					"Couldn't save the settings. Check your connection and try again.",
@@ -217,7 +220,10 @@ export default function SettingsPage() {
 			showToast("Settings reset to defaults", "success");
 		} catch (err: unknown) {
 			if (err instanceof ApiError && err.status === 403) {
-				showToast("You don't have permission to edit workspace settings", "error");
+				showToast(
+					"You don't have permission to edit workspace settings",
+					"error",
+				);
 			} else {
 				showToast("Failed to reset settings. Try again.", "error");
 			}

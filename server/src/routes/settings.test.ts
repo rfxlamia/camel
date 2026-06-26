@@ -329,7 +329,6 @@ describe("batchUpsertSettings", () => {
 	});
 
 	it("issues a single query with unnest for multiple keys", async () => {
-
 		const updates = [
 			{ key: "board_name", textValue: "Dev Team" },
 			{ key: "logo_path", textValue: "/uploads/custom.png" },

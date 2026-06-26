@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────────
 const { mockGetSession, mockPool, mockMintSession, mockPoolClient } =

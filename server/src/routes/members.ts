@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import {
-	lookupMembership,
 	checkActorCanManage,
-	countUserMemberships,
 	checkInviteeCap,
+	countUserMemberships,
+	lookupMembership,
 	workspaceAccessService,
 } from "./helpers.js";
 

@@ -271,17 +271,17 @@ export async function deleteCardsForBoard(
 // ---------------------------------------------------------------------------
 
 const ALLOWED_BOARD_COLUMNS = new Set([
-  "status",
-  "execution_status",
-  "original_intent",
+	"status",
+	"execution_status",
+	"original_intent",
 ]);
 
 export function validateBoardColumns(keys: string[]): void {
-  for (const key of keys) {
-    if (!ALLOWED_BOARD_COLUMNS.has(key)) {
-      throw new Error(`updateBoard: illegal column "${key}"`);
-    }
-  }
+	for (const key of keys) {
+		if (!ALLOWED_BOARD_COLUMNS.has(key)) {
+			throw new Error(`updateBoard: illegal column "${key}"`);
+		}
+	}
 }
 
 // Workspace membership helper

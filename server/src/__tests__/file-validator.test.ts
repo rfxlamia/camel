@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { validateFileContent, getFileSignature } from "../lib/file-validator";
+import { describe, expect, it } from "vitest";
+import { getFileSignature, validateFileContent } from "../lib/file-validator";
 
 describe("File Content Validation", () => {
 	describe("getFileSignature", () => {

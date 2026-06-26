@@ -1,5 +1,5 @@
-import type { Request, Response, NextFunction } from "express";
 import type { Server } from "node:http";
+import type { NextFunction, Request, Response } from "express";
 
 export interface TimeoutOptions {
 	timeout?: number;

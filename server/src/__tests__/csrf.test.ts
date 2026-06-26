@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import request from "supertest";
-import express from "express";
 import cookieParser from "cookie-parser";
+import express from "express";
+import request from "supertest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { csrfProtection, generateCsrfToken } from "../middleware/csrf.js";
 
 describe("CSRF Protection", () => {

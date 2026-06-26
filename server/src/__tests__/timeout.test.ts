@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import request from "supertest";
 import express from "express";
+import request from "supertest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestTimeout, serverTimeout } from "../middleware/timeout.js";
 
 describe("Request Timeout", () => {

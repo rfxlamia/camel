@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
-import { countUserMemberships, checkInviteeCap } from "./helpers.js";
+import { checkInviteeCap, countUserMemberships } from "./helpers.js";
 
 export const invitesRouter = Router({ mergeParams: true });
 

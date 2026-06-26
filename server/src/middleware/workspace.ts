@@ -20,7 +20,8 @@ function parseWorkspaceId(raw: string): number | null {
 
 async function lookupMembership(
 	userId: number,
-	workspaceId: number): Promise<string | undefined> {
+	workspaceId: number,
+): Promise<string | undefined> {
 	const { rows } = await pool.query(
 		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
 		[workspaceId, userId],
@@ -39,7 +40,9 @@ export async function requireWorkspaceMember(
 ) {
 	try {
 		const rawId = req.params.workspaceId;
-		const workspaceId = parseWorkspaceId(typeof rawId === "string" ? rawId : "");
+		const workspaceId = parseWorkspaceId(
+			typeof rawId === "string" ? rawId : "",
+		);
 		if (workspaceId === null) {
 			return res.status(400).json({ error: "workspaceId must be an integer" });
 		}

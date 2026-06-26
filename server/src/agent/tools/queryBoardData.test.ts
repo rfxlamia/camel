@@ -38,7 +38,10 @@ describe("query_board_data tool factory", () => {
 		expect(tool.name).toBe("query_board_data");
 		expect(tool.riskTier).toBe("read-only");
 		expect(tool.inputSchema.type).toBe("object");
-		const props = (tool.inputSchema.properties ?? {}) as Record<string, unknown>;
+		const props = (tool.inputSchema.properties ?? {}) as Record<
+			string,
+			unknown
+		>;
 		expect(props).not.toHaveProperty("workspaceId");
 		expect(props).not.toHaveProperty("boardId");
 	});
@@ -143,8 +146,12 @@ describe("query_board_data tool factory", () => {
 		});
 		const tool = makeQueryBoardData(ctx as never);
 		const payload = JSON.parse(
-			(await tool.execute({ data_types: ["metrics"], windowDays: "30" as never }))
-				.content,
+			(
+				await tool.execute({
+					data_types: ["metrics"],
+					windowDays: "30" as never,
+				})
+			).content,
 		);
 		expect(payload.metrics.throughput).toBe(1);
 		expect(payload.metrics.hasData).toBe(true);

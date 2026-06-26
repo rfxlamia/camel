@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { NextFunction, Request, Response } from "express";
 
 const SENSITIVE_PATTERNS = [
 	/\b(relation|table|column|constraint|index)\s+"[^"]+"\s+(does not exist|already exists)\b/i,

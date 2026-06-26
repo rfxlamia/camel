@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks — must run before any module that touches config/db.
@@ -17,9 +17,9 @@ vi.mock("../realtime.js", () => ({
 	}),
 }));
 
-import request from "supertest";
-import express from "express";
 import cookieParser from "cookie-parser";
+import express from "express";
+import request from "supertest";
 
 import { requireAuth } from "../auth.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";

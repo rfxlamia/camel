@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { Router } from "express";
 import { betterAuth } from "better-auth";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
-import { pool } from "./db/pool.js";
-import { config } from "./config.js";
+import { Router } from "express";
 import { mintCamelSession, SESSION_COOKIE } from "./auth.js";
+import { config } from "./config.js";
+import { pool } from "./db/pool.js";
 
 // Pure: extract primary verified email from GitHub /user/emails API response.
 export function getGitHubPrimaryEmail(

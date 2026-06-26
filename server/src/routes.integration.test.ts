@@ -66,11 +66,11 @@ vi.mock("./auth.js", async (importOriginal) => {
 	};
 });
 
+import cookieParser from "cookie-parser";
 // ---------------------------------------------------------------------------
 // Now safe to import modules that depend on the mocked deps.
 // ---------------------------------------------------------------------------
 import express from "express";
-import cookieParser from "cookie-parser";
 import request from "supertest";
 import { pool } from "./db/pool.js";
 import { api } from "./routes.js";

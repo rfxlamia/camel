@@ -88,7 +88,11 @@ function PaneFrame({ children }: { children: React.ReactNode }) {
 }
 
 // Skeleton card line used across several previews.
-function MiniCard({ tone = "neutral" }: { tone?: "neutral" | "primary" | "success" }) {
+function MiniCard({
+	tone = "neutral",
+}: {
+	tone?: "neutral" | "primary" | "success";
+}) {
 	const bar =
 		tone === "primary"
 			? "bg-primary-300"
@@ -341,7 +345,8 @@ export default function LandingPage() {
 						>
 							Camel is a kanban board for small dev teams — work-in-progress
 							limits that keep everyone focused, live delivery metrics,
-							real-time collaboration, and built-in AI that work on repetitive tasks, so you don&apos;t have to.
+							real-time collaboration, and built-in AI that work on repetitive
+							tasks, so you don&apos;t have to.
 						</p>
 						<div
 							className="reveal mt-8 flex flex-wrap items-center gap-3"
@@ -552,7 +557,9 @@ export default function LandingPage() {
 								<span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-100 text-primary-700 transition-colors group-hover/card:bg-primary-600 group-hover/card:text-white">
 									<f.icon className="h-4 w-4" />
 								</span>
-								<h3 className="text-md font-bold text-neutral-900">{f.title}</h3>
+								<h3 className="text-md font-bold text-neutral-900">
+									{f.title}
+								</h3>
 							</div>
 							<p className="mt-2.5 text-base leading-relaxed text-neutral-600">
 								{f.body}

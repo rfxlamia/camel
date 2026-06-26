@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	validateCardTitle,
-	validateCardDescription,
 	validateBoardName,
+	validateCardDescription,
+	validateCardTitle,
 	validateDisplayName,
 	validateUsername,
 } from "../validators/input-length.js";

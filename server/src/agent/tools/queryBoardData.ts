@@ -1,7 +1,7 @@
 import {
+	type CardTimestamps,
 	computeFlowMetrics,
 	computeMetricsHistory,
-	type CardTimestamps,
 } from "../../core/metrics.js";
 import type { Tool, ToolResult } from "./types.js";
 

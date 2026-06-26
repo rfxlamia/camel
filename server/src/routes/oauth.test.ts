@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockTestUser, mockClient } = vi.hoisted(() => {
 	const mockClient = {
@@ -42,8 +42,8 @@ vi.mock("bcryptjs", () => ({
 	default: { hash: vi.fn(async () => "hashed_password") },
 }));
 
-import { oauthRouter } from "../routes/oauth.js";
 import { pool } from "../db/pool.js";
+import { oauthRouter } from "../routes/oauth.js";
 
 function createApp() {
 	const app = express();

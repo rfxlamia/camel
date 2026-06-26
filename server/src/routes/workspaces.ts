@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import {
-	serializeWorkspaceList,
-	getWorkspaceCapacity,
 	countUserMemberships,
+	getWorkspaceCapacity,
 	lookupMembership,
+	serializeWorkspaceList,
 } from "./helpers.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
