@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
+import type { RedisClientType } from "redis";
 import type { AuthUser } from "./auth.js";
-import { config } from "./config.js";
 import { getRedisClient } from "./db/redis.js";
 
 // Redis carries the real-time layer (presence + pub/sub). If it is down the
@@ -106,6 +106,7 @@ export interface RealtimeHubDeps {
 interface SseClient {
 	workspaceId: number;
 	res: Response;
+	keepAlive: ReturnType<typeof setInterval>;
 }
 
 interface LocalTestClient {
@@ -115,6 +116,7 @@ interface LocalTestClient {
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
 	let redisAvailable = deps.publisher !== null;
+	let isShuttingDown = false;
 	const presence = (deps.presence ?? deps.publisher) as PresenceLike | null;
 	const clientsByWorkspace = new Map<number, Set<SseClient>>();
 	const localTestClients = new Set<LocalTestClient>();
@@ -233,6 +235,11 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 				return;
 			}
 
+			if (isShuttingDown) {
+				res.status(503).json({ error: "Server is shutting down" });
+				return;
+			}
+
 			res.writeHead(200, {
 				"Content-Type": "text/event-stream",
 				"Cache-Control": "no-cache",
@@ -240,10 +247,10 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 			});
 			res.write(": connected\n\n");
 
-			const client: SseClient = { workspaceId, res };
+			const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
+			const client: SseClient = { workspaceId, res, keepAlive };
 			addSseClient(client);
 
-			const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
 			req.on("close", () => {
 				clearInterval(keepAlive);
 				removeSseClient(client);
@@ -270,6 +277,21 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 			} catch {
 				// best-effort
 			}
+		},
+
+		shutdown(): void {
+			isShuttingDown = true;
+			for (const [_ws, set] of clientsByWorkspace) {
+				for (const client of set) {
+					try {
+						clearInterval(client.keepAlive);
+						client.res.end();
+					} catch {
+						// best-effort: client may already be closed
+					}
+				}
+			}
+			clientsByWorkspace.clear();
 		},
 
 		async onlineUsers(
@@ -309,6 +331,7 @@ let activeHub = createRealtimeHub({
 	subscriber: null,
 	presence: null,
 });
+let activeSubscriber: RedisClientType | null = null;
 
 export { connectRedis } from "./db/redis.js";
 
@@ -327,6 +350,7 @@ export async function initRealtime(): Promise<void> {
 			console.error("Redis subscriber error:", err.message);
 		});
 		await sub.connect();
+		activeSubscriber = sub;
 		activeHub = createRealtimeHub({
 			publisher: client,
 			subscriber: sub,
@@ -384,4 +408,12 @@ export async function onlineUsers(
 	self?: AuthUser,
 ): Promise<Array<AuthUser & { lastSeen: string }>> {
 	return activeHub.onlineUsers(workspaceId, self);
+}
+
+export async function shutdownRealtime(): Promise<void> {
+	activeHub.shutdown();
+	await Promise.allSettled([
+		activeSubscriber?.quit(),
+		getRedisClient()?.quit(),
+	]);
 }
