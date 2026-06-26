@@ -1,6 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Calendar, Check } from "lucide-react";
+import { memo } from "react";
 import type { Card } from "../types";
 
 interface Props {
@@ -104,7 +105,9 @@ export function CardBody({ card }: { card: Card }) {
 	);
 }
 
-export default function CardView({ card, onOpen }: Props) {
+export default memo(CardView);
+
+function CardView({ card, onOpen }: Props) {
 	const {
 		attributes,
 		listeners,

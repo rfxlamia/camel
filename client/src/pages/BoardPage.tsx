@@ -180,6 +180,7 @@ export default function BoardPage() {
 		setColumns,
 		loadError,
 		refresh,
+		cancelScheduledRefresh,
 		showToast,
 		deleteCard,
 		activeWorkspaceId,
@@ -189,7 +190,10 @@ export default function BoardPage() {
 	const snapshotRef = useRef<Column[] | null>(null);
 
 	// Card click opens the route-driven context panel (deep-linkable URL).
-	const onOpenCard = (card: Card) => navigate(`/board/card/${card.id}`);
+	const onOpenCard = useCallback(
+		(card: Card) => navigate(`/board/card/${card.id}`),
+		[navigate],
+	);
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -278,6 +282,7 @@ export default function BoardPage() {
 					: cols,
 			);
 			try {
+				cancelScheduledRefresh();
 				await deleteCard(cardId);
 				snapshotRef.current = null;
 			} catch {
@@ -343,6 +348,7 @@ export default function BoardPage() {
 		}
 
 		try {
+			cancelScheduledRefresh();
 			await api.moveCard(activeWorkspaceId, cardId, {
 				toColumnId: col.id,
 				index,
@@ -353,7 +359,10 @@ export default function BoardPage() {
 		} catch (err) {
 			revert();
 			if (err instanceof ApiError && err.code === "version_conflict") {
-				showToast("Someone else moved this card first — board refreshed.", "warning");
+				showToast(
+					"Someone else moved this card first — board refreshed.",
+					"warning",
+				);
 				await refresh();
 			} else if (err instanceof ApiError && err.status === 409) {
 				showToast("WIP limit reached — finish something first.", "warning");
@@ -366,53 +375,65 @@ export default function BoardPage() {
 		}
 	};
 
-	const onAddCard = async (columnId: number, title: string) => {
-		if (activeWorkspaceId === null) return;
-		try {
-			await api.createCard(activeWorkspaceId, { columnId, title });
-			await refresh();
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 409) {
-				showToast("WIP limit reached — finish something first.", "warning");
-			} else {
+	const onAddCard = useCallback(
+		async (columnId: number, title: string) => {
+			if (activeWorkspaceId === null) return;
+			try {
+				cancelScheduledRefresh();
+				await api.createCard(activeWorkspaceId, { columnId, title });
+				await refresh();
+			} catch (err) {
+				if (err instanceof ApiError && err.status === 409) {
+					showToast("WIP limit reached — finish something first.", "warning");
+				} else {
+					showToast(
+						"Couldn't add the card. Check your connection and try again.",
+						"error",
+					);
+				}
+			}
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
+	);
+
+	const onUpdateColumn = useCallback(
+		async (
+			id: number,
+			patch: {
+				title?: string;
+				wipLimit?: number | null;
+				policy?: string;
+				isDone?: boolean;
+			},
+		) => {
+			if (activeWorkspaceId === null) return;
+			try {
+				cancelScheduledRefresh();
+				await api.updateColumn(activeWorkspaceId, id, patch);
+				await refresh();
+			} catch {
+				showToast("Couldn't update the column. Try again.", "error");
+			}
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
+	);
+
+	const onAddColumn = useCallback(
+		async (title: string) => {
+			if (activeWorkspaceId === null) return;
+			try {
+				cancelScheduledRefresh();
+				await api.createColumn(activeWorkspaceId, title);
+				await refresh();
+			} catch {
 				showToast(
-					"Couldn't add the card. Check your connection and try again.",
+					"Couldn't add the column. Check your connection and try again.",
 					"error",
 				);
 			}
-		}
-	};
-
-	const onUpdateColumn = async (
-		id: number,
-		patch: {
-			title?: string;
-			wipLimit?: number | null;
-			policy?: string;
-			isDone?: boolean;
 		},
-	) => {
-		if (activeWorkspaceId === null) return;
-		try {
-			await api.updateColumn(activeWorkspaceId, id, patch);
-			await refresh();
-		} catch {
-			showToast("Couldn't update the column. Try again.", "error");
-		}
-	};
-
-	const onAddColumn = async (title: string) => {
-		if (activeWorkspaceId === null) return;
-		try {
-			await api.createColumn(activeWorkspaceId, title);
-			await refresh();
-		} catch {
-			showToast(
-				"Couldn't add the column. Check your connection and try again.",
-				"error",
-			);
-		}
-	};
+		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
+	);
 
 	return (
 		<div className="flex h-full flex-col">

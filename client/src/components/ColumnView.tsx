@@ -4,7 +4,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Plus, Settings2 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { Card, Column } from "../types";
 import { wipStatus } from "../types";
 import CardView from "./CardView";
@@ -218,12 +218,9 @@ function AddCard({
 	);
 }
 
-export default function ColumnView({
-	column,
-	onOpenCard,
-	onAddCard,
-	onUpdateColumn,
-}: Props) {
+export default memo(ColumnView);
+
+function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 	const [editing, setEditing] = useState(false);
 	const { setNodeRef, isOver } = useDroppable({
 		id: `col-${column.id}`,
