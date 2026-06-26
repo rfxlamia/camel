@@ -1,7 +1,62 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
-import { getHumanColumns } from "./helpers.js";
+import { getHumanColumns, type HumanColumn } from "./helpers.js";
+
+type CardRow = {
+	id: number;
+	column_id: number;
+	title: string;
+	description: string;
+	position: number;
+	version: number;
+	created_at: string;
+	started_at: string | null;
+	done_at: string | null;
+	due_date: string | null;
+	assignee_id: number | null;
+	assignee_username: string | null;
+	assignee_display_name: string | null;
+};
+
+export function buildBoardResponse(columns: HumanColumn[], cards: CardRow[]) {
+	const cardsByColumn = new Map<number, CardRow[]>();
+	for (const c of cards) {
+		const list = cardsByColumn.get(c.column_id);
+		if (list) list.push(c);
+		else cardsByColumn.set(c.column_id, [c]);
+	}
+
+	return {
+		columns: columns.map((col) => ({
+			id: col.id,
+			title: col.title,
+			position: col.position,
+			wipLimit: col.wip_limit,
+			policy: col.policy,
+			isDone: col.is_done,
+			cards: (cardsByColumn.get(col.id) ?? []).map((c) => ({
+				id: c.id,
+				columnId: c.column_id,
+				title: c.title,
+				description: c.description,
+				position: c.position,
+				version: c.version,
+				createdAt: c.created_at,
+				startedAt: c.started_at,
+				doneAt: c.done_at,
+				dueDate: c.due_date,
+				assignee: c.assignee_id
+					? {
+							id: c.assignee_id,
+							username: c.assignee_username,
+							displayName: c.assignee_display_name,
+						}
+					: null,
+			})),
+		})),
+	};
+}
 
 export const boardRouter = Router({ mergeParams: true });
 
@@ -19,35 +74,5 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
      WHERE c.workspace_id = $1 AND c.deleted_at IS NULL ORDER BY c.position`,
 		[workspaceId],
 	);
-	res.json({
-		columns: columns.map((col) => ({
-			id: col.id,
-			title: col.title,
-			position: col.position,
-			wipLimit: col.wip_limit,
-			policy: col.policy,
-			isDone: col.is_done,
-			cards: cards.rows
-				.filter((c) => c.column_id === col.id)
-				.map((c) => ({
-					id: c.id,
-					columnId: c.column_id,
-					title: c.title,
-					description: c.description,
-					position: c.position,
-					version: c.version,
-					createdAt: c.created_at,
-					startedAt: c.started_at,
-					doneAt: c.done_at,
-					dueDate: c.due_date,
-					assignee: c.assignee_id
-						? {
-								id: c.assignee_id,
-								username: c.assignee_username,
-								displayName: c.assignee_display_name,
-							}
-						: null,
-				})),
-		})),
-	});
+	res.json(buildBoardResponse(columns, cards.rows));
 });
