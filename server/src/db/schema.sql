@@ -283,7 +283,7 @@ CREATE INDEX IF NOT EXISTS idx_invites_username
 
 -- Activity feed: filter by workspace + sort by recency in one index
 CREATE INDEX IF NOT EXISTS idx_events_workspace_created
-  ON card_events(workspace_id, created_at DESC);
+  ON card_events(workspace_id, created_at DESC, id DESC);
 
 -- Board read: filter live cards by workspace + sort by position
 CREATE INDEX IF NOT EXISTS idx_cards_workspace_position
