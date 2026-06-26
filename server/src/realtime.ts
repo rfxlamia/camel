@@ -116,16 +116,34 @@ interface LocalTestClient {
 export function createRealtimeHub(deps: RealtimeHubDeps) {
 	let redisAvailable = deps.publisher !== null;
 	const presence = (deps.presence ?? deps.publisher) as PresenceLike | null;
-	const sseClients = new Set<SseClient>();
+	const clientsByWorkspace = new Map<number, Set<SseClient>>();
 	const localTestClients = new Set<LocalTestClient>();
+
+	function addSseClient(client: SseClient): void {
+		let set = clientsByWorkspace.get(client.workspaceId);
+		if (!set) {
+			set = new Set();
+			clientsByWorkspace.set(client.workspaceId, set);
+		}
+		set.add(client);
+	}
+
+	function removeSseClient(client: SseClient): void {
+		const set = clientsByWorkspace.get(client.workspaceId);
+		if (set) {
+			set.delete(client);
+			if (set.size === 0) clientsByWorkspace.delete(client.workspaceId);
+		}
+	}
 
 	function fanOut(
 		workspaceId: number,
 		message: string,
 		event: PublishableEvent,
 	): void {
-		for (const client of sseClients) {
-			if (client.workspaceId === workspaceId) {
+		const set = clientsByWorkspace.get(workspaceId);
+		if (set) {
+			for (const client of set) {
 				client.res.write(`data: ${message}\n\n`);
 			}
 		}
@@ -223,12 +241,12 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 			res.write(": connected\n\n");
 
 			const client: SseClient = { workspaceId, res };
-			sseClients.add(client);
+			addSseClient(client);
 
 			const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
 			req.on("close", () => {
 				clearInterval(keepAlive);
-				sseClients.delete(client);
+				removeSseClient(client);
 			});
 		},
 

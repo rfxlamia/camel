@@ -5,6 +5,33 @@ import {
 	workspacePresencePattern,
 } from "./realtime.js";
 
+type MockRequest = {
+	params: Record<string, string>;
+	on: ReturnType<typeof vi.fn>;
+};
+type MockResponse = {
+	writeHead: ReturnType<typeof vi.fn>;
+	write: ReturnType<typeof vi.fn>;
+	status: ReturnType<typeof vi.fn>;
+	json: ReturnType<typeof vi.fn>;
+};
+
+function mockSseRequest(workspaceId: number): MockRequest {
+	return {
+		params: { workspaceId: String(workspaceId) },
+		on: vi.fn(),
+	};
+}
+
+function mockSseResponse(): MockResponse {
+	return {
+		writeHead: vi.fn(),
+		write: vi.fn(),
+		status: vi.fn().mockReturnThis(),
+		json: vi.fn(),
+	};
+}
+
 describe("workspace realtime isolation", () => {
 	it("keeps local fallback clients isolated by workspace", async () => {
 		const hub = createRealtimeHub({ publisher: null, subscriber: null });
@@ -41,6 +68,52 @@ describe("workspace realtime isolation", () => {
 		expect(scanIterator).toHaveBeenCalledWith({
 			MATCH: "camel:workspace:7:presence:*",
 		});
+	});
+});
+
+describe("SSE client workspace isolation", () => {
+	it("fans out only to SSE clients in the target workspace", () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+
+		const reqA = mockSseRequest(1);
+		const resA = mockSseResponse();
+		hub.sseHandler(reqA as never, resA as never);
+
+		const reqB = mockSseRequest(2);
+		const resB = mockSseResponse();
+		hub.sseHandler(reqB as never, resB as never);
+
+		// Publish to workspace 1 — only resA should receive it
+		hub.publishEvent(1, { type: "card.created", cardId: 10 });
+
+		expect(resA.write).toHaveBeenCalledWith(
+			expect.stringContaining("card.created"),
+		);
+		expect(resB.write).not.toHaveBeenCalledWith(
+			expect.stringContaining("card.created"),
+		);
+	});
+
+	it("removes SSE client from index on disconnect", () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+
+		const req = mockSseRequest(1);
+		const res = mockSseResponse();
+		hub.sseHandler(req as never, res as never);
+
+		// Simulate disconnect — find the "close" handler
+		const closeHandler = req.on.mock.calls.find(
+			([event]) => event === "close",
+		)?.[1] as (() => void) | undefined;
+		expect(closeHandler).toBeDefined();
+		closeHandler?.();
+
+		// Publish after disconnect — should not crash or write
+		res.write.mockClear();
+		hub.publishEvent(1, { type: "card.created", cardId: 99 });
+		expect(res.write).not.toHaveBeenCalledWith(
+			expect.stringContaining("card.created"),
+		);
 	});
 });
 
