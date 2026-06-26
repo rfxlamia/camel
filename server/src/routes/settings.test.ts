@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	batchUpsertSettings,
 	DEFAULT_SETTINGS,
@@ -6,12 +6,6 @@ import {
 	validateBoardName,
 	validateSettingKey,
 } from "./settings.js";
-import { pool } from "../db/pool.js";
-
-// Mock the pool module
-vi.mock("../db/pool.js", () => ({
-	pool: { query: vi.fn() },
-}));
 
 describe("validateBoardName", () => {
 	it("rejects empty string", () => {
@@ -316,9 +310,25 @@ describe("workspace settings service", () => {
 });
 
 describe("batchUpsertSettings", () => {
+	const { mockQuery } = vi.hoisted(() => {
+		return { mockQuery: vi.fn() };
+	});
+
+	vi.mock("../db/pool.js", () => ({
+		pool: { query: mockQuery },
+	}));
+
+	beforeEach(() => {
+		mockQuery.mockReset();
+		mockQuery.mockResolvedValue({ rows: [] });
+	});
+
+	it("returns early for empty updates array", async () => {
+		await batchUpsertSettings(42, [], 1);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
 	it("issues a single query with unnest for multiple keys", async () => {
-		const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
-		vi.mocked(pool.query).mockImplementation(mockQuery);
 
 		const updates = [
 			{ key: "board_name", textValue: "Dev Team" },
@@ -336,6 +346,9 @@ describe("batchUpsertSettings", () => {
 		expect(sql).toContain("unnest");
 		expect(sql).toContain("ON CONFLICT");
 
+		// Verify atomicity: single statement, no semicolons
+		expect(sql).not.toContain(";");
+
 		// Verify params: [workspaceId, newVersion, keys[], values[]]
 		expect(params).toEqual([
 			42,
@@ -346,9 +359,6 @@ describe("batchUpsertSettings", () => {
 	});
 
 	it("handles single key update", async () => {
-		const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
-		vi.mocked(pool.query).mockImplementation(mockQuery);
-
 		await batchUpsertSettings(1, [{ key: "board_name", textValue: "A" }], 1);
 
 		expect(mockQuery).toHaveBeenCalledTimes(1);

@@ -228,6 +228,8 @@ export async function batchUpsertSettings(
 	updates: Array<{ key: string; textValue: string }>,
 	newVersion: number,
 ): Promise<void> {
+	if (updates.length === 0) return;
+
 	const keys = updates.map((u) => u.key);
 	const values = updates.map((u) => u.textValue);
 
