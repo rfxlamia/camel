@@ -1,8 +1,4 @@
-import {
-	LogOut,
-	PanelLeftClose,
-	PanelLeftOpen,
-} from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
 import { useBoard } from "../../context/BoardContext";

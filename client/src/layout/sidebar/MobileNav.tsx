@@ -15,7 +15,12 @@ interface MobileNavProps {
 	onModeChange: (m: Mode) => void;
 }
 
-export function MobileNav({ open, onClose, mode, onModeChange }: MobileNavProps) {
+export function MobileNav({
+	open,
+	onClose,
+	mode,
+	onModeChange,
+}: MobileNavProps) {
 	const { logout, settings } = useBoard();
 	const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 

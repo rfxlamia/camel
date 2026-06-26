@@ -51,8 +51,18 @@ export default function AppLayout() {
 	return (
 		<div className="flex h-screen">
 			<WorkspaceOverlays />
-			<Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} mode={mode} onModeChange={setMode} />
-			<MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} mode={mode} onModeChange={setMode} />
+			<Sidebar
+				collapsed={collapsed}
+				onToggle={() => setCollapsed((c) => !c)}
+				mode={mode}
+				onModeChange={setMode}
+			/>
+			<MobileNav
+				open={mobileNavOpen}
+				onClose={() => setMobileNavOpen(false)}
+				mode={mode}
+				onModeChange={setMode}
+			/>
 
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 md:px-6">
