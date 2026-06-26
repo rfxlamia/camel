@@ -19,9 +19,10 @@ import { createErrorHandler } from "./middleware/error-handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
-import { initRealtime } from "./realtime.js";
+import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
+import { pool } from "./db/pool.js";
 import { api } from "./routes.js";
 
 const app = express();
@@ -81,7 +82,10 @@ app.use(
 	express.static(UPLOADS_DIR),
 );
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => {
+	if (isShuttingDown) return res.status(503).json({ status: "shutting_down" });
+	res.json({ ok: true });
+});
 
 // CSRF token endpoint for client to retrieve the token
 app.get("/api/csrf-token", (req, res) => {
@@ -103,6 +107,9 @@ app.use("/api", api);
 app.use("/api", createAgentRouter());
 
 app.use(createErrorHandler());
+
+// Module-scope flag so health endpoint and shutdown handler share state.
+let isShuttingDown = false;
 
 const port = config.PORT;
 const server = app.listen(port, async () => {
@@ -128,10 +135,31 @@ const server = app.listen(port, async () => {
 		24 * 60 * 60 * 1000,
 	);
 
-	// Graceful shutdown: clear the interval so the process can exit cleanly.
+	// Graceful shutdown: drain connections, close resources, then exit.
 	const shutdown = () => {
-		clearInterval(cleanupInterval);
-		process.exit(0);
+		if (isShuttingDown) return;
+		isShuttingDown = true;
+		console.log("Shutting down gracefully...");
+
+		// Start forced-exit timer BEFORE async cleanup.
+		const forceExit = setTimeout(() => {
+			console.error("Graceful shutdown timed out — forcing exit");
+			process.exit(1);
+		}, 5000);
+		// Don't hold the process open just for the timer.
+		forceExit.unref();
+
+		// Shorten timeouts so idle sockets drain quickly.
+		server.keepAliveTimeout = 1000;
+		server.headersTimeout = 2000;
+
+		server.close(async () => {
+			clearInterval(cleanupInterval);
+			await Promise.allSettled([shutdownRealtime(), pool.end()]);
+			clearTimeout(forceExit);
+			console.log("Shutdown complete — exiting cleanly");
+			process.exit(0);
+		});
 	};
 	process.on("SIGTERM", shutdown);
 	process.on("SIGINT", shutdown);
