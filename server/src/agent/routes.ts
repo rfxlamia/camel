@@ -267,6 +267,23 @@ export async function deleteCardsForBoard(
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Board column allowlist — exported for unit tests
+// ---------------------------------------------------------------------------
+
+const ALLOWED_BOARD_COLUMNS = new Set([
+  "status",
+  "execution_status",
+  "original_intent",
+]);
+
+export function validateBoardColumns(keys: string[]): void {
+  for (const key of keys) {
+    if (!ALLOWED_BOARD_COLUMNS.has(key)) {
+      throw new Error(`updateBoard: illegal column "${key}"`);
+    }
+  }
+}
+
 // Workspace membership helper
 // ---------------------------------------------------------------------------
 
@@ -342,6 +359,7 @@ const realDeps: AgentBoardServiceDeps = {
 	},
 
 	updateBoard: async (boardId, data) => {
+		validateBoardColumns(Object.keys(data));
 		const sets: string[] = [];
 		const values: unknown[] = [];
 		let i = 1;

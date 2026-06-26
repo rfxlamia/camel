@@ -9,6 +9,7 @@ import {
   resolveMessageAction,
   runInsertColumns,
   selectConversationHistory,
+  validateBoardColumns,
 } from "./routes.js";
 
 describe("defaultToolRegistry", () => {
@@ -265,5 +266,27 @@ describe("realDeps SQL wiring (fakeDb)", () => {
     expect(sql).toMatch(
       /column_id\s+in\s*\(\s*select\s+id\s+from\s+columns\s+where\s+board_id\s*=\s*\$1/i,
     );
+  });
+});
+
+describe("validateBoardColumns (SQL allowlist)", () => {
+  it("accepts allowed column names", () => {
+    expect(() =>
+      validateBoardColumns(["status", "execution_status", "original_intent"]),
+    ).not.toThrow();
+  });
+
+  it("throws on non-allowlisted column name", () => {
+    expect(() => validateBoardColumns(["status", "malicious_col"])).toThrow(
+      /illegal column "malicious_col"/,
+    );
+  });
+
+  it("throws on empty string key", () => {
+    expect(() => validateBoardColumns([""])).toThrow(/illegal column ""/);
+  });
+
+  it("does not throw for empty array (no columns)", () => {
+    expect(() => validateBoardColumns([])).not.toThrow();
   });
 });
