@@ -90,8 +90,11 @@ app.get("/api/csrf-token", (req, res) => {
 	res.json({ csrfToken: token });
 });
 
-// Rate limiter starts as no-op; upgraded to Redis-backed after connectRedis().
-let rateLimiterInstance: express.RequestHandler = (_req, _res, next) => next();
+// Initialize synchronously with the in-memory limiter so auth endpoints are
+// rate-limited from the very first request (before Redis connects). Without
+// this, there is a window between listen() and connectRedis() where auth has
+// no rate limiting. Upgraded to the Redis-backed limiter after connectRedis().
+let rateLimiterInstance: express.RequestHandler = createAuthRateLimiter();
 const delegatingLimiter: express.RequestHandler = (req, res, next) =>
 	rateLimiterInstance(req, res, next);
 

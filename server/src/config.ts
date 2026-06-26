@@ -22,6 +22,15 @@ const envSchema = z.object({
 
 	REDIS_URL: z.string().default("redis://localhost:6379"),
 
+	// Deployment environment. Left as a permissive string (not an enum) so
+	// custom values like "staging" don't crash startup.
+	NODE_ENV: z.string().optional(),
+
+	// Comma-separated list of allowed CORS origins. Required in production
+	// (enforced below) — otherwise the API silently denies all cross-origin
+	// requests. Consumed by core/cors.ts.
+	CORS_ORIGIN: z.string().optional(),
+
 	PORT: z.coerce.number().int().positive().default(3001),
 
 	TAVILY_API_KEY: z.string().optional(),
@@ -54,5 +63,15 @@ if (
 		config.BETTER_AUTH_SECRET === "dev-secret-change-in-production")
 ) {
 	console.error("❌ BETTER_AUTH_SECRET must be set in production");
+	process.exit(1);
+}
+
+if (
+	process.env.NODE_ENV === "production" &&
+	(!config.CORS_ORIGIN || config.CORS_ORIGIN.trim() === "")
+) {
+	console.error(
+		"❌ CORS_ORIGIN must be set in production (comma-separated list of allowed origins)",
+	);
 	process.exit(1);
 }
