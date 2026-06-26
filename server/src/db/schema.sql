@@ -275,3 +275,16 @@ CREATE TABLE IF NOT EXISTS auth_audit (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_auth_audit_actor ON auth_audit(actor_id);
+
+-- Performance indexes (issue #72)
+-- Invite lookup by username (workspace list endpoint)
+CREATE INDEX IF NOT EXISTS idx_invites_username
+  ON workspace_invites(username);
+
+-- Activity feed: filter by workspace + sort by recency in one index
+CREATE INDEX IF NOT EXISTS idx_events_workspace_created
+  ON card_events(workspace_id, created_at DESC, id DESC);
+
+-- Board read: filter live cards by workspace + sort by position
+CREATE INDEX IF NOT EXISTS idx_cards_workspace_position
+  ON cards(workspace_id, position) WHERE deleted_at IS NULL;
