@@ -5,12 +5,14 @@ import PresenceBar from "../components/PresenceBar";
 import Toast from "../components/Toast";
 import { useBoard } from "../context/BoardContext";
 import { formatTitle, getFaviconLink } from "../lib/title";
-import Sidebar, { MobileNav, NAV_ITEMS, WorkspaceOverlays } from "./Sidebar";
+import Sidebar, { MobileNav, NAV_ITEMS, WorkspaceOverlays } from "./sidebar";
+import { useSidebarMode } from "./sidebar/useSidebarMode";
 
 const SIDEBAR_COLLAPSED_KEY = "camel.sidebar.collapsed";
 
 export default function AppLayout() {
 	const { user, presence, toast, settings } = useBoard();
+	const [mode, setMode] = useSidebarMode();
 	const [collapsed, setCollapsed] = useState(
 		() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
 	);
@@ -49,8 +51,8 @@ export default function AppLayout() {
 	return (
 		<div className="flex h-screen">
 			<WorkspaceOverlays />
-			<Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-			<MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+			<Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} mode={mode} onModeChange={setMode} />
+			<MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} mode={mode} onModeChange={setMode} />
 
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 md:px-6">
