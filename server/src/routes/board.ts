@@ -19,6 +19,14 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
      WHERE c.workspace_id = $1 AND c.deleted_at IS NULL ORDER BY c.position`,
 		[workspaceId],
 	);
+	// Group cards by column_id in a single pass — O(columns + cards) instead of O(columns × cards)
+	const cardsByColumn = new Map<number, typeof cards.rows>();
+	for (const c of cards.rows) {
+		const list = cardsByColumn.get(c.column_id);
+		if (list) list.push(c);
+		else cardsByColumn.set(c.column_id, [c]);
+	}
+
 	res.json({
 		columns: columns.map((col) => ({
 			id: col.id,
@@ -27,27 +35,25 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 			wipLimit: col.wip_limit,
 			policy: col.policy,
 			isDone: col.is_done,
-			cards: cards.rows
-				.filter((c) => c.column_id === col.id)
-				.map((c) => ({
-					id: c.id,
-					columnId: c.column_id,
-					title: c.title,
-					description: c.description,
-					position: c.position,
-					version: c.version,
-					createdAt: c.created_at,
-					startedAt: c.started_at,
-					doneAt: c.done_at,
-					dueDate: c.due_date,
-					assignee: c.assignee_id
-						? {
-								id: c.assignee_id,
-								username: c.assignee_username,
-								displayName: c.assignee_display_name,
-							}
-						: null,
-				})),
+			cards: (cardsByColumn.get(col.id) ?? []).map((c) => ({
+				id: c.id,
+				columnId: c.column_id,
+				title: c.title,
+				description: c.description,
+				position: c.position,
+				version: c.version,
+				createdAt: c.created_at,
+				startedAt: c.started_at,
+				doneAt: c.done_at,
+				dueDate: c.due_date,
+				assignee: c.assignee_id
+					? {
+							id: c.assignee_id,
+							username: c.assignee_username,
+							displayName: c.assignee_display_name,
+						}
+					: null,
+			})),
 		})),
 	});
 });
