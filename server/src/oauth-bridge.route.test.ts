@@ -75,17 +75,12 @@ describe("GET /api/auth/complete-oauth", () => {
 		// Better Auth created orphan user id=99 (no username, fresh OAuth)
 		mockGetSession.mockResolvedValueOnce({ user: { id: "99" } });
 
-		// Non-transactional pool.query calls:
-		// 1. old session lookup → returns oldUserId=42
-		// 2. old user username check → returns "john" (has username)
-		mockPool.query
-			.mockResolvedValueOnce({ rows: [{ user_id: 42 }] })
-			.mockResolvedValueOnce({ rows: [{ username: "john" }] });
-
-		// Transaction (pool.connect):
-		// BEGIN → get baUser email → UPDATE ba_accounts → DELETE orphan → UPDATE email → COMMIT
+		// All queries inside the if (oldToken) block are now transactional (poolClient.query):
+		// BEGIN → session lookup → username check → SELECT email → UPDATE ba_accounts → DELETE orphan → UPDATE email → COMMIT
 		mockPoolClient.query
 			.mockResolvedValueOnce(undefined) // BEGIN
+			.mockResolvedValueOnce({ rows: [{ user_id: 42 }] }) // session lookup
+			.mockResolvedValueOnce({ rows: [{ username: "john" }] }) // username check
 			.mockResolvedValueOnce({
 				rows: [{ email: "john@gmail.com", email_verified: true }],
 			}) // SELECT email from baUser
@@ -103,7 +98,9 @@ describe("GET /api/auth/complete-oauth", () => {
 		// Session minted for the EXISTING user (42), not the orphan (99)
 		expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), 42);
 		// Old session must NOT be deleted (it belongs to the legitimate user)
-		const deleteCalls = (mockPool.query as ReturnType<typeof vi.fn>).mock.calls.filter(
+		const deleteCalls = (
+			mockPoolClient.query as ReturnType<typeof vi.fn>
+		).mock.calls.filter(
 			(c: unknown[]) =>
 				typeof c[0] === "string" && c[0].includes("DELETE FROM sessions"),
 		);
@@ -114,18 +111,18 @@ describe("GET /api/auth/complete-oauth", () => {
 	it("true link collision (old user has NO username): orphans old session, redirects to pick-username", async () => {
 		mockGetSession.mockResolvedValueOnce({ user: { id: "55" } });
 
-		// 1. old session lookup → user_id=77
-		// 2. old user username → null (OAuth-only user, no username yet)
-		// 3. DELETE old session
-		// 4. INSERT auth_audit
-		// 5. mintCamelSession (mocked, no pool call)
-		// 6. SELECT username for baUser → null
-		mockPool.query
-			.mockResolvedValueOnce({ rows: [{ user_id: 77 }] })
-			.mockResolvedValueOnce({ rows: [{ username: null }] })
+		// All queries inside the if (oldToken) block are now transactional:
+		// BEGIN → session lookup → username check → DELETE sessions → INSERT auth_audit → COMMIT
+		// Then non-transactional: SELECT username for baUser
+		mockPoolClient.query
+			.mockResolvedValueOnce(undefined) // BEGIN
+			.mockResolvedValueOnce({ rows: [{ user_id: 77 }] }) // session lookup
+			.mockResolvedValueOnce({ rows: [{ username: null }] }) // username check
 			.mockResolvedValueOnce(undefined) // DELETE sessions
 			.mockResolvedValueOnce(undefined) // INSERT auth_audit
-			.mockResolvedValueOnce({ rows: [{ username: null }] }); // baUser username
+			.mockResolvedValueOnce(undefined); // COMMIT
+
+		mockPool.query.mockResolvedValueOnce({ rows: [{ username: null }] }); // baUser username
 
 		const res = await request(app)
 			.get("/api/auth/complete-oauth")
@@ -155,9 +152,7 @@ describe("GET /api/auth/complete-oauth", () => {
 		const res = await request(app).get("/api/auth/complete-oauth");
 
 		expect(res.status).toBe(302);
-		expect(res.headers.location).toBe(
-			`${CLIENT_URL}/?oauth_error=cancelled`,
-		);
+		expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth_error=cancelled`);
 		expect(mockMintSession).not.toHaveBeenCalled();
 	});
 });
