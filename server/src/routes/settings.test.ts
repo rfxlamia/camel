@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	batchUpsertSettings,
 	DEFAULT_SETTINGS,
 	generateDefaultSettings,
 	validateBoardName,
 	validateSettingKey,
 } from "./settings.js";
+import { pool } from "../db/pool.js";
+
+// Mock the pool module
+vi.mock("../db/pool.js", () => ({
+	pool: { query: vi.fn() },
+}));
 
 describe("validateBoardName", () => {
 	it("rejects empty string", () => {
@@ -292,7 +299,7 @@ describe("workspace settings service", () => {
 
 	it("blocks member writes and removes reset-app", async () => {
 		const service = createWorkspaceSettingsService({
-			getMembership: vi.fn(async () => ({ role: "member" })),
+			getMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
 			getSettings: vi.fn(),
 			updateSettings: vi.fn(),
 		});
@@ -305,5 +312,47 @@ describe("workspace settings service", () => {
 			}),
 		).resolves.toEqual({ status: 403, error: "Forbidden" });
 		expect(hasResetAppRoute()).toBe(false);
+	});
+});
+
+describe("batchUpsertSettings", () => {
+	it("issues a single query with unnest for multiple keys", async () => {
+		const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
+		vi.mocked(pool.query).mockImplementation(mockQuery);
+
+		const updates = [
+			{ key: "board_name", textValue: "Dev Team" },
+			{ key: "logo_path", textValue: "/uploads/custom.png" },
+		];
+
+		await batchUpsertSettings(42, updates, 5);
+
+		// Should be called exactly once (not N times)
+		expect(mockQuery).toHaveBeenCalledTimes(1);
+
+		const [sql, params] = mockQuery.mock.calls[0];
+
+		// Verify SQL uses unnest
+		expect(sql).toContain("unnest");
+		expect(sql).toContain("ON CONFLICT");
+
+		// Verify params: [workspaceId, newVersion, keys[], values[]]
+		expect(params).toEqual([
+			42,
+			5,
+			["board_name", "logo_path"],
+			["Dev Team", "/uploads/custom.png"],
+		]);
+	});
+
+	it("handles single key update", async () => {
+		const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
+		vi.mocked(pool.query).mockImplementation(mockQuery);
+
+		await batchUpsertSettings(1, [{ key: "board_name", textValue: "A" }], 1);
+
+		expect(mockQuery).toHaveBeenCalledTimes(1);
+		const [, params] = mockQuery.mock.calls[0];
+		expect(params).toEqual([1, 1, ["board_name"], ["A"]]);
 	});
 });

@@ -219,6 +219,30 @@ export function hasResetAppRoute(): boolean {
 	return false;
 }
 
+/**
+ * Batch-upsert settings keys in a single atomic SQL statement.
+ * Uses unnest() to avoid N sequential round trips and ensure all-or-nothing writes.
+ */
+export async function batchUpsertSettings(
+	workspaceId: number,
+	updates: Array<{ key: string; textValue: string }>,
+	newVersion: number,
+): Promise<void> {
+	const keys = updates.map((u) => u.key);
+	const values = updates.map((u) => u.textValue);
+
+	await pool.query(
+		`INSERT INTO settings (workspace_id, key, text_value, version, updated_at)
+		 SELECT $1, k, v, $2, now()
+		 FROM unnest($3::text[], $4::text[]) AS t(k, v)
+		 ON CONFLICT (workspace_id, key) DO UPDATE SET
+		   text_value = EXCLUDED.text_value,
+		   version    = EXCLUDED.version,
+		   updated_at = now()`,
+		[workspaceId, newVersion, keys, values],
+	);
+}
+
 function parseWorkspaceId(raw: string): number | null {
 	const workspaceId = Number(raw);
 	return Number.isInteger(workspaceId) ? workspaceId : null;
@@ -417,17 +441,7 @@ settingsRouter.patch("/", async (req, res) => {
 
 	const newVersion = currentGlobal + 1;
 
-	for (const u of updates) {
-		await pool.query(
-			`INSERT INTO settings (workspace_id, key, text_value, version, updated_at)
-       VALUES ($1, $2, $3, $4, now())
-       ON CONFLICT (workspace_id, key) DO UPDATE SET
-         text_value = EXCLUDED.text_value,
-         version = EXCLUDED.version,
-         updated_at = now()`,
-			[workspaceId, u.key, u.textValue, newVersion],
-		);
-	}
+	await batchUpsertSettings(workspaceId, updates, newVersion);
 
 	await publishEvent(workspaceId, {
 		type: "settings.updated",
