@@ -132,7 +132,9 @@ export function createOAuthBridgeRouter(): Router {
 	// Forward the error to the client app so the user sees a meaningful message.
 	router.get("/error", (req, res) => {
 		const code = req.query.error ?? "oauth_failed";
-		res.redirect(`${config.CLIENT_URL}/?oauth_error=${encodeURIComponent(String(code))}`);
+		res.redirect(
+			`${config.CLIENT_URL}/?oauth_error=${encodeURIComponent(String(code))}`,
+		);
 	});
 
 	router.get("/complete-oauth", async (req, res) => {
@@ -148,31 +150,38 @@ export function createOAuthBridgeRouter(): Router {
 
 		// Detect existing camel session
 		const oldToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
-		console.log("[complete-oauth] baUserId=%d oldToken=%s cookies=%j", baUserId, oldToken ? oldToken.slice(0, 8) + "..." : "NONE", Object.keys(req.cookies ?? {}));
+		console.log(
+			"[complete-oauth] baUserId=%d oldToken=%s cookies=%j",
+			baUserId,
+			oldToken ? oldToken.slice(0, 8) + "..." : "NONE",
+			Object.keys(req.cookies ?? {}),
+		);
 		if (oldToken) {
-			const { rows: oldRows } = await pool.query<{ user_id: number }>(
-				"SELECT user_id FROM sessions WHERE token = $1 AND expires_at > now()",
-				[oldToken],
-			);
-			const oldUserId = oldRows[0]?.user_id;
-			if (oldUserId && oldUserId !== baUserId) {
-				// Check if the logged-in user already has a username (password-auth user
-				// linking OAuth for the first time via EmailGatePage).
-				const { rows: oldUserRows } = await pool.query<{
-					username: string | null;
-				}>(
-					"SELECT username FROM users WHERE id = $1",
-					[oldUserId],
-				);
-				const oldUsername = oldUserRows[0]?.username ?? null;
+			// Wrap session lookup + account transfer in a single transaction to
+			// prevent TOCTOU race (M4): concurrent OAuth callbacks must not see
+			// stale state between the decision query and the mutation.
+			const client = await pool.connect();
+			try {
+				await client.query("BEGIN");
 
-				if (oldUsername) {
-					// Transfer the BA OAuth account to the existing user, then delete the
-					// orphan user Better Auth created (it couldn't match by email because
-					// password-registered users have email=NULL).
-					const client = await pool.connect();
-					try {
-						await client.query("BEGIN");
+				const { rows: oldRows } = await client.query<{ user_id: number }>(
+					"SELECT user_id FROM sessions WHERE token = $1 AND expires_at > now()",
+					[oldToken],
+				);
+				const oldUserId = oldRows[0]?.user_id;
+
+				if (oldUserId && oldUserId !== baUserId) {
+					// Check if the logged-in user already has a username (password-auth user
+					// linking OAuth for the first time via EmailGatePage).
+					const { rows: oldUserRows } = await client.query<{
+						username: string | null;
+					}>("SELECT username FROM users WHERE id = $1", [oldUserId]);
+					const oldUsername = oldUserRows[0]?.username ?? null;
+
+					if (oldUsername) {
+						// Transfer the BA OAuth account to the existing user, then delete the
+						// orphan user Better Auth created (it couldn't match by email because
+						// password-registered users have email=NULL).
 						const { rows: baUserRows } = await client.query<{
 							email: string | null;
 							email_verified: boolean;
@@ -200,33 +209,37 @@ export function createOAuthBridgeRouter(): Router {
 							);
 						}
 						await client.query("COMMIT");
-					} catch (err) {
-						await client.query("ROLLBACK");
-						throw err;
-					} finally {
-						client.release();
+
+						// Old camel session still valid; mint a fresh one to refresh TTL.
+						await mintCamelSession(res, oldUserId);
+						res.redirect(config.CLIENT_URL);
+						return;
 					}
 
-					// Old camel session still valid; mint a fresh one to refresh TTL.
-					await mintCamelSession(res, oldUserId);
-					res.redirect(config.CLIENT_URL);
-					return;
+					// True link collision (Rule 4): different user, not an OAuth link attempt.
+					await client.query("DELETE FROM sessions WHERE token = $1", [
+						oldToken,
+					]);
+					await client.query(
+						`INSERT INTO auth_audit (actor_id, event_type, payload)
+             VALUES ($1, 'account_orphaned', $2)`,
+						[
+							oldUserId,
+							JSON.stringify({
+								orphanedUserId: oldUserId,
+								linkedToUserId: baUserId,
+							}),
+						],
+					);
+					res.clearCookie(SESSION_COOKIE, { path: "/" });
 				}
 
-				// True link collision (Rule 4): different user, not an OAuth link attempt.
-				await pool.query("DELETE FROM sessions WHERE token = $1", [oldToken]);
-				await pool.query(
-					`INSERT INTO auth_audit (actor_id, event_type, payload)
-           VALUES ($1, 'account_orphaned', $2)`,
-					[
-						oldUserId,
-						JSON.stringify({
-							orphanedUserId: oldUserId,
-							linkedToUserId: baUserId,
-						}),
-					],
-				);
-				res.clearCookie(SESSION_COOKIE, { path: "/" });
+				await client.query("COMMIT");
+			} catch (err) {
+				await client.query("ROLLBACK");
+				throw err;
+			} finally {
+				client.release();
 			}
 		}
 
