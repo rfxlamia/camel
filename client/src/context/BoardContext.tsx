@@ -420,13 +420,11 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		const beat = () => {
 			void api
 				.heartbeat(activeWorkspaceId)
-				// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring heartbeat errors
-				.catch(() => {});
+				.catch((err) => console.debug("heartbeat failed", err));
 			void api
 				.getPresence(activeWorkspaceId)
 				.then(({ users }) => setPresence(users))
-				// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring presence errors
-				.catch(() => {});
+				.catch((err) => console.debug("presence fetch failed", err));
 		};
 		beat();
 		const heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
@@ -435,8 +433,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				void api
 					.getPresence(activeWorkspaceId)
 					.then(({ users }) => setPresence(users))
-					// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring presence errors
-					.catch(() => {}),
+					.catch((err) => console.debug("presence refresh failed", err)),
 			PRESENCE_REFRESH_MS,
 		);
 

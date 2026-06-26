@@ -77,8 +77,7 @@ function DetailsSection({
 			.then(({ members }) => {
 				if (active) setMembers(members);
 			})
-			// biome-ignore lint/suspicious/noEmptyBlockStatements: assignee list is non-critical
-			.catch(() => {});
+			.catch((err) => console.warn("assignee list fetch failed", err));
 		return () => {
 			active = false;
 		};
@@ -286,8 +285,7 @@ function ActivitySection({ cardId }: { cardId: number }) {
 			.then(({ events }) => {
 				if (active) setEvents(events);
 			})
-			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring fetch errors
-			.catch(() => {});
+			.catch((err) => console.warn("card activity fetch failed", err));
 		return () => {
 			active = false;
 		};

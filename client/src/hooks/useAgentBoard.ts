@@ -77,8 +77,7 @@ export function useAgentBoard() {
 			.then((b) => {
 				setBoard(b);
 			})
-			// biome-ignore lint/suspicious/noEmptyBlockStatements: intentionally ignoring board fetch errors
-			.catch(() => {});
+			.catch((err) => console.debug("agent board fetch failed", err));
 	}, [agentEvents, activeWorkspaceId]);
 
 	// Fetch deliverable artifact when execution completes.
