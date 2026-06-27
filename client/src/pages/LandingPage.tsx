@@ -581,18 +581,19 @@ export default function LandingPage() {
 							behaves.
 						</p>
 					</div>
-					<div className="reveal mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-						{PRACTICES.map((p) => (
+					<div className="reveal mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{PRACTICES.map((p, i) => (
 							<div
 								key={p}
-								className="flex items-center gap-3 rounded-md border border-neutral-200 bg-neutral-100 px-4 py-3"
+								className="group/practice flex items-center gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-[0_12px_28px_-12px_oklch(28%_0.044_250_/_0.35)]"
 							>
-								<span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success-100 text-success-900">
-									<Check className="h-3.5 w-3.5" />
+								<span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-sm font-bold tabular-nums text-primary-700 transition-colors group-hover/practice:bg-primary-600 group-hover/practice:text-white">
+									{String(i + 1).padStart(2, "0")}
 								</span>
-								<span className="text-base font-medium text-neutral-800">
+								<span className="text-base font-semibold text-neutral-900">
 									{p}
 								</span>
+								<Check className="ml-auto h-4 w-4 shrink-0 text-primary-300 opacity-0 transition-opacity duration-200 group-hover/practice:opacity-100" />
 							</div>
 						))}
 					</div>
