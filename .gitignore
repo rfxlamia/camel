@@ -42,3 +42,6 @@ docs/
 
 # Vite/Vitest config compilation cache
 *.timestamp-*.mjs
+
+# Production secrets
+deploy/.env.production
