@@ -78,9 +78,21 @@ if (
 
 // OAuth state cookies are host-scoped; APP_BASE_URL and CLIENT_URL must share
 // the same origin or the state cookie won't be sent on the callback redirect.
-if (new URL(config.APP_BASE_URL).origin !== new URL(config.CLIENT_URL).origin) {
-	console.error(
-		`❌ APP_BASE_URL (${config.APP_BASE_URL}) and CLIENT_URL (${config.CLIENT_URL}) must share the same origin — OAuth state cookie will be lost otherwise`,
-	);
-	process.exit(1);
+// Skip in test only — dev/staging should still catch origin mismatches early.
+if (process.env.NODE_ENV !== "test") {
+	try {
+		const appOrigin = new URL(config.APP_BASE_URL).origin;
+		const clientOrigin = new URL(config.CLIENT_URL).origin;
+		if (appOrigin !== clientOrigin) {
+			console.error(
+				`❌ APP_BASE_URL (${config.APP_BASE_URL}) and CLIENT_URL (${config.CLIENT_URL}) must share the same origin — OAuth state cookie will be lost otherwise`,
+			);
+			process.exit(1);
+		}
+	} catch {
+		console.error(
+			`❌ APP_BASE_URL (${config.APP_BASE_URL}) or CLIENT_URL (${config.CLIENT_URL}) is not a valid URL`,
+		);
+		process.exit(1);
+	}
 }
