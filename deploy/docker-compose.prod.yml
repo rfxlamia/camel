@@ -43,7 +43,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       CSRF_SECRET: ${CSRF_SECRET}
       CORS_ORIGIN: https://camel.web.id
-      APP_BASE_URL: https://api.camel.web.id
+      APP_BASE_URL: https://camel.web.id
       CLIENT_URL: https://camel.web.id
       PORT: 3001
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}

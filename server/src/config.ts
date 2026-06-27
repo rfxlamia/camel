@@ -75,3 +75,12 @@ if (
 	);
 	process.exit(1);
 }
+
+// OAuth state cookies are host-scoped; APP_BASE_URL and CLIENT_URL must share
+// the same origin or the state cookie won't be sent on the callback redirect.
+if (new URL(config.APP_BASE_URL).origin !== new URL(config.CLIENT_URL).origin) {
+	console.error(
+		`❌ APP_BASE_URL (${config.APP_BASE_URL}) and CLIENT_URL (${config.CLIENT_URL}) must share the same origin — OAuth state cookie will be lost otherwise`,
+	);
+	process.exit(1);
+}

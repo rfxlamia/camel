@@ -28,7 +28,6 @@ coverage/
 # Local tooling
 .pi/
 .claude/
-!.claude/skills/
 .worktree/
 .agents/
 .bob/
