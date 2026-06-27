@@ -78,8 +78,8 @@ if (
 
 // OAuth state cookies are host-scoped; APP_BASE_URL and CLIENT_URL must share
 // the same origin or the state cookie won't be sent on the callback redirect.
-// Skip in test only — dev/staging should still catch origin mismatches early.
-if (process.env.NODE_ENV !== "test") {
+// Only enforce in production — local dev uses different ports (localhost:3001 vs :5173).
+if (process.env.NODE_ENV === "production") {
 	try {
 		const appOrigin = new URL(config.APP_BASE_URL).origin;
 		const clientOrigin = new URL(config.CLIENT_URL).origin;

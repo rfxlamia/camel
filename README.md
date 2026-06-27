@@ -3,7 +3,7 @@
 
 # Camel Kanban
 
-  A kanban board for small dev teams, built around the six essential kanban
+  A kanban board for micro teams, built around the six essential kanban
   practices: visualize workflow, WIP limits, flow management, explicit
   policies, feedback loops, and continuous improvement — with an integrated
   LLM agent pipeline for research and reporting.
@@ -20,7 +20,7 @@
 
 ## Overview
 
-Camel Kanban is a full-stack, multi-user kanban board designed for small development teams. It combines drag-and-drop card management with real-time collaboration, flow metrics, WIP limit enforcement, and an agentic LLM pipeline for automated research and reporting.
+Camel Kanban is a full-stack, multi-user kanban board designed for micro teams. It combines drag-and-drop card management with real-time collaboration, flow metrics, WIP limit enforcement, and an agentic LLM pipeline for automated research and reporting.
 
 **Key capabilities:**
 
