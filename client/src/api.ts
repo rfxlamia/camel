@@ -1,3 +1,4 @@
+import type { TemplateColumn } from "./lib/templates";
 import type {
 	ActivityEvent,
 	AgentArtifact,
@@ -132,6 +133,14 @@ export const api = {
 		request<Column>(`/workspaces/${workspaceId}/columns`, {
 			method: "POST",
 			body: JSON.stringify({ title }),
+		}),
+	applyTemplate: (
+		workspaceId: number,
+		body: { templateName: string; columns: TemplateColumn[] },
+	) =>
+		request<Column[]>(`/workspaces/${workspaceId}/columns/batch`, {
+			method: "POST",
+			body: JSON.stringify(body),
 		}),
 	updateColumn: (
 		workspaceId: number,

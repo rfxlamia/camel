@@ -435,6 +435,36 @@ describe("Agent API methods", () => {
 	});
 });
 
+describe("template batch API", () => {
+	it("applyTemplate POSTs to /columns/batch with {templateName, columns}", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () => Promise.resolve([]),
+		});
+		const { api } = await import("./api");
+
+		const columns = [
+			{
+				title: "Backlog",
+				color: "powder-blue" as const,
+				wipLimit: null,
+				policy: "Ideas.",
+				isDone: false,
+			},
+		];
+		await api.applyTemplate(7, { templateName: "Software Dev", columns });
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/columns/batch",
+			expect.objectContaining({ method: "POST" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ templateName: "Software Dev", columns });
+	});
+});
+
 describe("sendAgentBoardMessage structured payloads", () => {
 	it("sends { message: string } body when called with a string argument", async () => {
 		mockFetch.mockClear();

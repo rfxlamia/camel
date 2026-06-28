@@ -17,8 +17,11 @@ import { ApiError, api } from "../api";
 import { CardBody } from "../components/CardView";
 import ColumnView from "../components/ColumnView";
 import EmptyState from "../components/EmptyState";
+import TemplatePicker from "../components/TemplatePicker";
 import TrashZone from "../components/TrashZone";
 import { useBoard } from "../context/BoardContext";
+import { WORKSPACE_TEMPLATES } from "../lib/templates";
+import type { WorkspaceTemplate } from "../lib/templates";
 import type { Card, Column } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -187,6 +190,10 @@ export default function BoardPage() {
 	} = useBoard();
 	const navigate = useNavigate();
 	const [activeCard, setActiveCard] = useState<Card | null>(null);
+	const [pickerState, setPickerState] = useState<
+		"idle" | "loading" | "success"
+	>("idle");
+	const [startBlank, setStartBlank] = useState(false);
 	const snapshotRef = useRef<Column[] | null>(null);
 
 	// Card click opens the route-driven context panel (deep-linkable URL).
@@ -438,6 +445,40 @@ export default function BoardPage() {
 		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
 	);
 
+	const onStartBlank = useCallback(() => {
+		setStartBlank(true);
+	}, []);
+
+	const onApplyTemplate = useCallback(
+		async (template: WorkspaceTemplate) => {
+			if (activeWorkspaceId === null) return;
+			setPickerState("loading");
+			try {
+				cancelScheduledRefresh();
+				await api.applyTemplate(activeWorkspaceId, {
+					templateName: template.name,
+					columns: template.columns,
+				});
+				setPickerState("success");
+				window.setTimeout(() => {
+					void refresh().then(() => setPickerState("idle"));
+				}, 2000);
+			} catch (err) {
+				if (err instanceof ApiError && err.status === 409) {
+					await refresh();
+					setPickerState("idle");
+				} else {
+					showToast(
+						"Couldn't apply the template. Check your connection and try again.",
+						"error",
+					);
+					setPickerState("idle");
+				}
+			}
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
+	);
+
 	return (
 		<div className="flex h-full flex-col">
 			{/* Board identity heading — visually carried by the toolbar/columns, but
@@ -469,12 +510,21 @@ export default function BoardPage() {
 					>
 						{columns.length === 0 ? (
 							<div className="flex h-full items-center justify-center">
-								<EmptyState
-									icon={Columns3}
-									title="Start your board"
-									description="Columns are the stages your work moves through — like To do, In progress, and Done. Add your first one to get going."
-									action={<AddColumn onAddColumn={onAddColumn} />}
-								/>
+								{startBlank ? (
+									<EmptyState
+										icon={Columns3}
+										title="Start your board"
+										description="Columns are the stages your work moves through — like To do, In progress, and Done. Add your first one to get going."
+										action={<AddColumn onAddColumn={onAddColumn} />}
+									/>
+								) : (
+									<TemplatePicker
+										templates={WORKSPACE_TEMPLATES}
+										state={pickerState}
+										onApply={onApplyTemplate}
+										onStartBlank={onStartBlank}
+									/>
+								)}
 							</div>
 						) : (
 							<div className="flex h-full items-start gap-5 pb-2">
