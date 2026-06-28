@@ -84,7 +84,7 @@ export function validateColumnBatch(
 		normalized.push({
 			title: titleValidation.trimmed!,
 			color: color as ColumnColor | null,
-			wipLimit: wipLimit ?? null,
+			wipLimit: typeof wipLimit === "number" ? wipLimit : null,
 			policy: typeof policy === "string" ? policy : "",
 			isDone: done,
 		});
