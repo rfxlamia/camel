@@ -83,18 +83,39 @@ function ColumnSettings({
 		api
 			.getWorkspaceMembers(activeWorkspaceId)
 			.then(({ members: m }) => {
-				if (active) setMembers(m);
+				if (!active) return;
+				setMembers(m);
+				// Validate that signableAssigneeId still exists in the members list
+				if (
+					signableAssigneeId !== null &&
+					!m.some((mem) => mem.userId === signableAssigneeId)
+				) {
+					setSignableAssigneeId(null);
+				}
 			})
 			.catch(() => {
-				if (active) setMembersError(true);
+				if (active) {
+					setMembersError(true);
+					// Clear signableAssigneeId when we can't verify membership
+					setSignableAssigneeId(null);
+				}
 			});
 		return () => {
 			active = false;
 		};
-	}, [isSignable, activeWorkspaceId]);
+	}, [isSignable, activeWorkspaceId, signableAssigneeId]);
 
 	const save = async () => {
 		const limit = wipLimit.trim() === "" ? null : Number(wipLimit);
+		// Sanitize signableAssigneeId: validate against current members or clear if errored
+		const sanitizedSignableAssigneeId = isSignable
+			? membersError
+				? null
+				: signableAssigneeId !== null &&
+						!members.some((m) => m.userId === signableAssigneeId)
+					? null
+					: signableAssigneeId
+			: null;
 		await onUpdateColumn(column.id, {
 			title: title.trim() || column.title,
 			wipLimit:
@@ -104,7 +125,7 @@ function ColumnSettings({
 			policy,
 			isDone,
 			isSignable,
-			signableAssigneeId: isSignable ? signableAssigneeId : null,
+			signableAssigneeId: sanitizedSignableAssigneeId,
 		});
 		onClose();
 	};

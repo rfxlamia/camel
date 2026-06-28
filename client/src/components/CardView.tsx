@@ -70,7 +70,7 @@ export function CardBody({ card }: { card: Card }) {
 					</span>
 				)}
 			</div>
-			{card.description && (
+			{card.description.trim() && (
 				<pre
 					className={`mt-1.5 line-clamp-3 overflow-hidden whitespace-pre-wrap break-words rounded-md border border-neutral-200 bg-neutral-100/70 px-2 py-1.5 font-mono text-[11px] leading-relaxed tracking-tight ${
 						done ? "text-neutral-500" : "text-neutral-700"

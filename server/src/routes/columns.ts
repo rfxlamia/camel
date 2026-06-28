@@ -4,6 +4,7 @@ import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
 import { validateColumnName } from "../validators/input-length.js";
+import { recordActivity } from "./helpers.js";
 
 export const columnsRouter = Router({ mergeParams: true });
 
@@ -40,6 +41,7 @@ columnsRouter.patch(
 		}
 		const { title, wipLimit, policy, isDone, isSignable, signableAssigneeId } =
 			req.body ?? {};
+		const hasSignableAssigneeId = "signableAssigneeId" in (req.body ?? {});
 
 		// Validate title if provided
 		if (title !== undefined) {
@@ -73,11 +75,9 @@ columnsRouter.patch(
 				[workspaceId, signableAssigneeId],
 			);
 			if (memberCheck.rows.length === 0) {
-				return res
-					.status(400)
-					.json({
-						error: "signableAssigneeId must be a member of this workspace",
-					});
+				return res.status(400).json({
+					error: "signableAssigneeId must be a member of this workspace",
+				});
 			}
 		}
 
@@ -111,18 +111,19 @@ columnsRouter.patch(
 					 policy = COALESCE($5, policy),
 					 is_done = true,
 					 is_signable = COALESCE($7, is_signable),
-					 signable_assignee_id = CASE WHEN $7 = false THEN NULL ELSE COALESCE($8, signable_assignee_id) END
+					 signable_assignee_id = CASE WHEN $7 = false THEN NULL WHEN $9 THEN $8 ELSE signable_assignee_id END
 					 WHERE id = $1 AND workspace_id = $6
 					 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id`,
 					[
-						id,
-						title ?? null,
-						wipLimit !== undefined,
-						wipLimit ?? null,
-						policy ?? null,
-						workspaceId,
-						isSignable ?? null,
-						signableAssigneeId ?? null,
+						id, // $1
+						title ?? null, // $2
+						wipLimit !== undefined, // $3
+						wipLimit ?? null, // $4
+						policy ?? null, // $5
+						workspaceId, // $6
+						isSignable ?? null, // $7
+						signableAssigneeId ?? null, // $8
+						hasSignableAssigneeId, // $9
 					],
 				);
 
@@ -138,6 +139,15 @@ columnsRouter.patch(
 						signableAssigneeId: rows[0].signable_assignee_id,
 					},
 				} as BoardEvent);
+				await recordActivity(pool, req.user!, workspaceId, "update", {
+					payload: {
+						columnId: id,
+						columnTitle: rows[0].title,
+						isDone: true,
+						isSignable: rows[0].is_signable,
+						signableAssigneeId: rows[0].signable_assignee_id,
+					},
+				});
 				res.json(rows[0]);
 			} catch (err) {
 				await client.query("ROLLBACK");
@@ -155,19 +165,20 @@ columnsRouter.patch(
 			 policy = COALESCE($5, policy),
 			 is_done = COALESCE($6, is_done),
 			 is_signable = COALESCE($8, is_signable),
-			 signable_assignee_id = CASE WHEN $8 = false THEN NULL ELSE COALESCE($9, signable_assignee_id) END
+			 signable_assignee_id = CASE WHEN $8 = false THEN NULL WHEN $10 THEN $9 ELSE signable_assignee_id END
 		 WHERE id = $1 AND workspace_id = $7
 		 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id`,
 			[
-				id,
-				title ?? null,
-				wipLimit !== undefined,
-				wipLimit ?? null,
-				policy ?? null,
-				isDone ?? null,
-				workspaceId,
-				isSignable ?? null,
-				signableAssigneeId ?? null,
+				id, // $1
+				title ?? null, // $2
+				wipLimit !== undefined, // $3
+				wipLimit ?? null, // $4
+				policy ?? null, // $5
+				isDone ?? null, // $6
+				workspaceId, // $7
+				isSignable ?? null, // $8
+				signableAssigneeId ?? null, // $9
+				hasSignableAssigneeId, // $10
 			],
 		);
 		if (rows.length === 0)
@@ -182,6 +193,15 @@ columnsRouter.patch(
 				signableAssigneeId: rows[0].signable_assignee_id,
 			},
 		} as BoardEvent);
+		await recordActivity(pool, req.user!, workspaceId, "update", {
+			payload: {
+				columnId: id,
+				columnTitle: rows[0].title,
+				...(isDone !== undefined && { isDone }),
+				isSignable: rows[0].is_signable,
+				signableAssigneeId: rows[0].signable_assignee_id,
+			},
+		});
 		res.json(rows[0]);
 	},
 );

@@ -289,6 +289,11 @@ export const workspaceAccessService = createWorkspaceAccessService({
        RETURNING user_id`,
 			[workspaceId, userId],
 		);
+		// Clear signable_assignee_id from columns that reference this member
+		await pool.query(
+			"UPDATE columns SET signable_assignee_id = NULL WHERE workspace_id = $1 AND signable_assignee_id = $2",
+			[workspaceId, userId],
+		);
 		const { rows: userRows } = await pool.query(
 			"SELECT username FROM users WHERE id = $1",
 			[rows[0].user_id],
