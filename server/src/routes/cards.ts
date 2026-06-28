@@ -98,7 +98,7 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 		return res.status(400).json({ error: descValidation.error });
 	}
 	const col = await pool.query(
-		"SELECT id, wip_limit FROM columns WHERE id = $1 AND workspace_id = $2",
+		"SELECT id, wip_limit, is_signable, signable_assignee_id FROM columns WHERE id = $1 AND workspace_id = $2",
 		[Number(columnId), workspaceId],
 	);
 	if (col.rows.length === 0) {
@@ -116,31 +116,64 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	if (!wip.allowed) {
 		return res.status(409).json({ error: "WIP limit reached for this column" });
 	}
+	const autoAssigneeId =
+		col.rows[0].is_signable && col.rows[0].signable_assignee_id
+			? col.rows[0].signable_assignee_id
+			: null;
 	const { rows } = await pool.query(
-		`INSERT INTO cards (column_id, title, description, position, workspace_id)
+		`INSERT INTO cards (column_id, title, description, position, workspace_id, assignee_id)
      VALUES ($1, $2, $3,
              COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
-             $5)
-     RETURNING id, column_id, title, description, position, version, created_at, started_at, done_at`,
+             $5, $6)
+     RETURNING id`,
 		[
 			Number(columnId),
 			titleValidation.trimmed,
 			descValidation.trimmed ?? "",
 			POSITION_GAP,
 			workspaceId,
+			autoAssigneeId,
 		],
 	);
 	await recordActivity(pool, req.user!, workspaceId, "create", {
 		cardId: rows[0].id,
 		toColumnId: Number(columnId),
-		payload: { cardTitle: rows[0].title },
+		payload: { cardTitle: titleValidation.trimmed },
 	});
 	await publishEvent(workspaceId, {
 		type: "card.created",
 		actor: req.user!,
 		cardId: rows[0].id,
 	});
-	res.status(201).json(rows[0]);
+	// Re-query with users join to include assignee details
+	const { rows: cardRows } = await pool.query(
+		`SELECT c.id, c.column_id, c.title, c.description, c.position, c.version,
+		        c.created_at, c.started_at, c.done_at, c.assignee_id,
+		        u.username AS assignee_username, u.display_name AS assignee_display_name
+		 FROM cards c
+		 LEFT JOIN users u ON u.id = c.assignee_id
+		 WHERE c.id = $1 AND c.workspace_id = $2`,
+		[rows[0].id, workspaceId],
+	);
+	const card = cardRows[0];
+	res.status(201).json({
+		id: card.id,
+		columnId: card.column_id,
+		title: card.title,
+		description: card.description,
+		position: card.position,
+		version: card.version,
+		createdAt: card.created_at,
+		startedAt: card.started_at,
+		doneAt: card.done_at,
+		assignee: card.assignee_id
+			? {
+					id: card.assignee_id,
+					username: card.assignee_username,
+					displayName: card.assignee_display_name,
+				}
+			: null,
+	});
 });
 
 cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -342,7 +375,7 @@ cardsRouter.post(
 			}
 
 			const colRes = await client.query(
-				`SELECT id, wip_limit, is_done,
+				`SELECT id, wip_limit, is_done, is_signable, signable_assignee_id,
               (position = (SELECT MIN(position) FROM columns WHERE workspace_id = $2)) AS is_first
        FROM columns WHERE id = $1 AND workspace_id = $2`,
 				[toColumnId, workspaceId],
@@ -396,16 +429,26 @@ cardsRouter.post(
 
 			await client.query(
 				`UPDATE cards SET
-         column_id = $2,
-         position = $3,
-         version = version + 1,
-         started_at = CASE
-           WHEN started_at IS NULL AND ($4 OR NOT $5) THEN now()
-           ELSE started_at
-         END,
-         done_at = CASE WHEN $4 THEN COALESCE(done_at, now()) ELSE NULL END
-       WHERE id = $1`,
-				[cardId, toColumnId, position, target.is_done, target.is_first],
+			     column_id = $2,
+			     position = $3,
+			     version = version + 1,
+			     started_at = CASE
+			       WHEN started_at IS NULL AND ($4 OR NOT $5) THEN now()
+			       ELSE started_at
+			     END,
+			     done_at = CASE WHEN $4 THEN COALESCE(done_at, now()) ELSE NULL END,
+			     assignee_id = CASE WHEN $6 AND $7 IS NOT NULL AND NOT $8 THEN $7 ELSE assignee_id END
+			   WHERE id = $1`,
+				[
+					cardId,
+					toColumnId,
+					position,
+					target.is_done,
+					target.is_first,
+					target.is_signable,
+					target.signable_assignee_id,
+					isSameColumn,
+				],
 			);
 
 			await recordActivity(
@@ -430,11 +473,35 @@ cardsRouter.post(
 			});
 
 			const updated = await pool.query(
-				`SELECT id, column_id, title, description, position, version, created_at, started_at, done_at
-       FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+				`SELECT c.id, c.column_id, c.title, c.description, c.position, c.version,
+			       c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date,
+			       c.assignee_id, u.username AS assignee_username,
+			       u.display_name AS assignee_display_name
+			 FROM cards c
+			 LEFT JOIN users u ON u.id = c.assignee_id
+			 WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
 				[cardId, workspaceId],
 			);
-			res.json(updated.rows[0]);
+			const c = updated.rows[0];
+			res.json({
+				id: c.id,
+				columnId: c.column_id,
+				title: c.title,
+				description: c.description,
+				position: c.position,
+				version: c.version,
+				createdAt: c.created_at,
+				startedAt: c.started_at,
+				doneAt: c.done_at,
+				dueDate: c.due_date,
+				assignee: c.assignee_id
+					? {
+							id: c.assignee_id,
+							username: c.assignee_username,
+							displayName: c.assignee_display_name,
+						}
+					: null,
+			});
 		} catch (err) {
 			await client.query("ROLLBACK");
 			throw err;

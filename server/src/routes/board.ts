@@ -35,6 +35,8 @@ export function buildBoardResponse(columns: HumanColumn[], cards: CardRow[]) {
 			wipLimit: col.wip_limit,
 			policy: col.policy,
 			isDone: col.is_done,
+			isSignable: col.is_signable,
+			signableAssigneeId: col.signable_assignee_id,
 			cards: (cardsByColumn.get(col.id) ?? []).map((c) => ({
 				id: c.id,
 				columnId: c.column_id,

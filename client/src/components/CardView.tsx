@@ -70,10 +70,14 @@ export function CardBody({ card }: { card: Card }) {
 					</span>
 				)}
 			</div>
-			{card.description && (
-				<p className="mt-1 line-clamp-2 text-xs leading-snug text-neutral-600">
+			{card.description.trim() && (
+				<pre
+					className={`mt-1.5 line-clamp-3 overflow-hidden whitespace-pre-wrap break-words rounded-md border border-neutral-200 bg-neutral-100/70 px-2 py-1.5 font-mono text-[11px] leading-relaxed tracking-tight ${
+						done ? "text-neutral-500" : "text-neutral-700"
+					}`}
+				>
 					{card.description}
-				</p>
+				</pre>
 			)}
 			{(card.dueDate || card.assignee) && (
 				<div className="mt-2 flex items-center gap-2">

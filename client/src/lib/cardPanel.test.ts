@@ -31,6 +31,8 @@ function makeColumn(id: number, cards: Card[]): Column {
 		wipLimit: null,
 		policy: "",
 		isDone: false,
+		isSignable: false,
+		signableAssigneeId: null,
 		cards,
 	};
 }

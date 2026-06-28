@@ -288,3 +288,10 @@ CREATE INDEX IF NOT EXISTS idx_events_workspace_created
 -- Board read: filter live cards by workspace + sort by position
 CREATE INDEX IF NOT EXISTS idx_cards_workspace_position
   ON cards(workspace_id, position) WHERE deleted_at IS NULL;
+
+-- Signable columns: auto-assign cards to a designated member when moved/created.
+-- is_signable: marks a column as having auto-assign behavior.
+-- signable_assignee_id: the workspace member to auto-assign; SET NULL if user is deleted.
+-- Non-exclusive: multiple columns can be signable, each with their own assignee.
+ALTER TABLE columns ADD COLUMN IF NOT EXISTS is_signable BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE columns ADD COLUMN IF NOT EXISTS signable_assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;

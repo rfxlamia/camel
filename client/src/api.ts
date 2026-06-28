@@ -141,6 +141,8 @@ export const api = {
 			wipLimit?: number | null;
 			policy?: string;
 			isDone?: boolean;
+			isSignable?: boolean;
+			signableAssigneeId?: number | null;
 		},
 	) =>
 		request<Column>(`/workspaces/${workspaceId}/columns/${id}`, {

@@ -4,8 +4,10 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Plus, Settings2 } from "lucide-react";
-import { memo, useState } from "react";
-import type { Card, Column } from "../types";
+import { memo, useEffect, useRef, useState } from "react";
+import { api } from "../api";
+import { useBoard } from "../context/BoardContext";
+import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
 import CardView from "./CardView";
 
@@ -20,6 +22,8 @@ interface Props {
 			wipLimit?: number | null;
 			policy?: string;
 			isDone?: boolean;
+			isSignable?: boolean;
+			signableAssigneeId?: number | null;
 		},
 	) => Promise<void>;
 }
@@ -58,15 +62,65 @@ function ColumnSettings({
 	onUpdateColumn: Props["onUpdateColumn"];
 	onClose: () => void;
 }) {
+	const { activeWorkspaceId } = useBoard();
 	const [title, setTitle] = useState(column.title);
 	const [wipLimit, setWipLimit] = useState(
 		column.wipLimit === null ? "" : String(column.wipLimit),
 	);
 	const [policy, setPolicy] = useState(column.policy);
 	const [isDone, setIsDone] = useState(column.isDone);
+	const [isSignable, setIsSignable] = useState(column.isSignable);
+	const [signableAssigneeId, setSignableAssigneeId] = useState<number | null>(
+		column.signableAssigneeId,
+	);
+	const [members, setMembers] = useState<WorkspaceMember[]>([]);
+	const [membersError, setMembersError] = useState(false);
+
+	// Ref to avoid stale closure in useEffect while keeping signableAssigneeId
+	// out of deps (re-fetching members on every assignee change is unnecessary)
+	const assigneeIdRef = useRef(signableAssigneeId);
+	assigneeIdRef.current = signableAssigneeId;
+
+	useEffect(() => {
+		if (!isSignable || activeWorkspaceId === null) return;
+		let active = true;
+		setMembersError(false);
+		api
+			.getWorkspaceMembers(activeWorkspaceId)
+			.then(({ members: m }) => {
+				if (!active) return;
+				setMembers(m);
+				// Validate that signableAssigneeId still exists in the members list
+				if (
+					assigneeIdRef.current !== null &&
+					!m.some((mem) => mem.userId === assigneeIdRef.current)
+				) {
+					setSignableAssigneeId(null);
+				}
+			})
+			.catch(() => {
+				if (active) {
+					setMembersError(true);
+					// Clear signableAssigneeId when we can't verify membership
+					setSignableAssigneeId(null);
+				}
+			});
+		return () => {
+			active = false;
+		};
+	}, [isSignable, activeWorkspaceId]);
 
 	const save = async () => {
 		const limit = wipLimit.trim() === "" ? null : Number(wipLimit);
+		// Sanitize signableAssigneeId: validate against current members or clear if errored
+		const sanitizedSignableAssigneeId = isSignable
+			? membersError
+				? null
+				: signableAssigneeId !== null &&
+						!members.some((m) => m.userId === signableAssigneeId)
+					? null
+					: signableAssigneeId
+			: null;
 		await onUpdateColumn(column.id, {
 			title: title.trim() || column.title,
 			wipLimit:
@@ -75,6 +129,8 @@ function ColumnSettings({
 					: limit,
 			policy,
 			isDone,
+			isSignable,
+			signableAssigneeId: sanitizedSignableAssigneeId,
 		});
 		onClose();
 	};
@@ -132,6 +188,49 @@ function ColumnSettings({
 			<p className="-mt-1 text-xs text-neutral-500">
 				Cards moved here will be marked as completed
 			</p>
+			<label className="flex items-center gap-2">
+				<input
+					type="checkbox"
+					checked={isSignable}
+					onChange={(e) => setIsSignable(e.target.checked)}
+					className="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+				/>
+				<span className="text-xs font-medium text-neutral-700">
+					Mark as Signable Column
+				</span>
+			</label>
+			<p className="-mt-1 text-xs text-neutral-500">
+				Cards moved here will be auto-assigned to the selected member
+			</p>
+			{isSignable && (
+				<label className="block">
+					<span className="text-xs font-medium text-neutral-700">
+						Auto-assign to
+					</span>
+					{membersError ? (
+						<p className="text-xs text-error-600">
+							Failed to load members. Save and reopen to retry.
+						</p>
+					) : (
+						<select
+							className={inputClass}
+							value={signableAssigneeId ?? ""}
+							onChange={(e) =>
+								setSignableAssigneeId(
+									e.target.value === "" ? null : Number(e.target.value),
+								)
+							}
+						>
+							<option value="">No auto-assign</option>
+							{members.map((m) => (
+								<option key={m.userId} value={m.userId}>
+									{m.displayName}
+								</option>
+							))}
+						</select>
+					)}
+				</label>
+			)}
 			<div className="flex gap-2">
 				<button
 					onClick={save}
