@@ -51,13 +51,19 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
 import { pool } from "../db/pool.js";
+import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
+import * as routeHelpers from "./helpers.js";
+
+/** Isolated from routes.integration.test.ts (workspace 1). */
+const WORKSPACE_ID = 99;
 
 function createTestApp() {
 	const app = express();
 	app.use(express.json());
 	app.use(cookieParser());
 	app.use("/api", api);
+	app.use(createErrorHandler());
 	return app;
 }
 
@@ -112,28 +118,36 @@ async function setupFixtures() {
 	);
 	await pool.query(
 		`INSERT INTO workspaces (id, name, owner_user_id, is_personal)
-		 VALUES (1, 'Test WS', $1, false) ON CONFLICT (id) DO NOTHING`,
-		[mockTestUser.id],
+		 VALUES ($1, 'Batch Test WS', $2, false) ON CONFLICT (id) DO NOTHING`,
+		[WORKSPACE_ID, mockTestUser.id],
 	);
 	await pool.query(
 		`INSERT INTO workspace_members (workspace_id, user_id, role)
-		 VALUES (1, $1, 'owner') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
-		[mockTestUser.id],
+		 VALUES ($1, $2, 'owner') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
+		[WORKSPACE_ID, mockTestUser.id],
 	);
 }
 
 beforeEach(async () => {
 	await setupFixtures();
-	await pool.query("DELETE FROM card_events");
-	await pool.query("DELETE FROM columns WHERE workspace_id = 1");
+	await pool.query("DELETE FROM card_events WHERE workspace_id = $1", [
+		WORKSPACE_ID,
+	]);
+	await pool.query("DELETE FROM columns WHERE workspace_id = $1", [
+		WORKSPACE_ID,
+	]);
 	vi.clearAllMocks();
 });
 
 afterAll(async () => {
-	await pool.query(
-		"TRUNCATE users, workspaces, columns, cards, card_events CASCADE",
-	);
-	await pool.end();
+	await pool.query("DELETE FROM card_events WHERE workspace_id = $1", [
+		WORKSPACE_ID,
+	]);
+	await pool.query("DELETE FROM columns WHERE workspace_id = $1", [WORKSPACE_ID]);
+	await pool.query("DELETE FROM workspace_members WHERE workspace_id = $1", [
+		WORKSPACE_ID,
+	]);
+	await pool.query("DELETE FROM workspaces WHERE id = $1", [WORKSPACE_ID]);
 });
 
 describe.skipIf(!process.env.RUN_INTEGRATION)(
@@ -141,13 +155,14 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 	() => {
 		it("seeds an empty workspace atomically with one event + one activity", async () => {
 			const res = await request(app)
-				.post("/api/workspaces/1/columns/batch")
+				.post(`/api/workspaces/${WORKSPACE_ID}/columns/batch`)
 				.send(PAYLOAD);
 
 			expect(res.status).toBe(201);
 
 			const cols = await pool.query(
-				"SELECT title, color, wip_limit, policy, is_done, is_signable, signable_assignee_id FROM columns WHERE workspace_id = 1 ORDER BY position",
+				`SELECT title, color, wip_limit, policy, is_done, is_signable, signable_assignee_id FROM columns WHERE workspace_id = $1 ORDER BY position`,
+				[WORKSPACE_ID],
 			);
 			expect(cols.rows).toHaveLength(5);
 			expect(cols.rows.map((c) => c.title)).toEqual([
@@ -167,7 +182,8 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			});
 
 			const events = await pool.query(
-				"SELECT event_type, payload FROM card_events WHERE workspace_id = 1",
+				"SELECT event_type, payload FROM card_events WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(events.rows).toHaveLength(1);
 			expect(events.rows[0].event_type).toBe("create");
@@ -179,21 +195,24 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		it("rejects a non-empty workspace with 409 and writes nothing", async () => {
 			await pool.query(
-				"INSERT INTO columns (title, position, workspace_id) VALUES ('Existing', 1024, 1)",
+				"INSERT INTO columns (title, position, workspace_id) VALUES ('Existing', 1024, $1)",
+				[WORKSPACE_ID],
 			);
 
 			const res = await request(app)
-				.post("/api/workspaces/1/columns/batch")
+				.post(`/api/workspaces/${WORKSPACE_ID}/columns/batch`)
 				.send(PAYLOAD);
 
 			expect(res.status).toBe(409);
 			const cols = await pool.query(
-				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = 1",
+				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(cols.rows[0].n).toBe(1);
 			expect(mockPublishEvent).not.toHaveBeenCalled();
 			const events = await pool.query(
-				"SELECT count(*)::int AS n FROM card_events WHERE workspace_id = 1",
+				"SELECT count(*)::int AS n FROM card_events WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(events.rows[0].n).toBe(0);
 		});
@@ -212,12 +231,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				],
 			};
 			const res = await request(app)
-				.post("/api/workspaces/1/columns/batch")
+				.post(`/api/workspaces/${WORKSPACE_ID}/columns/batch`)
 				.send(bad);
 
 			expect(res.status).toBe(400);
 			const cols = await pool.query(
-				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = 1",
+				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(cols.rows[0].n).toBe(0);
 		});
@@ -232,12 +252,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				})),
 			};
 			const res = await request(app)
-				.post("/api/workspaces/1/columns/batch")
+				.post(`/api/workspaces/${WORKSPACE_ID}/columns/batch`)
 				.send(withSignable);
 
 			expect(res.status).toBe(201);
 			const cols = await pool.query(
-				"SELECT is_signable, signable_assignee_id FROM columns WHERE workspace_id = 1",
+				"SELECT is_signable, signable_assignee_id FROM columns WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(cols.rows.every((c) => c.is_signable === false)).toBe(true);
 			expect(cols.rows.every((c) => c.signable_assignee_id === null)).toBe(
@@ -246,43 +267,27 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		it("rolls back fully when an insert fails mid-apply (atomicity)", async () => {
-			const realConnect = pool.connect.bind(pool);
-			const connectSpy = vi
-				.spyOn(pool, "connect")
-				// biome-ignore lint/suspicious/noExplicitAny: test double
-				.mockImplementation(async () => {
-					const client: any = await realConnect();
-					const realQuery = client.query.bind(client);
-					let inserts = 0;
-					client.query = (...args: any[]) => {
-						const sql =
-							typeof args[0] === "string" ? args[0] : (args[0]?.text ?? "");
-						if (/INSERT INTO columns/i.test(sql)) {
-							inserts++;
-							if (inserts === 3) {
-								return Promise.reject(new Error("simulated insert failure"));
-							}
-						}
-						return realQuery(...args);
-					};
-					return client;
-				});
+			const activitySpy = vi
+				.spyOn(routeHelpers, "recordActivity")
+				.mockRejectedValueOnce(new Error("simulated activity failure"));
 
 			try {
 				const res = await request(app)
-					.post("/api/workspaces/1/columns/batch")
+					.post(`/api/workspaces/${WORKSPACE_ID}/columns/batch`)
 					.send(PAYLOAD);
 				expect(res.status).toBeGreaterThanOrEqual(500);
 			} finally {
-				connectSpy.mockRestore();
+				activitySpy.mockRestore();
 			}
 
 			const cols = await pool.query(
-				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = 1",
+				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(cols.rows[0].n).toBe(0);
 			const events = await pool.query(
-				"SELECT count(*)::int AS n FROM card_events WHERE workspace_id = 1",
+				"SELECT count(*)::int AS n FROM card_events WHERE workspace_id = $1",
+				[WORKSPACE_ID],
 			);
 			expect(events.rows[0].n).toBe(0);
 			expect(mockPublishEvent).not.toHaveBeenCalled();

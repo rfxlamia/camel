@@ -111,7 +111,14 @@ columnsRouter.post(
 
 			res.status(201).json(created);
 		} catch (err) {
-			await client.query("ROLLBACK");
+			try {
+				await client.query("ROLLBACK");
+			} catch {
+				// transaction may already be aborted
+			}
+			if (!res.headersSent) {
+				return res.status(500).json({ error: "internal server error" });
+			}
 			throw err;
 		} finally {
 			client.release();
