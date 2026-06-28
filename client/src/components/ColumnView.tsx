@@ -328,15 +328,6 @@ function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 	const over =
 		column.wipLimit !== null && column.cards.length > column.wipLimit;
 
-	// Flow rail: WIP-over (red) → done (green) → active/limited (blue) → idle (grey).
-	const rail = over
-		? "bg-error-500"
-		: column.isDone
-			? "bg-success-500"
-			: column.wipLimit !== null
-				? "bg-primary-500"
-				: "bg-neutral-300";
-
 	return (
 		<section
 			className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border shadow-[0_1px_2px_oklch(28%_0.044_250_/_0.06)] transition-colors ${
@@ -345,9 +336,6 @@ function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 					: "border-neutral-200 bg-neutral-100"
 			}`}
 		>
-			{/* Flow-state rail */}
-			<div className={`h-[3px] w-full ${rail}`} aria-hidden />
-
 			<div className="flex min-h-0 flex-1 flex-col p-2">
 				<header className="px-1 pt-1">
 					<div className="flex items-center justify-between gap-2">
