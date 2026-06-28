@@ -283,25 +283,35 @@ export const workspaceAccessService = createWorkspaceAccessService({
 		return role ? { userId, role } : null;
 	},
 	removeMember: async (workspaceId, userId) => {
-		const { rows } = await pool.query(
-			`DELETE FROM workspace_members
-       WHERE workspace_id = $1 AND user_id = $2
-       RETURNING user_id`,
-			[workspaceId, userId],
-		);
-		// Clear signable_assignee_id from columns that reference this member
-		await pool.query(
-			"UPDATE columns SET signable_assignee_id = NULL WHERE workspace_id = $1 AND signable_assignee_id = $2",
-			[workspaceId, userId],
-		);
-		const { rows: userRows } = await pool.query(
-			"SELECT username FROM users WHERE id = $1",
-			[rows[0].user_id],
-		);
-		return {
-			userId: rows[0].user_id as number,
-			username: userRows[0].username as string,
-		};
+		const client = await pool.connect();
+		try {
+			await client.query("BEGIN");
+			const { rows } = await client.query(
+				`DELETE FROM workspace_members
+					   WHERE workspace_id = $1 AND user_id = $2
+					   RETURNING user_id`,
+				[workspaceId, userId],
+			);
+			// Clear signable_assignee_id from columns that reference this member
+			await client.query(
+				"UPDATE columns SET signable_assignee_id = NULL WHERE workspace_id = $1 AND signable_assignee_id = $2",
+				[workspaceId, userId],
+			);
+			await client.query("COMMIT");
+			const { rows: userRows } = await pool.query(
+				"SELECT username FROM users WHERE id = $1",
+				[rows[0].user_id],
+			);
+			return {
+				userId: rows[0].user_id as number,
+				username: userRows[0].username as string,
+			};
+		} catch (err) {
+			await client.query("ROLLBACK");
+			throw err;
+		} finally {
+			client.release();
+		}
 	},
 	publishEvent,
 	clearPresence,
