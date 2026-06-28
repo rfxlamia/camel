@@ -3,23 +3,13 @@ import { POSITION_GAP } from "../core/position.js";
 import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
+import {
+	COLUMN_COLORS,
+	isValidColumnColor,
+	validateColumnBatch,
+} from "../validators/column.js";
 import { validateColumnName } from "../validators/input-length.js";
 import { recordActivity } from "./helpers.js";
-
-// Valid column color palette names
-const COLUMN_COLORS = [
-	"powder-blue",
-	"pale-sky",
-	"light-cyan",
-	"frozen-water",
-	"turquoise",
-] as const;
-
-type ColumnColor = (typeof COLUMN_COLORS)[number];
-
-function isValidColumnColor(value: unknown): value is ColumnColor | null {
-	return value === null || COLUMN_COLORS.includes(value as ColumnColor);
-}
 
 export const columnsRouter = Router({ mergeParams: true });
 
@@ -43,6 +33,91 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	});
 	res.status(201).json(rows[0]);
 });
+
+columnsRouter.post(
+	"/columns/batch",
+	requireWorkspaceMember,
+	async (req, res) => {
+		const { workspaceId } = req.workspace!;
+
+		const validation = validateColumnBatch(req.body?.columns);
+		if (!validation.valid) {
+			return res.status(400).json({ error: validation.error });
+		}
+
+		const templateName =
+			typeof req.body?.templateName === "string"
+				? req.body.templateName
+				: "";
+		const normalized = validation.normalized!;
+
+		const client = await pool.connect();
+		try {
+			await client.query("BEGIN");
+
+			await client.query(
+				"SELECT id FROM workspaces WHERE id = $1 FOR UPDATE",
+				[workspaceId],
+			);
+
+			const countRes = await client.query(
+				"SELECT count(*)::int AS n FROM columns WHERE workspace_id = $1",
+				[workspaceId],
+			);
+			if (countRes.rows[0].n > 0) {
+				await client.query("ROLLBACK");
+				return res
+					.status(409)
+					.json({ error: "workspace already has columns" });
+			}
+
+			const created: Array<Record<string, unknown>> = [];
+			for (let i = 0; i < normalized.length; i++) {
+				const col = normalized[i];
+				const { rows } = await client.query(
+					`INSERT INTO columns (title, position, workspace_id, wip_limit, policy, is_done, is_signable, signable_assignee_id, color)
+					 VALUES ($1, $2, $3, $4, $5, $6, false, null, $7)
+					 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id, color`,
+					[
+						col.title,
+						i * POSITION_GAP,
+						workspaceId,
+						col.wipLimit,
+						col.policy,
+						col.isDone,
+						col.color,
+					],
+				);
+				created.push(rows[0]);
+			}
+
+			await recordActivity(client, req.user!, workspaceId, "create", {
+				payload: {
+					templateName,
+					columnCount: normalized.length,
+				},
+			});
+
+			await client.query("COMMIT");
+
+			try {
+				await publishEvent(workspaceId, {
+					type: "column.created",
+					actor: req.user!,
+				});
+			} catch {
+				// best-effort post-commit publish
+			}
+
+			res.status(201).json(created);
+		} catch (err) {
+			await client.query("ROLLBACK");
+			throw err;
+		} finally {
+			client.release();
+		}
+	},
+);
 
 columnsRouter.patch(
 	"/columns/:id",
