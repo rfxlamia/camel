@@ -313,6 +313,8 @@ export type HumanColumn = {
 	wip_limit: number | null;
 	policy: string;
 	is_done: boolean;
+	is_signable: boolean;
+	signable_assignee_id: number | null;
 };
 
 export async function getHumanColumns(
@@ -320,7 +322,7 @@ export async function getHumanColumns(
 	workspaceId: number,
 ): Promise<HumanColumn[]> {
 	const { rows } = await db.query(
-		`SELECT id, title, position, wip_limit, policy, is_done
+		`SELECT id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id
      FROM columns WHERE workspace_id = $1 AND board_id IS NULL ORDER BY position`,
 		[workspaceId],
 	);

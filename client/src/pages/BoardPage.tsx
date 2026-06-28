@@ -404,6 +404,8 @@ export default function BoardPage() {
 				wipLimit?: number | null;
 				policy?: string;
 				isDone?: boolean;
+				isSignable?: boolean;
+				signableAssigneeId?: number | null;
 			},
 		) => {
 			if (activeWorkspaceId === null) return;

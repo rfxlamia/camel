@@ -79,6 +79,8 @@ export interface Column {
 	wipLimit: number | null;
 	policy: string;
 	isDone: boolean;
+	isSignable: boolean;
+	signableAssigneeId: number | null;
 	cards: Card[];
 }
 
