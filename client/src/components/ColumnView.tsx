@@ -4,7 +4,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Plus, Settings2 } from "lucide-react";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import type { Card, Column, WorkspaceMember } from "../types";
@@ -76,6 +76,11 @@ function ColumnSettings({
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [membersError, setMembersError] = useState(false);
 
+	// Ref to avoid stale closure in useEffect while keeping signableAssigneeId
+	// out of deps (re-fetching members on every assignee change is unnecessary)
+	const assigneeIdRef = useRef(signableAssigneeId);
+	assigneeIdRef.current = signableAssigneeId;
+
 	useEffect(() => {
 		if (!isSignable || activeWorkspaceId === null) return;
 		let active = true;
@@ -87,8 +92,8 @@ function ColumnSettings({
 				setMembers(m);
 				// Validate that signableAssigneeId still exists in the members list
 				if (
-					signableAssigneeId !== null &&
-					!m.some((mem) => mem.userId === signableAssigneeId)
+					assigneeIdRef.current !== null &&
+					!m.some((mem) => mem.userId === assigneeIdRef.current)
 				) {
 					setSignableAssigneeId(null);
 				}
@@ -103,7 +108,7 @@ function ColumnSettings({
 		return () => {
 			active = false;
 		};
-	}, [isSignable, activeWorkspaceId, signableAssigneeId]);
+	}, [isSignable, activeWorkspaceId]);
 
 	const save = async () => {
 		const limit = wipLimit.trim() === "" ? null : Number(wipLimit);
