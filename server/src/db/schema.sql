@@ -295,3 +295,7 @@ CREATE INDEX IF NOT EXISTS idx_cards_workspace_position
 -- Non-exclusive: multiple columns can be signable, each with their own assignee.
 ALTER TABLE columns ADD COLUMN IF NOT EXISTS is_signable BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE columns ADD COLUMN IF NOT EXISTS signable_assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+-- Column color: allows users to customize column appearance with predefined palettes.
+-- Stores palette name (e.g. 'powder-blue', 'pale-sky') or NULL for default neutral styling.
+ALTER TABLE columns ADD COLUMN IF NOT EXISTS color TEXT;

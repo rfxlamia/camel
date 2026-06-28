@@ -81,6 +81,7 @@ export interface Column {
 	isDone: boolean;
 	isSignable: boolean;
 	signableAssigneeId: number | null;
+	color: string | null;
 	cards: Card[];
 }
 

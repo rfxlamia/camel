@@ -6,6 +6,21 @@ import { type BoardEvent, publishEvent } from "../realtime.js";
 import { validateColumnName } from "../validators/input-length.js";
 import { recordActivity } from "./helpers.js";
 
+// Valid column color palette names
+const COLUMN_COLORS = [
+	"powder-blue",
+	"pale-sky",
+	"light-cyan",
+	"frozen-water",
+	"turquoise",
+] as const;
+
+type ColumnColor = (typeof COLUMN_COLORS)[number];
+
+function isValidColumnColor(value: unknown): value is ColumnColor | null {
+	return value === null || COLUMN_COLORS.includes(value as ColumnColor);
+}
+
 export const columnsRouter = Router({ mergeParams: true });
 
 columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
@@ -19,7 +34,7 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	const { rows } = await pool.query(
 		`INSERT INTO columns (title, position, workspace_id)
      VALUES ($1, COALESCE((SELECT MAX(position) FROM columns WHERE workspace_id = $2), 0) + $3, $2)
-     RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id`,
+     RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id, color`,
 		[titleValidation.trimmed, workspaceId, POSITION_GAP],
 	);
 	await publishEvent(workspaceId, {
@@ -39,8 +54,15 @@ columnsRouter.patch(
 		if (Number.isNaN(id)) {
 			return res.status(400).json({ error: "invalid column id" });
 		}
-		const { title, wipLimit, policy, isDone, isSignable, signableAssigneeId } =
-			req.body ?? {};
+		const {
+			title,
+			wipLimit,
+			policy,
+			isDone,
+			isSignable,
+			signableAssigneeId,
+			color,
+		} = req.body ?? {};
 		const hasSignableAssigneeId = "signableAssigneeId" in (req.body ?? {});
 
 		// Validate title if provided
@@ -81,6 +103,13 @@ columnsRouter.patch(
 			}
 		}
 
+		// Validate color if provided
+		if (color !== undefined && !isValidColumnColor(color)) {
+			return res.status(400).json({
+				error: `color must be one of: ${COLUMN_COLORS.join(", ")}, or null`,
+			});
+		}
+
 		// Use transaction for isDone enforcement to ensure atomicity
 		if (isDone === true) {
 			const client = await pool.connect();
@@ -111,9 +140,10 @@ columnsRouter.patch(
 					 policy = COALESCE($5, policy),
 					 is_done = true,
 					 is_signable = COALESCE($7, is_signable),
-					 signable_assignee_id = CASE WHEN $7 = false THEN NULL WHEN $9 THEN $8 ELSE signable_assignee_id END
+					 signable_assignee_id = CASE WHEN $7 = false THEN NULL WHEN $9 THEN $8 ELSE signable_assignee_id END,
+					 color = COALESCE($10, color)
 					 WHERE id = $1 AND workspace_id = $6
-					 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id`,
+					 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id, color`,
 					[
 						id, // $1
 						title ?? null, // $2
@@ -124,6 +154,7 @@ columnsRouter.patch(
 						isSignable ?? null, // $7
 						signableAssigneeId ?? null, // $8
 						hasSignableAssigneeId, // $9
+						color ?? null, // $10
 					],
 				);
 
@@ -137,6 +168,7 @@ columnsRouter.patch(
 						isDone: true,
 						isSignable: rows[0].is_signable,
 						signableAssigneeId: rows[0].signable_assignee_id,
+						color: rows[0].color,
 					},
 				} as BoardEvent);
 				await recordActivity(pool, req.user!, workspaceId, "update", {
@@ -146,6 +178,7 @@ columnsRouter.patch(
 						isDone: true,
 						isSignable: rows[0].is_signable,
 						signableAssigneeId: rows[0].signable_assignee_id,
+						color: rows[0].color,
 					},
 				});
 				res.json(rows[0]);
@@ -165,9 +198,10 @@ columnsRouter.patch(
 			 policy = COALESCE($5, policy),
 			 is_done = COALESCE($6, is_done),
 			 is_signable = COALESCE($8, is_signable),
-			 signable_assignee_id = CASE WHEN $8 = false THEN NULL WHEN $10 THEN $9 ELSE signable_assignee_id END
+			 signable_assignee_id = CASE WHEN $8 = false THEN NULL WHEN $10 THEN $9 ELSE signable_assignee_id END,
+			 color = COALESCE($11, color)
 		 WHERE id = $1 AND workspace_id = $7
-		 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id`,
+		 RETURNING id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id, color`,
 			[
 				id, // $1
 				title ?? null, // $2
@@ -179,6 +213,7 @@ columnsRouter.patch(
 				isSignable ?? null, // $8
 				signableAssigneeId ?? null, // $9
 				hasSignableAssigneeId, // $10
+				color ?? null, // $11
 			],
 		);
 		if (rows.length === 0)
@@ -191,6 +226,7 @@ columnsRouter.patch(
 				...(isDone !== undefined && { isDone }),
 				isSignable: rows[0].is_signable,
 				signableAssigneeId: rows[0].signable_assignee_id,
+				color: rows[0].color,
 			},
 		} as BoardEvent);
 		await recordActivity(pool, req.user!, workspaceId, "update", {
@@ -200,6 +236,7 @@ columnsRouter.patch(
 				...(isDone !== undefined && { isDone }),
 				isSignable: rows[0].is_signable,
 				signableAssigneeId: rows[0].signable_assignee_id,
+				color: rows[0].color,
 			},
 		});
 		res.json(rows[0]);

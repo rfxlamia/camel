@@ -11,6 +11,9 @@ function makeColumn(
 		wip_limit: null,
 		policy: "manual",
 		is_done: false,
+		is_signable: false,
+		signable_assignee_id: null,
+		color: null,
 		...overrides,
 	};
 }
@@ -163,6 +166,9 @@ describe("buildBoardResponse", () => {
 				wip_limit: 5,
 				policy: "auto",
 				is_done: true,
+				is_signable: false,
+				signable_assignee_id: null,
+				color: "powder-blue",
 			},
 		];
 
@@ -175,6 +181,9 @@ describe("buildBoardResponse", () => {
 			wipLimit: 5,
 			policy: "auto",
 			isDone: true,
+			isSignable: false,
+			signableAssigneeId: null,
+			color: "powder-blue",
 			cards: [],
 		});
 	});

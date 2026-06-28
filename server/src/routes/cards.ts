@@ -437,7 +437,7 @@ cardsRouter.post(
 			       ELSE started_at
 			     END,
 			     done_at = CASE WHEN $4 THEN COALESCE(done_at, now()) ELSE NULL END,
-			     assignee_id = CASE WHEN $6 AND $7 IS NOT NULL AND NOT $8 THEN $7 ELSE assignee_id END
+			 assignee_id = CASE WHEN $6 AND $7::integer IS NOT NULL AND NOT $8 THEN $7::integer ELSE assignee_id END
 			   WHERE id = $1`,
 				[
 					cardId,

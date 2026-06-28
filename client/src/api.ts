@@ -143,6 +143,7 @@ export const api = {
 			isDone?: boolean;
 			isSignable?: boolean;
 			signableAssigneeId?: number | null;
+			color?: string | null;
 		},
 	) =>
 		request<Column>(`/workspaces/${workspaceId}/columns/${id}`, {

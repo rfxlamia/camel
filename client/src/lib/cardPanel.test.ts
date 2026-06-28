@@ -33,6 +33,7 @@ function makeColumn(id: number, cards: Card[]): Column {
 		isDone: false,
 		isSignable: false,
 		signableAssigneeId: null,
+		color: null,
 		cards,
 	};
 }

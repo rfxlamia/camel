@@ -3,13 +3,42 @@ import {
 	SortableContext,
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, Settings2 } from "lucide-react";
+import { Plus, Settings2, X } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
 import CardView from "./CardView";
+
+// Column color palette names (must match server validation)
+const COLUMN_COLORS = [
+	"powder-blue",
+	"pale-sky",
+	"light-cyan",
+	"frozen-water",
+	"turquoise",
+] as const;
+
+type ColumnColor = (typeof COLUMN_COLORS)[number];
+
+// Preview colors for the picker (shade 200 for visibility)
+const COLOR_PREVIEWS: Record<ColumnColor, string> = {
+	"powder-blue": "var(--color-powder-blue-200)",
+	"pale-sky": "var(--color-pale-sky-200)",
+	"light-cyan": "var(--color-light-cyan-200)",
+	"frozen-water": "var(--color-frozen-water-200)",
+	turquoise: "var(--color-turquoise-200)",
+};
+
+// Human-readable labels
+const COLOR_LABELS: Record<ColumnColor, string> = {
+	"powder-blue": "Powder Blue",
+	"pale-sky": "Pale Sky",
+	"light-cyan": "Light Cyan",
+	"frozen-water": "Frozen Water",
+	turquoise: "Turquoise",
+};
 
 interface Props {
 	column: Column;
@@ -24,6 +53,7 @@ interface Props {
 			isDone?: boolean;
 			isSignable?: boolean;
 			signableAssigneeId?: number | null;
+			color?: string | null;
 		},
 	) => Promise<void>;
 }
@@ -72,6 +102,9 @@ function ColumnSettings({
 	const [isSignable, setIsSignable] = useState(column.isSignable);
 	const [signableAssigneeId, setSignableAssigneeId] = useState<number | null>(
 		column.signableAssigneeId,
+	);
+	const [color, setColor] = useState<ColumnColor | null>(
+		(column.color as ColumnColor) ?? null,
 	);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [membersError, setMembersError] = useState(false);
@@ -131,6 +164,7 @@ function ColumnSettings({
 			isDone,
 			isSignable,
 			signableAssigneeId: sanitizedSignableAssigneeId,
+			color,
 		});
 		onClose();
 	};
@@ -174,6 +208,41 @@ function ColumnSettings({
 					placeholder="When does a card belong here?"
 				/>
 			</label>
+			<div className="block">
+				<span className="text-xs font-medium text-neutral-700">Color</span>
+				<div className="mt-1.5 flex flex-wrap items-center gap-2">
+					{COLUMN_COLORS.map((c) => (
+						<button
+							key={c}
+							type="button"
+							title={COLOR_LABELS[c]}
+							onClick={() => setColor(c === color ? null : c)}
+							className={`h-7 w-7 rounded-full border-2 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+								color === c
+									? "border-neutral-800 scale-110 shadow-md"
+									: "border-neutral-300 hover:border-neutral-500 hover:scale-105"
+							}`}
+							style={{ backgroundColor: COLOR_PREVIEWS[c] }}
+							aria-label={COLOR_LABELS[c]}
+							aria-pressed={color === c}
+						/>
+					))}
+					{color !== null && (
+						<button
+							type="button"
+							title="Remove color"
+							onClick={() => setColor(null)}
+							className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-neutral-300 bg-neutral-100 text-neutral-500 transition-all hover:border-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							aria-label="Remove color"
+						>
+							<X size={14} />
+						</button>
+					)}
+				</div>
+				<p className="mt-1 text-xs text-neutral-500">
+					{color ? `Selected: ${COLOR_LABELS[color]}` : "Default neutral"}
+				</p>
+			</div>
 			<label className="flex items-center gap-2">
 				<input
 					type="checkbox"
@@ -319,6 +388,37 @@ function AddCard({
 
 export default memo(ColumnView);
 
+// Static Tailwind class lookup for column colors
+// Using static strings ensures Tailwind's JIT compiler can detect and include these classes
+const COLUMN_STYLES: Record<ColumnColor, string> = {
+	"powder-blue":
+		"border-[var(--color-powder-blue-200)] bg-[var(--color-powder-blue-50)]",
+	"pale-sky":
+		"border-[var(--color-pale-sky-200)] bg-[var(--color-pale-sky-50)]",
+	"light-cyan":
+		"border-[var(--color-light-cyan-200)] bg-[var(--color-light-cyan-50)]",
+	"frozen-water":
+		"border-[var(--color-frozen-water-200)] bg-[var(--color-frozen-water-50)]",
+	turquoise:
+		"border-[var(--color-turquoise-200)] bg-[var(--color-turquoise-50)]",
+};
+
+// Get CSS classes for column color styling
+function getColumnColorStyles(color: string | null, isOver: boolean): string {
+	// WIP error state always overrides color
+	if (isOver) {
+		return "border-error-300 bg-error-100/40";
+	}
+
+	// No color = default neutral styling
+	if (!color || !(color in COLUMN_STYLES)) {
+		return "border-neutral-200 bg-neutral-100";
+	}
+
+	// Apply color: bg tint (shade 50) + border (shade 200)
+	return COLUMN_STYLES[color as ColumnColor];
+}
+
 function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 	const [editing, setEditing] = useState(false);
 	const { setNodeRef, isOver } = useDroppable({
@@ -330,11 +430,10 @@ function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 
 	return (
 		<section
-			className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border shadow-[0_1px_2px_oklch(28%_0.044_250_/_0.06)] transition-colors ${
-				over
-					? "border-error-300 bg-error-100/40"
-					: "border-neutral-200 bg-neutral-100"
-			}`}
+			className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border shadow-[0_1px_2px_oklch(28%_0.044_250_/_0.06)] transition-colors ${getColumnColorStyles(
+				column.color,
+				over,
+			)}`}
 		>
 			<div className="flex min-h-0 flex-1 flex-col p-2">
 				<header className="px-1 pt-1">

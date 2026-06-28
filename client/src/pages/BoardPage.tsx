@@ -406,6 +406,7 @@ export default function BoardPage() {
 				isDone?: boolean;
 				isSignable?: boolean;
 				signableAssigneeId?: number | null;
+				color?: string | null;
 			},
 		) => {
 			if (activeWorkspaceId === null) return;
