@@ -9,6 +9,7 @@ import type {
 	Column,
 	FlowMetrics,
 	MetricsHistoryBucket,
+	NotificationsResponse,
 	PresenceUser,
 	SettingsMap,
 	User,
@@ -210,6 +211,32 @@ export const api = {
 		request<{ ok: boolean }>(`/workspaces/${workspaceId}/presence/heartbeat`, {
 			method: "POST",
 		}),
+
+	// ---- Notifications ----
+	getNotifications: (
+		workspaceId: number,
+		opts?: { cursor?: number; limit?: number },
+	) => {
+		const params = new URLSearchParams();
+		if (opts?.cursor !== undefined) params.set("cursor", String(opts.cursor));
+		if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+		const query = params.toString();
+		return request<NotificationsResponse>(
+			query
+				? `/workspaces/${workspaceId}/notifications?${query}`
+				: `/workspaces/${workspaceId}/notifications`,
+		);
+	},
+	markNotificationAsRead: (workspaceId: number, id: number) =>
+		request<{ ok: boolean }>(
+			`/workspaces/${workspaceId}/notifications/${id}/read`,
+			{ method: "PATCH" },
+		),
+	markAllNotificationsAsRead: (workspaceId: number) =>
+		request<{ ok: boolean; markedCount: number }>(
+			`/workspaces/${workspaceId}/notifications/read-all`,
+			{ method: "POST" },
+		),
 
 	// Settings
 	getSettings: (workspaceId: number) =>
