@@ -299,3 +299,34 @@ ALTER TABLE columns ADD COLUMN IF NOT EXISTS signable_assignee_id INTEGER REFERE
 -- Column color: allows users to customize column appearance with predefined palettes.
 -- Stores palette name (e.g. 'powder-blue', 'pale-sky') or NULL for default neutral styling.
 ALTER TABLE columns ADD COLUMN IF NOT EXISTS color TEXT;
+
+-- Notification center (2026-06: inbox, domain events, due date reminders)
+
+CREATE TABLE IF NOT EXISTS workspace_settings (
+  workspace_id  INTEGER PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  timezone      TEXT NOT NULL DEFAULT 'UTC'
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id              SERIAL PRIMARY KEY,
+  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id    INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  type            TEXT NOT NULL,
+  title           TEXT NOT NULL,
+  body            TEXT,
+  card_id         INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+  actor_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  read_at         TIMESTAMPTZ,
+  source_deleted  BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, read_at) WHERE read_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+  ON notifications(user_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_reminder_daily
+  ON notifications(user_id, card_id, ((created_at AT TIME ZONE 'UTC')::date))
+  WHERE type = 'due_date_reminder';
