@@ -17,7 +17,9 @@ export const notificationsRouter = Router({ mergeParams: true });
 notificationsRouter.use(requireWorkspaceMember);
 
 notificationsRouter.get("/", async (req, res) => {
-	const workspaceId = Number(req.params.workspaceId);
+	const workspaceId = Number(
+		(req.params as { workspaceId: string }).workspaceId,
+	);
 	const userId = (req.user as { id: number }).id;
 	const limit = Math.min(Number(req.query.limit ?? 50), 100);
 	const cursor = req.query.cursor ? Number(req.query.cursor) : null;
@@ -68,7 +70,9 @@ notificationsRouter.patch("/:id/read", async (req, res) => {
 
 notificationsRouter.post("/read-all", async (req, res) => {
 	const userId = (req.user as { id: number }).id;
-	const workspaceId = Number(req.params.workspaceId);
+	const workspaceId = Number(
+		(req.params as { workspaceId: string }).workspaceId,
+	);
 	const { rowCount } = await pool.query(
 		"UPDATE notifications SET read_at = now() WHERE user_id = $1 AND workspace_id = $2 AND read_at IS NULL",
 		[userId, workspaceId],
@@ -80,7 +84,9 @@ notificationsRouter.post("/read-all", async (req, res) => {
 notificationsRouter.get("/stream", sseNotificationHandler);
 
 notificationsRouter.post("/system-alert", async (req, res) => {
-	const workspaceId = Number(req.params.workspaceId);
+	const workspaceId = Number(
+		(req.params as { workspaceId: string }).workspaceId,
+	);
 	const actor = req.user as { id: number; role?: string };
 	const { rows: memberRows } = await pool.query(
 		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",

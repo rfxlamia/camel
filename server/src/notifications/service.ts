@@ -6,7 +6,7 @@ type PushFn = (
 	workspaceId: number,
 	notification: Record<string, unknown>,
 ) => void;
-let pushFn: PushFn = () => {};
+let pushFn: PushFn = () => undefined;
 
 export function registerPush(fn: PushFn): void {
 	pushFn = fn;

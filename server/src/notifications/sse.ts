@@ -16,7 +16,9 @@ export async function sseNotificationHandler(
 	res: Response,
 ): Promise<void> {
 	const userId = (req.user as { id: number }).id;
-	const workspaceId = Number(req.params.workspaceId);
+	const workspaceId = Number(
+		(req.params as { workspaceId: string }).workspaceId,
+	);
 	const lastEventId = Number(req.headers["last-event-id"] ?? 0) || 0;
 
 	res.writeHead(200, {
