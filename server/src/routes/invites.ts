@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
+import { domainBus, EVENTS } from "../events.js";
 import { checkInviteeCap, countUserMemberships } from "./helpers.js";
 
 export const invitesRouter = Router({ mergeParams: true });
@@ -53,6 +54,20 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 				.json({ error: "Already a member of this workspace" });
 		}
 
+		const { rows: memberRows } = await client.query(
+			"SELECT user_id FROM workspace_members WHERE workspace_id = $1",
+			[workspaceId],
+		);
+		const existingMemberIds = memberRows.map(
+			(r: { user_id: number }) => r.user_id,
+		);
+
+		const { rows: wsNameRows } = await client.query(
+			"SELECT name FROM workspaces WHERE id = $1",
+			[workspaceId],
+		);
+		const workspaceName = wsNameRows[0]?.name ?? "the workspace";
+
 		// INSERT with ON CONFLICT to atomically handle duplicate membership.
 		const { rows: insertedRows } = await client.query(
 			`INSERT INTO workspace_members (workspace_id, user_id, role)
@@ -72,6 +87,18 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 			inviteId,
 		]);
 		await client.query("COMMIT");
+
+		domainBus.emit(EVENTS.MEMBER_JOINED, {
+			type: EVENTS.MEMBER_JOINED,
+			workspaceId,
+			actorId: req.user!.id,
+			payload: {
+				newMemberId: req.user!.id,
+				newMemberDisplayName: req.user!.displayName,
+				workspaceName,
+				existingMemberIds,
+			},
+		});
 
 		const wsRes = await client.query(
 			"SELECT id, name, is_personal FROM workspaces WHERE id = $1",

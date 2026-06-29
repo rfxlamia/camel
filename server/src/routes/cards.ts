@@ -7,6 +7,7 @@ import {
 } from "../core/position.js";
 import { checkWipLimit } from "../core/wip.js";
 import { pool } from "../db/pool.js";
+import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import {
@@ -156,6 +157,19 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 		[rows[0].id, workspaceId],
 	);
 	const card = cardRows[0];
+	if (card.assignee_id) {
+		domainBus.emit(EVENTS.CARD_ASSIGNED, {
+			type: EVENTS.CARD_ASSIGNED,
+			workspaceId,
+			actorId: req.user!.id,
+			payload: {
+				cardId: card.id,
+				assigneeId: card.assignee_id,
+				cardTitle: card.title,
+				actorDisplayName: req.user!.displayName,
+			},
+		});
+	}
 	res.status(201).json({
 		id: card.id,
 		columnId: card.column_id,
@@ -250,6 +264,15 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	}
 	sets.push("version = version + 1");
 
+	const prevRes = await pool.query(
+		`SELECT assignee_id, due_date::text AS due_date FROM cards
+     WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+		[id, workspaceId],
+	);
+	const prev = prevRes.rows[0] as
+		| { assignee_id: number | null; due_date: string | null }
+		| undefined;
+
 	vals.push(id);
 	const idP = vals.length;
 	vals.push(workspaceId);
@@ -298,7 +321,60 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		actor: req.user!,
 		cardId: id,
 	});
-	res.json(rows[0]);
+	const updated = rows[0];
+	const newAssigneeId = updated.assignee_id as number | null;
+	const newDueDate = updated.due_date as string | null;
+
+	if (
+		hasAssignee &&
+		newAssigneeId != null &&
+		newAssigneeId !== prev?.assignee_id
+	) {
+		domainBus.emit(EVENTS.CARD_ASSIGNED, {
+			type: EVENTS.CARD_ASSIGNED,
+			workspaceId,
+			actorId: req.user!.id,
+			payload: {
+				cardId: id,
+				assigneeId: newAssigneeId,
+				cardTitle: updated.title,
+				actorDisplayName: req.user!.displayName,
+			},
+		});
+	}
+
+	if (hasDueDate && newDueDate !== prev?.due_date) {
+		if (newDueDate != null) {
+			domainBus.emit(EVENTS.CARD_DUE_DATE_CHANGED, {
+				type: EVENTS.CARD_DUE_DATE_CHANGED,
+				workspaceId,
+				actorId: req.user!.id,
+				payload: {
+					cardId: id,
+					assigneeId: newAssigneeId,
+					cardTitle: updated.title,
+					actorDisplayName: req.user!.displayName,
+					oldDueDate: prev?.due_date ?? null,
+					newDueDate,
+				},
+			});
+		} else {
+			domainBus.emit(EVENTS.CARD_DUE_DATE_REMOVED, {
+				type: EVENTS.CARD_DUE_DATE_REMOVED,
+				workspaceId,
+				actorId: req.user!.id,
+				payload: {
+					cardId: id,
+					assigneeId: newAssigneeId,
+					cardTitle: updated.title,
+					actorDisplayName: req.user!.displayName,
+					oldDueDate: prev?.due_date ?? null,
+				},
+			});
+		}
+	}
+
+	res.json(updated);
 });
 
 cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -322,6 +398,12 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		type: "card.deleted",
 		actor: req.user!,
 		cardId: id,
+	});
+	domainBus.emit(EVENTS.CARD_DELETED, {
+		type: EVENTS.CARD_DELETED,
+		workspaceId,
+		actorId: req.user!.id,
+		payload: { cardId: id },
 	});
 	res.status(204).end();
 });
