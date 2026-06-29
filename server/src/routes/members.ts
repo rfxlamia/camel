@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
+import { domainBus, EVENTS } from "../events.js";
 import {
 	checkActorCanManage,
 	checkInviteeCap,
@@ -82,11 +83,37 @@ membersRouter.post("/members", async (req, res) => {
 			return res.status(cap.status).json({ error: cap.error });
 		}
 
+		const existingRes = await pool.query(
+			"SELECT user_id FROM workspace_members WHERE workspace_id = $1",
+			[workspaceId],
+		);
+		const existingMemberIds = existingRes.rows.map(
+			(r: { user_id: number }) => r.user_id,
+		);
+
+		const wsRes = await pool.query(
+			"SELECT name FROM workspaces WHERE id = $1",
+			[workspaceId],
+		);
+		const workspaceName = wsRes.rows[0]?.name ?? "the workspace";
+
 		await pool.query(
 			`INSERT INTO workspace_members (workspace_id, user_id, role)
        VALUES ($1, $2, $3)`,
 			[workspaceId, target.id, memberRole],
 		);
+
+		domainBus.emit(EVENTS.MEMBER_JOINED, {
+			type: EVENTS.MEMBER_JOINED,
+			workspaceId,
+			actorId: req.user!.id,
+			payload: {
+				newMemberId: target.id,
+				newMemberDisplayName: target.display_name,
+				workspaceName,
+				existingMemberIds,
+			},
+		});
 
 		return res.status(201).json({
 			userId: target.id,
