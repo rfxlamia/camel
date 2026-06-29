@@ -122,8 +122,9 @@ async function setupFixtures() {
 		[mockTestUser.id],
 	);
 
-	// Columns — reset sequence so IDs are predictable
-	await pool.query("ALTER SEQUENCE columns_id_seq RESTART WITH 1");
+	// Columns — clear workspace fixtures then insert predictable set
+	await pool.query("DELETE FROM cards WHERE workspace_id = 1");
+	await pool.query("DELETE FROM columns WHERE workspace_id = 1");
 	const colRes = await pool.query(
 		`INSERT INTO columns (title, position, wip_limit, is_done, workspace_id)
      VALUES
@@ -191,7 +192,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.send({ toColumnId: col2Id, index: 0, version: 1 });
 
 			expect(res.status).toBe(200);
-			expect(res.body.column_id).toBe(col2Id);
+			expect(res.body.columnId).toBe(col2Id);
 			expect(res.body.version).toBe(2);
 		});
 
@@ -203,7 +204,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.send({ toColumnId: col2Id, index: 0 });
 
 			expect(res.status).toBe(200);
-			expect(res.body.column_id).toBe(col2Id);
+			expect(res.body.columnId).toBe(col2Id);
 			// version still increments even without check
 			expect(res.body.version).toBe(6);
 		});
@@ -254,7 +255,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.send({ toColumnId: col1Id, index: 1 });
 
 			expect(res.status).toBe(200);
-			expect(res.body.column_id).toBe(col1Id);
+			expect(res.body.columnId).toBe(col1Id);
 		});
 
 		// ----- Activity logging -----
@@ -294,7 +295,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.send({ toColumnId: col1Id, index: 0 });
 
 			expect(res.status).toBe(200);
-			expect(res.body.column_id).toBe(col1Id);
+			expect(res.body.columnId).toBe(col1Id);
 
 			// No activity log for same-column moves
 			const events = await pool.query(
