@@ -19,6 +19,7 @@ import { createErrorHandler } from "./middleware/error-handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
+import { initNotificationService } from "./notifications/service.js";
 import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
@@ -178,6 +179,7 @@ server = app.listen(port, async () => {
 	rateLimiterInstance = createAuthRateLimiter();
 
 	await initRealtime();
+	initNotificationService();
 
 	// Cleanup expired sessions on startup, then every 24 hours.
 	await cleanupExpiredSessions();
