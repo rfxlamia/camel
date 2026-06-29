@@ -20,6 +20,7 @@ import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
 import { initNotificationService } from "./notifications/service.js";
+import { startDueDateScheduler } from "./notifications/scheduler.js";
 import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
@@ -180,6 +181,7 @@ server = app.listen(port, async () => {
 
 	await initRealtime();
 	initNotificationService();
+	startDueDateScheduler();
 
 	// Cleanup expired sessions on startup, then every 24 hours.
 	await cleanupExpiredSessions();
