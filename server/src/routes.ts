@@ -9,6 +9,7 @@ import { columnsRouter } from "./routes/columns.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { metricsRouter } from "./routes/metrics.js";
+import { notificationsRouter } from "./notifications/router.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
 import { workspacesRouter } from "./routes/workspaces.js";
@@ -52,6 +53,7 @@ api.use("/workspaces/:workspaceId", invitesRouter);
 api.use("/workspaces/:workspaceId", membersRouter);
 api.use("/workspaces/:workspaceId", metricsRouter);
 api.use("/workspaces/:workspaceId", presenceRouter);
+api.use("/workspaces/:workspaceId/notifications", notificationsRouter);
 
 // ---- Integration test helpers (in-memory, no DB) ------------------------------
 
