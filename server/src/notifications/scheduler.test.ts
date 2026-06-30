@@ -41,6 +41,13 @@ describe("runDueDateReminders", () => {
 		expect(selectSql).toContain("is_done = FALSE");
 	});
 
+	it("only runs during the midnight hour in workspace timezone", async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+		await runDueDateReminders();
+		const [selectSql] = mockQuery.mock.calls[0] as [string];
+		expect(selectSql).toContain("EXTRACT(HOUR FROM");
+	});
+
 	it("is idempotent — second run does not throw when partial index conflict fires", async () => {
 		mockQuery
 			.mockResolvedValueOnce({

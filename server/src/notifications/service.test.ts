@@ -35,6 +35,7 @@ describe("initNotificationService — card:assigned", () => {
 		expect(sql).toContain("INSERT INTO notifications");
 		expect(params).toContain(3); // user_id = assigneeId
 		expect(params).toContain("card_assigned");
+		expect(params).toContain(1); // board_id = workspaceId
 	});
 
 	it("skips notification when actor === assignee (self-assign)", async () => {
@@ -109,6 +110,42 @@ describe("initNotificationService — card:dueDateChanged", () => {
 	});
 });
 
+describe("initNotificationService — card:dueDateRemoved", () => {
+	let cleanup: (() => void) | undefined;
+
+	beforeEach(() => {
+		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as never);
+		cleanup = initNotificationService();
+	});
+
+	afterEach(() => {
+		cleanup?.();
+		vi.clearAllMocks();
+	});
+
+	it("inserts removed-due-date notification via dueDateChanged handler", async () => {
+		domainBus.emit(EVENTS.CARD_DUE_DATE_REMOVED, {
+			type: EVENTS.CARD_DUE_DATE_REMOVED,
+			workspaceId: 1,
+			actorId: 7,
+			payload: {
+				cardId: 10,
+				assigneeId: 3,
+				cardTitle: "Fix login bug",
+				actorDisplayName: "Bob",
+				oldDueDate: "2026-07-01",
+			},
+		});
+		await vi.waitFor(() => expect(mockQuery).toHaveBeenCalled());
+		const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+		expect(sql).toContain("INSERT INTO notifications");
+		expect(params).toContain("due_date_changed");
+		expect(params.some((p) => String(p).includes("removed due date"))).toBe(
+			true,
+		);
+	});
+});
+
 describe("initNotificationService — member:joined", () => {
 	let cleanup: (() => void) | undefined;
 
@@ -139,6 +176,39 @@ describe("initNotificationService — member:joined", () => {
 		expect(allCalls.some((s) => s.includes("INSERT INTO notifications"))).toBe(
 			true,
 		);
+	});
+
+	it("skips duplicate welcome when member already has one in workspace", async () => {
+		mockQuery.mockResolvedValueOnce({
+			rows: [{ id: 100 }],
+			rowCount: 1,
+		} as never);
+
+		domainBus.emit(EVENTS.MEMBER_JOINED, {
+			type: EVENTS.MEMBER_JOINED,
+			workspaceId: 1,
+			actorId: 99,
+			payload: {
+				newMemberId: 5,
+				newMemberDisplayName: "Charlie",
+				workspaceName: "Team Alpha",
+				existingMemberIds: [1, 2],
+			},
+		});
+		await new Promise((r) => setTimeout(r, 10));
+
+		const insertCalls = mockQuery.mock.calls.filter(([sql]: [string]) =>
+			sql.includes("INSERT INTO notifications"),
+		);
+		expect(insertCalls).toHaveLength(2);
+		expect(
+			insertCalls.every(([, params]) =>
+				(params as unknown[]).includes("member_joined"),
+			),
+		).toBe(true);
+		expect(
+			insertCalls.some(([, params]) => (params as unknown[]).includes("welcome")),
+		).toBe(false);
 	});
 });
 

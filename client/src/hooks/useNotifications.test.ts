@@ -97,7 +97,7 @@ describe("useNotifications", () => {
 			expect(result.current.notifications).toHaveLength(1);
 		});
 
-		expect(mockGetNotifications).toHaveBeenCalledWith(1);
+		expect(mockGetNotifications).toHaveBeenCalledWith(1, { limit: 50 });
 		expect(result.current.unreadCount).toBe(1);
 		expect(result.current.notifications[0]).toEqual(sampleNotification);
 		expect(MockEventSource.latest()?.url).toBe(
@@ -178,5 +178,59 @@ describe("useNotifications", () => {
 		expect(result.current.notifications[0].id).toBe(99);
 		expect(result.current.notifications[0].type).toBe("welcome");
 		expect(result.current.unreadCount).toBe(2);
+	});
+
+	it("notification.read SSE does not decrement unreadCount when id is absent from list", async () => {
+		const { useNotifications } = await import("./useNotifications");
+		const { result } = renderHook(() => useNotifications(1));
+
+		await waitFor(() => {
+			expect(result.current.unreadCount).toBe(1);
+		});
+
+		const stream = MockEventSource.latest();
+		act(() => {
+			stream!.emit("notification.read", { id: 999 });
+		});
+
+		expect(result.current.unreadCount).toBe(1);
+	});
+
+	it("loadMore appends the next page when nextCursor is present", async () => {
+		const page2Notification: AppNotification = {
+			...sampleNotification,
+			id: 5,
+			title: "Older notification",
+		};
+		mockGetNotifications
+			.mockResolvedValueOnce({
+				notifications: [sampleNotification],
+				unreadCount: 1,
+				nextCursor: 10,
+			})
+			.mockResolvedValueOnce({
+				notifications: [page2Notification],
+				unreadCount: 1,
+				nextCursor: null,
+			});
+
+		const { useNotifications } = await import("./useNotifications");
+		const { result } = renderHook(() => useNotifications(1));
+
+		await waitFor(() => {
+			expect(result.current.hasMore).toBe(true);
+		});
+
+		await act(async () => {
+			await result.current.loadMore();
+		});
+
+		expect(mockGetNotifications).toHaveBeenLastCalledWith(1, {
+			cursor: 10,
+			limit: 50,
+		});
+		expect(result.current.notifications).toHaveLength(2);
+		expect(result.current.notifications[1]?.id).toBe(5);
+		expect(result.current.hasMore).toBe(false);
 	});
 });

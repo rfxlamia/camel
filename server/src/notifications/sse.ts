@@ -30,8 +30,10 @@ export async function sseNotificationHandler(
 
 	if (lastEventId > 0) {
 		const { rows } = await pool.query(
-			"SELECT * FROM notifications WHERE user_id = $1 AND id > $2 ORDER BY id",
-			[userId, lastEventId],
+			`SELECT * FROM notifications
+       WHERE user_id = $1 AND workspace_id = $2 AND id > $3
+       ORDER BY id`,
+			[userId, workspaceId, lastEventId],
 		);
 		for (const row of rows) {
 			res.write(
@@ -52,27 +54,35 @@ export async function sseNotificationHandler(
 
 export function pushNotificationToUser(
 	userId: number,
-	_workspaceId: number,
+	workspaceId: number,
 	notification: Record<string, unknown>,
 ): void {
 	const event = `id: ${notification.id}\nevent: notification.created\ndata: ${JSON.stringify(notification)}\n\n`;
 	for (const client of clients) {
-		if (client.userId === userId) {
+		if (client.userId === userId && client.workspaceId === workspaceId) {
 			client.res.write(event);
 		}
 	}
 }
 
-export function pushReadEvent(userId: number, notificationId: number): void {
+export function pushReadEvent(
+	userId: number,
+	workspaceId: number,
+	notificationId: number,
+): void {
 	const event = `event: notification.read\ndata: ${JSON.stringify({ id: notificationId })}\n\n`;
 	for (const client of clients) {
-		if (client.userId === userId) client.res.write(event);
+		if (client.userId === userId && client.workspaceId === workspaceId) {
+			client.res.write(event);
+		}
 	}
 }
 
-export function pushReadAllEvent(userId: number): void {
+export function pushReadAllEvent(userId: number, workspaceId: number): void {
 	const event = `event: notifications.read-all\ndata: {}\n\n`;
 	for (const client of clients) {
-		if (client.userId === userId) client.res.write(event);
+		if (client.userId === userId && client.workspaceId === workspaceId) {
+			client.res.write(event);
+		}
 	}
 }

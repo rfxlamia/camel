@@ -315,6 +315,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   title           TEXT NOT NULL,
   body            TEXT,
   card_id         INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+  board_id        INTEGER,
   actor_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
   read_at         TIMESTAMPTZ,
   source_deleted  BOOLEAN NOT NULL DEFAULT FALSE,
@@ -330,3 +331,5 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_reminder_daily
   ON notifications(user_id, card_id, ((created_at AT TIME ZONE 'UTC')::date))
   WHERE type = 'due_date_reminder';
+
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS board_id INTEGER;

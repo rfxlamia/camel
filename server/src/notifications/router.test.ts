@@ -39,6 +39,7 @@ describe("GET /workspaces/:workspaceId/notifications", () => {
 						source_deleted: false,
 						created_at: new Date().toISOString(),
 						card_id: 10,
+						board_id: 1,
 						actor_id: 7,
 					},
 				],
@@ -50,6 +51,7 @@ describe("GET /workspaces/:workspaceId/notifications", () => {
 		expect(res.status).toBe(200);
 		expect(res.body).toHaveProperty("notifications");
 		expect(res.body).toHaveProperty("unreadCount", 2);
+		expect(res.body.notifications[0]).toMatchObject({ boardId: 1 });
 	});
 });
 

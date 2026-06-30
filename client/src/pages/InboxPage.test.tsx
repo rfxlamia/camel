@@ -15,10 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppNotification } from "../types";
 
 // Hoisted mocks
-const {
-	mockUseNotificationsContext,
-	mockNavigate,
-} = vi.hoisted(() => ({
+const { mockUseNotificationsContext, mockNavigate } = vi.hoisted(() => ({
 	mockUseNotificationsContext: vi.fn(),
 	mockNavigate: vi.fn(),
 }));
@@ -54,6 +51,9 @@ const baseCtx = {
 	notifications: [] as AppNotification[],
 	unreadCount: 0,
 	loading: false,
+	loadingMore: false,
+	hasMore: false,
+	loadMore: vi.fn().mockResolvedValue(undefined),
 	markAsRead: vi.fn().mockResolvedValue(undefined),
 	markAllAsRead: vi.fn().mockResolvedValue(undefined),
 };
@@ -144,7 +144,9 @@ describe("InboxPage sourceDeleted", () => {
 		expect(screen.getByText(/Card no longer exists/i)).toBeTruthy();
 
 		// Clicking should NOT call markAsRead
-		const item = screen.getByText("Bob assigned 'Fix bug' to you").closest("li")!;
+		const item = screen
+			.getByText("Bob assigned 'Fix bug' to you")
+			.closest("li")!;
 		fireEvent.click(item);
 		expect(baseCtx.markAsRead).not.toHaveBeenCalled();
 		expect(mockNavigate).not.toHaveBeenCalled();
@@ -165,7 +167,9 @@ describe("InboxPage click navigation", () => {
 		});
 		render(<InboxPage />);
 
-		const item = screen.getByText("Bob assigned 'Fix bug' to you").closest("li")!;
+		const item = screen
+			.getByText("Bob assigned 'Fix bug' to you")
+			.closest("li")!;
 		fireEvent.click(item);
 
 		await waitFor(() => {
@@ -221,6 +225,26 @@ describe("InboxPage mark all as read", () => {
 
 		await waitFor(() => {
 			expect(markAllAsRead).toHaveBeenCalled();
+		});
+	});
+});
+
+describe("InboxPage load more", () => {
+	it("shows Load more button when hasMore and calls loadMore on click", async () => {
+		const loadMore = vi.fn().mockResolvedValue(undefined);
+		mockUseNotificationsContext.mockReturnValue({
+			...baseCtx,
+			notifications: [makeNotification({ id: 1, readAt: null })],
+			unreadCount: 1,
+			hasMore: true,
+			loadMore,
+		});
+		render(<InboxPage />);
+
+		fireEvent.click(screen.getByRole("button", { name: /load more/i }));
+
+		await waitFor(() => {
+			expect(loadMore).toHaveBeenCalled();
 		});
 	});
 });

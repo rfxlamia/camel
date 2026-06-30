@@ -19,12 +19,13 @@ async function insertNotification(params: {
 	title: string;
 	body?: string;
 	cardId?: number | null;
+	boardId?: number | null;
 	actorId?: number | null;
 }): Promise<Record<string, unknown> | null> {
 	try {
 		const { rows } = await pool.query(
-			`INSERT INTO notifications (user_id, workspace_id, type, title, body, card_id, actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`INSERT INTO notifications (user_id, workspace_id, type, title, body, card_id, board_id, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
 			[
 				params.userId,
@@ -33,11 +34,16 @@ async function insertNotification(params: {
 				params.title,
 				params.body ?? null,
 				params.cardId ?? null,
+				params.boardId ?? null,
 				params.actorId ?? null,
 			],
 		);
 		return rows[0] ?? null;
-	} catch {
+	} catch (err) {
+		console.error(
+			`Failed to insert notification (type=${params.type}, user=${params.userId}):`,
+			err,
+		);
 		return null;
 	}
 }
@@ -56,6 +62,7 @@ function onCardAssigned(event: DomainEvent): void {
 		type: "card_assigned",
 		title: `${actorDisplayName} assigned '${cardTitle}' to you`,
 		cardId,
+		boardId: event.workspaceId,
 		actorId: event.actorId,
 	}).then((n) => n && pushFn(assigneeId, event.workspaceId, n));
 }
@@ -82,6 +89,7 @@ function onCardDueDateChanged(event: DomainEvent): void {
 		type: "due_date_changed",
 		title,
 		cardId,
+		boardId: event.workspaceId,
 		actorId: event.actorId,
 	}).then((n) => n && pushFn(assigneeId, event.workspaceId, n));
 }
@@ -103,8 +111,9 @@ function onMemberJoined(event: DomainEvent): void {
 		};
 	void (async () => {
 		const { rows } = await pool.query(
-			`SELECT id FROM notifications WHERE user_id = $1 AND workspace_id = $2 AND type = 'welcome'
-         AND created_at > now() - interval '24 hours' LIMIT 1`,
+			`SELECT id FROM notifications
+         WHERE user_id = $1 AND workspace_id = $2 AND type = 'welcome'
+         LIMIT 1`,
 			[newMemberId, event.workspaceId],
 		);
 		if (rows.length === 0) {
@@ -131,10 +140,17 @@ function onMemberJoined(event: DomainEvent): void {
 
 function onCardDeleted(event: DomainEvent): void {
 	const { cardId } = event.payload as { cardId: number };
-	void pool.query(
-		"UPDATE notifications SET source_deleted = true WHERE card_id = $1",
-		[cardId],
-	);
+	void pool
+		.query(
+			"UPDATE notifications SET source_deleted = true WHERE card_id = $1",
+			[cardId],
+		)
+		.catch((err) => {
+			console.error(
+				`Failed to mark notifications source_deleted for card ${cardId}:`,
+				err,
+			);
+		});
 }
 
 async function onSystemAlert(event: DomainEvent): Promise<void> {

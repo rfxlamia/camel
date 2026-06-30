@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { AppNotification, AppNotificationType } from "../types";
 
+const PAGE_SIZE = 50;
+
 function normalizeNotification(raw: Record<string, unknown>): AppNotification {
 	return {
 		id: Number(raw.id),
@@ -17,10 +19,17 @@ function normalizeNotification(raw: Record<string, unknown>): AppNotification {
 	};
 }
 
+async function fetchFirstPage(workspaceId: number) {
+	return api.getNotifications(workspaceId, { limit: PAGE_SIZE });
+}
+
 export interface UseNotificationsResult {
 	notifications: AppNotification[];
 	unreadCount: number;
 	loading: boolean;
+	loadingMore: boolean;
+	hasMore: boolean;
+	loadMore: () => Promise<void>;
 	markAsRead: (id: number) => Promise<void>;
 	markAllAsRead: () => Promise<void>;
 }
@@ -30,7 +39,9 @@ export function useNotifications(
 ): UseNotificationsResult {
 	const [notifications, setNotifications] = useState<AppNotification[]>([]);
 	const [unreadCount, setUnreadCount] = useState(0);
+	const [nextCursor, setNextCursor] = useState<number | null>(null);
 	const [loading, setLoading] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
 
 	const markAsRead = useCallback(
 		async (id: number) => {
@@ -51,10 +62,10 @@ export function useNotifications(
 			try {
 				await api.markNotificationAsRead(workspaceId, id);
 			} catch {
-				// Re-fetch on failure to restore server truth.
-				const data = await api.getNotifications(workspaceId);
+				const data = await fetchFirstPage(workspaceId);
 				setNotifications(data.notifications);
 				setUnreadCount(data.unreadCount);
+				setNextCursor(data.nextCursor);
 			}
 		},
 		[workspaceId],
@@ -72,16 +83,38 @@ export function useNotifications(
 		try {
 			await api.markAllNotificationsAsRead(workspaceId);
 		} catch {
-			const data = await api.getNotifications(workspaceId);
+			const data = await fetchFirstPage(workspaceId);
 			setNotifications(data.notifications);
 			setUnreadCount(data.unreadCount);
+			setNextCursor(data.nextCursor);
 		}
 	}, [workspaceId]);
+
+	const loadMore = useCallback(async () => {
+		if (workspaceId === null || nextCursor === null || loadingMore) return;
+
+		setLoadingMore(true);
+		try {
+			const data = await api.getNotifications(workspaceId, {
+				cursor: nextCursor,
+				limit: PAGE_SIZE,
+			});
+			setNotifications((prev) => {
+				const seen = new Set(prev.map((n) => n.id));
+				const appended = data.notifications.filter((n) => !seen.has(n.id));
+				return [...prev, ...appended];
+			});
+			setNextCursor(data.nextCursor);
+		} finally {
+			setLoadingMore(false);
+		}
+	}, [workspaceId, nextCursor, loadingMore]);
 
 	useEffect(() => {
 		if (workspaceId === null) {
 			setNotifications([]);
 			setUnreadCount(0);
+			setNextCursor(null);
 			setLoading(false);
 			return;
 		}
@@ -89,12 +122,12 @@ export function useNotifications(
 		let active = true;
 		setLoading(true);
 
-		void api
-			.getNotifications(workspaceId)
+		void fetchFirstPage(workspaceId)
 			.then((data) => {
 				if (!active) return;
 				setNotifications(data.notifications);
 				setUnreadCount(data.unreadCount);
+				setNextCursor(data.nextCursor);
 			})
 			.finally(() => {
 				if (active) setLoading(false);
@@ -124,14 +157,14 @@ export function useNotifications(
 		const onRead = (e: MessageEvent) => {
 			try {
 				const { id } = JSON.parse(e.data as string) as { id: number };
-				setNotifications((prev) =>
-					prev.map((n) =>
-						n.id === id && n.readAt === null
-							? { ...n, readAt: new Date().toISOString() }
-							: n,
-					),
-				);
-				setUnreadCount((c) => Math.max(0, c - 1));
+				setNotifications((prev) => {
+					const hadUnread = prev.some((n) => n.id === id && n.readAt === null);
+					if (!hadUnread) return prev;
+					setUnreadCount((c) => Math.max(0, c - 1));
+					return prev.map((n) =>
+						n.id === id ? { ...n, readAt: new Date().toISOString() } : n,
+					);
+				});
 			} catch {
 				// ignore malformed SSE payloads
 			}
@@ -162,6 +195,9 @@ export function useNotifications(
 		notifications,
 		unreadCount,
 		loading,
+		loadingMore,
+		hasMore: nextCursor !== null,
+		loadMore,
 		markAsRead,
 		markAllAsRead,
 	};

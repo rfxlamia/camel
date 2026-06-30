@@ -16,13 +16,14 @@ export async function runDueDateReminders(): Promise<void> {
       AND c.due_date IS NOT NULL
       AND col.is_done = FALSE
       AND c.due_date = (CURRENT_TIMESTAMP AT TIME ZONE COALESCE(ws.timezone, 'UTC'))::date
+      AND EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE COALESCE(ws.timezone, 'UTC')) = 0
   `);
 
 	for (const row of rows) {
 		try {
 			await pool.query(
-				`INSERT INTO notifications (user_id, workspace_id, type, title, card_id)
-         VALUES ($1, $2, 'due_date_reminder', $3, $4)
+				`INSERT INTO notifications (user_id, workspace_id, type, title, card_id, board_id)
+         VALUES ($1, $2, 'due_date_reminder', $3, $4, $5)
          ON CONFLICT (user_id, card_id, ((created_at AT TIME ZONE 'UTC')::date))
          WHERE type = 'due_date_reminder' DO NOTHING`,
 				[
@@ -30,11 +31,13 @@ export async function runDueDateReminders(): Promise<void> {
 					row.workspace_id,
 					`'${row.card_title}' is due today`,
 					row.card_id,
+					row.workspace_id,
 				],
 			);
-		} catch {
+		} catch (err) {
 			console.error(
-				`Failed to insert due_date_reminder for card ${row.card_id}`,
+				`Failed to insert due_date_reminder for card ${row.card_id}:`,
+				err,
 			);
 		}
 	}

@@ -51,49 +51,49 @@ export default function AppLayout() {
 
 	return (
 		<NotificationsProvider>
-		<div className="flex h-screen">
-			<WorkspaceOverlays />
-			<Sidebar
-				collapsed={collapsed}
-				onToggle={() => setCollapsed((c) => !c)}
-				mode={mode}
-				onModeChange={setMode}
-			/>
-			<MobileNav
-				open={mobileNavOpen}
-				onClose={() => setMobileNavOpen(false)}
-				mode={mode}
-				onModeChange={setMode}
-			/>
+			<div className="flex h-screen">
+				<WorkspaceOverlays />
+				<Sidebar
+					collapsed={collapsed}
+					onToggle={() => setCollapsed((c) => !c)}
+					mode={mode}
+					onModeChange={setMode}
+				/>
+				<MobileNav
+					open={mobileNavOpen}
+					onClose={() => setMobileNavOpen(false)}
+					mode={mode}
+					onModeChange={setMode}
+				/>
 
-			<div className="flex min-w-0 flex-1 flex-col">
-				<header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 md:px-6">
-					<div className="flex items-center gap-3">
-						<button
-							onClick={() => setMobileNavOpen(true)}
-							aria-label="Open menu"
-							className="rounded-md p-2 text-neutral-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 md:hidden"
-						>
-							<Menu size={20} aria-hidden />
-						</button>
-						<span className="flex items-center gap-1.5 text-sm font-medium text-neutral-700">
-							<PageIcon size={15} className="text-neutral-400" aria-hidden />
-							{pageTitle}
-						</span>
-					</div>
+				<div className="flex min-w-0 flex-1 flex-col">
+					<header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 md:px-6">
+						<div className="flex items-center gap-3">
+							<button
+								onClick={() => setMobileNavOpen(true)}
+								aria-label="Open menu"
+								className="rounded-md p-2 text-neutral-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 md:hidden"
+							>
+								<Menu size={20} aria-hidden />
+							</button>
+							<span className="flex items-center gap-1.5 text-sm font-medium text-neutral-700">
+								<PageIcon size={15} className="text-neutral-400" aria-hidden />
+								{pageTitle}
+							</span>
+						</div>
 
-					<div className="flex items-center gap-3">
-						<PresenceBar users={presence} self={user} />
-					</div>
-				</header>
+						<div className="flex items-center gap-3">
+							<PresenceBar users={presence} self={user} />
+						</div>
+					</header>
 
-				<main className="min-h-0 flex-1 overflow-auto">
-					<Outlet />
-				</main>
+					<main className="min-h-0 flex-1 overflow-auto">
+						<Outlet />
+					</main>
+				</div>
+
+				{toast && <Toast message={toast.message} type={toast.type} />}
 			</div>
-
-			{toast && <Toast message={toast.message} type={toast.type} />}
-		</div>
 		</NotificationsProvider>
 	);
 }

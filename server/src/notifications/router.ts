@@ -43,6 +43,7 @@ notificationsRouter.get("/", async (req, res) => {
 		title: r.title,
 		body: r.body,
 		cardId: r.card_id,
+		boardId: r.board_id,
 		actorId: r.actor_id,
 		readAt: r.read_at,
 		sourceDeleted: r.source_deleted,
@@ -58,13 +59,14 @@ notificationsRouter.get("/", async (req, res) => {
 
 notificationsRouter.patch("/:id/read", async (req, res) => {
 	const userId = (req.user as { id: number }).id;
-	const id = Number(req.params.id);
+	const params = req.params as { workspaceId: string; id: string };
+	const id = Number(params.id);
 	const { rows, rowCount } = await pool.query(
 		"UPDATE notifications SET read_at = now() WHERE id = $1 AND user_id = $2 AND read_at IS NULL RETURNING id",
 		[id, userId],
 	);
 	if (!rowCount) return res.status(404).json({ error: "Not found" });
-	pushReadEvent(userId, rows[0].id);
+	pushReadEvent(userId, Number(params.workspaceId), rows[0].id);
 	res.json({ ok: true });
 });
 
@@ -77,7 +79,7 @@ notificationsRouter.post("/read-all", async (req, res) => {
 		"UPDATE notifications SET read_at = now() WHERE user_id = $1 AND workspace_id = $2 AND read_at IS NULL",
 		[userId, workspaceId],
 	);
-	pushReadAllEvent(userId);
+	pushReadAllEvent(userId, workspaceId);
 	res.json({ ok: true, markedCount: rowCount ?? 0 });
 });
 
