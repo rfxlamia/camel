@@ -2,6 +2,7 @@ import {
 	Activity,
 	Bot,
 	History,
+	Inbox,
 	LayoutDashboard,
 	Settings,
 	type LucideIcon,
@@ -11,6 +12,7 @@ import type { Mode } from "./shared";
 
 export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 	{ to: "/board", label: "Board", icon: SquareKanban },
+	{ to: "/inbox", label: "Inbox", icon: Inbox },
 	{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 	{ to: "/activity", label: "Activity", icon: Activity },
 	{ to: "/agent", label: "Agent", icon: Bot },
@@ -22,7 +24,7 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 // Activity is intentionally not a top-level nav item — it's a board changelog,
 // reachable from the Dashboard "View all" drill-down rather than a primary peer.
 export const KANBAN_NAV = NAV_ITEMS.filter((i) =>
-	["/board", "/dashboard"].includes(i.to),
+	["/board", "/inbox", "/dashboard"].includes(i.to),
 );
 export const AGENT_NAV = NAV_ITEMS.filter((i) =>
 	["/agent", "/history"].includes(i.to),

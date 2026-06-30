@@ -2,6 +2,7 @@ import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
 import { useBoard } from "../../context/BoardContext";
+import { useNotificationsContext } from "../../context/NotificationsContext";
 import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
 import { type Mode, navLinkClass } from "./shared";
 import { ModeSwitcher } from "./ModeSwitcher";
@@ -26,6 +27,7 @@ export default function Sidebar({
 	onModeChange,
 }: SidebarProps) {
 	const { logout, settings } = useBoard();
+	const { unreadCount } = useNotificationsContext();
 	const labelClass = collapsed
 		? "hidden"
 		: "hidden lg:inline whitespace-nowrap";
@@ -69,6 +71,14 @@ export default function Sidebar({
 					<NavLink key={to} to={to} className={navLinkClass} title={label}>
 						<Icon size={18} className="shrink-0" aria-hidden />
 						<span className={labelClass}>{label}</span>
+						{to === "/inbox" && unreadCount > 0 && (
+							<span
+								className="ml-auto inline-flex items-center justify-center rounded-full bg-error-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+								aria-label={`${unreadCount} unread notifications`}
+							>
+								{unreadCount > 9 ? "9+" : unreadCount}
+							</span>
+						)}
 					</NavLink>
 				))}
 			</nav>

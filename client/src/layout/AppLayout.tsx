@@ -4,6 +4,7 @@ import { Outlet, useLocation } from "react-router";
 import PresenceBar from "../components/PresenceBar";
 import Toast from "../components/Toast";
 import { useBoard } from "../context/BoardContext";
+import { NotificationsProvider } from "../context/NotificationsContext";
 import { formatTitle, getFaviconLink } from "../lib/title";
 import Sidebar, { MobileNav, NAV_ITEMS, WorkspaceOverlays } from "./sidebar";
 import { useSidebarMode } from "./sidebar/useSidebarMode";
@@ -49,6 +50,7 @@ export default function AppLayout() {
 	const pageTitle = activeItem?.label ?? "Board";
 
 	return (
+		<NotificationsProvider>
 		<div className="flex h-screen">
 			<WorkspaceOverlays />
 			<Sidebar
@@ -92,5 +94,6 @@ export default function AppLayout() {
 
 			{toast && <Toast message={toast.message} type={toast.type} />}
 		</div>
+		</NotificationsProvider>
 	);
 }

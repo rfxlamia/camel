@@ -58,6 +58,12 @@ const router = createBrowserRouter([
 				}),
 			},
 			{
+				path: "inbox",
+				lazy: async () => ({
+					Component: (await import("./pages/InboxPage")).default,
+				}),
+			},
+			{
 				path: "agent",
 				lazy: async () => ({
 					Component: (await import("./pages/AgentPage")).default,
