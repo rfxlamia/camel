@@ -104,7 +104,7 @@ export const api = {
 		patch: {
 			title?: string;
 			description?: string;
-			assigneeId?: number | null;
+			assigneeIds?: number[];
 			dueDate?: string | null;
 			version?: number;
 		},

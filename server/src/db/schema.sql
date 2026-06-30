@@ -289,6 +289,28 @@ CREATE INDEX IF NOT EXISTS idx_events_workspace_created
 CREATE INDEX IF NOT EXISTS idx_cards_workspace_position
   ON cards(workspace_id, position) WHERE deleted_at IS NULL;
 
+-- Multiple assignees per card (junction table; replaces cards.assignee_id).
+CREATE TABLE IF NOT EXISTS card_assignees (
+  card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (card_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_card_assignees_user ON card_assignees(user_id);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'cards' AND column_name = 'assignee_id'
+  ) THEN
+    INSERT INTO card_assignees (card_id, user_id)
+    SELECT id, assignee_id FROM cards
+    WHERE assignee_id IS NOT NULL
+    ON CONFLICT DO NOTHING;
+    ALTER TABLE cards DROP COLUMN assignee_id;
+  END IF;
+END $$;
+
 -- Signable columns: auto-assign cards to a designated member when moved/created.
 -- is_signable: marks a column as having auto-assign behavior.
 -- signable_assignee_id: the workspace member to auto-assign; SET NULL if user is deleted.

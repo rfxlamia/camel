@@ -16,6 +16,13 @@ import {
 	validateDueDate,
 } from "../validators/input-length.js";
 import {
+	addCardAssignee,
+	getCardAssigneeIds,
+	loadCardAssigneesForCards,
+	syncCardAssignees,
+	type CardAssignee,
+} from "./card-assignees.js";
+import {
 	createScopedBoardService,
 	lookupMembership,
 	parseWorkspaceId,
@@ -23,6 +30,131 @@ import {
 } from "./helpers.js";
 
 export const cardsRouter = Router({ mergeParams: true });
+
+const CARD_SELECT = `SELECT c.id, c.workspace_id, c.column_id, c.title, c.description, c.position, c.version,
+  c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date
+  FROM cards c`;
+
+type CardDbRow = {
+	id: number;
+	column_id: number;
+	title: string;
+	description: string;
+	position: number;
+	version: number;
+	created_at: string;
+	started_at: string | null;
+	done_at: string | null;
+	due_date: string | null;
+};
+
+function mapCardResponse(c: CardDbRow, assignees: CardAssignee[]) {
+	return {
+		id: c.id,
+		columnId: c.column_id,
+		title: c.title,
+		description: c.description,
+		position: c.position,
+		version: c.version,
+		createdAt: c.created_at,
+		startedAt: c.started_at,
+		doneAt: c.done_at,
+		dueDate: c.due_date,
+		assignees,
+	};
+}
+
+async function hydrateCard(cardId: number, workspaceId: number) {
+	const { rows } = await pool.query(
+		`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
+		[cardId, workspaceId],
+	);
+	if (rows.length === 0) return null;
+	const assigneesByCard = await loadCardAssigneesForCards(pool, [cardId]);
+	return mapCardResponse(rows[0], assigneesByCard.get(cardId) ?? []);
+}
+
+function emitCardAssigned(
+	workspaceId: number,
+	actorId: number,
+	cardId: number,
+	cardTitle: string,
+	actorDisplayName: string,
+	assigneeId: number,
+) {
+	domainBus.emit(EVENTS.CARD_ASSIGNED, {
+		type: EVENTS.CARD_ASSIGNED,
+		workspaceId,
+		actorId,
+		payload: { cardId, assigneeId, cardTitle, actorDisplayName },
+	});
+}
+
+function emitDueDateChange(
+	workspaceId: number,
+	actorId: number,
+	cardId: number,
+	cardTitle: string,
+	actorDisplayName: string,
+	assigneeIds: number[],
+	oldDueDate: string | null,
+	newDueDate: string | null,
+) {
+	for (const assigneeId of assigneeIds) {
+		if (newDueDate != null) {
+			domainBus.emit(EVENTS.CARD_DUE_DATE_CHANGED, {
+				type: EVENTS.CARD_DUE_DATE_CHANGED,
+				workspaceId,
+				actorId,
+				payload: {
+					cardId,
+					assigneeId,
+					cardTitle,
+					actorDisplayName,
+					oldDueDate,
+					newDueDate,
+				},
+			});
+		} else {
+			domainBus.emit(EVENTS.CARD_DUE_DATE_REMOVED, {
+				type: EVENTS.CARD_DUE_DATE_REMOVED,
+				workspaceId,
+				actorId,
+				payload: {
+					cardId,
+					assigneeId,
+					cardTitle,
+					actorDisplayName,
+					oldDueDate,
+				},
+			});
+		}
+	}
+}
+
+async function parseAssigneeIds(
+	body: Record<string, unknown>,
+	workspaceId: number,
+): Promise<number[] | { error: string }> {
+	const raw = body.assigneeIds;
+	if (!Array.isArray(raw)) {
+		return { error: "assigneeIds must be an array of integers" };
+	}
+	const ids: number[] = [];
+	for (const id of raw) {
+		if (!Number.isInteger(id)) {
+			return { error: "assigneeIds must be an array of integers" };
+		}
+		ids.push(id as number);
+	}
+	for (const userId of [...new Set(ids)]) {
+		const role = await lookupMembership(userId, workspaceId);
+		if (!role) {
+			return { error: "assignee must be a member of this workspace" };
+		}
+	}
+	return ids;
+}
 
 cardsRouter.get("/cards/:id", async (req, res) => {
 	const workspaceId = parseWorkspaceId(
@@ -43,17 +175,11 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 		},
 		getCardById: async (wsId, cId) => {
 			const { rows } = await pool.query(
-				`SELECT c.id, c.workspace_id, c.column_id, c.title, c.description,
-                c.position, c.version, c.created_at, c.started_at, c.done_at,
-                c.due_date::text AS due_date, c.assignee_id,
-                u.username AS assignee_username,
-                u.display_name AS assignee_display_name
-         FROM cards c
-         LEFT JOIN users u ON u.id = c.assignee_id
-         WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
+				`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
 				[cId, wsId],
 			);
 			if (rows.length === 0) return null;
+			const assigneesByCard = await loadCardAssigneesForCards(pool, [cId]);
 			const c = rows[0];
 			return {
 				id: c.id,
@@ -67,13 +193,7 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 				startedAt: c.started_at,
 				doneAt: c.done_at,
 				dueDate: c.due_date,
-				assignee: c.assignee_id
-					? {
-							id: c.assignee_id,
-							username: c.assignee_username,
-							displayName: c.assignee_display_name,
-						}
-					: null,
+				assignees: assigneesByCard.get(cId) ?? [],
 			};
 		},
 		getBoardRows: async () => [],
@@ -121,73 +241,58 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 		col.rows[0].is_signable && col.rows[0].signable_assignee_id
 			? col.rows[0].signable_assignee_id
 			: null;
-	const { rows } = await pool.query(
-		`INSERT INTO cards (column_id, title, description, position, workspace_id, assignee_id)
+	const client = await pool.connect();
+	try {
+		await client.query("BEGIN");
+		const { rows } = await client.query(
+			`INSERT INTO cards (column_id, title, description, position, workspace_id)
      VALUES ($1, $2, $3,
              COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
-             $5, $6)
+             $5)
      RETURNING id`,
-		[
-			Number(columnId),
-			titleValidation.trimmed,
-			descValidation.trimmed ?? "",
-			POSITION_GAP,
-			workspaceId,
-			autoAssigneeId,
-		],
-	);
-	await recordActivity(pool, req.user!, workspaceId, "create", {
-		cardId: rows[0].id,
-		toColumnId: Number(columnId),
-		payload: { cardTitle: titleValidation.trimmed },
-	});
-	await publishEvent(workspaceId, {
-		type: "card.created",
-		actor: req.user!,
-		cardId: rows[0].id,
-	});
-	// Re-query with users join to include assignee details
-	const { rows: cardRows } = await pool.query(
-		`SELECT c.id, c.column_id, c.title, c.description, c.position, c.version,
-		        c.created_at, c.started_at, c.done_at, c.assignee_id,
-		        u.username AS assignee_username, u.display_name AS assignee_display_name
-		 FROM cards c
-		 LEFT JOIN users u ON u.id = c.assignee_id
-		 WHERE c.id = $1 AND c.workspace_id = $2`,
-		[rows[0].id, workspaceId],
-	);
-	const card = cardRows[0];
-	if (card.assignee_id) {
-		domainBus.emit(EVENTS.CARD_ASSIGNED, {
-			type: EVENTS.CARD_ASSIGNED,
-			workspaceId,
-			actorId: req.user!.id,
-			payload: {
-				cardId: card.id,
-				assigneeId: card.assignee_id,
-				cardTitle: card.title,
-				actorDisplayName: req.user!.displayName,
-			},
+			[
+				Number(columnId),
+				titleValidation.trimmed,
+				descValidation.trimmed ?? "",
+				POSITION_GAP,
+				workspaceId,
+			],
+		);
+		const cardId = rows[0].id as number;
+		if (autoAssigneeId !== null) {
+			await addCardAssignee(client, cardId, autoAssigneeId);
+		}
+		await recordActivity(client, req.user!, workspaceId, "create", {
+			cardId,
+			toColumnId: Number(columnId),
+			payload: { cardTitle: titleValidation.trimmed },
 		});
+		await client.query("COMMIT");
+
+		await publishEvent(workspaceId, {
+			type: "card.created",
+			actor: req.user!,
+			cardId,
+		});
+
+		const card = await hydrateCard(cardId, workspaceId);
+		if (autoAssigneeId !== null) {
+			emitCardAssigned(
+				workspaceId,
+				req.user!.id,
+				cardId,
+				card!.title,
+				req.user!.displayName,
+				autoAssigneeId,
+			);
+		}
+		res.status(201).json(card);
+	} catch (err) {
+		await client.query("ROLLBACK");
+		throw err;
+	} finally {
+		client.release();
 	}
-	res.status(201).json({
-		id: card.id,
-		columnId: card.column_id,
-		title: card.title,
-		description: card.description,
-		position: card.position,
-		version: card.version,
-		createdAt: card.created_at,
-		startedAt: card.started_at,
-		doneAt: card.done_at,
-		assignee: card.assignee_id
-			? {
-					id: card.assignee_id,
-					username: card.assignee_username,
-					displayName: card.assignee_display_name,
-				}
-			: null,
-	});
 });
 
 cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -208,7 +313,7 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	// can't express "clear", so the SET clause is built from present keys only.
 	const hasTitle = "title" in body;
 	const hasDescription = "description" in body;
-	const hasAssignee = "assigneeId" in body;
+	const hasAssigneeIds = "assigneeIds" in body;
 	const hasDueDate = "dueDate" in body;
 
 	const sets: string[] = [];
@@ -226,26 +331,6 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		vals.push(v.trimmed);
 		sets.push(`description = $${vals.length}`);
 	}
-	if (hasAssignee) {
-		const assigneeId = body.assigneeId;
-		if (assigneeId === null) {
-			vals.push(null);
-			sets.push(`assignee_id = $${vals.length}`);
-		} else if (Number.isInteger(assigneeId)) {
-			const role = await lookupMembership(assigneeId as number, workspaceId);
-			if (!role) {
-				return res
-					.status(400)
-					.json({ error: "assignee must be a member of this workspace" });
-			}
-			vals.push(assigneeId);
-			sets.push(`assignee_id = $${vals.length}`);
-		} else {
-			return res
-				.status(400)
-				.json({ error: "assigneeId must be an integer or null" });
-		}
-	}
 	if (hasDueDate) {
 		const dueDate = body.dueDate;
 		if (dueDate === null) {
@@ -259,122 +344,160 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		}
 	}
 
-	if (sets.length === 0) {
+	let parsedAssigneeIds: number[] | undefined;
+	if (hasAssigneeIds) {
+		const parsed = await parseAssigneeIds(body, workspaceId);
+		if ("error" in parsed) {
+			return res.status(400).json({ error: parsed.error });
+		}
+		parsedAssigneeIds = parsed;
+	}
+
+	if (sets.length === 0 && !hasAssigneeIds) {
 		return res.status(400).json({ error: "no updatable fields provided" });
 	}
-	sets.push("version = version + 1");
+	if (sets.length > 0 || hasAssigneeIds) {
+		sets.push("version = version + 1");
+	}
 
-	const prevRes = await pool.query(
-		`SELECT assignee_id, due_date::text AS due_date FROM cards
-     WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
-		[id, workspaceId],
-	);
-	const prev = prevRes.rows[0] as
-		| { assignee_id: number | null; due_date: string | null }
-		| undefined;
+	const client = await pool.connect();
+	try {
+		await client.query("BEGIN");
 
-	vals.push(id);
-	const idP = vals.length;
-	vals.push(workspaceId);
-	const wsP = vals.length;
-	vals.push(version ?? null);
-	const verP = vals.length;
-
-	const { rows } = await pool.query(
-		`UPDATE cards SET ${sets.join(", ")}
-     WHERE id = $${idP} AND workspace_id = $${wsP} AND deleted_at IS NULL
-       AND ($${verP}::int IS NULL OR version = $${verP})
-     RETURNING id, column_id, title, description, position, version,
-               created_at, started_at, done_at, due_date::text AS due_date, assignee_id`,
-		vals,
-	);
-	if (rows.length === 0) {
-		const current = await pool.query(
-			`SELECT id, column_id, title, description, position, version,
-              created_at, started_at, done_at, due_date::text AS due_date, assignee_id
-       FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+		const prevRes = await client.query(
+			`SELECT due_date::text AS due_date FROM cards
+       WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
 			[id, workspaceId],
 		);
-		if (current.rows.length === 0) {
-			return res.status(404).json({ error: "card not found" });
-		}
-		return res.status(409).json({
-			error: "Someone else updated this card first.",
-			code: "version_conflict",
-			card: current.rows[0],
-		});
-	}
-	await recordActivity(pool, req.user!, workspaceId, "update", {
-		cardId: id,
-		payload: {
-			cardTitle: rows[0].title,
-			changed: [
-				hasTitle && "title",
-				hasDescription && "description",
-				hasAssignee && "assignee",
-				hasDueDate && "dueDate",
-			].filter(Boolean),
-		},
-	});
-	await publishEvent(workspaceId, {
-		type: "card.updated",
-		actor: req.user!,
-		cardId: id,
-	});
-	const updated = rows[0];
-	const newAssigneeId = updated.assignee_id as number | null;
-	const newDueDate = updated.due_date as string | null;
+		const prevDueDate = prevRes.rows[0]?.due_date as string | null | undefined;
+		const prevAssigneeIds = await getCardAssigneeIds(client, id);
 
-	if (
-		hasAssignee &&
-		newAssigneeId != null &&
-		newAssigneeId !== prev?.assignee_id
-	) {
-		domainBus.emit(EVENTS.CARD_ASSIGNED, {
-			type: EVENTS.CARD_ASSIGNED,
-			workspaceId,
-			actorId: req.user!.id,
+		let updated: CardDbRow;
+		if (sets.length > 0) {
+			vals.push(id);
+			const idP = vals.length;
+			vals.push(workspaceId);
+			const wsP = vals.length;
+			vals.push(version ?? null);
+			const verP = vals.length;
+
+			const { rows } = await client.query(
+				`UPDATE cards SET ${sets.join(", ")}
+         WHERE id = $${idP} AND workspace_id = $${wsP} AND deleted_at IS NULL
+           AND ($${verP}::int IS NULL OR version = $${verP})
+         RETURNING id, column_id, title, description, position, version,
+                   created_at, started_at, done_at, due_date::text AS due_date`,
+				vals,
+			);
+			if (rows.length === 0) {
+				await client.query("ROLLBACK");
+				const current = await pool.query(
+					`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
+					[id, workspaceId],
+				);
+				if (current.rows.length === 0) {
+					return res.status(404).json({ error: "card not found" });
+				}
+				const assigneesByCard = await loadCardAssigneesForCards(pool, [id]);
+				return res.status(409).json({
+					error: "Someone else updated this card first.",
+					code: "version_conflict",
+					card: mapCardResponse(
+						current.rows[0],
+						assigneesByCard.get(id) ?? [],
+					),
+				});
+			}
+			updated = rows[0];
+		} else {
+			const { rows } = await client.query(
+				`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
+				[id, workspaceId],
+			);
+			if (rows.length === 0) {
+				await client.query("ROLLBACK");
+				return res.status(404).json({ error: "card not found" });
+			}
+			updated = rows[0];
+			const bump = await client.query(
+				`UPDATE cards SET version = version + 1
+         WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+           AND ($3::int IS NULL OR version = $3)
+         RETURNING version`,
+				[id, workspaceId, version ?? null],
+			);
+			if (bump.rows.length === 0) {
+				await client.query("ROLLBACK");
+				return res.status(409).json({
+					error: "Someone else updated this card first.",
+					code: "version_conflict",
+				});
+			}
+			updated.version = bump.rows[0].version;
+		}
+
+		let assigneeSync: { added: number[] } | undefined;
+		if (hasAssigneeIds && parsedAssigneeIds !== undefined) {
+			assigneeSync = await syncCardAssignees(client, id, parsedAssigneeIds);
+		}
+
+		await recordActivity(client, req.user!, workspaceId, "update", {
+			cardId: id,
 			payload: {
-				cardId: id,
-				assigneeId: newAssigneeId,
 				cardTitle: updated.title,
-				actorDisplayName: req.user!.displayName,
+				changed: [
+					hasTitle && "title",
+					hasDescription && "description",
+					hasAssigneeIds && "assignees",
+					hasDueDate && "dueDate",
+				].filter(Boolean),
 			},
 		});
-	}
 
-	if (hasDueDate && newDueDate !== prev?.due_date) {
-		if (newDueDate != null) {
-			domainBus.emit(EVENTS.CARD_DUE_DATE_CHANGED, {
-				type: EVENTS.CARD_DUE_DATE_CHANGED,
-				workspaceId,
-				actorId: req.user!.id,
-				payload: {
-					cardId: id,
-					assigneeId: newAssigneeId,
-					cardTitle: updated.title,
-					actorDisplayName: req.user!.displayName,
-					oldDueDate: prev?.due_date ?? null,
-					newDueDate,
-				},
-			});
-		} else {
-			domainBus.emit(EVENTS.CARD_DUE_DATE_REMOVED, {
-				type: EVENTS.CARD_DUE_DATE_REMOVED,
-				workspaceId,
-				actorId: req.user!.id,
-				payload: {
-					cardId: id,
-					assigneeId: newAssigneeId,
-					cardTitle: updated.title,
-					actorDisplayName: req.user!.displayName,
-					oldDueDate: prev?.due_date ?? null,
-				},
-			});
+		await client.query("COMMIT");
+
+		await publishEvent(workspaceId, {
+			type: "card.updated",
+			actor: req.user!,
+			cardId: id,
+		});
+
+		const assigneesByCard = await loadCardAssigneesForCards(pool, [id]);
+		const currentAssigneeIds = (assigneesByCard.get(id) ?? []).map((a) => a.id);
+
+		if (assigneeSync) {
+			for (const assigneeId of assigneeSync.added) {
+				emitCardAssigned(
+					workspaceId,
+					req.user!.id,
+					id,
+					updated.title,
+					req.user!.displayName,
+					assigneeId,
+				);
+			}
 		}
-	}
 
-	res.json(updated);
+		if (hasDueDate && updated.due_date !== prevDueDate) {
+			emitDueDateChange(
+				workspaceId,
+				req.user!.id,
+				id,
+				updated.title,
+				req.user!.displayName,
+				currentAssigneeIds.length > 0 ? currentAssigneeIds : prevAssigneeIds,
+				prevDueDate ?? null,
+				updated.due_date as string | null,
+			);
+		}
+
+		res.json(mapCardResponse(updated, assigneesByCard.get(id) ?? []));
+	} catch (err) {
+		await client.query("ROLLBACK");
+		throw err;
+	} finally {
+		client.release();
+	}
 });
 
 cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -518,8 +641,7 @@ cardsRouter.post(
 			       WHEN started_at IS NULL AND ($4 OR NOT $5) THEN now()
 			       ELSE started_at
 			     END,
-			     done_at = CASE WHEN $4 THEN COALESCE(done_at, now()) ELSE NULL END,
-			 assignee_id = CASE WHEN $6 AND $7::integer IS NOT NULL AND NOT $8 THEN $7::integer ELSE assignee_id END
+			     done_at = CASE WHEN $4 THEN COALESCE(done_at, now()) ELSE NULL END
 			   WHERE id = $1`,
 				[
 					cardId,
@@ -527,11 +649,24 @@ cardsRouter.post(
 					position,
 					target.is_done,
 					target.is_first,
-					target.is_signable,
-					target.signable_assignee_id,
-					isSameColumn,
 				],
 			);
+
+			let addedSignableAssignee: number | null = null;
+			if (
+				target.is_signable &&
+				target.signable_assignee_id != null &&
+				!isSameColumn
+			) {
+				const added = await addCardAssignee(
+					client,
+					cardId,
+					target.signable_assignee_id as number,
+				);
+				if (added) {
+					addedSignableAssignee = target.signable_assignee_id as number;
+				}
+			}
 
 			await recordActivity(
 				client,
@@ -554,36 +689,19 @@ cardsRouter.post(
 				cardId,
 			});
 
-			const updated = await pool.query(
-				`SELECT c.id, c.column_id, c.title, c.description, c.position, c.version,
-			       c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date,
-			       c.assignee_id, u.username AS assignee_username,
-			       u.display_name AS assignee_display_name
-			 FROM cards c
-			 LEFT JOIN users u ON u.id = c.assignee_id
-			 WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
-				[cardId, workspaceId],
-			);
-			const c = updated.rows[0];
-			res.json({
-				id: c.id,
-				columnId: c.column_id,
-				title: c.title,
-				description: c.description,
-				position: c.position,
-				version: c.version,
-				createdAt: c.created_at,
-				startedAt: c.started_at,
-				doneAt: c.done_at,
-				dueDate: c.due_date,
-				assignee: c.assignee_id
-					? {
-							id: c.assignee_id,
-							username: c.assignee_username,
-							displayName: c.assignee_display_name,
-						}
-					: null,
-			});
+			if (addedSignableAssignee !== null) {
+				emitCardAssigned(
+					workspaceId,
+					req.user!.id,
+					cardId,
+					card.title,
+					req.user!.displayName,
+					addedSignableAssignee,
+				);
+			}
+
+			const cardResponse = await hydrateCard(cardId, workspaceId);
+			res.json(cardResponse);
 		} catch (err) {
 			await client.query("ROLLBACK");
 			throw err;

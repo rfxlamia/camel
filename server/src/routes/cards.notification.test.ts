@@ -3,7 +3,21 @@ import express from "express";
 import request from "supertest";
 import { domainBus, EVENTS } from "../events.js";
 
-vi.mock("../db/pool.js", () => ({ pool: { query: vi.fn() } }));
+const { mockClientQuery, mockConnect } = vi.hoisted(() => {
+	const mockClientQuery = vi.fn();
+	const mockConnect = vi.fn().mockResolvedValue({
+		query: mockClientQuery,
+		release: vi.fn(),
+	});
+	return { mockClientQuery, mockConnect };
+});
+
+vi.mock("../db/pool.js", () => ({
+	pool: {
+		query: vi.fn(),
+		connect: mockConnect,
+	},
+}));
 vi.mock("../realtime.js", () => ({ publishEvent: vi.fn() }));
 vi.mock("./helpers.js", () => ({
 	lookupMembership: vi.fn().mockResolvedValue("member"),
@@ -11,6 +25,29 @@ vi.mock("./helpers.js", () => ({
 	recordActivity: vi.fn().mockResolvedValue(undefined),
 	createScopedBoardService: vi.fn(),
 }));
+vi.mock("./card-assignees.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./card-assignees.js")>();
+	return {
+		...actual,
+		loadCardAssigneesForCards: vi.fn().mockResolvedValue(
+			new Map([
+				[
+					10,
+					[
+						{
+							id: 3,
+							username: "alice",
+							displayName: "Alice",
+						},
+					],
+				],
+			]),
+		),
+		getCardAssigneeIds: vi.fn(),
+		syncCardAssignees: vi.fn(),
+		addCardAssignee: vi.fn(),
+	};
+});
 vi.mock("../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (_req: unknown, _res: unknown, next: () => void) =>
 		next(),
@@ -28,9 +65,31 @@ vi.mock("../validators/input-length.js", () => ({
 }));
 
 import { pool } from "../db/pool.js";
+import {
+	addCardAssignee,
+	getCardAssigneeIds,
+	syncCardAssignees,
+} from "./card-assignees.js";
 import { cardsRouter } from "./cards.js";
 
 const mockQuery = vi.mocked(pool.query);
+const mockGetCardAssigneeIds = vi.mocked(getCardAssigneeIds);
+const mockSyncCardAssignees = vi.mocked(syncCardAssignees);
+const mockAddCardAssignee = vi.mocked(addCardAssignee);
+
+const cardRow = {
+	id: 10,
+	workspace_id: 1,
+	column_id: 1,
+	title: "Fix bug",
+	description: "",
+	position: 1024,
+	version: 2,
+	created_at: "2026-06-01T00:00:00Z",
+	started_at: null,
+	done_at: null,
+	due_date: null as string | null,
+};
 
 const app = express();
 app.use(express.json());
@@ -51,38 +110,46 @@ afterEach(() => {
 });
 
 describe("cards route — CARD_ASSIGNED event emission", () => {
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		mockQuery.mockReset();
+		mockClientQuery.mockReset();
+		mockGetCardAssigneeIds.mockReset();
+		mockSyncCardAssignees.mockReset();
+		mockAddCardAssignee.mockReset();
+		mockConnect.mockReset();
+		mockConnect.mockResolvedValue({
+			query: mockClientQuery,
+			release: vi.fn(),
+		} as never);
+	});
 
 	it("emits CARD_ASSIGNED when card is PATCHed with a new assignee", async () => {
-		mockQuery
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never) // BEGIN
 			.mockResolvedValueOnce({
-				rows: [{ assignee_id: null, due_date: null }],
+				rows: [{ due_date: null }],
 				rowCount: 1,
-			} as never)
-			.mockResolvedValueOnce({
-				rows: [
-					{
-						id: 10,
-						workspace_id: 1,
-						column_id: 1,
-						title: "Fix bug",
-						description: "",
-						position: 1024,
-						version: 2,
-						assignee_id: 3,
-						due_date: null,
-					},
-				],
-				rowCount: 1,
-			} as never)
-			.mockResolvedValue({ rows: [], rowCount: 0 } as never);
+			} as never);
+		mockGetCardAssigneeIds.mockResolvedValueOnce([]);
+		mockClientQuery.mockResolvedValueOnce({
+			rows: [cardRow],
+			rowCount: 1,
+		} as never);
+		mockSyncCardAssignees.mockResolvedValueOnce({
+			prev: [],
+			added: [3],
+			removed: [],
+		});
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never) // recordActivity
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never); // COMMIT
 
 		const received: unknown[] = [];
 		domainBus.once(EVENTS.CARD_ASSIGNED, (e) => received.push(e));
 
 		await request(app)
 			.patch("/workspaces/1/cards/10")
-			.send({ assigneeId: 3, version: 1 });
+			.send({ assigneeIds: [3], version: 1 });
 
 		expect(received).toHaveLength(1);
 		expect(
@@ -95,34 +162,32 @@ describe("cards route — CARD_ASSIGNED event emission", () => {
 	});
 
 	it("does NOT emit CARD_ASSIGNED when assignee is unchanged", async () => {
-		mockQuery
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
 			.mockResolvedValueOnce({
-				rows: [{ assignee_id: 3, due_date: null }],
+				rows: [{ due_date: null }],
 				rowCount: 1,
-			} as never)
-			.mockResolvedValueOnce({
-				rows: [
-					{
-						id: 10,
-						column_id: 1,
-						title: "Fix bug",
-						description: "",
-						position: 1024,
-						version: 2,
-						assignee_id: 3,
-						due_date: null,
-					},
-				],
-				rowCount: 1,
-			} as never)
-			.mockResolvedValue({ rows: [], rowCount: 0 } as never);
+			} as never);
+		mockGetCardAssigneeIds.mockResolvedValueOnce([3]);
+		mockClientQuery.mockResolvedValueOnce({
+			rows: [cardRow],
+			rowCount: 1,
+		} as never);
+		mockSyncCardAssignees.mockResolvedValueOnce({
+			prev: [3],
+			added: [],
+			removed: [],
+		});
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
 
 		const received: unknown[] = [];
 		domainBus.on(EVENTS.CARD_ASSIGNED, (e) => received.push(e));
 
 		await request(app)
 			.patch("/workspaces/1/cards/10")
-			.send({ assigneeId: 3, version: 1 });
+			.send({ assigneeIds: [3], version: 1 });
 
 		expect(received).toHaveLength(0);
 	});
@@ -140,28 +205,18 @@ describe("cards route — CARD_ASSIGNED event emission", () => {
 				],
 				rowCount: 1,
 			} as never)
-			.mockResolvedValueOnce({ rows: [{ n: 0 }], rowCount: 1 } as never)
-			.mockResolvedValueOnce({ rows: [{ id: 10 }], rowCount: 1 } as never)
-			.mockResolvedValueOnce({
-				rows: [
-					{
-						id: 10,
-						column_id: 1,
-						title: "Fix bug",
-						description: "",
-						position: 1024,
-						version: 1,
-						created_at: "2026-06-01T00:00:00Z",
-						started_at: null,
-						done_at: null,
-						assignee_id: 3,
-						assignee_username: "alice",
-						assignee_display_name: "Alice",
-					},
-				],
-				rowCount: 1,
-			} as never)
-			.mockResolvedValue({ rows: [], rowCount: 0 } as never);
+			.mockResolvedValueOnce({ rows: [{ n: 0 }], rowCount: 1 } as never);
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never) // BEGIN
+			.mockResolvedValueOnce({ rows: [{ id: 10 }], rowCount: 1 } as never); // INSERT
+		mockAddCardAssignee.mockResolvedValueOnce(true);
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never) // recordActivity
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never); // COMMIT
+		mockQuery.mockResolvedValueOnce({
+			rows: [{ ...cardRow, version: 1 }],
+			rowCount: 1,
+		} as never);
 
 		const received: unknown[] = [];
 		domainBus.once(EVENTS.CARD_ASSIGNED, (e) => received.push(e));
@@ -178,7 +233,9 @@ describe("cards route — CARD_ASSIGNED event emission", () => {
 });
 
 describe("cards route — CARD_DELETED event emission", () => {
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		mockQuery.mockReset();
+	});
 
 	it("emits CARD_DELETED when card is soft-deleted", async () => {
 		mockQuery
@@ -201,30 +258,33 @@ describe("cards route — CARD_DELETED event emission", () => {
 });
 
 describe("cards route — CARD_DUE_DATE_CHANGED event emission", () => {
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		mockQuery.mockReset();
+		mockClientQuery.mockReset();
+		mockGetCardAssigneeIds.mockReset();
+		mockSyncCardAssignees.mockReset();
+		mockConnect.mockReset();
+		mockConnect.mockResolvedValue({
+			query: mockClientQuery,
+			release: vi.fn(),
+		} as never);
+	});
 
 	it("emits CARD_DUE_DATE_CHANGED when due_date is PATCHed on assigned card", async () => {
-		mockQuery
+		mockClientQuery
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
 			.mockResolvedValueOnce({
-				rows: [{ assignee_id: 3, due_date: null }],
+				rows: [{ due_date: null }],
+				rowCount: 1,
+			} as never);
+		mockGetCardAssigneeIds.mockResolvedValueOnce([3]);
+		mockClientQuery
+			.mockResolvedValueOnce({
+				rows: [{ ...cardRow, due_date: "2026-07-01" }],
 				rowCount: 1,
 			} as never)
-			.mockResolvedValueOnce({
-				rows: [
-					{
-						id: 10,
-						column_id: 1,
-						title: "Fix bug",
-						description: "",
-						position: 1024,
-						version: 2,
-						assignee_id: 3,
-						due_date: "2026-07-01",
-					},
-				],
-				rowCount: 1,
-			} as never)
-			.mockResolvedValue({ rows: [], rowCount: 0 } as never);
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
+			.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
 
 		const received: unknown[] = [];
 		domainBus.once(EVENTS.CARD_DUE_DATE_CHANGED, (e) => received.push(e));

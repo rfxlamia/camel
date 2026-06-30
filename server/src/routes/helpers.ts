@@ -122,6 +122,7 @@ export type ScopedBoardDeps = {
 		workspaceId: number;
 		title: string;
 		assignee?: { id: number; username: string; displayName: string } | null;
+		assignees?: { id: number; username: string; displayName: string }[];
 		dueDate?: string | null;
 	} | null>;
 	getBoardRows: (workspaceId: number) => Promise<
@@ -295,6 +296,12 @@ export const workspaceAccessService = createWorkspaceAccessService({
 			// Clear signable_assignee_id from columns that reference this member
 			await client.query(
 				"UPDATE columns SET signable_assignee_id = NULL WHERE workspace_id = $1 AND signable_assignee_id = $2",
+				[workspaceId, userId],
+			);
+			await client.query(
+				`DELETE FROM card_assignees ca
+				 USING cards c
+				 WHERE ca.card_id = c.id AND c.workspace_id = $1 AND ca.user_id = $2`,
 				[workspaceId, userId],
 			);
 			await client.query("COMMIT");

@@ -22,9 +22,6 @@ function makeCard(overrides: {
 	id: number;
 	column_id: number;
 	position?: number;
-	assignee_id?: number | null;
-	assignee_username?: string | null;
-	assignee_display_name?: string | null;
 }) {
 	return {
 		id: overrides.id,
@@ -37,9 +34,6 @@ function makeCard(overrides: {
 		started_at: null,
 		done_at: null,
 		due_date: null,
-		assignee_id: overrides.assignee_id ?? null,
-		assignee_username: overrides.assignee_username ?? null,
-		assignee_display_name: overrides.assignee_display_name ?? null,
 	};
 }
 
@@ -52,7 +46,7 @@ describe("buildBoardResponse", () => {
 			makeCard({ id: 30, column_id: 1 }),
 		];
 
-		const result = buildBoardResponse(columns, cards);
+		const result = buildBoardResponse(columns, cards, new Map());
 
 		expect(result.columns).toHaveLength(2);
 		expect(result.columns[0].cards).toHaveLength(2);
@@ -69,41 +63,43 @@ describe("buildBoardResponse", () => {
 		];
 		const cards = [makeCard({ id: 10, column_id: 1 })];
 
-		const result = buildBoardResponse(columns, cards);
+		const result = buildBoardResponse(columns, cards, new Map());
 
 		expect(result.columns[0].cards).toHaveLength(1);
 		expect(result.columns[1].cards).toHaveLength(0);
 		expect(result.columns[2].cards).toHaveLength(0);
 	});
 
-	it("sets assignee to null when assignee_id is null", () => {
+	it("returns empty assignees when card has none", () => {
 		const columns = [makeColumn({ id: 1 })];
-		const cards = [makeCard({ id: 10, column_id: 1, assignee_id: null })];
+		const cards = [makeCard({ id: 10, column_id: 1 })];
 
-		const result = buildBoardResponse(columns, cards);
+		const result = buildBoardResponse(columns, cards, new Map());
 
-		expect(result.columns[0].cards[0].assignee).toBeNull();
+		expect(result.columns[0].cards[0].assignees).toEqual([]);
 	});
 
-	it("maps assignee fields when assignee_id is present", () => {
+	it("maps assignees from the lookup map", () => {
 		const columns = [makeColumn({ id: 1 })];
-		const cards = [
-			makeCard({
-				id: 10,
-				column_id: 1,
-				assignee_id: 42,
-				assignee_username: "alice",
-				assignee_display_name: "Alice W",
-			}),
-		];
+		const cards = [makeCard({ id: 10, column_id: 1 })];
+		const assignees = new Map([
+			[
+				10,
+				[
+					{
+						id: 42,
+						username: "alice",
+						displayName: "Alice W",
+					},
+				],
+			],
+		]);
 
-		const result = buildBoardResponse(columns, cards);
+		const result = buildBoardResponse(columns, cards, assignees);
 
-		expect(result.columns[0].cards[0].assignee).toEqual({
-			id: 42,
-			username: "alice",
-			displayName: "Alice W",
-		});
+		expect(result.columns[0].cards[0].assignees).toEqual([
+			{ id: 42, username: "alice", displayName: "Alice W" },
+		]);
 	});
 
 	it("preserves card ordering from input", () => {
@@ -114,7 +110,7 @@ describe("buildBoardResponse", () => {
 			makeCard({ id: 20, column_id: 1, position: 2 }),
 		];
 
-		const result = buildBoardResponse(columns, cards);
+		const result = buildBoardResponse(columns, cards, new Map());
 
 		expect(result.columns[0].cards.map((c) => c.id)).toEqual([30, 10, 20]);
 	});
@@ -133,13 +129,10 @@ describe("buildBoardResponse", () => {
 				started_at: "2026-06-02T08:00:00Z",
 				done_at: "2026-06-03T16:00:00Z",
 				due_date: "2026-06-10",
-				assignee_id: null,
-				assignee_username: null,
-				assignee_display_name: null,
 			},
 		];
 
-		const result = buildBoardResponse(columns, cards);
+		const result = buildBoardResponse(columns, cards, new Map());
 		const card = result.columns[0].cards[0];
 
 		expect(card).toEqual({
@@ -153,7 +146,7 @@ describe("buildBoardResponse", () => {
 			startedAt: "2026-06-02T08:00:00Z",
 			doneAt: "2026-06-03T16:00:00Z",
 			dueDate: "2026-06-10",
-			assignee: null,
+			assignees: [],
 		});
 	});
 
@@ -172,7 +165,7 @@ describe("buildBoardResponse", () => {
 			},
 		];
 
-		const result = buildBoardResponse(columns, []);
+		const result = buildBoardResponse(columns, [], new Map());
 
 		expect(result.columns[0]).toEqual({
 			id: 5,
@@ -189,7 +182,7 @@ describe("buildBoardResponse", () => {
 	});
 
 	it("handles empty inputs gracefully", () => {
-		const result = buildBoardResponse([], []);
+		const result = buildBoardResponse([], [], new Map());
 
 		expect(result).toEqual({ columns: [] });
 	});

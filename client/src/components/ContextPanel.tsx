@@ -1,4 +1,4 @@
-import { ChevronDown, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api } from "../api";
@@ -11,9 +11,17 @@ import {
 } from "../lib/cardPanel";
 import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
+import { AssigneePicker } from "./AssigneePicker";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
+
+function assigneeIdsEqual(a: number[], b: number[]): boolean {
+	if (a.length !== b.length) return false;
+	const sortedA = [...a].sort((x, y) => x - y);
+	const sortedB = [...b].sort((x, y) => x - y);
+	return sortedA.every((id, i) => id === sortedB[i]);
+}
 
 function MetaRow({ label, value }: { label: string; value: string | null }) {
 	return (
@@ -38,7 +46,7 @@ function DetailsSection({
 		patch: {
 			title?: string;
 			description?: string;
-			assigneeId?: number | null;
+			assigneeIds?: number[];
 			dueDate?: string | null;
 			version?: number;
 		},
@@ -49,8 +57,8 @@ function DetailsSection({
 	const { setHasUnsavedCardEdits, activeWorkspaceId } = useBoard();
 	const [title, setTitle] = useState(card.title);
 	const [description, setDescription] = useState(card.description);
-	const [assigneeId, setAssigneeId] = useState<number | null>(
-		card.assignee?.id ?? null,
+	const [assigneeIds, setAssigneeIds] = useState<number[]>(
+		card.assignees.map((a) => a.id),
 	);
 	const [dueDate, setDueDate] = useState<string | null>(card.dueDate);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -61,7 +69,7 @@ function DetailsSection({
 	const baselineRef = useRef({
 		title: card.title,
 		description: card.description,
-		assigneeId: card.assignee?.id ?? null,
+		assigneeIds: card.assignees.map((a) => a.id),
 		dueDate: card.dueDate,
 		version: card.version,
 	});
@@ -83,36 +91,47 @@ function DetailsSection({
 		};
 	}, [activeWorkspaceId]);
 
+	const cardAssigneeKey = card.assignees
+		.map((a) => a.id)
+		.sort((a, b) => a - b)
+		.join(",");
+
+	// Re-sync the form from the server card ONLY when the server card changes
+	// (card.* / version). The draft title/description/assigneeIds/dueDate are read
+	// solely to decide whether to skip the sync (never overwrite in-progress edits) —
+	// they are deliberately NOT triggers. Server assignee changes are tracked via the
+	// stable `cardAssigneeKey` string rather than `card.assignees` array identity.
+	// Both behaviors are covered by ContextPanel.test.tsx ("server→form sync").
+	// biome-ignore lint/correctness/useExhaustiveDependencies: draft state is read to gate the sync, not to trigger it — see comment above.
 	useEffect(() => {
 		const base = baselineRef.current;
 		const dirty =
 			title !== base.title ||
 			description !== base.description ||
-			assigneeId !== base.assigneeId ||
+			!assigneeIdsEqual(assigneeIds, base.assigneeIds) ||
 			dueDate !== base.dueDate;
 		if (dirty && !forceSyncRef.current) return;
 		forceSyncRef.current = false;
+		const nextAssigneeIds = card.assignees.map((a) => a.id);
 		baselineRef.current = {
 			title: card.title,
 			description: card.description,
-			assigneeId: card.assignee?.id ?? null,
+			assigneeIds: nextAssigneeIds,
 			dueDate: card.dueDate,
 			version: card.version,
 		};
-		setTitle(card.title);
-		setDescription(card.description);
-		setAssigneeId(card.assignee?.id ?? null);
-		setDueDate(card.dueDate);
+		if (title !== card.title) setTitle(card.title);
+		if (description !== card.description) setDescription(card.description);
+		if (!assigneeIdsEqual(assigneeIds, nextAssigneeIds)) {
+			setAssigneeIds(nextAssigneeIds);
+		}
+		if (dueDate !== card.dueDate) setDueDate(card.dueDate);
 	}, [
 		card.title,
 		card.description,
-		card.assignee?.id,
+		cardAssigneeKey,
 		card.dueDate,
 		card.version,
-		title,
-		description,
-		assigneeId,
-		dueDate,
 	]);
 
 	useEffect(() => {
@@ -120,11 +139,11 @@ function DetailsSection({
 		const dirty =
 			title !== base.title ||
 			description !== base.description ||
-			assigneeId !== base.assigneeId ||
+			!assigneeIdsEqual(assigneeIds, base.assigneeIds) ||
 			dueDate !== base.dueDate;
 		setHasUnsavedCardEdits(dirty);
 		return () => setHasUnsavedCardEdits(false);
-	}, [title, description, assigneeId, dueDate, setHasUnsavedCardEdits]);
+	}, [title, description, assigneeIds, dueDate, setHasUnsavedCardEdits]);
 
 	const save = async () => {
 		const trimmed = title.trim();
@@ -133,13 +152,13 @@ function DetailsSection({
 		const patch: {
 			title: string;
 			description: string;
-			assigneeId?: number | null;
+			assigneeIds?: number[];
 			dueDate?: string | null;
 			version?: number;
 		} = { title: trimmed, description, version: base.version };
-		// Only send assignee/due when changed, so the activity log records the
-		// real edit (and an explicit null clears the field server-side).
-		if (assigneeId !== base.assigneeId) patch.assigneeId = assigneeId;
+		if (!assigneeIdsEqual(assigneeIds, base.assigneeIds)) {
+			patch.assigneeIds = assigneeIds;
+		}
 		if (dueDate !== base.dueDate) patch.dueDate = dueDate;
 		const result = await saveCard(card.id, patch);
 		if (result === "saved") {
@@ -147,7 +166,7 @@ function DetailsSection({
 				...baselineRef.current,
 				title: trimmed,
 				description,
-				assigneeId,
+				assigneeIds,
 				dueDate,
 			};
 			setTitle(trimmed);
@@ -158,19 +177,17 @@ function DetailsSection({
 		}
 	};
 
-	// Keep the current assignee selectable even if they've since left the
-	// workspace (otherwise the <select> would silently show "Unassigned").
+	// Keep current assignees selectable even if they've since left the workspace.
 	const assigneeOptions = [...members];
-	if (
-		card.assignee &&
-		!assigneeOptions.some((m) => m.userId === card.assignee?.id)
-	) {
-		assigneeOptions.unshift({
-			userId: card.assignee.id,
-			username: card.assignee.username,
-			displayName: card.assignee.displayName,
-			role: "member",
-		});
+	for (const assignee of card.assignees) {
+		if (!assigneeOptions.some((m) => m.userId === assignee.id)) {
+			assigneeOptions.unshift({
+				userId: assignee.id,
+				username: assignee.username,
+				displayName: assignee.displayName,
+				role: "member",
+			});
+		}
 	}
 
 	return (
@@ -178,6 +195,17 @@ function DetailsSection({
 			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
 				Details
 			</h3>
+			<label className="block sm:max-w-44">
+				<span className="text-sm font-medium text-neutral-700">Due date</span>
+				<input
+					type="date"
+					className={inputClass}
+					value={dueDate ?? ""}
+					onChange={(e) =>
+						setDueDate(e.target.value === "" ? null : e.target.value)
+					}
+				/>
+			</label>
 			<label className="block">
 				<span className="text-sm font-medium text-neutral-700">Title</span>
 				<input
@@ -199,44 +227,13 @@ function DetailsSection({
 					placeholder="Add details..."
 				/>
 			</label>
-			<div className="flex gap-3">
-				<label className="block flex-1">
-					<span className="text-sm font-medium text-neutral-700">Assignee</span>
-					<div className="relative mt-1">
-						<select
-							className="w-full appearance-none rounded-md border border-neutral-300 bg-white py-2 pr-9 pl-3 text-base text-neutral-900 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none"
-							value={assigneeId === null ? "" : String(assigneeId)}
-							onChange={(e) =>
-								setAssigneeId(
-									e.target.value === "" ? null : Number(e.target.value),
-								)
-							}
-						>
-							<option value="">Unassigned</option>
-							{assigneeOptions.map((m) => (
-								<option key={m.userId} value={String(m.userId)}>
-									{m.displayName}
-								</option>
-							))}
-						</select>
-						<ChevronDown
-							size={16}
-							aria-hidden
-							className="pointer-events-none absolute inset-y-0 right-2.5 my-auto text-neutral-500"
-						/>
-					</div>
-				</label>
-				<label className="block flex-1">
-					<span className="text-sm font-medium text-neutral-700">Due date</span>
-					<input
-						type="date"
-						className={inputClass}
-						value={dueDate ?? ""}
-						onChange={(e) =>
-							setDueDate(e.target.value === "" ? null : e.target.value)
-						}
-					/>
-				</label>
+			<div className="min-w-0">
+				<span className="text-sm font-medium text-neutral-700">Assignees</span>
+				<AssigneePicker
+					members={assigneeOptions}
+					value={assigneeIds}
+					onChange={setAssigneeIds}
+				/>
 			</div>
 
 			<dl className="space-y-1 rounded-md border border-neutral-200 bg-neutral-100 px-3 py-2">

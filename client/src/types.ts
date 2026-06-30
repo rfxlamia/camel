@@ -16,7 +16,7 @@ export interface Card {
 	doneAt: string | null;
 	// Calendar date "YYYY-MM-DD" (no time-of-day) or null when unset.
 	dueDate: string | null;
-	assignee: CardAssignee | null;
+	assignees: CardAssignee[];
 	workspaceId?: number;
 }
 

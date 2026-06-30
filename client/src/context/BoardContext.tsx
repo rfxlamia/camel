@@ -90,7 +90,7 @@ interface BoardContextValue {
 		patch: {
 			title?: string;
 			description?: string;
-			assigneeId?: number | null;
+			assigneeIds?: number[];
 			dueDate?: string | null;
 			version?: number;
 		},
@@ -513,7 +513,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			patch: {
 				title?: string;
 				description?: string;
-				assigneeId?: number | null;
+				assigneeIds?: number[];
 				dueDate?: string | null;
 				version?: number;
 			},

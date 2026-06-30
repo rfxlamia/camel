@@ -19,7 +19,7 @@ function makeCard(id: number, columnId: number): Card {
 		startedAt: null,
 		doneAt: null,
 		dueDate: null,
-		assignee: null,
+		assignees: [],
 	};
 }
 

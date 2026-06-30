@@ -79,7 +79,7 @@ export function CardBody({ card }: { card: Card }) {
 					{card.description}
 				</pre>
 			)}
-			{(card.dueDate || card.assignee) && (
+			{(card.dueDate || card.assignees.length > 0) && (
 				<div className="mt-2 flex items-center gap-2">
 					{card.dueDate && (
 						<span
@@ -94,14 +94,30 @@ export function CardBody({ card }: { card: Card }) {
 							{formatDue(card.dueDate)}
 						</span>
 					)}
-					{card.assignee && (
-						<span
-							className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-100 text-[10px] font-semibold text-primary-800"
-							title={`Assigned to ${card.assignee.displayName}`}
-							aria-label={`Assigned to ${card.assignee.displayName}`}
-						>
-							{initials(card.assignee.displayName)}
-						</span>
+					{card.assignees.length > 0 && (
+						<div className="ml-auto flex -space-x-1.5">
+							{card.assignees.slice(0, 3).map((assignee) => (
+								<span
+									key={assignee.id}
+									className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white bg-primary-100 text-[10px] font-semibold text-primary-800"
+									title={`Assigned to ${assignee.displayName}`}
+									aria-label={`Assigned to ${assignee.displayName}`}
+								>
+									{initials(assignee.displayName)}
+								</span>
+							))}
+							{card.assignees.length > 3 && (
+								<span
+									className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-white bg-neutral-200 px-1 text-[9px] font-semibold text-neutral-700"
+									title={card.assignees
+										.slice(3)
+										.map((a) => a.displayName)
+										.join(", ")}
+								>
+									+{card.assignees.length - 3}
+								</span>
+							)}
+						</div>
 					)}
 				</div>
 			)}

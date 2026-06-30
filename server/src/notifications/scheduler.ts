@@ -4,15 +4,15 @@ export async function runDueDateReminders(): Promise<void> {
 	const { rows } = await pool.query(`
     SELECT
       c.id AS card_id,
-      c.assignee_id,
+      ca.user_id AS assignee_id,
       c.title AS card_title,
       c.workspace_id
     FROM cards c
     JOIN columns col ON col.id = c.column_id
+    JOIN card_assignees ca ON ca.card_id = c.id
     LEFT JOIN workspace_settings ws ON ws.workspace_id = c.workspace_id
     WHERE
       c.deleted_at IS NULL
-      AND c.assignee_id IS NOT NULL
       AND c.due_date IS NOT NULL
       AND col.is_done = FALSE
       AND c.due_date = (CURRENT_TIMESTAMP AT TIME ZONE COALESCE(ws.timezone, 'UTC'))::date

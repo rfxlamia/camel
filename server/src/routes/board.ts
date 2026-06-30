@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { loadCardAssigneesForCards } from "./card-assignees.js";
 import { getHumanColumns, type HumanColumn } from "./helpers.js";
 
 type CardRow = {
@@ -14,12 +15,13 @@ type CardRow = {
 	started_at: string | null;
 	done_at: string | null;
 	due_date: string | null;
-	assignee_id: number | null;
-	assignee_username: string | null;
-	assignee_display_name: string | null;
 };
 
-export function buildBoardResponse(columns: HumanColumn[], cards: CardRow[]) {
+export function buildBoardResponse(
+	columns: HumanColumn[],
+	cards: CardRow[],
+	assigneesByCard: Map<number, { id: number; username: string; displayName: string }[]>,
+) {
 	const cardsByColumn = new Map<number, CardRow[]>();
 	for (const c of cards) {
 		const list = cardsByColumn.get(c.column_id);
@@ -49,13 +51,7 @@ export function buildBoardResponse(columns: HumanColumn[], cards: CardRow[]) {
 				startedAt: c.started_at,
 				doneAt: c.done_at,
 				dueDate: c.due_date,
-				assignee: c.assignee_id
-					? {
-							id: c.assignee_id,
-							username: c.assignee_username,
-							displayName: c.assignee_display_name,
-						}
-					: null,
+				assignees: assigneesByCard.get(c.id) ?? [],
 			})),
 		})),
 	};
@@ -69,13 +65,12 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 	const columns = await getHumanColumns(pool, workspaceId);
 	const cards = await pool.query(
 		`SELECT c.id, c.column_id, c.title, c.description, c.position, c.version,
-            c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date,
-            c.assignee_id, u.username AS assignee_username,
-            u.display_name AS assignee_display_name
+            c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date
      FROM cards c
-     LEFT JOIN users u ON u.id = c.assignee_id
      WHERE c.workspace_id = $1 AND c.deleted_at IS NULL ORDER BY c.position`,
 		[workspaceId],
 	);
-	res.json(buildBoardResponse(columns, cards.rows));
+	const cardIds = cards.rows.map((c) => c.id as number);
+	const assigneesByCard = await loadCardAssigneesForCards(pool, cardIds);
+	res.json(buildBoardResponse(columns, cards.rows, assigneesByCard));
 });
