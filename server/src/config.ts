@@ -35,6 +35,9 @@ const envSchema = z.object({
 
 	TAVILY_API_KEY: z.string().optional(),
 
+	LINEAR_API_KEY: z.string().optional(),
+	LINEAR_TEAM_ID: z.string().optional(),
+
 	// OAuth / Better Auth
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
