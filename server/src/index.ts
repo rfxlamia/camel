@@ -24,6 +24,7 @@ import { startDueDateScheduler } from "./notifications/scheduler.js";
 import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
+import { ticketIntakeRouter } from "./routes/ticket-intake.js";
 import { pool } from "./db/pool.js";
 import { api } from "./routes.js";
 
@@ -110,6 +111,7 @@ app.use("/api/auth", oauthRouter); // set-username, set-password (outside email 
 app.use("/api/auth", createAuthRouter(delegatingLimiter));
 app.use("/api", api);
 app.use("/api", createAgentRouter());
+app.use("/api", ticketIntakeRouter);
 
 app.use(createErrorHandler());
 
