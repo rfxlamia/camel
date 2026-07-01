@@ -1,15 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockCreate = vi.fn();
-vi.mock("@anthropic-ai/sdk", () => {
-	return {
-		default: class MockAnthropic {
-			messages = {
-				create: mockCreate,
-			};
+
+vi.mock("../../config.js", () => ({
+	config: {
+		ANTHROPIC_MODEL: "test-model",
+		ANTHROPIC_API_KEY: "test-key",
+	},
+}));
+
+vi.mock("../llm.js", () => ({
+	getClient: () => ({
+		messages: {
+			create: mockCreate,
 		},
-	};
-});
+	}),
+}));
 
 describe("extractTicketFields", () => {
 	beforeEach(() => {
