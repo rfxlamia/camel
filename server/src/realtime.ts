@@ -53,7 +53,8 @@ export interface BoardEvent {
 		| "agent.card.thinking"
 		| "agent.tool.started"
 		| "agent.tool.result"
-		| "agent.tool.failed";
+		| "agent.tool.failed"
+		| "ticket_intake.submit_result";
 	actor?: AuthUser;
 	cardId?: number;
 	userId?: number;
@@ -68,6 +69,18 @@ export interface BoardEvent {
 	token?: string;
 	boardId?: number;
 	payload?: Record<string, unknown>;
+	success?: boolean;
+	issueUrl?: string;
+	issueIdentifier?: string;
+	errorMessage?: string;
+	retryable?: boolean;
+	ticketResult?: {
+		success: boolean;
+		issueUrl?: string;
+		issueIdentifier?: string;
+		errorMessage?: string;
+		retryable?: boolean;
+	};
 	at?: string;
 }
 
