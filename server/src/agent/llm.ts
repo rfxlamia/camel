@@ -45,7 +45,7 @@ export const MAX_TOKENS = OUTPUT_BUDGET + THINKING_BUDGET; // 24576
 
 let _client: Anthropic | null = null;
 
-function getClient(): Anthropic {
+export function getClient(): Anthropic {
 	if (!_client) {
 		const opts: ClientOptions = {
 			apiKey: config.ANTHROPIC_API_KEY,
