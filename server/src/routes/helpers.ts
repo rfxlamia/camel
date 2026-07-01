@@ -356,7 +356,13 @@ export async function recordActivity(
 	db: Queryable,
 	actor: AuthUser,
 	workspaceId: number,
-	eventType: "create" | "update" | "move" | "reorder" | "delete",
+	eventType:
+		| "create"
+		| "update"
+		| "move"
+		| "reorder"
+		| "delete"
+		| "linear_ticket_created",
 	opts: {
 		cardId?: number | null;
 		fromColumnId?: number | null;
