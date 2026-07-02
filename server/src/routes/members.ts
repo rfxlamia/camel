@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import {
 	checkActorCanManage,
@@ -21,14 +21,19 @@ membersRouter.get("/members", async (req, res) => {
 	const role = await lookupMembership(req.user!.id, workspaceId);
 	if (!role) return res.status(404).json({ error: "Not found" });
 
-	const { rows } = await pool.query(
-		`SELECT u.id AS user_id, u.username, u.display_name, wm.role
-     FROM workspace_members wm
-     JOIN users u ON u.id = wm.user_id
-     WHERE wm.workspace_id = $1
-     ORDER BY wm.role, u.username`,
-		[workspaceId],
-	);
+	const rows = await db
+		.selectFrom("workspace_members as wm")
+		.innerJoin("users as u", "u.id", "wm.user_id")
+		.select([
+			"u.id as user_id",
+			"u.username",
+			"u.display_name",
+			"wm.role",
+		])
+		.where("wm.workspace_id", "=", workspaceId)
+		.orderBy("wm.role")
+		.orderBy("u.username")
+		.execute();
 
 	res.json({
 		members: rows.map((row) => ({
@@ -63,13 +68,13 @@ membersRouter.post("/members", async (req, res) => {
 		inviteRole === "admin" || inviteRole === "member" ? inviteRole : "member";
 
 	const normalizedUsername = username.trim().toLowerCase();
-	const targetRes = await pool.query(
-		"SELECT id, username, display_name FROM users WHERE username = $1",
-		[normalizedUsername],
-	);
+	const target = await db
+		.selectFrom("users")
+		.select(["id", "username", "display_name"])
+		.where("username", "=", normalizedUsername)
+		.executeTakeFirst();
 
-	if (targetRes.rows.length > 0) {
-		const target = targetRes.rows[0];
+	if (target) {
 		const existing = await lookupMembership(target.id, workspaceId);
 		if (existing) {
 			return res
@@ -83,25 +88,24 @@ membersRouter.post("/members", async (req, res) => {
 			return res.status(cap.status).json({ error: cap.error });
 		}
 
-		const existingRes = await pool.query(
-			"SELECT user_id FROM workspace_members WHERE workspace_id = $1",
-			[workspaceId],
-		);
-		const existingMemberIds = existingRes.rows.map(
-			(r: { user_id: number }) => r.user_id,
-		);
+		const existingRows = await db
+			.selectFrom("workspace_members")
+			.select("user_id")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		const existingMemberIds = existingRows.map((r) => r.user_id);
 
-		const wsRes = await pool.query(
-			"SELECT name FROM workspaces WHERE id = $1",
-			[workspaceId],
-		);
-		const workspaceName = wsRes.rows[0]?.name ?? "the workspace";
+		const ws = await db
+			.selectFrom("workspaces")
+			.select("name")
+			.where("id", "=", workspaceId)
+			.executeTakeFirst();
+		const workspaceName = ws?.name ?? "the workspace";
 
-		await pool.query(
-			`INSERT INTO workspace_members (workspace_id, user_id, role)
-       VALUES ($1, $2, $3)`,
-			[workspaceId, target.id, memberRole],
-		);
+		await db
+			.insertInto("workspace_members")
+			.values({ workspace_id: workspaceId, user_id: target.id, role: memberRole })
+			.execute();
 
 		domainBus.emit(EVENTS.MEMBER_JOINED, {
 			type: EVENTS.MEMBER_JOINED,
@@ -123,23 +127,28 @@ membersRouter.post("/members", async (req, res) => {
 		});
 	}
 
-	const dupInvite = await pool.query(
-		"SELECT id FROM workspace_invites WHERE workspace_id = $1 AND username = $2",
-		[workspaceId, normalizedUsername],
-	);
-	if (dupInvite.rows.length > 0) {
+	const dupInvite = await db
+		.selectFrom("workspace_invites")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("username", "=", normalizedUsername)
+		.executeTakeFirst();
+	if (dupInvite) {
 		return res
 			.status(409)
 			.json({ error: "Invite already pending for this username" });
 	}
 
-	const invRes = await pool.query(
-		`INSERT INTO workspace_invites (workspace_id, username, role, invited_by)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, workspace_id, username, role`,
-		[workspaceId, normalizedUsername, memberRole, req.user!.id],
-	);
-	const inv = invRes.rows[0];
+	const inv = await db
+		.insertInto("workspace_invites")
+		.values({
+			workspace_id: workspaceId,
+			username: normalizedUsername,
+			role: memberRole,
+			invited_by: req.user!.id,
+		})
+		.returning(["id", "workspace_id", "username", "role"])
+		.executeTakeFirstOrThrow();
 
 	res.status(201).json({
 		id: inv.id,
