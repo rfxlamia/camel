@@ -1,5 +1,6 @@
+import { sql } from "kysely";
 import type { AuthUser } from "../auth.js";
-import { pool } from "../db/pool.js";
+import { db, type DBExecutor } from "../db/kysely.js";
 import { clearPresence, publishEvent } from "../realtime.js";
 
 // ---- Workspace capacity -----------------------------------------------------
@@ -84,22 +85,25 @@ export function checkInviteeCap(membershipCount: number): WorkspaceCapacity {
 // ---- Membership helpers -----------------------------------------------------
 
 export async function countUserMemberships(userId: number): Promise<number> {
-	const { rows } = await pool.query(
-		"SELECT COUNT(*)::int AS n FROM workspace_members WHERE user_id = $1",
-		[userId],
-	);
-	return rows[0].n;
+	const result = await db
+		.selectFrom("workspace_members")
+		.select(sql<number>`count(*)::int`.as("n"))
+		.where("user_id", "=", userId)
+		.executeTakeFirstOrThrow();
+	return result.n;
 }
 
 export async function lookupMembership(
 	userId: number,
 	workspaceId: number,
 ): Promise<string | undefined> {
-	const { rows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, userId],
-	);
-	return rows[0]?.role as string | undefined;
+	const row = await db
+		.selectFrom("workspace_members")
+		.select("role")
+		.where("workspace_id", "=", workspaceId)
+		.where("user_id", "=", userId)
+		.executeTakeFirst();
+	return row?.role;
 }
 
 export function parseWorkspaceId(raw: string): number | null {
@@ -271,62 +275,56 @@ export const workspaceAccessService = createWorkspaceAccessService({
 		return role ? { userId: actorId, role } : null;
 	},
 	getWorkspace: async (workspaceId) => {
-		const { rows } = await pool.query(
-			"SELECT id, name FROM workspaces WHERE id = $1",
-			[workspaceId],
-		);
-		return rows[0]
-			? { id: rows[0].id as number, name: rows[0].name as string }
-			: null;
+		const row = await db
+			.selectFrom("workspaces")
+			.select(["id", "name"])
+			.where("id", "=", workspaceId)
+			.executeTakeFirst();
+		return row ?? null;
 	},
 	getTargetMembership: async (workspaceId, userId) => {
 		const role = await lookupMembership(userId, workspaceId);
 		return role ? { userId, role } : null;
 	},
 	removeMember: async (workspaceId, userId) => {
-		const client = await pool.connect();
-		try {
-			await client.query("BEGIN");
-			const { rows } = await client.query(
-				`DELETE FROM workspace_members
-					   WHERE workspace_id = $1 AND user_id = $2
-					   RETURNING user_id`,
-				[workspaceId, userId],
-			);
+		return db.transaction().execute(async (trx) => {
+			const deleted = await trx
+				.deleteFrom("workspace_members")
+				.where("workspace_id", "=", workspaceId)
+				.where("user_id", "=", userId)
+				.returning("user_id")
+				.executeTakeFirstOrThrow();
+
 			// Clear signable_assignee_id from columns that reference this member
-			await client.query(
-				"UPDATE columns SET signable_assignee_id = NULL WHERE workspace_id = $1 AND signable_assignee_id = $2",
-				[workspaceId, userId],
-			);
-			await client.query(
-				`DELETE FROM card_assignees ca
-				 USING cards c
-				 WHERE ca.card_id = c.id AND c.workspace_id = $1 AND ca.user_id = $2`,
-				[workspaceId, userId],
-			);
-			await client.query("COMMIT");
-			const { rows: userRows } = await pool.query(
-				"SELECT username FROM users WHERE id = $1",
-				[rows[0].user_id],
-			);
-			return {
-				userId: rows[0].user_id as number,
-				username: userRows[0].username as string,
-			};
-		} catch (err) {
-			await client.query("ROLLBACK");
-			throw err;
-		} finally {
-			client.release();
-		}
+			await trx
+				.updateTable("columns")
+				.set({ signable_assignee_id: null })
+				.where("workspace_id", "=", workspaceId)
+				.where("signable_assignee_id", "=", userId)
+				.execute();
+
+			await trx
+				.deleteFrom("card_assignees")
+				.using("cards")
+				.whereRef("card_assignees.card_id", "=", "cards.id")
+				.where("cards.workspace_id", "=", workspaceId)
+				.where("card_assignees.user_id", "=", userId)
+				.execute();
+
+			const user = await trx
+				.selectFrom("users")
+				.select("username")
+				.where("id", "=", deleted.user_id)
+				.executeTakeFirstOrThrow();
+
+			return { userId: deleted.user_id, username: user.username as string };
+		});
 	},
 	publishEvent,
 	clearPresence,
 });
 
 // ---- Board helpers ----------------------------------------------------------
-
-export type Queryable = Pick<typeof pool, "query">;
 
 export type HumanColumn = {
 	id: number;
@@ -341,19 +339,30 @@ export type HumanColumn = {
 };
 
 export async function getHumanColumns(
-	db: Queryable,
+	dbExec: DBExecutor,
 	workspaceId: number,
 ): Promise<HumanColumn[]> {
-	const { rows } = await db.query(
-		`SELECT id, title, position, wip_limit, policy, is_done, is_signable, signable_assignee_id, color
-     FROM columns WHERE workspace_id = $1 AND board_id IS NULL ORDER BY position`,
-		[workspaceId],
-	);
-	return rows;
+	return dbExec
+		.selectFrom("columns")
+		.select([
+			"id",
+			"title",
+			"position",
+			"wip_limit",
+			"policy",
+			"is_done",
+			"is_signable",
+			"signable_assignee_id",
+			"color",
+		])
+		.where("workspace_id", "=", workspaceId)
+		.where("board_id", "is", null)
+		.orderBy("position")
+		.execute();
 }
 
 export async function recordActivity(
-	db: Queryable,
+	dbExec: DBExecutor,
 	actor: AuthUser,
 	workspaceId: number,
 	eventType:
@@ -370,17 +379,16 @@ export async function recordActivity(
 		payload?: Record<string, unknown>;
 	},
 ): Promise<void> {
-	await db.query(
-		`INSERT INTO card_events (card_id, from_column_id, to_column_id, actor_id, event_type, payload, workspace_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		[
-			opts.cardId ?? null,
-			opts.fromColumnId ?? null,
-			opts.toColumnId ?? null,
-			actor.id,
-			eventType,
-			JSON.stringify(opts.payload ?? {}),
-			workspaceId,
-		],
-	);
+	await dbExec
+		.insertInto("card_events")
+		.values({
+			card_id: opts.cardId ?? null,
+			from_column_id: opts.fromColumnId ?? null,
+			to_column_id: opts.toColumnId ?? null,
+			actor_id: actor.id,
+			event_type: eventType,
+			payload: JSON.stringify(opts.payload ?? {}),
+			workspace_id: workspaceId,
+		})
+		.execute();
 }

@@ -1,18 +1,12 @@
+import "dotenv/config";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Request, Response } from "express";
-
-vi.mock("../db/pool.js", () => ({
-	pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
-}));
-
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 import {
 	sseNotificationHandler,
 	pushNotificationToUser,
 	pushReadAllEvent,
 } from "./sse.js";
-
-const mockQuery = vi.mocked(pool.query);
 
 describe("pushNotificationToUser — user-keyed isolation", () => {
 	vi.useFakeTimers();
@@ -96,30 +90,6 @@ describe("pushNotificationToUser — user-keyed isolation", () => {
 		expect(writeWs2).not.toHaveBeenCalled();
 	});
 
-	it("replays missed notifications scoped to the connected workspace", async () => {
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 99 }], rowCount: 1 } as never);
-
-		const write = vi.fn();
-		let closeCb: () => void = () => {};
-		const req = {
-			user: { id: 1 },
-			params: { workspaceId: "7" },
-			headers: { "last-event-id": "10" },
-			on: (event: string, cb: () => void) => {
-				if (event === "close") closeCb = cb;
-			},
-		} as unknown as Request;
-		const res = { writeHead: vi.fn(), write } as unknown as Response;
-
-		await sseNotificationHandler(req, res);
-		closeHandlers.push(() => closeCb());
-
-		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining("workspace_id = $2"),
-			[1, 7, 10],
-		);
-	});
-
 	it("read-all SSE event only reaches clients on the same workspace", async () => {
 		const writeWs1 = vi.fn();
 		const writeWs2 = vi.fn();
@@ -156,3 +126,72 @@ describe("pushNotificationToUser — user-keyed isolation", () => {
 		expect(writeWs2).not.toHaveBeenCalled();
 	});
 });
+
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"pushNotificationToUser — missed-notification replay (real DB)",
+	() => {
+		it("replays missed notifications scoped to the connected workspace", async () => {
+			const user = await db
+				.insertInto("users")
+				.values({
+					username: `sse-replay-${Date.now()}`,
+					display_name: "SSE Replay Tester",
+					password_hash: "hashed",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({
+					name: "SSE Replay WS",
+					owner_user_id: user.id,
+					is_personal: false,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			const notification = await db
+				.insertInto("notifications")
+				.values({
+					user_id: user.id,
+					workspace_id: workspace.id,
+					type: "card_assigned",
+					title: "Assigned!",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+
+			try {
+				const write = vi.fn();
+				let closeCb: () => void = () => {};
+				const req = {
+					user: { id: user.id },
+					params: { workspaceId: String(workspace.id) },
+					headers: { "last-event-id": String(notification.id - 1) },
+					on: (event: string, cb: () => void) => {
+						if (event === "close") closeCb = cb;
+					},
+				} as unknown as Request;
+				const res = { writeHead: vi.fn(), write } as unknown as Response;
+
+				await sseNotificationHandler(req, res);
+				closeCb();
+
+				const replayCall = write.mock.calls.find((call) =>
+					String(call[0]).includes("notification.created"),
+				);
+				expect(replayCall).toBeDefined();
+				expect(replayCall?.[0]).toContain(`id: ${notification.id}`);
+			} finally {
+				await db
+					.deleteFrom("notifications")
+					.where("id", "=", notification.id)
+					.execute();
+				await db
+					.deleteFrom("workspaces")
+					.where("id", "=", workspace.id)
+					.execute();
+				await db.deleteFrom("users").where("id", "=", user.id).execute();
+			}
+		});
+	},
+);

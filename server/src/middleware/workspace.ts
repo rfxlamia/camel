@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation
@@ -22,11 +22,13 @@ async function lookupMembership(
 	userId: number,
 	workspaceId: number,
 ): Promise<string | undefined> {
-	const { rows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, userId],
-	);
-	return rows[0]?.role as string | undefined;
+	const row = await db
+		.selectFrom("workspace_members")
+		.select("role")
+		.where("workspace_id", "=", workspaceId)
+		.where("user_id", "=", userId)
+		.executeTakeFirst();
+	return row?.role;
 }
 
 /**

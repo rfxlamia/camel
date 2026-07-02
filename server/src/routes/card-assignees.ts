@@ -1,4 +1,4 @@
-import type { Queryable } from "./helpers.js";
+import type { DBExecutor } from "../db/kysely.js";
 
 export type CardAssignee = {
 	id: number;
@@ -21,28 +21,28 @@ export function diffAssigneeIds(
 }
 
 export async function loadCardAssigneesForCards(
-	db: Queryable,
+	dbExec: DBExecutor,
 	cardIds: number[],
 ): Promise<Map<number, CardAssignee[]>> {
 	const map = new Map<number, CardAssignee[]>();
 	if (cardIds.length === 0) return map;
 
-	const { rows } = await db.query(
-		`SELECT ca.card_id, u.id, u.username, u.display_name
-     FROM card_assignees ca
-     JOIN users u ON u.id = ca.user_id
-     WHERE ca.card_id = ANY($1::int[])
-     ORDER BY ca.card_id, u.display_name`,
-		[cardIds],
-	);
+	const rows = await dbExec
+		.selectFrom("card_assignees as ca")
+		.innerJoin("users as u", "u.id", "ca.user_id")
+		.select(["ca.card_id", "u.id", "u.username", "u.display_name"])
+		.where("ca.card_id", "in", cardIds)
+		.orderBy("ca.card_id")
+		.orderBy("u.display_name")
+		.execute();
 
 	for (const row of rows) {
-		const cardId = row.card_id as number;
+		const cardId = row.card_id;
 		const list = map.get(cardId) ?? [];
 		list.push({
-			id: row.id as number,
+			id: row.id,
 			username: row.username as string,
-			displayName: row.display_name as string,
+			displayName: row.display_name,
 		});
 		map.set(cardId, list);
 	}
@@ -50,50 +50,53 @@ export async function loadCardAssigneesForCards(
 }
 
 export async function getCardAssigneeIds(
-	db: Queryable,
+	dbExec: DBExecutor,
 	cardId: number,
 ): Promise<number[]> {
-	const { rows } = await db.query(
-		`SELECT user_id FROM card_assignees WHERE card_id = $1 ORDER BY user_id`,
-		[cardId],
-	);
-	return rows.map((r) => r.user_id as number);
+	const rows = await dbExec
+		.selectFrom("card_assignees")
+		.select("user_id")
+		.where("card_id", "=", cardId)
+		.orderBy("user_id")
+		.execute();
+	return rows.map((r) => r.user_id);
 }
 
 /** Returns true when a new row was inserted (assignee was not already on the card). */
 export async function addCardAssignee(
-	db: Queryable,
+	dbExec: DBExecutor,
 	cardId: number,
 	userId: number,
 ): Promise<boolean> {
-	const { rowCount } = await db.query(
-		`INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)
-     ON CONFLICT DO NOTHING`,
-		[cardId, userId],
-	);
-	return (rowCount ?? 0) > 0;
+	const result = await dbExec
+		.insertInto("card_assignees")
+		.values({ card_id: cardId, user_id: userId })
+		.onConflict((oc) => oc.doNothing())
+		.executeTakeFirst();
+	return Number(result.numInsertedOrUpdatedRows ?? 0) > 0;
 }
 
 export async function syncCardAssignees(
-	db: Queryable,
+	dbExec: DBExecutor,
 	cardId: number,
 	assigneeIds: number[],
 ): Promise<{ prev: number[]; added: number[]; removed: number[] }> {
-	const prev = await getCardAssigneeIds(db, cardId);
+	const prev = await getCardAssigneeIds(dbExec, cardId);
 	const { added, removed } = diffAssigneeIds(prev, assigneeIds);
 
 	if (removed.length > 0) {
-		await db.query(
-			`DELETE FROM card_assignees WHERE card_id = $1 AND user_id = ANY($2::int[])`,
-			[cardId, removed],
-		);
+		await dbExec
+			.deleteFrom("card_assignees")
+			.where("card_id", "=", cardId)
+			.where("user_id", "in", removed)
+			.execute();
 	}
 	for (const userId of added) {
-		await db.query(
-			`INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-			[cardId, userId],
-		);
+		await dbExec
+			.insertInto("card_assignees")
+			.values({ card_id: cardId, user_id: userId })
+			.onConflict((oc) => oc.doNothing())
+			.execute();
 	}
 
 	return { prev, added, removed };

@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { pool } from "../db/pool.js";
+import { sql } from "kysely";
+import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { loadCardAssigneesForCards } from "./card-assignees.js";
 import { getHumanColumns, type HumanColumn } from "./helpers.js";
@@ -62,15 +63,32 @@ export const boardRouter = Router({ mergeParams: true });
 boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
-	const columns = await getHumanColumns(pool, workspaceId);
-	const cards = await pool.query(
-		`SELECT c.id, c.column_id, c.title, c.description, c.position, c.version,
-            c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date
-     FROM cards c
-     WHERE c.workspace_id = $1 AND c.deleted_at IS NULL ORDER BY c.position`,
-		[workspaceId],
-	);
-	const cardIds = cards.rows.map((c) => c.id as number);
-	const assigneesByCard = await loadCardAssigneesForCards(pool, cardIds);
-	res.json(buildBoardResponse(columns, cards.rows, assigneesByCard));
+	const columns = await getHumanColumns(db, workspaceId);
+	const cardRows = await db
+		.selectFrom("cards")
+		.select([
+			"id",
+			"column_id",
+			"title",
+			"description",
+			"position",
+			"version",
+			"created_at",
+			"started_at",
+			"done_at",
+			sql<string | null>`due_date::text`.as("due_date"),
+		])
+		.where("workspace_id", "=", workspaceId)
+		.where("deleted_at", "is", null)
+		.orderBy("position")
+		.execute();
+	const cards = cardRows.map((c) => ({
+		...c,
+		created_at: c.created_at.toISOString(),
+		started_at: c.started_at?.toISOString() ?? null,
+		done_at: c.done_at?.toISOString() ?? null,
+	}));
+	const cardIds = cards.map((c) => c.id);
+	const assigneesByCard = await loadCardAssigneesForCards(db, cardIds);
+	res.json(buildBoardResponse(columns, cards, assigneesByCard));
 });

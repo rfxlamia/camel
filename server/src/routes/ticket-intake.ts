@@ -21,7 +21,7 @@ import {
 	recordSubmitSuccess,
 } from "../agent/ticket-intake/rate-limits.js";
 import { executeWithRetry } from "../agent/ticket-intake/retry.js";
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
 import { lookupMembership, recordActivity } from "./helpers.js";
 
@@ -118,7 +118,7 @@ async function runSubmitInBackground(
 		);
 
 		await recordSubmitSuccess(user.id);
-		await recordActivity(pool, user, workspaceId, "linear_ticket_created", {
+		await recordActivity(db, user, workspaceId, "linear_ticket_created", {
 			cardId: body.cardId ?? null,
 			payload: {
 				issueUrl: result.issueUrl,
@@ -351,7 +351,7 @@ ticketIntakeRouter.get(
 			return res.status(404).json({ error: "Not found" });
 		}
 
-		const tickets = await getTicketHistory(pool, workspaceId, cardId);
+		const tickets = await getTicketHistory(db, workspaceId, cardId);
 		return res.json({ tickets });
 	},
 );

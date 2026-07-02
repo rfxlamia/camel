@@ -9,7 +9,7 @@
 		"start": "node dist/index.js",
 		"test": "vitest run --silent",
 		"test:integration": "RUN_LLM_IT=1 vitest run src/agent/pipeline.integration.test.ts",
-		"test:integration:routes": "RUN_INTEGRATION=1 vitest run src/routes.integration.test.ts",
+		"test:integration:routes": "RUN_INTEGRATION=1 vitest run --no-file-parallelism",
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit",
 		"db:migrate": "tsx src/db/migrate.ts",
