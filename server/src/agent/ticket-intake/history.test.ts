@@ -76,11 +76,17 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("getTicketHistory", () => {
 
 		await recordActivity(db, actor, workspaceId, "linear_ticket_created", {
 			cardId,
-			payload: { title: "Old ticket", issueUrl: "https://linear.app/issue/old" },
+			payload: {
+				title: "Old ticket",
+				issueUrl: "https://linear.app/issue/old",
+			},
 		});
 		await recordActivity(db, actor, workspaceId, "linear_ticket_created", {
 			cardId,
-			payload: { title: "New ticket", issueUrl: "https://linear.app/issue/new" },
+			payload: {
+				title: "New ticket",
+				issueUrl: "https://linear.app/issue/new",
+			},
 		});
 
 		const result = await getTicketHistory(db, workspaceId, cardId);
@@ -96,6 +102,43 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("getTicketHistory", () => {
 		const result = await getTicketHistory(db, workspaceId, cardId);
 
 		expect(result).toEqual([]);
+	});
+
+	it("breaks created_at ties by id desc, newest insert first", async () => {
+		const { workspaceId, cardId, actor } = await makeFixtures();
+
+		// A single multi-row INSERT shares one now() evaluation (STABLE, not
+		// VOLATILE), so these rows get identical created_at — only the id
+		// tiebreak can keep "most recent first" deterministic.
+		await db
+			.insertInto("card_events")
+			.values([
+				{
+					card_id: cardId,
+					actor_id: actor.id,
+					event_type: "linear_ticket_created",
+					payload: JSON.stringify({
+						title: "First",
+						issueUrl: "https://linear.app/issue/1",
+					}),
+					workspace_id: workspaceId,
+				},
+				{
+					card_id: cardId,
+					actor_id: actor.id,
+					event_type: "linear_ticket_created",
+					payload: JSON.stringify({
+						title: "Second",
+						issueUrl: "https://linear.app/issue/2",
+					}),
+					workspace_id: workspaceId,
+				},
+			])
+			.execute();
+
+		const result = await getTicketHistory(db, workspaceId, cardId);
+
+		expect(result.map((r) => r.title)).toEqual(["Second", "First"]);
 	});
 });
 

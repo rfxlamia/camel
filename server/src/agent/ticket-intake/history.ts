@@ -18,6 +18,7 @@ export async function getTicketHistory(
 		.where("card_id", "=", cardId)
 		.where("event_type", "=", "linear_ticket_created")
 		.orderBy("created_at", "desc")
+		.orderBy("id", "desc")
 		.execute();
 
 	return rows.map((row) => {
