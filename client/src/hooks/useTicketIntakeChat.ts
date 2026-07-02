@@ -34,6 +34,10 @@ export type TicketIntakePrefill = {
 	userAction?: string;
 };
 
+// Keep in sync with server/src/routes/ticket-intake.ts CLASSIFIER_QUESTION
+export const CLASSIFIER_QUESTION =
+	"What kind of issue is this — a bug, a feature request, or an improvement?";
+
 export type TicketIntakeOpenConfig =
 	| {
 			variant: "card";
@@ -189,6 +193,10 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		processedEventCountRef.current = 0;
 	}, []);
 
+	const seedClassifier = useCallback(() => {
+		setMessages([{ role: "assistant", content: CLASSIFIER_QUESTION }]);
+	}, []);
+
 	const open = useCallback(
 		(openConfig: TicketIntakeOpenConfig) => {
 			resetSession();
@@ -196,16 +204,20 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 				variant: openConfig.variant,
 				prefill: openConfigToPrefill(openConfig),
 			});
+			if (openConfig.variant !== "autoError") {
+				seedClassifier();
+			}
 			setPanelOpen(true);
 		},
-		[resetSession],
+		[resetSession, seedClassifier],
 	);
 
 	const openPanel = useCallback(() => {
 		resetSession();
 		setActiveSession(null);
+		seedClassifier();
 		setPanelOpen(true);
-	}, [resetSession]);
+	}, [resetSession, seedClassifier]);
 
 	const close = useCallback(() => {
 		setPanelOpen(false);
@@ -247,7 +259,8 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 			}
 
 			const priorMessages = messagesRef.current;
-			const isFirstTurn = !priorMessages.some((m) => m.role === "user");
+			const isFirstUserMessage = !priorMessages.some((m) => m.role === "user");
+			const isFirstApiTurn = priorMessages.length === 0;
 			const nextMessages: TicketIntakeMessage[] = [
 				...priorMessages,
 				{ role: "user", content: trimmed },
@@ -256,9 +269,9 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 			setIsSending(true);
 			setSendError(null);
 
-			const conversationHistory = isFirstTurn
+			const conversationHistory = isFirstApiTurn
 				? undefined
-				: nextMessages.map((m) => ({
+				: priorMessages.map((m) => ({
 						role: m.role,
 						content: m.content,
 					}));
@@ -266,14 +279,14 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 			try {
 				const response = await api.ticketIntake.sendMessage(workspaceId, {
 					message: outbound,
-					isFirstTurn,
-					...(effectiveVariant === "autoError" && isFirstTurn
+					isFirstTurn: isFirstApiTurn,
+					...(effectiveVariant === "autoError" && isFirstApiTurn
 						? { autoError: true }
 						: {}),
 					conversationHistory,
 				});
 
-				if (!isFirstTurn) {
+				if (!isFirstUserMessage) {
 					applyChatCooldown();
 				}
 

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TicketIntakeDraft } from "../api";
 import { ApiError } from "../api";
 import type { TicketIntakeResultEvent } from "./useTicketIntakeChat";
+import { CLASSIFIER_QUESTION } from "./useTicketIntakeChat";
 
 const mockSendMessage = vi.fn();
 const mockSubmit = vi.fn();
@@ -49,15 +50,57 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 		vi.clearAllMocks();
 	});
 
-	it("asks classifier on first turn and keeps preview gated", async () => {
+	it("seeds classifier when openPanel is called", async () => {
+		const { useTicketIntakeChat } = await import("./useTicketIntakeChat");
+		const { result } = renderHook(() =>
+			useTicketIntakeChat({ workspaceId: 1, variant: "global" }),
+		);
+
+		act(() => {
+			result.current.openPanel();
+		});
+
+		expect(result.current.messages).toEqual([
+			{ role: "assistant", content: CLASSIFIER_QUESTION },
+		]);
+		expect(mockSendMessage).not.toHaveBeenCalled();
+	});
+
+	it("seeds classifier when open is called with card variant", async () => {
+		const { useTicketIntakeChat } = await import("./useTicketIntakeChat");
+		const { result } = renderHook(() =>
+			useTicketIntakeChat({ workspaceId: 1, variant: "global" }),
+		);
+
+		act(() => {
+			result.current.open({
+				variant: "card",
+				prefill: {
+					title: "Broken card",
+					description: "Does not save",
+					cardId: 5,
+				},
+			});
+		});
+
+		expect(result.current.messages).toEqual([
+			{ role: "assistant", content: CLASSIFIER_QUESTION },
+		]);
+	});
+
+	it("sends first user message with classifier in history after seed", async () => {
 		mockSendMessage.mockResolvedValueOnce({
 			ready: false,
-			question: "Is this a bug, feature, or improvement?",
+			question: "Can you describe what happened?",
 		});
 		const { useTicketIntakeChat } = await import("./useTicketIntakeChat");
 		const { result } = renderHook(() =>
 			useTicketIntakeChat({ workspaceId: 1, variant: "global" }),
 		);
+
+		act(() => {
+			result.current.openPanel();
+		});
 
 		await act(async () => {
 			await result.current.sendMessage("kanban-nya aneh");
@@ -65,15 +108,15 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 
 		expect(mockSendMessage).toHaveBeenCalledWith(1, {
 			message: "kanban-nya aneh",
-			isFirstTurn: true,
-			conversationHistory: undefined,
+			isFirstTurn: false,
+			conversationHistory: [
+				{ role: "assistant", content: CLASSIFIER_QUESTION },
+			],
 		});
 		expect(result.current.messages).toEqual([
+			{ role: "assistant", content: CLASSIFIER_QUESTION },
 			{ role: "user", content: "kanban-nya aneh" },
-			{
-				role: "assistant",
-				content: "Is this a bug, feature, or improvement?",
-			},
+			{ role: "assistant", content: "Can you describe what happened?" },
 		]);
 		expect(result.current.previewReady).toBe(false);
 		expect(result.current.draft).toBeNull();
@@ -84,13 +127,17 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 		mockSendMessage
 			.mockResolvedValueOnce({
 				ready: false,
-				question: "Is this a bug, feature, or improvement?",
+				question: "Can you describe what happened?",
 			})
 			.mockResolvedValueOnce({ ready: true, draft: readyDraft });
 		const { useTicketIntakeChat } = await import("./useTicketIntakeChat");
 		const { result } = renderHook(() =>
 			useTicketIntakeChat({ workspaceId: 1, variant: "global" }),
 		);
+
+		act(() => {
+			result.current.openPanel();
+		});
 
 		await act(async () => {
 			await result.current.sendMessage("kanban-nya aneh");
@@ -103,12 +150,9 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 			message: "bug",
 			isFirstTurn: false,
 			conversationHistory: [
+				{ role: "assistant", content: CLASSIFIER_QUESTION },
 				{ role: "user", content: "kanban-nya aneh" },
-				{
-					role: "assistant",
-					content: "Is this a bug, feature, or improvement?",
-				},
-				{ role: "user", content: "bug" },
+				{ role: "assistant", content: "Can you describe what happened?" },
 			],
 		});
 		expect(result.current.previewReady).toBe(true);
