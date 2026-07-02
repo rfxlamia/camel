@@ -10,6 +10,7 @@ import {
 	useState,
 } from "react";
 import { ApiError, api } from "../api";
+import type { TicketIntakeResultEvent } from "../hooks/useTicketIntakeChat";
 import { shouldClearOnWorkspaceChange } from "../lib/agentStream";
 import {
 	chooseInitialWorkspace,
@@ -25,7 +26,6 @@ import {
 	persistRemindedInviteIds,
 	readRemindedInviteIds,
 } from "../lib/workspaceSwitcher";
-import type { TicketIntakeResultEvent } from "../hooks/useTicketIntakeChat";
 import type {
 	ActivityEvent,
 	AgentEvent,
@@ -584,11 +584,14 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const deleteCard = useCallback(
 		async (id: number) => {
 			if (activeWorkspaceId === null) return;
-			await api.deleteCard(activeWorkspaceId, id);
+			const current = columns
+				?.flatMap((col) => col.cards)
+				.find((c) => c.id === id);
+			await api.deleteCard(activeWorkspaceId, id, current?.version);
 			cancelScheduledRefresh();
 			await refresh();
 		},
-		[activeWorkspaceId, refresh, cancelScheduledRefresh],
+		[activeWorkspaceId, columns, refresh, cancelScheduledRefresh],
 	);
 
 	const logout = useCallback(async () => {

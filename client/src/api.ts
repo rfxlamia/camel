@@ -1,5 +1,5 @@
-import { publishAutoError } from "./lib/ticketIntakeBus";
 import type { TemplateColumn } from "./lib/templates";
+import { publishAutoError } from "./lib/ticketIntakeBus";
 import type {
 	ActivityEvent,
 	AgentArtifact,
@@ -165,9 +165,10 @@ export const api = {
 			},
 			{ userInitiated: true, userAction: "Save" },
 		),
-	deleteCard: (workspaceId: number, id: number) =>
+	deleteCard: (workspaceId: number, id: number, version?: number) =>
 		request<void>(`/workspaces/${workspaceId}/cards/${id}`, {
 			method: "DELETE",
+			body: JSON.stringify({ version }),
 		}),
 	getCardActivity: (workspaceId: number, id: number) =>
 		request<{ events: ActivityEvent[] }>(
@@ -438,8 +439,7 @@ export const api = {
 
 	// ---- Ticket intake ----
 	ticketIntake: {
-		getConfig: () =>
-			request<{ enabled: boolean }>("/ticket-intake/config"),
+		getConfig: () => request<{ enabled: boolean }>("/ticket-intake/config"),
 		getChatLimit: (workspaceId: number) =>
 			request<{ isLocked: boolean; retryAfterMs?: number }>(
 				`/workspaces/${workspaceId}/ticket-intake/chat-limit`,

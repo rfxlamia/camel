@@ -7,7 +7,7 @@ import {
 	rebalance,
 } from "../core/position.js";
 import { checkWipLimit } from "../core/wip.js";
-import { db, type DBExecutor } from "../db/kysely.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
@@ -18,10 +18,10 @@ import {
 } from "../validators/input-length.js";
 import {
 	addCardAssignee,
+	type CardAssignee,
 	getCardAssigneeIds,
 	loadCardAssigneesForCards,
 	syncCardAssignees,
-	type CardAssignee,
 } from "./card-assignees.js";
 import {
 	createScopedBoardService,
@@ -33,19 +33,21 @@ import {
 export const cardsRouter = Router({ mergeParams: true });
 
 function selectFullCard(dbExec: DBExecutor) {
-	return dbExec.selectFrom("cards as c").select([
-		"c.id",
-		"c.workspace_id",
-		"c.column_id",
-		"c.title",
-		"c.description",
-		"c.position",
-		"c.version",
-		"c.created_at",
-		"c.started_at",
-		"c.done_at",
-		sql<string | null>`c.due_date::text`.as("due_date"),
-	]);
+	return dbExec
+		.selectFrom("cards as c")
+		.select([
+			"c.id",
+			"c.workspace_id",
+			"c.column_id",
+			"c.title",
+			"c.description",
+			"c.position",
+			"c.version",
+			"c.created_at",
+			"c.started_at",
+			"c.done_at",
+			sql<string | null>`c.due_date::text`.as("due_date"),
+		]);
 }
 
 type FullCardRow = {
@@ -295,7 +297,9 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 			return { kind: "wip" };
 		}
 		const autoAssigneeId =
-			col.is_signable && col.signable_assignee_id ? col.signable_assignee_id : null;
+			col.is_signable && col.signable_assignee_id
+				? col.signable_assignee_id
+				: null;
 
 		const inserted = await trx
 			.insertInto("cards")
@@ -593,23 +597,55 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	if (Number.isNaN(id)) {
 		return res.status(400).json({ error: "invalid card id" });
 	}
-	const deleted = await db.transaction().execute(async (trx) => {
+	const { version } = (req.body ?? {}) as { version?: unknown };
+	if (version !== undefined && !Number.isInteger(version)) {
+		return res.status(400).json({ error: "version must be an integer" });
+	}
+
+	type DeleteResult =
+		| { kind: "not_found" }
+		| { kind: "conflict" }
+		| { kind: "ok"; title: string; column_id: number };
+
+	const result: DeleteResult = await db.transaction().execute(async (trx) => {
 		const row = await trx
 			.updateTable("cards")
 			.set({ deleted_at: sql`now()` })
 			.where("id", "=", id)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
+			.$if(version !== undefined, (qb) =>
+				qb.where("version", "=", version as number),
+			)
 			.returning(["title", "column_id"])
 			.executeTakeFirst();
-		if (!row) return null;
+		if (!row) {
+			const current = await trx
+				.selectFrom("cards")
+				.select("id")
+				.where("id", "=", id)
+				.where("workspace_id", "=", workspaceId)
+				.where("deleted_at", "is", null)
+				.executeTakeFirst();
+			return current ? { kind: "conflict" } : { kind: "not_found" };
+		}
 		await recordActivity(trx, req.user!, workspaceId, "delete", {
 			fromColumnId: row.column_id,
 			payload: { cardTitle: row.title },
 		});
-		return row;
+		return { kind: "ok", title: row.title, column_id: row.column_id };
 	});
-	if (!deleted) return res.status(404).json({ error: "card not found" });
+
+	if (result.kind === "not_found") {
+		return res.status(404).json({ error: "card not found" });
+	}
+	if (result.kind === "conflict") {
+		return res.status(409).json({
+			error: "Someone else updated this card first.",
+			code: "version_conflict",
+		});
+	}
+
 	await publishEvent(workspaceId, {
 		type: "card.deleted",
 		actor: req.user!,
@@ -665,7 +701,14 @@ cardsRouter.post(
 		const result: MoveResult = await db.transaction().execute(async (trx) => {
 			const card = await trx
 				.selectFrom("cards")
-				.select(["id", "column_id", "title", "version", "started_at", "done_at"])
+				.select([
+					"id",
+					"column_id",
+					"title",
+					"version",
+					"started_at",
+					"done_at",
+				])
 				.where("id", "=", cardId)
 				.where("workspace_id", "=", workspaceId)
 				.where("deleted_at", "is", null)

@@ -233,5 +233,60 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			);
 			expect(events.rows[0].n).toBe(0);
 		});
+
+		it("rejects a stale version with 409 instead of deleting", async () => {
+			const col = await pool.query(
+				`INSERT INTO columns (title, position, wip_limit, is_done, workspace_id)
+         VALUES ('Backlog', 1000, NULL, false, $1) RETURNING id`,
+				[WORKSPACE_ID],
+			);
+			const colId = col.rows[0].id;
+			const card = await pool.query(
+				`INSERT INTO cards (title, column_id, position, workspace_id)
+         VALUES ('to delete', $1, 1000, $2) RETURNING id`,
+				[colId, WORKSPACE_ID],
+			);
+			const cardId = card.rows[0].id;
+
+			const res = await request(app)
+				.delete(`/api/workspaces/${WORKSPACE_ID}/cards/${cardId}`)
+				.send({ version: 999 });
+
+			expect(res.status).toBe(409);
+			expect(res.body.code).toBe("version_conflict");
+
+			const row = await pool.query(
+				"SELECT deleted_at FROM cards WHERE id = $1",
+				[cardId],
+			);
+			expect(row.rows[0].deleted_at).toBeNull();
+		});
+
+		it("deletes when the correct version is sent", async () => {
+			const col = await pool.query(
+				`INSERT INTO columns (title, position, wip_limit, is_done, workspace_id)
+         VALUES ('Backlog', 1000, NULL, false, $1) RETURNING id`,
+				[WORKSPACE_ID],
+			);
+			const colId = col.rows[0].id;
+			const card = await pool.query(
+				`INSERT INTO cards (title, column_id, position, workspace_id)
+         VALUES ('to delete', $1, 1000, $2) RETURNING id`,
+				[colId, WORKSPACE_ID],
+			);
+			const cardId = card.rows[0].id;
+
+			const res = await request(app)
+				.delete(`/api/workspaces/${WORKSPACE_ID}/cards/${cardId}`)
+				.send({ version: 1 });
+
+			expect(res.status).toBe(204);
+
+			const row = await pool.query(
+				"SELECT deleted_at FROM cards WHERE id = $1",
+				[cardId],
+			);
+			expect(row.rows[0].deleted_at).not.toBeNull();
+		});
 	},
 );
