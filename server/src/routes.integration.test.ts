@@ -440,5 +440,39 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 
 			expect(res.status).toBe(404);
 		});
+
+		it("enforces single Done column under concurrent isDone=true requests", async () => {
+			const cols = await pool.query(
+				`INSERT INTO columns (title, position, wip_limit, is_done, workspace_id)
+         VALUES
+           ('Race A', 4000, NULL, false, 1),
+           ('Race B', 5000, NULL, false, 1),
+           ('Race C', 6000, NULL, false, 1),
+           ('Race D', 7000, NULL, false, 1),
+           ('Race E', 8000, NULL, false, 1)
+         RETURNING id`,
+			);
+			const raceColIds: number[] = cols.rows.map((r) => r.id);
+
+			try {
+				const results = await Promise.all(
+					raceColIds.map((cid) =>
+						request(app)
+							.patch(`/api/workspaces/1/columns/${cid}`)
+							.send({ isDone: true }),
+					),
+				);
+				expect(results.every((r) => r.status === 200)).toBe(true);
+
+				const doneCols = await pool.query(
+					"SELECT id FROM columns WHERE workspace_id = 1 AND is_done = true",
+				);
+				expect(doneCols.rows).toHaveLength(1);
+			} finally {
+				await pool.query("DELETE FROM columns WHERE id = ANY($1)", [
+					raceColIds,
+				]);
+			}
+		});
 	},
 );

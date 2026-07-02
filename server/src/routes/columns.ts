@@ -264,6 +264,16 @@ columnsRouter.patch(
 		// Use transaction for isDone enforcement to ensure atomicity
 		if (isDone === true) {
 			const updated = await db.transaction().execute(async (trx) => {
+				// Lock the workspace so concurrent isDone=true requests serialize —
+				// otherwise two columns could both pass the exists check and both
+				// end up is_done=true (or clobber each other's unset).
+				await trx
+					.selectFrom("workspaces")
+					.select("id")
+					.where("id", "=", workspaceId)
+					.forUpdate()
+					.execute();
+
 				// First verify column exists
 				const exists = await trx
 					.selectFrom("columns")
