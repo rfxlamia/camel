@@ -33,15 +33,17 @@ function buildSubmitState(
 
 interface ChatPanelProps {
 	onClose: () => void;
+	chat?: ReturnType<typeof useTicketIntakeChat>;
 }
 
-export function ChatPanel({ onClose }: ChatPanelProps) {
+export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 	const { activeWorkspaceId, ticketIntakeEvents } = useBoard();
-	const chat = useTicketIntakeChat({
+	const internalChat = useTicketIntakeChat({
 		workspaceId: activeWorkspaceId,
 		variant: "global",
 		ticketIntakeEvents,
 	});
+	const chat = chatOverride ?? internalChat;
 
 	const {
 		messages,

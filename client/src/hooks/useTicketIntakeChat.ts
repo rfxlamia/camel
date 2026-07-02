@@ -34,6 +34,26 @@ export type TicketIntakePrefill = {
 	userAction?: string;
 };
 
+export type TicketIntakeOpenConfig =
+	| {
+			variant: "card";
+			prefill: {
+				title: string;
+				description: string;
+				cardId: number;
+				cardLink?: string;
+			};
+	  }
+	| {
+			variant: "autoError";
+			prefill: TicketIntakePrefill;
+	  };
+
+type ActiveSession = {
+	variant: "card" | "autoError";
+	prefill: TicketIntakePrefill;
+};
+
 export interface UseTicketIntakeChatConfig {
 	workspaceId: number | null;
 	variant: "global" | "card" | "autoError";
@@ -73,15 +93,34 @@ function sourceForVariant(
 	}
 }
 
+function openConfigToPrefill(
+	config: TicketIntakeOpenConfig,
+): TicketIntakePrefill {
+	if (config.variant === "card") {
+		return {
+			cardId: config.prefill.cardId,
+			cardTitle: config.prefill.title,
+			cardDescription: config.prefill.description,
+		};
+	}
+	return config.prefill;
+}
+
 export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 	const { workspaceId, variant, prefill, ticketIntakeEvents = [] } = config;
 
+	const [activeSession, setActiveSession] = useState<ActiveSession | null>(
+		null,
+	);
 	const [messages, setMessages] = useState<TicketIntakeMessage[]>([]);
 	const [draft, setDraft] = useState<TicketIntakeDraft | null>(null);
 	const [previewReady, setPreviewReady] = useState(false);
 	const [submitState, setSubmitState] =
 		useState<TicketIntakeSubmitState>("idle");
-	const [open, setOpen] = useState(variant === "autoError");
+	const [panelOpen, setPanelOpen] = useState(variant === "autoError");
+
+	const effectiveVariant = activeSession?.variant ?? variant;
+	const effectivePrefill = activeSession?.prefill ?? prefill;
 
 	const cardContextUsedRef = useRef(false);
 	const autoErrorInitRef = useRef(false);
@@ -89,15 +128,45 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 	const messagesRef = useRef(messages);
 	messagesRef.current = messages;
 
+	const resetSession = useCallback(() => {
+		setMessages([]);
+		setDraft(null);
+		setPreviewReady(false);
+		setSubmitState("idle");
+		cardContextUsedRef.current = false;
+		autoErrorInitRef.current = false;
+		processedEventCountRef.current = 0;
+	}, []);
+
+	const open = useCallback(
+		(openConfig: TicketIntakeOpenConfig) => {
+			resetSession();
+			setActiveSession({
+				variant: openConfig.variant,
+				prefill: openConfigToPrefill(openConfig),
+			});
+			setPanelOpen(true);
+		},
+		[resetSession],
+	);
+
+	const close = useCallback(() => {
+		setPanelOpen(false);
+		setActiveSession(null);
+		autoErrorInitRef.current = false;
+	}, []);
+
 	const submitBodyFromDraft = useCallback(
 		(currentDraft: TicketIntakeDraft) => ({
 			title: currentDraft.title ?? "",
 			description: currentDraft.description ?? "",
 			type: currentDraft.type ?? "Bug",
-			...(prefill?.cardId !== undefined ? { cardId: prefill.cardId } : {}),
-			source: sourceForVariant(variant),
+			...(effectivePrefill?.cardId !== undefined
+				? { cardId: effectivePrefill.cardId }
+				: {}),
+			source: sourceForVariant(effectiveVariant),
 		}),
-		[prefill?.cardId, variant],
+		[effectivePrefill?.cardId, effectiveVariant],
 	);
 
 	const sendMessage = useCallback(
@@ -108,8 +177,12 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 			if (!trimmed) return;
 
 			let outbound = trimmed;
-			if (variant === "card" && prefill && !cardContextUsedRef.current) {
-				const context = buildCardContext(prefill);
+			if (
+				effectiveVariant === "card" &&
+				effectivePrefill &&
+				!cardContextUsedRef.current
+			) {
+				const context = buildCardContext(effectivePrefill);
 				if (context) {
 					outbound = `${context}\n\n${trimmed}`;
 					cardContextUsedRef.current = true;
@@ -135,7 +208,7 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 				const response = await api.ticketIntake.sendMessage(workspaceId, {
 					message: outbound,
 					isFirstTurn,
-					...(variant === "autoError" && isFirstTurn
+					...(effectiveVariant === "autoError" && isFirstTurn
 						? { autoError: true }
 						: {}),
 					conversationHistory,
@@ -157,16 +230,40 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 				setMessages(priorMessages);
 			}
 		},
-		[workspaceId, variant, prefill],
+		[workspaceId, effectiveVariant, effectivePrefill],
 	);
 
 	useEffect(() => {
-		if (variant !== "autoError" || !workspaceId || !prefill) return;
+		if (effectiveVariant !== "autoError" || !workspaceId || !effectivePrefill) {
+			return;
+		}
+		if (!panelOpen) return;
 		if (autoErrorInitRef.current) return;
 		autoErrorInitRef.current = true;
-		setOpen(true);
+		void sendMessage(buildAutoErrorMessage(effectivePrefill));
+	}, [
+		effectiveVariant,
+		workspaceId,
+		effectivePrefill,
+		panelOpen,
+		sendMessage,
+	]);
+
+	useEffect(() => {
+		if (variant !== "autoError" || activeSession !== null) return;
+		if (!workspaceId || !prefill) return;
+		if (!panelOpen) return;
+		if (autoErrorInitRef.current) return;
+		autoErrorInitRef.current = true;
 		void sendMessage(buildAutoErrorMessage(prefill));
-	}, [variant, workspaceId, prefill, sendMessage]);
+	}, [
+		variant,
+		activeSession,
+		workspaceId,
+		prefill,
+		panelOpen,
+		sendMessage,
+	]);
 
 	useEffect(() => {
 		if (submitState !== "submitting") return;
@@ -231,6 +328,10 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		confirm,
 		editDraft,
 		resubmit,
-		...(variant === "autoError" ? { open } : {}),
+		open,
+		close,
+		panelOpen,
+		activeVariant: effectiveVariant,
+		activePrefill: effectivePrefill,
 	};
 }

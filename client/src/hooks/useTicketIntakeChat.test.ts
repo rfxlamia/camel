@@ -145,7 +145,7 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 		expect(result.current.draft?.type).toBe("Bug");
 		expect(result.current.submitState).toBe("idle");
 		expect(mockSubmit).not.toHaveBeenCalled();
-		expect(result.current.open).toBe(true);
+		expect(result.current.panelOpen).toBe(true);
 	});
 
 	it("editDraft updates the in-memory draft while preview is ready", async () => {

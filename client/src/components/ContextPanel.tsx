@@ -17,16 +17,6 @@ import { AssigneePicker } from "./AssigneePicker";
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
 
-type TicketIntakeOpen = (config: {
-	variant: "card";
-	prefill: {
-		title: string;
-		description: string;
-		cardId: number;
-		cardLink: string;
-	};
-}) => void;
-
 function issueIdentifierFromUrl(issueUrl: string): string {
 	const segment = issueUrl.split("/").pop();
 	return segment ?? issueUrl;
@@ -95,9 +85,7 @@ function DetailsSection({
 		workspaceId: activeWorkspaceId,
 		variant: "card",
 	});
-	const openTicketIntake = (
-		ticketIntakeChat as typeof ticketIntakeChat & { open: TicketIntakeOpen }
-	).open;
+	const { open: openTicketIntake } = ticketIntakeChat;
 
 	// Workspace members populate the assignee picker.
 	useEffect(() => {
