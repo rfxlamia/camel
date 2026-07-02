@@ -162,10 +162,9 @@ beforeAll(async () => {
 
 afterEach(async () => {
 	// Clean per-test data but keep base fixtures
-	await pool.query("DELETE FROM card_events");
-	await pool.query("DELETE FROM cards");
-	// Reset card sequence
-	await pool.query("ALTER SEQUENCE cards_id_seq RESTART WITH 1");
+	// Use TRUNCATE CASCADE to atomically reset both table data and sequence,
+	// avoiding stale-sequence collisions when other test files leave rows.
+	await pool.query("TRUNCATE cards, card_events RESTART IDENTITY CASCADE");
 	vi.clearAllMocks();
 });
 
@@ -285,7 +284,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		// ----- Same-column reorder -----
 
-		it("does NOT record activity for same-column reorder", async () => {
+		it("records reorder activity for same-column reorder", async () => {
 			await insertCard("G-1", col1Id, 1000);
 			await insertCard("G-2", col1Id, 2000);
 			const cardId = await insertCard("Card G", col1Id, 1500);
@@ -297,12 +296,16 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(res.status).toBe(200);
 			expect(res.body.columnId).toBe(col1Id);
 
-			// No activity log for same-column moves
+			// Same-column moves are recorded as "reorder" events
 			const events = await pool.query(
 				"SELECT * FROM card_events WHERE card_id = $1",
 				[cardId],
 			);
-			expect(events.rows).toHaveLength(0);
+			expect(events.rows).toHaveLength(1);
+			expect(events.rows[0].event_type).toBe("reorder");
+			expect(events.rows[0].actor_id).toBe(mockTestUser.id);
+			expect(events.rows[0].workspace_id).toBe(1);
+			expect(events.rows[0].payload).toHaveProperty("cardTitle", "Card G");
 		});
 
 		// ----- Edge cases -----
