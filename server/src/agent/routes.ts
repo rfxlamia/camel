@@ -442,6 +442,10 @@ const realDeps: AgentBoardServiceDeps = {
 		}));
 	},
 
+	// Intentionally does NOT call recordActivity()/write card_events (R6, see
+	// service.test.ts). Agent-created cards get a clickable board handle only;
+	// the human Activity Feed stays reserved for user-driven actions. Also, no
+	// actor is available here — runPipeline is fire-and-forget with no req.user.
 	insertCard: async (data) => {
 		await db
 			.insertInto("cards")
