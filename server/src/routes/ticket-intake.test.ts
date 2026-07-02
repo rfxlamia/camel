@@ -56,6 +56,10 @@ vi.mock("../agent/ticket-intake/llm.js", () => ({
 	extractTicketFields: (...args: unknown[]) =>
 		mockExtractTicketFields(...args),
 }));
+const mockGetTicketHistory = vi.fn();
+vi.mock("../agent/ticket-intake/history.js", () => ({
+	getTicketHistory: (...args: unknown[]) => mockGetTicketHistory(...args),
+}));
 vi.mock("../agent/ticket-intake/completeness.js", () => ({
 	checkCompleteness: vi.fn(
 		(extraction: { title: string; expected: string; actual: string }) => {
@@ -317,5 +321,55 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 
 		expect(res.status).toBe(409);
 		expect(mockCreateLinearIssue).not.toHaveBeenCalled();
+	});
+});
+
+describe("GET /api/workspaces/:workspaceId/ticket-intake/history", () => {
+	beforeEach(() => {
+		mockLookupMembership.mockReset().mockResolvedValue("member");
+		mockGetTicketHistory.mockReset();
+	});
+
+	it("returns 2 entries for a card with recorded history", async () => {
+		mockGetTicketHistory.mockResolvedValueOnce([
+			{
+				title: "T1",
+				issueUrl: "https://linear.app/cam/issue/CAM-1",
+				createdAt: "2026-07-01T00:00:00Z",
+			},
+			{
+				title: "T2",
+				issueUrl: "https://linear.app/cam/issue/CAM-2",
+				createdAt: "2026-06-30T00:00:00Z",
+			},
+		]);
+
+		const res = await request(app).get(
+			"/api/workspaces/1/ticket-intake/history?cardId=42",
+		);
+
+		expect(res.status).toBe(200);
+		expect(res.body.tickets).toHaveLength(2);
+	});
+
+	it("returns an empty array for a card with no history", async () => {
+		mockGetTicketHistory.mockResolvedValueOnce([]);
+
+		const res = await request(app).get(
+			"/api/workspaces/1/ticket-intake/history?cardId=99",
+		);
+
+		expect(res.status).toBe(200);
+		expect(res.body.tickets).toEqual([]);
+	});
+
+	it("returns 404 for a user who is not a workspace member", async () => {
+		mockLookupMembership.mockResolvedValueOnce(null);
+
+		const res = await request(app).get(
+			"/api/workspaces/1/ticket-intake/history?cardId=42",
+		);
+
+		expect(res.status).toBe(404);
 	});
 });

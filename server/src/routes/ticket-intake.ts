@@ -5,6 +5,7 @@ import {
 	checkCompleteness,
 	type TicketExtraction,
 } from "../agent/ticket-intake/completeness.js";
+import { getTicketHistory } from "../agent/ticket-intake/history.js";
 import { extractTicketFields } from "../agent/ticket-intake/llm.js";
 import {
 	createLinearComment,
@@ -259,4 +260,30 @@ ticketIntakeRouter.post(
 	"/workspaces/:workspaceId/ticket-intake/resubmit",
 	requireAuth,
 	async (req, res) => handleSubmit(req, res, true),
+);
+
+ticketIntakeRouter.get(
+	"/workspaces/:workspaceId/ticket-intake/history",
+	requireAuth,
+	async (req, res) => {
+		const workspaceId = Number(req.params.workspaceId);
+		if (!Number.isInteger(workspaceId)) {
+			return res
+				.status(400)
+				.json({ error: "workspaceId must be an integer" });
+		}
+
+		const cardId = Number(req.query.cardId);
+		if (!Number.isInteger(cardId)) {
+			return res.status(400).json({ error: "cardId must be an integer" });
+		}
+
+		const membership = await lookupMembership(req.user!.id, workspaceId);
+		if (!membership) {
+			return res.status(404).json({ error: "Not found" });
+		}
+
+		const tickets = await getTicketHistory(pool, workspaceId, cardId);
+		return res.json({ tickets });
+	},
 );
