@@ -425,6 +425,148 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 	},
 );
 
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"PATCH / — version race (real DB)",
+	() => {
+		let workspaceId: number;
+		let ownerId: number;
+		let app: express.Express;
+
+		beforeAll(async () => {
+			const owner = await db
+				.insertInto("users")
+				.values({
+					username: `settings-patch-race-${Date.now()}`,
+					display_name: "Owner",
+					password_hash: "h",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			ownerId = owner.id;
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({
+					name: "Patch Race WS",
+					owner_user_id: ownerId,
+					is_personal: false,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			workspaceId = workspace.id;
+			await db
+				.insertInto("workspace_members")
+				.values({ workspace_id: workspaceId, user_id: ownerId, role: "owner" })
+				.execute();
+
+			app = express();
+			app.use(express.json());
+			app.use((req, _res, next) => {
+				(req as unknown as { user: { id: number } }).user = { id: ownerId };
+				next();
+			});
+			app.use("/workspaces/:workspaceId/settings", settingsRouter);
+		});
+
+		afterAll(async () => {
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("workspace_members")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+			await db.deleteFrom("users").where("id", "=", ownerId).execute();
+		});
+
+		afterEach(async () => {
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+		});
+
+		it("rejects the loser with 409 instead of silently clobbering the winner", async () => {
+			await db
+				.insertInto("settings")
+				.values({
+					workspace_id: workspaceId,
+					key: "board_name",
+					text_value: "Original",
+					version: 1,
+				})
+				.execute();
+
+			// Delay the first insertInto call (whichever request's write reaches it
+			// first) so the second request's read-check-write cycle completes
+			// first — reproducing the window between the version read and the
+			// write where a concurrent request can slip through undetected.
+			// Kysely builders are immutable — each chained call (.values(),
+			// .onConflict()) returns a new instance, so the terminal .execute()
+			// is never the object insertInto() itself returned. A Proxy that
+			// re-wraps every chained call catches whichever instance execute()
+			// finally lands on.
+			function delayExecuteOnce(builder: any, delayMs: number): any {
+				return new Proxy(builder, {
+					get(target, prop, receiver) {
+						const value = Reflect.get(target, prop, receiver);
+						if (typeof value !== "function") return value;
+						if (
+							prop === "execute" ||
+							prop === "executeTakeFirst" ||
+							prop === "executeTakeFirstOrThrow"
+						) {
+							return async (...args: unknown[]) => {
+								await new Promise((r) => setTimeout(r, delayMs));
+								return value.apply(target, args);
+							};
+						}
+						return (...args: unknown[]) => {
+							const result = value.apply(target, args);
+							return result && typeof result === "object"
+								? delayExecuteOnce(result, delayMs)
+								: result;
+						};
+					},
+				});
+			}
+
+			const originalInsertInto = db.insertInto.bind(db);
+			const spy = vi
+				.spyOn(db, "insertInto")
+				.mockImplementationOnce((...args: any[]) => {
+					const builder = (originalInsertInto as any)(...args);
+					return delayExecuteOnce(builder, 150);
+				});
+
+			try {
+				const [first, second] = await Promise.all([
+					request(app)
+						.patch(`/workspaces/${workspaceId}/settings`)
+						.send({ version: 1, boardName: "From A" }),
+					request(app)
+						.patch(`/workspaces/${workspaceId}/settings`)
+						.send({ version: 1, boardName: "From B" }),
+				]);
+
+				const statuses = [first.status, second.status].sort();
+				expect(statuses).toEqual([200, 409]);
+			} finally {
+				spy.mockRestore();
+			}
+
+			const row = await db
+				.selectFrom("settings")
+				.select(["text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.where("key", "=", "board_name")
+				.executeTakeFirstOrThrow();
+			expect(row.version).toBe(2);
+		});
+	},
+);
+
 describe.skipIf(!process.env.RUN_INTEGRATION)("POST /logo (real DB)", () => {
 	let workspaceId: number;
 	let ownerId: number;
@@ -501,9 +643,20 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("POST /logo (real DB)", () => {
 			.execute();
 
 		// Simulate a DB failure on the upsert that persists the new logo
-		// path — this is the only insertInto call in the request path.
-		vi.spyOn(db, "insertInto").mockImplementationOnce(() => {
-			throw new Error("simulated DB failure");
+		// path. The write now runs inside db.transaction(), so patch the
+		// trx handed to the callback rather than db.insertInto directly.
+		const originalTransaction = db.transaction.bind(db);
+		vi.spyOn(db, "transaction").mockImplementationOnce(() => {
+			const builder = originalTransaction();
+			const originalExecute = builder.execute.bind(builder);
+			builder.execute = ((cb: any) =>
+				originalExecute((trx: any) => {
+					trx.insertInto = () => {
+						throw new Error("simulated DB failure");
+					};
+					return cb(trx);
+				})) as typeof builder.execute;
+			return builder;
 		});
 
 		const pngMagic = Buffer.from([

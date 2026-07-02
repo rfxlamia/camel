@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type RequestHandler, Router } from "express";
 import { sql } from "kysely";
-import { db } from "../db/kysely.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { validateFileContent } from "../lib/file-validator.js";
 import { publishEvent } from "../realtime.js";
 
@@ -227,10 +227,11 @@ export async function batchUpsertSettings(
 	workspaceId: number,
 	updates: Array<{ key: string; textValue: string }>,
 	newVersion: number,
+	dbExecutor: DBExecutor = db,
 ): Promise<void> {
 	if (updates.length === 0) return;
 
-	await db
+	await dbExecutor
 		.insertInto("settings")
 		.values(
 			updates.map((u) => ({
@@ -278,13 +279,32 @@ async function getSettingRows(workspaceId: number): Promise<SettingRow[]> {
 	return raw.map(mapPgSettingRow);
 }
 
-async function getCurrentGlobalVersion(workspaceId: number): Promise<number> {
-	const verRows = await db
+async function getCurrentGlobalVersion(
+	workspaceId: number,
+	dbExecutor: DBExecutor = db,
+): Promise<number> {
+	const verRows = await dbExecutor
 		.selectFrom("settings")
 		.select("version")
 		.where("workspace_id", "=", workspaceId)
 		.execute();
 	return verRows.reduce((max, r) => Math.max(max, r.version || 0), 0);
+}
+
+/** Serializes concurrent settings writes for a workspace: locks the
+ * workspace row so the version read and the upsert happen atomically,
+ * closing the read-then-write race between getCurrentGlobalVersion and
+ * batchUpsertSettings. */
+async function lockWorkspaceForSettingsWrite(
+	trx: DBExecutor,
+	workspaceId: number,
+): Promise<void> {
+	await trx
+		.selectFrom("workspaces")
+		.select("id")
+		.where("id", "=", workspaceId)
+		.forUpdate()
+		.execute();
 }
 
 type WorkspaceRouteParams = { workspaceId: string };
@@ -439,9 +459,23 @@ settingsRouter.patch("/", async (req, res) => {
 	}
 
 	// All setting keys share one version per workspace; client must send the max it last saw.
-	const currentGlobal = await getCurrentGlobalVersion(workspaceId);
+	// Lock the workspace row for the read+write so a concurrent request can't
+	// read the same pre-write version and silently clobber this write.
+	const conflict = await db.transaction().execute(async (trx) => {
+		await lockWorkspaceForSettingsWrite(trx, workspaceId);
+		const currentGlobal = await getCurrentGlobalVersion(workspaceId, trx);
 
-	if (clientVersion !== currentGlobal) {
+		if (clientVersion !== currentGlobal) {
+			return true;
+		}
+
+		if (updates.length > 0) {
+			await batchUpsertSettings(workspaceId, updates, currentGlobal + 1, trx);
+		}
+		return false;
+	});
+
+	if (conflict) {
 		return res.status(409).json({
 			error: "Someone else updated settings first.",
 			code: "version_conflict",
@@ -452,10 +486,6 @@ settingsRouter.patch("/", async (req, res) => {
 		const rows = await getSettingRows(workspaceId);
 		return res.json(generateDefaultSettings(rows));
 	}
-
-	const newVersion = currentGlobal + 1;
-
-	await batchUpsertSettings(workspaceId, updates, newVersion);
 
 	await publishEvent(workspaceId, {
 		type: "settings.updated",
@@ -552,34 +582,42 @@ settingsRouter.post(
 
 		const newRelativePath = `/uploads/${req.file.filename}`;
 
-		const current = await db
-			.selectFrom("settings")
-			.select("text_value")
-			.where("workspace_id", "=", workspaceId)
-			.where("key", "=", "logo_path")
-			.executeTakeFirst();
-		const oldLogoPath = current?.text_value ?? null;
+		// Lock the workspace row for the read+write so a concurrent settings
+		// write can't read the same pre-write global version.
+		const oldLogoPath = await db.transaction().execute(async (trx) => {
+			await lockWorkspaceForSettingsWrite(trx, workspaceId);
 
-		const currentGlobal = await getCurrentGlobalVersion(workspaceId);
-		const newVersion = currentGlobal + 1;
+			const current = await trx
+				.selectFrom("settings")
+				.select("text_value")
+				.where("workspace_id", "=", workspaceId)
+				.where("key", "=", "logo_path")
+				.executeTakeFirst();
+			const oldPath = current?.text_value ?? null;
 
-		await db
-			.insertInto("settings")
-			.values({
-				workspace_id: workspaceId,
-				key: "logo_path",
-				text_value: newRelativePath,
-				version: newVersion,
-				updated_at: sql`now()`,
-			})
-			.onConflict((oc) =>
-				oc.columns(["workspace_id", "key"]).doUpdateSet({
-					text_value: (eb) => eb.ref("excluded.text_value"),
-					version: (eb) => eb.ref("excluded.version"),
+			const currentGlobal = await getCurrentGlobalVersion(workspaceId, trx);
+			const newVersion = currentGlobal + 1;
+
+			await trx
+				.insertInto("settings")
+				.values({
+					workspace_id: workspaceId,
+					key: "logo_path",
+					text_value: newRelativePath,
+					version: newVersion,
 					updated_at: sql`now()`,
-				}),
-			)
-			.execute();
+				})
+				.onConflict((oc) =>
+					oc.columns(["workspace_id", "key"]).doUpdateSet({
+						text_value: (eb) => eb.ref("excluded.text_value"),
+						version: (eb) => eb.ref("excluded.version"),
+						updated_at: sql`now()`,
+					}),
+				)
+				.execute();
+
+			return oldPath;
+		});
 
 		await tryDeleteOldUploadedLogo(oldLogoPath);
 
