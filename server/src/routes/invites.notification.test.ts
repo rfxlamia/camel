@@ -23,12 +23,14 @@ import { domainBus, EVENTS } from "../events.js";
 import * as helpers from "./helpers.js";
 import { invitesRouter } from "./invites.js";
 
+const inviteeUsername = `invitee-charlie-${Date.now()}`;
+
 const app = express();
 app.use(express.json());
 app.use((req, _res, next) => {
 	(req as Record<string, unknown>).user = {
 		id: userId,
-		username: "invitee-charlie",
+		username: inviteeUsername,
 		displayName: "Charlie",
 	};
 	next();
@@ -57,7 +59,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const invitee = await db
 				.insertInto("users")
 				.values({
-					username: "invitee-charlie",
+					username: inviteeUsername,
 					display_name: "Charlie",
 					password_hash: "hashed",
 				})
@@ -103,7 +105,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.insertInto("workspace_invites")
 				.values({
 					workspace_id: workspaceId,
-					username: "invitee-charlie",
+					username: inviteeUsername,
 					role: "member",
 				})
 				.returning("id")
@@ -150,7 +152,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.insertInto("workspace_invites")
 				.values({
 					workspace_id: workspaceId,
-					username: "invitee-charlie",
+					username: inviteeUsername,
 					role: "admin",
 				})
 				.returning("id")
