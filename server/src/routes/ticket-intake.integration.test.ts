@@ -26,50 +26,49 @@ vi.mock("../config.js", () => ({
 	},
 }));
 
-vi.mock("../db/pool.js", () => ({
-	pool: {
-		query: vi.fn(async (sql: string, params: unknown[]) => {
-			if (/INSERT INTO card_events/i.test(sql)) {
-				const [cardId, , , , eventType, payloadJson, workspaceId] = params as [
-					number | null,
-					unknown,
-					unknown,
-					unknown,
-					string,
-					string,
-					number,
-				];
+vi.mock("./helpers.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./helpers.js")>();
+	return {
+		...actual,
+		lookupMembership: vi.fn().mockResolvedValue("member"),
+		recordActivity: vi.fn(
+			async (
+				_db: unknown,
+				_actor: unknown,
+				workspaceId: number,
+				eventType: string,
+				opts: { cardId?: number | null; payload?: Record<string, unknown> },
+			) => {
 				cardEvents.push({
-					card_id: cardId,
+					card_id: opts.cardId ?? null,
 					event_type: eventType,
-					payload: JSON.parse(payloadJson),
+					payload: opts.payload ?? {},
 					workspace_id: workspaceId,
 					created_at: new Date().toISOString(),
 				});
-				return { rows: [], rowCount: 1 };
-			}
-			if (/SELECT payload, created_at FROM card_events/i.test(sql)) {
-				const [workspaceId, cardId] = params as [number, number];
-				const rows = cardEvents
-					.filter(
-						(r) =>
-							r.workspace_id === workspaceId &&
-							r.card_id === cardId &&
-							r.event_type === "linear_ticket_created",
-					)
-					.sort((a, b) => b.created_at.localeCompare(a.created_at))
-					.map((r) => ({ payload: r.payload, created_at: r.created_at }));
-				return { rows, rowCount: rows.length };
-			}
-			return { rows: [], rowCount: 0 };
-		}),
-	},
-}));
-
-vi.mock("./helpers.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("./helpers.js")>();
-	return { ...actual, lookupMembership: vi.fn().mockResolvedValue("member") };
+			},
+		),
+	};
 });
+
+vi.mock("../agent/ticket-intake/history.js", () => ({
+	getTicketHistory: vi.fn(
+		async (_db: unknown, workspaceId: number, cardId: number) =>
+			cardEvents
+				.filter(
+					(r) =>
+						r.workspace_id === workspaceId &&
+						r.card_id === cardId &&
+						r.event_type === "linear_ticket_created",
+				)
+				.sort((a, b) => b.created_at.localeCompare(a.created_at))
+				.map((r) => ({
+					title: (r.payload as { title?: string }).title ?? "",
+					issueUrl: (r.payload as { issueUrl?: string }).issueUrl ?? "",
+					createdAt: r.created_at,
+				})),
+	),
+}));
 
 vi.mock("../auth.js", () => ({
 	requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),

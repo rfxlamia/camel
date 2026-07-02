@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { pool } from "../db/pool.js";
+import { sql } from "kysely";
+import { db } from "../db/kysely.js";
 import {
 	countUserMemberships,
 	getWorkspaceCapacity,
@@ -13,35 +14,47 @@ workspacesRouter.get("/", async (req, res) => {
 	const userId = req.user!.id;
 	const username = req.user!.username;
 
-	const wsRes = await pool.query(
-		`SELECT w.id, w.name, w.is_personal, wm.role,
-            (SELECT COUNT(*)::int FROM workspace_members m WHERE m.workspace_id = w.id) AS member_count
-     FROM workspace_members wm
-     JOIN workspaces w ON w.id = wm.workspace_id
-     WHERE wm.user_id = $1
-     ORDER BY w.name`,
-		[userId],
-	);
+	const wsRows = await db
+		.selectFrom("workspace_members as wm")
+		.innerJoin("workspaces as w", "w.id", "wm.workspace_id")
+		.select((eb) => [
+			"w.id",
+			"w.name",
+			"w.is_personal",
+			"wm.role",
+			eb
+				.selectFrom("workspace_members as m")
+				.select([sql<number>`count(*)::int`.as("count")])
+				.whereRef("m.workspace_id", "=", "w.id")
+				.as("member_count"),
+		])
+		.where("wm.user_id", "=", userId)
+		.orderBy("w.name")
+		.execute();
 
-	const invRes = await pool.query(
-		`SELECT wi.id, wi.workspace_id, w.name AS workspace_name, wi.role
-     FROM workspace_invites wi
-     JOIN workspaces w ON w.id = wi.workspace_id
-     WHERE wi.username = $1
-     ORDER BY wi.created_at`,
-		[username],
-	);
+	const invRows = await db
+		.selectFrom("workspace_invites as wi")
+		.innerJoin("workspaces as w", "w.id", "wi.workspace_id")
+		.select([
+			"wi.id",
+			"wi.workspace_id",
+			"w.name as workspace_name",
+			"wi.role",
+		])
+		.where("wi.username", "=", username as string)
+		.orderBy("wi.created_at")
+		.execute();
 
 	res.json(
 		serializeWorkspaceList({
-			workspaces: wsRes.rows.map((row) => ({
+			workspaces: wsRows.map((row) => ({
 				id: row.id,
 				name: row.name,
 				role: row.role,
 				isPersonal: row.is_personal,
-				memberCount: row.member_count,
+				memberCount: Number(row.member_count),
 			})),
-			invites: invRes.rows.map((row) => ({
+			invites: invRows.map((row) => ({
 				id: row.id,
 				workspaceId: row.workspace_id,
 				workspaceName: row.workspace_name,
@@ -63,36 +76,34 @@ workspacesRouter.post("/", async (req, res) => {
 		return res.status(cap.status).json({ error: cap.error });
 	}
 
-	const client = await pool.connect();
-	try {
-		await client.query("BEGIN");
-		const wsRes = await client.query(
-			`INSERT INTO workspaces (name, owner_user_id, is_personal)
-       VALUES ($1, $2, false)
-       RETURNING id, name, is_personal`,
-			[name.trim(), req.user!.id],
-		);
-		const ws = wsRes.rows[0];
-		await client.query(
-			`INSERT INTO workspace_members (workspace_id, user_id, role)
-       VALUES ($1, $2, 'owner')`,
-			[ws.id, req.user!.id],
-		);
-		await client.query("COMMIT");
+	const ws = await db.transaction().execute(async (trx) => {
+		const inserted = await trx
+			.insertInto("workspaces")
+			.values({
+				name: name.trim(),
+				owner_user_id: req.user!.id,
+				is_personal: false,
+			})
+			.returning(["id", "name", "is_personal"])
+			.executeTakeFirstOrThrow();
+		await trx
+			.insertInto("workspace_members")
+			.values({
+				workspace_id: inserted.id,
+				user_id: req.user!.id,
+				role: "owner",
+			})
+			.execute();
+		return inserted;
+	});
 
-		res.status(201).json({
-			id: ws.id,
-			name: ws.name,
-			role: "owner",
-			isPersonal: ws.is_personal,
-			memberCount: 1,
-		});
-	} catch (err) {
-		await client.query("ROLLBACK");
-		throw err;
-	} finally {
-		client.release();
-	}
+	res.status(201).json({
+		id: ws.id,
+		name: ws.name,
+		role: "owner",
+		isPersonal: ws.is_personal,
+		memberCount: 1,
+	});
 });
 
 workspacesRouter.delete("/:workspaceId", async (req, res) => {
@@ -106,29 +117,30 @@ workspacesRouter.delete("/:workspaceId", async (req, res) => {
 	if (actorRole !== "owner")
 		return res.status(404).json({ error: "Not found" });
 
-	const wsRes = await pool.query(
-		"SELECT is_personal FROM workspaces WHERE id = $1",
-		[workspaceId],
-	);
-	if (wsRes.rows.length === 0)
-		return res.status(404).json({ error: "Not found" });
-	if (wsRes.rows[0].is_personal) {
+	const ws = await db
+		.selectFrom("workspaces")
+		.select("is_personal")
+		.where("id", "=", workspaceId)
+		.executeTakeFirst();
+	if (!ws) return res.status(404).json({ error: "Not found" });
+	if (ws.is_personal) {
 		return res
 			.status(403)
 			.json({ error: "Personal workspaces cannot be deleted" });
 	}
 
-	const countRes = await pool.query(
-		"SELECT COUNT(*)::int AS n FROM workspace_members WHERE workspace_id = $1",
-		[workspaceId],
-	);
-	if (countRes.rows[0].n > 1) {
+	const countRow = await db
+		.selectFrom("workspace_members")
+		.select(sql<number>`count(*)::int`.as("n"))
+		.where("workspace_id", "=", workspaceId)
+		.executeTakeFirstOrThrow();
+	if (countRow.n > 1) {
 		return res.status(409).json({
 			error: "Remove all other members before deleting this workspace",
 		});
 	}
 
-	await pool.query("DELETE FROM workspaces WHERE id = $1", [workspaceId]);
+	await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 	res.status(204).end();
 });
 
@@ -162,29 +174,24 @@ workspacesRouter.post("/:workspaceId/transfer-ownership", async (req, res) => {
 		return res.status(404).json({ error: "Not found" });
 	}
 
-	const client = await pool.connect();
-	try {
-		await client.query("BEGIN");
-		await client.query(
-			`UPDATE workspace_members SET role = 'owner'
-       WHERE workspace_id = $1 AND user_id = $2`,
-			[workspaceId, newOwnerId],
-		);
-		await client.query(
-			`UPDATE workspace_members SET role = $3
-       WHERE workspace_id = $1 AND user_id = $2`,
-			[workspaceId, req.user!.id, demotedRole],
-		);
-		await client.query(
-			"UPDATE workspaces SET owner_user_id = $2 WHERE id = $1",
-			[workspaceId, newOwnerId],
-		);
-		await client.query("COMMIT");
-		res.json({ ok: true });
-	} catch (err) {
-		await client.query("ROLLBACK");
-		throw err;
-	} finally {
-		client.release();
-	}
+	await db.transaction().execute(async (trx) => {
+		await trx
+			.updateTable("workspace_members")
+			.set({ role: "owner" })
+			.where("workspace_id", "=", workspaceId)
+			.where("user_id", "=", newOwnerId)
+			.execute();
+		await trx
+			.updateTable("workspace_members")
+			.set({ role: demotedRole })
+			.where("workspace_id", "=", workspaceId)
+			.where("user_id", "=", req.user!.id)
+			.execute();
+		await trx
+			.updateTable("workspaces")
+			.set({ owner_user_id: newOwnerId })
+			.where("id", "=", workspaceId)
+			.execute();
+	});
+	res.json({ ok: true });
 });

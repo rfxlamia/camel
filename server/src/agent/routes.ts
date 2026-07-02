@@ -20,8 +20,9 @@
 
 import type { Request } from "express";
 import { Router } from "express";
+import { sql } from "kysely";
 import { requireAuth } from "../auth.js";
-import { pool } from "../db/pool.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { llmTimeout } from "../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
@@ -57,31 +58,34 @@ export interface ToolTraceItem {
 }
 
 export async function getToolTrace(
-	db: {
-		query: (
-			sql: string,
-			params: unknown[],
-		) => Promise<{ rows: Array<Record<string, unknown>> }>;
-	},
+	dbExec: DBExecutor,
 	boardId: number,
 ): Promise<ToolTraceItem[]> {
-	const { rows } = await db.query(
-		`SELECT column_slug, tool_name, input, result, error_code, attempt, created_at
-		 FROM agent_tool_calls
-		 WHERE board_id = $1
-		 ORDER BY created_at`,
-		[boardId],
-	);
+	const rows = await dbExec
+		.selectFrom("agent_tool_calls")
+		.select([
+			"column_slug",
+			"tool_name",
+			"input",
+			"result",
+			"error_code",
+			"attempt",
+			"created_at",
+		])
+		.where("board_id", "=", boardId)
+		.orderBy("created_at")
+		.orderBy("id")
+		.execute();
 
 	return mergeToolTraceRows(
 		rows.map((r) => ({
-			column_slug: r.column_slug as string,
-			tool_name: r.tool_name as string,
+			column_slug: r.column_slug,
+			tool_name: r.tool_name,
 			input: r.input,
-			result: r.result as string | null,
-			error_code: r.error_code as string | null,
-			attempt: r.attempt as number | null,
-			created_at: r.created_at as string | null,
+			result: r.result,
+			error_code: r.error_code,
+			attempt: r.attempt,
+			created_at: r.created_at ? r.created_at.toISOString() : null,
 		})),
 	);
 }
@@ -91,7 +95,7 @@ export async function getToolTrace(
 // ---------------------------------------------------------------------------
 
 export async function runInsertColumns(
-	db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+	dbExec: DBExecutor,
 	data: {
 		boardId: number;
 		workspaceId: number;
@@ -101,21 +105,20 @@ export async function runInsertColumns(
 	for (const col of data.columns) {
 		const tools = col.tools as string[] | undefined;
 		const toolBudget = col.tool_budget as number | undefined;
-		await db.query(
-			`INSERT INTO columns (title, position, board_id, slug, reasoning, system_prompt, workspace_id, tools, tool_budget)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			[
-				col.name,
-				col.position,
-				data.boardId,
-				col.slug,
-				col.reasoning,
-				col.system_prompt,
-				data.workspaceId,
-				tools ?? [],
-				toolBudget ?? null,
-			],
-		);
+		await dbExec
+			.insertInto("columns")
+			.values({
+				title: col.name as string,
+				position: col.position as number,
+				board_id: data.boardId,
+				slug: col.slug as string,
+				reasoning: col.reasoning as boolean,
+				system_prompt: col.system_prompt as string,
+				workspace_id: data.workspaceId,
+				tools: tools ?? [],
+				tool_budget: toolBudget ?? null,
+			})
+			.execute();
 	}
 }
 
@@ -125,7 +128,7 @@ export async function runInsertColumns(
 
 export const realArtifactDeps = {
 	insertArtifact: async (
-		db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+		dbExec: DBExecutor,
 		data: {
 			boardId: number;
 			workspaceId: number;
@@ -134,48 +137,44 @@ export const realArtifactDeps = {
 			content: string;
 		},
 	): Promise<void> => {
-		await db.query(
-			`INSERT INTO agent_artifacts (board_id, workspace_id, filename, format, content)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (board_id) DO UPDATE SET
-         filename = EXCLUDED.filename,
-         content = EXCLUDED.content,
-         format = EXCLUDED.format,
-         created_at = now()`,
-			[
-				data.boardId,
-				data.workspaceId,
-				data.filename,
-				data.format,
-				data.content,
-			],
-		);
+		await dbExec
+			.insertInto("agent_artifacts")
+			.values({
+				board_id: data.boardId,
+				workspace_id: data.workspaceId,
+				filename: data.filename,
+				format: data.format,
+				content: data.content,
+			})
+			.onConflict((oc) =>
+				oc.column("board_id").doUpdateSet((eb) => ({
+					filename: eb.ref("excluded.filename"),
+					content: eb.ref("excluded.content"),
+					format: eb.ref("excluded.format"),
+					created_at: sql`now()`,
+				})),
+			)
+			.execute();
 	},
 
 	getArtifact: async (
-		db: {
-			query: (
-				sql: string,
-				params: unknown[],
-			) => Promise<{ rows: Array<Record<string, unknown>> }>;
-		},
+		dbExec: DBExecutor,
 		boardId: number,
 	): Promise<{
 		filename: string;
 		format: "md";
 		content: string;
 	} | null> => {
-		const { rows } = await db.query(
-			`SELECT filename, format, content
-       FROM agent_artifacts
-       WHERE board_id = $1`,
-			[boardId],
-		);
-		if (rows.length === 0) return null;
+		const row = await dbExec
+			.selectFrom("agent_artifacts")
+			.select(["filename", "format", "content"])
+			.where("board_id", "=", boardId)
+			.executeTakeFirst();
+		if (!row) return null;
 		return {
-			filename: rows[0].filename as string,
-			format: rows[0].format as "md",
-			content: rows[0].content as string,
+			filename: row.filename,
+			format: row.format as "md",
+			content: row.content,
 		};
 	},
 };
@@ -221,45 +220,39 @@ export function resolveMessageAction(body: unknown): MessageAction {
 // ---------------------------------------------------------------------------
 
 export async function selectConversationHistory(
-	db: {
-		query: (
-			sql: string,
-			params: unknown[],
-		) => Promise<{ rows: Array<Record<string, unknown>> }>;
-	},
+	dbExec: DBExecutor,
 	boardId: number,
 ): Promise<Array<{ role: string; content: string }>> {
-	const { rows } = await db.query(
-		`SELECT role, content
-     FROM agent_conversations
-     WHERE board_id = $1
-     ORDER BY created_at`,
-		[boardId],
-	);
-	return rows.map((r) => ({
-		role: r.role as string,
-		content: r.content as string,
-	}));
+	const rows = await dbExec
+		.selectFrom("agent_conversations")
+		.select(["role", "content"])
+		.where("board_id", "=", boardId)
+		.orderBy("created_at")
+		.orderBy("id")
+		.execute();
+	return rows;
 }
 
 export async function deleteOutputsForBoard(
-	db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+	dbExec: DBExecutor,
 	boardId: number,
 ): Promise<void> {
-	await db.query(`DELETE FROM agent_card_outputs WHERE board_id = $1`, [
-		boardId,
-	]);
+	await dbExec
+		.deleteFrom("agent_card_outputs")
+		.where("board_id", "=", boardId)
+		.execute();
 }
 
 export async function deleteCardsForBoard(
-	db: { query: (sql: string, params: unknown[]) => Promise<unknown> },
+	dbExec: DBExecutor,
 	boardId: number,
 ): Promise<void> {
-	await db.query(
-		`DELETE FROM cards
-     WHERE column_id IN (SELECT id FROM columns WHERE board_id = $1)`,
-		[boardId],
-	);
+	await dbExec
+		.deleteFrom("cards")
+		.where("column_id", "in", (eb) =>
+			eb.selectFrom("columns").select("id").where("board_id", "=", boardId),
+		)
+		.execute();
 }
 
 // ---------------------------------------------------------------------------
@@ -291,11 +284,13 @@ async function lookupMembership(
 	userId: number,
 	workspaceId: number,
 ): Promise<string | null> {
-	const { rows } = await pool.query(
-		`SELECT role FROM workspace_members WHERE user_id = $1 AND workspace_id = $2`,
-		[userId, workspaceId],
-	);
-	return rows.length > 0 ? rows[0].role : null;
+	const row = await db
+		.selectFrom("workspace_members")
+		.select("role")
+		.where("user_id", "=", userId)
+		.where("workspace_id", "=", workspaceId)
+		.executeTakeFirst();
+	return row?.role ?? null;
 }
 
 const realDeps: AgentBoardServiceDeps = {
@@ -311,41 +306,50 @@ const realDeps: AgentBoardServiceDeps = {
 	) => Promise<void>,
 
 	insertBoard: async (data) => {
-		const { rows } = await pool.query(
-			`INSERT INTO agent_boards (workspace_id, user_id, template_id, original_intent, status)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-			[
-				data.workspaceId,
-				data.userId,
-				data.templateId,
-				data.originalIntent,
-				data.status,
-			],
-		);
-		return { id: rows[0].id };
+		const inserted = await db
+			.insertInto("agent_boards")
+			.values({
+				workspace_id: data.workspaceId,
+				user_id: data.userId,
+				template_id: data.templateId,
+				original_intent: data.originalIntent,
+				status: data.status,
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		return { id: inserted.id };
 	},
 
 	insertConversation: async (data) => {
-		await pool.query(
-			`INSERT INTO agent_conversations (board_id, role, content)
-       VALUES ($1, $2, $3)`,
-			[data.boardId, data.role, data.content],
-		);
+		await db
+			.insertInto("agent_conversations")
+			.values({
+				board_id: data.boardId,
+				role: data.role,
+				content: data.content,
+			})
+			.execute();
 	},
 
 	insertColumns: (data) =>
-		runInsertColumns(pool, data as Parameters<typeof runInsertColumns>[1]),
+		runInsertColumns(db, data as Parameters<typeof runInsertColumns>[1]),
 
 	getBoard: async (boardId) => {
-		const { rows } = await pool.query(
-			`SELECT id, workspace_id, user_id, template_id, original_intent,
-              status, execution_status, created_at
-       FROM agent_boards WHERE id = $1`,
-			[boardId],
-		);
-		if (rows.length === 0) return null;
-		const r = rows[0];
+		const r = await db
+			.selectFrom("agent_boards")
+			.select([
+				"id",
+				"workspace_id",
+				"user_id",
+				"template_id",
+				"original_intent",
+				"status",
+				"execution_status",
+				"created_at",
+			])
+			.where("id", "=", boardId)
+			.executeTakeFirst();
+		if (!r) return null;
 		return {
 			id: r.id,
 			workspaceId: r.workspace_id,
@@ -354,188 +358,218 @@ const realDeps: AgentBoardServiceDeps = {
 			originalIntent: r.original_intent,
 			status: r.status,
 			executionStatus: r.execution_status,
-			createdAt: r.created_at,
+			createdAt: r.created_at.toISOString(),
 		};
 	},
 
 	updateBoard: async (boardId, data) => {
 		validateBoardColumns(Object.keys(data));
-		const sets: string[] = [];
-		const values: unknown[] = [];
-		let i = 1;
-		for (const [key, value] of Object.entries(data)) {
-			sets.push(`${key} = $${i}`);
-			values.push(value);
-			i++;
-		}
-		sets.push("updated_at = now()");
-		values.push(boardId);
-		await pool.query(
-			`UPDATE agent_boards SET ${sets.join(", ")} WHERE id = $${i}`,
-			values,
-		);
+		await db
+			.updateTable("agent_boards")
+			.set({
+				...(data as {
+					status?: string;
+					execution_status?: string;
+					original_intent?: string;
+				}),
+				updated_at: sql`now()`,
+			})
+			.where("id", "=", boardId)
+			.execute();
 	},
 
 	approveBoardAtomic: async (boardId) => {
-		const { rowCount } = await pool.query(
-			`UPDATE agent_boards
-			 SET status = 'approved', execution_status = 'running', updated_at = now()
-			 WHERE id = $1 AND status = 'pending'
-			 RETURNING id`,
-			[boardId],
-		);
-		return { rowCount: rowCount ?? 0 };
+		const result = await db
+			.updateTable("agent_boards")
+			.set({
+				status: "approved",
+				execution_status: "running",
+				updated_at: sql`now()`,
+			})
+			.where("id", "=", boardId)
+			.where("status", "=", "pending")
+			.executeTakeFirst();
+		return { rowCount: Number(result.numUpdatedRows ?? 0) };
 	},
 
 	listBoards: async (workspaceId) => {
-		const { rows } = await pool.query(
-			`SELECT id, original_intent, template_id, status, execution_status, created_at
-       FROM agent_boards
-       WHERE workspace_id = $1
-       ORDER BY created_at DESC`,
-			[workspaceId],
-		);
-		return rows.map((r: Record<string, unknown>) => ({
-			id: r.id as number,
-			originalIntent: r.original_intent as string,
-			templateId: r.template_id as string,
-			status: r.status as string,
-			executionStatus: r.execution_status as string,
-			createdAt: r.created_at as string,
+		const rows = await db
+			.selectFrom("agent_boards")
+			.select([
+				"id",
+				"original_intent",
+				"template_id",
+				"status",
+				"execution_status",
+				"created_at",
+			])
+			.where("workspace_id", "=", workspaceId)
+			.orderBy("created_at", "desc")
+			.execute();
+		return rows.map((r) => ({
+			id: r.id,
+			originalIntent: r.original_intent,
+			templateId: r.template_id,
+			status: r.status,
+			executionStatus: r.execution_status,
+			createdAt: r.created_at.toISOString(),
 		}));
 	},
 
 	getFirstCard: async (boardId) => {
-		const { rows } = await pool.query(
-			`SELECT id, slug, system_prompt, reasoning, tools, tool_budget
-       FROM columns
-       WHERE board_id = $1
-       ORDER BY position
-       LIMIT 1`,
-			[boardId],
-		);
-		if (rows.length === 0) return null;
+		const r = await db
+			.selectFrom("columns")
+			.select([
+				"id",
+				"slug",
+				"system_prompt",
+				"reasoning",
+				"tools",
+				"tool_budget",
+			])
+			.where("board_id", "=", boardId)
+			.orderBy("position")
+			.limit(1)
+			.executeTakeFirst();
+		if (!r) return null;
 		return {
-			columnId: rows[0].id,
-			columnSlug: rows[0].slug,
-			systemPrompt: rows[0].system_prompt,
-			reasoning: rows[0].reasoning,
-			tools: (rows[0].tools as string[] | null) ?? [],
-			toolBudget: (rows[0].tool_budget as number | null) ?? null,
+			columnId: r.id,
+			columnSlug: r.slug as string,
+			systemPrompt: r.system_prompt as string,
+			reasoning: r.reasoning,
+			tools: r.tools ?? [],
+			toolBudget: r.tool_budget ?? null,
 		};
 	},
 
 	getColumns: async (boardId) => {
-		const { rows } = await pool.query(
-			`SELECT id, slug, system_prompt, reasoning, tools, tool_budget
-     FROM columns
-     WHERE board_id = $1
-     ORDER BY position`,
-			[boardId],
-		);
-		return rows.map((r: Record<string, unknown>) => ({
-			columnId: r.id as number,
+		const rows = await db
+			.selectFrom("columns")
+			.select([
+				"id",
+				"slug",
+				"system_prompt",
+				"reasoning",
+				"tools",
+				"tool_budget",
+			])
+			.where("board_id", "=", boardId)
+			.orderBy("position")
+			.execute();
+		return rows.map((r) => ({
+			columnId: r.id,
 			columnSlug: r.slug as string,
 			systemPrompt: r.system_prompt as string,
-			reasoning: r.reasoning as boolean,
-			tools: (r.tools as string[] | null) ?? [],
-			toolBudget: (r.tool_budget as number | null) ?? null,
+			reasoning: r.reasoning,
+			tools: r.tools ?? [],
+			toolBudget: r.tool_budget ?? null,
 		}));
 	},
 
+	// Intentionally does NOT call recordActivity()/write card_events (R6, see
+	// service.test.ts). Agent-created cards get a clickable board handle only;
+	// the human Activity Feed stays reserved for user-driven actions. Also, no
+	// actor is available here — runPipeline is fire-and-forget with no req.user.
 	insertCard: async (data) => {
-		await pool.query(
-			`INSERT INTO cards (column_id, title, position, workspace_id)
-       VALUES ($1, $2, $3, $4)`,
-			[data.columnId, data.title, data.position, data.workspaceId],
-		);
+		await db
+			.insertInto("cards")
+			.values({
+				column_id: data.columnId,
+				title: data.title,
+				position: data.position,
+				workspace_id: data.workspaceId,
+			})
+			.execute();
 	},
 
 	insertOutput: async (data) => {
-		await pool.query(
-			`INSERT INTO agent_card_outputs (board_id, column_slug, card_index, output, thinking)
-       VALUES ($1, $2, $3, $4, $5)`,
-			[
-				data.boardId,
-				data.columnSlug,
-				data.cardIndex,
-				data.output,
-				data.thinking ?? null,
-			],
-		);
+		await db
+			.insertInto("agent_card_outputs")
+			.values({
+				board_id: data.boardId,
+				column_slug: data.columnSlug,
+				card_index: data.cardIndex,
+				output: data.output,
+				thinking: data.thinking ?? null,
+			})
+			.execute();
 	},
 
 	insertToolCall: async (data) => {
-		await pool.query(
-			`INSERT INTO agent_tool_calls (board_id, column_slug, tool_name, input, result, error_code, attempt)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			[
-				data.boardId,
-				data.columnSlug,
-				data.toolName,
-				data.input !== null ? JSON.stringify(data.input) : null,
-				data.result ?? null,
-				data.errorCode ?? null,
-				data.attempt ?? 1,
-			],
-		);
+		await db
+			.insertInto("agent_tool_calls")
+			.values({
+				board_id: data.boardId,
+				column_slug: data.columnSlug,
+				tool_name: data.toolName,
+				input: data.input !== null ? JSON.stringify(data.input) : null,
+				result: data.result ?? null,
+				error_code: data.errorCode ?? null,
+				attempt: data.attempt ?? 1,
+			})
+			.execute();
 	},
 
 	getOutput: async (data) => {
-		const { rows } = await pool.query(
-			`SELECT output, thinking
-       FROM agent_card_outputs
-       WHERE board_id = $1 AND column_slug = $2
-       ORDER BY card_index
-       LIMIT 1`,
-			[data.boardId, data.columnSlug],
-		);
-		if (rows.length === 0) return null;
-		return { output: rows[0].output, thinking: rows[0].thinking };
+		const row = await db
+			.selectFrom("agent_card_outputs")
+			.select(["output", "thinking"])
+			.where("board_id", "=", data.boardId)
+			.where("column_slug", "=", data.columnSlug)
+			.orderBy("card_index")
+			.limit(1)
+			.executeTakeFirst();
+		if (!row) return null;
+		return { output: row.output, thinking: row.thinking };
 	},
 
-	insertArtifact: (data) => realArtifactDeps.insertArtifact(pool, data),
+	insertArtifact: (data) => realArtifactDeps.insertArtifact(db, data),
 
-	getArtifact: (boardId) => realArtifactDeps.getArtifact(pool, boardId),
+	getArtifact: (boardId) => realArtifactDeps.getArtifact(db, boardId),
 
-	getConversationHistory: (boardId) => selectConversationHistory(pool, boardId),
+	getConversationHistory: (boardId) => selectConversationHistory(db, boardId),
 
-	deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(pool, boardId),
+	deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(db, boardId),
 
-	deleteCardsForBoard: (boardId) => deleteCardsForBoard(pool, boardId),
+	deleteCardsForBoard: (boardId) => deleteCardsForBoard(db, boardId),
 
 	fetchCardTimestamps: async (workspaceId) => {
-		const { rows } = await pool.query(
-			`SELECT created_at, started_at, done_at
-       FROM cards
-       WHERE workspace_id = $1 AND deleted_at IS NULL`,
-			[workspaceId],
-		);
-		return rows.map((r: Record<string, unknown>) => ({
-			createdAt: r.created_at as Date,
-			startedAt: r.started_at as Date | null,
-			doneAt: r.done_at as Date | null,
+		const rows = await db
+			.selectFrom("cards")
+			.select(["created_at", "started_at", "done_at"])
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.execute();
+		return rows.map((r) => ({
+			createdAt: r.created_at,
+			startedAt: r.started_at,
+			doneAt: r.done_at,
 		}));
 	},
 
 	fetchActivityEvents: async (workspaceId, limit) => {
-		const { rows } = await pool.query(
-			`SELECT e.event_type, e.payload, e.created_at,
-              c.title AS current_card_title
-       FROM card_events e
-       LEFT JOIN cards c ON c.id = e.card_id AND c.deleted_at IS NULL
-       WHERE e.workspace_id = $1
-       ORDER BY e.created_at DESC, e.id DESC
-       LIMIT $2`,
-			[workspaceId, limit],
-		);
-		return rows.map((r: Record<string, unknown>) => {
+		const rows = await db
+			.selectFrom("card_events as e")
+			.leftJoin("cards as c", (join) =>
+				join.onRef("c.id", "=", "e.card_id").on("c.deleted_at", "is", null),
+			)
+			.select([
+				"e.event_type",
+				"e.payload",
+				"e.created_at",
+				"c.title as current_card_title",
+			])
+			.where("e.workspace_id", "=", workspaceId)
+			.orderBy("e.created_at", "desc")
+			.orderBy("e.id", "desc")
+			.limit(limit)
+			.execute();
+		return rows.map((r) => {
 			const payload = r.payload as { cardTitle?: string } | null;
 			return {
-				type: r.event_type as string,
-				cardTitle:
-					(r.current_card_title as string | null) ?? payload?.cardTitle ?? null,
-				at: (r.created_at as Date).toISOString(),
+				type: r.event_type,
+				cardTitle: r.current_card_title ?? payload?.cardTitle ?? null,
+				at: r.created_at.toISOString(),
 			};
 		});
 	},
@@ -746,18 +780,28 @@ export function createAgentRouter(
 				}
 
 				// Fetch columns + cards for this agent board
-				const colsRes = await pool.query(
-					`SELECT id, title, position, slug, reasoning, system_prompt
-				 FROM columns WHERE board_id = $1 ORDER BY position`,
-					[boardId],
-				);
+				const colRows = await db
+					.selectFrom("columns")
+					.select([
+						"id",
+						"title",
+						"position",
+						"slug",
+						"reasoning",
+						"system_prompt",
+					])
+					.where("board_id", "=", boardId)
+					.orderBy("position")
+					.execute();
 				const columns = [];
-				for (const col of colsRes.rows) {
-					const cardsRes = await pool.query(
-						`SELECT id, column_id, title, position
-					 FROM cards WHERE column_id = $1 AND deleted_at IS NULL ORDER BY position`,
-						[col.id],
-					);
+				for (const col of colRows) {
+					const cardRows = await db
+						.selectFrom("cards")
+						.select(["id", "column_id", "title", "position"])
+						.where("column_id", "=", col.id)
+						.where("deleted_at", "is", null)
+						.orderBy("position")
+						.execute();
 					columns.push({
 						id: col.id,
 						slug: col.slug,
@@ -765,7 +809,7 @@ export function createAgentRouter(
 						position: col.position,
 						reasoning: col.reasoning,
 						systemPrompt: col.system_prompt,
-						cards: cardsRes.rows.map((c: Record<string, unknown>) => ({
+						cards: cardRows.map((c) => ({
 							id: c.id,
 							columnId: c.column_id,
 							title: c.title,
@@ -775,8 +819,8 @@ export function createAgentRouter(
 				}
 
 				// Fetch stored tool trace (read-only replay)
-				const toolTrace = await getToolTrace(pool, boardId);
-				const conversations = await selectConversationHistory(pool, boardId);
+				const toolTrace = await getToolTrace(db, boardId);
+				const conversations = await selectConversationHistory(db, boardId);
 
 				res.json({ ...result, columns, toolTrace, conversations });
 			} catch (err) {

@@ -72,8 +72,14 @@ import cookieParser from "cookie-parser";
 // ---------------------------------------------------------------------------
 import express from "express";
 import request from "supertest";
+import { db } from "./db/kysely.js";
 import { pool } from "./db/pool.js";
 import { api } from "./routes.js";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const WS_ID = 1;
 
 // ---------------------------------------------------------------------------
 // Test app
@@ -96,44 +102,73 @@ let col1Id: number;
 let col2Id: number; // has wip_limit = 2
 
 async function setupFixtures() {
-	// User
-	await pool.query(
-		`INSERT INTO users (id, username, display_name, password_hash)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING`,
-		[
-			mockTestUser.id,
-			mockTestUser.username,
-			mockTestUser.displayName,
-			"hashed",
-		],
-	);
+	// User — idempotent so multiple test files sharing user id=1 don't collide
+	await db
+		.insertInto("users")
+		.values({
+			id: mockTestUser.id,
+			username: mockTestUser.username,
+			display_name: mockTestUser.displayName,
+			password_hash: "hashed",
+		})
+		.onConflict((oc) => oc.column("id").doNothing())
+		.execute();
 
 	// Workspace
-	await pool.query(
-		`INSERT INTO workspaces (id, name, owner_user_id, is_personal)
-     VALUES (1, 'Test WS', $1, false) ON CONFLICT (id) DO NOTHING`,
-		[mockTestUser.id],
-	);
+	await db
+		.insertInto("workspaces")
+		.values({
+			id: WS_ID,
+			name: "Test WS",
+			owner_user_id: mockTestUser.id,
+			is_personal: false,
+		})
+		.onConflict((oc) => oc.column("id").doNothing())
+		.execute();
 
 	// Membership
-	await pool.query(
-		`INSERT INTO workspace_members (workspace_id, user_id, role)
-     VALUES (1, $1, 'owner') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
-		[mockTestUser.id],
-	);
+	await db
+		.insertInto("workspace_members")
+		.values({
+			workspace_id: WS_ID,
+			user_id: mockTestUser.id,
+			role: "owner",
+		})
+		.onConflict((oc) => oc.columns(["workspace_id", "user_id"]).doNothing())
+		.execute();
 
 	// Columns — clear workspace fixtures then insert predictable set
-	await pool.query("DELETE FROM cards WHERE workspace_id = 1");
-	await pool.query("DELETE FROM columns WHERE workspace_id = 1");
-	const colRes = await pool.query(
-		`INSERT INTO columns (title, position, wip_limit, is_done, workspace_id)
-     VALUES
-       ('Backlog',   1000, NULL, false, 1),
-       ('In Progress', 2000, 2,    false, 1),
-       ('Done',      3000, NULL, true,  1)
-     RETURNING id, title`,
-	);
-	const cols = colRes.rows;
+	await db.deleteFrom("cards").where("workspace_id", "=", WS_ID).execute();
+	await db.deleteFrom("columns").where("workspace_id", "=", WS_ID).execute();
+
+	const cols = await db
+		.insertInto("columns")
+		.values([
+			{
+				title: "Backlog",
+				position: 1000,
+				wip_limit: null,
+				is_done: false,
+				workspace_id: WS_ID,
+			},
+			{
+				title: "In Progress",
+				position: 2000,
+				wip_limit: 2,
+				is_done: false,
+				workspace_id: WS_ID,
+			},
+			{
+				title: "Done",
+				position: 3000,
+				wip_limit: null,
+				is_done: true,
+				workspace_id: WS_ID,
+			},
+		])
+		.returning(["id", "title"])
+		.execute();
+
 	col1Id = cols.find((c) => c.title === "Backlog")!.id;
 	col2Id = cols.find((c) => c.title === "In Progress")!.id;
 }
@@ -144,13 +179,18 @@ async function insertCard(
 	position: number,
 	version = 1,
 ) {
-	const res = await pool.query(
-		`INSERT INTO cards (title, column_id, position, version, workspace_id)
-     VALUES ($1, $2, $3, $4, 1)
-     RETURNING id`,
-		[title, columnId, position, version],
-	);
-	return res.rows[0].id as number;
+	const row = await db
+		.insertInto("cards")
+		.values({
+			title,
+			column_id: columnId,
+			position,
+			version,
+			workspace_id: WS_ID,
+		})
+		.returning("id")
+		.executeTakeFirstOrThrow();
+	return row.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,18 +201,52 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-	// Clean per-test data but keep base fixtures
-	await pool.query("DELETE FROM card_events");
-	await pool.query("DELETE FROM cards");
-	// Reset card sequence
-	await pool.query("ALTER SEQUENCE cards_id_seq RESTART WITH 1");
+	// Clean per-test data but keep base fixtures — scoped to this workspace only
+	await db
+		.deleteFrom("card_events")
+		.where("workspace_id", "=", WS_ID)
+		.execute();
+	await db
+		.deleteFrom("card_assignees")
+		.where(
+			"card_id",
+			"in",
+			db.selectFrom("cards").select("id").where("workspace_id", "=", WS_ID),
+		)
+		.execute();
+	await db.deleteFrom("cards").where("workspace_id", "=", WS_ID).execute();
+	// Reset card sequence to avoid collisions across test files
+	await pool.query(
+		"SELECT setval('cards_id_seq', COALESCE((SELECT MAX(id) FROM cards), 0) + 1, false)",
+	);
 	vi.clearAllMocks();
 });
 
 afterAll(async () => {
-	await pool.query(
-		"TRUNCATE users, workspaces, columns, cards, card_events CASCADE",
-	);
+	// Scoped cleanup — only remove data for this test's workspace.
+	// DO NOT truncate global tables (users, workspaces) as other test files
+	// create their own workspace-scoped data.
+	await db
+		.deleteFrom("card_events")
+		.where("workspace_id", "=", WS_ID)
+		.execute();
+	await db
+		.deleteFrom("card_assignees")
+		.where(
+			"card_id",
+			"in",
+			db.selectFrom("cards").select("id").where("workspace_id", "=", WS_ID),
+		)
+		.execute();
+	await db.deleteFrom("cards").where("workspace_id", "=", WS_ID).execute();
+	await db.deleteFrom("columns").where("workspace_id", "=", WS_ID).execute();
+	await db
+		.deleteFrom("workspace_members")
+		.where("workspace_id", "=", WS_ID)
+		.execute();
+	await db.deleteFrom("workspaces").where("id", "=", WS_ID).execute();
+	// NOTE: we intentionally do NOT delete the shared user (id=1) since other
+	// test files also use it with ON CONFLICT DO NOTHING.
 	await pool.end();
 });
 
@@ -188,7 +262,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card A", col1Id, 1000, 1);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id, index: 0, version: 1 });
 
 			expect(res.status).toBe(200);
@@ -200,7 +274,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card B", col1Id, 1000, 5);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id, index: 0 });
 
 			expect(res.status).toBe(200);
@@ -218,7 +292,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card C", col1Id, 1000);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id, index: 0 });
 
 			expect(res.status).toBe(409);
@@ -232,7 +306,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card D", col1Id, 1000, 1);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id, index: 0, version: 999 });
 
 			expect(res.status).toBe(409);
@@ -251,7 +325,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 			// Move card between the tightly-packed siblings — triggers RangeError → rebalance
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col1Id, index: 1 });
 
 			expect(res.status).toBe(200);
@@ -264,45 +338,51 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card F", col1Id, 1000);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id, index: 0 });
 
 			expect(res.status).toBe(200);
 
-			const events = await pool.query(
-				"SELECT * FROM card_events WHERE card_id = $1",
-				[cardId],
-			);
-			expect(events.rows).toHaveLength(1);
-			const evt = events.rows[0];
+			const events = await db
+				.selectFrom("card_events")
+				.selectAll()
+				.where("card_id", "=", cardId)
+				.execute();
+			expect(events).toHaveLength(1);
+			const evt = events[0];
 			expect(evt.event_type).toBe("move");
 			expect(evt.from_column_id).toBe(col1Id);
 			expect(evt.to_column_id).toBe(col2Id);
 			expect(evt.actor_id).toBe(mockTestUser.id);
-			expect(evt.workspace_id).toBe(1);
+			expect(evt.workspace_id).toBe(WS_ID);
 			expect(evt.payload).toHaveProperty("cardTitle", "Card F");
 		});
 
 		// ----- Same-column reorder -----
 
-		it("does NOT record activity for same-column reorder", async () => {
+		it("records reorder activity for same-column reorder", async () => {
 			await insertCard("G-1", col1Id, 1000);
 			await insertCard("G-2", col1Id, 2000);
 			const cardId = await insertCard("Card G", col1Id, 1500);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col1Id, index: 0 });
 
 			expect(res.status).toBe(200);
 			expect(res.body.columnId).toBe(col1Id);
 
-			// No activity log for same-column moves
-			const events = await pool.query(
-				"SELECT * FROM card_events WHERE card_id = $1",
-				[cardId],
-			);
-			expect(events.rows).toHaveLength(0);
+			// Same-column moves are recorded as "reorder" events
+			const events = await db
+				.selectFrom("card_events")
+				.selectAll()
+				.where("card_id", "=", cardId)
+				.execute();
+			expect(events).toHaveLength(1);
+			expect(events[0].event_type).toBe("reorder");
+			expect(events[0].actor_id).toBe(mockTestUser.id);
+			expect(events[0].workspace_id).toBe(WS_ID);
+			expect(events[0].payload).toHaveProperty("cardTitle", "Card G");
 		});
 
 		// ----- Edge cases -----
@@ -311,7 +391,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card H", col1Id, 1000);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: "abc", index: 0 });
 
 			expect(res.status).toBe(400);
@@ -321,7 +401,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card I", col1Id, 1000);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id });
 
 			expect(res.status).toBe(400);
@@ -331,7 +411,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card J", col1Id, 1000);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: col2Id, index: 0, version: "1" });
 
 			expect(res.status).toBe(400);
@@ -339,7 +419,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		it("returns 404 for non-existent card", async () => {
 			const res = await request(app)
-				.post("/api/workspaces/1/cards/99999/move")
+				.post(`/api/workspaces/${WS_ID}/cards/99999/move`)
 				.send({ toColumnId: col2Id, index: 0 });
 
 			expect(res.status).toBe(404);
@@ -349,7 +429,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const cardId = await insertCard("Card K", col1Id, 1000);
 
 			const res = await request(app)
-				.post(`/api/workspaces/1/cards/${cardId}/move`)
+				.post(`/api/workspaces/${WS_ID}/cards/${cardId}/move`)
 				.send({ toColumnId: 99999, index: 0 });
 
 			expect(res.status).toBe(404);
@@ -365,14 +445,16 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 	() => {
 		beforeEach(async () => {
 			// Reset all columns to is_done = false before each test
-			await pool.query(
-				"UPDATE columns SET is_done = false WHERE workspace_id = 1",
-			);
+			await db
+				.updateTable("columns")
+				.set({ is_done: false })
+				.where("workspace_id", "=", WS_ID)
+				.execute();
 		});
 
 		it("sets isDone to true and returns updated column", async () => {
 			const res = await request(app)
-				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.patch(`/api/workspaces/${WS_ID}/columns/${col1Id}`)
 				.send({ isDone: true });
 
 			expect(res.status).toBe(200);
@@ -382,12 +464,12 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 		it("unsets isDone when set to false", async () => {
 			// First set to true
 			await request(app)
-				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.patch(`/api/workspaces/${WS_ID}/columns/${col1Id}`)
 				.send({ isDone: true });
 
 			// Then unset
 			const res = await request(app)
-				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.patch(`/api/workspaces/${WS_ID}/columns/${col1Id}`)
 				.send({ isDone: false });
 
 			expect(res.status).toBe(200);
@@ -397,28 +479,29 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 		it("enforces single Done column per workspace", async () => {
 			// col1Id becomes Done
 			await request(app)
-				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.patch(`/api/workspaces/${WS_ID}/columns/${col1Id}`)
 				.send({ isDone: true });
 
 			// col2Id also becomes Done - should unset col1Id
 			const res = await request(app)
-				.patch(`/api/workspaces/1/columns/${col2Id}`)
+				.patch(`/api/workspaces/${WS_ID}/columns/${col2Id}`)
 				.send({ isDone: true });
 
 			expect(res.status).toBe(200);
 			expect(res.body.is_done).toBe(true);
 
 			// Verify col1Id is no longer Done
-			const check = await pool.query(
-				"SELECT is_done FROM columns WHERE id = $1",
-				[col1Id],
-			);
-			expect(check.rows[0].is_done).toBe(false);
+			const check = await db
+				.selectFrom("columns")
+				.select("is_done")
+				.where("id", "=", col1Id)
+				.executeTakeFirstOrThrow();
+			expect(check.is_done).toBe(false);
 		});
 
 		it("returns 400 for invalid isDone type", async () => {
 			const res = await request(app)
-				.patch(`/api/workspaces/1/columns/${col1Id}`)
+				.patch(`/api/workspaces/${WS_ID}/columns/${col1Id}`)
 				.send({ isDone: "yes" });
 
 			expect(res.status).toBe(400);
@@ -427,7 +510,7 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 
 		it("returns 400 for invalid column id", async () => {
 			const res = await request(app)
-				.patch("/api/workspaces/1/columns/abc")
+				.patch(`/api/workspaces/${WS_ID}/columns/abc`)
 				.send({ isDone: true });
 
 			expect(res.status).toBe(400);
@@ -435,10 +518,130 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 
 		it("returns 404 for non-existent column", async () => {
 			const res = await request(app)
-				.patch("/api/workspaces/1/columns/99999")
+				.patch(`/api/workspaces/${WS_ID}/columns/99999`)
 				.send({ isDone: true });
 
 			expect(res.status).toBe(404);
+		});
+
+		it("enforces single Done column under concurrent isDone=true requests", async () => {
+			const cols = await db
+				.insertInto("columns")
+				.values([
+					{
+						title: "Race A",
+						position: 4000,
+						is_done: false,
+						workspace_id: WS_ID,
+					},
+					{
+						title: "Race B",
+						position: 5000,
+						is_done: false,
+						workspace_id: WS_ID,
+					},
+					{
+						title: "Race C",
+						position: 6000,
+						is_done: false,
+						workspace_id: WS_ID,
+					},
+					{
+						title: "Race D",
+						position: 7000,
+						is_done: false,
+						workspace_id: WS_ID,
+					},
+					{
+						title: "Race E",
+						position: 8000,
+						is_done: false,
+						workspace_id: WS_ID,
+					},
+				])
+				.returning("id")
+				.execute();
+			const raceColIds = cols.map((c) => c.id);
+
+			try {
+				const results = await Promise.all(
+					raceColIds.map((cid) =>
+						request(app)
+							.patch(`/api/workspaces/${WS_ID}/columns/${cid}`)
+							.send({ isDone: true }),
+					),
+				);
+				expect(results.every((r) => r.status === 200)).toBe(true);
+
+				const doneCols = await db
+					.selectFrom("columns")
+					.select("id")
+					.where("workspace_id", "=", WS_ID)
+					.where("is_done", "=", true)
+					.execute();
+				expect(doneCols).toHaveLength(1);
+			} finally {
+				await db.deleteFrom("columns").where("id", "in", raceColIds).execute();
+			}
+		});
+	},
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/workspaces/:wid/columns and DELETE .../columns/:id — activity log
+// ---------------------------------------------------------------------------
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"Column create/delete — card_events",
+	() => {
+		it("records a create activity event", async () => {
+			const res = await request(app)
+				.post(`/api/workspaces/${WS_ID}/columns`)
+				.send({ title: "New Column" });
+			expect(res.status).toBe(201);
+
+			const events = await db
+				.selectFrom("card_events")
+				.select("payload")
+				.where("workspace_id", "=", WS_ID)
+				.where("event_type", "=", "create")
+				.orderBy("id", "desc")
+				.limit(1)
+				.execute();
+			expect(events).toHaveLength(1);
+			expect(events[0].payload).toHaveProperty("columnTitle", "New Column");
+
+			await db.deleteFrom("columns").where("id", "=", res.body.id).execute();
+		});
+
+		it("records a delete activity event", async () => {
+			const col = await db
+				.insertInto("columns")
+				.values({
+					title: "To Delete",
+					position: 9000,
+					wip_limit: null,
+					is_done: false,
+					workspace_id: WS_ID,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			const colId = col.id;
+
+			const res = await request(app).delete(
+				`/api/workspaces/${WS_ID}/columns/${colId}`,
+			);
+			expect(res.status).toBe(204);
+
+			const events = await db
+				.selectFrom("card_events")
+				.select("payload")
+				.where("workspace_id", "=", WS_ID)
+				.where("event_type", "=", "delete")
+				.orderBy("id", "desc")
+				.limit(1)
+				.execute();
+			expect(events).toHaveLength(1);
+			expect(events[0].payload).toHaveProperty("columnTitle", "To Delete");
 		});
 	},
 );

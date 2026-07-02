@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { pool } from "../db/pool.js";
+import { lookupMembership } from "../routes/helpers.js";
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation
@@ -16,17 +16,6 @@ declare global {
 function parseWorkspaceId(raw: string): number | null {
 	const workspaceId = Number(raw);
 	return Number.isInteger(workspaceId) ? workspaceId : null;
-}
-
-async function lookupMembership(
-	userId: number,
-	workspaceId: number,
-): Promise<string | undefined> {
-	const { rows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, userId],
-	);
-	return rows[0]?.role as string | undefined;
 }
 
 /**

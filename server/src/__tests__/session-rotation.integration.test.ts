@@ -95,4 +95,28 @@ describe.skipIf(!shouldRun)("Session token rotation", () => {
 		const result = await rotateSessionToken(99999, "non_existent_token");
 		expect(result).toBeNull();
 	});
+
+	it("rejects rotation of an expired token and leaves it in place", async () => {
+		const { rows: u } = await pool.query(
+			`INSERT INTO users (username, display_name, password_hash)
+       VALUES ($1, $2, $3) RETURNING id`,
+			["test_expired", "Test Expired", "hashed_password"],
+		);
+		const userId = u[0].id;
+
+		await pool.query(
+			`INSERT INTO sessions (token, user_id, expires_at)
+       VALUES ($1, $2, now() - interval '1 day')`,
+			["expired_token", userId],
+		);
+
+		const result = await rotateSessionToken(userId, "expired_token");
+		expect(result).toBeNull();
+
+		// The expired row must survive — rotation only consumes valid rows.
+		const still = await pool.query("SELECT 1 FROM sessions WHERE token = $1", [
+			"expired_token",
+		]);
+		expect(still.rows.length).toBe(1);
+	});
 });

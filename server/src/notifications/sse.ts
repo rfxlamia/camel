@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 
 interface SseClient {
 	userId: number;
@@ -29,12 +29,14 @@ export async function sseNotificationHandler(
 	res.write(": connected\n\n");
 
 	if (lastEventId > 0) {
-		const { rows } = await pool.query(
-			`SELECT * FROM notifications
-       WHERE user_id = $1 AND workspace_id = $2 AND id > $3
-       ORDER BY id`,
-			[userId, workspaceId, lastEventId],
-		);
+		const rows = await db
+			.selectFrom("notifications")
+			.selectAll()
+			.where("user_id", "=", userId)
+			.where("workspace_id", "=", workspaceId)
+			.where("id", ">", lastEventId)
+			.orderBy("id")
+			.execute();
 		for (const row of rows) {
 			res.write(
 				`id: ${row.id}\nevent: notification.created\ndata: ${JSON.stringify(row)}\n\n`,

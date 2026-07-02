@@ -1,8 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import "dotenv/config";
+import { existsSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import * as path from "node:path";
+import express from "express";
+import request from "supertest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import { db } from "../db/kysely.js";
 import {
 	batchUpsertSettings,
 	DEFAULT_SETTINGS,
 	generateDefaultSettings,
+	settingsRouter,
+	UPLOADS_DIR,
 	validateBoardName,
 	validateSettingKey,
 } from "./settings.js";
@@ -309,59 +326,377 @@ describe("workspace settings service", () => {
 	});
 });
 
-describe("batchUpsertSettings", () => {
-	const { mockQuery } = vi.hoisted(() => {
-		return { mockQuery: vi.fn() };
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"batchUpsertSettings (real DB)",
+	() => {
+		let workspaceId: number;
+		let ownerId: number;
+
+		beforeAll(async () => {
+			const owner = await db
+				.insertInto("users")
+				.values({
+					username: `settings-batch-${Date.now()}`,
+					display_name: "Owner",
+					password_hash: "h",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			ownerId = owner.id;
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({
+					name: "Batch Settings WS",
+					owner_user_id: ownerId,
+					is_personal: false,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			workspaceId = workspace.id;
+		});
+
+		afterAll(async () => {
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+			await db.deleteFrom("users").where("id", "=", ownerId).execute();
+		});
+
+		afterEach(async () => {
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+		});
+
+		it("returns early for empty updates array", async () => {
+			await batchUpsertSettings(workspaceId, [], 1);
+			const rows = await db
+				.selectFrom("settings")
+				.selectAll()
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			expect(rows).toHaveLength(0);
+		});
+
+		it("upserts multiple keys atomically in one call", async () => {
+			const updates = [
+				{ key: "board_name", textValue: "Dev Team" },
+				{ key: "logo_path", textValue: "/uploads/custom.png" },
+			];
+
+			await batchUpsertSettings(workspaceId, updates, 5);
+
+			const rows = await db
+				.selectFrom("settings")
+				.select(["key", "text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.orderBy("key")
+				.execute();
+			expect(rows).toEqual([
+				{ key: "board_name", text_value: "Dev Team", version: 5 },
+				{ key: "logo_path", text_value: "/uploads/custom.png", version: 5 },
+			]);
+		});
+
+		it("handles single key update and upserts existing rows on conflict", async () => {
+			await batchUpsertSettings(
+				workspaceId,
+				[{ key: "board_name", textValue: "A" }],
+				1,
+			);
+			await batchUpsertSettings(
+				workspaceId,
+				[{ key: "board_name", textValue: "B" }],
+				2,
+			);
+
+			const rows = await db
+				.selectFrom("settings")
+				.select(["key", "text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			expect(rows).toEqual([
+				{ key: "board_name", text_value: "B", version: 2 },
+			]);
+		});
+	},
+);
+
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"PATCH / — version race (real DB)",
+	() => {
+		let workspaceId: number;
+		let ownerId: number;
+		let app: express.Express;
+
+		beforeAll(async () => {
+			const owner = await db
+				.insertInto("users")
+				.values({
+					username: `settings-patch-race-${Date.now()}`,
+					display_name: "Owner",
+					password_hash: "h",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			ownerId = owner.id;
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({
+					name: "Patch Race WS",
+					owner_user_id: ownerId,
+					is_personal: false,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			workspaceId = workspace.id;
+			await db
+				.insertInto("workspace_members")
+				.values({ workspace_id: workspaceId, user_id: ownerId, role: "owner" })
+				.execute();
+
+			app = express();
+			app.use(express.json());
+			app.use((req, _res, next) => {
+				(req as unknown as { user: { id: number } }).user = { id: ownerId };
+				next();
+			});
+			app.use("/workspaces/:workspaceId/settings", settingsRouter);
+		});
+
+		afterAll(async () => {
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("workspace_members")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+			await db.deleteFrom("users").where("id", "=", ownerId).execute();
+		});
+
+		afterEach(async () => {
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+		});
+
+		it("rejects the loser with 409 instead of silently clobbering the winner", async () => {
+			await db
+				.insertInto("settings")
+				.values({
+					workspace_id: workspaceId,
+					key: "board_name",
+					text_value: "Original",
+					version: 1,
+				})
+				.execute();
+
+			// Delay the first insertInto call (whichever request's write reaches it
+			// first) so the second request's read-check-write cycle completes
+			// first — reproducing the window between the version read and the
+			// write where a concurrent request can slip through undetected.
+			// Kysely builders are immutable — each chained call (.values(),
+			// .onConflict()) returns a new instance, so the terminal .execute()
+			// is never the object insertInto() itself returned. A Proxy that
+			// re-wraps every chained call catches whichever instance execute()
+			// finally lands on.
+			function delayExecuteOnce(builder: any, delayMs: number): any {
+				return new Proxy(builder, {
+					get(target, prop, receiver) {
+						const value = Reflect.get(target, prop, receiver);
+						if (typeof value !== "function") return value;
+						if (
+							prop === "execute" ||
+							prop === "executeTakeFirst" ||
+							prop === "executeTakeFirstOrThrow"
+						) {
+							return async (...args: unknown[]) => {
+								await new Promise((r) => setTimeout(r, delayMs));
+								return value.apply(target, args);
+							};
+						}
+						return (...args: unknown[]) => {
+							const result = value.apply(target, args);
+							return result && typeof result === "object"
+								? delayExecuteOnce(result, delayMs)
+								: result;
+						};
+					},
+				});
+			}
+
+			const originalInsertInto = db.insertInto.bind(db);
+			const spy = vi
+				.spyOn(db, "insertInto")
+				.mockImplementationOnce((...args: any[]) => {
+					const builder = (originalInsertInto as any)(...args);
+					return delayExecuteOnce(builder, 150);
+				});
+
+			try {
+				const [first, second] = await Promise.all([
+					request(app)
+						.patch(`/workspaces/${workspaceId}/settings`)
+						.send({ version: 1, boardName: "From A" }),
+					request(app)
+						.patch(`/workspaces/${workspaceId}/settings`)
+						.send({ version: 1, boardName: "From B" }),
+				]);
+
+				const statuses = [first.status, second.status].sort();
+				expect(statuses).toEqual([200, 409]);
+			} finally {
+				spy.mockRestore();
+			}
+
+			const row = await db
+				.selectFrom("settings")
+				.select(["text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.where("key", "=", "board_name")
+				.executeTakeFirstOrThrow();
+			expect(row.version).toBe(2);
+		});
+
+		it("array body with a duplicate key does not crash the multi-row upsert", async () => {
+			const res = await request(app)
+				.patch(`/workspaces/${workspaceId}/settings`)
+				.send([
+					{ key: "board_name", textValue: "First", version: 0 },
+					{ key: "board_name", textValue: "Second", version: 0 },
+				]);
+
+			expect(res.status).toBe(200);
+
+			const row = await db
+				.selectFrom("settings")
+				.select(["text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.where("key", "=", "board_name")
+				.executeTakeFirstOrThrow();
+			expect(row.text_value).toBe("Second");
+			expect(row.version).toBe(1);
+		});
+	},
+);
+
+describe.skipIf(!process.env.RUN_INTEGRATION)("POST /logo (real DB)", () => {
+	let workspaceId: number;
+	let ownerId: number;
+	let app: express.Express;
+
+	beforeAll(async () => {
+		const owner = await db
+			.insertInto("users")
+			.values({
+				username: `settings-logo-${Date.now()}`,
+				display_name: "Owner",
+				password_hash: "h",
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		ownerId = owner.id;
+		const workspace = await db
+			.insertInto("workspaces")
+			.values({ name: "Logo WS", owner_user_id: ownerId, is_personal: false })
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		workspaceId = workspace.id;
+		await db
+			.insertInto("workspace_members")
+			.values({ workspace_id: workspaceId, user_id: ownerId, role: "owner" })
+			.execute();
+
+		app = express();
+		app.use((req, _res, next) => {
+			(req as unknown as { user: { id: number } }).user = { id: ownerId };
+			next();
+		});
+		app.use("/workspaces/:workspaceId/settings", settingsRouter);
+		app.use((err: any, _req: any, res: any, _next: any) => {
+			res.status(500).json({ error: err.message ?? "error" });
+		});
 	});
 
-	vi.mock("../db/pool.js", () => ({
-		pool: { query: mockQuery },
-	}));
-
-	beforeEach(() => {
-		mockQuery.mockReset();
-		mockQuery.mockResolvedValue({ rows: [] });
+	afterAll(async () => {
+		await db
+			.deleteFrom("settings")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		await db
+			.deleteFrom("workspace_members")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+		await db.deleteFrom("users").where("id", "=", ownerId).execute();
 	});
 
-	it("returns early for empty updates array", async () => {
-		await batchUpsertSettings(42, [], 1);
-		expect(mockQuery).not.toHaveBeenCalled();
+	afterEach(async () => {
+		await db
+			.deleteFrom("settings")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		vi.restoreAllMocks();
 	});
 
-	it("issues a single query with unnest for multiple keys", async () => {
-		const updates = [
-			{ key: "board_name", textValue: "Dev Team" },
-			{ key: "logo_path", textValue: "/uploads/custom.png" },
-		];
+	it("keeps the old logo file on disk when the DB write fails", async () => {
+		const oldFilename = `old-test-logo-${Date.now()}.png`;
+		const oldAbsPath = path.join(UPLOADS_DIR, oldFilename);
+		writeFileSync(oldAbsPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+		const filesBefore = new Set(readdirSync(UPLOADS_DIR));
 
-		await batchUpsertSettings(42, updates, 5);
+		await db
+			.insertInto("settings")
+			.values({
+				workspace_id: workspaceId,
+				key: "logo_path",
+				text_value: `/uploads/${oldFilename}`,
+				version: 1,
+			})
+			.execute();
 
-		// Should be called exactly once (not N times)
-		expect(mockQuery).toHaveBeenCalledTimes(1);
+		// Simulate a DB failure on the upsert that persists the new logo
+		// path. The write now runs inside db.transaction(), so patch the
+		// trx handed to the callback rather than db.insertInto directly.
+		const originalTransaction = db.transaction.bind(db);
+		vi.spyOn(db, "transaction").mockImplementationOnce(() => {
+			const builder = originalTransaction();
+			const originalExecute = builder.execute.bind(builder);
+			builder.execute = ((cb: any) =>
+				originalExecute((trx: any) => {
+					trx.insertInto = () => {
+						throw new Error("simulated DB failure");
+					};
+					return cb(trx);
+				})) as typeof builder.execute;
+			return builder;
+		});
 
-		const [sql, params] = mockQuery.mock.calls[0];
-
-		// Verify SQL uses unnest
-		expect(sql).toContain("unnest");
-		expect(sql).toContain("ON CONFLICT");
-
-		// Verify atomicity: single statement, no semicolons
-		expect(sql).not.toContain(";");
-
-		// Verify params: [workspaceId, newVersion, keys[], values[]]
-		expect(params).toEqual([
-			42,
-			5,
-			["board_name", "logo_path"],
-			["Dev Team", "/uploads/custom.png"],
+		const pngMagic = Buffer.from([
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 		]);
-	});
+		try {
+			const res = await request(app)
+				.post(`/workspaces/${workspaceId}/settings/logo`)
+				.attach("logo", pngMagic, {
+					filename: "new-logo.png",
+					contentType: "image/png",
+				});
 
-	it("handles single key update", async () => {
-		await batchUpsertSettings(1, [{ key: "board_name", textValue: "A" }], 1);
-
-		expect(mockQuery).toHaveBeenCalledTimes(1);
-		const [, params] = mockQuery.mock.calls[0];
-		expect(params).toEqual([1, 1, ["board_name"], ["A"]]);
+			expect(res.status).toBe(500);
+			expect(existsSync(oldAbsPath)).toBe(true);
+		} finally {
+			if (existsSync(oldAbsPath)) unlinkSync(oldAbsPath);
+			for (const f of readdirSync(UPLOADS_DIR)) {
+				if (!filesBefore.has(f)) unlinkSync(path.join(UPLOADS_DIR, f));
+			}
+		}
 	});
 });

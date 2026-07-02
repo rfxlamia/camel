@@ -1,4 +1,6 @@
+import "dotenv/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../db/kysely.js";
 import { getHumanColumns } from "../routes.js";
 import type { AgentBoardServiceDeps, ColumnInfo } from "./service.js";
 import { createAgentBoardService } from "./service.js";
@@ -7,21 +9,62 @@ import { webSearch } from "./tools/webSearch.js";
 
 // ---- T1 scaffold: board isolation ----
 
-describe("board isolation", () => {
+describe.skipIf(!process.env.RUN_INTEGRATION)("board isolation", () => {
 	it("getHumanColumns filters agent columns via board_id IS NULL", async () => {
-		const calls: string[] = [];
-		const fakeDb = {
-			query: vi.fn(async (sql: string, _params: unknown[]) => {
-				calls.push(sql);
-				return { rows: [] };
-			}),
-		};
+		const user = await db
+			.insertInto("users")
+			.values({
+				username: `board-isolation-${Date.now()}`,
+				display_name: "Board Isolation Tester",
+				password_hash: "hashed",
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		const workspace = await db
+			.insertInto("workspaces")
+			.values({
+				name: "Board Isolation WS",
+				owner_user_id: user.id,
+				is_personal: false,
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		const board = await db
+			.insertInto("agent_boards")
+			.values({
+				workspace_id: workspace.id,
+				user_id: user.id,
+				original_intent: "test",
+				template_id: "research-report",
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		const humanColumn = await db
+			.insertInto("columns")
+			.values({ title: "Human Column", position: 1000, workspace_id: workspace.id })
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		const agentColumn = await db
+			.insertInto("columns")
+			.values({
+				title: "Agent Column",
+				position: 2000,
+				workspace_id: workspace.id,
+				board_id: board.id,
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
 
-		await getHumanColumns(fakeDb as any, 1);
-
-		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [1]);
-		expect(calls[0]).toMatch(/board_id IS NULL/i);
-		expect(calls[0]).not.toMatch(/board_id IS NOT NULL/i);
+		try {
+			const result = await getHumanColumns(db, workspace.id);
+			expect(result.map((c) => c.id)).toEqual([humanColumn.id]);
+			expect(result.map((c) => c.id)).not.toContain(agentColumn.id);
+		} finally {
+			await db.deleteFrom("columns").where("id", "in", [humanColumn.id, agentColumn.id]).execute();
+			await db.deleteFrom("agent_boards").where("id", "=", board.id).execute();
+			await db.deleteFrom("workspaces").where("id", "=", workspace.id).execute();
+			await db.deleteFrom("users").where("id", "=", user.id).execute();
+		}
 	});
 });
 

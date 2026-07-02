@@ -8,8 +8,9 @@ import {
 	Router,
 } from "express";
 import rateLimit from "express-rate-limit";
+import { sql } from "kysely";
 import { RedisStore } from "rate-limit-redis";
-import { pool } from "./db/pool.js";
+import { db } from "./db/kysely.js";
 import { getRedisClient } from "./db/redis.js";
 import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
 import {
@@ -248,10 +249,10 @@ export async function mintCamelSession(
 	const expiresAt = new Date(
 		Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
 	);
-	await pool.query(
-		"INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)",
-		[token, userId, expiresAt],
-	);
+	await db
+		.insertInto("sessions")
+		.values({ token, user_id: userId, expires_at: expiresAt })
+		.execute();
 	res.cookie(SESSION_COOKIE, token, {
 		httpOnly: true,
 		sameSite: "lax",
@@ -270,38 +271,33 @@ export async function rotateSessionToken(
 	userId: number,
 	oldToken: string,
 ): Promise<string | null> {
-	const client = await pool.connect();
 	try {
-		await client.query("BEGIN");
+		return await db.transaction().execute(async (trx) => {
+			const deleted = await trx
+				.deleteFrom("sessions")
+				.where("token", "=", oldToken)
+				.where("user_id", "=", userId)
+				.where("expires_at", ">", new Date())
+				.returning("token")
+				.executeTakeFirst();
+			if (!deleted) {
+				return null;
+			}
 
-		const { rows: existing } = await client.query(
-			"SELECT 1 FROM sessions WHERE token = $1 AND user_id = $2",
-			[oldToken, userId],
-		);
-		if (existing.length === 0) {
-			await client.query("ROLLBACK");
-			return null;
-		}
+			const newToken = randomBytes(32).toString("base64url");
+			const expiresAt = new Date(
+				Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+			);
+			await trx
+				.insertInto("sessions")
+				.values({ token: newToken, user_id: userId, expires_at: expiresAt })
+				.execute();
 
-		await client.query("DELETE FROM sessions WHERE token = $1", [oldToken]);
-
-		const newToken = randomBytes(32).toString("base64url");
-		const expiresAt = new Date(
-			Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
-		);
-		await client.query(
-			"INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)",
-			[newToken, userId, expiresAt],
-		);
-
-		await client.query("COMMIT");
-		return newToken;
+			return newToken;
+		});
 	} catch (err) {
-		await client.query("ROLLBACK");
 		console.error("[auth] session rotation failed:", err);
 		return null;
-	} finally {
-		client.release();
 	}
 }
 
@@ -311,10 +307,11 @@ export async function rotateSessionToken(
  */
 export async function cleanupExpiredSessions(): Promise<number> {
 	try {
-		const result = await pool.query(
-			"DELETE FROM sessions WHERE expires_at < now()",
-		);
-		const count = result.rowCount ?? 0;
+		const result = await db
+			.deleteFrom("sessions")
+			.where("expires_at", "<", sql<Date>`now()`)
+			.executeTakeFirst();
+		const count = Number(result.numDeletedRows ?? 0);
 		if (count > 0) {
 			console.log(`[auth] cleaned up ${count} expired session(s)`);
 		}
@@ -334,16 +331,17 @@ export async function requireAuth(
 		const token = req.cookies?.[SESSION_COOKIE];
 		if (!token)
 			return res.status(401).json({ error: "authentication required" });
-		const { rows } = await pool.query(
-			`SELECT u.id, u.username, u.display_name, u.email, u.email_verified
-       FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token = $1 AND s.expires_at > now()`,
-			[token],
-		);
-		if (rows.length === 0) {
+		const row = await db
+			.selectFrom("sessions as s")
+			.innerJoin("users as u", "u.id", "s.user_id")
+			.select(["u.id", "u.username", "u.display_name", "u.email", "u.email_verified"])
+			.where("s.token", "=", token)
+			.where("s.expires_at", ">", sql<Date>`now()`)
+			.executeTakeFirst();
+		if (!row) {
 			return res.status(401).json({ error: "session expired — sign in again" });
 		}
-		req.user = toUser(rows[0]);
+		req.user = toUser(row);
 		next();
 	} catch (err) {
 		next(err);
@@ -386,65 +384,82 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 
 		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 		const normalizedUsername = usernameValidation.trimmed!.toLowerCase();
-		const client = await pool.connect();
 		try {
-			await client.query("BEGIN");
+			const user = await db.transaction().execute(async (trx) => {
+				const inserted = await trx
+					.insertInto("users")
+					.values({
+						username: normalizedUsername,
+						display_name: name,
+						password_hash: hash,
+					})
+					.returning(["id", "username", "display_name"])
+					.executeTakeFirstOrThrow();
+				const user = toUser(inserted);
 
-			const { rows } = await client.query(
-				`INSERT INTO users (username, display_name, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING id, username, display_name`,
-				[normalizedUsername, name, hash],
-			);
-			const user = toUser(rows[0]);
+				const pendingRows = await trx
+					.selectFrom("workspace_invites")
+					.select(["id", "workspace_id", "username", "role"])
+					.where("username", "=", normalizedUsername)
+					.execute();
+				const pendingInvites: PendingInvite[] = pendingRows.map((row) => ({
+					id: row.id,
+					workspaceId: row.workspace_id,
+					username: row.username,
+					role: row.role,
+				}));
 
-			const pendingRes = await client.query(
-				`SELECT id, workspace_id, username, role
-       FROM workspace_invites WHERE username = $1`,
-				[normalizedUsername],
-			);
-			const pendingInvites: PendingInvite[] = pendingRes.rows.map((row) => ({
-				id: row.id,
-				workspaceId: row.workspace_id,
-				username: row.username,
-				role: row.role,
-			}));
+				const plan = createSignupWorkspacePlan({ user, pendingInvites });
 
-			const plan = createSignupWorkspacePlan({ user, pendingInvites });
+				const ws = await trx
+					.insertInto("workspaces")
+					.values({
+						name: plan.personalWorkspace.name,
+						owner_user_id: plan.personalWorkspace.ownerUserId,
+						is_personal: plan.personalWorkspace.isPersonal,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
 
-			const wsRes = await client.query(
-				`INSERT INTO workspaces (name, owner_user_id, is_personal)
-       VALUES ($1, $2, $3)
-       RETURNING id`,
-				[
-					plan.personalWorkspace.name,
-					plan.personalWorkspace.ownerUserId,
-					plan.personalWorkspace.isPersonal,
-				],
-			);
-			const workspaceId = wsRes.rows[0].id;
+				for (const membership of plan.memberships) {
+					await trx
+						.insertInto("workspace_members")
+						.values({
+							workspace_id: ws.id,
+							user_id: membership.userId,
+							role: membership.role,
+						})
+						.execute();
+				}
 
-			for (const membership of plan.memberships) {
-				await client.query(
-					`INSERT INTO workspace_members (workspace_id, user_id, role)
-         VALUES ($1, $2, $3)`,
-					[workspaceId, membership.userId, membership.role],
-				);
-			}
+				// Consume pending invites: grant membership THEN delete invite
+				for (const invite of pendingInvites) {
+					await trx
+						.insertInto("workspace_members")
+						.values({
+							workspace_id: invite.workspaceId,
+							user_id: user.id,
+							role: invite.role,
+						})
+						.execute();
+					await trx
+						.deleteFrom("workspace_invites")
+						.where("id", "=", invite.id)
+						.execute();
+				}
 
-			await client.query("COMMIT");
+				return user;
+			});
+
 			await mintCamelSession(res, user.id);
 			res.status(201).json({ user });
 		} catch (err) {
-			await client.query("ROLLBACK");
 			if ((err as { code?: string }).code === "23505") {
 				return res
 					.status(409)
 					.json({ error: "That username's already taken — try another." });
 			}
 			throw err;
-		} finally {
-			client.release();
 		}
 	});
 
@@ -455,13 +470,22 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.status(400)
 				.json({ error: "Username and password are required." });
 		}
-		const { rows } = await pool.query(
-			"SELECT id, username, display_name, email, email_verified, password_hash FROM users WHERE username = $1",
-			[username.toLowerCase()],
-		);
+		const row = await db
+			.selectFrom("users")
+			.select([
+				"id",
+				"username",
+				"display_name",
+				"email",
+				"email_verified",
+				"password_hash",
+			])
+			.where("username", "=", username.toLowerCase())
+			.executeTakeFirst();
 		const ok =
-			rows.length > 0 &&
-			(await bcrypt.compare(password, rows[0].password_hash));
+			row !== undefined &&
+			row.password_hash !== null &&
+			(await bcrypt.compare(password, row.password_hash));
 		if (!ok) {
 			// Failure already recorded by accountLockoutMiddleware
 			return res
@@ -473,19 +497,19 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		// This prevents session fixation — only the current login gets a fresh token.
 		const presented = req.cookies?.[SESSION_COOKIE];
 		if (presented) {
-			await pool.query(
-				"DELETE FROM sessions WHERE token = $1 AND user_id = $2",
-				[presented, rows[0].id],
-			);
+			await db
+				.deleteFrom("sessions")
+				.where("token", "=", presented)
+				.where("user_id", "=", row.id)
+				.execute();
 		}
-		await mintCamelSession(res, rows[0].id);
-		res.json({ user: toUser(rows[0]) });
+		await mintCamelSession(res, row.id);
+		res.json({ user: toUser(row) });
 	});
 
 	auth.post("/logout", async (req, res) => {
 		const token = req.cookies?.[SESSION_COOKIE];
-		if (token)
-			await pool.query("DELETE FROM sessions WHERE token = $1", [token]);
+		if (token) await db.deleteFrom("sessions").where("token", "=", token).execute();
 		res.clearCookie(SESSION_COOKIE, { path: "/" });
 		res.status(204).end();
 	});

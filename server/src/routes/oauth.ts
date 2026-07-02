@@ -7,7 +7,7 @@ import {
 	requireAuth,
 	USERNAME_RE,
 } from "../auth.js";
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 import { validateUsername } from "../validators/input-length.js";
 
 export const oauthRouter = Router();
@@ -31,76 +31,89 @@ oauthRouter.post("/set-username", requireAuth, async (req, res) => {
 			? displayName.trim()
 			: normalizedUsername;
 
-	const client = await pool.connect();
 	try {
-		await client.query("BEGIN");
-		await client.query(
-			"UPDATE users SET username = $1, display_name = $2 WHERE id = $3",
-			[normalizedUsername, displayNameFinal, req.user.id],
-		);
-		const pendingRes = await client.query<{
-			id: number;
-			workspace_id: number;
-			username: string;
-			role: string;
-		}>(
-			"SELECT id, workspace_id, username, role FROM workspace_invites WHERE username = $1",
-			[normalizedUsername],
-		);
-		const pendingInvites: PendingInvite[] = pendingRes.rows.map((r) => ({
-			id: r.id,
-			workspaceId: r.workspace_id,
-			username: r.username,
-			role: r.role,
-		}));
-		const plan = createSignupWorkspacePlan({
-			user: {
-				id: req.user.id,
-				username: normalizedUsername,
-				displayName: displayNameFinal,
-				email: req.user.email,
-				emailVerified: req.user.emailVerified,
-				needsUsername: false,
-			},
-			pendingInvites,
-		});
-		const wsRes = await client.query<{ id: number }>(
-			"INSERT INTO workspaces (name, owner_user_id, is_personal) VALUES ($1, $2, $3) RETURNING id",
-			[
-				plan.personalWorkspace.name,
-				plan.personalWorkspace.ownerUserId,
-				plan.personalWorkspace.isPersonal,
-			],
-		);
-		const workspaceId = wsRes.rows[0].id;
-		for (const m of plan.memberships) {
-			await client.query(
-				"INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)",
-				[workspaceId, m.userId, m.role],
-			);
+		const outcome: "ok" | "already_set" = await db
+			.transaction()
+			.execute(async (trx) => {
+				// Conditional on username still being null: closes the TOCTOU
+				// window between the req.user precheck above and this write —
+				// a concurrent set-username must not be overwritten.
+				const updated = await trx
+					.updateTable("users")
+					.set({ username: normalizedUsername, display_name: displayNameFinal })
+					.where("id", "=", req.user!.id)
+					.where("username", "is", null)
+					.returning("id")
+					.executeTakeFirst();
+				if (!updated) {
+					return "already_set";
+				}
+
+				const pendingRows = await trx
+					.selectFrom("workspace_invites")
+					.select(["id", "workspace_id", "username", "role"])
+					.where("username", "=", normalizedUsername)
+					.execute();
+				const pendingInvites: PendingInvite[] = pendingRows.map((r) => ({
+					id: r.id,
+					workspaceId: r.workspace_id,
+					username: r.username,
+					role: r.role,
+				}));
+				const plan = createSignupWorkspacePlan({
+					user: {
+						id: req.user!.id,
+						username: normalizedUsername,
+						displayName: displayNameFinal,
+						email: req.user!.email,
+						emailVerified: req.user!.emailVerified,
+						needsUsername: false,
+					},
+					pendingInvites,
+				});
+				const ws = await trx
+					.insertInto("workspaces")
+					.values({
+						name: plan.personalWorkspace.name,
+						owner_user_id: plan.personalWorkspace.ownerUserId,
+						is_personal: plan.personalWorkspace.isPersonal,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				for (const m of plan.memberships) {
+					await trx
+						.insertInto("workspace_members")
+						.values({ workspace_id: ws.id, user_id: m.userId, role: m.role })
+						.execute();
+				}
+				// Consume pending invites: grant membership THEN delete invite
+				for (const invite of pendingInvites) {
+					await trx
+						.insertInto("workspace_members")
+						.values({
+							workspace_id: invite.workspaceId,
+							user_id: req.user!.id,
+							role: invite.role,
+						})
+						.execute();
+					await trx
+						.deleteFrom("workspace_invites")
+						.where("id", "=", invite.id)
+						.execute();
+				}
+				return "ok";
+			});
+		if (outcome === "already_set") {
+			return res.status(409).json({ error: "Username already set." });
 		}
-		// Consume pending invites: grant membership THEN delete invite
-		for (const invite of pendingInvites) {
-			await client.query(
-				"INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)",
-				[invite.workspaceId, req.user.id, invite.role],
-			);
-			await client.query("DELETE FROM workspace_invites WHERE id = $1", [
-				invite.id,
-			]);
-		}
-		await client.query("COMMIT");
 		res.json({ ok: true });
 	} catch (err) {
-		await client.query("ROLLBACK");
 		if ((err as { code?: string }).code === "23505") {
 			return res
 				.status(409)
 				.json({ error: "Username already taken — try another." });
 		}
 		throw err;
-	} finally {
-		client.release();
 	}
 });
 
@@ -113,19 +126,21 @@ oauthRouter.post("/set-password", requireAuth, async (req, res) => {
 			.status(400)
 			.json({ error: "Password must be at least 8 characters." });
 	}
-	const { rows } = await pool.query<{ password_hash: string | null }>(
-		"SELECT password_hash FROM users WHERE id = $1",
-		[req.user.id],
-	);
-	if (rows[0]?.password_hash !== null) {
+	const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+	// Conditional on password_hash still being null: closes the TOCTOU
+	// window between a precheck and this write — a concurrent set-password
+	// must not be overwritten.
+	const updated = await db
+		.updateTable("users")
+		.set({ password_hash: hash })
+		.where("id", "=", req.user.id)
+		.where("password_hash", "is", null)
+		.returning("id")
+		.executeTakeFirst();
+	if (!updated) {
 		return res
 			.status(409)
 			.json({ error: "Password already set. Use change-password instead." });
 	}
-	const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-	await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [
-		hash,
-		req.user.id,
-	]);
 	res.json({ ok: true });
 });

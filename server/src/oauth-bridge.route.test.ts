@@ -1,22 +1,30 @@
+/**
+ * Integration tests for the /api/auth/complete-oauth bridge route.
+ *
+ * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
+ *
+ * Run:
+ *   RUN_INTEGRATION=1 npx vitest run src/oauth-bridge.route.test.ts
+ */
+import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import { db } from "./db/kysely.js";
 
-// ── Hoisted mocks ────────────────────────────────────────────────────────────
-const { mockGetSession, mockPool, mockMintSession, mockPoolClient } =
-	vi.hoisted(() => {
-		const mockPoolClient = { query: vi.fn(), release: vi.fn() };
-		return {
-			mockGetSession: vi.fn(),
-			mockPool: {
-				query: vi.fn(),
-				connect: vi.fn(() => Promise.resolve(mockPoolClient)),
-			},
-			mockMintSession: vi.fn(),
-			mockPoolClient,
-		};
-	});
+const { mockGetSession, mockMintSession } = vi.hoisted(() => ({
+	mockGetSession: vi.fn(),
+	mockMintSession: vi.fn(),
+}));
 
 vi.mock("better-auth", () => ({
 	betterAuth: vi.fn(() => ({
@@ -29,10 +37,9 @@ vi.mock("better-auth/node", () => ({
 	fromNodeHeaders: vi.fn((h: unknown) => h),
 }));
 
-vi.mock("./db/pool.js", () => ({ pool: mockPool }));
-
 vi.mock("./config.js", () => ({
 	config: {
+		DATABASE_URL: process.env.DATABASE_URL,
 		CLIENT_URL: "http://localhost:5173",
 		BETTER_AUTH_SECRET: "test-secret",
 		APP_BASE_URL: "http://localhost:3001",
@@ -49,7 +56,7 @@ vi.mock("./auth.js", async (importOriginal) => {
 	return { ...actual, mintCamelSession: mockMintSession };
 });
 
-import { createOAuthBridgeRouter } from "./oauth-bridge.js";
+const { createOAuthBridgeRouter } = await import("./oauth-bridge.js");
 
 const SESSION_COOKIE = "camel_session";
 const CLIENT_URL = "http://localhost:5173";
@@ -61,98 +68,198 @@ function createApp() {
 	return app;
 }
 
-describe("GET /api/auth/complete-oauth", () => {
-	let app: ReturnType<typeof createApp>;
+async function makeUser(opts: {
+	username: string | null;
+	email?: string | null;
+	emailVerified?: boolean;
+}) {
+	const user = await db
+		.insertInto("users")
+		.values({
+			username: opts.username,
+			display_name: opts.username ?? "OAuth User",
+			password_hash: opts.username ? "hashed" : null,
+			email: opts.email ?? null,
+			email_verified: opts.emailVerified ?? false,
+		})
+		.returning("id")
+		.executeTakeFirstOrThrow();
+	return user.id;
+}
 
-	beforeEach(() => {
-		vi.clearAllMocks();
-		app = createApp();
-	});
+const cleanupUserIds: number[] = [];
+const cleanupTokens: string[] = [];
 
-	afterEach(() => vi.clearAllMocks());
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"GET /api/auth/complete-oauth (real DB)",
+	() => {
+		let app: ReturnType<typeof createApp>;
 
-	it("existing password user (has username) linking OAuth: transfers BA account, sets email, redirects to main app", async () => {
-		// Better Auth created orphan user id=99 (no username, fresh OAuth)
-		mockGetSession.mockResolvedValueOnce({ user: { id: "99" } });
+		beforeEach(() => {
+			vi.clearAllMocks();
+			app = createApp();
+		});
 
-		// All queries inside the if (oldToken) block are now transactional (poolClient.query):
-		// BEGIN → session lookup → username check → SELECT email → UPDATE ba_accounts → DELETE orphan → UPDATE email → COMMIT
-		mockPoolClient.query
-			.mockResolvedValueOnce(undefined) // BEGIN
-			.mockResolvedValueOnce({ rows: [{ user_id: 42 }] }) // session lookup
-			.mockResolvedValueOnce({ rows: [{ username: "john" }] }) // username check
-			.mockResolvedValueOnce({
-				rows: [{ email: "john@gmail.com", email_verified: true }],
-			}) // SELECT email from baUser
-			.mockResolvedValueOnce(undefined) // UPDATE ba_accounts SET user_id
-			.mockResolvedValueOnce(undefined) // DELETE FROM users (orphan)
-			.mockResolvedValueOnce(undefined) // UPDATE users SET email (on oldUser)
-			.mockResolvedValueOnce(undefined); // COMMIT
+		afterEach(() => vi.clearAllMocks());
 
-		const res = await request(app)
-			.get("/api/auth/complete-oauth")
-			.set("Cookie", `${SESSION_COOKIE}=old-valid-token`);
+		afterAll(async () => {
+			if (cleanupTokens.length > 0) {
+				await db
+					.deleteFrom("sessions")
+					.where("token", "in", cleanupTokens)
+					.execute();
+			}
+			if (cleanupUserIds.length > 0) {
+				await db
+					.deleteFrom("users")
+					.where("id", "in", cleanupUserIds)
+					.execute();
+			}
+		});
 
-		expect(res.status).toBe(302);
-		expect(res.headers.location).toBe(CLIENT_URL);
-		// Session minted for the EXISTING user (42), not the orphan (99)
-		expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), 42);
-		// Old session must NOT be deleted (it belongs to the legitimate user)
-		const deleteCalls = (
-			mockPoolClient.query as ReturnType<typeof vi.fn>
-		).mock.calls.filter(
-			(c: unknown[]) =>
-				typeof c[0] === "string" && c[0].includes("DELETE FROM sessions"),
-		);
-		expect(deleteCalls).toHaveLength(0);
-		expect(mockPoolClient.release).toHaveBeenCalledOnce();
-	});
+		it("existing password user (has username) linking OAuth: transfers BA account, sets email, redirects to main app", async () => {
+			const uniqueSuffix = Date.now();
+			const username = `john-${uniqueSuffix}`;
+			const email = `john-${uniqueSuffix}@gmail.com`;
+			const accountId = `gh-${uniqueSuffix}`;
 
-	it("true link collision (old user has NO username): orphans old session, redirects to pick-username", async () => {
-		mockGetSession.mockResolvedValueOnce({ user: { id: "55" } });
+			const oldUserId = await makeUser({ username, email: null });
+			const baUserId = await makeUser({
+				username: null,
+				email,
+				emailVerified: true,
+			});
+			cleanupUserIds.push(oldUserId, baUserId);
 
-		// All queries inside the if (oldToken) block are now transactional:
-		// BEGIN → session lookup → username check → DELETE sessions → INSERT auth_audit → COMMIT
-		// Then non-transactional: SELECT username for baUser
-		mockPoolClient.query
-			.mockResolvedValueOnce(undefined) // BEGIN
-			.mockResolvedValueOnce({ rows: [{ user_id: 77 }] }) // session lookup
-			.mockResolvedValueOnce({ rows: [{ username: null }] }) // username check
-			.mockResolvedValueOnce(undefined) // DELETE sessions
-			.mockResolvedValueOnce(undefined) // INSERT auth_audit
-			.mockResolvedValueOnce(undefined); // COMMIT
+			const token = `old-valid-token-${uniqueSuffix}`;
+			cleanupTokens.push(token);
+			await db
+				.insertInto("sessions")
+				.values({
+					token,
+					user_id: oldUserId,
+					expires_at: new Date(Date.now() + 3_600_000),
+				})
+				.execute();
+			await db
+				.insertInto("ba_accounts")
+				.values({
+					id: `acct-${uniqueSuffix}`,
+					account_id: accountId,
+					provider_id: "github",
+					user_id: baUserId,
+				})
+				.execute();
 
-		mockPool.query.mockResolvedValueOnce({ rows: [{ username: null }] }); // baUser username
+			mockGetSession.mockResolvedValueOnce({ user: { id: String(baUserId) } });
 
-		const res = await request(app)
-			.get("/api/auth/complete-oauth")
-			.set("Cookie", `${SESSION_COOKIE}=other-token`);
+			const res = await request(app)
+				.get("/api/auth/complete-oauth")
+				.set("Cookie", `${SESSION_COOKIE}=${token}`);
 
-		expect(res.status).toBe(302);
-		expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth=pick-username`);
-		expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), 55);
-	});
+			expect(res.status).toBe(302);
+			expect(res.headers.location).toBe(CLIENT_URL);
+			// Session minted for the EXISTING user, not the orphan
+			expect(mockMintSession).toHaveBeenCalledWith(
+				expect.anything(),
+				oldUserId,
+			);
 
-	it("no existing session: new OAuth user redirects to pick-username", async () => {
-		mockGetSession.mockResolvedValueOnce({ user: { id: "10" } });
+			// Old session must NOT be deleted (it belongs to the legitimate user)
+			const session = await db
+				.selectFrom("sessions")
+				.select("user_id")
+				.where("token", "=", token)
+				.executeTakeFirst();
+			expect(session?.user_id).toBe(oldUserId);
 
-		// No old session cookie — only mintCamelSession + username check
-		mockPool.query.mockResolvedValueOnce({ rows: [{ username: null }] }); // baUser username
+			// Orphan BA user deleted, ba_accounts transferred, email set on old user
+			const orphan = await db
+				.selectFrom("users")
+				.select("id")
+				.where("id", "=", baUserId)
+				.executeTakeFirst();
+			expect(orphan).toBeUndefined();
 
-		const res = await request(app).get("/api/auth/complete-oauth");
+			const account = await db
+				.selectFrom("ba_accounts")
+				.select("user_id")
+				.where("account_id", "=", accountId)
+				.executeTakeFirst();
+			expect(account?.user_id).toBe(oldUserId);
 
-		expect(res.status).toBe(302);
-		expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth=pick-username`);
-		expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), 10);
-	});
+			const oldUser = await db
+				.selectFrom("users")
+				.select(["email", "email_verified"])
+				.where("id", "=", oldUserId)
+				.executeTakeFirstOrThrow();
+			expect(oldUser.email).toBe(email);
+			expect(oldUser.email_verified).toBe(true);
+		});
 
-	it("no Better Auth session: redirects to oauth_error=cancelled", async () => {
-		mockGetSession.mockResolvedValueOnce(null);
+		it("true link collision (old user has NO username): orphans old session, redirects to pick-username", async () => {
+			const oldUserId = await makeUser({ username: null });
+			const baUserId = await makeUser({ username: null });
+			cleanupUserIds.push(oldUserId, baUserId);
 
-		const res = await request(app).get("/api/auth/complete-oauth");
+			const token = `other-token-${Date.now()}`;
+			cleanupTokens.push(token);
+			await db
+				.insertInto("sessions")
+				.values({
+					token,
+					user_id: oldUserId,
+					expires_at: new Date(Date.now() + 3_600_000),
+				})
+				.execute();
 
-		expect(res.status).toBe(302);
-		expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth_error=cancelled`);
-		expect(mockMintSession).not.toHaveBeenCalled();
-	});
-});
+			mockGetSession.mockResolvedValueOnce({ user: { id: String(baUserId) } });
+
+			const res = await request(app)
+				.get("/api/auth/complete-oauth")
+				.set("Cookie", `${SESSION_COOKIE}=${token}`);
+
+			expect(res.status).toBe(302);
+			expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth=pick-username`);
+			expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), baUserId);
+
+			const session = await db
+				.selectFrom("sessions")
+				.select("token")
+				.where("token", "=", token)
+				.executeTakeFirst();
+			expect(session).toBeUndefined();
+
+			const audit = await db
+				.selectFrom("auth_audit")
+				.select(["actor_id", "event_type"])
+				.where("actor_id", "=", oldUserId)
+				.where("event_type", "=", "account_orphaned")
+				.executeTakeFirst();
+			expect(audit).toBeDefined();
+		});
+
+		it("no existing session: new OAuth user redirects to pick-username", async () => {
+			const baUserId = await makeUser({ username: null });
+			cleanupUserIds.push(baUserId);
+
+			mockGetSession.mockResolvedValueOnce({ user: { id: String(baUserId) } });
+
+			const res = await request(app).get("/api/auth/complete-oauth");
+
+			expect(res.status).toBe(302);
+			expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth=pick-username`);
+			expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), baUserId);
+		});
+
+		it("no Better Auth session: redirects to oauth_error=cancelled", async () => {
+			mockGetSession.mockResolvedValueOnce(null);
+
+			const res = await request(app).get("/api/auth/complete-oauth");
+
+			expect(res.status).toBe(302);
+			expect(res.headers.location).toBe(`${CLIENT_URL}/?oauth_error=cancelled`);
+			expect(mockMintSession).not.toHaveBeenCalled();
+		});
+	},
+);

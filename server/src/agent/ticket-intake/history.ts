@@ -1,4 +1,4 @@
-import type { Queryable } from "../../routes/helpers.js";
+import type { DBExecutor } from "../../db/kysely.js";
 
 export type TicketHistoryEntry = {
 	title: string;
@@ -7,21 +7,26 @@ export type TicketHistoryEntry = {
 };
 
 export async function getTicketHistory(
-	db: Queryable,
+	dbExec: DBExecutor,
 	workspaceId: number,
 	cardId: number,
 ): Promise<TicketHistoryEntry[]> {
-	const { rows } = await db.query(
-		`SELECT payload, created_at FROM card_events WHERE workspace_id = $1 AND card_id = $2 AND event_type = 'linear_ticket_created' ORDER BY created_at DESC`,
-		[workspaceId, cardId],
-	);
+	const rows = await dbExec
+		.selectFrom("card_events")
+		.select(["payload", "created_at"])
+		.where("workspace_id", "=", workspaceId)
+		.where("card_id", "=", cardId)
+		.where("event_type", "=", "linear_ticket_created")
+		.orderBy("created_at", "desc")
+		.orderBy("id", "desc")
+		.execute();
 
 	return rows.map((row) => {
 		const payload = row.payload as { title?: string; issueUrl?: string };
 		return {
 			title: payload.title ?? "",
 			issueUrl: payload.issueUrl ?? "",
-			createdAt: row.created_at as Date,
+			createdAt: row.created_at,
 		};
 	});
 }

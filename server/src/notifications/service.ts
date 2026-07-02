@@ -1,4 +1,4 @@
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 import { domainBus, EVENTS, type DomainEvent } from "../events.js";
 
 type PushFn = (
@@ -23,22 +23,21 @@ async function insertNotification(params: {
 	actorId?: number | null;
 }): Promise<Record<string, unknown> | null> {
 	try {
-		const { rows } = await pool.query(
-			`INSERT INTO notifications (user_id, workspace_id, type, title, body, card_id, board_id, actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING *`,
-			[
-				params.userId,
-				params.workspaceId,
-				params.type,
-				params.title,
-				params.body ?? null,
-				params.cardId ?? null,
-				params.boardId ?? null,
-				params.actorId ?? null,
-			],
-		);
-		return rows[0] ?? null;
+		const row = await db
+			.insertInto("notifications")
+			.values({
+				user_id: params.userId,
+				workspace_id: params.workspaceId,
+				type: params.type,
+				title: params.title,
+				body: params.body ?? null,
+				card_id: params.cardId ?? null,
+				board_id: params.boardId ?? null,
+				actor_id: params.actorId ?? null,
+			})
+			.returningAll()
+			.executeTakeFirst();
+		return row ?? null;
 	} catch (err) {
 		console.error(
 			`Failed to insert notification (type=${params.type}, user=${params.userId}):`,
@@ -110,13 +109,15 @@ function onMemberJoined(event: DomainEvent): void {
 			existingMemberIds: number[];
 		};
 	void (async () => {
-		const { rows } = await pool.query(
-			`SELECT id FROM notifications
-         WHERE user_id = $1 AND workspace_id = $2 AND type = 'welcome'
-         LIMIT 1`,
-			[newMemberId, event.workspaceId],
-		);
-		if (rows.length === 0) {
+		const existing = await db
+			.selectFrom("notifications")
+			.select("id")
+			.where("user_id", "=", newMemberId)
+			.where("workspace_id", "=", event.workspaceId)
+			.where("type", "=", "welcome")
+			.limit(1)
+			.executeTakeFirst();
+		if (!existing) {
 			const n = await insertNotification({
 				userId: newMemberId,
 				workspaceId: event.workspaceId,
@@ -140,11 +141,11 @@ function onMemberJoined(event: DomainEvent): void {
 
 function onCardDeleted(event: DomainEvent): void {
 	const { cardId } = event.payload as { cardId: number };
-	void pool
-		.query(
-			"UPDATE notifications SET source_deleted = true WHERE card_id = $1",
-			[cardId],
-		)
+	void db
+		.updateTable("notifications")
+		.set({ source_deleted: true })
+		.where("card_id", "=", cardId)
+		.execute()
 		.catch((err) => {
 			console.error(
 				`Failed to mark notifications source_deleted for card ${cardId}:`,
@@ -155,10 +156,11 @@ function onCardDeleted(event: DomainEvent): void {
 
 async function onSystemAlert(event: DomainEvent): Promise<void> {
 	const { title, body } = event.payload as { title: string; body?: string };
-	const { rows } = await pool.query(
-		"SELECT user_id FROM workspace_members WHERE workspace_id = $1",
-		[event.workspaceId],
-	);
+	const rows = await db
+		.selectFrom("workspace_members")
+		.select("user_id")
+		.where("workspace_id", "=", event.workspaceId)
+		.execute();
 	for (const row of rows) {
 		const n = await insertNotification({
 			userId: row.user_id,

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { sql } from "kysely";
 import {
 	neighborsAt,
 	POSITION_GAP,
@@ -6,7 +7,7 @@ import {
 	rebalance,
 } from "../core/position.js";
 import { checkWipLimit } from "../core/wip.js";
-import { pool } from "../db/pool.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
@@ -17,10 +18,10 @@ import {
 } from "../validators/input-length.js";
 import {
 	addCardAssignee,
+	type CardAssignee,
 	getCardAssigneeIds,
 	loadCardAssigneesForCards,
 	syncCardAssignees,
-	type CardAssignee,
 } from "./card-assignees.js";
 import {
 	createScopedBoardService,
@@ -31,9 +32,37 @@ import {
 
 export const cardsRouter = Router({ mergeParams: true });
 
-const CARD_SELECT = `SELECT c.id, c.workspace_id, c.column_id, c.title, c.description, c.position, c.version,
-  c.created_at, c.started_at, c.done_at, c.due_date::text AS due_date
-  FROM cards c`;
+function selectFullCard(dbExec: DBExecutor) {
+	return dbExec
+		.selectFrom("cards as c")
+		.select([
+			"c.id",
+			"c.workspace_id",
+			"c.column_id",
+			"c.title",
+			"c.description",
+			"c.position",
+			"c.version",
+			"c.created_at",
+			"c.started_at",
+			"c.done_at",
+			sql<string | null>`c.due_date::text`.as("due_date"),
+		]);
+}
+
+type FullCardRow = {
+	id: number;
+	workspace_id: number;
+	column_id: number;
+	title: string;
+	description: string;
+	position: number;
+	version: number;
+	created_at: Date;
+	started_at: Date | null;
+	done_at: Date | null;
+	due_date: string | null;
+};
 
 type CardDbRow = {
 	id: number;
@@ -47,6 +76,21 @@ type CardDbRow = {
 	done_at: string | null;
 	due_date: string | null;
 };
+
+function toCardDbRow(row: FullCardRow): CardDbRow {
+	return {
+		id: row.id,
+		column_id: row.column_id,
+		title: row.title,
+		description: row.description,
+		position: row.position,
+		version: row.version,
+		created_at: row.created_at.toISOString(),
+		started_at: row.started_at?.toISOString() ?? null,
+		done_at: row.done_at?.toISOString() ?? null,
+		due_date: row.due_date,
+	};
+}
 
 function mapCardResponse(c: CardDbRow, assignees: CardAssignee[]) {
 	return {
@@ -65,13 +109,14 @@ function mapCardResponse(c: CardDbRow, assignees: CardAssignee[]) {
 }
 
 async function hydrateCard(cardId: number, workspaceId: number) {
-	const { rows } = await pool.query(
-		`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
-		[cardId, workspaceId],
-	);
-	if (rows.length === 0) return null;
-	const assigneesByCard = await loadCardAssigneesForCards(pool, [cardId]);
-	return mapCardResponse(rows[0], assigneesByCard.get(cardId) ?? []);
+	const row = await selectFullCard(db)
+		.where("c.id", "=", cardId)
+		.where("c.workspace_id", "=", workspaceId)
+		.where("c.deleted_at", "is", null)
+		.executeTakeFirst();
+	if (!row) return null;
+	const assigneesByCard = await loadCardAssigneesForCards(db, [cardId]);
+	return mapCardResponse(toCardDbRow(row), assigneesByCard.get(cardId) ?? []);
 }
 
 function emitCardAssigned(
@@ -174,25 +219,25 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 			return r ? { role: r } : null;
 		},
 		getCardById: async (wsId, cId) => {
-			const { rows } = await pool.query(
-				`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
-				[cId, wsId],
-			);
-			if (rows.length === 0) return null;
-			const assigneesByCard = await loadCardAssigneesForCards(pool, [cId]);
-			const c = rows[0];
+			const row = await selectFullCard(db)
+				.where("c.id", "=", cId)
+				.where("c.workspace_id", "=", wsId)
+				.where("c.deleted_at", "is", null)
+				.executeTakeFirst();
+			if (!row) return null;
+			const assigneesByCard = await loadCardAssigneesForCards(db, [cId]);
 			return {
-				id: c.id,
-				workspaceId: c.workspace_id,
-				title: c.title,
-				columnId: c.column_id,
-				description: c.description,
-				position: c.position,
-				version: c.version,
-				createdAt: c.created_at,
-				startedAt: c.started_at,
-				doneAt: c.done_at,
-				dueDate: c.due_date,
+				id: row.id,
+				workspaceId: row.workspace_id,
+				title: row.title,
+				columnId: row.column_id,
+				description: row.description,
+				position: row.position,
+				version: row.version,
+				createdAt: row.created_at.toISOString(),
+				startedAt: row.started_at?.toISOString() ?? null,
+				doneAt: row.done_at?.toISOString() ?? null,
+				dueDate: row.due_date,
 				assignees: assigneesByCard.get(cId) ?? [],
 			};
 		},
@@ -210,6 +255,9 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const { columnId, title, description } = req.body ?? {};
+	if (!Number.isInteger(columnId)) {
+		return res.status(400).json({ error: "columnId must be an integer" });
+	}
 	const titleValidation = validateCardTitle(title ?? "");
 	if (!titleValidation.valid) {
 		return res.status(400).json({ error: titleValidation.error });
@@ -218,81 +266,93 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	if (!descValidation.valid) {
 		return res.status(400).json({ error: descValidation.error });
 	}
-	const col = await pool.query(
-		"SELECT id, wip_limit, is_signable, signable_assignee_id FROM columns WHERE id = $1 AND workspace_id = $2",
-		[Number(columnId), workspaceId],
-	);
-	if (col.rows.length === 0) {
-		return res.status(404).json({ error: "column not found" });
-	}
-	const count = await pool.query(
-		"SELECT COUNT(*)::int AS n FROM cards WHERE column_id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
-		[Number(columnId), workspaceId],
-	);
-	const wip = checkWipLimit({
-		currentCount: count.rows[0].n,
-		wipLimit: col.rows[0].wip_limit,
-		isSameColumn: false,
-	});
-	if (!wip.allowed) {
-		return res.status(409).json({ error: "WIP limit reached for this column" });
-	}
-	const autoAssigneeId =
-		col.rows[0].is_signable && col.rows[0].signable_assignee_id
-			? col.rows[0].signable_assignee_id
-			: null;
-	const client = await pool.connect();
-	try {
-		await client.query("BEGIN");
-		const { rows } = await client.query(
-			`INSERT INTO cards (column_id, title, description, position, workspace_id)
-     VALUES ($1, $2, $3,
-             COALESCE((SELECT MAX(position) FROM cards WHERE column_id = $1), 0) + $4,
-             $5)
-     RETURNING id`,
-			[
-				Number(columnId),
-				titleValidation.trimmed,
-				descValidation.trimmed ?? "",
-				POSITION_GAP,
-				workspaceId,
-			],
-		);
-		const cardId = rows[0].id as number;
-		if (autoAssigneeId !== null) {
-			await addCardAssignee(client, cardId, autoAssigneeId);
+	type CreateResult =
+		| { kind: "not_found_column" }
+		| { kind: "wip" }
+		| { kind: "ok"; cardId: number; autoAssigneeId: number | null };
+
+	const result: CreateResult = await db.transaction().execute(async (trx) => {
+		// Lock the column row first so concurrent creates targeting the same
+		// column serialize on the WIP count instead of racing past it together.
+		const col = await trx
+			.selectFrom("columns")
+			.select(["id", "wip_limit", "is_signable", "signable_assignee_id"])
+			.where("id", "=", Number(columnId))
+			.where("workspace_id", "=", workspaceId)
+			.forUpdate()
+			.executeTakeFirst();
+		if (!col) {
+			return { kind: "not_found_column" };
 		}
-		await recordActivity(client, req.user!, workspaceId, "create", {
-			cardId,
+		const countRow = await trx
+			.selectFrom("cards")
+			.select(sql<number>`count(*)::int`.as("n"))
+			.where("column_id", "=", Number(columnId))
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.executeTakeFirstOrThrow();
+		const wip = checkWipLimit({
+			currentCount: countRow.n,
+			wipLimit: col.wip_limit,
+			isSameColumn: false,
+		});
+		if (!wip.allowed) {
+			return { kind: "wip" };
+		}
+		const autoAssigneeId =
+			col.is_signable && col.signable_assignee_id
+				? col.signable_assignee_id
+				: null;
+
+		const inserted = await trx
+			.insertInto("cards")
+			.values({
+				column_id: Number(columnId),
+				title: titleValidation.trimmed as string,
+				description: descValidation.trimmed ?? "",
+				position: sql<number>`COALESCE((SELECT MAX(position) FROM cards WHERE column_id = ${Number(columnId)}), 0) + ${POSITION_GAP}`,
+				workspace_id: workspaceId,
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+
+		if (autoAssigneeId !== null) {
+			await addCardAssignee(trx, inserted.id, autoAssigneeId);
+		}
+		await recordActivity(trx, req.user!, workspaceId, "create", {
+			cardId: inserted.id,
 			toColumnId: Number(columnId),
 			payload: { cardTitle: titleValidation.trimmed },
 		});
-		await client.query("COMMIT");
+		return { kind: "ok", cardId: inserted.id, autoAssigneeId };
+	});
 
-		await publishEvent(workspaceId, {
-			type: "card.created",
-			actor: req.user!,
-			cardId,
-		});
-
-		const card = await hydrateCard(cardId, workspaceId);
-		if (autoAssigneeId !== null) {
-			emitCardAssigned(
-				workspaceId,
-				req.user!.id,
-				cardId,
-				card!.title,
-				req.user!.displayName,
-				autoAssigneeId,
-			);
-		}
-		res.status(201).json(card);
-	} catch (err) {
-		await client.query("ROLLBACK");
-		throw err;
-	} finally {
-		client.release();
+	if (result.kind === "not_found_column") {
+		return res.status(404).json({ error: "column not found" });
 	}
+	if (result.kind === "wip") {
+		return res.status(409).json({ error: "WIP limit reached for this column" });
+	}
+	const { cardId, autoAssigneeId } = result;
+
+	await publishEvent(workspaceId, {
+		type: "card.created",
+		actor: req.user!,
+		cardId,
+	});
+
+	const card = await hydrateCard(cardId, workspaceId);
+	if (autoAssigneeId !== null) {
+		emitCardAssigned(
+			workspaceId,
+			req.user!.id,
+			cardId,
+			card!.title,
+			req.user!.displayName,
+			autoAssigneeId,
+		);
+	}
+	res.status(201).json(card);
 });
 
 cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -309,38 +369,36 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	}
 
 	// Presence (not null) decides whether a field is touched: an explicit null
-	// clears a nullable column, an absent key leaves it untouched. COALESCE
-	// can't express "clear", so the SET clause is built from present keys only.
+	// clears a nullable column, an absent key leaves it untouched.
 	const hasTitle = "title" in body;
 	const hasDescription = "description" in body;
 	const hasAssigneeIds = "assigneeIds" in body;
 	const hasDueDate = "dueDate" in body;
 
-	const sets: string[] = [];
-	const vals: unknown[] = [];
+	const setFields: {
+		title?: string;
+		description?: string;
+		due_date?: string | null;
+	} = {};
 
 	if (hasTitle) {
 		const v = validateCardTitle(title as string);
 		if (!v.valid) return res.status(400).json({ error: v.error });
-		vals.push(v.trimmed);
-		sets.push(`title = $${vals.length}`);
+		setFields.title = v.trimmed as string;
 	}
 	if (hasDescription) {
 		const v = validateCardDescription(description as string);
 		if (!v.valid) return res.status(400).json({ error: v.error });
-		vals.push(v.trimmed);
-		sets.push(`description = $${vals.length}`);
+		setFields.description = v.trimmed as string;
 	}
 	if (hasDueDate) {
 		const dueDate = body.dueDate;
 		if (dueDate === null) {
-			vals.push(null);
-			sets.push(`due_date = $${vals.length}`);
+			setFields.due_date = null;
 		} else {
 			const v = validateDueDate(dueDate as string);
 			if (!v.valid) return res.status(400).json({ error: v.error });
-			vals.push(v.trimmed);
-			sets.push(`due_date = $${vals.length}`);
+			setFields.due_date = v.trimmed as string;
 		}
 	}
 
@@ -353,95 +411,116 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		parsedAssigneeIds = parsed;
 	}
 
-	if (sets.length === 0 && !hasAssigneeIds) {
+	const hasSets = Object.keys(setFields).length > 0;
+	if (!hasSets && !hasAssigneeIds) {
 		return res.status(400).json({ error: "no updatable fields provided" });
 	}
-	if (sets.length > 0 || hasAssigneeIds) {
-		sets.push("version = version + 1");
-	}
 
-	const client = await pool.connect();
-	try {
-		await client.query("BEGIN");
+	type TxResult =
+		| { kind: "not_found" }
+		| { kind: "conflict"; card: ReturnType<typeof mapCardResponse> | null }
+		| {
+				kind: "ok";
+				updated: CardDbRow;
+				prevDueDate: string | null | undefined;
+				prevAssigneeIds: number[];
+				assigneeSync?: { added: number[] };
+		  };
 
-		const prevRes = await client.query(
-			`SELECT due_date::text AS due_date FROM cards
-       WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
-			[id, workspaceId],
-		);
-		const prevDueDate = prevRes.rows[0]?.due_date as string | null | undefined;
-		const prevAssigneeIds = await getCardAssigneeIds(client, id);
+	const result: TxResult = await db.transaction().execute(async (trx) => {
+		const prevRow = await trx
+			.selectFrom("cards")
+			.select(sql<string | null>`due_date::text`.as("due_date"))
+			.where("id", "=", id)
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.executeTakeFirst();
+		const prevDueDate = prevRow?.due_date;
+		const prevAssigneeIds = await getCardAssigneeIds(trx, id);
 
 		let updated: CardDbRow;
-		if (sets.length > 0) {
-			vals.push(id);
-			const idP = vals.length;
-			vals.push(workspaceId);
-			const wsP = vals.length;
-			vals.push(version ?? null);
-			const verP = vals.length;
+		if (hasSets) {
+			const updatedRow = await trx
+				.updateTable("cards")
+				.set({ ...setFields, version: sql`version + 1` })
+				.where("id", "=", id)
+				.where("workspace_id", "=", workspaceId)
+				.where("deleted_at", "is", null)
+				.$if(version !== undefined, (qb) =>
+					qb.where("version", "=", version as number),
+				)
+				.returning([
+					"id",
+					"column_id",
+					"title",
+					"description",
+					"position",
+					"version",
+					"created_at",
+					"started_at",
+					"done_at",
+					sql<string | null>`due_date::text`.as("due_date"),
+				])
+				.executeTakeFirst();
 
-			const { rows } = await client.query(
-				`UPDATE cards SET ${sets.join(", ")}
-         WHERE id = $${idP} AND workspace_id = $${wsP} AND deleted_at IS NULL
-           AND ($${verP}::int IS NULL OR version = $${verP})
-         RETURNING id, column_id, title, description, position, version,
-                   created_at, started_at, done_at, due_date::text AS due_date`,
-				vals,
-			);
-			if (rows.length === 0) {
-				await client.query("ROLLBACK");
-				const current = await pool.query(
-					`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
-					[id, workspaceId],
-				);
-				if (current.rows.length === 0) {
-					return res.status(404).json({ error: "card not found" });
-				}
-				const assigneesByCard = await loadCardAssigneesForCards(pool, [id]);
-				return res.status(409).json({
-					error: "Someone else updated this card first.",
-					code: "version_conflict",
+			if (!updatedRow) {
+				const current = await selectFullCard(trx)
+					.where("c.id", "=", id)
+					.where("c.workspace_id", "=", workspaceId)
+					.where("c.deleted_at", "is", null)
+					.executeTakeFirst();
+				if (!current) return { kind: "not_found" };
+				const assigneesByCard = await loadCardAssigneesForCards(trx, [id]);
+				return {
+					kind: "conflict",
 					card: mapCardResponse(
-						current.rows[0],
+						toCardDbRow(current),
 						assigneesByCard.get(id) ?? [],
 					),
-				});
+				};
 			}
-			updated = rows[0];
+			updated = {
+				id: updatedRow.id,
+				column_id: updatedRow.column_id,
+				title: updatedRow.title,
+				description: updatedRow.description,
+				position: updatedRow.position,
+				version: updatedRow.version,
+				created_at: updatedRow.created_at.toISOString(),
+				started_at: updatedRow.started_at?.toISOString() ?? null,
+				done_at: updatedRow.done_at?.toISOString() ?? null,
+				due_date: updatedRow.due_date,
+			};
 		} else {
-			const { rows } = await client.query(
-				`${CARD_SELECT} WHERE c.id = $1 AND c.workspace_id = $2 AND c.deleted_at IS NULL`,
-				[id, workspaceId],
-			);
-			if (rows.length === 0) {
-				await client.query("ROLLBACK");
-				return res.status(404).json({ error: "card not found" });
-			}
-			updated = rows[0];
-			const bump = await client.query(
-				`UPDATE cards SET version = version + 1
-         WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-           AND ($3::int IS NULL OR version = $3)
-         RETURNING version`,
-				[id, workspaceId, version ?? null],
-			);
-			if (bump.rows.length === 0) {
-				await client.query("ROLLBACK");
-				return res.status(409).json({
-					error: "Someone else updated this card first.",
-					code: "version_conflict",
-				});
-			}
-			updated.version = bump.rows[0].version;
+			const current = await selectFullCard(trx)
+				.where("c.id", "=", id)
+				.where("c.workspace_id", "=", workspaceId)
+				.where("c.deleted_at", "is", null)
+				.executeTakeFirst();
+			if (!current) return { kind: "not_found" };
+			updated = toCardDbRow(current);
+
+			const bump = await trx
+				.updateTable("cards")
+				.set({ version: sql`version + 1` })
+				.where("id", "=", id)
+				.where("workspace_id", "=", workspaceId)
+				.where("deleted_at", "is", null)
+				.$if(version !== undefined, (qb) =>
+					qb.where("version", "=", version as number),
+				)
+				.returning("version")
+				.executeTakeFirst();
+			if (!bump) return { kind: "conflict", card: null };
+			updated.version = bump.version;
 		}
 
 		let assigneeSync: { added: number[] } | undefined;
 		if (hasAssigneeIds && parsedAssigneeIds !== undefined) {
-			assigneeSync = await syncCardAssignees(client, id, parsedAssigneeIds);
+			assigneeSync = await syncCardAssignees(trx, id, parsedAssigneeIds);
 		}
 
-		await recordActivity(client, req.user!, workspaceId, "update", {
+		await recordActivity(trx, req.user!, workspaceId, "update", {
 			cardId: id,
 			payload: {
 				cardTitle: updated.title,
@@ -454,50 +533,64 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 			},
 		});
 
-		await client.query("COMMIT");
+		return { kind: "ok", updated, prevDueDate, prevAssigneeIds, assigneeSync };
+	});
 
-		await publishEvent(workspaceId, {
-			type: "card.updated",
-			actor: req.user!,
-			cardId: id,
-		});
-
-		const assigneesByCard = await loadCardAssigneesForCards(pool, [id]);
-		const currentAssigneeIds = (assigneesByCard.get(id) ?? []).map((a) => a.id);
-
-		if (assigneeSync) {
-			for (const assigneeId of assigneeSync.added) {
-				emitCardAssigned(
-					workspaceId,
-					req.user!.id,
-					id,
-					updated.title,
-					req.user!.displayName,
-					assigneeId,
-				);
-			}
+	if (result.kind === "not_found") {
+		return res.status(404).json({ error: "card not found" });
+	}
+	if (result.kind === "conflict") {
+		if (result.card) {
+			return res.status(409).json({
+				error: "Someone else updated this card first.",
+				code: "version_conflict",
+				card: result.card,
+			});
 		}
+		return res.status(409).json({
+			error: "Someone else updated this card first.",
+			code: "version_conflict",
+		});
+	}
 
-		if (hasDueDate && updated.due_date !== prevDueDate) {
-			emitDueDateChange(
+	const { updated, prevDueDate, prevAssigneeIds, assigneeSync } = result;
+
+	await publishEvent(workspaceId, {
+		type: "card.updated",
+		actor: req.user!,
+		cardId: id,
+	});
+
+	const assigneesByCard = await loadCardAssigneesForCards(db, [id]);
+	const currentAssigneeIds = (assigneesByCard.get(id) ?? []).map((a) => a.id);
+
+	if (assigneeSync) {
+		for (const assigneeId of assigneeSync.added) {
+			emitCardAssigned(
 				workspaceId,
 				req.user!.id,
 				id,
 				updated.title,
 				req.user!.displayName,
-				currentAssigneeIds.length > 0 ? currentAssigneeIds : prevAssigneeIds,
-				prevDueDate ?? null,
-				updated.due_date as string | null,
+				assigneeId,
 			);
 		}
-
-		res.json(mapCardResponse(updated, assigneesByCard.get(id) ?? []));
-	} catch (err) {
-		await client.query("ROLLBACK");
-		throw err;
-	} finally {
-		client.release();
 	}
+
+	if (hasDueDate && updated.due_date !== (prevDueDate ?? null)) {
+		emitDueDateChange(
+			workspaceId,
+			req.user!.id,
+			id,
+			updated.title,
+			req.user!.displayName,
+			currentAssigneeIds.length > 0 ? currentAssigneeIds : prevAssigneeIds,
+			prevDueDate ?? null,
+			updated.due_date,
+		);
+	}
+
+	res.json(mapCardResponse(updated, assigneesByCard.get(id) ?? []));
 });
 
 cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -507,16 +600,55 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	if (Number.isNaN(id)) {
 		return res.status(400).json({ error: "invalid card id" });
 	}
-	const { rows } = await pool.query(
-		"UPDATE cards SET deleted_at = now() WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL RETURNING title, column_id",
-		[id, workspaceId],
-	);
-	if (rows.length === 0)
-		return res.status(404).json({ error: "card not found" });
-	await recordActivity(pool, req.user!, workspaceId, "delete", {
-		fromColumnId: rows[0].column_id,
-		payload: { cardTitle: rows[0].title },
+	const { version } = (req.body ?? {}) as { version?: unknown };
+	if (version !== undefined && !Number.isInteger(version)) {
+		return res.status(400).json({ error: "version must be an integer" });
+	}
+
+	type DeleteResult =
+		| { kind: "not_found" }
+		| { kind: "conflict" }
+		| { kind: "ok"; title: string; column_id: number };
+
+	const result: DeleteResult = await db.transaction().execute(async (trx) => {
+		const row = await trx
+			.updateTable("cards")
+			.set({ deleted_at: sql`now()` })
+			.where("id", "=", id)
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.$if(version !== undefined, (qb) =>
+				qb.where("version", "=", version as number),
+			)
+			.returning(["title", "column_id"])
+			.executeTakeFirst();
+		if (!row) {
+			const current = await trx
+				.selectFrom("cards")
+				.select("id")
+				.where("id", "=", id)
+				.where("workspace_id", "=", workspaceId)
+				.where("deleted_at", "is", null)
+				.executeTakeFirst();
+			return current ? { kind: "conflict" } : { kind: "not_found" };
+		}
+		await recordActivity(trx, req.user!, workspaceId, "delete", {
+			fromColumnId: row.column_id,
+			payload: { cardTitle: row.title },
+		});
+		return { kind: "ok", title: row.title, column_id: row.column_id };
 	});
+
+	if (result.kind === "not_found") {
+		return res.status(404).json({ error: "card not found" });
+	}
+	if (result.kind === "conflict") {
+		return res.status(409).json({
+			error: "Someone else updated this card first.",
+			code: "version_conflict",
+		});
+	}
+
 	await publishEvent(workspaceId, {
 		type: "card.deleted",
 		actor: req.user!,
@@ -557,61 +689,76 @@ cardsRouter.post(
 			return res.status(400).json({ error: "version must be an integer" });
 		}
 
-		const client = await pool.connect();
-		try {
-			await client.query("BEGIN");
+		type MoveResult =
+			| { kind: "not_found_card" }
+			| { kind: "conflict" }
+			| { kind: "not_found_column" }
+			| { kind: "wip"; reason?: string }
+			| {
+					kind: "ok";
+					isSameColumn: boolean;
+					cardTitle: string;
+					addedSignableAssignee: number | null;
+			  };
 
-			const cardRes = await client.query(
-				"SELECT id, column_id, title, version, started_at, done_at FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL FOR UPDATE",
-				[cardId, workspaceId],
-			);
-			if (cardRes.rows.length === 0) {
-				await client.query("ROLLBACK");
-				return res.status(404).json({ error: "card not found" });
-			}
-			const card = cardRes.rows[0];
+		const result: MoveResult = await db.transaction().execute(async (trx) => {
+			const card = await trx
+				.selectFrom("cards")
+				.select([
+					"id",
+					"column_id",
+					"title",
+					"version",
+					"started_at",
+					"done_at",
+				])
+				.where("id", "=", cardId)
+				.where("workspace_id", "=", workspaceId)
+				.where("deleted_at", "is", null)
+				.forUpdate()
+				.executeTakeFirst();
+			if (!card) return { kind: "not_found_card" };
 
 			if (version !== undefined && card.version !== version) {
-				await client.query("ROLLBACK");
-				return res.status(409).json({
-					error: "Someone else moved this card first.",
-					code: "version_conflict",
-				});
+				return { kind: "conflict" };
 			}
 
-			const colRes = await client.query(
-				`SELECT id, wip_limit, is_done, is_signable, signable_assignee_id,
-              (position = (SELECT MIN(position) FROM columns WHERE workspace_id = $2)) AS is_first
-       FROM columns WHERE id = $1 AND workspace_id = $2`,
-				[toColumnId, workspaceId],
-			);
-			if (colRes.rows.length === 0) {
-				await client.query("ROLLBACK");
-				return res.status(404).json({ error: "column not found" });
-			}
-			const target = colRes.rows[0];
+			const target = await trx
+				.selectFrom("columns")
+				.select([
+					"id",
+					"wip_limit",
+					"is_done",
+					"is_signable",
+					"signable_assignee_id",
+					sql<boolean>`(position = (SELECT MIN(position) FROM columns WHERE workspace_id = ${workspaceId}))`.as(
+						"is_first",
+					),
+				])
+				.where("id", "=", toColumnId)
+				.where("workspace_id", "=", workspaceId)
+				.executeTakeFirst();
+			if (!target) return { kind: "not_found_column" };
+
 			const isSameColumn = card.column_id === toColumnId;
 
-			const siblingsRes = await client.query(
-				`SELECT id, position FROM cards
-       WHERE column_id = $1 AND workspace_id = $2 AND id <> $3 AND deleted_at IS NULL
-       ORDER BY position FOR UPDATE`,
-				[toColumnId, workspaceId, cardId],
-			);
-			const siblings = siblingsRes.rows;
+			const siblings = await trx
+				.selectFrom("cards")
+				.select(["id", "position"])
+				.where("column_id", "=", toColumnId)
+				.where("workspace_id", "=", workspaceId)
+				.where("id", "<>", cardId)
+				.where("deleted_at", "is", null)
+				.orderBy("position")
+				.forUpdate()
+				.execute();
 
 			const wip = checkWipLimit({
 				currentCount: siblings.length,
 				wipLimit: target.wip_limit,
 				isSameColumn,
 			});
-			if (!wip.allowed) {
-				await client.query("ROLLBACK");
-				return res.status(409).json({
-					error: "WIP limit reached for this column",
-					reason: wip.reason,
-				});
-			}
+			if (!wip.allowed) return { kind: "wip", reason: wip.reason };
 
 			let position: number;
 			try {
@@ -623,34 +770,27 @@ cardsRouter.post(
 			} catch {
 				const fresh = rebalance(siblings.length);
 				for (let i = 0; i < siblings.length; i++) {
-					await client.query("UPDATE cards SET position = $2 WHERE id = $1", [
-						siblings[i].id,
-						fresh[i],
-					]);
+					await trx
+						.updateTable("cards")
+						.set({ position: fresh[i] })
+						.where("id", "=", siblings[i].id)
+						.execute();
 				}
 				const { before, after } = neighborsAt(fresh, index);
 				position = positionBetween(before, after);
 			}
 
-			await client.query(
-				`UPDATE cards SET
-			     column_id = $2,
-			     position = $3,
-			     version = version + 1,
-			     started_at = CASE
-			       WHEN started_at IS NULL AND ($4 OR NOT $5) THEN now()
-			       ELSE started_at
-			     END,
-			     done_at = CASE WHEN $4 THEN COALESCE(done_at, now()) ELSE NULL END
-			   WHERE id = $1`,
-				[
-					cardId,
-					toColumnId,
+			await trx
+				.updateTable("cards")
+				.set({
+					column_id: toColumnId,
 					position,
-					target.is_done,
-					target.is_first,
-				],
-			);
+					version: sql`version + 1`,
+					started_at: sql`CASE WHEN started_at IS NULL AND (${target.is_done} OR NOT ${target.is_first}) THEN now() ELSE started_at END`,
+					done_at: sql`CASE WHEN ${target.is_done} THEN COALESCE(done_at, now()) ELSE NULL END`,
+				})
+				.where("id", "=", cardId)
+				.execute();
 
 			let addedSignableAssignee: number | null = null;
 			if (
@@ -659,17 +799,17 @@ cardsRouter.post(
 				!isSameColumn
 			) {
 				const added = await addCardAssignee(
-					client,
+					trx,
 					cardId,
-					target.signable_assignee_id as number,
+					target.signable_assignee_id,
 				);
 				if (added) {
-					addedSignableAssignee = target.signable_assignee_id as number;
+					addedSignableAssignee = target.signable_assignee_id;
 				}
 			}
 
 			await recordActivity(
-				client,
+				trx,
 				req.user!,
 				workspaceId,
 				isSameColumn ? "reorder" : "move",
@@ -681,32 +821,51 @@ cardsRouter.post(
 				},
 			);
 
-			await client.query("COMMIT");
+			return {
+				kind: "ok",
+				isSameColumn,
+				cardTitle: card.title,
+				addedSignableAssignee,
+			};
+		});
 
-			await publishEvent(workspaceId, {
-				type: isSameColumn ? "card.reordered" : "card.moved",
-				actor: req.user!,
-				cardId,
-			});
-
-			if (addedSignableAssignee !== null) {
-				emitCardAssigned(
-					workspaceId,
-					req.user!.id,
-					cardId,
-					card.title,
-					req.user!.displayName,
-					addedSignableAssignee,
-				);
-			}
-
-			const cardResponse = await hydrateCard(cardId, workspaceId);
-			res.json(cardResponse);
-		} catch (err) {
-			await client.query("ROLLBACK");
-			throw err;
-		} finally {
-			client.release();
+		if (result.kind === "not_found_card") {
+			return res.status(404).json({ error: "card not found" });
 		}
+		if (result.kind === "conflict") {
+			return res.status(409).json({
+				error: "Someone else moved this card first.",
+				code: "version_conflict",
+			});
+		}
+		if (result.kind === "not_found_column") {
+			return res.status(404).json({ error: "column not found" });
+		}
+		if (result.kind === "wip") {
+			return res.status(409).json({
+				error: "WIP limit reached for this column",
+				reason: result.reason,
+			});
+		}
+
+		await publishEvent(workspaceId, {
+			type: result.isSameColumn ? "card.reordered" : "card.moved",
+			actor: req.user!,
+			cardId,
+		});
+
+		if (result.addedSignableAssignee !== null) {
+			emitCardAssigned(
+				workspaceId,
+				req.user!.id,
+				cardId,
+				result.cardTitle,
+				req.user!.displayName,
+				result.addedSignableAssignee,
+			);
+		}
+
+		const cardResponse = await hydrateCard(cardId, workspaceId);
+		res.json(cardResponse);
 	},
 );

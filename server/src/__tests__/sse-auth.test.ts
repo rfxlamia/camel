@@ -9,12 +9,16 @@ vi.mock("../db/pool.js", () => ({
 	pool: { query: vi.fn() },
 }));
 
-// Mock realtime to avoid Redis.
+// Mock realtime to avoid Redis. requireWorkspaceMember now pulls in
+// routes/helpers.js (shared lookupMembership), which needs publishEvent
+// and clearPresence from this module too.
 vi.mock("../realtime.js", () => ({
 	sseHandler: vi.fn((_req: unknown, res: any) => {
 		res.writeHead(200, { "Content-Type": "text/event-stream" });
 		res.end();
 	}),
+	publishEvent: vi.fn(),
+	clearPresence: vi.fn(),
 }));
 
 import cookieParser from "cookie-parser";

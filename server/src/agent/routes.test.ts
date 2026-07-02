@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import "dotenv/config";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { db } from "../db/kysely.js";
 import {
 	buildArtifactDownload,
 	defaultToolRegistry,
@@ -17,167 +19,6 @@ describe("defaultToolRegistry", () => {
 		const tools = defaultToolRegistry.resolveTools(["web_search"]);
 		expect(tools).toHaveLength(1);
 		expect(tools[0].name).toBe("web_search");
-	});
-});
-
-describe("getToolTrace (read-only replay)", () => {
-	it("returns merged trace steps ordered by created_at, scoped to the board", async () => {
-		const rows = [
-			{
-				column_slug: "research-specialist",
-				tool_name: "web_search",
-				input: { query: "fintech" },
-				result: "started",
-				error_code: null,
-				attempt: 1,
-				created_at: "2026-06-15T10:00:00Z",
-			},
-			{
-				column_slug: "research-specialist",
-				tool_name: "web_search",
-				input: { query: "fintech", resultCount: 3 },
-				result: "3",
-				error_code: null,
-				attempt: 1,
-				created_at: "2026-06-15T10:00:01Z",
-			},
-		];
-		const fakeDb = { query: vi.fn(async () => ({ rows })) };
-
-		const trace = await getToolTrace(fakeDb as any, 42);
-
-		// scoped to the board id
-		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
-		const sql = fakeDb.query.mock.calls[0][0] as string;
-		expect(sql).toMatch(/agent_tool_calls/i);
-		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
-		expect(sql).toMatch(/order by\s+created_at/i);
-
-		// merged logical step the client expects
-		expect(trace).toEqual([
-			expect.objectContaining({
-				columnSlug: "research-specialist",
-				toolName: "web_search",
-				query: "fintech",
-				resultCount: 3,
-				attempt: 1,
-				createdAt: "2026-06-15T10:00:01Z",
-			}),
-		]);
-	});
-
-	it("reads legacy string input shape", async () => {
-		const rows = [
-			{
-				column_slug: "research-specialist",
-				tool_name: "web_search",
-				input: "fintech",
-				result: "2",
-				error_code: null,
-				attempt: 1,
-				created_at: "2026-06-15T10:00:00Z",
-			},
-		];
-		const fakeDb = { query: vi.fn(async () => ({ rows })) };
-		const trace = await getToolTrace(fakeDb as never, 42);
-		expect(trace[0].query).toBe("fintech");
-		expect(trace[0].resultCount).toBe(2);
-	});
-
-	it("is read-only — issues exactly one SELECT and executes no tool", async () => {
-		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
-		const trace = await getToolTrace(fakeDb as any, 1);
-
-		expect(trace).toEqual([]);
-		expect(fakeDb.query).toHaveBeenCalledTimes(1);
-		expect(
-			(fakeDb.query.mock.calls[0][0] as string).toLowerCase(),
-		).not.toContain("insert");
-	});
-});
-
-describe("insertColumns tools serialization", () => {
-	it("passes a raw array for TEXT[] tools column, not a JSON string", async () => {
-		const mockDb = { query: vi.fn(async () => ({})) };
-
-		await runInsertColumns(mockDb as any, {
-			boardId: 1,
-			workspaceId: 1,
-			columns: [
-				{
-					name: "Research",
-					position: 1,
-					slug: "research-specialist",
-					reasoning: false,
-					system_prompt: "Do research",
-					tools: ["web_search"],
-					tool_budget: 3,
-				},
-			],
-		});
-
-		expect(mockDb.query).toHaveBeenCalledTimes(1);
-		const params = mockDb.query.mock.calls[0][1] as unknown[];
-		const toolsArg = params[7]; // $8 is the tools parameter
-
-		// Must be a raw array, NOT a JSON string
-		expect(Array.isArray(toolsArg)).toBe(true);
-		expect(toolsArg).toEqual(["web_search"]);
-		expect(typeof toolsArg).not.toBe("string");
-	});
-
-	it("passes an empty array when tools is undefined", async () => {
-		const mockDb = { query: vi.fn(async () => ({})) };
-
-		await runInsertColumns(mockDb as any, {
-			boardId: 1,
-			workspaceId: 1,
-			columns: [
-				{
-					name: "Analysis",
-					position: 2,
-					slug: "analysis",
-					reasoning: false,
-					system_prompt: "Analyse",
-					tools: undefined,
-					tool_budget: undefined,
-				},
-			],
-		});
-
-		const params = mockDb.query.mock.calls[0][1] as unknown[];
-		const toolsArg = params[7];
-
-		expect(Array.isArray(toolsArg)).toBe(true);
-		expect(toolsArg).toEqual([]);
-	});
-});
-
-describe("artifact DB helpers", () => {
-	it("insertArtifact upserts keyed on board_id", async () => {
-		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
-		await realArtifactDeps.insertArtifact(fakeDb as never, {
-			boardId: 7,
-			workspaceId: 3,
-			filename: "title.md",
-			format: "md",
-			content: "# Title\nBody",
-		});
-		const sql = (fakeDb.query.mock.calls[0][0] as string).toLowerCase();
-		expect(sql).toContain("insert into agent_artifacts");
-		expect(sql).toMatch(/on conflict\s*\(\s*board_id\s*\)\s*do update/i);
-	});
-
-	it("getArtifact issues a single board-scoped SELECT", async () => {
-		const row = { filename: "title.md", format: "md", content: "# Title" };
-		const fakeDb = { query: vi.fn(async () => ({ rows: [row] })) };
-		const result = await realArtifactDeps.getArtifact(fakeDb as never, 7);
-		expect(fakeDb.query).toHaveBeenCalledTimes(1);
-		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [7]);
-		const sql = (fakeDb.query.mock.calls[0][0] as string).toLowerCase();
-		expect(sql).toContain("from agent_artifacts");
-		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
-		expect(result).toMatchObject({ filename: "title.md" });
 	});
 });
 
@@ -227,48 +68,6 @@ describe("resolveMessageAction (pure payload detection)", () => {
 	});
 });
 
-describe("realDeps SQL wiring (fakeDb)", () => {
-	it("selectConversationHistory queries agent_conversations scoped + ordered", async () => {
-		const rows = [
-			{ role: "user", content: "What about subsidies?" },
-			{ role: "assistant", content: "Subsidies are..." },
-		];
-		const fakeDb = { query: vi.fn(async () => ({ rows })) };
-
-		const history = await selectConversationHistory(fakeDb as any, 42);
-
-		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
-		const sql = fakeDb.query.mock.calls[0][0] as string;
-		expect(sql).toMatch(/from\s+agent_conversations/i);
-		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
-		expect(sql).toMatch(/order by\s+created_at/i);
-		expect(history).toEqual([
-			{ role: "user", content: "What about subsidies?" },
-			{ role: "assistant", content: "Subsidies are..." },
-		]);
-	});
-
-	it("deleteOutputsForBoard issues a scoped DELETE on agent_card_outputs", async () => {
-		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
-		await deleteOutputsForBoard(fakeDb as any, 42);
-		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
-		const sql = fakeDb.query.mock.calls[0][0] as string;
-		expect(sql).toMatch(/delete from\s+agent_card_outputs/i);
-		expect(sql).toMatch(/board_id\s*=\s*\$1/i);
-	});
-
-	it("deleteCardsForBoard deletes cards via columns subquery", async () => {
-		const fakeDb = { query: vi.fn(async () => ({ rows: [] })) };
-		await deleteCardsForBoard(fakeDb as any, 42);
-		expect(fakeDb.query).toHaveBeenCalledWith(expect.any(String), [42]);
-		const sql = fakeDb.query.mock.calls[0][0] as string;
-		expect(sql).toMatch(/delete from\s+cards/i);
-		expect(sql).toMatch(
-			/column_id\s+in\s*\(\s*select\s+id\s+from\s+columns\s+where\s+board_id\s*=\s*\$1/i,
-		);
-	});
-});
-
 describe("validateBoardColumns (SQL allowlist)", () => {
 	it("accepts allowed column names", () => {
 		expect(() =>
@@ -290,3 +89,330 @@ describe("validateBoardColumns (SQL allowlist)", () => {
 		expect(() => validateBoardColumns([])).not.toThrow();
 	});
 });
+
+/**
+ * Integration tests for the Kysely-backed DB helpers exported from routes.ts.
+ *
+ * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
+ *
+ * Run:
+ *   RUN_INTEGRATION=1 npx vitest run src/agent/routes.test.ts
+ */
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"agent DB helpers (real DB)",
+	() => {
+		let userId: number;
+		let workspaceId: number;
+		let boardId: number;
+
+		beforeAll(async () => {
+			const user = await db
+				.insertInto("users")
+				.values({
+					username: `agent-routes-${Date.now()}`,
+					display_name: "Agent Tester",
+					password_hash: "h",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			userId = user.id;
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({
+					name: "Agent Routes WS",
+					owner_user_id: userId,
+					is_personal: false,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			workspaceId = workspace.id;
+			const board = await db
+				.insertInto("agent_boards")
+				.values({
+					workspace_id: workspaceId,
+					user_id: userId,
+					original_intent: "test intent",
+					template_id: "research-report",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			boardId = board.id;
+		});
+
+		afterAll(async () => {
+			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+			await db.deleteFrom("users").where("id", "=", userId).execute();
+		});
+
+		describe("getToolTrace (read-only replay)", () => {
+			afterEach(async () => {
+				await db
+					.deleteFrom("agent_tool_calls")
+					.where("board_id", "=", boardId)
+					.execute();
+			});
+
+			it("returns merged trace steps ordered by created_at, scoped to the board", async () => {
+				await db
+					.insertInto("agent_tool_calls")
+					.values([
+						{
+							board_id: boardId,
+							column_slug: "research-specialist",
+							tool_name: "web_search",
+							input: JSON.stringify({ query: "fintech" }),
+							result: "started",
+							attempt: 1,
+						},
+						{
+							board_id: boardId,
+							column_slug: "research-specialist",
+							tool_name: "web_search",
+							input: JSON.stringify({ query: "fintech", resultCount: 3 }),
+							result: "3",
+							attempt: 1,
+						},
+					])
+					.execute();
+
+				const trace = await getToolTrace(db, boardId);
+
+				expect(trace).toEqual([
+					expect.objectContaining({
+						columnSlug: "research-specialist",
+						toolName: "web_search",
+						query: "fintech",
+						resultCount: 3,
+						attempt: 1,
+					}),
+				]);
+			});
+
+			it("is read-only — issues exactly one SELECT and executes no tool", async () => {
+				const trace = await getToolTrace(db, boardId);
+				expect(trace).toEqual([]);
+			});
+
+			it("breaks created_at ties by id, preserving insertion order", async () => {
+				// A single multi-row INSERT shares one now() evaluation (STABLE,
+				// not VOLATILE), so these rows get identical created_at — only
+				// the id tiebreak can keep the order deterministic.
+				await db
+					.insertInto("agent_tool_calls")
+					.values([
+						{
+							board_id: boardId,
+							column_slug: "research-specialist",
+							tool_name: "web_search",
+							input: JSON.stringify({ query: "first" }),
+							result: "1",
+							attempt: 1,
+						},
+						{
+							board_id: boardId,
+							column_slug: "research-specialist",
+							tool_name: "web_search",
+							input: JSON.stringify({ query: "second" }),
+							result: "1",
+							attempt: 2,
+						},
+					])
+					.execute();
+
+				const trace = await getToolTrace(db, boardId);
+
+				expect(trace.map((t) => t.attempt)).toEqual([1, 2]);
+			});
+		});
+
+		describe("insertColumns tools serialization", () => {
+			afterAll(async () => {
+				await db
+					.deleteFrom("columns")
+					.where("board_id", "=", boardId)
+					.execute();
+			});
+
+			it("stores a real TEXT[] tools column, not a JSON string", async () => {
+				await runInsertColumns(db, {
+					boardId,
+					workspaceId,
+					columns: [
+						{
+							name: "Research",
+							position: 1,
+							slug: "research-specialist",
+							reasoning: false,
+							system_prompt: "Do research",
+							tools: ["web_search"],
+							tool_budget: 3,
+						},
+					],
+				});
+
+				const row = await db
+					.selectFrom("columns")
+					.select(["tools", "tool_budget"])
+					.where("board_id", "=", boardId)
+					.where("slug", "=", "research-specialist")
+					.executeTakeFirstOrThrow();
+				expect(row.tools).toEqual(["web_search"]);
+				expect(row.tool_budget).toBe(3);
+			});
+
+			it("stores an empty array when tools is undefined", async () => {
+				await runInsertColumns(db, {
+					boardId,
+					workspaceId,
+					columns: [
+						{
+							name: "Analysis",
+							position: 2,
+							slug: "analysis",
+							reasoning: false,
+							system_prompt: "Analyse",
+							tools: undefined,
+							tool_budget: undefined,
+						},
+					],
+				});
+
+				const row = await db
+					.selectFrom("columns")
+					.select(["tools", "tool_budget"])
+					.where("board_id", "=", boardId)
+					.where("slug", "=", "analysis")
+					.executeTakeFirstOrThrow();
+				expect(row.tools).toEqual([]);
+				expect(row.tool_budget).toBeNull();
+			});
+		});
+
+		describe("artifact DB helpers", () => {
+			afterAll(async () => {
+				await db
+					.deleteFrom("agent_artifacts")
+					.where("board_id", "=", boardId)
+					.execute();
+			});
+
+			it("insertArtifact upserts keyed on board_id", async () => {
+				await realArtifactDeps.insertArtifact(db, {
+					boardId,
+					workspaceId,
+					filename: "title.md",
+					format: "md",
+					content: "# Title\nBody",
+				});
+				await realArtifactDeps.insertArtifact(db, {
+					boardId,
+					workspaceId,
+					filename: "title2.md",
+					format: "md",
+					content: "# Title 2",
+				});
+
+				const rows = await db
+					.selectFrom("agent_artifacts")
+					.selectAll()
+					.where("board_id", "=", boardId)
+					.execute();
+				expect(rows).toHaveLength(1);
+				expect(rows[0].filename).toBe("title2.md");
+			});
+
+			it("getArtifact issues a single board-scoped SELECT", async () => {
+				await realArtifactDeps.insertArtifact(db, {
+					boardId,
+					workspaceId,
+					filename: "title3.md",
+					format: "md",
+					content: "# Title 3",
+				});
+
+				const result = await realArtifactDeps.getArtifact(db, boardId);
+				expect(result).toMatchObject({ filename: "title3.md" });
+			});
+		});
+
+		describe("realDeps SQL wiring", () => {
+			it("selectConversationHistory queries agent_conversations scoped + ordered", async () => {
+				await db
+					.insertInto("agent_conversations")
+					.values([
+						{
+							board_id: boardId,
+							role: "user",
+							content: "What about subsidies?",
+						},
+						{
+							board_id: boardId,
+							role: "assistant",
+							content: "Subsidies are...",
+						},
+					])
+					.execute();
+
+				const history = await selectConversationHistory(db, boardId);
+				expect(history).toEqual([
+					{ role: "user", content: "What about subsidies?" },
+					{ role: "assistant", content: "Subsidies are..." },
+				]);
+
+				await db
+					.deleteFrom("agent_conversations")
+					.where("board_id", "=", boardId)
+					.execute();
+			});
+
+			it("deleteOutputsForBoard issues a scoped DELETE on agent_card_outputs", async () => {
+				await db
+					.insertInto("agent_card_outputs")
+					.values({ board_id: boardId, column_slug: "research", output: "out" })
+					.execute();
+
+				await deleteOutputsForBoard(db, boardId);
+
+				const rows = await db
+					.selectFrom("agent_card_outputs")
+					.selectAll()
+					.where("board_id", "=", boardId)
+					.execute();
+				expect(rows).toHaveLength(0);
+			});
+
+			it("deleteCardsForBoard deletes cards via columns subquery", async () => {
+				const column = await db
+					.insertInto("columns")
+					.values({
+						title: "Backlog",
+						position: 1000,
+						workspace_id: workspaceId,
+						board_id: boardId,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				await db
+					.insertInto("cards")
+					.values({
+						title: "Card",
+						column_id: column.id,
+						position: 1000,
+						workspace_id: workspaceId,
+					})
+					.execute();
+
+				await deleteCardsForBoard(db, boardId);
+
+				const rows = await db
+					.selectFrom("cards")
+					.selectAll()
+					.where("column_id", "=", column.id)
+					.execute();
+				expect(rows).toHaveLength(0);
+
+				await db.deleteFrom("columns").where("id", "=", column.id).execute();
+			});
+		});
+	},
+);
