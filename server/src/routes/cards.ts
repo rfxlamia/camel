@@ -593,19 +593,23 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	if (Number.isNaN(id)) {
 		return res.status(400).json({ error: "invalid card id" });
 	}
-	const deleted = await db
-		.updateTable("cards")
-		.set({ deleted_at: sql`now()` })
-		.where("id", "=", id)
-		.where("workspace_id", "=", workspaceId)
-		.where("deleted_at", "is", null)
-		.returning(["title", "column_id"])
-		.executeTakeFirst();
-	if (!deleted) return res.status(404).json({ error: "card not found" });
-	await recordActivity(db, req.user!, workspaceId, "delete", {
-		fromColumnId: deleted.column_id,
-		payload: { cardTitle: deleted.title },
+	const deleted = await db.transaction().execute(async (trx) => {
+		const row = await trx
+			.updateTable("cards")
+			.set({ deleted_at: sql`now()` })
+			.where("id", "=", id)
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.returning(["title", "column_id"])
+			.executeTakeFirst();
+		if (!row) return null;
+		await recordActivity(trx, req.user!, workspaceId, "delete", {
+			fromColumnId: row.column_id,
+			payload: { cardTitle: row.title },
+		});
+		return row;
 	});
+	if (!deleted) return res.status(404).json({ error: "card not found" });
 	await publishEvent(workspaceId, {
 		type: "card.deleted",
 		actor: req.user!,
