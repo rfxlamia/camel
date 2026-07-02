@@ -10,7 +10,15 @@ import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { db } from "./db/kysely.js";
 
 const { mockGetSession, mockMintSession } = vi.hoisted(() => ({
@@ -102,20 +110,28 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					.execute();
 			}
 			if (cleanupUserIds.length > 0) {
-				await db.deleteFrom("users").where("id", "in", cleanupUserIds).execute();
+				await db
+					.deleteFrom("users")
+					.where("id", "in", cleanupUserIds)
+					.execute();
 			}
 		});
 
 		it("existing password user (has username) linking OAuth: transfers BA account, sets email, redirects to main app", async () => {
-			const oldUserId = await makeUser({ username: "john", email: null });
+			const uniqueSuffix = Date.now();
+			const username = `john-${uniqueSuffix}`;
+			const email = `john-${uniqueSuffix}@gmail.com`;
+			const accountId = `gh-${uniqueSuffix}`;
+
+			const oldUserId = await makeUser({ username, email: null });
 			const baUserId = await makeUser({
 				username: null,
-				email: "john@gmail.com",
+				email,
 				emailVerified: true,
 			});
 			cleanupUserIds.push(oldUserId, baUserId);
 
-			const token = `old-valid-token-${Date.now()}`;
+			const token = `old-valid-token-${uniqueSuffix}`;
 			cleanupTokens.push(token);
 			await db
 				.insertInto("sessions")
@@ -128,8 +144,8 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			await db
 				.insertInto("ba_accounts")
 				.values({
-					id: `acct-${Date.now()}`,
-					account_id: "gh-123",
+					id: `acct-${uniqueSuffix}`,
+					account_id: accountId,
 					provider_id: "github",
 					user_id: baUserId,
 				})
@@ -144,7 +160,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(res.status).toBe(302);
 			expect(res.headers.location).toBe(CLIENT_URL);
 			// Session minted for the EXISTING user, not the orphan
-			expect(mockMintSession).toHaveBeenCalledWith(expect.anything(), oldUserId);
+			expect(mockMintSession).toHaveBeenCalledWith(
+				expect.anything(),
+				oldUserId,
+			);
 
 			// Old session must NOT be deleted (it belongs to the legitimate user)
 			const session = await db
@@ -165,7 +184,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const account = await db
 				.selectFrom("ba_accounts")
 				.select("user_id")
-				.where("account_id", "=", "gh-123")
+				.where("account_id", "=", accountId)
 				.executeTakeFirst();
 			expect(account?.user_id).toBe(oldUserId);
 
@@ -174,7 +193,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.select(["email", "email_verified"])
 				.where("id", "=", oldUserId)
 				.executeTakeFirstOrThrow();
-			expect(oldUser.email).toBe("john@gmail.com");
+			expect(oldUser.email).toBe(email);
 			expect(oldUser.email_verified).toBe(true);
 		});
 
