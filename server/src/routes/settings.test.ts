@@ -1,10 +1,25 @@
 import "dotenv/config";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import * as path from "node:path";
+import express from "express";
+import request from "supertest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { db } from "../db/kysely.js";
 import {
 	batchUpsertSettings,
 	DEFAULT_SETTINGS,
 	generateDefaultSettings,
+	settingsRouter,
+	UPLOADS_DIR,
 	validateBoardName,
 	validateSettingKey,
 } from "./settings.js";
@@ -330,20 +345,30 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			ownerId = owner.id;
 			const workspace = await db
 				.insertInto("workspaces")
-				.values({ name: "Batch Settings WS", owner_user_id: ownerId, is_personal: false })
+				.values({
+					name: "Batch Settings WS",
+					owner_user_id: ownerId,
+					is_personal: false,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
 		});
 
 		afterAll(async () => {
-			await db.deleteFrom("settings").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 			await db.deleteFrom("users").where("id", "=", ownerId).execute();
 		});
 
 		afterEach(async () => {
-			await db.deleteFrom("settings").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("settings")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 		});
 
 		it("returns early for empty updates array", async () => {
@@ -397,4 +422,108 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				{ key: "board_name", text_value: "B", version: 2 },
 			]);
 		});
+	},
+);
+
+describe.skipIf(!process.env.RUN_INTEGRATION)("POST /logo (real DB)", () => {
+	let workspaceId: number;
+	let ownerId: number;
+	let app: express.Express;
+
+	beforeAll(async () => {
+		const owner = await db
+			.insertInto("users")
+			.values({
+				username: `settings-logo-${Date.now()}`,
+				display_name: "Owner",
+				password_hash: "h",
+			})
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		ownerId = owner.id;
+		const workspace = await db
+			.insertInto("workspaces")
+			.values({ name: "Logo WS", owner_user_id: ownerId, is_personal: false })
+			.returning("id")
+			.executeTakeFirstOrThrow();
+		workspaceId = workspace.id;
+		await db
+			.insertInto("workspace_members")
+			.values({ workspace_id: workspaceId, user_id: ownerId, role: "owner" })
+			.execute();
+
+		app = express();
+		app.use((req, _res, next) => {
+			(req as unknown as { user: { id: number } }).user = { id: ownerId };
+			next();
+		});
+		app.use("/workspaces/:workspaceId/settings", settingsRouter);
+		app.use((err: any, _req: any, res: any, _next: any) => {
+			res.status(500).json({ error: err.message ?? "error" });
+		});
+	});
+
+	afterAll(async () => {
+		await db
+			.deleteFrom("settings")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		await db
+			.deleteFrom("workspace_members")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+		await db.deleteFrom("users").where("id", "=", ownerId).execute();
+	});
+
+	afterEach(async () => {
+		await db
+			.deleteFrom("settings")
+			.where("workspace_id", "=", workspaceId)
+			.execute();
+		vi.restoreAllMocks();
+	});
+
+	it("keeps the old logo file on disk when the DB write fails", async () => {
+		const oldFilename = `old-test-logo-${Date.now()}.png`;
+		const oldAbsPath = path.join(UPLOADS_DIR, oldFilename);
+		writeFileSync(oldAbsPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+		const filesBefore = new Set(readdirSync(UPLOADS_DIR));
+
+		await db
+			.insertInto("settings")
+			.values({
+				workspace_id: workspaceId,
+				key: "logo_path",
+				text_value: `/uploads/${oldFilename}`,
+				version: 1,
+			})
+			.execute();
+
+		// Simulate a DB failure on the upsert that persists the new logo
+		// path — this is the only insertInto call in the request path.
+		vi.spyOn(db, "insertInto").mockImplementationOnce(() => {
+			throw new Error("simulated DB failure");
+		});
+
+		const pngMagic = Buffer.from([
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		]);
+		try {
+			const res = await request(app)
+				.post(`/workspaces/${workspaceId}/settings/logo`)
+				.attach("logo", pngMagic, {
+					filename: "new-logo.png",
+					contentType: "image/png",
+				});
+
+			expect(res.status).toBe(500);
+			expect(existsSync(oldAbsPath)).toBe(true);
+		} finally {
+			if (existsSync(oldAbsPath)) unlinkSync(oldAbsPath);
+			for (const f of readdirSync(UPLOADS_DIR)) {
+				if (!filesBefore.has(f)) unlinkSync(path.join(UPLOADS_DIR, f));
+			}
+		}
+	});
 });

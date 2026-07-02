@@ -482,7 +482,10 @@ settingsRouter.delete("/", async (req, res) => {
 		return res.status(edit.status).json({ error: edit.error });
 	}
 
-	await db.deleteFrom("settings").where("workspace_id", "=", workspaceId).execute();
+	await db
+		.deleteFrom("settings")
+		.where("workspace_id", "=", workspaceId)
+		.execute();
 	await publishEvent(workspaceId, {
 		type: "settings.updated",
 		actor: req.user!,
@@ -557,8 +560,6 @@ settingsRouter.post(
 			.executeTakeFirst();
 		const oldLogoPath = current?.text_value ?? null;
 
-		await tryDeleteOldUploadedLogo(oldLogoPath);
-
 		const currentGlobal = await getCurrentGlobalVersion(workspaceId);
 		const newVersion = currentGlobal + 1;
 
@@ -579,6 +580,8 @@ settingsRouter.post(
 				}),
 			)
 			.execute();
+
+		await tryDeleteOldUploadedLogo(oldLogoPath);
 
 		await publishEvent(workspaceId, {
 			type: "settings.updated",
