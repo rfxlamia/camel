@@ -7,9 +7,9 @@
  *   RUN_INTEGRATION=1 npx vitest run src/routes/members.notification.test.ts
  */
 import "dotenv/config";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import express from "express";
 import request from "supertest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { membersRouter } from "./members.js";
@@ -25,6 +25,7 @@ app.use("/workspaces/:workspaceId", membersRouter);
 let adminId: number;
 let charlieId: number;
 let workspaceId: number;
+const charlieUsername = `members-notif-charlie-${Date.now()}`;
 
 describe.skipIf(!process.env.RUN_INTEGRATION)(
 	"members route — MEMBER_JOINED event emission (real DB)",
@@ -44,7 +45,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const charlie = await db
 				.insertInto("users")
 				.values({
-					username: "charlie",
+					username: charlieUsername,
 					display_name: "Charlie",
 					password_hash: "hashed",
 				})
@@ -54,7 +55,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 			const workspace = await db
 				.insertInto("workspaces")
-				.values({ name: "Team Alpha", owner_user_id: adminId, is_personal: false })
+				.values({
+					name: "Team Alpha",
+					owner_user_id: adminId,
+					is_personal: false,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
@@ -75,7 +80,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.where("workspace_id", "=", workspaceId)
 				.execute();
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
-			await db.deleteFrom("users").where("id", "in", [adminId, charlieId]).execute();
+			await db
+				.deleteFrom("users")
+				.where("id", "in", [adminId, charlieId])
+				.execute();
 		});
 
 		it("emits MEMBER_JOINED after successful member insert with existingMemberIds", async () => {
@@ -84,7 +92,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 			const res = await request(app)
 				.post(`/workspaces/${workspaceId}/members`)
-				.send({ username: "charlie" });
+				.send({ username: charlieUsername });
 
 			expect(res.status).toBe(201);
 			expect(received).toHaveLength(1);
