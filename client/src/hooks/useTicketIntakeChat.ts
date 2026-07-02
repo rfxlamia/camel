@@ -7,11 +7,11 @@ export type TicketIntakeMessage = {
 };
 
 export type TicketIntakeSubmitState =
-	| "idle"
-	| "submitting"
-	| "success"
-	| "graceful_failure"
-	| "rate_limited";
+	| { status: "idle"; lastError?: string }
+	| { status: "submitting" }
+	| { status: "success"; issueUrl: string; issueIdentifier: string }
+	| { status: "graceful_failure"; errorMessage?: string; retryable?: boolean }
+	| { status: "rate_limited" };
 
 export type TicketIntakeResultEvent = {
 	type: "ticket_intake.submit_result";
@@ -115,8 +115,9 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 	const [messages, setMessages] = useState<TicketIntakeMessage[]>([]);
 	const [draft, setDraft] = useState<TicketIntakeDraft | null>(null);
 	const [previewReady, setPreviewReady] = useState(false);
-	const [submitState, setSubmitState] =
-		useState<TicketIntakeSubmitState>("idle");
+	const [submitState, setSubmitState] = useState<TicketIntakeSubmitState>({
+		status: "idle",
+	});
 	const [panelOpen, setPanelOpen] = useState(variant === "autoError");
 
 	const effectiveVariant = activeSession?.variant ?? variant;
@@ -132,7 +133,7 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		setMessages([]);
 		setDraft(null);
 		setPreviewReady(false);
-		setSubmitState("idle");
+		setSubmitState({ status: "idle" });
 		cardContextUsedRef.current = false;
 		autoErrorInitRef.current = false;
 		processedEventCountRef.current = 0;
@@ -266,7 +267,7 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 	]);
 
 	useEffect(() => {
-		if (submitState !== "submitting") return;
+		if (submitState.status !== "submitting") return;
 
 		for (
 			let i = processedEventCountRef.current;
@@ -277,7 +278,19 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 			if (event.type !== "ticket_intake.submit_result") continue;
 
 			processedEventCountRef.current = i + 1;
-			setSubmitState(event.success ? "success" : "graceful_failure");
+			if (event.success) {
+				setSubmitState({
+					status: "success",
+					issueUrl: event.issueUrl ?? "",
+					issueIdentifier: event.issueIdentifier ?? "",
+				});
+			} else {
+				setSubmitState({
+					status: "graceful_failure",
+					errorMessage: event.errorMessage,
+					retryable: event.retryable,
+				});
+			}
 			return;
 		}
 	}, [ticketIntakeEvents, submitState]);
@@ -289,22 +302,24 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 	const confirm = useCallback(async () => {
 		if (!workspaceId || !draft || !draft.title?.trim()) return;
 
-		setSubmitState("submitting");
+		setSubmitState({ status: "submitting" });
 		try {
 			await api.ticketIntake.submit(workspaceId, submitBodyFromDraft(draft));
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
-				setSubmitState("rate_limited");
+				setSubmitState({ status: "rate_limited" });
 				return;
 			}
-			setSubmitState("idle");
+			const message =
+				err instanceof Error ? err.message : "Failed to submit ticket";
+			setSubmitState({ status: "idle", lastError: message });
 		}
 	}, [workspaceId, draft, submitBodyFromDraft]);
 
 	const resubmit = useCallback(async () => {
 		if (!workspaceId || !draft || !draft.title?.trim()) return;
 
-		setSubmitState("submitting");
+		setSubmitState({ status: "submitting" });
 		try {
 			await api.ticketIntake.resubmit(
 				workspaceId,
@@ -312,10 +327,15 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 			);
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 409) {
-				setSubmitState("rate_limited");
+				setSubmitState({ status: "rate_limited" });
 				return;
 			}
-			setSubmitState("graceful_failure");
+			const message =
+				err instanceof Error ? err.message : "Failed to resubmit ticket";
+			setSubmitState({
+				status: "graceful_failure",
+				errorMessage: message,
+			});
 		}
 	}, [workspaceId, draft, submitBodyFromDraft]);
 

@@ -143,7 +143,7 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 			}),
 		);
 		expect(result.current.draft?.type).toBe("Bug");
-		expect(result.current.submitState).toBe("idle");
+		expect(result.current.submitState).toMatchObject({ status: "idle" });
 		expect(mockSubmit).not.toHaveBeenCalled();
 		expect(result.current.panelOpen).toBe(true);
 	});
@@ -200,7 +200,7 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 			type: "Bug",
 			source: "global",
 		});
-		expect(result.current.submitState).toBe("submitting");
+		expect(result.current.submitState).toMatchObject({ status: "submitting" });
 	});
 
 	it("maps ApiError 409 on confirm to rate_limited submitState", async () => {
@@ -220,7 +220,7 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 			await result.current.confirm();
 		});
 
-		expect(result.current.submitState).toBe("rate_limited");
+		expect(result.current.submitState).toMatchObject({ status: "rate_limited" });
 	});
 
 	it("consumes ticket_intake.submit_result success from ticketIntakeEvents", async () => {
@@ -254,7 +254,11 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 		rerender({ ticketIntakeEvents: [successEvent] });
 
 		await waitFor(() => {
-			expect(result.current.submitState).toBe("success");
+			expect(result.current.submitState).toMatchObject({
+				status: "success",
+				issueUrl: "https://linear.app/cam/issue/CAM-1",
+				issueIdentifier: "CAM-1",
+			});
 		});
 	});
 
@@ -292,7 +296,11 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 		});
 
 		await waitFor(() => {
-			expect(result.current.submitState).toBe("graceful_failure");
+			expect(result.current.submitState).toMatchObject({
+				status: "graceful_failure",
+				retryable: true,
+				errorMessage: "Linear unavailable",
+			});
 		});
 	});
 
@@ -328,7 +336,11 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 			],
 		});
 		await waitFor(() => {
-			expect(result.current.submitState).toBe("graceful_failure");
+			expect(result.current.submitState).toMatchObject({
+				status: "graceful_failure",
+				retryable: true,
+				errorMessage: "Linear unavailable",
+			});
 		});
 
 		await act(async () => {
@@ -341,6 +353,6 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 			type: "Bug",
 			source: "global",
 		});
-		expect(result.current.submitState).toBe("submitting");
+		expect(result.current.submitState).toMatchObject({ status: "submitting" });
 	});
 });

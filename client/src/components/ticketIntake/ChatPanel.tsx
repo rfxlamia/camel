@@ -1,35 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useBoard } from "../../context/BoardContext";
-import type {
-	TicketIntakeResultEvent,
-	TicketIntakeSubmitState,
-} from "../../hooks/useTicketIntakeChat";
 import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
-import { PreviewScreen, type PreviewSubmitState } from "./PreviewScreen";
+import { PreviewScreen } from "./PreviewScreen";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
-
-function buildSubmitState(
-	submitState: TicketIntakeSubmitState,
-	events: TicketIntakeResultEvent[],
-): PreviewSubmitState {
-	if (submitState === "success") {
-		const successEvent = [...events]
-			.reverse()
-			.find(
-				(event) =>
-					event.type === "ticket_intake.submit_result" && event.success,
-			);
-		return {
-			status: "success",
-			issueUrl: successEvent?.issueUrl,
-			issueIdentifier: successEvent?.issueIdentifier,
-		};
-	}
-
-	return { status: submitState };
-}
 
 interface ChatPanelProps {
 	onClose: () => void;
@@ -58,11 +33,6 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 
 	const [input, setInput] = useState("");
 
-	const previewSubmitState = useMemo(
-		() => buildSubmitState(submitState, ticketIntakeEvents),
-		[submitState, ticketIntakeEvents],
-	);
-
 	const handleSend = async () => {
 		const trimmed = input.trim();
 		if (!trimmed) return;
@@ -87,7 +57,7 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 					draft={draft}
 					onConfirm={handleConfirm}
 					onResubmit={resubmit}
-					submitState={previewSubmitState}
+					submitState={submitState}
 				/>
 			</div>
 		);
