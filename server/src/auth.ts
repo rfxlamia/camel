@@ -273,17 +273,16 @@ export async function rotateSessionToken(
 ): Promise<string | null> {
 	try {
 		return await db.transaction().execute(async (trx) => {
-			const existing = await trx
-				.selectFrom("sessions")
-				.select("token")
+			const deleted = await trx
+				.deleteFrom("sessions")
 				.where("token", "=", oldToken)
 				.where("user_id", "=", userId)
+				.where("expires_at", ">", new Date())
+				.returning("token")
 				.executeTakeFirst();
-			if (!existing) {
+			if (!deleted) {
 				return null;
 			}
-
-			await trx.deleteFrom("sessions").where("token", "=", oldToken).execute();
 
 			const newToken = randomBytes(32).toString("base64url");
 			const expiresAt = new Date(
