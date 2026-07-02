@@ -24,12 +24,7 @@ membersRouter.get("/members", async (req, res) => {
 	const rows = await db
 		.selectFrom("workspace_members as wm")
 		.innerJoin("users as u", "u.id", "wm.user_id")
-		.select([
-			"u.id as user_id",
-			"u.username",
-			"u.display_name",
-			"wm.role",
-		])
+		.select(["u.id as user_id", "u.username", "u.display_name", "wm.role"])
 		.where("wm.workspace_id", "=", workspaceId)
 		.orderBy("wm.role")
 		.orderBy("u.username")
@@ -88,24 +83,48 @@ membersRouter.post("/members", async (req, res) => {
 			return res.status(cap.status).json({ error: cap.error });
 		}
 
-		const existingRows = await db
-			.selectFrom("workspace_members")
-			.select("user_id")
-			.where("workspace_id", "=", workspaceId)
-			.execute();
-		const existingMemberIds = existingRows.map((r) => r.user_id);
+		// Snapshot existing members + workspace name, then insert, as one unit —
+		// matching the transaction pattern used for workspace creation and
+		// ownership transfer. onConflict/doNothing makes the insert itself the
+		// authoritative check: if a concurrent request already added this user
+		// between the earlier lookupMembership check and here, this loses the
+		// race cleanly (409) instead of throwing a raw PK-violation 500.
+		const inserted = await db.transaction().execute(async (trx) => {
+			const existingRows = await trx
+				.selectFrom("workspace_members")
+				.select("user_id")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			const existingMemberIds = existingRows.map((r) => r.user_id);
 
-		const ws = await db
-			.selectFrom("workspaces")
-			.select("name")
-			.where("id", "=", workspaceId)
-			.executeTakeFirst();
-		const workspaceName = ws?.name ?? "the workspace";
+			const ws = await trx
+				.selectFrom("workspaces")
+				.select("name")
+				.where("id", "=", workspaceId)
+				.executeTakeFirst();
+			const workspaceName = ws?.name ?? "the workspace";
 
-		await db
-			.insertInto("workspace_members")
-			.values({ workspace_id: workspaceId, user_id: target.id, role: memberRole })
-			.execute();
+			const row = await trx
+				.insertInto("workspace_members")
+				.values({
+					workspace_id: workspaceId,
+					user_id: target.id,
+					role: memberRole,
+				})
+				.onConflict((oc) => oc.columns(["workspace_id", "user_id"]).doNothing())
+				.returning("user_id")
+				.executeTakeFirst();
+
+			if (!row) return null;
+			return { existingMemberIds, workspaceName };
+		});
+
+		if (!inserted) {
+			return res
+				.status(409)
+				.json({ error: "User is already a member of this workspace" });
+		}
+		const { existingMemberIds, workspaceName } = inserted;
 
 		domainBus.emit(EVENTS.MEMBER_JOINED, {
 			type: EVENTS.MEMBER_JOINED,
