@@ -82,6 +82,9 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 		type: "column.created",
 		actor: req.user!,
 	});
+	await recordActivity(db, req.user!, workspaceId, "create", {
+		payload: { columnTitle: created.title },
+	});
 	res.status(201).json(created);
 });
 
@@ -376,13 +379,16 @@ columnsRouter.delete(
 		if (Number.isNaN(id)) {
 			return res.status(400).json({ error: "invalid column id" });
 		}
-		const result = await db
+		const deleted = await db
 			.deleteFrom("columns")
 			.where("id", "=", id)
 			.where("workspace_id", "=", workspaceId)
+			.returning(["title"])
 			.executeTakeFirst();
-		if (Number(result.numDeletedRows) === 0)
-			return res.status(404).json({ error: "column not found" });
+		if (!deleted) return res.status(404).json({ error: "column not found" });
+		await recordActivity(db, req.user!, workspaceId, "delete", {
+			payload: { columnTitle: deleted.title },
+		});
 		res.status(204).end();
 	},
 );

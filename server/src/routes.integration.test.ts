@@ -476,3 +476,45 @@ describe.skipIf(!process.env.RUN_LLM_IT)(
 		});
 	},
 );
+
+// ---------------------------------------------------------------------------
+// POST /api/workspaces/:wid/columns and DELETE .../columns/:id — activity log
+// ---------------------------------------------------------------------------
+describe.skipIf(!process.env.RUN_LLM_IT)(
+	"Column create/delete — card_events",
+	() => {
+		it("records a create activity event", async () => {
+			const res = await request(app)
+				.post("/api/workspaces/1/columns")
+				.send({ title: "New Column" });
+			expect(res.status).toBe(201);
+
+			const events = await pool.query(
+				"SELECT payload FROM card_events WHERE workspace_id = 1 AND event_type = 'create' ORDER BY id DESC LIMIT 1",
+			);
+			expect(events.rows).toHaveLength(1);
+			expect(events.rows[0].payload.columnTitle).toBe("New Column");
+
+			await pool.query("DELETE FROM columns WHERE id = $1", [res.body.id]);
+		});
+
+		it("records a delete activity event", async () => {
+			const col = await pool.query(
+				`INSERT INTO columns (title, position, wip_limit, is_done, workspace_id)
+         VALUES ('To Delete', 9000, NULL, false, 1) RETURNING id`,
+			);
+			const colId = col.rows[0].id;
+
+			const res = await request(app).delete(
+				`/api/workspaces/1/columns/${colId}`,
+			);
+			expect(res.status).toBe(204);
+
+			const events = await pool.query(
+				"SELECT payload FROM card_events WHERE workspace_id = 1 AND event_type = 'delete' ORDER BY id DESC LIMIT 1",
+			);
+			expect(events.rows).toHaveLength(1);
+			expect(events.rows[0].payload.columnTitle).toBe("To Delete");
+		});
+	},
+);
