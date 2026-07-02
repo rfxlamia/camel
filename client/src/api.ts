@@ -1,3 +1,4 @@
+import { publishAutoError } from "./lib/ticketIntakeBus";
 import type { TemplateColumn } from "./lib/templates";
 import type {
 	ActivityEvent,
@@ -38,9 +39,38 @@ function readCookie(name: string): string | null {
 	return match ? decodeURIComponent(match[1]) : null;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+interface RequestOptions {
+	userInitiated?: boolean;
+	userAction?: string;
+}
+
+export type TicketIntakeDraft = {
+	title: string | null;
+	description: string | null;
+	expected: string | null;
+	actual: string | null;
+	repro: string | null;
+	type: "Bug" | "Feature" | "Improvement" | null;
+};
+
+export type TicketIntakeChatResponse =
+	| { ready: false; question: string }
+	| { ready: true; draft: TicketIntakeDraft };
+
+export type TicketHistoryEntry = {
+	title: string;
+	issueUrl: string;
+	createdAt: string;
+};
+
+async function request<T>(
+	path: string,
+	init?: RequestInit,
+	options?: RequestOptions,
+): Promise<T> {
 	const method = (init?.method ?? "GET").toUpperCase();
 	const headers = new Headers(init?.headers);
+	const endpoint = `/api${path}`;
 
 	if (!headers.has("Content-Type")) {
 		headers.set("Content-Type", "application/json");
@@ -52,7 +82,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 		if (csrf) headers.set("X-CSRF-Token", csrf);
 	}
 
-	const res = await fetch(`/api${path}`, {
+	const res = await fetch(endpoint, {
 		...init,
 		headers,
 	});
@@ -66,6 +96,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 			if (body.code) code = body.code;
 		} catch {
 			// non-JSON error body
+		}
+		if (options?.userInitiated && res.status >= 500) {
+			publishAutoError({
+				endpoint,
+				status: res.status,
+				message,
+				timestamp: new Date().toISOString(),
+				userAction: options.userAction,
+			});
 		}
 		throw new ApiError(message, res.status, code);
 	}
@@ -90,14 +129,18 @@ export const api = {
 		workspaceId: number,
 		body: { columnId: number; title: string; description?: string },
 	) =>
-		request<Card>(`/workspaces/${workspaceId}/cards`, {
-			method: "POST",
-			body: JSON.stringify({
-				columnId: body.columnId,
-				title: body.title,
-				description: body.description ?? "",
-			}),
-		}),
+		request<Card>(
+			`/workspaces/${workspaceId}/cards`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					columnId: body.columnId,
+					title: body.title,
+					description: body.description ?? "",
+				}),
+			},
+			{ userInitiated: true, userAction: "submit" },
+		),
 	updateCard: (
 		workspaceId: number,
 		id: number,
@@ -109,10 +152,14 @@ export const api = {
 			version?: number;
 		},
 	) =>
-		request<Card>(`/workspaces/${workspaceId}/cards/${id}`, {
-			method: "PATCH",
-			body: JSON.stringify(patch),
-		}),
+		request<Card>(
+			`/workspaces/${workspaceId}/cards/${id}`,
+			{
+				method: "PATCH",
+				body: JSON.stringify(patch),
+			},
+			{ userInitiated: true, userAction: "Save" },
+		),
 	deleteCard: (workspaceId: number, id: number) =>
 		request<void>(`/workspaces/${workspaceId}/cards/${id}`, {
 			method: "DELETE",
@@ -126,10 +173,14 @@ export const api = {
 		id: number,
 		body: { toColumnId: number; index: number; version?: number },
 	) =>
-		request<Card>(`/workspaces/${workspaceId}/cards/${id}/move`, {
-			method: "POST",
-			body: JSON.stringify(body),
-		}),
+		request<Card>(
+			`/workspaces/${workspaceId}/cards/${id}/move`,
+			{
+				method: "POST",
+				body: JSON.stringify(body),
+			},
+			{ userInitiated: true, userAction: "drag-drop" },
+		),
 	createColumn: (workspaceId: number, title: string) =>
 		request<Column>(`/workspaces/${workspaceId}/columns`, {
 			method: "POST",
@@ -379,6 +430,64 @@ export const api = {
 		),
 	agentArtifactDownloadUrl: (workspaceId: number, boardId: number) =>
 		`/api/workspaces/${workspaceId}/agent/boards/${boardId}/artifact/download`,
+
+	// ---- Ticket intake ----
+	ticketIntake: {
+		sendMessage: (
+			workspaceId: number,
+			body: {
+				message: string;
+				isFirstTurn?: boolean;
+				autoError?: boolean;
+				conversationHistory?: Array<{ role: string; content: string }>;
+			},
+		) =>
+			request<TicketIntakeChatResponse>(
+				`/workspaces/${workspaceId}/ticket-intake/chat`,
+				{
+					method: "POST",
+					body: JSON.stringify(body),
+				},
+			),
+		submit: (
+			workspaceId: number,
+			body: {
+				title: string;
+				description: string;
+				type: string;
+				cardId?: number;
+				source?: string;
+			},
+		) =>
+			request<{ status: "submitting" }>(
+				`/workspaces/${workspaceId}/ticket-intake/submit`,
+				{
+					method: "POST",
+					body: JSON.stringify(body),
+				},
+			),
+		resubmit: (
+			workspaceId: number,
+			body: {
+				title: string;
+				description: string;
+				type: string;
+				cardId?: number;
+				source?: string;
+			},
+		) =>
+			request<{ status: "submitting" }>(
+				`/workspaces/${workspaceId}/ticket-intake/resubmit`,
+				{
+					method: "POST",
+					body: JSON.stringify(body),
+				},
+			),
+		getHistory: (workspaceId: number, cardId: number) =>
+			request<{ tickets: TicketHistoryEntry[] }>(
+				`/workspaces/${workspaceId}/ticket-intake/history?cardId=${cardId}`,
+			),
+	},
 };
 
 export { ApiError };

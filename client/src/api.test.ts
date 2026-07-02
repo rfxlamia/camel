@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock fetch globally for API tests
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
+
+const mockPublishAutoError = vi.fn();
+vi.mock("./lib/ticketIntakeBus", () => ({
+	publishAutoError: (...args: unknown[]) => mockPublishAutoError(...args),
+}));
 
 describe("Settings API methods", () => {
 	it("getSettings returns SettingsMap", async () => {
@@ -534,5 +539,200 @@ describe("sendAgentBoardMessage structured payloads", () => {
 			"/api/workspaces/7/agent/boards/1/message",
 		);
 		expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: "POST" });
+	});
+});
+
+describe("user-initiated auto-error bus", () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+		mockPublishAutoError.mockReset();
+	});
+
+	function mockError(status: number, message: string) {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status,
+			json: () => Promise.resolve({ error: message }),
+		});
+	}
+
+	it("publishes auto-error on tagged updateCard 500+", async () => {
+		mockError(500, "Internal Server Error");
+		const { api } = await import("./api");
+
+		await expect(
+			api.updateCard(7, 42, { title: "New", version: 1 }),
+		).rejects.toMatchObject({ status: 500 });
+
+		expect(mockPublishAutoError).toHaveBeenCalledTimes(1);
+		expect(mockPublishAutoError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				endpoint: "/api/workspaces/7/cards/42",
+				status: 500,
+				message: "Internal Server Error",
+				userAction: "Save",
+				timestamp: expect.any(String),
+			}),
+		);
+	});
+
+	it("publishes auto-error on tagged createCard 500+", async () => {
+		mockError(503, "Service Unavailable");
+		const { api } = await import("./api");
+
+		await expect(
+			api.createCard(7, { columnId: 1, title: "New" }),
+		).rejects.toMatchObject({ status: 503 });
+
+		expect(mockPublishAutoError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				endpoint: "/api/workspaces/7/cards",
+				status: 503,
+				userAction: "submit",
+			}),
+		);
+	});
+
+	it("publishes auto-error on tagged moveCard 500+", async () => {
+		mockError(500, "Server error");
+		const { api } = await import("./api");
+
+		await expect(
+			api.moveCard(7, 42, { toColumnId: 2, index: 0, version: 1 }),
+		).rejects.toMatchObject({ status: 500 });
+
+		expect(mockPublishAutoError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				endpoint: "/api/workspaces/7/cards/42/move",
+				status: 500,
+				userAction: "drag-drop",
+			}),
+		);
+	});
+
+	it("does not publish auto-error on tagged 400-class errors", async () => {
+		mockError(409, "Conflict");
+		const { api } = await import("./api");
+
+		await expect(
+			api.updateCard(7, 42, { title: "New", version: 1 }),
+		).rejects.toMatchObject({ status: 409 });
+
+		expect(mockPublishAutoError).not.toHaveBeenCalled();
+	});
+
+	it("does not publish auto-error on untagged 500+ background calls", async () => {
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				json: () => Promise.resolve({ error: "fail" }),
+			})
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				json: () => Promise.resolve({ error: "fail" }),
+			})
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				json: () => Promise.resolve({ error: "fail" }),
+			});
+		const { api } = await import("./api");
+
+		await expect(api.heartbeat(7)).rejects.toMatchObject({ status: 500 });
+		await expect(api.getPresence(7)).rejects.toMatchObject({ status: 500 });
+		await expect(api.getNotifications(7)).rejects.toMatchObject({
+			status: 500,
+		});
+
+		expect(mockPublishAutoError).not.toHaveBeenCalled();
+	});
+});
+
+describe("ticketIntake API methods", () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	it("sendMessage POSTs to ticket-intake/chat", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ ready: false, question: "Bug?" }),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.ticketIntake.sendMessage(7, {
+			message: "kanban broken",
+			isFirstTurn: true,
+		});
+
+		expect(result).toEqual({ ready: false, question: "Bug?" });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/ticket-intake/chat",
+			expect.objectContaining({ method: "POST" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ message: "kanban broken", isFirstTurn: true });
+	});
+
+	it("submit POSTs to ticket-intake/submit", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 202,
+			json: () => Promise.resolve({ status: "submitting" }),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.ticketIntake.submit(7, {
+			title: "Bug",
+			description: "desc",
+			type: "Bug",
+			cardId: 42,
+		});
+
+		expect(result).toEqual({ status: "submitting" });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/ticket-intake/submit",
+			expect.objectContaining({ method: "POST" }),
+		);
+	});
+
+	it("resubmit POSTs to ticket-intake/resubmit", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 202,
+			json: () => Promise.resolve({ status: "submitting" }),
+		});
+		const { api } = await import("./api");
+
+		await api.ticketIntake.resubmit(7, {
+			title: "Bug",
+			description: "desc",
+			type: "Bug",
+		});
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/ticket-intake/resubmit",
+			expect.objectContaining({ method: "POST" }),
+		);
+	});
+
+	it("getHistory GETs ticket-intake/history with cardId", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ tickets: [] }),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.ticketIntake.getHistory(7, 42);
+
+		expect(result).toEqual({ tickets: [] });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/ticket-intake/history?cardId=42",
+			expect.any(Object),
+		);
 	});
 });
