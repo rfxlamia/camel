@@ -18,36 +18,41 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 			.json({ error: "workspaceId and inviteId must be integers" });
 	}
 
-	const invite = await db
-		.selectFrom("workspace_invites")
-		.select(["id", "workspace_id", "username", "role"])
-		.where("id", "=", inviteId)
-		.where("workspace_id", "=", workspaceId)
-		.where("username", "=", req.user!.username as string)
-		.executeTakeFirst();
-	if (!invite) {
-		return res.status(404).json({ error: "Not found" });
-	}
-
 	const membershipCount = await countUserMemberships(req.user!.id);
 	const cap = checkInviteeCap(membershipCount);
 	if (!cap.ok) {
 		return res.status(cap.status).json({ error: cap.error });
 	}
 
-	// Wrap membership check + insert in a single transaction to prevent TOCTOU
-	// race (M14): concurrent invite accepts must not slip past the unique constraint.
-	// Inline SELECT is for UX (specific error message); ON CONFLICT is authoritative guard.
+	// Wrap invite consumption + membership insert in a single transaction to
+	// prevent TOCTOU races (M14): the invite must be deleted atomically as the
+	// authorization check itself — a revoked invite must not still be usable
+	// just because it existed when this request started. ON CONFLICT on the
+	// membership insert is the authoritative guard against concurrent accepts.
 	type TxResult =
+		| { kind: "not_found" }
 		| { kind: "already_member" }
 		| {
 				kind: "ok";
+				role: string;
 				workspaceName: string;
 				existingMemberIds: number[];
 				ws: { id: number; name: string; is_personal: boolean };
 		  };
 
 	const result: TxResult = await db.transaction().execute(async (trx) => {
+		// Atomically consume the invite: this delete IS the authorization check.
+		const deletedInvite = await trx
+			.deleteFrom("workspace_invites")
+			.where("id", "=", inviteId)
+			.where("workspace_id", "=", workspaceId)
+			.where("username", "=", req.user!.username as string)
+			.returning("role")
+			.executeTakeFirst();
+		if (!deletedInvite) {
+			return { kind: "not_found" };
+		}
+
 		// Check membership inside the transaction for consistent snapshot.
 		const existing = await trx
 			.selectFrom("workspace_members")
@@ -79,7 +84,7 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 			.values({
 				workspace_id: workspaceId,
 				user_id: req.user!.id,
-				role: invite.role,
+				role: deletedInvite.role,
 			})
 			.onConflict((oc) => oc.columns(["workspace_id", "user_id"]).doNothing())
 			.returning("user_id")
@@ -88,22 +93,28 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 			return { kind: "already_member" };
 		}
 
-		await trx
-			.deleteFrom("workspace_invites")
-			.where("id", "=", inviteId)
-			.execute();
-
 		const ws = await trx
 			.selectFrom("workspaces")
 			.select(["id", "name", "is_personal"])
 			.where("id", "=", workspaceId)
 			.executeTakeFirstOrThrow();
 
-		return { kind: "ok", workspaceName, existingMemberIds, ws };
+		return {
+			kind: "ok",
+			role: deletedInvite.role,
+			workspaceName,
+			existingMemberIds,
+			ws,
+		};
 	});
 
+	if (result.kind === "not_found") {
+		return res.status(404).json({ error: "Not found" });
+	}
 	if (result.kind === "already_member") {
-		return res.status(409).json({ error: "Already a member of this workspace" });
+		return res
+			.status(409)
+			.json({ error: "Already a member of this workspace" });
 	}
 
 	domainBus.emit(EVENTS.MEMBER_JOINED, {
@@ -121,7 +132,7 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 	res.json({
 		id: result.ws.id,
 		name: result.ws.name,
-		role: invite.role,
+		role: result.role,
 		isPersonal: result.ws.is_personal,
 	});
 });
