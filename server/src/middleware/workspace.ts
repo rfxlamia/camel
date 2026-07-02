@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { db } from "../db/kysely.js";
+import { lookupMembership } from "../routes/helpers.js";
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation
@@ -16,19 +16,6 @@ declare global {
 function parseWorkspaceId(raw: string): number | null {
 	const workspaceId = Number(raw);
 	return Number.isInteger(workspaceId) ? workspaceId : null;
-}
-
-async function lookupMembership(
-	userId: number,
-	workspaceId: number,
-): Promise<string | undefined> {
-	const row = await db
-		.selectFrom("workspace_members")
-		.select("role")
-		.where("workspace_id", "=", workspaceId)
-		.where("user_id", "=", userId)
-		.executeTakeFirst();
-	return row?.role;
 }
 
 /**
