@@ -9,7 +9,15 @@
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { db } from "../db/kysely.js";
 
 const testUser: {
@@ -161,6 +169,40 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("oauth routes (real DB)", () => {
 			expect(res.status).toBe(409);
 			expect(res.body.error).toMatch(/username already set/i);
 		});
+
+		it("does not double-create a workspace when username is set concurrently (TOCTOU)", async () => {
+			// req.user.username is still null (stale session snapshot) — a
+			// concurrent request already won the race and set the username in
+			// the DB. The transaction's write must be conditional on the DB
+			// state, not just the precheck, or this request would overwrite
+			// the winner's username and insert a second personal workspace.
+			const raceUsername = `race${Date.now()}`;
+			await db
+				.updateTable("users")
+				.set({ username: raceUsername, display_name: "Racer" })
+				.where("id", "=", testUser.id)
+				.execute();
+
+			const res = await request(app)
+				.post("/api/auth/set-username")
+				.send({ username: "loser_name" });
+
+			expect(res.status).toBe(409);
+
+			const workspaces = await db
+				.selectFrom("workspaces")
+				.selectAll()
+				.where("owner_user_id", "=", testUser.id)
+				.execute();
+			expect(workspaces).toHaveLength(0);
+
+			const user = await db
+				.selectFrom("users")
+				.select("username")
+				.where("id", "=", testUser.id)
+				.executeTakeFirstOrThrow();
+			expect(user.username).toBe(raceUsername);
+		});
 	});
 
 	describe("POST /api/auth/set-password", () => {
@@ -212,6 +254,40 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("oauth routes (real DB)", () => {
 
 			expect(res.status).toBe(409);
 			expect(res.body.error).toMatch(/password already set/i);
+		});
+
+		it("does not overwrite a password set concurrently between precheck and update (TOCTOU)", async () => {
+			await db
+				.updateTable("users")
+				.set({ password_hash: null })
+				.where("id", "=", testUser.id)
+				.execute();
+
+			// A concurrent request wins the race and sets password_hash during
+			// this request's bcrypt.hash call — the window between the
+			// select precheck and the update.
+			const bcrypt = (await import("bcryptjs")).default;
+			vi.mocked(bcrypt.hash).mockImplementationOnce(async () => {
+				await db
+					.updateTable("users")
+					.set({ password_hash: "$2a$10$winner_hash" })
+					.where("id", "=", testUser.id)
+					.execute();
+				return "loser_hash";
+			});
+
+			const res = await request(app)
+				.post("/api/auth/set-password")
+				.send({ password: "secret123" });
+
+			expect(res.status).toBe(409);
+
+			const user = await db
+				.selectFrom("users")
+				.select("password_hash")
+				.where("id", "=", testUser.id)
+				.executeTakeFirstOrThrow();
+			expect(user.password_hash).toBe("$2a$10$winner_hash");
 		});
 	});
 });
