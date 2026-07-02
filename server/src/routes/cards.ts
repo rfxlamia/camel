@@ -261,34 +261,42 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	if (!descValidation.valid) {
 		return res.status(400).json({ error: descValidation.error });
 	}
-	const col = await db
-		.selectFrom("columns")
-		.select(["id", "wip_limit", "is_signable", "signable_assignee_id"])
-		.where("id", "=", Number(columnId))
-		.where("workspace_id", "=", workspaceId)
-		.executeTakeFirst();
-	if (!col) {
-		return res.status(404).json({ error: "column not found" });
-	}
-	const countRow = await db
-		.selectFrom("cards")
-		.select(sql<number>`count(*)::int`.as("n"))
-		.where("column_id", "=", Number(columnId))
-		.where("workspace_id", "=", workspaceId)
-		.where("deleted_at", "is", null)
-		.executeTakeFirstOrThrow();
-	const wip = checkWipLimit({
-		currentCount: countRow.n,
-		wipLimit: col.wip_limit,
-		isSameColumn: false,
-	});
-	if (!wip.allowed) {
-		return res.status(409).json({ error: "WIP limit reached for this column" });
-	}
-	const autoAssigneeId =
-		col.is_signable && col.signable_assignee_id ? col.signable_assignee_id : null;
+	type CreateResult =
+		| { kind: "not_found_column" }
+		| { kind: "wip" }
+		| { kind: "ok"; cardId: number; autoAssigneeId: number | null };
 
-	const cardId = await db.transaction().execute(async (trx) => {
+	const result: CreateResult = await db.transaction().execute(async (trx) => {
+		// Lock the column row first so concurrent creates targeting the same
+		// column serialize on the WIP count instead of racing past it together.
+		const col = await trx
+			.selectFrom("columns")
+			.select(["id", "wip_limit", "is_signable", "signable_assignee_id"])
+			.where("id", "=", Number(columnId))
+			.where("workspace_id", "=", workspaceId)
+			.forUpdate()
+			.executeTakeFirst();
+		if (!col) {
+			return { kind: "not_found_column" };
+		}
+		const countRow = await trx
+			.selectFrom("cards")
+			.select(sql<number>`count(*)::int`.as("n"))
+			.where("column_id", "=", Number(columnId))
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.executeTakeFirstOrThrow();
+		const wip = checkWipLimit({
+			currentCount: countRow.n,
+			wipLimit: col.wip_limit,
+			isSameColumn: false,
+		});
+		if (!wip.allowed) {
+			return { kind: "wip" };
+		}
+		const autoAssigneeId =
+			col.is_signable && col.signable_assignee_id ? col.signable_assignee_id : null;
+
 		const inserted = await trx
 			.insertInto("cards")
 			.values({
@@ -309,8 +317,16 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 			toColumnId: Number(columnId),
 			payload: { cardTitle: titleValidation.trimmed },
 		});
-		return inserted.id;
+		return { kind: "ok", cardId: inserted.id, autoAssigneeId };
 	});
+
+	if (result.kind === "not_found_column") {
+		return res.status(404).json({ error: "column not found" });
+	}
+	if (result.kind === "wip") {
+		return res.status(409).json({ error: "WIP limit reached for this column" });
+	}
+	const { cardId, autoAssigneeId } = result;
 
 	await publishEvent(workspaceId, {
 		type: "card.created",
