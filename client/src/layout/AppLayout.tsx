@@ -2,6 +2,7 @@ import { Menu, SquareKanban } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import PresenceBar from "../components/PresenceBar";
+import { FloatingChatButton } from "../components/ticketIntake/FloatingChatButton";
 import Toast from "../components/Toast";
 import { useBoard } from "../context/BoardContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
@@ -93,6 +94,7 @@ export default function AppLayout() {
 				</div>
 
 				{toast && <Toast message={toast.message} type={toast.type} />}
+				<FloatingChatButton />
 			</div>
 		</NotificationsProvider>
 	);
