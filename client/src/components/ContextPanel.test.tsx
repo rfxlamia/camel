@@ -29,11 +29,20 @@ vi.mock("react-router", () => ({
 
 const getWorkspaceMembers = vi.fn();
 const getCardActivity = vi.fn();
+const mockGetHistory = vi.fn();
 vi.mock("../api", () => ({
 	api: {
 		getWorkspaceMembers: (...a: unknown[]) => getWorkspaceMembers(...a),
 		getCardActivity: (...a: unknown[]) => getCardActivity(...a),
+		ticketIntake: {
+			getHistory: (...a: unknown[]) => mockGetHistory(...a),
+		},
 	},
+}));
+
+const mockOpen = vi.fn();
+vi.mock("../hooks/useTicketIntakeChat", () => ({
+	useTicketIntakeChat: () => ({ open: mockOpen }),
 }));
 
 import ContextPanel from "./ContextPanel";
@@ -89,8 +98,10 @@ function titleInput(): HTMLInputElement {
 
 beforeEach(() => {
 	mockUseBoard.mockReset();
+	mockOpen.mockReset();
 	getWorkspaceMembers.mockReset().mockResolvedValue({ members: [] });
 	getCardActivity.mockReset().mockResolvedValue({ events: [] });
+	mockGetHistory.mockReset().mockResolvedValue({ tickets: [] });
 });
 afterEach(() => {
 	cleanup();
@@ -125,5 +136,83 @@ describe("ContextPanel server→form sync", () => {
 
 		await waitFor(() => expect(getCardActivity).toHaveBeenCalled());
 		expect(titleInput().value).toBe("My local edit");
+	});
+});
+
+describe("ContextPanel — Report issue prefill", () => {
+	it("opens the card-variant chat prefilled with title, description, and a link back to the card", () => {
+		setBoard(
+			makeCard({
+				id: 1,
+				title: "Fix login redirect",
+				description: "Redirect loops on logout",
+			}),
+		);
+		render(<ContextPanel />);
+
+		fireEvent.click(screen.getByRole("button", { name: /report issue/i }));
+
+		expect(mockOpen).toHaveBeenCalledWith(
+			expect.objectContaining({
+				variant: "card",
+				prefill: expect.objectContaining({
+					title: "Fix login redirect",
+					description: "Redirect loops on logout",
+					cardId: 1,
+				}),
+			}),
+		);
+	});
+});
+
+describe("ContextPanel — ticket history section", () => {
+	it("shows 2 history entries with title, link, and relative time", async () => {
+		mockGetHistory.mockResolvedValueOnce({
+			tickets: [
+				{
+					title: "T1",
+					issueUrl: "https://linear.app/cam/issue/CAM-1",
+					createdAt: "2026-06-30T00:00:00Z",
+				},
+				{
+					title: "T2",
+					issueUrl: "https://linear.app/cam/issue/CAM-2",
+					createdAt: "2026-06-29T00:00:00Z",
+				},
+			],
+		});
+		setBoard(makeCard({ id: 1 }));
+		render(<ContextPanel />);
+
+		await waitFor(() => {
+			expect(screen.getAllByRole("link", { name: /CAM-/ })).toHaveLength(2);
+		});
+	});
+
+	it("shows a lightweight empty state when there is no ticket history", async () => {
+		mockGetHistory.mockResolvedValueOnce({ tickets: [] });
+		setBoard(makeCard({ id: 1 }));
+		render(<ContextPanel />);
+
+		await waitFor(() => {
+			expect(screen.getByText(/no ticket/i)).toBeTruthy();
+		});
+	});
+});
+
+describe("ContextPanel — Report issue gated on active workspace (Story 9)", () => {
+	it("does not render the Report issue button when activeWorkspaceId is null", () => {
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: null,
+			columns: columnsWith(makeCard({ id: 1 })),
+			saveCard: vi.fn(),
+			deleteCard: vi.fn(),
+			showToast: vi.fn(),
+			setHasUnsavedCardEdits: vi.fn(),
+		});
+		render(<ContextPanel />);
+		expect(
+			screen.queryByRole("button", { name: /report issue/i }),
+		).toBeNull();
 	});
 });

@@ -1,8 +1,9 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { api } from "../api";
+import { api, type TicketHistoryEntry } from "../api";
 import { type SaveCardResult, useBoard } from "../context/BoardContext";
+import { useTicketIntakeChat } from "../hooks/useTicketIntakeChat";
 import {
 	describeCardEvent,
 	findCardInColumns,
@@ -15,6 +16,21 @@ import { AssigneePicker } from "./AssigneePicker";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
+
+type TicketIntakeOpen = (config: {
+	variant: "card";
+	prefill: {
+		title: string;
+		description: string;
+		cardId: number;
+		cardLink: string;
+	};
+}) => void;
+
+function issueIdentifierFromUrl(issueUrl: string): string {
+	const segment = issueUrl.split("/").pop();
+	return segment ?? issueUrl;
+}
 
 function assigneeIdsEqual(a: number[], b: number[]): boolean {
 	if (a.length !== b.length) return false;
@@ -75,6 +91,13 @@ function DetailsSection({
 	});
 	const forceSyncRef = useRef(false);
 	const [_syncNonce, setSyncNonce] = useState(0);
+	const ticketIntakeChat = useTicketIntakeChat({
+		workspaceId: activeWorkspaceId,
+		variant: "card",
+	});
+	const openTicketIntake = (
+		ticketIntakeChat as typeof ticketIntakeChat & { open: TicketIntakeOpen }
+	).open;
 
 	// Workspace members populate the assignee picker.
 	useEffect(() => {
@@ -242,6 +265,26 @@ function DetailsSection({
 				<MetaRow label="Done" value={card.doneAt} />
 			</dl>
 
+			{activeWorkspaceId !== null && (
+				<button
+					type="button"
+					onClick={() =>
+						openTicketIntake({
+							variant: "card",
+							prefill: {
+								title: card.title,
+								description: card.description,
+								cardId: card.id,
+								cardLink: `/board/card/${card.id}`,
+							},
+						})
+					}
+					className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				>
+					Report issue
+				</button>
+			)}
+
 			<div className="flex items-center justify-between pt-1">
 				<button
 					onClick={() => void onDelete()}
@@ -264,6 +307,72 @@ function DetailsSection({
 					</button>
 				</div>
 			</div>
+		</section>
+	);
+}
+
+function TicketHistorySection({ cardId }: { cardId: number }) {
+	const { activeWorkspaceId } = useBoard();
+	const [tickets, setTickets] = useState<TicketHistoryEntry[] | null>(null);
+
+	useEffect(() => {
+		if (activeWorkspaceId === null) return;
+		let active = true;
+		api.ticketIntake
+			.getHistory(activeWorkspaceId, cardId)
+			.then(({ tickets: history }) => {
+				if (active) setTickets(history);
+			})
+			.catch((err) => console.warn("ticket history fetch failed", err));
+		return () => {
+			active = false;
+		};
+	}, [activeWorkspaceId, cardId]);
+
+	return (
+		<section
+			aria-label="Ticket history"
+			className="border-t border-neutral-200 px-4 py-4"
+		>
+			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
+				Ticket history
+			</h3>
+			{tickets === null && (
+				<p className="mt-3 text-sm text-neutral-500">Loading ticket history...</p>
+			)}
+			{tickets !== null && tickets.length === 0 && (
+				<p className="mt-3 text-sm text-neutral-500">No tickets reported yet.</p>
+			)}
+			{tickets !== null && tickets.length > 0 && (
+				<ol className="mt-3 divide-y divide-neutral-100">
+					{tickets.map((ticket) => (
+						<li
+							key={ticket.issueUrl}
+							className="flex items-baseline justify-between gap-4 py-2.5"
+						>
+							<span className="min-w-0 text-sm leading-snug text-neutral-700">
+								<span className="font-medium text-neutral-900">
+									{ticket.title}
+								</span>{" "}
+								<a
+									href={ticket.issueUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-primary-600 hover:text-primary-700 hover:underline"
+								>
+									{issueIdentifierFromUrl(ticket.issueUrl)}
+								</a>
+							</span>
+							<time
+								dateTime={ticket.createdAt}
+								className="shrink-0 tabular-nums text-xs text-neutral-400"
+							>
+								{formatRelativeTime(ticket.createdAt)}
+							</time>
+						</li>
+					))}
+				</ol>
+			)}
 		</section>
 	);
 }
@@ -429,6 +538,7 @@ export default function ContextPanel() {
 						onClose={close}
 					/>
 					<ActivitySection cardId={card.id} />
+					<TicketHistorySection cardId={card.id} />
 				</div>
 			</aside>
 		</>
