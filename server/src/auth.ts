@@ -432,6 +432,22 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 						.execute();
 				}
 
+				// Consume pending invites: grant membership THEN delete invite
+				for (const invite of pendingInvites) {
+					await trx
+						.insertInto("workspace_members")
+						.values({
+							workspace_id: invite.workspaceId,
+							user_id: user.id,
+							role: invite.role,
+						})
+						.execute();
+					await trx
+						.deleteFrom("workspace_invites")
+						.where("id", "=", invite.id)
+						.execute();
+				}
+
 				return user;
 			});
 
