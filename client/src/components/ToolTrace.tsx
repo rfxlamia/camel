@@ -8,6 +8,8 @@ import {
 import { useState } from "react";
 import type { ToolTraceItem } from "../types";
 
+const SUMMARY_CHAR_LIMIT = 48;
+
 interface ToolTraceProps {
 	steps: ToolTraceItem[];
 }
@@ -27,14 +29,15 @@ export function ToolTrace({ steps }: ToolTraceProps) {
 		summaryParts.push("reasoning");
 		if (first.reasoningText) {
 			const preview =
-				first.reasoningText.length > 48
-					? `${first.reasoningText.slice(0, 48)}…`
+				first.reasoningText.length > SUMMARY_CHAR_LIMIT
+					? `${first.reasoningText.slice(0, SUMMARY_CHAR_LIMIT)}…`
 					: first.reasoningText;
 			summaryParts.push(preview);
 		}
 	} else {
 		summaryParts.push(first.toolName);
-		if (first.query) summaryParts.push(first.query);
+		if (first.query && first.query.length <= SUMMARY_CHAR_LIMIT)
+			summaryParts.push(first.query);
 		if (first.resultCount !== undefined)
 			summaryParts.push(`${first.resultCount} results`);
 		else if (first.toolName === "create_file" && first.query)
@@ -43,6 +46,7 @@ export function ToolTrace({ steps }: ToolTraceProps) {
 	const summary = summaryParts.join(" · ");
 
 	const hasError = toolSteps.some((s) => s.errorCode);
+	const allSuccess = toolSteps.length > 0 && !hasError;
 
 	return (
 		<div className="rounded-md border border-neutral-200 bg-neutral-100">
@@ -58,6 +62,11 @@ export function ToolTrace({ steps }: ToolTraceProps) {
 				{hasError && (
 					<span className="ml-auto rounded bg-error-100 px-1.5 py-0.5 text-xs font-medium text-error-700">
 						error
+					</span>
+				)}
+				{allSuccess && (
+					<span className="ml-auto rounded bg-success-100 px-1.5 py-0.5 text-xs font-medium text-success-900">
+						success
 					</span>
 				)}
 			</button>

@@ -933,7 +933,7 @@ async function executeCardWithTools(
 						onToolEvent?.({
 							phase: "result",
 							toolName: block.name,
-							query: query ?? (result.ok ? result.content : undefined),
+							query,
 							resultCount,
 						});
 						toolResults.push({

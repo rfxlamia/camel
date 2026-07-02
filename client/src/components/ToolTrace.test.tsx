@@ -67,6 +67,58 @@ describe("ToolTrace", () => {
 		const { container } = render(<ToolTrace steps={[]} />);
 		expect(container.textContent).toBe("");
 	});
+
+	it("shows success badge when all steps succeed", () => {
+		const { container } = render(
+			<ToolTrace
+				steps={[
+					{
+						toolName: "web_search",
+						query: "test",
+						resultCount: 5,
+						columnSlug: "test",
+					},
+				]}
+			/>,
+		);
+		expect(container.textContent).toContain("success");
+		expect(container.textContent).not.toContain("error");
+	});
+
+	it("hides query in summary when longer than 48 chars", () => {
+		const longQuery = "a".repeat(49);
+		const { container } = render(
+			<ToolTrace
+				steps={[
+					{
+						toolName: "web_search",
+						query: longQuery,
+						resultCount: 5,
+						columnSlug: "test",
+					},
+				]}
+			/>,
+		);
+		expect(container.textContent).not.toContain(longQuery);
+		expect(container.textContent).toContain("web_search");
+	});
+
+	it("handles undefined query gracefully", () => {
+		const { container } = render(
+			<ToolTrace
+				steps={[
+					{
+						toolName: "query_board_data",
+						columnSlug: "test",
+						resultCount: 5,
+					},
+				]}
+			/>,
+		);
+		expect(container.textContent).toContain("query_board_data");
+		expect(container.textContent).toContain("5 results");
+		expect(container.textContent).toContain("success");
+	});
 });
 
 describe("deriveToolTrace", () => {
