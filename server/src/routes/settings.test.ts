@@ -564,6 +564,26 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.executeTakeFirstOrThrow();
 			expect(row.version).toBe(2);
 		});
+
+		it("array body with a duplicate key does not crash the multi-row upsert", async () => {
+			const res = await request(app)
+				.patch(`/workspaces/${workspaceId}/settings`)
+				.send([
+					{ key: "board_name", textValue: "First", version: 0 },
+					{ key: "board_name", textValue: "Second", version: 0 },
+				]);
+
+			expect(res.status).toBe(200);
+
+			const row = await db
+				.selectFrom("settings")
+				.select(["text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.where("key", "=", "board_name")
+				.executeTakeFirstOrThrow();
+			expect(row.text_value).toBe("Second");
+			expect(row.version).toBe(1);
+		});
 	},
 );
 

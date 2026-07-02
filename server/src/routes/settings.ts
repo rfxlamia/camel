@@ -458,6 +458,12 @@ settingsRouter.patch("/", async (req, res) => {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
 
+	// The array-body path allows the same key more than once (last one
+	// wins); a duplicate key reaching batchUpsertSettings's single
+	// multi-row INSERT would trip Postgres's "ON CONFLICT DO UPDATE
+	// command cannot affect row a second time".
+	const dedupedUpdates = [...new Map(updates.map((u) => [u.key, u])).values()];
+
 	// All setting keys share one version per workspace; client must send the max it last saw.
 	// Lock the workspace row for the read+write so a concurrent request can't
 	// read the same pre-write version and silently clobber this write.
@@ -469,8 +475,13 @@ settingsRouter.patch("/", async (req, res) => {
 			return true;
 		}
 
-		if (updates.length > 0) {
-			await batchUpsertSettings(workspaceId, updates, currentGlobal + 1, trx);
+		if (dedupedUpdates.length > 0) {
+			await batchUpsertSettings(
+				workspaceId,
+				dedupedUpdates,
+				currentGlobal + 1,
+				trx,
+			);
 		}
 		return false;
 	});
@@ -482,7 +493,7 @@ settingsRouter.patch("/", async (req, res) => {
 		});
 	}
 
-	if (updates.length === 0) {
+	if (dedupedUpdates.length === 0) {
 		const rows = await getSettingRows(workspaceId);
 		return res.json(generateDefaultSettings(rows));
 	}
