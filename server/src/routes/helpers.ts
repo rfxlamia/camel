@@ -1,6 +1,6 @@
 import { sql } from "kysely";
 import type { AuthUser } from "../auth.js";
-import { db, type DBExecutor } from "../db/kysely.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { clearPresence, publishEvent } from "../realtime.js";
 
 // ---- Workspace capacity -----------------------------------------------------
@@ -197,7 +197,7 @@ export type WorkspaceAccessDeps = {
 	removeMember: (
 		workspaceId: number,
 		userId: number,
-	) => Promise<{ userId: number; username: string }>;
+	) => Promise<{ userId: number; username: string } | null>;
 	publishEvent: (
 		workspaceId: number,
 		event: {
@@ -251,6 +251,7 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 			if (!workspace) return { status: 404 as const, error: "Not found" };
 
 			const removed = await deps.removeMember(workspaceId, userId);
+			if (!removed) return { status: 404 as const, error: "Not found" };
 			deps.clearPresence(workspaceId, userId).catch(() => {
 				// best-effort; member already removed
 			});
@@ -293,7 +294,11 @@ export const workspaceAccessService = createWorkspaceAccessService({
 				.where("workspace_id", "=", workspaceId)
 				.where("user_id", "=", userId)
 				.returning("user_id")
-				.executeTakeFirstOrThrow();
+				.executeTakeFirst();
+			// Lost the race to a concurrent removal of the same member — the
+			// caller already checked membership existed, so treat this as a
+			// 404-style no-op rather than throwing.
+			if (!deleted) return null;
 
 			// Clear signable_assignee_id from columns that reference this member
 			await trx

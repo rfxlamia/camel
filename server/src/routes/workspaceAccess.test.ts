@@ -117,6 +117,32 @@ describe("membership removal events", () => {
 		expect(publishEvent).not.toHaveBeenCalledWith(9, expect.anything());
 		expect(clearPresence).toHaveBeenCalledWith(8, 4);
 	});
+
+	it("returns 404 (not a thrown error) when a concurrent request already removed the member", async () => {
+		const publishEvent = vi.fn(async () => undefined);
+		const clearPresence = vi.fn(async () => undefined);
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
+			getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
+			// Target membership still existed when checked...
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			// ...but a concurrent request already deleted the row by the time
+			// the actual DELETE runs.
+			removeMember: vi.fn(async () => null),
+			publishEvent,
+			clearPresence,
+		});
+
+		const result = await service.removeMember({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 4,
+		});
+
+		expect(result).toEqual({ status: 404, error: "Not found" });
+		expect(publishEvent).not.toHaveBeenCalled();
+		expect(clearPresence).not.toHaveBeenCalled();
+	});
 });
 
 describe("workspace isolation and legacy route cleanup", () => {
