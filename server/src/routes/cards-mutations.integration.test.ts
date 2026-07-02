@@ -156,6 +156,24 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			);
 			expect(rows.rows[0].n).toBe(1);
 		});
+
+		it("rejects a missing columnId with a clean 400, not a leaked DB error", async () => {
+			const res = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
+				.send({ title: "no column" });
+
+			expect(res.status).toBe(400);
+			expect(res.body.error).toBe("columnId must be an integer");
+		});
+
+		it("rejects a non-integer columnId with a clean 400, not a leaked DB error", async () => {
+			const res = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
+				.send({ columnId: "not-a-number", title: "bad column" });
+
+			expect(res.status).toBe(400);
+			expect(res.body.error).toBe("columnId must be an integer");
+		});
 	},
 );
 

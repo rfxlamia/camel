@@ -255,6 +255,9 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
 	const { columnId, title, description } = req.body ?? {};
+	if (!Number.isInteger(columnId)) {
+		return res.status(400).json({ error: "columnId must be an integer" });
+	}
 	const titleValidation = validateCardTitle(title ?? "");
 	if (!titleValidation.valid) {
 		return res.status(400).json({ error: titleValidation.error });
