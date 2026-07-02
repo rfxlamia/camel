@@ -192,6 +192,37 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				const trace = await getToolTrace(db, boardId);
 				expect(trace).toEqual([]);
 			});
+
+			it("breaks created_at ties by id, preserving insertion order", async () => {
+				// A single multi-row INSERT shares one now() evaluation (STABLE,
+				// not VOLATILE), so these rows get identical created_at — only
+				// the id tiebreak can keep the order deterministic.
+				await db
+					.insertInto("agent_tool_calls")
+					.values([
+						{
+							board_id: boardId,
+							column_slug: "research-specialist",
+							tool_name: "web_search",
+							input: JSON.stringify({ query: "first" }),
+							result: "1",
+							attempt: 1,
+						},
+						{
+							board_id: boardId,
+							column_slug: "research-specialist",
+							tool_name: "web_search",
+							input: JSON.stringify({ query: "second" }),
+							result: "1",
+							attempt: 2,
+						},
+					])
+					.execute();
+
+				const trace = await getToolTrace(db, boardId);
+
+				expect(trace.map((t) => t.attempt)).toEqual([1, 2]);
+			});
 		});
 
 		describe("insertColumns tools serialization", () => {

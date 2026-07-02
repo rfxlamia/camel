@@ -22,7 +22,7 @@ import type { Request } from "express";
 import { Router } from "express";
 import { sql } from "kysely";
 import { requireAuth } from "../auth.js";
-import { db, type DBExecutor } from "../db/kysely.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { llmTimeout } from "../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
@@ -74,6 +74,7 @@ export async function getToolTrace(
 		])
 		.where("board_id", "=", boardId)
 		.orderBy("created_at")
+		.orderBy("id")
 		.execute();
 
 	return mergeToolTraceRows(
@@ -227,6 +228,7 @@ export async function selectConversationHistory(
 		.select(["role", "content"])
 		.where("board_id", "=", boardId)
 		.orderBy("created_at")
+		.orderBy("id")
 		.execute();
 	return rows;
 }
@@ -321,7 +323,11 @@ const realDeps: AgentBoardServiceDeps = {
 	insertConversation: async (data) => {
 		await db
 			.insertInto("agent_conversations")
-			.values({ board_id: data.boardId, role: data.role, content: data.content })
+			.values({
+				board_id: data.boardId,
+				role: data.role,
+				content: data.content,
+			})
 			.execute();
 	},
 
@@ -375,7 +381,11 @@ const realDeps: AgentBoardServiceDeps = {
 	approveBoardAtomic: async (boardId) => {
 		const result = await db
 			.updateTable("agent_boards")
-			.set({ status: "approved", execution_status: "running", updated_at: sql`now()` })
+			.set({
+				status: "approved",
+				execution_status: "running",
+				updated_at: sql`now()`,
+			})
 			.where("id", "=", boardId)
 			.where("status", "=", "pending")
 			.executeTakeFirst();
@@ -409,7 +419,14 @@ const realDeps: AgentBoardServiceDeps = {
 	getFirstCard: async (boardId) => {
 		const r = await db
 			.selectFrom("columns")
-			.select(["id", "slug", "system_prompt", "reasoning", "tools", "tool_budget"])
+			.select([
+				"id",
+				"slug",
+				"system_prompt",
+				"reasoning",
+				"tools",
+				"tool_budget",
+			])
 			.where("board_id", "=", boardId)
 			.orderBy("position")
 			.limit(1)
@@ -428,7 +445,14 @@ const realDeps: AgentBoardServiceDeps = {
 	getColumns: async (boardId) => {
 		const rows = await db
 			.selectFrom("columns")
-			.select(["id", "slug", "system_prompt", "reasoning", "tools", "tool_budget"])
+			.select([
+				"id",
+				"slug",
+				"system_prompt",
+				"reasoning",
+				"tools",
+				"tool_budget",
+			])
 			.where("board_id", "=", boardId)
 			.orderBy("position")
 			.execute();
@@ -529,7 +553,12 @@ const realDeps: AgentBoardServiceDeps = {
 			.leftJoin("cards as c", (join) =>
 				join.onRef("c.id", "=", "e.card_id").on("c.deleted_at", "is", null),
 			)
-			.select(["e.event_type", "e.payload", "e.created_at", "c.title as current_card_title"])
+			.select([
+				"e.event_type",
+				"e.payload",
+				"e.created_at",
+				"c.title as current_card_title",
+			])
 			.where("e.workspace_id", "=", workspaceId)
 			.orderBy("e.created_at", "desc")
 			.orderBy("e.id", "desc")
@@ -753,7 +782,14 @@ export function createAgentRouter(
 				// Fetch columns + cards for this agent board
 				const colRows = await db
 					.selectFrom("columns")
-					.select(["id", "title", "position", "slug", "reasoning", "system_prompt"])
+					.select([
+						"id",
+						"title",
+						"position",
+						"slug",
+						"reasoning",
+						"system_prompt",
+					])
 					.where("board_id", "=", boardId)
 					.orderBy("position")
 					.execute();
