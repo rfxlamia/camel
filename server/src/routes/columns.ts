@@ -207,11 +207,13 @@ columnsRouter.patch(
 		const hasSignableAssigneeId = "signableAssigneeId" in (req.body ?? {});
 
 		// Validate title if provided
+		let trimmedTitle: string | undefined;
 		if (title !== undefined) {
 			const titleValidation = validateColumnName(title);
 			if (!titleValidation.valid) {
 				return res.status(400).json({ error: titleValidation.error });
 			}
+			trimmedTitle = titleValidation.trimmed;
 		}
 
 		if (wipLimit !== undefined && wipLimit !== null) {
@@ -254,7 +256,7 @@ columnsRouter.patch(
 		}
 
 		const patchFields = buildColumnPatchFields({
-			title,
+			title: trimmedTitle,
 			wipLimit,
 			policy,
 			isDone,
@@ -263,6 +265,10 @@ columnsRouter.patch(
 			hasSignableAssigneeId,
 			color,
 		});
+
+		if (Object.keys(patchFields).length === 0) {
+			return res.status(400).json({ error: "no updatable fields provided" });
+		}
 
 		// Use transaction for isDone enforcement to ensure atomicity
 		if (isDone === true) {
