@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import "dotenv/config";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../db/kysely.js";
 import {
 	batchUpsertSettings,
 	DEFAULT_SETTINGS,
@@ -309,59 +311,90 @@ describe("workspace settings service", () => {
 	});
 });
 
-describe("batchUpsertSettings", () => {
-	const { mockQuery } = vi.hoisted(() => {
-		return { mockQuery: vi.fn() };
-	});
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"batchUpsertSettings (real DB)",
+	() => {
+		let workspaceId: number;
+		let ownerId: number;
 
-	vi.mock("../db/pool.js", () => ({
-		pool: { query: mockQuery },
-	}));
+		beforeAll(async () => {
+			const owner = await db
+				.insertInto("users")
+				.values({
+					username: `settings-batch-${Date.now()}`,
+					display_name: "Owner",
+					password_hash: "h",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			ownerId = owner.id;
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({ name: "Batch Settings WS", owner_user_id: ownerId, is_personal: false })
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			workspaceId = workspace.id;
+		});
 
-	beforeEach(() => {
-		mockQuery.mockReset();
-		mockQuery.mockResolvedValue({ rows: [] });
-	});
+		afterAll(async () => {
+			await db.deleteFrom("settings").where("workspace_id", "=", workspaceId).execute();
+			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+			await db.deleteFrom("users").where("id", "=", ownerId).execute();
+		});
 
-	it("returns early for empty updates array", async () => {
-		await batchUpsertSettings(42, [], 1);
-		expect(mockQuery).not.toHaveBeenCalled();
-	});
+		afterEach(async () => {
+			await db.deleteFrom("settings").where("workspace_id", "=", workspaceId).execute();
+		});
 
-	it("issues a single query with unnest for multiple keys", async () => {
-		const updates = [
-			{ key: "board_name", textValue: "Dev Team" },
-			{ key: "logo_path", textValue: "/uploads/custom.png" },
-		];
+		it("returns early for empty updates array", async () => {
+			await batchUpsertSettings(workspaceId, [], 1);
+			const rows = await db
+				.selectFrom("settings")
+				.selectAll()
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			expect(rows).toHaveLength(0);
+		});
 
-		await batchUpsertSettings(42, updates, 5);
+		it("upserts multiple keys atomically in one call", async () => {
+			const updates = [
+				{ key: "board_name", textValue: "Dev Team" },
+				{ key: "logo_path", textValue: "/uploads/custom.png" },
+			];
 
-		// Should be called exactly once (not N times)
-		expect(mockQuery).toHaveBeenCalledTimes(1);
+			await batchUpsertSettings(workspaceId, updates, 5);
 
-		const [sql, params] = mockQuery.mock.calls[0];
+			const rows = await db
+				.selectFrom("settings")
+				.select(["key", "text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.orderBy("key")
+				.execute();
+			expect(rows).toEqual([
+				{ key: "board_name", text_value: "Dev Team", version: 5 },
+				{ key: "logo_path", text_value: "/uploads/custom.png", version: 5 },
+			]);
+		});
 
-		// Verify SQL uses unnest
-		expect(sql).toContain("unnest");
-		expect(sql).toContain("ON CONFLICT");
+		it("handles single key update and upserts existing rows on conflict", async () => {
+			await batchUpsertSettings(
+				workspaceId,
+				[{ key: "board_name", textValue: "A" }],
+				1,
+			);
+			await batchUpsertSettings(
+				workspaceId,
+				[{ key: "board_name", textValue: "B" }],
+				2,
+			);
 
-		// Verify atomicity: single statement, no semicolons
-		expect(sql).not.toContain(";");
-
-		// Verify params: [workspaceId, newVersion, keys[], values[]]
-		expect(params).toEqual([
-			42,
-			5,
-			["board_name", "logo_path"],
-			["Dev Team", "/uploads/custom.png"],
-		]);
-	});
-
-	it("handles single key update", async () => {
-		await batchUpsertSettings(1, [{ key: "board_name", textValue: "A" }], 1);
-
-		expect(mockQuery).toHaveBeenCalledTimes(1);
-		const [, params] = mockQuery.mock.calls[0];
-		expect(params).toEqual([1, 1, ["board_name"], ["A"]]);
-	});
+			const rows = await db
+				.selectFrom("settings")
+				.select(["key", "text_value", "version"])
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			expect(rows).toEqual([
+				{ key: "board_name", text_value: "B", version: 2 },
+			]);
+		});
 });

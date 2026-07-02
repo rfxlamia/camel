@@ -3,7 +3,8 @@ import { readFile, unlink } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type RequestHandler, Router } from "express";
-import { pool } from "../db/pool.js";
+import { sql } from "kysely";
+import { db } from "../db/kysely.js";
 import { validateFileContent } from "../lib/file-validator.js";
 import { publishEvent } from "../realtime.js";
 
@@ -129,8 +130,6 @@ type PgSettingRow = {
 	version: number;
 };
 
-type PgVersionRow = { version: number | null };
-
 function mapPgSettingRow(r: PgSettingRow): SettingRow {
 	return {
 		key: r.key,
@@ -220,8 +219,9 @@ export function hasResetAppRoute(): boolean {
 }
 
 /**
- * Batch-upsert settings keys in a single atomic SQL statement.
- * Uses unnest() to avoid N sequential round trips and ensure all-or-nothing writes.
+ * Batch-upsert settings keys in a single atomic multi-row INSERT.
+ * A single statement covering all keys avoids N sequential round trips
+ * and ensures all-or-nothing writes.
  */
 export async function batchUpsertSettings(
 	workspaceId: number,
@@ -230,24 +230,61 @@ export async function batchUpsertSettings(
 ): Promise<void> {
 	if (updates.length === 0) return;
 
-	const keys = updates.map((u) => u.key);
-	const values = updates.map((u) => u.textValue);
-
-	await pool.query(
-		`INSERT INTO settings (workspace_id, key, text_value, version, updated_at)
-		 SELECT $1, k, v, $2, now()
-		 FROM unnest($3::text[], $4::text[]) AS t(k, v)
-		 ON CONFLICT (workspace_id, key) DO UPDATE SET
-		   text_value = EXCLUDED.text_value,
-		   version    = EXCLUDED.version,
-		   updated_at = now()`,
-		[workspaceId, newVersion, keys, values],
-	);
+	await db
+		.insertInto("settings")
+		.values(
+			updates.map((u) => ({
+				workspace_id: workspaceId,
+				key: u.key,
+				text_value: u.textValue,
+				version: newVersion,
+				updated_at: sql`now()`,
+			})),
+		)
+		.onConflict((oc) =>
+			oc.columns(["workspace_id", "key"]).doUpdateSet({
+				text_value: (eb) => eb.ref("excluded.text_value"),
+				version: (eb) => eb.ref("excluded.version"),
+				updated_at: sql`now()`,
+			}),
+		)
+		.execute();
 }
 
 function parseWorkspaceId(raw: string): number | null {
 	const workspaceId = Number(raw);
 	return Number.isInteger(workspaceId) ? workspaceId : null;
+}
+
+async function getMemberRole(
+	workspaceId: number,
+	userId: number,
+): Promise<string | undefined> {
+	const row = await db
+		.selectFrom("workspace_members")
+		.select("role")
+		.where("workspace_id", "=", workspaceId)
+		.where("user_id", "=", userId)
+		.executeTakeFirst();
+	return row?.role;
+}
+
+async function getSettingRows(workspaceId: number): Promise<SettingRow[]> {
+	const raw = await db
+		.selectFrom("settings")
+		.select(["key", "text_value", "bool_value", "version"])
+		.where("workspace_id", "=", workspaceId)
+		.execute();
+	return raw.map(mapPgSettingRow);
+}
+
+async function getCurrentGlobalVersion(workspaceId: number): Promise<number> {
+	const verRows = await db
+		.selectFrom("settings")
+		.select("version")
+		.where("workspace_id", "=", workspaceId)
+		.execute();
+	return verRows.reduce((max, r) => Math.max(max, r.version || 0), 0);
 }
 
 type WorkspaceRouteParams = { workspaceId: string };
@@ -262,18 +299,10 @@ settingsRouter.get("/", async (req, res) => {
 		return res.status(400).json({ error: "workspaceId must be an integer" });
 	}
 
-	const { rows: memberRows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, req.user!.id],
-	);
-	if (memberRows.length === 0)
-		return res.status(404).json({ error: "Not found" });
+	const role = await getMemberRole(workspaceId, req.user!.id);
+	if (role === undefined) return res.status(404).json({ error: "Not found" });
 
-	const { rows: raw } = await pool.query(
-		`SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
-		[workspaceId],
-	);
-	const rows: SettingRow[] = raw.map((r) => mapPgSettingRow(r as PgSettingRow));
+	const rows = await getSettingRows(workspaceId);
 	const settings = generateDefaultSettings(rows);
 	res.json(settings);
 });
@@ -286,14 +315,10 @@ settingsRouter.patch("/", async (req, res) => {
 		return res.status(400).json({ error: "workspaceId must be an integer" });
 	}
 
-	const { rows: memberRows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, req.user!.id],
-	);
-	if (memberRows.length === 0)
-		return res.status(404).json({ error: "Not found" });
+	const role = await getMemberRole(workspaceId, req.user!.id);
+	if (role === undefined) return res.status(404).json({ error: "Not found" });
 
-	const edit = checkCanEditSettings(memberRows[0].role as string);
+	const edit = checkCanEditSettings(role);
 	if (!edit.allowed) {
 		return res.status(edit.status).json({ error: edit.error });
 	}
@@ -413,15 +438,8 @@ settingsRouter.patch("/", async (req, res) => {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
 
-	const { rows: verRows } = await pool.query(
-		`SELECT version FROM settings WHERE workspace_id = $1`,
-		[workspaceId],
-	);
 	// All setting keys share one version per workspace; client must send the max it last saw.
-	const currentGlobal = verRows.reduce(
-		(max: number, r) => Math.max(max, (r as PgVersionRow).version || 0),
-		0,
-	);
+	const currentGlobal = await getCurrentGlobalVersion(workspaceId);
 
 	if (clientVersion !== currentGlobal) {
 		return res.status(409).json({
@@ -431,13 +449,7 @@ settingsRouter.patch("/", async (req, res) => {
 	}
 
 	if (updates.length === 0) {
-		const { rows: raw } = await pool.query(
-			`SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
-			[workspaceId],
-		);
-		const rows: SettingRow[] = raw.map((r) =>
-			mapPgSettingRow(r as PgSettingRow),
-		);
+		const rows = await getSettingRows(workspaceId);
 		return res.json(generateDefaultSettings(rows));
 	}
 
@@ -450,13 +462,7 @@ settingsRouter.patch("/", async (req, res) => {
 		actor: req.user!,
 	});
 
-	const { rows: rawAfter } = await pool.query(
-		`SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
-		[workspaceId],
-	);
-	const afterRows: SettingRow[] = rawAfter.map((r) =>
-		mapPgSettingRow(r as PgSettingRow),
-	);
+	const afterRows = await getSettingRows(workspaceId);
 	res.json(generateDefaultSettings(afterRows));
 });
 
@@ -468,21 +474,15 @@ settingsRouter.delete("/", async (req, res) => {
 		return res.status(400).json({ error: "workspaceId must be an integer" });
 	}
 
-	const { rows: memberRows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, req.user!.id],
-	);
-	if (memberRows.length === 0)
-		return res.status(404).json({ error: "Not found" });
+	const role = await getMemberRole(workspaceId, req.user!.id);
+	if (role === undefined) return res.status(404).json({ error: "Not found" });
 
-	const edit = checkCanEditSettings(memberRows[0].role as string);
+	const edit = checkCanEditSettings(role);
 	if (!edit.allowed) {
 		return res.status(edit.status).json({ error: edit.error });
 	}
 
-	await pool.query("DELETE FROM settings WHERE workspace_id = $1", [
-		workspaceId,
-	]);
+	await db.deleteFrom("settings").where("workspace_id", "=", workspaceId).execute();
 	await publishEvent(workspaceId, {
 		type: "settings.updated",
 		actor: req.user!,
@@ -523,14 +523,10 @@ settingsRouter.post(
 			return res.status(400).json({ error: "workspaceId must be an integer" });
 		}
 
-		const { rows: memberRows } = await pool.query(
-			"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-			[workspaceId, req.user!.id],
-		);
-		if (memberRows.length === 0)
-			return res.status(404).json({ error: "Not found" });
+		const role = await getMemberRole(workspaceId, req.user!.id);
+		if (role === undefined) return res.status(404).json({ error: "Not found" });
 
-		const edit = checkCanEditSettings(memberRows[0].role as string);
+		const edit = checkCanEditSettings(role);
 		if (!edit.allowed) {
 			return res.status(edit.status).json({ error: edit.error });
 		}
@@ -553,46 +549,43 @@ settingsRouter.post(
 
 		const newRelativePath = `/uploads/${req.file.filename}`;
 
-		const { rows: currentRows } = await pool.query(
-			`SELECT key, text_value FROM settings WHERE workspace_id = $1 AND key = 'logo_path'`,
-			[workspaceId],
-		);
-		const oldLogoPath = currentRows[0]?.text_value ?? null;
+		const current = await db
+			.selectFrom("settings")
+			.select("text_value")
+			.where("workspace_id", "=", workspaceId)
+			.where("key", "=", "logo_path")
+			.executeTakeFirst();
+		const oldLogoPath = current?.text_value ?? null;
 
 		await tryDeleteOldUploadedLogo(oldLogoPath);
 
-		const { rows: verRows } = await pool.query(
-			`SELECT version FROM settings WHERE workspace_id = $1`,
-			[workspaceId],
-		);
-		const currentGlobal = verRows.reduce(
-			(max: number, r) => Math.max(max, (r as PgVersionRow).version || 0),
-			0,
-		);
+		const currentGlobal = await getCurrentGlobalVersion(workspaceId);
 		const newVersion = currentGlobal + 1;
 
-		await pool.query(
-			`INSERT INTO settings (workspace_id, key, text_value, version, updated_at)
-       VALUES ($1, $2, $3, $4, now())
-       ON CONFLICT (workspace_id, key) DO UPDATE SET
-         text_value = EXCLUDED.text_value,
-         version = EXCLUDED.version,
-         updated_at = now()`,
-			[workspaceId, "logo_path", newRelativePath, newVersion],
-		);
+		await db
+			.insertInto("settings")
+			.values({
+				workspace_id: workspaceId,
+				key: "logo_path",
+				text_value: newRelativePath,
+				version: newVersion,
+				updated_at: sql`now()`,
+			})
+			.onConflict((oc) =>
+				oc.columns(["workspace_id", "key"]).doUpdateSet({
+					text_value: (eb) => eb.ref("excluded.text_value"),
+					version: (eb) => eb.ref("excluded.version"),
+					updated_at: sql`now()`,
+				}),
+			)
+			.execute();
 
 		await publishEvent(workspaceId, {
 			type: "settings.updated",
 			actor: req.user!,
 		});
 
-		const { rows: rawAfter } = await pool.query(
-			`SELECT key, text_value, bool_value, version FROM settings WHERE workspace_id = $1`,
-			[workspaceId],
-		);
-		const afterRows: SettingRow[] = rawAfter.map((r) =>
-			mapPgSettingRow(r as PgSettingRow),
-		);
+		const afterRows = await getSettingRows(workspaceId);
 		res.json(generateDefaultSettings(afterRows));
 	},
 );
