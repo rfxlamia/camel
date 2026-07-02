@@ -108,13 +108,21 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		beforeAll(async () => {
 			const user = await db
 				.insertInto("users")
-				.values({ username: `agent-routes-${Date.now()}`, display_name: "Agent Tester", password_hash: "h" })
+				.values({
+					username: `agent-routes-${Date.now()}`,
+					display_name: "Agent Tester",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			userId = user.id;
 			const workspace = await db
 				.insertInto("workspaces")
-				.values({ name: "Agent Routes WS", owner_user_id: userId, is_personal: false })
+				.values({
+					name: "Agent Routes WS",
+					owner_user_id: userId,
+					is_personal: false,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
@@ -138,7 +146,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		describe("getToolTrace (read-only replay)", () => {
 			afterEach(async () => {
-				await db.deleteFrom("agent_tool_calls").where("board_id", "=", boardId).execute();
+				await db
+					.deleteFrom("agent_tool_calls")
+					.where("board_id", "=", boardId)
+					.execute();
 			});
 
 			it("returns merged trace steps ordered by created_at, scoped to the board", async () => {
@@ -185,7 +196,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		describe("insertColumns tools serialization", () => {
 			afterAll(async () => {
-				await db.deleteFrom("columns").where("board_id", "=", boardId).execute();
+				await db
+					.deleteFrom("columns")
+					.where("board_id", "=", boardId)
+					.execute();
 			});
 
 			it("stores a real TEXT[] tools column, not a JSON string", async () => {
@@ -245,7 +259,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		describe("artifact DB helpers", () => {
 			afterAll(async () => {
-				await db.deleteFrom("agent_artifacts").where("board_id", "=", boardId).execute();
+				await db
+					.deleteFrom("agent_artifacts")
+					.where("board_id", "=", boardId)
+					.execute();
 			});
 
 			it("insertArtifact upserts keyed on board_id", async () => {
@@ -274,8 +291,16 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			});
 
 			it("getArtifact issues a single board-scoped SELECT", async () => {
+				await realArtifactDeps.insertArtifact(db, {
+					boardId,
+					workspaceId,
+					filename: "title3.md",
+					format: "md",
+					content: "# Title 3",
+				});
+
 				const result = await realArtifactDeps.getArtifact(db, boardId);
-				expect(result).toMatchObject({ filename: "title2.md" });
+				expect(result).toMatchObject({ filename: "title3.md" });
 			});
 		});
 
@@ -284,8 +309,16 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				await db
 					.insertInto("agent_conversations")
 					.values([
-						{ board_id: boardId, role: "user", content: "What about subsidies?" },
-						{ board_id: boardId, role: "assistant", content: "Subsidies are..." },
+						{
+							board_id: boardId,
+							role: "user",
+							content: "What about subsidies?",
+						},
+						{
+							board_id: boardId,
+							role: "assistant",
+							content: "Subsidies are...",
+						},
 					])
 					.execute();
 
@@ -295,7 +328,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					{ role: "assistant", content: "Subsidies are..." },
 				]);
 
-				await db.deleteFrom("agent_conversations").where("board_id", "=", boardId).execute();
+				await db
+					.deleteFrom("agent_conversations")
+					.where("board_id", "=", boardId)
+					.execute();
 			});
 
 			it("deleteOutputsForBoard issues a scoped DELETE on agent_card_outputs", async () => {
