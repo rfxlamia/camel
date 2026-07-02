@@ -16,6 +16,9 @@ vi.mock("../../hooks/useTicketIntakeChat", () => ({
 		editDraft: vi.fn(),
 		submitState: "idle",
 		resubmit: vi.fn(),
+		openPanel: vi.fn(),
+		close: vi.fn(),
+		panelOpen: false,
 	}),
 }));
 
@@ -27,6 +30,17 @@ describe("FloatingChatButton", () => {
 	it("renders nothing when activeWorkspaceId is null", () => {
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: null,
+			ticketIntakeEnabled: true,
+			ticketIntakeEvents: [],
+		});
+		const { container } = render(<FloatingChatButton />);
+		expect(container.childElementCount).toBe(0);
+	});
+
+	it("renders nothing when ticket intake is disabled", () => {
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 1,
+			ticketIntakeEnabled: false,
 			ticketIntakeEvents: [],
 		});
 		const { container } = render(<FloatingChatButton />);
@@ -36,6 +50,7 @@ describe("FloatingChatButton", () => {
 	it("renders a clickable Button Primary token button when a workspace is active", () => {
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: 1,
+			ticketIntakeEnabled: true,
 			ticketIntakeEvents: [],
 		});
 		render(<FloatingChatButton />);

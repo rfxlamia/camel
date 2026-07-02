@@ -90,8 +90,13 @@ export interface CreateLinearIssueInput {
 }
 
 export interface CreateLinearIssueResult {
+	issueId: string;
 	issueUrl: string;
 	issueIdentifier: string;
+}
+
+export function isTicketIntakeConfigured(): boolean {
+	return Boolean(config.LINEAR_API_KEY?.trim() && config.LINEAR_TEAM_ID?.trim());
 }
 
 const ISSUE_CREATE_MUTATION = `
@@ -135,6 +140,7 @@ export async function createLinearIssue(
 	}
 
 	return {
+		issueId: data.issueCreate.issue.id,
 		issueUrl: data.issueCreate.issue.url,
 		issueIdentifier: data.issueCreate.issue.identifier,
 	};

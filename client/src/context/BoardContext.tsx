@@ -107,6 +107,7 @@ interface BoardContextValue {
 	clearAgentEvents: () => void;
 	clearFollowUpAgentEvents: () => void;
 	ticketIntakeEvents: TicketIntakeResultEvent[];
+	ticketIntakeEnabled: boolean;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -159,6 +160,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const [ticketIntakeEvents, setTicketIntakeEvents] = useState<
 		TicketIntakeResultEvent[]
 	>([]);
+	const [ticketIntakeEnabled, setTicketIntakeEnabled] = useState(false);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const prevWorkspaceIdRef = useRef<number | null>(null);
@@ -171,6 +173,22 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		activeWorkspaceId === null
 			? null
 			: (workspaces.find((w) => w.id === activeWorkspaceId) ?? null);
+
+	// Ticket-intake availability (Linear API keys configured on server).
+	useEffect(() => {
+		let active = true;
+		api.ticketIntake
+			.getConfig()
+			.then(({ enabled }) => {
+				if (active) setTicketIntakeEnabled(enabled);
+			})
+			.catch(() => {
+				if (active) setTicketIntakeEnabled(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	// Clear stale live agent events when switching workspaces (EC3).
 	useEffect(() => {
@@ -630,6 +648,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				clearAgentEvents,
 				clearFollowUpAgentEvents,
 				ticketIntakeEvents,
+				ticketIntakeEnabled,
 			}}
 		>
 			{children}

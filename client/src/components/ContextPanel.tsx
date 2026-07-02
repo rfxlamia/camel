@@ -13,6 +13,7 @@ import {
 import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 import { AssigneePicker } from "./AssigneePicker";
+import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
@@ -60,7 +61,8 @@ function DetailsSection({
 	onDelete: () => Promise<void>;
 	onClose: () => void;
 }) {
-	const { setHasUnsavedCardEdits, activeWorkspaceId } = useBoard();
+	const { setHasUnsavedCardEdits, activeWorkspaceId, ticketIntakeEnabled, ticketIntakeEvents } =
+		useBoard();
 	const [title, setTitle] = useState(card.title);
 	const [description, setDescription] = useState(card.description);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>(
@@ -84,6 +86,7 @@ function DetailsSection({
 	const ticketIntakeChat = useTicketIntakeChat({
 		workspaceId: activeWorkspaceId,
 		variant: "card",
+		ticketIntakeEvents,
 	});
 	const { open: openTicketIntake } = ticketIntakeChat;
 
@@ -253,7 +256,7 @@ function DetailsSection({
 				<MetaRow label="Done" value={card.doneAt} />
 			</dl>
 
-			{activeWorkspaceId !== null && (
+			{activeWorkspaceId !== null && ticketIntakeEnabled && (
 				<button
 					type="button"
 					onClick={() =>
@@ -271,6 +274,14 @@ function DetailsSection({
 				>
 					Report issue
 				</button>
+			)}
+
+			{ticketIntakeEnabled && (
+				<TicketIntakeChatOverlay
+					chat={ticketIntakeChat}
+					onClose={ticketIntakeChat.close}
+					ariaLabel="Report issue from card"
+				/>
 			)}
 
 			<div className="flex items-center justify-between pt-1">

@@ -19,6 +19,38 @@ function isPresent(value: string | null | undefined): boolean {
 	return typeof value === "string" && value.trim().length > 0;
 }
 
+export function inferTypeFromClassifierAnswer(
+	text: string,
+): TicketType | null {
+	const normalized = text.trim().toLowerCase();
+	if (/\bbug(s)?\b/.test(normalized)) return "Bug";
+	if (/\bfeature(s)?\b/.test(normalized)) return "Feature";
+	if (/\bimprovement(s)?\b/.test(normalized)) return "Improvement";
+	return null;
+}
+
+function questionForMissingFields(
+	fields: TicketExtraction,
+	missingFields: string[],
+): string {
+	if (
+		fields.type === "Bug" &&
+		(missingFields.includes("expected") || missingFields.includes("actual"))
+	) {
+		return "What did you expect to happen, and what actually happened instead?";
+	}
+	if (missingFields.includes("title") && missingFields.includes("description")) {
+		return "Could you give this issue a short title and describe what happened?";
+	}
+	if (missingFields.includes("title")) {
+		return "What would be a short title for this issue?";
+	}
+	if (missingFields.includes("description")) {
+		return "Could you describe the issue in a bit more detail?";
+	}
+	return "Could you share a bit more detail so we can draft the ticket?";
+}
+
 export function checkCompleteness(fields: TicketExtraction): CompletenessResult {
 	const missingFields: string[] = [];
 
@@ -34,14 +66,9 @@ export function checkCompleteness(fields: TicketExtraction): CompletenessResult 
 		return { ready: true, missingFields: [] };
 	}
 
-	let question: string | undefined;
-	if (
-		fields.type === "Bug" &&
-		(missingFields.includes("expected") || missingFields.includes("actual"))
-	) {
-		question =
-			"What did you expect to happen, and what actually happened instead?";
-	}
-
-	return { ready: false, missingFields, question };
+	return {
+		ready: false,
+		missingFields,
+		question: questionForMissingFields(fields, missingFields),
+	};
 }

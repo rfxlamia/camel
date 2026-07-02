@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { useBoard } from "../../context/BoardContext";
 import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
+import { ticketIntakeInputClass } from "./inputClass";
 import { PreviewScreen } from "./PreviewScreen";
-
-const inputClass =
-	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
 
 interface ChatPanelProps {
 	onClose: () => void;
@@ -26,28 +24,20 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 		previewReady,
 		draft,
 		confirm,
-		editDraft,
 		submitState,
 		resubmit,
+		isSending,
+		chatSendBlocked,
+		sendError,
 	} = chat;
 
 	const [input, setInput] = useState("");
 
 	const handleSend = async () => {
 		const trimmed = input.trim();
-		if (!trimmed) return;
+		if (!trimmed || chatSendBlocked || isSending) return;
 		setInput("");
 		await sendMessage(trimmed);
-	};
-
-	const handleConfirm = (edited: {
-		title: string;
-		description: string;
-	}) => {
-		editDraft(edited);
-		queueMicrotask(() => {
-			void confirm();
-		});
 	};
 
 	if (previewReady && draft) {
@@ -55,13 +45,17 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 			<div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
 				<PreviewScreen
 					draft={draft}
-					onConfirm={handleConfirm}
+					onConfirm={(edited) => {
+						void confirm(edited);
+					}}
 					onResubmit={resubmit}
 					submitState={submitState}
 				/>
 			</div>
 		);
 	}
+
+	const sendDisabled = !input.trim() || chatSendBlocked || isSending;
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -78,8 +72,19 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 						{message.content}
 					</div>
 				))}
+				{isSending && (
+					<p className="mr-8 text-sm text-neutral-500">Thinking…</p>
+				)}
 			</div>
 			<div className="border-t border-neutral-200 p-4">
+				{sendError && (
+					<p className="mb-2 text-sm text-error-700">{sendError}</p>
+				)}
+				{chatSendBlocked && !sendError && (
+					<p className="mb-2 text-sm text-neutral-600">
+						Please wait a moment before sending another message.
+					</p>
+				)}
 				<label htmlFor="ticket-intake-input" className="sr-only">
 					Your message
 				</label>
@@ -95,7 +100,7 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 						}
 					}}
 					placeholder="Describe the issue..."
-					className={inputClass}
+					className={ticketIntakeInputClass}
 				/>
 				<div className="mt-2 flex justify-end gap-2">
 					<button
@@ -108,7 +113,7 @@ export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
 					<button
 						type="button"
 						onClick={() => void handleSend()}
-						disabled={!input.trim()}
+						disabled={sendDisabled}
 						className="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,0.1)] hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 					>
 						Send

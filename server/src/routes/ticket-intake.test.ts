@@ -15,10 +15,12 @@ vi.mock("../auth.js", () => ({
 	requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 const mockCheckChatLimit = vi.fn().mockResolvedValue({ isLocked: false });
+const mockPeekChatLimit = vi.fn().mockResolvedValue({ isLocked: false });
 const mockPeekSubmitLimit = vi.fn();
 const mockRecordSubmitSuccess = vi.fn();
 vi.mock("../agent/ticket-intake/rate-limits.js", () => ({
 	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
+	peekChatLimit: (...args: unknown[]) => mockPeekChatLimit(...args),
 	peekSubmitLimit: (...args: unknown[]) => mockPeekSubmitLimit(...args),
 	recordSubmitSuccess: (...args: unknown[]) => mockRecordSubmitSuccess(...args),
 }));
@@ -31,6 +33,7 @@ vi.mock("../agent/ticket-intake/linear-client.js", () => ({
 	createLinearIssue: (...args: unknown[]) => mockCreateLinearIssue(...args),
 	createLinearComment: (...args: unknown[]) => mockCreateLinearComment(...args),
 	getLabelId: vi.fn().mockResolvedValue("label-bug-id"),
+	isTicketIntakeConfigured: vi.fn().mockReturnValue(true),
 }));
 vi.mock("../agent/ticket-intake/retry.js", () => ({
 	executeWithRetry: async (
@@ -80,6 +83,13 @@ vi.mock("../agent/ticket-intake/completeness.js", () => ({
 			return { ready: true };
 		},
 	),
+	inferTypeFromClassifierAnswer: (text: string) => {
+		const normalized = text.trim().toLowerCase();
+		if (/\bbug(s)?\b/.test(normalized)) return "Bug";
+		if (/\bfeature(s)?\b/.test(normalized)) return "Feature";
+		if (/\bimprovement(s)?\b/.test(normalized)) return "Improvement";
+		return null;
+	},
 }));
 
 import { publishEvent } from "../realtime.js";
@@ -220,6 +230,7 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 
 	it("responds 202 immediately and eventually publishes success on first-try issueCreate", async () => {
 		mockCreateLinearIssue.mockResolvedValueOnce({
+			issueId: "issue-9",
 			issueUrl: "https://linear.app/cam/issue/CAM-1",
 			issueIdentifier: "CAM-1",
 		});
@@ -247,6 +258,7 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 			.mockRejectedValueOnce({ status: 500 })
 			.mockRejectedValueOnce({ status: 500 })
 			.mockResolvedValueOnce({
+				issueId: "issue-9",
 				issueUrl: "https://linear.app/cam/issue/CAM-2",
 				issueIdentifier: "CAM-2",
 			});
@@ -296,6 +308,7 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 
 	it("still reports overall success when issueCreate succeeds but createLinearComment fails", async () => {
 		mockCreateLinearIssue.mockResolvedValueOnce({
+			issueId: "uuid-issue-3",
 			issueUrl: "https://linear.app/cam/issue/CAM-3",
 			issueIdentifier: "CAM-3",
 		});
@@ -306,6 +319,9 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 			.send({ title: "Bug title", description: "desc", type: "Bug" });
 
 		await flush();
+		expect(mockCreateLinearComment).toHaveBeenCalledWith(
+			expect.objectContaining({ issueId: "uuid-issue-3" }),
+		);
 		expect(mockPublishEvent).toHaveBeenCalledWith(
 			1,
 			expect.objectContaining({ success: true }),
@@ -321,6 +337,30 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 
 		expect(res.status).toBe(409);
 		expect(mockCreateLinearIssue).not.toHaveBeenCalled();
+	});
+});
+
+describe("POST /api/workspaces/:workspaceId/ticket-intake/chat rate limit", () => {
+	beforeEach(() => {
+		mockLookupMembership.mockReset().mockResolvedValue("member");
+		mockCheckChatLimit.mockReset().mockResolvedValue({ isLocked: false });
+	});
+
+	it("returns 429 with retryAfterMs when chat rate limit is exceeded", async () => {
+		mockCheckChatLimit.mockResolvedValueOnce({
+			isLocked: true,
+			retryAfterMs: 5000,
+		});
+
+		const res = await request(app)
+			.post("/api/workspaces/1/ticket-intake/chat")
+			.send({
+				message: "follow up",
+				conversationHistory: [{ role: "user", content: "first" }],
+			});
+
+		expect(res.status).toBe(429);
+		expect(res.body.retryAfterMs).toBe(5000);
 	});
 });
 

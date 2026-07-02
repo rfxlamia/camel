@@ -119,6 +119,12 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		status: "idle",
 	});
 	const [panelOpen, setPanelOpen] = useState(variant === "autoError");
+	const [isSending, setIsSending] = useState(false);
+	const [chatCooldownUntil, setChatCooldownUntil] = useState<number | null>(
+		null,
+	);
+	const [sendError, setSendError] = useState<string | null>(null);
+	const [chatSendBlocked, setChatSendBlocked] = useState(false);
 
 	const effectiveVariant = activeSession?.variant ?? variant;
 	const effectivePrefill = activeSession?.prefill ?? prefill;
@@ -129,11 +135,55 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 	const messagesRef = useRef(messages);
 	messagesRef.current = messages;
 
+	const applyChatCooldown = useCallback((retryAfterMs?: number) => {
+		const delayMs = retryAfterMs ?? 10_000;
+		setChatCooldownUntil(Date.now() + delayMs);
+		setChatSendBlocked(true);
+	}, []);
+
+	const refreshChatLimit = useCallback(async () => {
+		if (!workspaceId) return;
+		try {
+			const limit = await api.ticketIntake.getChatLimit(workspaceId);
+			if (limit.isLocked && limit.retryAfterMs !== undefined) {
+				setChatCooldownUntil(Date.now() + limit.retryAfterMs);
+				setChatSendBlocked(true);
+			} else {
+				setChatSendBlocked(false);
+				setChatCooldownUntil(null);
+			}
+		} catch {
+			// Non-fatal — server still enforces on send.
+		}
+	}, [workspaceId]);
+
+	useEffect(() => {
+		if (!panelOpen || !workspaceId) return;
+		void refreshChatLimit();
+	}, [panelOpen, workspaceId, refreshChatLimit]);
+
+	useEffect(() => {
+		if (!chatCooldownUntil) return;
+		const remaining = chatCooldownUntil - Date.now();
+		if (remaining <= 0) {
+			setChatSendBlocked(false);
+			setChatCooldownUntil(null);
+			return;
+		}
+		const timer = setTimeout(() => {
+			setChatSendBlocked(false);
+			setChatCooldownUntil(null);
+		}, remaining);
+		return () => clearTimeout(timer);
+	}, [chatCooldownUntil]);
+
 	const resetSession = useCallback(() => {
 		setMessages([]);
 		setDraft(null);
 		setPreviewReady(false);
 		setSubmitState({ status: "idle" });
+		setIsSending(false);
+		setSendError(null);
 		cardContextUsedRef.current = false;
 		autoErrorInitRef.current = false;
 		processedEventCountRef.current = 0;
@@ -150,6 +200,12 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		},
 		[resetSession],
 	);
+
+	const openPanel = useCallback(() => {
+		resetSession();
+		setActiveSession(null);
+		setPanelOpen(true);
+	}, [resetSession]);
 
 	const close = useCallback(() => {
 		setPanelOpen(false);
@@ -172,7 +228,7 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 
 	const sendMessage = useCallback(
 		async (message: string) => {
-			if (!workspaceId) return;
+			if (!workspaceId || chatSendBlocked || isSending) return;
 
 			const trimmed = message.trim();
 			if (!trimmed) return;
@@ -197,6 +253,8 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 				{ role: "user", content: trimmed },
 			];
 			setMessages(nextMessages);
+			setIsSending(true);
+			setSendError(null);
 
 			const conversationHistory = isFirstTurn
 				? undefined
@@ -215,6 +273,10 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 					conversationHistory,
 				});
 
+				if (!isFirstTurn) {
+					applyChatCooldown();
+				}
+
 				if (response.ready) {
 					setDraft(response.draft);
 					setPreviewReady(true);
@@ -227,11 +289,28 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 					...prev,
 					{ role: "assistant", content: response.question },
 				]);
-			} catch {
+			} catch (err) {
 				setMessages(priorMessages);
+				if (err instanceof ApiError && err.status === 429) {
+					applyChatCooldown(err.retryAfterMs);
+					setSendError("Please wait a moment before sending another message.");
+				} else {
+					const message =
+						err instanceof Error ? err.message : "Failed to send message";
+					setSendError(message);
+				}
+			} finally {
+				setIsSending(false);
 			}
 		},
-		[workspaceId, effectiveVariant, effectivePrefill],
+		[
+			workspaceId,
+			effectiveVariant,
+			effectivePrefill,
+			chatSendBlocked,
+			isSending,
+			applyChatCooldown,
+		],
 	);
 
 	useEffect(() => {
@@ -299,22 +378,30 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
 	}, []);
 
-	const confirm = useCallback(async () => {
-		if (!workspaceId || !draft || !draft.title?.trim()) return;
+	const confirm = useCallback(
+		async (patch?: Partial<Pick<TicketIntakeDraft, "title" | "description">>) => {
+			const currentDraft =
+				patch && draft ? { ...draft, ...patch } : draft;
+			if (!workspaceId || !currentDraft || !currentDraft.title?.trim()) return;
 
-		setSubmitState({ status: "submitting" });
-		try {
-			await api.ticketIntake.submit(workspaceId, submitBodyFromDraft(draft));
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 409) {
-				setSubmitState({ status: "rate_limited" });
-				return;
+			setSubmitState({ status: "submitting" });
+			try {
+				await api.ticketIntake.submit(
+					workspaceId,
+					submitBodyFromDraft(currentDraft),
+				);
+			} catch (err) {
+				if (err instanceof ApiError && err.status === 409) {
+					setSubmitState({ status: "rate_limited" });
+					return;
+				}
+				const message =
+					err instanceof Error ? err.message : "Failed to submit ticket";
+				setSubmitState({ status: "idle", lastError: message });
 			}
-			const message =
-				err instanceof Error ? err.message : "Failed to submit ticket";
-			setSubmitState({ status: "idle", lastError: message });
-		}
-	}, [workspaceId, draft, submitBodyFromDraft]);
+		},
+		[workspaceId, draft, submitBodyFromDraft],
+	);
 
 	const resubmit = useCallback(async () => {
 		if (!workspaceId || !draft || !draft.title?.trim()) return;
@@ -349,8 +436,12 @@ export function useTicketIntakeChat(config: UseTicketIntakeChatConfig) {
 		editDraft,
 		resubmit,
 		open,
+		openPanel,
 		close,
 		panelOpen,
+		isSending,
+		chatSendBlocked,
+		sendError,
 		activeVariant: effectiveVariant,
 		activePrefill: effectivePrefill,
 	};

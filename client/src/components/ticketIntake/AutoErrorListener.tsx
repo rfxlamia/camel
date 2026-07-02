@@ -1,10 +1,9 @@
-import { X } from "lucide-react";
 import { useEffect } from "react";
 import { useBoard } from "../../context/BoardContext";
 import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
 import type { AutoErrorDetail } from "../../lib/ticketIntakeBus";
 import { subscribeAutoError } from "../../lib/ticketIntakeBus";
-import { ChatPanel } from "./ChatPanel";
+import { TicketIntakeChatOverlay } from "./TicketIntakeChatOverlay";
 
 function autoErrorDetailToPrefill(detail: AutoErrorDetail) {
 	return {
@@ -17,7 +16,11 @@ function autoErrorDetailToPrefill(detail: AutoErrorDetail) {
 }
 
 export function AutoErrorListener() {
-	const { activeWorkspaceId, ticketIntakeEvents } = useBoard();
+	const {
+		activeWorkspaceId,
+		ticketIntakeEnabled,
+		ticketIntakeEvents,
+	} = useBoard();
 	const chat = useTicketIntakeChat({
 		workspaceId: activeWorkspaceId,
 		variant: "global",
@@ -25,6 +28,7 @@ export function AutoErrorListener() {
 	});
 
 	useEffect(() => {
+		if (!ticketIntakeEnabled) return;
 		return subscribeAutoError((detail) => {
 			if (activeWorkspaceId === null) return;
 			chat.open({
@@ -32,10 +36,11 @@ export function AutoErrorListener() {
 				prefill: autoErrorDetailToPrefill(detail),
 			});
 		});
-	}, [activeWorkspaceId, chat.open]);
+	}, [activeWorkspaceId, chat.open, ticketIntakeEnabled]);
 
 	if (
 		activeWorkspaceId === null ||
+		!ticketIntakeEnabled ||
 		!chat.panelOpen ||
 		chat.activeVariant !== "autoError"
 	) {
@@ -43,33 +48,10 @@ export function AutoErrorListener() {
 	}
 
 	return (
-		<div
-			className="fixed inset-0 z-[9999] flex items-end justify-end p-4 sm:items-center sm:justify-center sm:p-6"
-			role="dialog"
-			aria-label="Report issue from error"
-		>
-			<button
-				type="button"
-				aria-label="Close chat overlay"
-				className="absolute inset-0 bg-neutral-900/30"
-				onClick={chat.close}
-			/>
-			<div className="relative z-10 flex h-[min(32rem,calc(100vh-2rem))] w-full max-w-md flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
-				<div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
-					<h2 className="text-sm font-medium text-neutral-900">
-						Report issue
-					</h2>
-					<button
-						type="button"
-						aria-label="Close chat"
-						onClick={chat.close}
-						className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-					>
-						<X size={16} aria-hidden />
-					</button>
-				</div>
-				<ChatPanel chat={chat} onClose={chat.close} />
-			</div>
-		</div>
+		<TicketIntakeChatOverlay
+			chat={chat}
+			onClose={chat.close}
+			ariaLabel="Report issue from error"
+		/>
 	);
 }

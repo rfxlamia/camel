@@ -26,9 +26,22 @@ export function resetRateLimitsForTesting(): void {
 
 export async function peekSubmitLimit(
 	userId: number,
-): Promise<{ isLocked: boolean }> {
-	const { remainingAttempts } = await submitLimiter.peek(String(userId));
-	return { isLocked: remainingAttempts <= 0 };
+): Promise<{ isLocked: boolean; retryAfterMs?: number }> {
+	const peek = await submitLimiter.peek(String(userId));
+	return {
+		isLocked: peek.isLocked || peek.remainingAttempts <= 0,
+		...(peek.retryAfterMs !== undefined ? { retryAfterMs: peek.retryAfterMs } : {}),
+	};
+}
+
+export async function peekChatLimit(
+	userId: number,
+): Promise<{ isLocked: boolean; retryAfterMs?: number }> {
+	const peek = await chatLimiter.peek(String(userId));
+	return {
+		isLocked: peek.remainingAttempts <= 0,
+		...(peek.retryAfterMs !== undefined ? { retryAfterMs: peek.retryAfterMs } : {}),
+	};
 }
 
 export async function recordSubmitSuccess(userId: number): Promise<void> {

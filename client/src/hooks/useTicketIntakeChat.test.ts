@@ -8,6 +8,7 @@ import type { TicketIntakeResultEvent } from "./useTicketIntakeChat";
 const mockSendMessage = vi.fn();
 const mockSubmit = vi.fn();
 const mockResubmit = vi.fn();
+const mockGetChatLimit = vi.fn();
 
 vi.mock("../api", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../api")>();
@@ -20,6 +21,8 @@ vi.mock("../api", async (importOriginal) => {
 				submit: (...args: unknown[]) => mockSubmit(...args),
 				resubmit: (...args: unknown[]) => mockResubmit(...args),
 				getHistory: vi.fn(),
+				getChatLimit: (...args: unknown[]) => mockGetChatLimit(...args),
+				getConfig: vi.fn(),
 			},
 		},
 	};
@@ -39,6 +42,7 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 		mockSendMessage.mockReset();
 		mockSubmit.mockReset();
 		mockResubmit.mockReset();
+		mockGetChatLimit.mockReset().mockResolvedValue({ isLocked: false });
 	});
 
 	afterEach(() => {
@@ -166,6 +170,32 @@ describe("useTicketIntakeChat — turn flow and preview gating", () => {
 		expect(result.current.draft?.title).toBe("Updated title");
 		expect(result.current.draft?.description).toBe(readyDraft.description);
 	});
+
+	it("confirm with edited patch submits the edited values immediately", async () => {
+		mockSendMessage.mockResolvedValueOnce({ ready: true, draft: readyDraft });
+		mockSubmit.mockResolvedValueOnce({ status: "submitting" });
+		const { useTicketIntakeChat } = await import("./useTicketIntakeChat");
+		const { result } = renderHook(() =>
+			useTicketIntakeChat({ workspaceId: 1, variant: "global" }),
+		);
+
+		await act(async () => {
+			await result.current.sendMessage("detailed bug report");
+		});
+		await act(async () => {
+			await result.current.confirm({
+				title: "Edited title",
+				description: "Edited description",
+			});
+		});
+
+		expect(mockSubmit).toHaveBeenCalledWith(1, {
+			title: "Edited title",
+			description: "Edited description",
+			type: "Bug",
+			source: "global",
+		});
+	});
 });
 
 describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
@@ -173,6 +203,7 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 		mockSendMessage.mockReset();
 		mockSubmit.mockReset();
 		mockResubmit.mockReset();
+		mockGetChatLimit.mockReset().mockResolvedValue({ isLocked: false });
 	});
 
 	afterEach(() => {

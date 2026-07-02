@@ -6,6 +6,7 @@ interface RateLimitEntry {
 interface CheckResult {
 	isLocked: boolean;
 	remainingAttempts: number;
+	retryAfterMs?: number;
 }
 
 export class InMemoryRateLimiter {
@@ -37,9 +38,12 @@ export class InMemoryRateLimiter {
 
 		entry.count++;
 
+		const isLocked = entry.count > this.maxAttempts;
+		const remainingAttempts = Math.max(0, this.maxAttempts - entry.count);
 		return {
-			isLocked: entry.count > this.maxAttempts,
-			remainingAttempts: Math.max(0, this.maxAttempts - entry.count),
+			isLocked,
+			remainingAttempts,
+			...(isLocked ? { retryAfterMs: entry.expiresAt - now } : {}),
 		};
 	}
 
@@ -51,9 +55,14 @@ export class InMemoryRateLimiter {
 			return { isLocked: false, remainingAttempts: this.maxAttempts };
 		}
 
+		const remainingAttempts = Math.max(0, this.maxAttempts - entry.count);
+		const isLocked = entry.count > this.maxAttempts;
 		return {
-			isLocked: entry.count > this.maxAttempts,
-			remainingAttempts: Math.max(0, this.maxAttempts - entry.count),
+			isLocked,
+			remainingAttempts,
+			...(remainingAttempts <= 0
+				? { retryAfterMs: entry.expiresAt - now }
+				: {}),
 		};
 	}
 

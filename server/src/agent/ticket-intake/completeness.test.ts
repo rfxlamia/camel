@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkCompleteness } from "./completeness.js";
+import { checkCompleteness, inferTypeFromClassifierAnswer } from "./completeness.js";
 
 describe("checkCompleteness", () => {
 	it("returns ready:true when all required fields are present", () => {
@@ -59,5 +59,29 @@ describe("checkCompleteness", () => {
 
 		expect(result.ready).toBe(false);
 		expect(result.missingFields).toContain("title");
+		expect(result.question).toBeTruthy();
+	});
+
+	it("returns a clarifying question when type is null and title/description are missing", () => {
+		const result = checkCompleteness({
+			title: null,
+			description: null,
+			expected: null,
+			actual: null,
+			repro: null,
+			type: null,
+		});
+
+		expect(result.ready).toBe(false);
+		expect(result.question).toBeTruthy();
+	});
+});
+
+describe("inferTypeFromClassifierAnswer", () => {
+	it("maps common classifier replies to ticket types", () => {
+		expect(inferTypeFromClassifierAnswer("bug")).toBe("Bug");
+		expect(inferTypeFromClassifierAnswer("feature request")).toBe("Feature");
+		expect(inferTypeFromClassifierAnswer("improvement")).toBe("Improvement");
+		expect(inferTypeFromClassifierAnswer("hello")).toBeNull();
 	});
 });

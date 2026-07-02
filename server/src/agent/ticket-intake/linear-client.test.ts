@@ -64,6 +64,7 @@ describe("createLinearIssue", () => {
 		);
 
 		expect(result).toEqual({
+			issueId: "issue-id",
 			issueUrl: "https://linear.app/camel/issue/CAM-42",
 			issueIdentifier: "CAM-42",
 		});

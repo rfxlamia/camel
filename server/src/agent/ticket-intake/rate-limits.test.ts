@@ -35,10 +35,16 @@ describe("ticket-intake rate limits", () => {
 		it("locks for 5 minutes after a successful submit", async () => {
 			await recordSubmitSuccess(userId);
 
-			expect(await peekSubmitLimit(userId)).toEqual({ isLocked: true });
+			expect(await peekSubmitLimit(userId)).toEqual({
+				isLocked: true,
+				retryAfterMs: expect.any(Number),
+			});
 
 			vi.advanceTimersByTime(5 * 60 * 1000 - 1);
-			expect(await peekSubmitLimit(userId)).toEqual({ isLocked: true });
+			expect(await peekSubmitLimit(userId)).toEqual({
+				isLocked: true,
+				retryAfterMs: expect.any(Number),
+			});
 
 			vi.advanceTimersByTime(2);
 			expect(await peekSubmitLimit(userId)).toEqual({ isLocked: false });
@@ -57,6 +63,7 @@ describe("ticket-intake rate limits", () => {
 			expect(await checkChatLimit(userId)).toEqual({
 				isLocked: true,
 				remainingAttempts: 0,
+				retryAfterMs: expect.any(Number),
 			});
 
 			vi.advanceTimersByTime(10 * 1000 + 1);

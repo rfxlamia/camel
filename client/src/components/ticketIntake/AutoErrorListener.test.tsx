@@ -36,6 +36,7 @@ describe("AutoErrorListener", () => {
 		mockConfirm.mockReset();
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: 1,
+			ticketIntakeEnabled: true,
 			ticketIntakeEvents: [],
 		});
 	});
@@ -75,6 +76,7 @@ describe("AutoErrorListener", () => {
 	it("ignores bus events when activeWorkspaceId is null", async () => {
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: null,
+			ticketIntakeEnabled: true,
 			ticketIntakeEvents: [],
 		});
 		render(<AutoErrorListener />);

@@ -16,8 +16,8 @@ export interface RetryFailure {
 }
 
 export class RetryError extends Error implements RetryFailure {
-	readonly retryable: boolean;
-	readonly status?: number;
+	retryable: boolean;
+	status?: number;
 
 	constructor(message: string, retryable: boolean, status?: number) {
 		super(message);
@@ -109,7 +109,11 @@ export async function executeWithRetry<T>(
 			lastFailure = failure;
 
 			if (!failure.retryable) {
-				throw new RetryError(failure.message, false, failure.status);
+				const err = new Error(failure.message, { cause: error }) as RetryError;
+				err.name = "RetryError";
+				err.retryable = false;
+				err.status = failure.status;
+				throw err;
 			}
 
 			if (attempt < maxAttempts - 1) {

@@ -24,6 +24,7 @@ class ApiError extends Error {
 		message: string,
 		public status: number,
 		public code?: string,
+		public retryAfterMs?: number,
 	) {
 		super(message);
 	}
@@ -89,11 +90,15 @@ async function request<T>(
 	if (!res.ok) {
 		let message = `Request failed (${res.status})`;
 		let code: string | undefined;
+		let retryAfterMs: number | undefined;
 		try {
 			const body = await res.json();
 			if (body.error) message = body.error;
 			if (body.message) message = body.message;
 			if (body.code) code = body.code;
+			if (typeof body.retryAfterMs === "number") {
+				retryAfterMs = body.retryAfterMs;
+			}
 		} catch {
 			// non-JSON error body
 		}
@@ -106,7 +111,7 @@ async function request<T>(
 				userAction: options.userAction,
 			});
 		}
-		throw new ApiError(message, res.status, code);
+		throw new ApiError(message, res.status, code, retryAfterMs);
 	}
 	if (res.status === 204) return undefined as T;
 	return res.json();
@@ -433,6 +438,12 @@ export const api = {
 
 	// ---- Ticket intake ----
 	ticketIntake: {
+		getConfig: () =>
+			request<{ enabled: boolean }>("/ticket-intake/config"),
+		getChatLimit: (workspaceId: number) =>
+			request<{ isLocked: boolean; retryAfterMs?: number }>(
+				`/workspaces/${workspaceId}/ticket-intake/chat-limit`,
+			),
 		sendMessage: (
 			workspaceId: number,
 			body: {

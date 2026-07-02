@@ -41,8 +41,14 @@ vi.mock("../api", () => ({
 }));
 
 const mockOpen = vi.fn();
+const mockClose = vi.fn();
 vi.mock("../hooks/useTicketIntakeChat", () => ({
-	useTicketIntakeChat: () => ({ open: mockOpen }),
+	useTicketIntakeChat: () => ({
+		open: mockOpen,
+		close: mockClose,
+		panelOpen: false,
+		activeVariant: "card",
+	}),
 }));
 
 import ContextPanel from "./ContextPanel";
@@ -84,6 +90,8 @@ function columnsWith(card: Card): Column[] {
 function setBoard(card: Card) {
 	mockUseBoard.mockReturnValue({
 		activeWorkspaceId: 1,
+		ticketIntakeEnabled: true,
+		ticketIntakeEvents: [],
 		columns: columnsWith(card),
 		saveCard: vi.fn(),
 		deleteCard: vi.fn(),
@@ -204,6 +212,8 @@ describe("ContextPanel — Report issue gated on active workspace (Story 9)", ()
 	it("does not render the Report issue button when activeWorkspaceId is null", () => {
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: null,
+			ticketIntakeEnabled: true,
+			ticketIntakeEvents: [],
 			columns: columnsWith(makeCard({ id: 1 })),
 			saveCard: vi.fn(),
 			deleteCard: vi.fn(),
