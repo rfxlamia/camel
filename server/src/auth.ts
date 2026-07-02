@@ -469,7 +469,8 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 			.executeTakeFirst();
 		const ok =
 			row !== undefined &&
-			(await bcrypt.compare(password, row.password_hash as string));
+			row.password_hash !== null &&
+			(await bcrypt.compare(password, row.password_hash));
 		if (!ok) {
 			// Failure already recorded by accountLockoutMiddleware
 			return res
