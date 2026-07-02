@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { pool } from "../db/pool.js";
+import { sql } from "kysely";
+import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { registerPush } from "./service.js";
@@ -24,18 +25,23 @@ notificationsRouter.get("/", async (req, res) => {
 	const limit = Math.min(Number(req.query.limit ?? 50), 100);
 	const cursor = req.query.cursor ? Number(req.query.cursor) : null;
 
-	const { rows } = await pool.query(
-		`SELECT * FROM notifications
-     WHERE user_id = $1 AND workspace_id = $2
-       ${cursor ? "AND id < $3" : ""}
-     ORDER BY created_at DESC LIMIT ${cursor ? "$4" : "$3"}`,
-		cursor ? [userId, workspaceId, cursor, limit] : [userId, workspaceId, limit],
-	);
+	const rows = await db
+		.selectFrom("notifications")
+		.selectAll()
+		.where("user_id", "=", userId)
+		.where("workspace_id", "=", workspaceId)
+		.$if(cursor !== null, (qb) => qb.where("id", "<", cursor as number))
+		.orderBy("created_at", "desc")
+		.limit(limit)
+		.execute();
 
-	const { rows: countRows } = await pool.query(
-		"SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND workspace_id = $2 AND read_at IS NULL",
-		[userId, workspaceId],
-	);
+	const countRow = await db
+		.selectFrom("notifications")
+		.select(sql<number>`count(*)::int`.as("count"))
+		.where("user_id", "=", userId)
+		.where("workspace_id", "=", workspaceId)
+		.where("read_at", "is", null)
+		.executeTakeFirstOrThrow();
 
 	const notifications = rows.map((r) => ({
 		id: r.id,
@@ -52,7 +58,7 @@ notificationsRouter.get("/", async (req, res) => {
 
 	res.json({
 		notifications,
-		unreadCount: Number(countRows[0]?.count ?? 0),
+		unreadCount: Number(countRow.count ?? 0),
 		nextCursor: rows.length === limit ? rows[rows.length - 1].id : null,
 	});
 });
@@ -61,12 +67,16 @@ notificationsRouter.patch("/:id/read", async (req, res) => {
 	const userId = (req.user as { id: number }).id;
 	const params = req.params as { workspaceId: string; id: string };
 	const id = Number(params.id);
-	const { rows, rowCount } = await pool.query(
-		"UPDATE notifications SET read_at = now() WHERE id = $1 AND user_id = $2 AND read_at IS NULL RETURNING id",
-		[id, userId],
-	);
-	if (!rowCount) return res.status(404).json({ error: "Not found" });
-	pushReadEvent(userId, Number(params.workspaceId), rows[0].id);
+	const updated = await db
+		.updateTable("notifications")
+		.set({ read_at: sql`now()` })
+		.where("id", "=", id)
+		.where("user_id", "=", userId)
+		.where("read_at", "is", null)
+		.returning("id")
+		.executeTakeFirst();
+	if (!updated) return res.status(404).json({ error: "Not found" });
+	pushReadEvent(userId, Number(params.workspaceId), updated.id);
 	res.json({ ok: true });
 });
 
@@ -75,12 +85,15 @@ notificationsRouter.post("/read-all", async (req, res) => {
 	const workspaceId = Number(
 		(req.params as { workspaceId: string }).workspaceId,
 	);
-	const { rowCount } = await pool.query(
-		"UPDATE notifications SET read_at = now() WHERE user_id = $1 AND workspace_id = $2 AND read_at IS NULL",
-		[userId, workspaceId],
-	);
+	const result = await db
+		.updateTable("notifications")
+		.set({ read_at: sql`now()` })
+		.where("user_id", "=", userId)
+		.where("workspace_id", "=", workspaceId)
+		.where("read_at", "is", null)
+		.executeTakeFirst();
 	pushReadAllEvent(userId, workspaceId);
-	res.json({ ok: true, markedCount: rowCount ?? 0 });
+	res.json({ ok: true, markedCount: Number(result.numUpdatedRows ?? 0) });
 });
 
 notificationsRouter.get("/stream", sseNotificationHandler);
@@ -90,11 +103,13 @@ notificationsRouter.post("/system-alert", async (req, res) => {
 		(req.params as { workspaceId: string }).workspaceId,
 	);
 	const actor = req.user as { id: number; role?: string };
-	const { rows: memberRows } = await pool.query(
-		"SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
-		[workspaceId, actor.id],
-	);
-	if (!memberRows.length || !["admin", "owner"].includes(memberRows[0].role)) {
+	const member = await db
+		.selectFrom("workspace_members")
+		.select("role")
+		.where("workspace_id", "=", workspaceId)
+		.where("user_id", "=", actor.id)
+		.executeTakeFirst();
+	if (!member || !["admin", "owner"].includes(member.role)) {
 		return res.status(403).json({ error: "Admin or owner required" });
 	}
 	const { title, body } = req.body ?? {};

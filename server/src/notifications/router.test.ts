@@ -1,108 +1,187 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+/**
+ * Integration tests for the notifications router (list/read/read-all/system-alert).
+ *
+ * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
+ *
+ * Run:
+ *   RUN_INTEGRATION=1 npx vitest run src/notifications/router.test.ts
+ */
+import "dotenv/config";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import express from "express";
+import request from "supertest";
+import { db } from "../db/kysely.js";
+import { domainBus, EVENTS } from "../events.js";
 
-vi.mock("../db/pool.js", () => ({ pool: { query: vi.fn() } }));
-vi.mock("../auth.js", () => ({
-	requireAuth: vi.fn((req: { user?: unknown }, _res: unknown, next: () => void) => {
-		req.user = { id: 1, displayName: "Alice" };
-		next();
-	}),
-}));
 vi.mock("../middleware/workspace.js", () => ({
 	requireWorkspaceMember: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
-import { pool } from "../db/pool.js";
-import { domainBus, EVENTS } from "../events.js";
-import express from "express";
-import request from "supertest";
-import { requireAuth } from "../auth.js";
-import { notificationsRouter } from "./router.js";
+const { notificationsRouter } = await import("./router.js");
 
-const mockQuery = vi.mocked(pool.query);
-const app = express();
-app.use(express.json());
-app.use(requireAuth);
-app.use("/workspaces/:workspaceId/notifications", notificationsRouter);
+let userId: number;
+let workspaceId: number;
 
-describe("GET /workspaces/:workspaceId/notifications", () => {
-	beforeEach(() => vi.clearAllMocks());
-
-	it("returns notifications list with unreadCount", async () => {
-		mockQuery
-			.mockResolvedValueOnce({
-				rows: [
-					{
-						id: 1,
-						type: "card_assigned",
-						title: "Bob assigned...",
-						read_at: null,
-						source_deleted: false,
-						created_at: new Date().toISOString(),
-						card_id: 10,
-						board_id: 1,
-						actor_id: 7,
-					},
-				],
-				rowCount: 1,
-			} as never)
-			.mockResolvedValueOnce({ rows: [{ count: "2" }], rowCount: 1 } as never);
-
-		const res = await request(app).get("/workspaces/1/notifications");
-		expect(res.status).toBe(200);
-		expect(res.body).toHaveProperty("notifications");
-		expect(res.body).toHaveProperty("unreadCount", 2);
-		expect(res.body.notifications[0]).toMatchObject({ boardId: 1 });
+function createApp() {
+	const app = express();
+	app.use(express.json());
+	app.use((req, _res, next) => {
+		(req as Record<string, unknown>).user = { id: userId, displayName: "Alice" };
+		next();
 	});
-});
+	app.use("/workspaces/:workspaceId/notifications", notificationsRouter);
+	return app;
+}
+let app: ReturnType<typeof createApp>;
 
-describe("PATCH /workspaces/:workspaceId/notifications/:id/read", () => {
-	it("marks notification as read", async () => {
-		mockQuery.mockResolvedValue({ rows: [{ id: 1 }], rowCount: 1 } as never);
-		const res = await request(app).patch("/workspaces/1/notifications/1/read");
-		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ ok: true });
-	});
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"notifications router (real DB)",
+	() => {
+		beforeAll(async () => {
+			const user = await db
+				.insertInto("users")
+				.values({ username: `notif-router-${Date.now()}`, display_name: "Alice", password_hash: "h" })
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			userId = user.id;
+			const workspace = await db
+				.insertInto("workspaces")
+				.values({ name: "Notif Router WS", owner_user_id: userId, is_personal: false })
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			workspaceId = workspace.id;
+			await db
+				.insertInto("workspace_members")
+				.values({ workspace_id: workspaceId, user_id: userId, role: "member" })
+				.execute();
+			app = createApp();
+		});
 
-	it("returns 404 for unknown notification", async () => {
-		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as never);
-		const res = await request(app).patch("/workspaces/1/notifications/999/read");
-		expect(res.status).toBe(404);
-	});
-});
+		afterAll(async () => {
+			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
+			await db.deleteFrom("workspace_members").where("workspace_id", "=", workspaceId).execute();
+			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+			await db.deleteFrom("users").where("id", "=", userId).execute();
+		});
 
-describe("POST /workspaces/:workspaceId/notifications/read-all", () => {
-	it("marks all as read and returns markedCount", async () => {
-		mockQuery.mockResolvedValue({ rows: [], rowCount: 5 } as never);
-		const res = await request(app).post("/workspaces/1/notifications/read-all");
-		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ ok: true, markedCount: 5 });
-	});
-});
+		beforeEach(async () => {
+			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
+		});
 
-describe("POST /workspaces/:workspaceId/notifications/system-alert", () => {
-	it("returns 202 when admin posts a system alert", async () => {
-		mockQuery.mockResolvedValueOnce({ rows: [{ role: "admin" }], rowCount: 1 } as never);
-		const spy = vi.spyOn(domainBus, "emit");
+		describe("GET /workspaces/:workspaceId/notifications", () => {
+			it("returns notifications list with unreadCount", async () => {
+				await db
+					.insertInto("notifications")
+					.values([
+						{
+							user_id: userId,
+							workspace_id: workspaceId,
+							type: "card_assigned",
+							title: "Bob assigned...",
+							board_id: workspaceId,
+						},
+						{
+							user_id: userId,
+							workspace_id: workspaceId,
+							type: "welcome",
+							title: "Welcome!",
+						},
+					])
+					.execute();
 
-		const res = await request(app)
-			.post("/workspaces/1/notifications/system-alert")
-			.send({ title: "Maintenance tonight", body: "Server restart at midnight" });
+				const res = await request(app).get(`/workspaces/${workspaceId}/notifications`);
+				expect(res.status).toBe(200);
+				expect(res.body.notifications).toHaveLength(2);
+				expect(res.body.unreadCount).toBe(2);
+				expect(res.body.notifications[0]).toMatchObject({ boardId: workspaceId });
+			});
+		});
 
-		expect(res.status).toBe(202);
-		expect(spy).toHaveBeenCalledWith(
-			EVENTS.SYSTEM_ALERT,
-			expect.objectContaining({
-				payload: expect.objectContaining({ title: "Maintenance tonight" }),
-			}),
-		);
-		spy.mockRestore();
-	});
+		describe("PATCH /workspaces/:workspaceId/notifications/:id/read", () => {
+			it("marks notification as read", async () => {
+				const n = await db
+					.insertInto("notifications")
+					.values({ user_id: userId, workspace_id: workspaceId, type: "welcome", title: "Hi" })
+					.returning("id")
+					.executeTakeFirstOrThrow();
 
-	it("returns 403 when non-admin posts a system alert", async () => {
-		mockQuery.mockResolvedValueOnce({ rows: [{ role: "member" }], rowCount: 1 } as never);
-		const res = await request(app)
-			.post("/workspaces/1/notifications/system-alert")
-			.send({ title: "Alert" });
-		expect(res.status).toBe(403);
-	});
-});
+				const res = await request(app).patch(
+					`/workspaces/${workspaceId}/notifications/${n.id}/read`,
+				);
+				expect(res.status).toBe(200);
+				expect(res.body).toEqual({ ok: true });
+
+				const row = await db
+					.selectFrom("notifications")
+					.select("read_at")
+					.where("id", "=", n.id)
+					.executeTakeFirstOrThrow();
+				expect(row.read_at).not.toBeNull();
+			});
+
+			it("returns 404 for unknown notification", async () => {
+				const res = await request(app).patch(
+					`/workspaces/${workspaceId}/notifications/999999/read`,
+				);
+				expect(res.status).toBe(404);
+			});
+		});
+
+		describe("POST /workspaces/:workspaceId/notifications/read-all", () => {
+			it("marks all as read and returns markedCount", async () => {
+				await db
+					.insertInto("notifications")
+					.values([
+						{ user_id: userId, workspace_id: workspaceId, type: "welcome", title: "1" },
+						{ user_id: userId, workspace_id: workspaceId, type: "welcome", title: "2" },
+					])
+					.execute();
+
+				const res = await request(app).post(
+					`/workspaces/${workspaceId}/notifications/read-all`,
+				);
+				expect(res.status).toBe(200);
+				expect(res.body).toEqual({ ok: true, markedCount: 2 });
+			});
+		});
+
+		describe("POST /workspaces/:workspaceId/notifications/system-alert", () => {
+			it("returns 202 when admin posts a system alert", async () => {
+				await db
+					.updateTable("workspace_members")
+					.set({ role: "admin" })
+					.where("workspace_id", "=", workspaceId)
+					.where("user_id", "=", userId)
+					.execute();
+				const spy = vi.spyOn(domainBus, "emit");
+
+				const res = await request(app)
+					.post(`/workspaces/${workspaceId}/notifications/system-alert`)
+					.send({ title: "Maintenance tonight", body: "Server restart at midnight" });
+
+				expect(res.status).toBe(202);
+				expect(spy).toHaveBeenCalledWith(
+					EVENTS.SYSTEM_ALERT,
+					expect.objectContaining({
+						payload: expect.objectContaining({ title: "Maintenance tonight" }),
+					}),
+				);
+				spy.mockRestore();
+			});
+
+			it("returns 403 when non-admin posts a system alert", async () => {
+				await db
+					.updateTable("workspace_members")
+					.set({ role: "member" })
+					.where("workspace_id", "=", workspaceId)
+					.where("user_id", "=", userId)
+					.execute();
+
+				const res = await request(app)
+					.post(`/workspaces/${workspaceId}/notifications/system-alert`)
+					.send({ title: "Alert" });
+				expect(res.status).toBe(403);
+			});
+		});
+	},
+);
