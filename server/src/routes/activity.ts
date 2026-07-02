@@ -1,23 +1,34 @@
 import { Router } from "express";
-import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 
-const ACTIVITY_SELECT = `
-  SELECT e.id, e.event_type, e.payload, e.created_at, e.card_id,
-         u.username, u.display_name,
-         c.title AS current_card_title,
-         fc.title AS from_column_title,
-         tc.title AS to_column_title
-  FROM card_events e
-  LEFT JOIN users u ON u.id = e.actor_id
-  LEFT JOIN cards c ON c.id = e.card_id AND c.deleted_at IS NULL
-  LEFT JOIN columns fc ON fc.id = e.from_column_id
-  LEFT JOIN columns tc ON tc.id = e.to_column_id`;
+function activitySelect() {
+	return db
+		.selectFrom("card_events as e")
+		.leftJoin("users as u", "u.id", "e.actor_id")
+		.leftJoin("cards as c", (join) =>
+			join.onRef("c.id", "=", "e.card_id").on("c.deleted_at", "is", null),
+		)
+		.leftJoin("columns as fc", "fc.id", "e.from_column_id")
+		.leftJoin("columns as tc", "tc.id", "e.to_column_id")
+		.select([
+			"e.id",
+			"e.event_type",
+			"e.payload",
+			"e.created_at",
+			"e.card_id",
+			"u.username",
+			"u.display_name",
+			"c.title as current_card_title",
+			"fc.title as from_column_title",
+			"tc.title as to_column_title",
+		]);
+}
 
 function toActivityEvent(e: {
 	id: number;
 	event_type: string;
-	payload: { cardTitle?: string } | null;
+	payload: unknown;
 	created_at: Date;
 	card_id: number | null;
 	username: string | null;
@@ -26,11 +37,12 @@ function toActivityEvent(e: {
 	from_column_title: string | null;
 	to_column_title: string | null;
 }) {
+	const payload = e.payload as { cardTitle?: string } | null;
 	return {
 		id: e.id,
 		type: e.event_type,
 		cardId: e.card_id,
-		cardTitle: e.current_card_title ?? e.payload?.cardTitle ?? null,
+		cardTitle: e.current_card_title ?? payload?.cardTitle ?? null,
 		fromColumn: e.from_column_title,
 		toColumn: e.to_column_title,
 		actor: e.username
@@ -48,13 +60,12 @@ activityRouter.get("/activity", requireWorkspaceMember, async (req, res) => {
 	const rawLimit = Number(req.query.limit);
 	const limit =
 		Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
-	const { rows } = await pool.query(
-		`${ACTIVITY_SELECT}
-     WHERE e.workspace_id = $1
-     ORDER BY e.created_at DESC, e.id DESC
-     LIMIT $2`,
-		[workspaceId, limit],
-	);
+	const rows = await activitySelect()
+		.where("e.workspace_id", "=", workspaceId)
+		.orderBy("e.created_at", "desc")
+		.orderBy("e.id", "desc")
+		.limit(limit)
+		.execute();
 	res.json({ events: rows.map(toActivityEvent) });
 });
 
@@ -69,20 +80,23 @@ activityRouter.get(
 			return res.status(400).json({ error: "card id must be an integer" });
 		}
 
-		const cardCheck = await pool.query(
-			"SELECT id FROM cards WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
-			[cardId, workspaceId],
-		);
-		if (cardCheck.rows.length === 0) {
+		const cardCheck = await db
+			.selectFrom("cards")
+			.select("id")
+			.where("id", "=", cardId)
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.executeTakeFirst();
+		if (!cardCheck) {
 			return res.status(404).json({ error: "Not found" });
 		}
 
-		const { rows } = await pool.query(
-			`${ACTIVITY_SELECT}
-     WHERE e.card_id = $1 AND e.workspace_id = $2
-     ORDER BY e.created_at DESC, e.id DESC`,
-			[cardId, workspaceId],
-		);
+		const rows = await activitySelect()
+			.where("e.card_id", "=", cardId)
+			.where("e.workspace_id", "=", workspaceId)
+			.orderBy("e.created_at", "desc")
+			.orderBy("e.id", "desc")
+			.execute();
 		res.json({ events: rows.map(toActivityEvent) });
 	},
 );

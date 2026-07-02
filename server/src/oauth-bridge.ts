@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { Router } from "express";
+import { sql } from "kysely";
 import { mintCamelSession, SESSION_COOKIE } from "./auth.js";
 import { config } from "./config.js";
+import { db } from "./db/kysely.js";
 import { pool } from "./db/pool.js";
 
 // Pure: extract primary verified email from GitHub /user/emails API response.
@@ -160,86 +162,99 @@ export function createOAuthBridgeRouter(): Router {
 			// Wrap session lookup + account transfer in a single transaction to
 			// prevent TOCTOU race (M4): concurrent OAuth callbacks must not see
 			// stale state between the decision query and the mutation.
-			const client = await pool.connect();
-			try {
-				await client.query("BEGIN");
+			type BridgeResult =
+				| { kind: "linked"; oldUserId: number }
+				| { kind: "collision" }
+				| { kind: "noop" };
 
-				const { rows: oldRows } = await client.query<{ user_id: number }>(
-					"SELECT user_id FROM sessions WHERE token = $1 AND expires_at > now()",
-					[oldToken],
-				);
-				const oldUserId = oldRows[0]?.user_id;
+			const result: BridgeResult = await db.transaction().execute(async (trx) => {
+				const oldSession = await trx
+					.selectFrom("sessions")
+					.select("user_id")
+					.where("token", "=", oldToken)
+					.where("expires_at", ">", sql<Date>`now()`)
+					.executeTakeFirst();
+				const oldUserId = oldSession?.user_id;
 
 				if (oldUserId && oldUserId !== baUserId) {
 					// Check if the logged-in user already has a username (password-auth user
 					// linking OAuth for the first time via EmailGatePage).
-					const { rows: oldUserRows } = await client.query<{
-						username: string | null;
-					}>("SELECT username FROM users WHERE id = $1", [oldUserId]);
-					const oldUsername = oldUserRows[0]?.username ?? null;
+					const oldUserRow = await trx
+						.selectFrom("users")
+						.select("username")
+						.where("id", "=", oldUserId)
+						.executeTakeFirst();
+					const oldUsername = oldUserRow?.username ?? null;
 
 					if (oldUsername) {
 						// Transfer the BA OAuth account to the existing user, then delete the
 						// orphan user Better Auth created (it couldn't match by email because
 						// password-registered users have email=NULL).
-						const { rows: baUserRows } = await client.query<{
-							email: string | null;
-							email_verified: boolean;
-						}>("SELECT email, email_verified FROM users WHERE id = $1", [
-							baUserId,
-						]);
-						const baEmail = baUserRows[0]?.email ?? null;
-						const baEmailVerified = baUserRows[0]?.email_verified ?? false;
+						const baUserRow = await trx
+							.selectFrom("users")
+							.select(["email", "email_verified"])
+							.where("id", "=", baUserId)
+							.executeTakeFirst();
+						const baEmail = baUserRow?.email ?? null;
+						const baEmailVerified = baUserRow?.email_verified ?? false;
 
 						// Move OAuth link to existing user (must happen before DELETE to
 						// avoid FK cascade destroying the ba_accounts row).
-						await client.query(
-							"UPDATE ba_accounts SET user_id = $1 WHERE user_id = $2",
-							[oldUserId, baUserId],
-						);
+						await trx
+							.updateTable("ba_accounts")
+							.set({ user_id: oldUserId })
+							.where("user_id", "=", baUserId)
+							.execute();
 						// Delete orphan user — cascades ba_sessions.
-						await client.query("DELETE FROM users WHERE id = $1", [baUserId]);
+						await trx.deleteFrom("users").where("id", "=", baUserId).execute();
 						// Set email on existing user now that orphan row is gone (unique
 						// index allows this only after the conflicting row is deleted).
 						if (baEmail) {
-							await client.query(
-								`UPDATE users SET email = $1, email_verified = $2, updated_at = now()
-                 WHERE id = $3 AND email IS NULL`,
-								[baEmail, baEmailVerified, oldUserId],
-							);
+							await trx
+								.updateTable("users")
+								.set({
+									email: baEmail,
+									email_verified: baEmailVerified,
+									updated_at: sql`now()`,
+								})
+								.where("id", "=", oldUserId)
+								.where("email", "is", null)
+								.execute();
 						}
-						await client.query("COMMIT");
 
-						// Old camel session still valid; mint a fresh one to refresh TTL.
-						await mintCamelSession(res, oldUserId);
-						res.redirect(config.CLIENT_URL);
-						return;
+						return { kind: "linked", oldUserId };
 					}
 
 					// True link collision (Rule 4): different user, not an OAuth link attempt.
-					await client.query("DELETE FROM sessions WHERE token = $1", [
-						oldToken,
-					]);
-					await client.query(
-						`INSERT INTO auth_audit (actor_id, event_type, payload)
-             VALUES ($1, 'account_orphaned', $2)`,
-						[
-							oldUserId,
-							JSON.stringify({
+					await trx
+						.deleteFrom("sessions")
+						.where("token", "=", oldToken)
+						.execute();
+					await trx
+						.insertInto("auth_audit")
+						.values({
+							actor_id: oldUserId,
+							event_type: "account_orphaned",
+							payload: JSON.stringify({
 								orphanedUserId: oldUserId,
 								linkedToUserId: baUserId,
 							}),
-						],
-					);
-					res.clearCookie(SESSION_COOKIE, { path: "/" });
+						})
+						.execute();
+					return { kind: "collision" };
 				}
 
-				await client.query("COMMIT");
-			} catch (err) {
-				await client.query("ROLLBACK");
-				throw err;
-			} finally {
-				client.release();
+				return { kind: "noop" };
+			});
+
+			if (result.kind === "linked") {
+				// Old camel session still valid; mint a fresh one to refresh TTL.
+				await mintCamelSession(res, result.oldUserId);
+				res.redirect(config.CLIENT_URL);
+				return;
+			}
+			if (result.kind === "collision") {
+				res.clearCookie(SESSION_COOKIE, { path: "/" });
 			}
 		}
 
@@ -247,11 +262,12 @@ export function createOAuthBridgeRouter(): Router {
 		await mintCamelSession(res, baUserId);
 
 		// Route based on user state
-		const { rows: userRows } = await pool.query<{ username: string | null }>(
-			"SELECT username FROM users WHERE id = $1",
-			[baUserId],
-		);
-		const username = userRows[0]?.username ?? null;
+		const userRow = await db
+			.selectFrom("users")
+			.select("username")
+			.where("id", "=", baUserId)
+			.executeTakeFirst();
+		const username = userRow?.username ?? null;
 		if (!username) {
 			res.redirect(`${config.CLIENT_URL}/?oauth=pick-username`);
 		} else {
