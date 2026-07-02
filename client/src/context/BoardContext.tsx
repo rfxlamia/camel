@@ -25,6 +25,7 @@ import {
 	persistRemindedInviteIds,
 	readRemindedInviteIds,
 } from "../lib/workspaceSwitcher";
+import type { TicketIntakeResultEvent } from "../hooks/useTicketIntakeChat";
 import type {
 	ActivityEvent,
 	AgentEvent,
@@ -105,6 +106,7 @@ interface BoardContextValue {
 	agentEvents: AgentEvent[];
 	clearAgentEvents: () => void;
 	clearFollowUpAgentEvents: () => void;
+	ticketIntakeEvents: TicketIntakeResultEvent[];
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -154,6 +156,9 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	});
 	const [settingsVersion, setSettingsVersion] = useState(0);
 	const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
+	const [ticketIntakeEvents, setTicketIntakeEvents] = useState<
+		TicketIntakeResultEvent[]
+	>([]);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const prevWorkspaceIdRef = useRef<number | null>(null);
@@ -176,6 +181,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			)
 		) {
 			setAgentEvents([]);
+			setTicketIntakeEvents([]);
 		}
 		prevWorkspaceIdRef.current = activeWorkspaceId;
 	}, [activeWorkspaceId]);
@@ -477,6 +483,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					setAgentEvents((prev) => [...prev, data as AgentEvent]);
 					return;
 				}
+				if (data.type === "ticket_intake.submit_result") {
+					setTicketIntakeEvents((prev) => [
+						...prev,
+						data as TicketIntakeResultEvent,
+					]);
+					return;
+				}
 			} catch {
 				// non-JSON keep-alive comment
 			}
@@ -616,6 +629,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				agentEvents,
 				clearAgentEvents,
 				clearFollowUpAgentEvents,
+				ticketIntakeEvents,
 			}}
 		>
 			{children}
