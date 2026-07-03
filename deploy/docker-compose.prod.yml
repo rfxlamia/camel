@@ -53,6 +53,8 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
       EMAIL_GATE_ENABLED: ${EMAIL_GATE_ENABLED:-false}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-}
     volumes:
       - camel_uploads:/app/client/public/uploads
     depends_on:
