@@ -5,7 +5,7 @@ import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
 import {
-	COLUMN_COLORS,
+	COLUMN_COLOR_VALIDATION_ERROR,
 	isValidColumnColor,
 	validateColumnBatch,
 } from "../validators/column.js";
@@ -251,7 +251,7 @@ columnsRouter.patch(
 		// Validate color if provided
 		if (color !== undefined && !isValidColumnColor(color)) {
 			return res.status(400).json({
-				error: `color must be one of: ${COLUMN_COLORS.join(", ")}, or null`,
+				error: COLUMN_COLOR_VALIDATION_ERROR,
 			});
 		}
 
