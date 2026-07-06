@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateColumnBatch } from "./column.js";
+import { isValidColumnColor, validateColumnBatch } from "./column.js";
 
 function col(overrides: Record<string, unknown> = {}) {
 	return {
@@ -19,6 +19,60 @@ const validFive = [
 	col({ title: "In Review", color: "frozen-water", wipLimit: 2 }),
 	col({ title: "Done", color: "turquoise", isDone: true }),
 ];
+
+describe("isValidColumnColor — dual legacy + OKLCH", () => {
+	it("accepts legacy names and null", () => {
+		expect(isValidColumnColor(null)).toBe(true);
+		expect(isValidColumnColor("powder-blue")).toBe(true);
+		expect(isValidColumnColor("turquoise")).toBe(true);
+	});
+
+	it("accepts well-formed OKLCH in sanity range", () => {
+		expect(isValidColumnColor("oklch(88% 0.09 47.3)")).toBe(true);
+	});
+
+	it("rejects values outside sanity range or unknown strings", () => {
+		expect(isValidColumnColor("oklch(2 0.5 400)")).toBe(false);
+		expect(isValidColumnColor("hot-pink")).toBe(false);
+		expect(isValidColumnColor("")).toBe(false);
+	});
+});
+
+describe("validateColumnBatch — OKLCH mixed with legacy", () => {
+	it("accepts batch with one OKLCH color", () => {
+		const result = validateColumnBatch([
+			{
+				title: "A",
+				color: "oklch(88% 0.09 47.3)",
+				wipLimit: null,
+				policy: "",
+				isDone: false,
+			},
+		]);
+		expect(result.valid).toBe(true);
+	});
+
+	it("normalizes a batch with both legacy names and OKLCH strings", () => {
+		const result = validateColumnBatch([
+			{
+				title: "Backlog",
+				color: "powder-blue",
+				wipLimit: null,
+				policy: "p",
+				isDone: false,
+			},
+			{
+				title: "Done",
+				color: "oklch(88% 0.09 47.3)",
+				wipLimit: null,
+				policy: "p",
+				isDone: true,
+			},
+		]);
+		expect(result.valid).toBe(true);
+		expect(result.normalized?.[1].color).toBe("oklch(88% 0.09 47.3)");
+	});
+});
 
 describe("validateColumnBatch", () => {
 	it("rejects a non-array or empty columns array", () => {

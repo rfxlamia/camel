@@ -10,15 +10,48 @@ export const COLUMN_COLORS = [
 
 export type ColumnColor = (typeof COLUMN_COLORS)[number];
 
-export function isValidColumnColor(
-	value: unknown,
-): value is ColumnColor | null {
-	return value === null || COLUMN_COLORS.includes(value as ColumnColor);
+export const COLUMN_COLOR_VALIDATION_ERROR = `color must be a legacy name (${COLUMN_COLORS.join(", ")}), a well-formed oklch(...), or null`;
+
+const OKLCH_RE =
+	/^oklch\(\s*([\d.]+%?)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*[\d.]+%?)?\s*\)$/i;
+
+export function parseOklchColor(
+	value: string,
+): { l: number; c: number; h: number } | null {
+	const match = value.trim().match(OKLCH_RE);
+	if (!match) return null;
+
+	const [, lRaw, cRaw, hRaw] = match;
+	const l = lRaw.endsWith("%")
+		? Number(lRaw.slice(0, -1)) / 100
+		: Number(lRaw);
+	const c = Number(cRaw);
+	const h = Number(hRaw);
+
+	if (!Number.isFinite(l) || !Number.isFinite(c) || !Number.isFinite(h)) {
+		return null;
+	}
+
+	return { l, c, h };
+}
+
+function isOklchInSanityRange(value: string): boolean {
+	const parsed = parseOklchColor(value);
+	if (!parsed) return false;
+	const { l, c, h } = parsed;
+	return l >= 0 && l <= 1 && c >= 0 && c <= 0.4 && h >= 0 && h <= 360;
+}
+
+export function isValidColumnColor(value: unknown): value is string | null {
+	if (value === null) return true;
+	if (typeof value !== "string") return false;
+	if (COLUMN_COLORS.includes(value as ColumnColor)) return true;
+	return isOklchInSanityRange(value);
 }
 
 export interface NormalizedColumn {
 	title: string;
-	color: ColumnColor | null;
+	color: string | null;
 	wipLimit: number | null;
 	policy: string;
 	isDone: boolean;
@@ -61,7 +94,7 @@ export function validateColumnBatch(
 		if (!isValidColumnColor(color)) {
 			return {
 				valid: false,
-				error: `color must be one of: ${COLUMN_COLORS.join(", ")}, or null`,
+				error: COLUMN_COLOR_VALIDATION_ERROR,
 			};
 		}
 
@@ -83,7 +116,7 @@ export function validateColumnBatch(
 
 		normalized.push({
 			title: titleValidation.trimmed!,
-			color: color as ColumnColor | null,
+			color: color as string | null,
 			wipLimit: typeof wipLimit === "number" ? wipLimit : null,
 			policy: typeof policy === "string" ? policy : "",
 			isDone: done,
