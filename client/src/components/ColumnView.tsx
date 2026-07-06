@@ -3,16 +3,19 @@ import {
 	SortableContext,
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, Settings2, X } from "lucide-react";
+import { Plus, Settings2, Shuffle, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import {
-	COLUMN_COLORS,
 	COLOR_LABELS,
 	COLOR_PREVIEWS,
 	type ColumnColor,
 } from "../lib/columnColors";
+import {
+	generateSwatchCandidates,
+	isStoredOklchColor,
+} from "../lib/columnColorUtils";
 import { resolveColumnAppearance } from "../lib/columnStyleResolver";
 import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
@@ -34,6 +37,23 @@ interface Props {
 			color?: string | null;
 		},
 	) => Promise<void>;
+}
+
+function swatchPreviewStyle(swatch: string): { backgroundColor: string } {
+	if (isStoredOklchColor(swatch)) {
+		return { backgroundColor: swatch };
+	}
+	if (swatch in COLOR_PREVIEWS) {
+		return { backgroundColor: COLOR_PREVIEWS[swatch as ColumnColor] };
+	}
+	return { backgroundColor: swatch };
+}
+
+function formatSelectedColorLabel(color: string): string {
+	if (color in COLOR_LABELS) {
+		return COLOR_LABELS[color as ColumnColor];
+	}
+	return color.length > 28 ? `${color.slice(0, 25)}...` : color;
 }
 
 const WIP_BADGE_STYLES: Record<string, string> = {
@@ -81,8 +101,9 @@ function ColumnSettings({
 	const [signableAssigneeId, setSignableAssigneeId] = useState<number | null>(
 		column.signableAssigneeId,
 	);
-	const [color, setColor] = useState<ColumnColor | null>(
-		(column.color as ColumnColor) ?? null,
+	const [color, setColor] = useState<string | null>(column.color ?? null);
+	const [swatches, setSwatches] = useState(() =>
+		generateSwatchCandidates(column.color),
 	);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [membersError, setMembersError] = useState(false);
@@ -187,22 +208,31 @@ function ColumnSettings({
 				/>
 			</label>
 			<div className="block">
-				<span className="text-xs font-medium text-neutral-700">Color</span>
+				<div className="flex items-center justify-between gap-2">
+					<span className="text-xs font-medium text-neutral-700">Color</span>
+					<button
+						type="button"
+						onClick={() => setSwatches(generateSwatchCandidates(color))}
+						className="rounded-md p-1 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						aria-label="Shuffle colors"
+					>
+						<Shuffle size={14} aria-hidden />
+					</button>
+				</div>
 				<div className="mt-1.5 flex flex-wrap items-center gap-2">
-					{COLUMN_COLORS.map((c) => (
+					{swatches.map((swatch, i) => (
 						<button
-							key={c}
+							key={i}
 							type="button"
-							title={COLOR_LABELS[c]}
-							onClick={() => setColor(c === color ? null : c)}
+							onClick={() => setColor(color === swatch ? null : swatch)}
 							className={`h-7 w-7 rounded-full border-2 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
-								color === c
+								color === swatch
 									? "border-neutral-800 scale-110 shadow-md"
 									: "border-neutral-300 hover:border-neutral-500 hover:scale-105"
 							}`}
-							style={{ backgroundColor: COLOR_PREVIEWS[c] }}
-							aria-label={COLOR_LABELS[c]}
-							aria-pressed={color === c}
+							style={swatchPreviewStyle(swatch)}
+							aria-label={`Color swatch ${i + 1}`}
+							aria-pressed={color === swatch}
 						/>
 					))}
 					{color !== null && (
@@ -218,7 +248,9 @@ function ColumnSettings({
 					)}
 				</div>
 				<p className="mt-1 text-xs text-neutral-500">
-					{color ? `Selected: ${COLOR_LABELS[color]}` : "Default neutral"}
+					{color
+						? `Selected: ${formatSelectedColorLabel(color)}`
+						: "Default neutral"}
 				</p>
 			</div>
 			<label className="flex items-center gap-2">
