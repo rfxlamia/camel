@@ -4,6 +4,7 @@ import {
 	getWorkspaceDangerZoneState,
 	validateBoardName,
 	validateUnsavedChanges,
+	validateWorkspaceName,
 } from "./settingsValidation";
 
 describe("validateBoardName (client)", () => {
@@ -49,6 +50,29 @@ describe("validateBoardName (client)", () => {
 		expect(validateBoardName(name)).toEqual({
 			valid: false,
 			error: "Max 15 characters",
+		});
+	});
+});
+
+describe("validateWorkspaceName (client)", () => {
+	it("rejects empty string", () => {
+		expect(validateWorkspaceName("")).toEqual({
+			valid: false,
+			error: "Name is required",
+		});
+	});
+
+	it("rejects name over 100 characters", () => {
+		expect(validateWorkspaceName("A".repeat(101))).toEqual({
+			valid: false,
+			error: "Max 100 characters",
+		});
+	});
+
+	it("accepts valid name and trims whitespace", () => {
+		expect(validateWorkspaceName("  Team Alpha  ")).toEqual({
+			valid: true,
+			trimmed: "Team Alpha",
 		});
 	});
 });

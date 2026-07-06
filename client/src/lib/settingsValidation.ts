@@ -1,5 +1,18 @@
 import type { WorkspaceRole } from "../types";
 
+const WORKSPACE_NAME_MAX = 100;
+
+export function validateWorkspaceName(
+	name: string,
+): { valid: false; error: string } | { valid: true; trimmed: string } {
+	const trimmed = name.trim();
+	if (trimmed === "") return { valid: false, error: "Name is required" };
+	if (trimmed.length > WORKSPACE_NAME_MAX) {
+		return { valid: false, error: `Max ${WORKSPACE_NAME_MAX} characters` };
+	}
+	return { valid: true, trimmed };
+}
+
 export function validateBoardName(
 	name: string,
 ): { valid: false; error: string } | { valid: true; trimmed: string } {

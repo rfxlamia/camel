@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { sql } from "kysely";
 import { db } from "../db/kysely.js";
+import { validateWorkspaceName } from "../validators/input-length.js";
 import {
 	countUserMemberships,
 	getWorkspaceCapacity,
 	lookupMembership,
 	serializeWorkspaceList,
 } from "./helpers.js";
+import { checkCanEditSettings } from "./settings.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
 
@@ -66,9 +68,11 @@ workspacesRouter.get("/", async (req, res) => {
 
 workspacesRouter.post("/", async (req, res) => {
 	const { name } = req.body ?? {};
-	if (typeof name !== "string" || name.trim() === "") {
-		return res.status(400).json({ error: "name is required" });
+	const nameResult = validateWorkspaceName(name);
+	if (!nameResult.valid) {
+		return res.status(400).json({ error: nameResult.error });
 	}
+	const trimmedName = nameResult.trimmed!;
 
 	const membershipCount = await countUserMemberships(req.user!.id);
 	const cap = getWorkspaceCapacity(membershipCount);
@@ -80,7 +84,7 @@ workspacesRouter.post("/", async (req, res) => {
 		const inserted = await trx
 			.insertInto("workspaces")
 			.values({
-				name: name.trim(),
+				name: trimmedName,
 				owner_user_id: req.user!.id,
 				is_personal: false,
 			})
@@ -103,6 +107,50 @@ workspacesRouter.post("/", async (req, res) => {
 		role: "owner",
 		isPersonal: ws.is_personal,
 		memberCount: 1,
+	});
+});
+
+workspacesRouter.patch("/:workspaceId", async (req, res) => {
+	const workspaceId = Number(req.params.workspaceId);
+	if (!Number.isInteger(workspaceId)) {
+		return res.status(400).json({ error: "workspaceId must be an integer" });
+	}
+
+	const role = await lookupMembership(req.user!.id, workspaceId);
+	if (!role) return res.status(404).json({ error: "Not found" });
+
+	const edit = checkCanEditSettings(role);
+	if (!edit.allowed) {
+		return res.status(edit.status).json({ error: edit.error });
+	}
+
+	const { name } = req.body ?? {};
+	const nameResult = validateWorkspaceName(name);
+	if (!nameResult.valid) {
+		return res.status(400).json({ error: nameResult.error });
+	}
+	const trimmedName = nameResult.trimmed!;
+
+	const updated = await db
+		.updateTable("workspaces")
+		.set({ name: trimmedName })
+		.where("id", "=", workspaceId)
+		.returning(["id", "name", "is_personal"])
+		.executeTakeFirst();
+	if (!updated) return res.status(404).json({ error: "Not found" });
+
+	const countRow = await db
+		.selectFrom("workspace_members")
+		.select(sql<number>`count(*)::int`.as("n"))
+		.where("workspace_id", "=", workspaceId)
+		.executeTakeFirstOrThrow();
+
+	res.json({
+		id: updated.id,
+		name: updated.name,
+		role,
+		isPersonal: updated.is_personal,
+		memberCount: countRow.n,
 	});
 });
 

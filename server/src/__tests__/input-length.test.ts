@@ -5,6 +5,7 @@ import {
 	validateCardTitle,
 	validateDisplayName,
 	validateUsername,
+	validateWorkspaceName,
 } from "../validators/input-length.js";
 
 describe("Input Length Validation", () => {
@@ -57,6 +58,27 @@ describe("Input Length Validation", () => {
 			const result = validateCardDescription(longDesc);
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("10000");
+		});
+	});
+
+	describe("validateWorkspaceName", () => {
+		it("should accept valid workspace name", () => {
+			const result = validateWorkspaceName("Team Alpha");
+			expect(result.valid).toBe(true);
+			expect(result.trimmed).toBe("Team Alpha");
+		});
+
+		it("should reject empty workspace name", () => {
+			const result = validateWorkspaceName("   ");
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("required");
+		});
+
+		it("should reject workspace name exceeding max length", () => {
+			const longName = "a".repeat(101);
+			const result = validateWorkspaceName(longName);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("100");
 		});
 	});
 

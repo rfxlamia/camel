@@ -244,6 +244,7 @@ describe("workspace API methods", () => {
 
 		await api.getWorkspaces();
 		await api.createWorkspace({ name: "Launch" });
+		await api.updateWorkspace(7, { name: "Renamed" });
 		await api.getWorkspaceMembers(7);
 		await api.addWorkspaceMember(7, { username: "iris" });
 		await api.acceptInvite(7, 12);
@@ -261,6 +262,10 @@ describe("workspace API methods", () => {
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces",
 			expect.objectContaining({ method: "POST" }),
+		);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7",
+			expect.objectContaining({ method: "PATCH" }),
 		);
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/members",

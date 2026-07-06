@@ -344,6 +344,11 @@ export const api = {
 			method: "POST",
 			body: JSON.stringify(body),
 		}),
+	updateWorkspace: (workspaceId: number, body: { name: string }) =>
+		request<Workspace>(`/workspaces/${workspaceId}`, {
+			method: "PATCH",
+			body: JSON.stringify(body),
+		}),
 	getWorkspaceMembers: (workspaceId: number) =>
 		request<{ members: WorkspaceMember[] }>(
 			`/workspaces/${workspaceId}/members`,

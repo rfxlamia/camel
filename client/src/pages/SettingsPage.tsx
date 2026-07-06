@@ -7,6 +7,7 @@ import {
 	getWorkspaceDangerZoneState,
 	validateBoardName,
 	validateUnsavedChanges,
+	validateWorkspaceName,
 } from "../lib/settingsValidation";
 
 /** Collapsible section following creative-brief design tokens */
@@ -73,6 +74,14 @@ export default function SettingsPage() {
 	const [nameError, setNameError] = useState<string | null>(null);
 	const [isSaving, setIsSaving] = useState(false);
 
+	const [workspaceNameInput, setWorkspaceNameInput] = useState(
+		activeWorkspace?.name ?? "",
+	);
+	const [workspaceNameError, setWorkspaceNameError] = useState<string | null>(
+		null,
+	);
+	const [isSavingWorkspaceName, setIsSavingWorkspaceName] = useState(false);
+
 	const [cropImage, setCropImage] = useState<string | null>(null);
 	const [logoError, setLogoError] = useState<string | null>(null);
 
@@ -107,18 +116,33 @@ export default function SettingsPage() {
 	}, [settings.boardName]);
 
 	useEffect(() => {
+		setWorkspaceNameInput(activeWorkspace?.name ?? "");
+	}, [activeWorkspace?.name]);
+
+	useEffect(() => {
 		const onBeforeUnload = (ev: BeforeUnloadEvent) => {
-			if (
-				canEdit &&
-				validateUnsavedChanges(settings.boardName, boardNameInput)
-			) {
+			if (!canEdit) return;
+			const hasBoardChange = validateUnsavedChanges(
+				settings.boardName,
+				boardNameInput,
+			);
+			const hasWorkspaceChange =
+				activeWorkspace != null &&
+				validateUnsavedChanges(activeWorkspace.name, workspaceNameInput);
+			if (hasBoardChange || hasWorkspaceChange) {
 				ev.preventDefault();
 				ev.returnValue = "";
 			}
 		};
 		window.addEventListener("beforeunload", onBeforeUnload);
 		return () => window.removeEventListener("beforeunload", onBeforeUnload);
-	}, [settings.boardName, boardNameInput, canEdit]);
+	}, [
+		settings.boardName,
+		boardNameInput,
+		activeWorkspace,
+		workspaceNameInput,
+		canEdit,
+	]);
 
 	const nameVal = validateBoardName(boardNameInput);
 	const hasNameChange = validateUnsavedChanges(
@@ -126,6 +150,56 @@ export default function SettingsPage() {
 		boardNameInput,
 	);
 	const canSaveName = canEdit && nameVal.valid && hasNameChange && !isSaving;
+
+	const workspaceNameVal = validateWorkspaceName(workspaceNameInput);
+	const hasWorkspaceNameChange =
+		activeWorkspace != null &&
+		validateUnsavedChanges(activeWorkspace.name, workspaceNameInput);
+	const canSaveWorkspaceName =
+		canEdit &&
+		workspaceNameVal.valid &&
+		hasWorkspaceNameChange &&
+		!isSavingWorkspaceName;
+
+	async function handleSaveWorkspaceName() {
+		if (
+			!canEdit ||
+			activeWorkspaceId === null ||
+			!workspaceNameVal.valid ||
+			!hasWorkspaceNameChange
+		) {
+			if (!workspaceNameVal.valid) {
+				setWorkspaceNameError(workspaceNameVal.error);
+			}
+			return;
+		}
+		setWorkspaceNameError(null);
+		setIsSavingWorkspaceName(true);
+		try {
+			await api.updateWorkspace(activeWorkspaceId, {
+				name: workspaceNameVal.trimmed,
+			});
+			await reloadWorkspaces();
+			showToast("Workspace name saved", "success");
+		} catch (err: unknown) {
+			if (err instanceof ApiError && err.status === 403) {
+				showToast(
+					"You don't have permission to edit workspace settings",
+					"error",
+				);
+			} else if (err instanceof ApiError && err.status === 400) {
+				setWorkspaceNameError(err.message);
+				showToast(err.message, "error");
+			} else {
+				showToast(
+					"Couldn't save the workspace name. Check your connection and try again.",
+					"error",
+				);
+			}
+		} finally {
+			setIsSavingWorkspaceName(false);
+		}
+	}
 
 	async function handleSaveName() {
 		if (!canEdit || activeWorkspaceId === null || !nameVal.valid) {
@@ -393,6 +467,54 @@ export default function SettingsPage() {
 
 			{/* Board Name */}
 			<SettingsSection title="Identity">
+				<div>
+					<label
+						htmlFor="workspaceName"
+						className="block text-sm font-medium text-neutral-700"
+					>
+						Workspace name
+					</label>
+					<div className="mt-1 flex gap-2">
+						<input
+							id="workspaceName"
+							type="text"
+							value={workspaceNameInput}
+							onChange={(e) => {
+								setWorkspaceNameInput(e.target.value);
+								if (workspaceNameError) setWorkspaceNameError(null);
+							}}
+							maxLength={100}
+							disabled={!canEdit}
+							className={`flex-1 rounded-md border px-3 py-2 text-base focus:outline-none disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 ${
+								workspaceNameVal.valid
+									? "border-neutral-300 focus:border-primary-600"
+									: "border-error-500 focus:border-error-500"
+							}`}
+						/>
+						<button
+							type="button"
+							onClick={handleSaveWorkspaceName}
+							disabled={!canSaveWorkspaceName}
+							className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+						>
+							{isSavingWorkspaceName ? "Saving..." : "Save"}
+						</button>
+					</div>
+					{workspaceNameError && (
+						<p className="mt-1 text-sm text-error-600">{workspaceNameError}</p>
+					)}
+					{!workspaceNameVal.valid &&
+						!workspaceNameError &&
+						workspaceNameInput.trim() !== "" && (
+							<p className="mt-1 text-sm text-error-600">
+								{workspaceNameVal.error}
+							</p>
+						)}
+					<p className="mt-1 text-xs text-neutral-500">
+						1–100 characters. Shown in the workspace switcher.
+					</p>
+				</div>
+
 				<div>
 					<label
 						htmlFor="boardName"

@@ -55,6 +55,26 @@ export function validateCardDescription(description: string): ValidationResult {
 	return { valid: true, trimmed };
 }
 
+export function validateWorkspaceName(name: string): ValidationResult {
+	if (typeof name !== "string") {
+		return { valid: false, error: "name must be a string" };
+	}
+
+	const trimmed = name.trim();
+	if (trimmed === "") {
+		return { valid: false, error: "Name is required" };
+	}
+
+	if (trimmed.length > MAX_LENGTHS.workspaceName) {
+		return {
+			valid: false,
+			error: `name must be ${MAX_LENGTHS.workspaceName} characters or less`,
+		};
+	}
+
+	return { valid: true, trimmed };
+}
+
 export function validateBoardName(name: string): ValidationResult {
 	if (typeof name !== "string") {
 		return { valid: false, error: "name must be a string" };
