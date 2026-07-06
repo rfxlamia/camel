@@ -27,6 +27,8 @@ export const COLOR_LABELS: Record<ColumnColor, string> = {
 	turquoise: "Turquoise",
 };
 
+// Legacy named palette — board columns still render via these CSS-var Tailwind classes.
+// OKLCH strings stored on columns use inline styles instead (see columnStyleResolver).
 // Static Tailwind class lookup for column colors
 // Using static strings ensures Tailwind's JIT compiler can detect and include these classes
 export const COLUMN_STYLES: Record<ColumnColor, string> = {

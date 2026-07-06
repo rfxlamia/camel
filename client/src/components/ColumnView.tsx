@@ -4,16 +4,16 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Plus, Settings2, X } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import {
 	COLUMN_COLORS,
 	COLOR_LABELS,
 	COLOR_PREVIEWS,
-	COLUMN_STYLES,
 	type ColumnColor,
 } from "../lib/columnColors";
+import { resolveColumnAppearance } from "../lib/columnStyleResolver";
 import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
 import CardView from "./CardView";
@@ -366,22 +366,6 @@ function AddCard({
 
 export default memo(ColumnView);
 
-// Get CSS classes for column color styling
-function getColumnColorStyles(color: string | null, isOver: boolean): string {
-	// WIP error state always overrides color
-	if (isOver) {
-		return "border-error-300 bg-error-100/40";
-	}
-
-	// No color = default neutral styling
-	if (!color || !(color in COLUMN_STYLES)) {
-		return "border-neutral-200 bg-neutral-100";
-	}
-
-	// Apply color: bg tint (shade 50) + border (shade 200)
-	return COLUMN_STYLES[color as ColumnColor];
-}
-
 function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 	const [editing, setEditing] = useState(false);
 	const { setNodeRef, isOver } = useDroppable({
@@ -391,12 +375,20 @@ function ColumnView({ column, onOpenCard, onAddCard, onUpdateColumn }: Props) {
 	const over =
 		column.wipLimit !== null && column.cards.length > column.wipLimit;
 
+	const appearance = useMemo(
+		() => resolveColumnAppearance(column.color, over),
+		[column.color, over],
+	);
+
+	const colorClassName =
+		appearance.kind === "inline" ? "" : appearance.className;
+	const colorStyle =
+		appearance.kind === "inline" ? appearance.style : undefined;
+
 	return (
 		<section
-			className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border shadow-[0_1px_2px_oklch(28%_0.044_250_/_0.06)] transition-colors ${getColumnColorStyles(
-				column.color,
-				over,
-			)}`}
+			className={`flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border shadow-[0_1px_2px_oklch(28%_0.044_250_/_0.06)] transition-colors ${colorClassName}`}
+			style={colorStyle}
 		>
 			<div className="flex min-h-0 flex-1 flex-col p-2">
 				<header className="px-1 pt-1">
