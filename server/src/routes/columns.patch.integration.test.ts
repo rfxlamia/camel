@@ -58,6 +58,7 @@ import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
+import { COLUMN_COLOR_VALIDATION_ERROR } from "../validators/column.js";
 
 /** Isolated from routes.integration.test.ts (workspace 1),
  * columns.batch.integration.test.ts (workspace 99), and
@@ -163,6 +164,49 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				colId,
 			]);
 			expect(row.rows[0].title).toBe("Backlog");
+		});
+
+		it("persists a well-formed OKLCH color", async () => {
+			const oklch = "oklch(88% 0.09 47.3)";
+			const col = await pool.query(
+				`INSERT INTO columns (title, position, workspace_id)
+       VALUES ('Backlog', 1000, $1) RETURNING id`,
+				[WORKSPACE_ID],
+			);
+			const colId = col.rows[0].id;
+
+			const res = await request(app)
+				.patch(`/api/workspaces/${WORKSPACE_ID}/columns/${colId}`)
+				.send({ color: oklch });
+
+			expect(res.status).toBe(200);
+			expect(res.body.color).toBe(oklch);
+
+			const row = await pool.query("SELECT color FROM columns WHERE id = $1", [
+				colId,
+			]);
+			expect(row.rows[0].color).toBe(oklch);
+		});
+
+		it("rejects an invalid color with COLUMN_COLOR_VALIDATION_ERROR", async () => {
+			const col = await pool.query(
+				`INSERT INTO columns (title, position, workspace_id, color)
+       VALUES ('Backlog', 1000, $1, 'powder-blue') RETURNING id`,
+				[WORKSPACE_ID],
+			);
+			const colId = col.rows[0].id;
+
+			const res = await request(app)
+				.patch(`/api/workspaces/${WORKSPACE_ID}/columns/${colId}`)
+				.send({ color: "not-a-color" });
+
+			expect(res.status).toBe(400);
+			expect(res.body.error).toBe(COLUMN_COLOR_VALIDATION_ERROR);
+
+			const row = await pool.query("SELECT color FROM columns WHERE id = $1", [
+				colId,
+			]);
+			expect(row.rows[0].color).toBe("powder-blue");
 		});
 	},
 );
