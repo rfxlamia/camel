@@ -9,6 +9,9 @@ const FILE_SIGNATURES: Record<string, Buffer[]> = {
 		Buffer.from([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]),
 		Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]),
 	],
+	pdf: [
+		Buffer.from("%PDF-"), // 25 50 44 46 2d
+	],
 	// Dangerous types: detect to reject with specific "content does not match" error
 	exe: [
 		Buffer.from([0x4d, 0x5a]), // MZ - Windows PE/DOS executable
@@ -23,6 +26,7 @@ const MIME_TO_SIGNATURE: Record<string, string[]> = {
 	"image/jpeg": ["jpeg"],
 	"image/gif": ["gif"],
 	"image/webp": ["webp"],
+	"application/pdf": ["pdf"],
 };
 
 export interface FileValidationResult {
@@ -102,4 +106,44 @@ export async function validateFileContent(
 		valid: true,
 		detectedType,
 	};
+}
+
+/**
+ * Validate that a buffer is plausible plain text (markdown has no magic bytes).
+ * Rejects known binary signatures, NUL bytes, and invalid UTF-8.
+ */
+export function validateTextContent(buffer: Buffer): FileValidationResult {
+	if (!buffer || !(buffer instanceof Buffer) || buffer.length === 0) {
+		return {
+			valid: false,
+			error: "invalid file: no content provided",
+		};
+	}
+
+	const detectedType = getFileSignature(buffer);
+	if (detectedType) {
+		return {
+			valid: false,
+			error: `content does not match declared type: expected text but detected ${detectedType}`,
+			detectedType,
+		};
+	}
+
+	if (buffer.includes(0x00)) {
+		return {
+			valid: false,
+			error: "invalid file: binary content in text file",
+		};
+	}
+
+	try {
+		new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+	} catch {
+		return {
+			valid: false,
+			error: "invalid file: not valid UTF-8 text",
+		};
+	}
+
+	return { valid: true, detectedType: "text" };
 }

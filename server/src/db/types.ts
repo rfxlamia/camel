@@ -5,16 +5,17 @@
 
 import type { ColumnType } from "kysely";
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+	T extends ColumnType<infer S, infer I, infer U>
+		? ColumnType<S, I | undefined, U>
+		: ColumnType<T, T | undefined, T>;
 
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
 
 export type JsonObject = {
-  [x: string]: JsonValue | undefined;
+	[x: string]: JsonValue | undefined;
 };
 
 export type JsonPrimitive = boolean | number | string | null;
@@ -24,244 +25,259 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface AgentArtifacts {
-  board_id: number;
-  content: string;
-  created_at: Generated<Timestamp>;
-  filename: string;
-  format: Generated<string>;
-  id: Generated<number>;
-  workspace_id: number;
+	board_id: number;
+	content: string;
+	created_at: Generated<Timestamp>;
+	filename: string;
+	format: Generated<string>;
+	id: Generated<number>;
+	workspace_id: number;
 }
 
 export interface AgentBoards {
-  created_at: Generated<Timestamp>;
-  execution_status: Generated<string>;
-  id: Generated<number>;
-  original_intent: string;
-  status: Generated<string>;
-  template_id: Generated<string>;
-  updated_at: Generated<Timestamp>;
-  user_id: number;
-  workspace_id: number;
+	created_at: Generated<Timestamp>;
+	execution_status: Generated<string>;
+	id: Generated<number>;
+	original_intent: string;
+	status: Generated<string>;
+	template_id: Generated<string>;
+	updated_at: Generated<Timestamp>;
+	user_id: number;
+	workspace_id: number;
 }
 
 export interface AgentCardOutputs {
-  board_id: number;
-  card_index: Generated<number>;
-  column_slug: string;
-  created_at: Generated<Timestamp>;
-  id: Generated<number>;
-  output: string;
-  thinking: string | null;
+	board_id: number;
+	card_index: Generated<number>;
+	column_slug: string;
+	created_at: Generated<Timestamp>;
+	id: Generated<number>;
+	output: string;
+	thinking: string | null;
 }
 
 export interface AgentConversations {
-  board_id: number;
-  content: string;
-  created_at: Generated<Timestamp>;
-  id: Generated<number>;
-  role: string;
+	board_id: number;
+	content: string;
+	created_at: Generated<Timestamp>;
+	id: Generated<number>;
+	role: string;
+}
+
+export interface AgentFiles {
+	board_id: number | null;
+	content: Buffer;
+	created_at: Generated<Timestamp>;
+	extracted_text: string;
+	filename: string;
+	id: Generated<number>;
+	mime_type: string;
+	size_bytes: number;
+	truncated: Generated<boolean>;
+	uploaded_by: number;
+	workspace_id: number;
 }
 
 export interface AgentToolCalls {
-  attempt: Generated<number>;
-  board_id: number;
-  column_slug: string;
-  created_at: Generated<Timestamp>;
-  error_code: string | null;
-  id: Generated<number>;
-  input: Json | null;
-  result: string | null;
-  tool_name: string;
+	attempt: Generated<number>;
+	board_id: number;
+	column_slug: string;
+	created_at: Generated<Timestamp>;
+	error_code: string | null;
+	id: Generated<number>;
+	input: Json | null;
+	result: string | null;
+	tool_name: string;
 }
 
 export interface AuthAudit {
-  actor_id: number | null;
-  created_at: Generated<Timestamp>;
-  event_type: string;
-  id: Generated<number>;
-  payload: Generated<Json>;
+	actor_id: number | null;
+	created_at: Generated<Timestamp>;
+	event_type: string;
+	id: Generated<number>;
+	payload: Generated<Json>;
 }
 
 export interface BaAccounts {
-  access_token: string | null;
-  access_token_expires_at: Timestamp | null;
-  account_id: string;
-  created_at: Generated<Timestamp>;
-  id: string;
-  id_token: string | null;
-  password: string | null;
-  provider_id: string;
-  refresh_token: string | null;
-  refresh_token_expires_at: Timestamp | null;
-  scope: string | null;
-  updated_at: Generated<Timestamp>;
-  user_id: number;
+	access_token: string | null;
+	access_token_expires_at: Timestamp | null;
+	account_id: string;
+	created_at: Generated<Timestamp>;
+	id: string;
+	id_token: string | null;
+	password: string | null;
+	provider_id: string;
+	refresh_token: string | null;
+	refresh_token_expires_at: Timestamp | null;
+	scope: string | null;
+	updated_at: Generated<Timestamp>;
+	user_id: number;
 }
 
 export interface BaSessions {
-  created_at: Generated<Timestamp>;
-  expires_at: Timestamp;
-  id: string;
-  ip_address: string | null;
-  token: string;
-  updated_at: Generated<Timestamp>;
-  user_agent: string | null;
-  user_id: number;
+	created_at: Generated<Timestamp>;
+	expires_at: Timestamp;
+	id: string;
+	ip_address: string | null;
+	token: string;
+	updated_at: Generated<Timestamp>;
+	user_agent: string | null;
+	user_id: number;
 }
 
 export interface BaVerifications {
-  created_at: Generated<Timestamp | null>;
-  expires_at: Timestamp;
-  id: string;
-  identifier: string;
-  updated_at: Generated<Timestamp | null>;
-  value: string;
+	created_at: Generated<Timestamp | null>;
+	expires_at: Timestamp;
+	id: string;
+	identifier: string;
+	updated_at: Generated<Timestamp | null>;
+	value: string;
 }
 
 export interface CardAssignees {
-  card_id: number;
-  user_id: number;
+	card_id: number;
+	user_id: number;
 }
 
 export interface CardEvents {
-  actor_id: number | null;
-  card_id: number | null;
-  created_at: Generated<Timestamp>;
-  event_type: Generated<string>;
-  from_column_id: number | null;
-  id: Generated<number>;
-  payload: Generated<Json>;
-  to_column_id: number | null;
-  workspace_id: number;
+	actor_id: number | null;
+	card_id: number | null;
+	created_at: Generated<Timestamp>;
+	event_type: Generated<string>;
+	from_column_id: number | null;
+	id: Generated<number>;
+	payload: Generated<Json>;
+	to_column_id: number | null;
+	workspace_id: number;
 }
 
 export interface Cards {
-  column_id: number;
-  created_at: Generated<Timestamp>;
-  deleted_at: Timestamp | null;
-  description: Generated<string>;
-  done_at: Timestamp | null;
-  due_date: Timestamp | null;
-  id: Generated<number>;
-  position: number;
-  started_at: Timestamp | null;
-  title: string;
-  version: Generated<number>;
-  workspace_id: number;
+	column_id: number;
+	created_at: Generated<Timestamp>;
+	deleted_at: Timestamp | null;
+	description: Generated<string>;
+	done_at: Timestamp | null;
+	due_date: Timestamp | null;
+	id: Generated<number>;
+	position: number;
+	started_at: Timestamp | null;
+	title: string;
+	version: Generated<number>;
+	workspace_id: number;
 }
 
 export interface Columns {
-  board_id: number | null;
-  color: string | null;
-  id: Generated<number>;
-  is_done: Generated<boolean>;
-  is_signable: Generated<boolean>;
-  policy: Generated<string>;
-  position: number;
-  reasoning: Generated<boolean>;
-  signable_assignee_id: number | null;
-  slug: string | null;
-  system_prompt: string | null;
-  title: string;
-  tool_budget: number | null;
-  tools: Generated<string[]>;
-  wip_limit: number | null;
-  workspace_id: number;
+	board_id: number | null;
+	color: string | null;
+	id: Generated<number>;
+	is_done: Generated<boolean>;
+	is_signable: Generated<boolean>;
+	policy: Generated<string>;
+	position: number;
+	reasoning: Generated<boolean>;
+	signable_assignee_id: number | null;
+	slug: string | null;
+	system_prompt: string | null;
+	title: string;
+	tool_budget: number | null;
+	tools: Generated<string[]>;
+	wip_limit: number | null;
+	workspace_id: number;
 }
 
 export interface Notifications {
-  actor_id: number | null;
-  board_id: number | null;
-  body: string | null;
-  card_id: number | null;
-  created_at: Generated<Timestamp>;
-  id: Generated<number>;
-  read_at: Timestamp | null;
-  source_deleted: Generated<boolean>;
-  title: string;
-  type: string;
-  user_id: number;
-  workspace_id: number;
+	actor_id: number | null;
+	board_id: number | null;
+	body: string | null;
+	card_id: number | null;
+	created_at: Generated<Timestamp>;
+	id: Generated<number>;
+	read_at: Timestamp | null;
+	source_deleted: Generated<boolean>;
+	title: string;
+	type: string;
+	user_id: number;
+	workspace_id: number;
 }
 
 export interface Sessions {
-  created_at: Generated<Timestamp>;
-  expires_at: Timestamp;
-  token: string;
-  user_id: number;
+	created_at: Generated<Timestamp>;
+	expires_at: Timestamp;
+	token: string;
+	user_id: number;
 }
 
 export interface Settings {
-  bool_value: boolean | null;
-  key: string;
-  text_value: string | null;
-  updated_at: Generated<Timestamp>;
-  version: Generated<number>;
-  workspace_id: number;
+	bool_value: boolean | null;
+	key: string;
+	text_value: string | null;
+	updated_at: Generated<Timestamp>;
+	version: Generated<number>;
+	workspace_id: number;
 }
 
 export interface Users {
-  created_at: Generated<Timestamp>;
-  display_name: string;
-  email: string | null;
-  email_verified: Generated<boolean>;
-  id: Generated<number>;
-  image: string | null;
-  password_hash: string | null;
-  updated_at: Generated<Timestamp>;
-  username: string | null;
+	created_at: Generated<Timestamp>;
+	display_name: string;
+	email: string | null;
+	email_verified: Generated<boolean>;
+	id: Generated<number>;
+	image: string | null;
+	password_hash: string | null;
+	updated_at: Generated<Timestamp>;
+	username: string | null;
 }
 
 export interface WorkspaceInvites {
-  created_at: Generated<Timestamp>;
-  id: Generated<number>;
-  invited_by: number | null;
-  role: string;
-  username: string;
-  workspace_id: number;
+	created_at: Generated<Timestamp>;
+	id: Generated<number>;
+	invited_by: number | null;
+	role: string;
+	username: string;
+	workspace_id: number;
 }
 
 export interface WorkspaceMembers {
-  joined_at: Generated<Timestamp>;
-  role: string;
-  user_id: number;
-  workspace_id: number;
+	joined_at: Generated<Timestamp>;
+	role: string;
+	user_id: number;
+	workspace_id: number;
 }
 
 export interface Workspaces {
-  created_at: Generated<Timestamp>;
-  id: Generated<number>;
-  is_personal: Generated<boolean>;
-  name: string;
-  owner_user_id: number;
+	created_at: Generated<Timestamp>;
+	id: Generated<number>;
+	is_personal: Generated<boolean>;
+	name: string;
+	owner_user_id: number;
 }
 
 export interface WorkspaceSettings {
-  timezone: Generated<string>;
-  workspace_id: number;
+	timezone: Generated<string>;
+	workspace_id: number;
 }
 
 export interface DB {
-  agent_artifacts: AgentArtifacts;
-  agent_boards: AgentBoards;
-  agent_card_outputs: AgentCardOutputs;
-  agent_conversations: AgentConversations;
-  agent_tool_calls: AgentToolCalls;
-  auth_audit: AuthAudit;
-  ba_accounts: BaAccounts;
-  ba_sessions: BaSessions;
-  ba_verifications: BaVerifications;
-  card_assignees: CardAssignees;
-  card_events: CardEvents;
-  cards: Cards;
-  columns: Columns;
-  notifications: Notifications;
-  sessions: Sessions;
-  settings: Settings;
-  users: Users;
-  workspace_invites: WorkspaceInvites;
-  workspace_members: WorkspaceMembers;
-  workspace_settings: WorkspaceSettings;
-  workspaces: Workspaces;
+	agent_artifacts: AgentArtifacts;
+	agent_boards: AgentBoards;
+	agent_card_outputs: AgentCardOutputs;
+	agent_conversations: AgentConversations;
+	agent_files: AgentFiles;
+	agent_tool_calls: AgentToolCalls;
+	auth_audit: AuthAudit;
+	ba_accounts: BaAccounts;
+	ba_sessions: BaSessions;
+	ba_verifications: BaVerifications;
+	card_assignees: CardAssignees;
+	card_events: CardEvents;
+	cards: Cards;
+	columns: Columns;
+	notifications: Notifications;
+	sessions: Sessions;
+	settings: Settings;
+	users: Users;
+	workspace_invites: WorkspaceInvites;
+	workspace_members: WorkspaceMembers;
+	workspace_settings: WorkspaceSettings;
+	workspaces: Workspaces;
 }

@@ -211,6 +211,15 @@ export interface AgentCard {
 	position: number;
 }
 
+export interface AgentFileMeta {
+	id: number;
+	filename: string;
+	mimeType: string;
+	sizeBytes: number;
+	truncated: boolean;
+	textChars?: number;
+}
+
 export interface AgentBoard {
 	id: number;
 	workspaceId: number;
@@ -222,6 +231,7 @@ export interface AgentBoard {
 	columns: AgentColumn[];
 	toolTrace?: ToolTraceItem[];
 	conversations?: Array<{ role: string; content: string }>;
+	files?: AgentFileMeta[];
 }
 
 export interface AgentCardOutput {

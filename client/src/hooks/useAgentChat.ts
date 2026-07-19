@@ -18,7 +18,19 @@ import {
 	routeNext,
 	settle,
 } from "../lib/agentQueue";
-import type { AgentBoard, AgentEvent } from "../types";
+import type { AgentBoard, AgentEvent, AgentFileMeta } from "../types";
+
+// ---- Attachment limits (mirror server file-extract.ts) ----
+
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACHMENTS_PER_UPLOAD = 5;
+const MAX_ATTACHMENTS_PER_BOARD = 10;
+const ACCEPTED_EXTENSIONS = [".md", ".markdown", ".pdf"];
+
+function hasAcceptedExtension(name: string): boolean {
+	const lower = name.toLowerCase();
+	return ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
 
 // ---- Queue reducer (owned by this hook) ----
 
@@ -71,7 +83,7 @@ export function getStreamingFollowUpText(
 export interface UseAgentChatConfig {
 	board: AgentBoard | null;
 	boardRef: MutableRefObject<AgentBoard | null>;
-	createBoard: (intent: string) => Promise<void>;
+	createBoard: (intent: string, fileIds?: number[]) => Promise<void>;
 	setBoard: Dispatch<SetStateAction<AgentBoard | null>>;
 	activeWorkspaceId: number | null;
 	showToast: (msg: string, type?: ToastType) => void;
@@ -101,6 +113,11 @@ export function useAgentChat(config: UseAgentChatConfig) {
 
 	const [input, setInput] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [attachments, setAttachments] = useState<AgentFileMeta[]>([]);
+	const [uploadingFiles, setUploadingFiles] = useState(false);
+	// File ids snapshotted at send time — consumed by createBoardWithQueue,
+	// since the message queue itself stays string-based.
+	const pendingFileIdsRef = useRef<number[]>([]);
 	const [followUpMessages, setFollowUpMessages] = useState<FollowUpMessage[]>(
 		[],
 	);
@@ -201,7 +218,9 @@ export function useAgentChat(config: UseAgentChatConfig) {
 	// ---- createBoardWithQueue (settlement bridge over createBoard) ----
 	const createBoardWithQueue = useCallback(
 		async (intent: string) => {
-			await createBoard(intent);
+			const fileIds = pendingFileIdsRef.current;
+			pendingFileIdsRef.current = [];
+			await createBoard(intent, fileIds.length > 0 ? fileIds : undefined);
 			// Settlement bridge — route next queued item.
 			const settleResult = settle(queueStateRef.current);
 			dispatch({ type: "settle" });
@@ -241,6 +260,66 @@ export function useAgentChat(config: UseAgentChatConfig) {
 	}, [board?.executionStatus]);
 
 	// ---- Actions ----
+
+	// Attach files: client-side pre-check, then eager upload for file ids.
+	const attachFiles = useCallback(
+		async (files: File[]) => {
+			if (!activeWorkspaceId || files.length === 0) return;
+			if (files.length > MAX_ATTACHMENTS_PER_UPLOAD) {
+				showToast(
+					`Attach at most ${MAX_ATTACHMENTS_PER_UPLOAD} files at a time.`,
+					"error",
+				);
+				return;
+			}
+			if (attachments.length + files.length > MAX_ATTACHMENTS_PER_BOARD) {
+				showToast(
+					`A board can have at most ${MAX_ATTACHMENTS_PER_BOARD} files.`,
+					"error",
+				);
+				return;
+			}
+			for (const file of files) {
+				if (!hasAcceptedExtension(file.name)) {
+					showToast(
+						`"${file.name}": only .md and .pdf files are accepted.`,
+						"error",
+					);
+					return;
+				}
+				if (file.size > MAX_ATTACHMENT_BYTES) {
+					showToast(`"${file.name}": each file must be under 5MB.`, "error");
+					return;
+				}
+			}
+
+			setUploadingFiles(true);
+			try {
+				const result = await api.uploadAgentFiles(activeWorkspaceId, files);
+				setAttachments((prev) => [...prev, ...result.files]);
+				const empty = result.files.filter((f) => f.textChars === 0);
+				for (const f of empty) {
+					showToast(
+						`"${f.filename}" has no extractable text — is it a scanned PDF?`,
+						"error",
+					);
+				}
+			} catch (err) {
+				showToast(
+					err instanceof Error ? err.message : "Couldn't upload files.",
+					"error",
+				);
+			} finally {
+				setUploadingFiles(false);
+			}
+		},
+		[activeWorkspaceId, attachments.length, showToast],
+	);
+
+	// Remove locally only — the orphaned server row is reaped by the 24h cleanup.
+	const removeAttachment = useCallback((id: number) => {
+		setAttachments((prev) => prev.filter((a) => a.id !== id));
+	}, []);
 
 	// Confirm regenerate.
 	const handleConfirmRegenerate = useCallback(async () => {
@@ -335,6 +414,10 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		}
 
 		if (!board) {
+			// Snapshot attachment ids for board creation; the queue itself stays
+			// string-based (files are board-creation-scoped in this MVP).
+			pendingFileIdsRef.current = attachments.map((a) => a.id);
+			setAttachments([]);
 			const qResult = queueSubmit(queueStateRef.current, trimmed);
 			dispatch({ type: "submit", message: trimmed });
 			if (qResult.fire) {
@@ -356,6 +439,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		input,
 		busy,
 		board,
+		attachments,
 		clearError,
 		clearAgentEvents,
 		clearFollowUpAgentEvents,
@@ -429,12 +513,17 @@ export function useAgentChat(config: UseAgentChatConfig) {
 		isRunning ||
 		pendingRegenerate ||
 		(board !== null && !canFollowUp && !isPending);
-	const sendDisabled = inputDisabled || !input.trim();
+	const sendDisabled = inputDisabled || uploadingFiles || !input.trim();
 
 	return {
 		// Input state
 		input,
 		setInput,
+		// Attachment state
+		attachments,
+		uploadingFiles,
+		attachFiles,
+		removeAttachment,
 		// Chat state
 		busy,
 		setBusy,

@@ -104,7 +104,7 @@ export function useAgentBoard() {
 
 	// Create a new board (queue-agnostic — parent wraps with settlement).
 	const createBoard = useCallback(
-		async (intent: string) => {
+		async (intent: string, fileIds?: number[]) => {
 			if (!activeWorkspaceId) return;
 			// Use ref for synchronous guard to prevent race condition
 			if (creatingRef.current) return;
@@ -112,7 +112,11 @@ export function useAgentBoard() {
 			setCreating(true);
 			try {
 				clearAgentEvents();
-				const result = await api.createAgentBoard(activeWorkspaceId, intent);
+				const result = await api.createAgentBoard(
+					activeWorkspaceId,
+					intent,
+					fileIds,
+				);
 				const b = await api.getAgentBoard(activeWorkspaceId, result.boardId);
 				setBoard(b);
 				boardRef.current = b;

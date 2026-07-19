@@ -23,8 +23,27 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { requireAuth } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
+import {
+	validateFileContent,
+	validateTextContent,
+} from "../lib/file-validator.js";
 import { llmTimeout } from "../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
+import {
+	AgentFileExtractError,
+	detectAgentFileKind,
+	extractFileText,
+	MAX_FILES_PER_BOARD,
+	MAX_FILES_PER_UPLOAD,
+} from "./file-extract.js";
+import {
+	attachFilesToBoard,
+	deleteStaleUnattachedFiles,
+	getAgentFileUpload,
+	getFilesForBoard,
+	insertAgentFile,
+	sanitizeFilename,
+} from "./files.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,
@@ -213,6 +232,36 @@ export function resolveMessageAction(body: unknown): MessageAction {
 		}
 	}
 	return { kind: "invalid" };
+}
+
+// ---------------------------------------------------------------------------
+// fileIds body validation — exported for unit tests
+// ---------------------------------------------------------------------------
+
+export function parseFileIds(
+	value: unknown,
+): { ok: true; fileIds: number[] } | { ok: false; error: string } {
+	if (value === undefined || value === null) return { ok: true, fileIds: [] };
+	if (!Array.isArray(value)) {
+		return { ok: false, error: "fileIds must be an array of integers" };
+	}
+	if (value.length > MAX_FILES_PER_BOARD) {
+		return {
+			ok: false,
+			error: `fileIds must contain at most ${MAX_FILES_PER_BOARD} entries`,
+		};
+	}
+	const fileIds: number[] = [];
+	for (const entry of value) {
+		if (typeof entry !== "number" || !Number.isInteger(entry) || entry <= 0) {
+			return { ok: false, error: "fileIds must be an array of integers" };
+		}
+		fileIds.push(entry);
+	}
+	if (new Set(fileIds).size !== fileIds.length) {
+		return { ok: false, error: "fileIds must not contain duplicates" };
+	}
+	return { ok: true, fileIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +578,10 @@ const realDeps: AgentBoardServiceDeps = {
 
 	getConversationHistory: (boardId) => selectConversationHistory(db, boardId),
 
+	attachFilesToBoard: (data) => attachFilesToBoard(db, data),
+
+	getFilesForBoard: (boardId) => getFilesForBoard(db, boardId),
+
 	deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(db, boardId),
 
 	deleteCardsForBoard: (boardId) => deleteCardsForBoard(db, boardId),
@@ -602,6 +655,129 @@ export function createAgentRouter(
 		return true;
 	}
 
+	// ---- POST /workspaces/:workspaceId/agent/files ----
+	router.post(
+		"/workspaces/:workspaceId/agent/files",
+		requireAuth,
+		async (req, res) => {
+			const workspaceId = Number(req.params.workspaceId);
+			if (!Number.isInteger(workspaceId)) {
+				return res
+					.status(400)
+					.json({ error: "workspaceId must be an integer" });
+			}
+
+			try {
+				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+
+				const upload = await getAgentFileUpload();
+				upload.array("files", MAX_FILES_PER_UPLOAD)(
+					req,
+					res,
+					async (err: unknown) => {
+						if (err) {
+							const multerErr = err as { code?: string; message?: string };
+							if (multerErr.code === "LIMIT_FILE_SIZE") {
+								return res
+									.status(413)
+									.json({ error: "Each file must be under 5MB" });
+							}
+							return res
+								.status(400)
+								.json({ error: multerErr.message ?? "Upload failed" });
+						}
+
+						try {
+							const files = (req.files ?? []) as Express.Multer.File[];
+							if (files.length === 0) {
+								return res.status(400).json({ error: "No files provided" });
+							}
+
+							const results: Array<{
+								id: number;
+								filename: string;
+								mimeType: string;
+								sizeBytes: number;
+								truncated: boolean;
+								textChars: number;
+							}> = [];
+
+							for (const file of files) {
+								const detected = detectAgentFileKind(
+									file.originalname,
+									file.mimetype,
+								);
+								if (!detected.ok) {
+									return res.status(400).json({ error: detected.error });
+								}
+
+								// Magic-byte validation: declared type must match content
+								const validation =
+									detected.kind === "pdf"
+										? await validateFileContent(
+												file.buffer,
+												detected.storedMime,
+											)
+										: validateTextContent(file.buffer);
+								if (!validation.valid) {
+									return res.status(400).json({
+										error: `"${sanitizeFilename(file.originalname)}": ${validation.error}`,
+									});
+								}
+
+								let extracted: { text: string; truncated: boolean };
+								try {
+									extracted = await extractFileText(detected.kind, file.buffer);
+								} catch (extractErr) {
+									if (extractErr instanceof AgentFileExtractError) {
+										return res.status(422).json({
+											error: `"${sanitizeFilename(file.originalname)}": could not read PDF (corrupt or password-protected)`,
+										});
+									}
+									throw extractErr;
+								}
+
+								const filename = sanitizeFilename(file.originalname);
+								const { id } = await insertAgentFile(db, {
+									workspaceId,
+									uploadedBy: req.user!.id,
+									filename,
+									mimeType: detected.storedMime,
+									sizeBytes: file.size,
+									content: file.buffer,
+									extractedText: extracted.text,
+									truncated: extracted.truncated,
+								});
+
+								results.push({
+									id,
+									filename,
+									mimeType: detected.storedMime,
+									sizeBytes: file.size,
+									truncated: extracted.truncated,
+									textChars: extracted.text.length,
+								});
+							}
+
+							// Best-effort orphan cleanup — never blocks the response
+							deleteStaleUnattachedFiles(db, req.user!.id).catch((cleanupErr) =>
+								console.error("agent file cleanup error:", cleanupErr),
+							);
+
+							res.status(201).json({ files: results });
+						} catch (innerErr) {
+							console.error("agent uploadFiles error:", innerErr);
+							res.status(500).json({ error: "Failed to upload files" });
+						}
+					},
+				);
+			} catch (err) {
+				console.error("agent uploadFiles error:", err);
+				res.status(500).json({ error: "Failed to upload files" });
+			}
+		},
+	);
+
 	// ---- POST /workspaces/:workspaceId/agent/boards ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards",
@@ -619,6 +795,11 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "intent is required" });
 			}
 
+			const parsedFileIds = parseFileIds((req.body ?? {}).fileIds);
+			if (!parsedFileIds.ok) {
+				return res.status(400).json({ error: parsedFileIds.error });
+			}
+
 			try {
 				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
@@ -626,6 +807,7 @@ export function createAgentRouter(
 					workspaceId,
 					userId: req.user!.id,
 					intent: intent.trim(),
+					fileIds: parsedFileIds.fileIds,
 				});
 
 				if ("status" in result && typeof result.status === "number") {
@@ -822,7 +1004,16 @@ export function createAgentRouter(
 				const toolTrace = await getToolTrace(db, boardId);
 				const conversations = await selectConversationHistory(db, boardId);
 
-				res.json({ ...result, columns, toolTrace, conversations });
+				// Attached file metadata only — bytes and extracted text stay server-side
+				const files = (await getFilesForBoard(db, boardId)).map((f) => ({
+					id: f.id,
+					filename: f.filename,
+					mimeType: f.mimeType,
+					sizeBytes: f.sizeBytes,
+					truncated: f.truncated,
+				}));
+
+				res.json({ ...result, columns, toolTrace, conversations, files });
 			} catch (err) {
 				console.error("agent getBoardById error:", err);
 				res.status(500).json({ error: "Failed to get board" });

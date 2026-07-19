@@ -15,6 +15,10 @@
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import {
+	type AttachedFileForPrompt,
+	buildAttachedFilesBlock,
+} from "./file-extract.js";
+import {
 	createSafeSystemPrompt,
 	detectPromptInjection,
 	escapeXml,
@@ -678,6 +682,7 @@ export async function executeCard(
 	// tools paths. Optional for backward compat with existing callers.
 	onThinking?: (text: string) => void,
 	userContent?: string,
+	attachedFiles?: AttachedFileForPrompt[],
 ): Promise<ExecuteResult> {
 	const client = getClient();
 
@@ -715,6 +720,15 @@ export async function executeCard(
 	// Security: Sanitize user input
 	const sanitizedContent = sanitizeUserInput(messageContent);
 
+	// Attached files are appended AFTER sanitizeUserInput on purpose: their
+	// budget is enforced at extraction time (file-extract.ts) instead of the
+	// 10k user-input cap, while buildAttachedFilesBlock applies the same
+	// XML-escaping guarantees.
+	const filesBlock = buildAttachedFilesBlock(attachedFiles ?? []);
+	const finalContent = filesBlock
+		? `${sanitizedContent}\n\n${filesBlock}`
+		: sanitizedContent;
+
 	let result: ExecuteResult;
 
 	// Empty tools → legacy single-shot path (no tools param)
@@ -722,7 +736,7 @@ export async function executeCard(
 		result = await executeCardSingleShot(
 			client,
 			safeSystemPrompt,
-			sanitizedContent,
+			finalContent,
 			onToken,
 			onThinking,
 		);
@@ -730,7 +744,7 @@ export async function executeCard(
 		result = await executeCardWithTools(
 			client,
 			safeSystemPrompt,
-			sanitizedContent,
+			finalContent,
 			tools,
 			toolBudget,
 			onToken,

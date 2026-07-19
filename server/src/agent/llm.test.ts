@@ -984,3 +984,84 @@ describe("executeCard extended thinking + live streaming", () => {
 		expect(result.output).toBe("a long report");
 	});
 });
+
+describe("executeCard attached files", () => {
+	beforeEach(() => {
+		mockStream.mockReset();
+	});
+
+	function makeSimpleStream() {
+		return {
+			[Symbol.asyncIterator]: async function* () {
+				yield {
+					type: "content_block_delta",
+					delta: { type: "text_delta", text: "output" },
+				};
+			},
+			finalMessage: vi.fn().mockResolvedValue({
+				content: [{ type: "text", text: "output" }],
+			}),
+		};
+	}
+
+	it("appends the <attached_files> block after the sanitized user input", async () => {
+		mockStream.mockReturnValueOnce(makeSimpleStream());
+		const { executeCard } = await import("./llm.js");
+
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[],
+			3,
+			undefined,
+			undefined,
+			undefined,
+			[{ filename: "spec.md", extractedText: "# Spec isi", truncated: false }],
+		);
+
+		const content = mockStream.mock.calls[0][0].messages[0].content as string;
+		expect(content).toContain("</user_input>");
+		expect(content).toContain('<file name="spec.md" truncated="false">');
+		expect(content).toContain("# Spec isi");
+		expect(content.indexOf("<attached_files")).toBeGreaterThan(
+			content.indexOf("</user_input>"),
+		);
+	});
+
+	it("does not truncate file content via the 10k user-input cap", async () => {
+		mockStream.mockReturnValueOnce(makeSimpleStream());
+		const { executeCard } = await import("./llm.js");
+
+		const bigText = "z".repeat(25_000);
+		await executeCard(
+			"prompt",
+			"intent",
+			[],
+			false,
+			vi.fn(),
+			[],
+			3,
+			undefined,
+			undefined,
+			undefined,
+			[{ filename: "big.md", extractedText: bigText, truncated: false }],
+		);
+
+		const content = mockStream.mock.calls[0][0].messages[0].content as string;
+		expect(content).toContain(bigText);
+	});
+
+	it("leaves the message unchanged when no files are attached", async () => {
+		mockStream.mockReturnValueOnce(makeSimpleStream());
+		const { executeCard } = await import("./llm.js");
+
+		await executeCard("prompt", "intent", [], false, vi.fn());
+
+		const content = mockStream.mock.calls[0][0].messages[0].content as string;
+		expect(content).not.toContain("<attached_files");
+		expect(content).toMatch(/<user_input>[\s\S]*<\/user_input>$/);
+	});
+});

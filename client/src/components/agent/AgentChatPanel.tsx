@@ -15,6 +15,7 @@ import type { FollowUpMessage } from "../../lib/agentFollowUp";
 import type { QueueState } from "../../lib/agentQueue";
 import type { AgentArtifact, AgentBoard, AgentEvent } from "../../types";
 import ArtifactCard from "../ArtifactCard";
+import AttachmentChips from "./AttachmentChips";
 
 // ---- Chat markdown components ----
 
@@ -257,10 +258,15 @@ export default function AgentChatPanel({
 						);
 					}
 					return (
-						<div className="flex justify-end">
+						<div className="flex flex-col items-end gap-1.5">
 							<div className="max-w-[80%] rounded-lg rounded-br-sm bg-primary-600 px-3 py-2 shadow-sm">
 								<p className="text-sm text-white break-words">{userMessage}</p>
 							</div>
+							{board?.files && board.files.length > 0 && (
+								<div className="max-w-[80%]">
+									<AttachmentChips files={board.files} />
+								</div>
+							)}
 						</div>
 					);
 				})()}

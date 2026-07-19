@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock fetch globally for API tests
 const mockFetch = vi.fn();
@@ -418,6 +418,92 @@ describe("Agent API methods", () => {
 			"/api/workspaces/7/agent/boards/1",
 			expect.any(Object),
 		);
+	});
+
+	it("createAgentBoard includes fileIds in the body when provided", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ boardId: 1, explanation: "ok" }),
+		});
+		const { api } = await import("./api");
+
+		await api.createAgentBoard(7, "Summarize the attached files", [1, 2]);
+
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({
+			intent: "Summarize the attached files",
+			fileIds: [1, 2],
+		});
+	});
+
+	it("createAgentBoard omits fileIds when empty or absent", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ boardId: 1, explanation: "ok" }),
+		});
+		const { api } = await import("./api");
+
+		await api.createAgentBoard(7, "No files");
+		await api.createAgentBoard(7, "Empty files", []);
+
+		const firstBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		const secondBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+		expect(firstBody).toEqual({ intent: "No files" });
+		expect(secondBody).toEqual({ intent: "Empty files" });
+	});
+
+	it("uploadAgentFiles sends FormData via POST to the agent files endpoint", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () =>
+				Promise.resolve({
+					files: [
+						{
+							id: 5,
+							filename: "spec.md",
+							mimeType: "text/markdown",
+							sizeBytes: 10,
+							truncated: false,
+							textChars: 10,
+						},
+					],
+				}),
+		});
+		const { api } = await import("./api");
+
+		const file = new File(["# Spec"], "spec.md", { type: "text/markdown" });
+		const result = await api.uploadAgentFiles(7, [file]);
+
+		expect(result.files).toHaveLength(1);
+		expect(result.files[0].id).toBe(5);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/agent/files",
+			expect.objectContaining({ method: "POST" }),
+		);
+		const init = mockFetch.mock.calls[0][1] as RequestInit;
+		expect(init.body).toBeInstanceOf(FormData);
+	});
+
+	it("uploadAgentFiles surfaces the server error message on failure", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 413,
+			json: () => Promise.resolve({ error: "Each file must be under 5MB" }),
+		});
+		const { api } = await import("./api");
+
+		const file = new File(["x"], "big.pdf", { type: "application/pdf" });
+		await expect(api.uploadAgentFiles(7, [file])).rejects.toMatchObject({
+			status: 413,
+			message: "Each file must be under 5MB",
+		});
 	});
 
 	it("getAgentCardOutput returns output for a column slug", async () => {

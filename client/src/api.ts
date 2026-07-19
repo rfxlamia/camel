@@ -5,6 +5,7 @@ import type {
 	AgentArtifact,
 	AgentBoard,
 	AgentCardOutput,
+	AgentFileMeta,
 	Board,
 	Card,
 	Column,
@@ -391,14 +392,44 @@ export const api = {
 		request<void>(`/workspaces/${workspaceId}`, { method: "DELETE" }),
 
 	// ---- Agent ----
-	createAgentBoard: (workspaceId: number, intent: string) =>
+	createAgentBoard: (workspaceId: number, intent: string, fileIds?: number[]) =>
 		request<{ boardId: number; explanation: string }>(
 			`/workspaces/${workspaceId}/agent/boards`,
 			{
 				method: "POST",
-				body: JSON.stringify({ intent }),
+				body: JSON.stringify(
+					fileIds && fileIds.length > 0 ? { intent, fileIds } : { intent },
+				),
 			},
 		),
+	uploadAgentFiles: async (
+		workspaceId: number,
+		files: File[],
+	): Promise<{ files: AgentFileMeta[] }> => {
+		const formData = new FormData();
+		for (const file of files) {
+			formData.append("files", file);
+		}
+		const headers = new Headers();
+		const csrf = readCookie("csrf_token");
+		if (csrf) headers.set("X-CSRF-Token", csrf);
+		const res = await fetch(`/api/workspaces/${workspaceId}/agent/files`, {
+			method: "POST",
+			headers,
+			body: formData,
+		});
+		if (!res.ok) {
+			let message = `Upload failed (${res.status})`;
+			try {
+				const body = await res.json();
+				if (body.error) message = body.error;
+			} catch {
+				// non-JSON error body
+			}
+			throw new ApiError(message, res.status);
+		}
+		return res.json();
+	},
 	sendAgentBoardMessage: (
 		workspaceId: number,
 		boardId: number,

@@ -140,7 +140,30 @@ export interface AgentBoardServiceDeps {
 		}) => void,
 		onThinking?: (text: string) => void,
 		userContent?: string,
+		attachedFiles?: Array<{
+			filename: string;
+			extractedText: string;
+			truncated: boolean;
+		}>,
 	) => Promise<{ output: string; thinking?: string }>;
+
+	attachFilesToBoard?: (data: {
+		boardId: number;
+		workspaceId: number;
+		userId: number;
+		fileIds: number[];
+	}) => Promise<{ attached: number }>;
+
+	getFilesForBoard?: (boardId: number) => Promise<
+		Array<{
+			id: number;
+			filename: string;
+			mimeType: string;
+			sizeBytes: number;
+			extractedText: string;
+			truncated: boolean;
+		}>
+	>;
 
 	insertOutput?: (data: {
 		boardId: number;
@@ -341,10 +364,12 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			workspaceId,
 			userId,
 			intent,
+			fileIds,
 		}: {
 			workspaceId: number;
 			userId: number;
 			intent: string;
+			fileIds?: number[];
 		}) {
 			const classifyResult = await deps.classifyIntent!(intent);
 
@@ -380,6 +405,23 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				originalIntent: intent,
 				status: "pending",
 			});
+
+			// Claim uploaded files for this board. A mismatch means foreign,
+			// reused, or stale ids — reject rather than run with partial context.
+			if (fileIds && fileIds.length > 0 && deps.attachFilesToBoard) {
+				const { attached } = await deps.attachFilesToBoard({
+					boardId: board.id,
+					workspaceId,
+					userId,
+					fileIds,
+				});
+				if (attached !== fileIds.length) {
+					return {
+						status: 400 as const,
+						message: "One or more attached files are invalid",
+					};
+				}
+			}
 
 			// Store conversation thread (user intent + assistant explanation)
 			await deps.insertConversation!({
@@ -533,6 +575,10 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				});
 			};
 
+			// Legacy single-card path still forwards uploaded files for parity
+			// with runPipeline.
+			const attachedFiles = (await deps.getFilesForBoard?.(boardId)) ?? [];
+
 			try {
 				const result = await deps.executeCard!(
 					firstCard.systemPrompt,
@@ -545,6 +591,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					resolvedTools,
 					toolBudget,
 					onToolEvent,
+					undefined,
+					undefined,
+					attachedFiles,
 				);
 
 				clearInterval(batchInterval);
@@ -613,6 +662,10 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
 			const columns = await deps.getColumns!(boardId);
 			if (!columns || columns.length === 0) return;
+
+			// Uploaded reference files — same block for every column so the
+			// whole pipeline sees identical context.
+			const attachedFiles = (await deps.getFilesForBoard?.(boardId)) ?? [];
 
 			const template = getTemplate(board.templateId ?? "");
 			const slugToOutputKey = new Map<string, string>(
@@ -783,6 +836,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 							thinkingBuffer += text;
 						},
 						cardUserContent,
+						attachedFiles,
 					);
 
 					clearInterval(batchInterval);

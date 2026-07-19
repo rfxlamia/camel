@@ -1,6 +1,8 @@
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2, Paperclip } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
+import type { AgentFileMeta } from "../../types";
+import AttachmentChips from "./AttachmentChips";
 
 const EXAMPLE_PROMPTS = [
 	"Competitive landscape for EV scooters in Southeast Asia",
@@ -16,6 +18,10 @@ interface AgentComposerProps {
 	sendDisabled: boolean;
 	error: string | null;
 	onResetError: () => void;
+	attachments: AgentFileMeta[];
+	uploadingFiles: boolean;
+	onAttachFiles: (files: File[]) => void;
+	onRemoveAttachment: (id: number) => void;
 }
 
 /**
@@ -31,8 +37,20 @@ export default function AgentComposer({
 	sendDisabled,
 	error,
 	onResetError,
+	attachments,
+	uploadingFiles,
+	onAttachFiles,
+	onRemoveAttachment,
 }: AgentComposerProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	const handleFilesPicked = (list: FileList | null) => {
+		if (!list || list.length === 0) return;
+		onAttachFiles(Array.from(list));
+		// Allow re-picking the same file after a removal.
+		if (fileInputRef.current) fileInputRef.current.value = "";
+	};
 
 	// Focus the composer on mount — it's the single focal input on the page.
 	useEffect(() => {
@@ -113,7 +131,39 @@ export default function AgentComposer({
 							placeholder="Research the competitive landscape for EV scooters in Southeast Asia…"
 							className="block w-full resize-none bg-transparent px-3 pt-2 text-base text-neutral-900 placeholder:text-neutral-400 focus:outline-none disabled:text-neutral-400"
 						/>
+						{(attachments.length > 0 || uploadingFiles) && (
+							<div className="px-3 pb-1.5">
+								<AttachmentChips
+									files={attachments}
+									onRemove={onRemoveAttachment}
+								/>
+								{uploadingFiles && (
+									<p className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-500">
+										<Loader2 size={12} className="animate-spin" aria-hidden />
+										Uploading…
+									</p>
+								)}
+							</div>
+						)}
 						<div className="flex items-center justify-between gap-3 px-1 pt-1">
+							<input
+								ref={fileInputRef}
+								type="file"
+								multiple
+								accept=".md,.markdown,.pdf"
+								className="hidden"
+								onChange={(e) => handleFilesPicked(e.target.files)}
+							/>
+							<button
+								type="button"
+								onClick={() => fileInputRef.current?.click()}
+								disabled={inputDisabled || uploadingFiles}
+								aria-label="Attach markdown or PDF files"
+								title="Attach .md or .pdf files"
+								className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								<Paperclip size={15} aria-hidden />
+							</button>
 							<span className="hidden text-xs text-neutral-400 sm:block">
 								<kbd className="rounded border border-neutral-200 bg-neutral-100 px-1 py-px font-sans">
 									Enter

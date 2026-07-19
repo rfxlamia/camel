@@ -139,6 +139,10 @@ export default function AgentPage() {
 				sendDisabled={chat.sendDisabled}
 				error={error}
 				onResetError={handleResetError}
+				attachments={chat.attachments}
+				uploadingFiles={chat.uploadingFiles}
+				onAttachFiles={(files) => void chat.attachFiles(files)}
+				onRemoveAttachment={chat.removeAttachment}
 			/>
 		);
 	}

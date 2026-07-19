@@ -7,6 +7,7 @@ import {
 	deleteCardsForBoard,
 	deleteOutputsForBoard,
 	getToolTrace,
+	parseFileIds,
 	realArtifactDeps,
 	resolveMessageAction,
 	runInsertColumns,
@@ -65,6 +66,38 @@ describe("resolveMessageAction (pure payload detection)", () => {
 		expect(resolveMessageAction({ action: "bogus" })).toEqual({
 			kind: "invalid",
 		});
+	});
+});
+
+describe("parseFileIds (body validation)", () => {
+	it("returns empty array for missing / null fileIds", () => {
+		expect(parseFileIds(undefined)).toEqual({ ok: true, fileIds: [] });
+		expect(parseFileIds(null)).toEqual({ ok: true, fileIds: [] });
+	});
+
+	it("accepts an array of positive integers", () => {
+		expect(parseFileIds([1, 2, 3])).toEqual({ ok: true, fileIds: [1, 2, 3] });
+	});
+
+	it("rejects non-array values", () => {
+		expect(parseFileIds("x").ok).toBe(false);
+		expect(parseFileIds(7).ok).toBe(false);
+		expect(parseFileIds({}).ok).toBe(false);
+	});
+
+	it("rejects non-integer, negative, and zero entries", () => {
+		expect(parseFileIds([1.5]).ok).toBe(false);
+		expect(parseFileIds([-1]).ok).toBe(false);
+		expect(parseFileIds([0]).ok).toBe(false);
+		expect(parseFileIds(["1"]).ok).toBe(false);
+	});
+
+	it("rejects duplicates", () => {
+		expect(parseFileIds([1, 1]).ok).toBe(false);
+	});
+
+	it("rejects more than 10 entries", () => {
+		expect(parseFileIds([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]).ok).toBe(false);
 	});
 });
 

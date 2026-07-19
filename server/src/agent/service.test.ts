@@ -41,7 +41,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("board isolation", () => {
 			.executeTakeFirstOrThrow();
 		const humanColumn = await db
 			.insertInto("columns")
-			.values({ title: "Human Column", position: 1000, workspace_id: workspace.id })
+			.values({
+				title: "Human Column",
+				position: 1000,
+				workspace_id: workspace.id,
+			})
 			.returning("id")
 			.executeTakeFirstOrThrow();
 		const agentColumn = await db
@@ -60,9 +64,15 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("board isolation", () => {
 			expect(result.map((c) => c.id)).toEqual([humanColumn.id]);
 			expect(result.map((c) => c.id)).not.toContain(agentColumn.id);
 		} finally {
-			await db.deleteFrom("columns").where("id", "in", [humanColumn.id, agentColumn.id]).execute();
+			await db
+				.deleteFrom("columns")
+				.where("id", "in", [humanColumn.id, agentColumn.id])
+				.execute();
 			await db.deleteFrom("agent_boards").where("id", "=", board.id).execute();
-			await db.deleteFrom("workspaces").where("id", "=", workspace.id).execute();
+			await db
+				.deleteFrom("workspaces")
+				.where("id", "=", workspace.id)
+				.execute();
 			await db.deleteFrom("users").where("id", "=", user.id).execute();
 		}
 	});
@@ -309,6 +319,9 @@ describe("triggerExecution", () => {
 			expect.any(Array),
 			expect.any(Number),
 			expect.any(Function),
+			undefined,
+			undefined,
+			expect.any(Array),
 		);
 		expect(insertOutput).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -3209,5 +3222,112 @@ describe("status-report missing-period clarification (T5)", () => {
 			message: expect.stringMatching(/period/i),
 		});
 		expect(updateBoard).not.toHaveBeenCalled();
+	});
+});
+
+// ---- Attached files (agent file upload) ----
+
+describe("attached files", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("createBoard attaches uploaded files and succeeds when all ids claim", async () => {
+		const attachFilesToBoard = vi.fn(async () => ({ attached: 2 }));
+		const service = createAgentBoardService({
+			classifyIntent: vi.fn(async () => ({
+				templateId: "research-report",
+				explanation: "ok",
+			})),
+			insertBoard: vi.fn(async () => ({ id: 7 })),
+			insertConversation: vi.fn(async () => {}),
+			insertColumns: vi.fn(async () => {}),
+			publishEvent: vi.fn(),
+			attachFilesToBoard,
+		});
+
+		const result = await service.createBoard({
+			workspaceId: 1,
+			userId: 1,
+			intent: "riset dari dokumen terlampir",
+			fileIds: [11, 12],
+		});
+
+		expect(attachFilesToBoard).toHaveBeenCalledWith({
+			boardId: 7,
+			workspaceId: 1,
+			userId: 1,
+			fileIds: [11, 12],
+		});
+		expect(result).toMatchObject({ boardId: 7 });
+	});
+
+	it("createBoard returns 400 when attach count mismatches (foreign/stale ids)", async () => {
+		const service = createAgentBoardService({
+			classifyIntent: vi.fn(async () => ({
+				templateId: "research-report",
+				explanation: "ok",
+			})),
+			insertBoard: vi.fn(async () => ({ id: 7 })),
+			insertConversation: vi.fn(async () => {}),
+			insertColumns: vi.fn(async () => {}),
+			publishEvent: vi.fn(),
+			attachFilesToBoard: vi.fn(async () => ({ attached: 1 })),
+		});
+
+		const result = await service.createBoard({
+			workspaceId: 1,
+			userId: 1,
+			intent: "riset dari dokumen terlampir",
+			fileIds: [11, 999],
+		});
+
+		expect(result).toMatchObject({
+			status: 400,
+			message: expect.stringContaining("invalid"),
+		});
+	});
+
+	it("runPipeline forwards getFilesForBoard result as the attachedFiles arg of every executeCard call", async () => {
+		const files = [
+			{
+				id: 1,
+				filename: "spec.md",
+				mimeType: "text/markdown",
+				sizeBytes: 100,
+				extractedText: "# Spec",
+				truncated: false,
+			},
+		];
+		const { service, deps } = buildService({
+			getFilesForBoard: vi.fn(async () => files),
+		});
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const calls = (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls;
+		expect(calls).toHaveLength(2);
+		for (const call of calls) {
+			expect(call[call.length - 1]).toEqual(files);
+		}
+	});
+
+	it("runPipeline passes an empty attachedFiles array when the dep is absent", async () => {
+		const { service, deps } = buildService();
+
+		const promise = service.runPipeline({ boardId: 1, workspaceId: 1 });
+		await vi.runAllTimersAsync();
+		await promise;
+
+		const calls = (deps.executeCard as ReturnType<typeof vi.fn>).mock.calls;
+		for (const call of calls) {
+			expect(call[call.length - 1]).toEqual([]);
+		}
 	});
 });

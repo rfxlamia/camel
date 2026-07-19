@@ -68,3 +68,19 @@ CREATE TABLE IF NOT EXISTS agent_artifacts (
   UNIQUE (board_id)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_artifacts_board ON agent_artifacts(board_id);
+
+CREATE TABLE IF NOT EXISTS agent_files (
+  id             SERIAL PRIMARY KEY,
+  workspace_id   INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  board_id       INTEGER REFERENCES agent_boards(id) ON DELETE CASCADE, -- NULL until attached
+  uploaded_by    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  filename       TEXT NOT NULL,
+  mime_type      TEXT NOT NULL CHECK (mime_type IN ('text/markdown', 'application/pdf')),
+  size_bytes     INTEGER NOT NULL,
+  content        BYTEA NOT NULL,
+  extracted_text TEXT NOT NULL,
+  truncated      BOOLEAN NOT NULL DEFAULT false,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_agent_files_board ON agent_files(board_id);
+CREATE INDEX IF NOT EXISTS idx_agent_files_uploader ON agent_files(uploaded_by);
