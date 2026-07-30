@@ -1,6 +1,11 @@
 import type { Selectable } from "kysely";
 import type { DBExecutor } from "../db/kysely.js";
-import type { ChatAttachments, ChatMessages, ChatThreads } from "../db/types.js";
+import type {
+	ChatAttachments,
+	ChatMessages,
+	ChatThreads,
+	Json,
+} from "../db/types.js";
 import type {
 	ChatAttachment,
 	ChatAttachmentFormat,
@@ -172,6 +177,103 @@ export function createChatService(db: DBExecutor) {
 				.where("id", "=", threadId)
 				.where("title", "=", "Untitled")
 				.execute();
+		},
+
+		async getMessages(threadId: number): Promise<ChatMessage[]> {
+			const rows = await db
+				.selectFrom("chat_messages")
+				.selectAll()
+				.where("thread_id", "=", threadId)
+				.orderBy("created_at", "asc")
+				.orderBy("id", "asc")
+				.execute();
+			return rows.map(mapMessage);
+		},
+
+		async getMessage(
+			userId: number,
+			messageId: number,
+		): Promise<ChatMessage | null> {
+			const row = await db
+				.selectFrom("chat_messages as m")
+				.innerJoin("chat_threads as t", "t.id", "m.thread_id")
+				.selectAll("m")
+				.where("m.id", "=", messageId)
+				.where("t.user_id", "=", userId)
+				.executeTakeFirst();
+			return row ? mapMessage(row) : null;
+		},
+
+		async deleteMessage(messageId: number): Promise<void> {
+			await db
+				.deleteFrom("chat_messages")
+				.where("id", "=", messageId)
+				.execute();
+		},
+
+		async updateMessage(
+			messageId: number,
+			params: {
+				content: string;
+				thinking?: string | null;
+				toolTrace?: Json | null;
+			},
+		): Promise<ChatMessage> {
+			const row = await db
+				.updateTable("chat_messages")
+				.set({
+					content: params.content,
+					thinking: params.thinking ?? null,
+					tool_trace: params.toolTrace ?? null,
+				})
+				.where("id", "=", messageId)
+				.returningAll()
+				.executeTakeFirstOrThrow();
+			return mapMessage(row);
+		},
+
+		async getAttachmentsForMessages(
+			messageIds: number[],
+		): Promise<Map<number, ChatAttachment[]>> {
+			const map = new Map<number, ChatAttachment[]>();
+			if (messageIds.length === 0) return map;
+
+			const rows = await db
+				.selectFrom("chat_attachments")
+				.selectAll()
+				.where("message_id", "in", messageIds)
+				.orderBy("id", "asc")
+				.execute();
+
+			for (const row of rows) {
+				const attachment = mapAttachment(row);
+				const list = map.get(attachment.messageId) ?? [];
+				list.push(attachment);
+				map.set(attachment.messageId, list);
+			}
+			return map;
+		},
+
+		async getAttachment(
+			userId: number,
+			attachmentId: number,
+		): Promise<ChatAttachment | null> {
+			const row = await db
+				.selectFrom("chat_attachments as a")
+				.innerJoin("chat_messages as m", "m.id", "a.message_id")
+				.innerJoin("chat_threads as t", "t.id", "m.thread_id")
+				.select([
+					"a.id",
+					"a.message_id",
+					"a.filename",
+					"a.format",
+					"a.content",
+					"a.created_at",
+				])
+				.where("a.id", "=", attachmentId)
+				.where("t.user_id", "=", userId)
+				.executeTakeFirst();
+			return row ? mapAttachment(row) : null;
 		},
 	};
 }

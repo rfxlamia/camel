@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import { createAgentRouter } from "./agent/routes.js";
+import { createChatRouter } from "./chat/routes.js";
 import {
 	cleanupExpiredSessions,
 	createAuthRateLimiter,
@@ -50,7 +51,9 @@ app.use(cookieParser());
 // 30s request timeout for the STANDARD board API only.
 // Skip agent endpoints (buffered, long-running) and the SSE stream.
 const isTimeoutExempt = (path: string) =>
-	path.includes("/agent/") || path.endsWith("/events/stream");
+	path.includes("/agent/") ||
+	path.includes("/chat/") ||
+	path.endsWith("/events/stream");
 
 app.use((req, res, next) => {
 	if (!req.path.startsWith("/api/")) return next();
@@ -110,6 +113,7 @@ app.use("/api/auth", createOAuthBridgeRouter()); // camel_session bridge
 app.use("/api/auth", oauthRouter); // set-username, set-password (outside email gate)
 app.use("/api/auth", createAuthRouter(delegatingLimiter));
 app.use("/api", api);
+app.use(createChatRouter());
 app.use("/api", createAgentRouter());
 app.use("/api", ticketIntakeRouter);
 
