@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockSendMessage = vi.fn();
 const mockRetryMessage = vi.fn();
+const mockGetMessages = vi.fn();
 
 vi.mock("../api", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../api")>();
@@ -15,6 +16,7 @@ vi.mock("../api", async (importOriginal) => {
 				...actual.api.chat,
 				sendMessage: (...a: unknown[]) => mockSendMessage(...a),
 				retryMessage: (...a: unknown[]) => mockRetryMessage(...a),
+				getMessages: (...a: unknown[]) => mockGetMessages(...a),
 			},
 		},
 	};
@@ -34,6 +36,8 @@ describe("useChatStream", () => {
 	beforeEach(() => {
 		mockSendMessage.mockReset();
 		mockRetryMessage.mockReset();
+		mockGetMessages.mockReset();
+		mockGetMessages.mockResolvedValue([]);
 	});
 
 	afterEach(() => vi.clearAllMocks());

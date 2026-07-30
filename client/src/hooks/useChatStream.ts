@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ApiError, api } from "../api";
 import { deriveChatToolTrace } from "../lib/chatToolTrace";
 import {
@@ -9,6 +9,7 @@ import {
 } from "../lib/agentQueue";
 import type {
 	ChatAttachment,
+	ChatMessage as ApiChatMessage,
 	ChatMessageRole,
 	ChatToolEvent,
 	StreamEvent,
@@ -47,6 +48,17 @@ function queueReducer(state: QueueState, action: QueueAction): QueueState {
 }
 
 const OVERFLOW_MESSAGE = "Thread too long, start a new chat";
+
+function mapApiMessage(message: ApiChatMessage): ChatStreamMessage {
+	return {
+		id: message.id,
+		role: message.role,
+		content: message.content,
+		thinking: message.thinking ?? null,
+		toolTrace: message.toolTrace ?? [],
+		attachments: message.attachments ?? [],
+	};
+}
 
 type TurnWaiter = {
 	message: string;
@@ -111,9 +123,27 @@ function removeStreamingAssistant(
 	return next;
 }
 
+function removeUnsavedUserMessage(
+	messages: ChatStreamMessage[],
+	content: string,
+): ChatStreamMessage[] {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (
+			message.role === "user" &&
+			message.id === undefined &&
+			message.content === content
+		) {
+			return [...messages.slice(0, i), ...messages.slice(i + 1)];
+		}
+	}
+	return messages;
+}
+
 export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 	const [messages, setMessages] = useState<ChatStreamMessage[]>([]);
 	const [overflowError, setOverflowError] = useState<string | null>(null);
+	const [overflowMessage, setOverflowMessage] = useState<string | null>(null);
 	const [canRetry, setCanRetry] = useState(true);
 	const [queueState, dispatch] = useReducer(queueReducer, initialQueue);
 	const queueStateRef = useRef(queueState);
@@ -129,6 +159,27 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 			addUserMessage?: boolean;
 		}) => Promise<void>
 	>(async () => undefined);
+
+	useEffect(() => {
+		if (!threadId) return;
+
+		let cancelled = false;
+		queueStateRef.current = initialQueue;
+		dispatch({ type: "reset" });
+		setOverflowError(null);
+		setOverflowMessage(null);
+		setCanRetry(true);
+		setMessages([]);
+
+		void api.chat.getMessages(threadId).then((apiMessages) => {
+			if (cancelled) return;
+			setMessages(apiMessages.map(mapApiMessage));
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [threadId]);
 
 	const drainQueue = useCallback(() => {
 		const settleResult = settle(queueStateRef.current);
@@ -174,6 +225,7 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 		}) => {
 			const isRetry = retryMessageId !== undefined;
 			setOverflowError(null);
+			setOverflowMessage(null);
 			setCanRetry(true);
 
 			if (!isRetry && message && addUserMessage) {
@@ -240,23 +292,25 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 										}),
 									);
 									break;
-								case "error":
-									setMessages((prev) => {
-										const withoutPartial =
-											removeStreamingAssistant(prev);
-										return [
-											...withoutPartial,
+								case "error": {
+									const errorMessage = event.message;
+									const retryable = event.retryable !== false;
+									setCanRetry(retryable);
+									void api.chat.getMessages(threadId).then((apiMessages) => {
+										const lastUser = [...apiMessages]
+											.reverse()
+											.find((m) => m.role === "user");
+										setMessages([
+											...apiMessages.map(mapApiMessage),
 											{
 												role: "error",
-												content: event.message,
-												retryMessageId: isRetry
-													? retryMessageId
-													: undefined,
+												content: errorMessage,
+												retryMessageId: lastUser?.id,
 											},
-										];
+										]);
 									});
-									setCanRetry(event.retryable !== false);
 									break;
+								}
 							}
 						},
 					},
@@ -276,8 +330,15 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 
 				if (status === 413) {
 					setOverflowError(OVERFLOW_MESSAGE);
+					setOverflowMessage(message ?? "");
 					setCanRetry(false);
-					setMessages((prev) => removeStreamingAssistant(prev));
+					setMessages((prev) => {
+						let next = removeStreamingAssistant(prev);
+						if (message && addUserMessage) {
+							next = removeUnsavedUserMessage(next, message);
+						}
+						return next;
+					});
 				} else {
 					setMessages((prev) => {
 						const withoutPartial = removeStreamingAssistant(prev);
@@ -317,6 +378,7 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 	);
 
 	const retry = useCallback(async (messageId: number) => {
+		setMessages((prev) => prev.filter((m) => m.role !== "error"));
 		void executeTurnRef.current({
 			retryMessageId: messageId,
 			addUserMessage: false,
@@ -337,16 +399,53 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 			await acquireTurn(trimmed);
 
 			let latest = "";
-			await executeTurnRef.current({
-				message: trimmed,
-				abortSignal,
-				addUserMessage: false,
-				onToken: (text) => {
-					latest = text;
-				},
-			});
+			let lastYielded = "";
+			const updates: string[] = [];
+			let resolveWait: (() => void) | null = null;
+			let turnFinished = false;
 
-			yield { content: [{ type: "text", text: latest }] };
+			const notify = () => {
+				resolveWait?.();
+				resolveWait = null;
+			};
+
+			const onToken = (text: string) => {
+				latest = text;
+				updates.push(text);
+				notify();
+			};
+
+			const turnPromise = executeTurnRef
+				.current({
+					message: trimmed,
+					abortSignal,
+					addUserMessage: true,
+					onToken,
+				})
+				.finally(() => {
+					turnFinished = true;
+					notify();
+				});
+
+			while (!turnFinished || updates.length > 0) {
+				while (updates.length > 0) {
+					const text = updates.shift()!;
+					if (text !== lastYielded) {
+						lastYielded = text;
+						yield { content: [{ type: "text", text }] };
+					}
+				}
+				if (turnFinished) break;
+				await new Promise<void>((resolve) => {
+					resolveWait = resolve;
+				});
+			}
+
+			await turnPromise;
+
+			if (latest !== lastYielded) {
+				yield { content: [{ type: "text", text: latest }] };
+			}
 		},
 		[acquireTurn],
 	);
@@ -356,6 +455,7 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 		send,
 		retry,
 		overflowError,
+		overflowMessage,
 		canRetry,
 		isStreaming: queueState.isGenerating,
 		runModelTurn,

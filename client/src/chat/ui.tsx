@@ -1,28 +1,67 @@
 import {
 	ComposerPrimitive,
-	MessagePrimitive,
 	ThreadPrimitive,
+	unstable_useComposerInput,
 } from "@assistant-ui/react";
+import { useEffect } from "react";
+import { ChatMessage } from "../components/chat/ChatMessage";
+import { useChatStreamContext } from "./ChatRuntimeProvider";
+
+function ChatMessageList() {
+	const { messages, retry, canRetry } = useChatStreamContext();
+
+	return (
+		<div className="space-y-4">
+			{messages.map((message, index) => (
+				<ChatMessage
+					key={message.id ?? `msg-${index}`}
+					role={message.role}
+					content={message.content}
+					thinking={message.thinking ?? null}
+					toolTrace={message.toolTrace ?? []}
+					attachments={message.attachments ?? []}
+					canRetry={message.role === "error" ? canRetry : undefined}
+					onRetry={
+						message.role === "error" && message.retryMessageId != null
+							? () => void retry(message.retryMessageId!)
+							: undefined
+					}
+				/>
+			))}
+		</div>
+	);
+}
 
 export function LocalThread() {
 	return (
 		<ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
 			<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-4 py-3">
-				<ThreadPrimitive.Messages>
-					{() => (
-						<MessagePrimitive.Root className="mb-4">
-							<MessagePrimitive.Parts />
-						</MessagePrimitive.Root>
-					)}
-				</ThreadPrimitive.Messages>
+				<ChatMessageList />
 			</ThreadPrimitive.Viewport>
 		</ThreadPrimitive.Root>
 	);
 }
 
 export function LocalComposer() {
+	const { overflowError, overflowMessage } = useChatStreamContext();
+	const { setText } = unstable_useComposerInput();
+
+	useEffect(() => {
+		if (overflowMessage) {
+			setText(overflowMessage);
+		}
+	}, [overflowMessage, setText]);
+
 	return (
 		<ComposerPrimitive.Root className="border-t border-neutral-200 bg-white px-4 py-3">
+			{overflowError && (
+				<div
+					role="alert"
+					className="mb-2 rounded-lg border border-error-200 bg-error-50 px-3 py-2 text-sm text-error-900"
+				>
+					{overflowError}
+				</div>
+			)}
 			<div className="flex items-end gap-2">
 				<ComposerPrimitive.Input
 					rows={1}

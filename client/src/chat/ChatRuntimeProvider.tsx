@@ -1,7 +1,6 @@
 import {
 	AssistantRuntimeProvider,
 	useLocalRuntime,
-	useRemoteThreadListRuntime,
 } from "@assistant-ui/core/react";
 import {
 	createContext,
@@ -9,27 +8,22 @@ import {
 	useMemo,
 	type ReactNode,
 } from "react";
-import { useChatStream } from "../hooks/useChatStream";
+import {
+	useChatStream,
+	type UseChatStreamOptions,
+} from "../hooks/useChatStream";
 import { createModelAdapter } from "./modelAdapter";
-import { threadListAdapter } from "./threadListAdapter";
 
-type ChatStreamConfig = {
-	threadId: number;
-	workspaceId?: number;
-};
+type ChatStreamContextValue = ReturnType<typeof useChatStream>;
 
-const ChatStreamConfigContext = createContext<ChatStreamConfig>({
-	threadId: 0,
-});
+const ChatStreamContext = createContext<ChatStreamContextValue | null>(null);
 
-function useChatThreadRuntime() {
-	const { threadId, workspaceId } = useContext(ChatStreamConfigContext);
-	const chatStream = useChatStream({ threadId, workspaceId });
-	const adapter = useMemo(
-		() => createModelAdapter(chatStream),
-		[chatStream],
-	);
-	return useLocalRuntime(adapter);
+export function useChatStreamContext(): ChatStreamContextValue {
+	const ctx = useContext(ChatStreamContext);
+	if (!ctx) {
+		throw new Error("useChatStreamContext must be used within ChatRuntimeProvider");
+	}
+	return ctx;
 }
 
 type ChatRuntimeProviderProps = {
@@ -38,30 +32,41 @@ type ChatRuntimeProviderProps = {
 	workspaceId?: number;
 };
 
+function ChatThreadRuntime({
+	threadId,
+	workspaceId,
+	children,
+}: UseChatStreamOptions & { children: ReactNode }) {
+	const chatStream = useChatStream({ threadId, workspaceId });
+	const adapter = useMemo(
+		() => createModelAdapter(chatStream),
+		[chatStream],
+	);
+	const runtime = useLocalRuntime(adapter);
+
+	return (
+		<ChatStreamContext.Provider value={chatStream}>
+			<AssistantRuntimeProvider runtime={runtime}>
+				{children}
+			</AssistantRuntimeProvider>
+		</ChatStreamContext.Provider>
+	);
+}
+
 export function ChatRuntimeProvider({
 	children,
 	threadId,
 	workspaceId,
 }: ChatRuntimeProviderProps) {
-	const config = useMemo(
-		() => ({
-			threadId: Number(threadId) || 0,
-			workspaceId,
-		}),
-		[threadId, workspaceId],
-	);
+	const parsedThreadId = Number(threadId) || 0;
 
-	const runtime = useRemoteThreadListRuntime({
-		runtimeHook: useChatThreadRuntime,
-		adapter: threadListAdapter,
-		threadId,
-	});
+	if (!parsedThreadId) {
+		return <>{children}</>;
+	}
 
 	return (
-		<ChatStreamConfigContext.Provider value={config}>
-			<AssistantRuntimeProvider runtime={runtime}>
-				{children}
-			</AssistantRuntimeProvider>
-		</ChatStreamConfigContext.Provider>
+		<ChatThreadRuntime threadId={parsedThreadId} workspaceId={workspaceId}>
+			{children}
+		</ChatThreadRuntime>
 	);
 }
