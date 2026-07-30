@@ -15,16 +15,14 @@
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import {
-	createSafeSystemPrompt,
 	detectPromptInjection,
 	escapeXml,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
 } from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
-import { toAnthropicToolDefs } from "./tools/registry.js";
-import { countSearchResults } from "./tools/trace.js";
 import type { Tool, ToolEvent } from "./tools/types.js";
+import { runChatTurn } from "../chat/run-chat-turn.js";
 
 // ---------------------------------------------------------------------------
 // Client singleton — lazy-initialized on first call
@@ -679,8 +677,6 @@ export async function executeCard(
 	onThinking?: (text: string) => void,
 	userContent?: string,
 ): Promise<ExecuteResult> {
-	const client = getClient();
-
 	// Security: Check for prompt injection attempts (LOG AND CONTINUE, don't hard-fail)
 	//
 	// This is intentionally a soft, logging-only layer — NOT a blocking control.
@@ -700,9 +696,6 @@ export async function executeCard(
 		original_intent: intent,
 	});
 
-	// Security: Add security constraints to system prompt
-	const safeSystemPrompt = createSafeSystemPrompt(rendered);
-
 	// Build the user message with any previous outputs
 	let messageContent = userContent ?? intent;
 	if (previousOutputs.length > 0) {
@@ -712,279 +705,13 @@ export async function executeCard(
 			"\n</previous_outputs>";
 	}
 
-	// Security: Sanitize user input
-	const sanitizedContent = sanitizeUserInput(messageContent);
-
-	let result: ExecuteResult;
-
-	// Empty tools → legacy single-shot path (no tools param)
-	if (tools.length === 0) {
-		result = await executeCardSingleShot(
-			client,
-			safeSystemPrompt,
-			sanitizedContent,
-			onToken,
-			onThinking,
-		);
-	} else {
-		result = await executeCardWithTools(
-			client,
-			safeSystemPrompt,
-			sanitizedContent,
-			tools,
-			toolBudget,
-			onToken,
-			onToolEvent,
-			onThinking,
-		);
-	}
-
-	// Security: Sanitize LLM output to prevent leakage
-	return {
-		...result,
-		output: sanitizeLLMOutput(result.output),
-	};
-}
-
-async function executeCardSingleShot(
-	client: Anthropic,
-	system: string,
-	userContent: string,
-	onToken: (token: string) => void,
-	onThinking?: (text: string) => void,
-): Promise<ExecuteResult> {
-	const stream = client.messages.stream({
-		model: MODEL,
-		// Extended thinking enabled for every card (design: all columns).
-		// MAX_TOKENS = OUTPUT_BUDGET + THINKING_BUDGET keeps output headroom
-		// >=16384 so stop_reason !== max_tokens on long reports (anti-truncation).
-		max_tokens: MAX_TOKENS,
-		thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
-		system,
-		messages: [{ role: "user", content: userContent }],
+	return runChatTurn({
+		systemPrompt: rendered,
+		messages: [{ role: "user", content: messageContent }],
+		tools,
+		toolBudget,
+		onToken,
+		onThinking,
+		onToolEvent,
 	});
-
-	let output = "";
-	let thinking = "";
-
-	for await (const event of stream) {
-		if (
-			event.type === "content_block_delta" &&
-			event.delta.type === "text_delta"
-		) {
-			const text = event.delta.text;
-			output += text;
-			onToken(text);
-		}
-		if (
-			event.type === "content_block_delta" &&
-			event.delta.type === "thinking_delta"
-		) {
-			onThinking?.(event.delta.thinking);
-		}
-	}
-
-	const finalMessage = await stream.finalMessage();
-
-	for (const block of finalMessage.content) {
-		if (block.type === "thinking") {
-			thinking = block.thinking;
-		}
-	}
-
-	return { output, thinking: thinking || undefined };
-}
-
-type AnthropicMessage = Anthropic.MessageParam;
-
-function toolCallQuery(input: unknown): string | undefined {
-	if (!input || typeof input !== "object") return undefined;
-	const obj = input as Record<string, unknown>;
-	if (typeof obj.query === "string") return obj.query;
-	if (typeof obj.filename === "string") return obj.filename;
-	if (typeof obj.content === "string") {
-		const trimmed = obj.content.trim();
-		if (!trimmed) return undefined;
-		const preview = trimmed.slice(0, 60);
-		return preview.length < trimmed.length ? `${preview}…` : preview;
-	}
-	return undefined;
-}
-
-function toolResultCount(
-	toolName: string,
-	content: string,
-): number | undefined {
-	if (toolName === "create_file") return undefined;
-	return countSearchResults(content);
-}
-
-async function executeCardWithTools(
-	client: Anthropic,
-	system: string,
-	userContent: string,
-	tools: Tool[],
-	toolBudget: number,
-	onToken: (token: string) => void,
-	onToolEvent?: (e: ToolEvent) => void,
-	onThinking?: (text: string) => void,
-): Promise<ExecuteResult> {
-	const toolsByName = new Map(tools.map((t) => [t.name, t]));
-	const messages: AnthropicMessage[] = [{ role: "user", content: userContent }];
-	let remainingBudget = toolBudget;
-	let thinking: string | undefined;
-	let lastTurnText = "";
-	// Executions + budget refusals + final text turn(s); generous cap avoids
-	// empty-output pipeline failure when the model retries past budget.
-	const maxIterations = toolBudget * 5 + 10;
-
-	for (let iteration = 0; iteration < maxIterations; iteration++) {
-		const stream = client.messages.stream({
-			model: MODEL,
-			// Extended thinking + budgeted max for tool path too (same math as single-shot).
-			max_tokens: MAX_TOKENS,
-			thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
-			system,
-			messages,
-			tools: toAnthropicToolDefs(tools),
-		});
-
-		let turnText = "";
-		lastTurnText = "";
-
-		for await (const event of stream) {
-			if (
-				event.type === "content_block_delta" &&
-				event.delta.type === "text_delta"
-			) {
-				turnText += event.delta.text;
-				onToken(event.delta.text); // live during the turn (incl. pre-tool text), not buffered to final only
-			}
-			if (
-				event.type === "content_block_delta" &&
-				event.delta.type === "thinking_delta"
-			) {
-				onThinking?.(event.delta.thinking);
-			}
-		}
-
-		const finalMessage = await stream.finalMessage();
-		lastTurnText = turnText;
-
-		for (const block of finalMessage.content) {
-			if (block.type === "thinking") {
-				thinking = block.thinking;
-			}
-		}
-
-		if (finalMessage.stop_reason === "tool_use") {
-			if (turnText && onToolEvent) {
-				onToolEvent({ phase: "reasoning", text: turnText });
-			}
-
-			messages.push({
-				role: "assistant",
-				content: finalMessage.content,
-			});
-
-			const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-			for (const block of finalMessage.content) {
-				if (block.type !== "tool_use") continue;
-
-				const query =
-					typeof block.input === "object" && block.input !== null
-						? toolCallQuery(block.input)
-						: undefined;
-
-				if (remainingBudget > 0) {
-					remainingBudget--;
-					const tool = toolsByName.get(block.name);
-
-					onToolEvent?.({
-						phase: "started",
-						toolName: block.name,
-						query,
-					});
-
-					if (!tool) {
-						const content = `Unknown tool: ${block.name}`;
-						onToolEvent?.({
-							phase: "failed",
-							toolName: block.name,
-							query,
-							errorCode: "UNKNOWN_TOOL",
-						});
-						toolResults.push({
-							type: "tool_result",
-							tool_use_id: block.id,
-							content,
-							is_error: true,
-						});
-						continue;
-					}
-
-					const result = await tool.execute(
-						block.input as Record<string, unknown>,
-					);
-
-					if (result.ok) {
-						const resultCount = toolResultCount(block.name, result.content);
-						onToolEvent?.({
-							phase: "result",
-							toolName: block.name,
-							query,
-							resultCount,
-						});
-						toolResults.push({
-							type: "tool_result",
-							tool_use_id: block.id,
-							content: result.content,
-						});
-					} else {
-						onToolEvent?.({
-							phase: "failed",
-							toolName: block.name,
-							query,
-							errorCode: result.errorCode,
-						});
-						toolResults.push({
-							type: "tool_result",
-							tool_use_id: block.id,
-							content: result.content,
-							is_error: true,
-						});
-					}
-				} else {
-					onToolEvent?.({
-						phase: "failed",
-						toolName: block.name,
-						query,
-						errorCode: "BUDGET_EXCEEDED",
-					});
-					toolResults.push({
-						type: "tool_result",
-						tool_use_id: block.id,
-						content: "search limit reached",
-						is_error: true,
-					});
-				}
-			}
-
-			messages.push({ role: "user", content: toolResults });
-			continue;
-		}
-
-		// Note: text deltas (incl final turn) are streamed live via onToken above;
-		// no re-emit of full turnText here (would duplicate). Passback of assistant
-		// content below is kept RAW so signed thinking blocks survive tool-loop turns.
-		return { output: turnText, thinking };
-	}
-
-	return {
-		output:
-			lastTurnText ||
-			"The agent could not complete this step within the tool loop limit.",
-		thinking,
-	};
 }
