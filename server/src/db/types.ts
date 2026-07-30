@@ -119,6 +119,33 @@ export interface BaVerifications {
   value: string;
 }
 
+export interface ChatAttachments {
+  content: string;
+  created_at: Generated<Timestamp>;
+  filename: string;
+  format: string;
+  id: Generated<number>;
+  message_id: number;
+}
+
+export interface ChatMessages {
+  content: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  role: string;
+  thinking: string | null;
+  thread_id: number;
+  tool_trace: Json | null;
+}
+
+export interface ChatThreads {
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  title: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  user_id: number;
+}
+
 export interface CardAssignees {
   card_id: number;
   user_id: number;
@@ -252,6 +279,9 @@ export interface DB {
   ba_accounts: BaAccounts;
   ba_sessions: BaSessions;
   ba_verifications: BaVerifications;
+  chat_attachments: ChatAttachments;
+  chat_messages: ChatMessages;
+  chat_threads: ChatThreads;
   card_assignees: CardAssignees;
   card_events: CardEvents;
   cards: Cards;
@@ -265,3 +295,5 @@ export interface DB {
   workspace_settings: WorkspaceSettings;
   workspaces: Workspaces;
 }
+
+export type Database = DB;

@@ -8,11 +8,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 export async function migrate() {
 	const sql = readFileSync(join(here, "schema.sql"), "utf8");
 	const agentSql = readFileSync(join(here, "agent-schema.sql"), "utf8");
+	const chatSql = readFileSync(join(here, "chat-schema.sql"), "utf8");
 	const client = await pool.connect();
 	try {
 		await client.query("BEGIN");
 		await client.query(sql);
 		await client.query(agentSql);
+		await client.query(chatSql);
 		await client.query("COMMIT");
 		console.log("Schema applied.");
 	} catch (err) {

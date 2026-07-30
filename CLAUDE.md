@@ -8,7 +8,7 @@ This file provides guidance to agents when working with code in this repository.
 
 **Fractional positioning**: `MIN_SPACING = 1e-9` triggers rebalance. Don't use integer positions.
 
-**Database migrations**: `make db-migrate` applies BOTH `schema.sql` AND `agent-schema.sql` (not separate commands).
+**Database migrations**: `make db-migrate` applies `schema.sql`, `agent-schema.sql`, and `chat-schema.sql` (not separate commands).
 
 **Integration tests**: Require `RUN_LLM_IT=1` env var AND running DB. Not run by default `make test`.
 
