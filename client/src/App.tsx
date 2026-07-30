@@ -70,6 +70,18 @@ const router = createBrowserRouter([
 				}),
 			},
 			{
+				path: "chat",
+				lazy: async () => ({
+					Component: (await import("./pages/ChatPage")).default,
+				}),
+			},
+			{
+				path: "chat/:threadId",
+				lazy: async () => ({
+					Component: (await import("./pages/ChatPage")).default,
+				}),
+			},
+			{
 				path: "history",
 				lazy: async () => ({
 					Component: (await import("./pages/HistoryPage")).default,

@@ -4,6 +4,7 @@ import {
 	History,
 	Inbox,
 	LayoutDashboard,
+	MessageSquare,
 	Settings,
 	type LucideIcon,
 	SquareKanban,
@@ -16,6 +17,7 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 	{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 	{ to: "/activity", label: "Activity", icon: Activity },
 	{ to: "/agent", label: "Agent", icon: Bot },
+	{ to: "/chat", label: "Chat", icon: MessageSquare },
 	{ to: "/history", label: "History", icon: History },
 	{ to: "/settings", label: "Settings", icon: Settings },
 ];
@@ -27,9 +29,9 @@ export const KANBAN_NAV = NAV_ITEMS.filter((i) =>
 	["/board", "/inbox", "/dashboard"].includes(i.to),
 );
 export const AGENT_NAV = NAV_ITEMS.filter((i) =>
-	["/agent", "/history"].includes(i.to),
+	["/agent", "/chat", "/history"].includes(i.to),
 );
-export const AGENT_PATHS = ["/agent", "/history"];
+export const AGENT_PATHS = ["/agent", "/chat", "/history"];
 export const SETTINGS_ITEM = NAV_ITEMS.find((i) => i.to === "/settings")!;
 
 export function getModeFromPath(pathname: string): Mode {

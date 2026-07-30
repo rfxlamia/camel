@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getModeFromPath } from "./navItems";
+import { AGENT_NAV, AGENT_PATHS, getModeFromPath } from "./navItems";
 
 describe("getModeFromPath", () => {
 	it("returns 'agent' for /agent", () => {
@@ -24,5 +24,18 @@ describe("getModeFromPath", () => {
 
 	it("returns 'kanban' for /dashboard", () => {
 		expect(getModeFromPath("/dashboard")).toBe("kanban");
+	});
+});
+
+describe("chat nav", () => {
+	it("AGENT_NAV includes /chat", () => {
+		expect(AGENT_NAV.map((i) => i.to)).toContain("/chat");
+	});
+	it("AGENT_PATHS includes /chat", () => {
+		expect(AGENT_PATHS).toContain("/chat");
+	});
+	it("getModeFromPath returns agent for /chat and /chat/:threadId", () => {
+		expect(getModeFromPath("/chat")).toBe("agent");
+		expect(getModeFromPath("/chat/42")).toBe("agent");
 	});
 });
