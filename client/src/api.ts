@@ -7,6 +7,8 @@ import type {
 	AgentCardOutput,
 	Board,
 	Card,
+	ChatMessage,
+	ChatThread,
 	Column,
 	FlowMetrics,
 	MetricsHistoryBucket,
@@ -115,6 +117,46 @@ async function request<T>(
 	}
 	if (res.status === 204) return undefined as T;
 	return res.json();
+}
+
+async function chatStream(
+	threadId: number,
+	body: Record<string, unknown>,
+): Promise<ReadableStream<Uint8Array>> {
+	const headers = new Headers({ "Content-Type": "application/json" });
+	const csrf = readCookie("csrf_token");
+	if (csrf) headers.set("X-CSRF-Token", csrf);
+
+	const res = await fetch(`/api/chat/threads/${threadId}/messages`, {
+		method: "POST",
+		headers,
+		credentials: "include",
+		body: JSON.stringify(body),
+	});
+
+	if (!res.ok) {
+		let message = `Request failed (${res.status})`;
+		let code: string | undefined;
+		let retryAfterMs: number | undefined;
+		try {
+			const errorBody = await res.json();
+			if (errorBody.error) message = errorBody.error;
+			if (errorBody.message) message = errorBody.message;
+			if (errorBody.code) code = errorBody.code;
+			if (typeof errorBody.retryAfterMs === "number") {
+				retryAfterMs = errorBody.retryAfterMs;
+			}
+		} catch {
+			// non-JSON error body
+		}
+		throw new ApiError(message, res.status, code, retryAfterMs);
+	}
+
+	if (!res.body) {
+		throw new ApiError("Empty response body", res.status);
+	}
+
+	return res.body;
 }
 
 export const api = {
@@ -441,6 +483,64 @@ export const api = {
 		),
 	agentArtifactDownloadUrl: (workspaceId: number, boardId: number) =>
 		`/api/workspaces/${workspaceId}/agent/boards/${boardId}/artifact/download`,
+
+	// ---- Chat ----
+	chat: {
+		listThreads: () =>
+			request<ChatThread[]>("/chat/threads", { credentials: "include" }),
+		createThread: () =>
+			request<ChatThread>("/chat/threads", {
+				method: "POST",
+				credentials: "include",
+			}),
+		renameThread: (threadId: number, title: string) =>
+			request<ChatThread>(`/chat/threads/${threadId}`, {
+				method: "PATCH",
+				body: JSON.stringify({ title }),
+				credentials: "include",
+			}),
+		deleteThread: (threadId: number) =>
+			request<void>(`/chat/threads/${threadId}`, {
+				method: "DELETE",
+				credentials: "include",
+			}),
+		getMessages: async (threadId: number) => {
+			const data = await request<
+				ChatMessage[] | (ChatThread & { messages: ChatMessage[] })
+			>(`/chat/threads/${threadId}`, { credentials: "include" });
+			return Array.isArray(data) ? data : data.messages;
+		},
+		sendMessage: (
+			threadId: number,
+			message: string,
+			opts?: { workspaceId?: number },
+		) => {
+			const body: { message: string; workspaceId?: number } = { message };
+			if (opts?.workspaceId !== undefined) {
+				body.workspaceId = opts.workspaceId;
+			}
+			return chatStream(threadId, body);
+		},
+		retryMessage: (threadId: number, messageId: number) =>
+			chatStream(threadId, { action: "retry", messageId }),
+		downloadAttachment: async (attachmentId: number) => {
+			const res = await fetch(`/api/chat/attachments/${attachmentId}`, {
+				credentials: "include",
+			});
+			if (!res.ok) {
+				let message = `Request failed (${res.status})`;
+				try {
+					const errorBody = await res.json();
+					if (errorBody.error) message = errorBody.error;
+					if (errorBody.message) message = errorBody.message;
+				} catch {
+					// non-JSON error body
+				}
+				throw new ApiError(message, res.status);
+			}
+			return res.blob();
+		},
+	},
 
 	// ---- Ticket intake ----
 	ticketIntake: {

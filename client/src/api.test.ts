@@ -655,6 +655,128 @@ describe("user-initiated auto-error bus", () => {
 	});
 });
 
+describe("chat API methods", () => {
+	beforeEach(() => mockFetch.mockReset());
+
+	it("api.chat.listThreads GETs /api/chat/threads", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve([{ id: 1, title: "Untitled" }]),
+		});
+		const { api } = await import("./api");
+		const threads = await api.chat.listThreads();
+		expect(threads).toEqual([{ id: 1, title: "Untitled" }]);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/chat/threads",
+			expect.objectContaining({ credentials: "include" }),
+		);
+	});
+
+	it("api.chat.createThread POSTs /api/chat/threads", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ id: 2, title: "Untitled" }),
+		});
+		const { api } = await import("./api");
+		await api.chat.createThread();
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/chat/threads",
+			expect.objectContaining({ method: "POST" }),
+		);
+	});
+
+	it("api.chat.renameThread PATCHes thread title", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ id: 1, title: "Renamed" }),
+		});
+		const { api } = await import("./api");
+		await api.chat.renameThread(1, "Renamed");
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/chat/threads/1",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+	});
+
+	it("api.chat.getMessages returns thinking and toolTrace fields", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve([
+					{
+						id: 10,
+						role: "assistant",
+						content: "Hi",
+						thinking: "thought",
+						toolTrace: [{ toolName: "web_search" }],
+					},
+				]),
+		});
+		const { api } = await import("./api");
+		const msgs = await api.chat.getMessages(1);
+		expect(msgs[0].thinking).toBe("thought");
+		expect(msgs[0].toolTrace).toHaveLength(1);
+	});
+
+	it("api.chat.sendMessage returns ReadableStream body", async () => {
+		const stream = new ReadableStream({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
+				controller.close();
+			},
+		});
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			body: stream,
+		});
+		const { api } = await import("./api");
+		const body = await api.chat.sendMessage(1, "hello", { workspaceId: 7 });
+		expect(body).toBeInstanceOf(ReadableStream);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/chat/threads/1/messages",
+			expect.objectContaining({
+				body: JSON.stringify({ message: "hello", workspaceId: 7 }),
+			}),
+		);
+	});
+
+	it("api.chat.downloadAttachment GETs attachment by id", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			blob: () => Promise.resolve(new Blob(["# Report"])),
+		});
+		const { api } = await import("./api");
+		await api.chat.downloadAttachment(5);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/chat/attachments/5",
+			expect.objectContaining({ credentials: "include" }),
+		);
+	});
+
+	it("api.chat.retryMessage POSTs retry action", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			body: new ReadableStream(),
+		});
+		const { api } = await import("./api");
+		await api.chat.retryMessage(1, 42);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/chat/threads/1/messages",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ action: "retry", messageId: 42 }),
+			}),
+		);
+	});
+});
+
 describe("ticketIntake API methods", () => {
 	beforeEach(() => {
 		mockFetch.mockReset();
