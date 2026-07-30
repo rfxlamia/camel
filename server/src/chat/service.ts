@@ -139,7 +139,8 @@ export function createChatService(db: DBExecutor) {
 					role: params.role,
 					content: params.content,
 					thinking: params.thinking ?? null,
-					tool_trace: params.toolTrace ?? null,
+					tool_trace:
+						params.toolTrace != null ? JSON.stringify(params.toolTrace) : null,
 				})
 				.returningAll()
 				.executeTakeFirstOrThrow();
@@ -224,7 +225,8 @@ export function createChatService(db: DBExecutor) {
 				.set({
 					content: params.content,
 					thinking: params.thinking ?? null,
-					tool_trace: params.toolTrace ?? null,
+					tool_trace:
+						params.toolTrace != null ? JSON.stringify(params.toolTrace) : null,
 				})
 				.where("id", "=", messageId)
 				.returningAll()
