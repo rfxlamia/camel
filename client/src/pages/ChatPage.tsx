@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { ChatRuntimeProvider } from "../chat/ChatRuntimeProvider";
 import { LocalComposer, LocalThread } from "../chat/ui";
+import { useBoard } from "../context/BoardContext";
 import type { ChatThread } from "../types";
 
 type AssistantUIExtras = {
@@ -18,6 +19,7 @@ const { Thread = LocalThread, Composer = LocalComposer } =
 export default function ChatPage() {
 	const { threadId: threadIdParam } = useParams();
 	const navigate = useNavigate();
+	const { activeWorkspaceId } = useBoard();
 	const [threads, setThreads] = useState<ChatThread[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -127,7 +129,10 @@ export default function ChatPage() {
 			</aside>
 
 			<div className="flex min-w-0 flex-1 flex-col bg-white">
-				<ChatRuntimeProvider threadId={threadIdParam}>
+				<ChatRuntimeProvider
+					threadId={threadIdParam}
+					workspaceId={activeWorkspaceId ?? undefined}
+				>
 					<Thread />
 					<Composer />
 				</ChatRuntimeProvider>

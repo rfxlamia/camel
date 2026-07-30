@@ -29,6 +29,10 @@ vi.mock("@assistant-ui/react", () => ({
 	Composer: () => <div data-testid="chat-composer" />,
 }));
 
+vi.mock("../context/BoardContext", () => ({
+	useBoard: () => ({ activeWorkspaceId: 7 }),
+}));
+
 describe("ChatPage", () => {
 	beforeEach(() => {
 		mockListThreads.mockResolvedValue([{ id: 1, title: "Untitled", messageCount: 0 }]);
