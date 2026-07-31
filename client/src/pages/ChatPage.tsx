@@ -1,20 +1,11 @@
-import * as AssistantUIModule from "@assistant-ui/react";
 import { Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { ChatRuntimeProvider } from "../chat/ChatRuntimeProvider";
-import { LocalComposer, LocalThread } from "../chat/ui";
+import { ChatPanel } from "../chat/ui";
 import { useBoard } from "../context/BoardContext";
 import type { ChatThread } from "../types";
-
-type AssistantUIExtras = {
-	Thread?: React.ComponentType;
-	Composer?: React.ComponentType;
-};
-
-const { Thread = LocalThread, Composer = LocalComposer } =
-	AssistantUIModule as typeof AssistantUIModule & AssistantUIExtras;
 
 export default function ChatPage() {
 	const { threadId: threadIdParam } = useParams();
@@ -85,10 +76,10 @@ export default function ChatPage() {
 	};
 
 	return (
-		<div className="flex min-h-0 flex-1">
+		<div className="flex h-full min-h-0 flex-1">
 			{redirectTarget && <Navigate to={redirectTarget} replace />}
 
-			<aside className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50">
+			<aside className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 min-h-0">
 				<div className="border-b border-neutral-200 p-3">
 					<button
 						type="button"
@@ -128,14 +119,21 @@ export default function ChatPage() {
 				</nav>
 			</aside>
 
-			<div className="flex min-w-0 flex-1 flex-col bg-white">
-				<ChatRuntimeProvider
-					threadId={threadIdParam}
-					workspaceId={activeWorkspaceId ?? undefined}
-				>
-					<Thread />
-					<Composer />
-				</ChatRuntimeProvider>
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+				{threadIdParam ? (
+					<ChatRuntimeProvider
+						threadId={threadIdParam}
+						workspaceId={activeWorkspaceId ?? undefined}
+					>
+						<ChatPanel />
+					</ChatRuntimeProvider>
+				) : (
+					!redirectTarget && (
+						<div className="flex flex-1 items-center justify-center text-sm text-neutral-500">
+							Loading chat…
+						</div>
+					)
+				)}
 			</div>
 		</div>
 	);

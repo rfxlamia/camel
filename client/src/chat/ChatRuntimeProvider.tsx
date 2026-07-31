@@ -1,7 +1,7 @@
 import {
 	AssistantRuntimeProvider,
 	useLocalRuntime,
-} from "@assistant-ui/core/react";
+} from "@assistant-ui/react";
 import {
 	createContext,
 	useContext,
@@ -47,7 +47,7 @@ function ChatThreadRuntime({
 	return (
 		<ChatStreamContext.Provider value={chatStream}>
 			<AssistantRuntimeProvider runtime={runtime}>
-				{children}
+				<div className="flex min-h-0 flex-1 flex-col">{children}</div>
 			</AssistantRuntimeProvider>
 		</ChatStreamContext.Provider>
 	);

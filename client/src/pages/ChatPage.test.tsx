@@ -6,10 +6,11 @@ const mockListThreads = vi.fn();
 const mockCreateThread = vi.fn();
 const mockDeleteThread = vi.fn();
 const mockNavigate = vi.fn();
+let mockThreadId: string | undefined = "1";
 
 vi.mock("react-router", () => ({
 	useNavigate: () => mockNavigate,
-	useParams: () => ({ threadId: undefined }),
+	useParams: () => ({ threadId: mockThreadId }),
 	Navigate: ({ to }: { to: string }) => <div data-testid="redirect">{to}</div>,
 }));
 
@@ -24,9 +25,13 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("@assistant-ui/react", () => ({
-	Thread: () => <div data-testid="chat-thread" />,
-	Composer: () => <div data-testid="chat-composer" />,
+vi.mock("../chat/ui", () => ({
+	ChatPanel: () => (
+		<div>
+			<div data-testid="chat-thread" />
+			<div data-testid="chat-composer" />
+		</div>
+	),
 }));
 
 vi.mock("../context/BoardContext", () => ({
@@ -35,6 +40,7 @@ vi.mock("../context/BoardContext", () => ({
 
 describe("ChatPage", () => {
 	beforeEach(() => {
+		mockThreadId = "1";
 		mockListThreads.mockResolvedValue([{ id: 1, title: "Untitled", messageCount: 0 }]);
 		mockCreateThread.mockResolvedValue({ id: 2, title: "Untitled" });
 		mockDeleteThread.mockResolvedValue(undefined);
@@ -51,6 +57,7 @@ describe("ChatPage", () => {
 	});
 
 	it("redirects /chat to a thread", async () => {
+		mockThreadId = undefined;
 		const { default: ChatPage } = await import("./ChatPage");
 		render(<ChatPage />);
 		await waitFor(() => {

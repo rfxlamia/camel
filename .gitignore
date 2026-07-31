@@ -45,3 +45,8 @@ docs/
 
 # Production secrets
 deploy/.env.production
+deploy/deploy.sh
+deploy/deploy-ggf.sh
+deploy/.env.ggf.production
+deploy/docker-compose.prod.yml
+deploy/docker-compose.ggf.yml

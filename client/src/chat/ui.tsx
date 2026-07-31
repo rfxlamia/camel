@@ -32,17 +32,7 @@ function ChatMessageList() {
 	);
 }
 
-export function LocalThread() {
-	return (
-		<ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
-			<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-4 py-3">
-				<ChatMessageList />
-			</ThreadPrimitive.Viewport>
-		</ThreadPrimitive.Root>
-	);
-}
-
-export function LocalComposer() {
+function ChatComposer() {
 	const { overflowError, overflowMessage } = useChatStreamContext();
 	const { setText } = unstable_useComposerInput();
 
@@ -53,7 +43,7 @@ export function LocalComposer() {
 	}, [overflowMessage, setText]);
 
 	return (
-		<ComposerPrimitive.Root className="border-t border-neutral-200 bg-white px-4 py-3">
+		<ComposerPrimitive.Root className="shrink-0 border-t border-neutral-200 bg-white px-4 py-3">
 			{overflowError && (
 				<div
 					role="alert"
@@ -74,4 +64,32 @@ export function LocalComposer() {
 			</div>
 		</ComposerPrimitive.Root>
 	);
+}
+
+/** Full-height chat column: scrollable messages + composer pinned to bottom. */
+export function ChatPanel() {
+	return (
+		<ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
+			<ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+				<ChatMessageList />
+			</ThreadPrimitive.Viewport>
+			<ChatComposer />
+		</ThreadPrimitive.Root>
+	);
+}
+
+/** @deprecated Use ChatPanel — kept for tests. */
+export function LocalThread() {
+	return (
+		<ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
+			<ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+				<ChatMessageList />
+			</ThreadPrimitive.Viewport>
+		</ThreadPrimitive.Root>
+	);
+}
+
+/** @deprecated Use ChatPanel — kept for tests. */
+export function LocalComposer() {
+	return <ChatComposer />;
 }

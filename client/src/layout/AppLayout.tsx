@@ -23,6 +23,7 @@ export default function AppLayout() {
 	const location = useLocation();
 
 	const onSettings = location.pathname.startsWith("/settings");
+	const onChat = location.pathname.startsWith("/chat");
 
 	useEffect(() => {
 		localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
@@ -89,13 +90,15 @@ export default function AppLayout() {
 						</div>
 					</header>
 
-					<main className="min-h-0 flex-1 overflow-auto">
+					<main
+						className={`min-h-0 flex-1 ${onChat ? "flex flex-col overflow-hidden" : "overflow-auto"}`}
+					>
 						<Outlet />
 					</main>
 				</div>
 
 				{toast && <Toast message={toast.message} type={toast.type} />}
-				<FloatingChatButton />
+				{!onChat && <FloatingChatButton />}
 				<AutoErrorListener />
 			</div>
 		</NotificationsProvider>
