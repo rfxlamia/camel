@@ -93,4 +93,94 @@ describe("useChatStream", () => {
 		expect(result.current.overflowError).toContain("Thread too long");
 		expect(result.current.canRetry).toBe(false);
 	});
+
+	it("merges attachments from getMessages after stream done", async () => {
+		mockSendMessage.mockResolvedValue(
+			ndjsonStream([
+				'{"type":"token","text":"Here is your file"}',
+				'{"type":"done","messageId":99}',
+			]),
+		);
+		mockGetMessages
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([
+				{
+					id: 10,
+					role: "user",
+					content: "create a file",
+				},
+				{
+					id: 99,
+					role: "assistant",
+					content: "Here is your file",
+					attachments: [
+						{
+							id: 1,
+							messageId: 99,
+							filename: "report.md",
+							format: "md",
+						},
+					],
+				},
+			]);
+
+		const { useChatStream } = await import("./useChatStream");
+		const { result } = renderHook(() => useChatStream({ threadId: 1 }));
+
+		await act(async () => {
+			await result.current.send("create a file");
+		});
+
+		await waitFor(() => {
+			const assistant = result.current.messages.find(
+				(m) => m.role === "assistant" && m.id === 99,
+			);
+			expect(assistant?.attachments).toEqual([
+				{
+					id: 1,
+					messageId: 99,
+					filename: "report.md",
+					format: "md",
+				},
+			]);
+		});
+		expect(mockGetMessages).toHaveBeenCalledTimes(2);
+	});
+
+	it("removes partial assistant immediately on stream error", async () => {
+		mockSendMessage.mockResolvedValue(
+			ndjsonStream([
+				'{"type":"token","text":"Partial"}',
+				'{"type":"error","message":"Model failed","retryable":true}',
+			]),
+		);
+		mockGetMessages
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([
+				{ id: 5, role: "user", content: "hello" },
+			]);
+
+		const { useChatStream } = await import("./useChatStream");
+		const { result } = renderHook(() => useChatStream({ threadId: 1 }));
+
+		await act(async () => {
+			void result.current.send("hello");
+		});
+
+		await waitFor(() => {
+			expect(
+				result.current.messages.some(
+					(m) => m.role === "assistant" && m.id === undefined,
+				),
+			).toBe(false);
+		});
+
+		await waitFor(() => {
+			const errorMsg = result.current.messages.find((m) => m.role === "error");
+			expect(errorMsg).toMatchObject({
+				content: "Model failed",
+				retryMessageId: 5,
+			});
+		});
+	});
 });

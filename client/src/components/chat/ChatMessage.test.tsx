@@ -47,4 +47,25 @@ describe("ChatMessage", () => {
 		);
 		expect(screen.getByText(/considered options/i)).toBeTruthy();
 	});
+
+	it("renders download link for create_file attachment", () => {
+		render(
+			<ChatMessage
+				role="assistant"
+				content="Created your file."
+				thinking={null}
+				toolTrace={[]}
+				attachments={[
+					{
+						id: 42,
+						messageId: 99,
+						filename: "notes.md",
+						format: "md",
+					},
+				]}
+			/>,
+		);
+		const link = screen.getByRole("button", { name: /notes\.md/i });
+		expect(link).toBeTruthy();
+	});
 });

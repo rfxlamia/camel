@@ -282,20 +282,39 @@ export function useChatStream({ threadId, workspaceId }: UseChatStreamOptions) {
 										}),
 									);
 									break;
-								case "done":
+								case "done": {
+									const messageId = event.messageId;
 									setMessages((prev) =>
 										updateStreamingAssistant(prev, {
-											id: event.messageId,
+											id: messageId,
 											content,
 											thinking,
 											toolTrace: deriveChatToolTrace(toolEvents),
 										}),
 									);
+									void api.chat.getMessages(threadId).then((apiMessages) => {
+										const assistant = apiMessages.find(
+											(m) => m.id === messageId,
+										);
+										if (!assistant?.attachments?.length) return;
+										setMessages((prev) => {
+											const next = [...prev];
+											const idx = next.findIndex((m) => m.id === messageId);
+											if (idx < 0) return prev;
+											next[idx] = {
+												...next[idx],
+												attachments: assistant.attachments,
+											};
+											return next;
+										});
+									});
 									break;
+								}
 								case "error": {
 									const errorMessage = event.message;
 									const retryable = event.retryable !== false;
 									setCanRetry(retryable);
+									setMessages((prev) => removeStreamingAssistant(prev));
 									void api.chat.getMessages(threadId).then((apiMessages) => {
 										const lastUser = [...apiMessages]
 											.reverse()
