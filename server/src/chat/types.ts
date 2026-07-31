@@ -31,6 +31,7 @@ export interface ChatAttachment {
 }
 
 export interface InsertMessageParams {
+	userId: number;
 	threadId: number;
 	role: ChatMessageRole;
 	content: string;
@@ -39,6 +40,7 @@ export interface InsertMessageParams {
 }
 
 export interface InsertAttachmentParams {
+	userId: number;
 	messageId: number;
 	filename: string;
 	format: ChatAttachmentFormat;

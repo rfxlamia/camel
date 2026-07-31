@@ -2,11 +2,13 @@ import { MAX_ARTIFACT_BYTES } from "../../agent/artifact.js";
 import type { Tool, ToolResult } from "../../agent/tools/types.js";
 import type { ChatAttachmentFormat, InsertAttachmentParams } from "../types.js";
 
+type InsertAttachmentInput = Omit<InsertAttachmentParams, "userId">;
+
 const VALID_FORMATS = new Set<ChatAttachmentFormat>(["md", "txt", "csv"]);
 
 export interface CreateChatFileCtx {
 	messageId: number;
-	insertAttachment: (row: InsertAttachmentParams) => Promise<void>;
+	insertAttachment: (row: InsertAttachmentInput) => Promise<void>;
 }
 
 export function makeCreateChatFile(ctx: CreateChatFileCtx): Tool {

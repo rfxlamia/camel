@@ -378,10 +378,14 @@ export function createChatRouter(): Router {
 				try {
 					if (action.kind === "send") {
 						const userRow = await service.insertMessage({
+							userId,
 							threadId,
 							role: "user",
 							content: action.message,
 						});
+						if (!userRow) {
+							throw new Error("Thread not found");
+						}
 						history = [...history, userRow];
 					} else if (retryTargetId !== undefined) {
 						await service.deleteMessage(retryTargetId);
@@ -389,10 +393,14 @@ export function createChatRouter(): Router {
 					}
 
 					const placeholder = await service.insertMessage({
+						userId,
 						threadId,
 						role: "assistant",
 						content: "",
 					});
+					if (!placeholder) {
+						throw new Error("Thread not found");
+					}
 					assistantRowId = placeholder.id;
 
 					const toolEvents: ToolEvent[] = [];
@@ -402,7 +410,7 @@ export function createChatRouter(): Router {
 						messageId: assistantRowId,
 						workspaceId,
 						insertAttachment: async (row) => {
-							await service.insertAttachment(row);
+							await service.insertAttachment({ ...row, userId });
 						},
 					});
 
@@ -439,7 +447,7 @@ export function createChatRouter(): Router {
 						userMessageText ??
 						history.find((m) => m.role === "user")?.content;
 					if (firstUserMessage && thread.title === "Untitled") {
-						await service.autoTitleThread(threadId, firstUserMessage);
+						await service.autoTitleThread(userId, threadId, firstUserMessage);
 					}
 
 					writeStreamEvent(res, { type: "done", messageId: updated.id });

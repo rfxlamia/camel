@@ -13,12 +13,14 @@ import { webSearch } from "../../agent/tools/webSearch.js";
 import type { InsertAttachmentParams } from "../types.js";
 import { makeCreateChatFile } from "./createChatFile.js";
 
+type InsertAttachmentInput = Omit<InsertAttachmentParams, "userId">;
+
 export interface ChatToolFactoryCtx {
 	userId: number;
 	threadId: number;
 	messageId: number;
 	workspaceId?: number;
-	insertAttachment: (row: InsertAttachmentParams) => Promise<void>;
+	insertAttachment: (row: InsertAttachmentInput) => Promise<void>;
 	fetchCardTimestamps?: (workspaceId: number) => Promise<CardTimestamps[]>;
 	fetchActivityEvents?: (
 		workspaceId: number,

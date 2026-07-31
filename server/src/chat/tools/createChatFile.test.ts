@@ -26,11 +26,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("createChatFile", () => {
 		const thread = await service.createThread(userId);
 		threadId = thread.id;
 		const msg = await service.insertMessage({
+			userId,
 			threadId,
 			role: "assistant",
 			content: "Here is your file",
 		});
-		messageId = msg.id;
+		expect(msg).not.toBeNull();
+		messageId = msg!.id;
 	});
 
 	afterEach(async () => {
@@ -40,7 +42,8 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("createChatFile", () => {
 	it("inserts chat_attachments row with LLM-supplied md content", async () => {
 		const tool = makeCreateChatFile({
 			messageId,
-			insertAttachment: (row) => service.insertAttachment(row),
+			insertAttachment: (row) =>
+				service.insertAttachment({ ...row, userId }),
 		});
 		const result = await tool.execute({
 			filename: "report.md",

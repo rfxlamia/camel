@@ -71,15 +71,27 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat service", () => {
 		await service.deleteThread(userAId, thread.id);
 	});
 
+	it("renameThread persists title via getThread", async () => {
+		const thread = await service.createThread(userAId);
+		const renamed = await service.renameThread(userAId, thread.id, "My Title");
+		expect(renamed?.title).toBe("My Title");
+		const fetched = await service.getThread(userAId, thread.id);
+		expect(fetched?.title).toBe("My Title");
+		await service.deleteThread(userAId, thread.id);
+	});
+
 	it("deleteThread hard-deletes messages and attachments", async () => {
 		const thread = await service.createThread(userAId);
 		const msg = await service.insertMessage({
+			userId: userAId,
 			threadId: thread.id,
 			role: "user",
 			content: "hello",
 		});
+		expect(msg).not.toBeNull();
 		await service.insertAttachment({
-			messageId: msg.id,
+			userId: userAId,
+			messageId: msg!.id,
 			filename: "note.md",
 			format: "md",
 			content: "# Note",
@@ -97,7 +109,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat service", () => {
 		const thread = await service.createThread(userAId);
 		const long =
 			"This is a very long first message that should be truncated for the thread title";
-		await service.autoTitleThread(thread.id, long);
+		await service.autoTitleThread(userAId, thread.id, long);
 		const updated = await service.getThread(userAId, thread.id);
 		expect(updated?.title.length).toBeLessThanOrEqual(50);
 		expect(updated?.title).not.toBe("Untitled");

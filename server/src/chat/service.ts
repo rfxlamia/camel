@@ -131,7 +131,15 @@ export function createChatService(db: DBExecutor) {
 			return Number(result.numDeletedRows) > 0;
 		},
 
-		async insertMessage(params: InsertMessageParams): Promise<ChatMessage> {
+		async insertMessage(params: InsertMessageParams): Promise<ChatMessage | null> {
+			const thread = await db
+				.selectFrom("chat_threads")
+				.select("id")
+				.where("id", "=", params.threadId)
+				.where("user_id", "=", params.userId)
+				.executeTakeFirst();
+			if (!thread) return null;
+
 			const row = await db
 				.insertInto("chat_messages")
 				.values({
@@ -149,12 +157,24 @@ export function createChatService(db: DBExecutor) {
 				.updateTable("chat_threads")
 				.set({ updated_at: new Date() })
 				.where("id", "=", params.threadId)
+				.where("user_id", "=", params.userId)
 				.execute();
 
 			return mapMessage(row);
 		},
 
-		async insertAttachment(params: InsertAttachmentParams): Promise<ChatAttachment> {
+		async insertAttachment(
+			params: InsertAttachmentParams,
+		): Promise<ChatAttachment | null> {
+			const owned = await db
+				.selectFrom("chat_messages as m")
+				.innerJoin("chat_threads as t", "t.id", "m.thread_id")
+				.select("m.id")
+				.where("m.id", "=", params.messageId)
+				.where("t.user_id", "=", params.userId)
+				.executeTakeFirst();
+			if (!owned) return null;
+
 			const row = await db
 				.insertInto("chat_attachments")
 				.values({
@@ -168,7 +188,11 @@ export function createChatService(db: DBExecutor) {
 			return mapAttachment(row);
 		},
 
-		async autoTitleThread(threadId: number, firstUserMessage: string): Promise<void> {
+		async autoTitleThread(
+			userId: number,
+			threadId: number,
+			firstUserMessage: string,
+		): Promise<void> {
 			await db
 				.updateTable("chat_threads")
 				.set({
@@ -176,6 +200,7 @@ export function createChatService(db: DBExecutor) {
 					updated_at: new Date(),
 				})
 				.where("id", "=", threadId)
+				.where("user_id", "=", userId)
 				.where("title", "=", "Untitled")
 				.execute();
 		},
