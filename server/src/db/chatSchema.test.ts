@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { Database } from "./types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -55,10 +56,8 @@ describe("migrate.ts wiring", () => {
 });
 
 describe("Kysely types", () => {
-	it("registers ChatThreads, ChatMessages, ChatAttachments on Database", async () => {
-		const { Database } = await import("./types.js");
-		type DB = Database;
-		type Tables = keyof DB;
+	it("registers ChatThreads, ChatMessages, ChatAttachments on Database", () => {
+		type Tables = keyof Database;
 		const _threads: Tables = "chat_threads";
 		const _messages: Tables = "chat_messages";
 		const _attachments: Tables = "chat_attachments";
