@@ -28,6 +28,7 @@ COPY --from=builder /app/server/dist ./server/dist
 # SQL files must live beside migrate.js (reads via import.meta.url)
 COPY server/src/db/schema.sql ./server/dist/db/schema.sql
 COPY server/src/db/agent-schema.sql ./server/dist/db/agent-schema.sql
+COPY server/src/db/chat-schema.sql ./server/dist/db/chat-schema.sql
 
 # UPLOADS_DIR resolves to client/public/uploads relative to server/dist
 RUN mkdir -p ./client/public/uploads

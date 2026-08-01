@@ -325,16 +325,9 @@ export default function LandingPage() {
 				<div className="board-canvas absolute inset-0 opacity-60" aria-hidden />
 				<div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 md:grid-cols-2 md:py-28">
 					<div>
-						<span
-							className="reveal inline-flex items-center gap-2 rounded-full border border-accent-300 bg-accent-100 px-3 py-1 text-sm font-medium text-accent-800"
-							style={{ transitionDelay: "0ms" }}
-						>
-							<Sparkles className="h-3.5 w-3.5" />
-							Kanban with an agentic mind
-						</span>
 						<h1
-							className="reveal mt-5 text-3xl font-bold leading-[1.1] tracking-tight text-primary-900"
-							style={{ transitionDelay: "80ms" }}
+							className="reveal text-3xl font-bold leading-[1.1] tracking-tight text-primary-900"
+							style={{ transitionDelay: "0ms" }}
 						>
 							Move the work forward,{" "}
 							<span className="text-accent-700">calmly.</span>
