@@ -54,7 +54,7 @@ const FEATURES = [
 	{
 		key: "team",
 		icon: Users,
-		title: "Made for micro teams",
+		title: "Built for small, growing teams",
 		body: "Invite your team to a shared workspace, assign cards, set due dates, and follow every change in one clear activity feed.",
 	},
 ] as const;
@@ -336,7 +336,8 @@ export default function LandingPage() {
 							className="reveal mt-5 max-w-md text-md leading-relaxed text-neutral-600"
 							style={{ transitionDelay: "160ms" }}
 						>
-							Camel is a kanban board for micro teams — work-in-progress limits
+							Camel is a kanban board for small and growing teams —
+							work-in-progress limits
 							that keep everyone focused, live delivery metrics, real-time
 							collaboration, and built-in AI that work on repetitive tasks, so
 							you don&apos;t have to.
@@ -418,7 +419,7 @@ export default function LandingPage() {
 			<section id="features" className="mx-auto max-w-6xl px-5 py-20">
 				<div className="reveal max-w-2xl">
 					<h2 className="text-xl font-bold tracking-tight text-primary-900">
-						Everything a micro team needs to stay in flow
+						Everything your team needs to stay in flow
 					</h2>
 					<p className="mt-3 text-base text-neutral-600">
 						Six proven kanban practices, built right into the board — plus
@@ -635,7 +636,7 @@ export default function LandingPage() {
 					<div className="flex items-center gap-2">
 						<img src="/logo.png" alt="" className="h-5 w-5" />
 						<span className="font-semibold text-neutral-700">Camel Kanban</span>
-						<span className="text-neutral-400">· for micro teams</span>
+						<span className="text-neutral-400">· for small and growing teams</span>
 					</div>
 					<p>Visualize · limit WIP · manage flow · improve.</p>
 				</div>

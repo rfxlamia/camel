@@ -105,7 +105,7 @@ export default function AuthPage({
 						style={{ animationDelay: "200ms" }}
 					>
 						WIP limits that hold, live flow metrics, and real-time presence —
-						for micro teams that want a steady pace.
+						for small and growing teams that want a steady pace.
 					</p>
 
 					{/* Static mini-board: a "look how organized this is" demo. */}
