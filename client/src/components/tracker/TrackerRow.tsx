@@ -18,6 +18,12 @@ export default function TrackerRow({ item }: Props) {
 			<span className="w-16 shrink-0 font-mono text-xs text-neutral-500 tabular-nums">
 				{item.key}
 			</span>
+			<span
+				className="h-2 w-2 shrink-0 rounded-full"
+				style={{ backgroundColor: item.status.colour }}
+				aria-label={item.status.name}
+				title={item.status.name}
+			/>
 			<span className="min-w-0 flex-1 truncate font-medium text-neutral-900">
 				{item.title}
 			</span>

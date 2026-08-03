@@ -444,6 +444,7 @@ export const api = {
 			description?: string;
 			statusId?: number;
 			priorityId?: number | null;
+			labelIds?: number[];
 			assigneeIds?: number[];
 		},
 	) =>

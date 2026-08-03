@@ -209,6 +209,50 @@ async function findItemByKeyNumber(
 		.executeTakeFirst();
 }
 
+async function parseLabelIds(
+	body: Record<string, unknown>,
+	workspaceId: number,
+): Promise<number[] | { error: string }> {
+	const raw = body.labelIds;
+	if (!Array.isArray(raw)) {
+		return { error: "labelIds must be an array of integers" };
+	}
+	const ids: number[] = [];
+	for (const id of raw) {
+		if (!Number.isInteger(id)) {
+			return { error: "labelIds must be an array of integers" };
+		}
+		ids.push(id as number);
+	}
+	for (const labelId of [...new Set(ids)]) {
+		const row = await db
+			.selectFrom("tracker_vocabularies")
+			.select("id")
+			.where("id", "=", labelId)
+			.where("workspace_id", "=", workspaceId)
+			.where("kind", "=", "label")
+			.executeTakeFirst();
+		if (!row) {
+			return { error: "label must belong to this workspace" };
+		}
+	}
+	return ids;
+}
+
+async function syncTrackerItemLabels(
+	dbExec: DBExecutor,
+	trackerItemId: number,
+	labelIds: number[],
+): Promise<void> {
+	for (const vocabularyId of labelIds) {
+		await dbExec
+			.insertInto("tracker_item_labels")
+			.values({ tracker_item_id: trackerItemId, vocabulary_id: vocabularyId })
+			.onConflict((oc) => oc.doNothing())
+			.execute();
+	}
+}
+
 async function parseAssigneeIds(
 	body: Record<string, unknown>,
 	workspaceId: number,
@@ -306,6 +350,15 @@ trackerItemsRouter.post(
 			assigneeIds = parsed;
 		}
 
+		let labelIds: number[] = [];
+		if (body.labelIds !== undefined) {
+			const parsed = await parseLabelIds(body, workspaceId);
+			if ("error" in parsed) {
+				return res.status(400).json({ error: parsed.error });
+			}
+			labelIds = parsed;
+		}
+
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
@@ -347,6 +400,10 @@ trackerItemsRouter.post(
 
 				if (assigneeIds.length > 0) {
 					await syncTrackerItemAssignees(trx, inserted.id, assigneeIds);
+				}
+
+				if (labelIds.length > 0) {
+					await syncTrackerItemLabels(trx, inserted.id, labelIds);
 				}
 
 				await recordTrackerActivity(

@@ -1,7 +1,8 @@
 import { X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../api";
-import type { TrackerVocabulary } from "../../types";
+import type { TrackerVocabulary, WorkspaceMember } from "../../types";
+import { AssigneePicker } from "../AssigneePicker";
 
 interface Props {
 	workspaceId: number;
@@ -19,9 +20,36 @@ export default function TrackerCreateModal({
 	priorities,
 }: Props) {
 	const [title, setTitle] = useState("");
+	const [description, setDescription] = useState("");
 	const [statusId, setStatusId] = useState<number | undefined>();
 	const [priorityId, setPriorityId] = useState<number | null | undefined>();
+	const [labelIds, setLabelIds] = useState<number[]>([]);
+	const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
+	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
+	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [submitting, setSubmitting] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		void (async () => {
+			const [labelList, memberList] = await Promise.all([
+				api.listTrackerVocabularies(workspaceId, "label"),
+				api.getWorkspaceMembers(workspaceId),
+			]);
+			if (cancelled) return;
+			setLabels(labelList);
+			setMembers(memberList.members);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [workspaceId]);
+
+	const toggleLabel = (id: number) => {
+		setLabelIds((prev) =>
+			prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+		);
+	};
 
 	const handleSubmit = async (e: FormEvent) => {
 		e.preventDefault();
@@ -30,11 +58,18 @@ export default function TrackerCreateModal({
 		try {
 			const body: {
 				title: string;
+				description?: string;
 				statusId?: number;
 				priorityId?: number | null;
+				labelIds?: number[];
+				assigneeIds?: number[];
 			} = { title: title.trim() };
+			const trimmedDescription = description.trim();
+			if (trimmedDescription) body.description = trimmedDescription;
 			if (statusId !== undefined) body.statusId = statusId;
 			if (priorityId !== undefined) body.priorityId = priorityId;
+			if (labelIds.length > 0) body.labelIds = labelIds;
+			if (assigneeIds.length > 0) body.assigneeIds = assigneeIds;
 			await api.createTrackerItem(workspaceId, body);
 			onCreated();
 			onClose();
@@ -83,6 +118,22 @@ export default function TrackerCreateModal({
 							onChange={(e) => setTitle(e.target.value)}
 							className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 							autoFocus
+						/>
+					</div>
+
+					<div>
+						<label
+							htmlFor="tracker-create-item-description"
+							className="mb-1 block text-sm font-medium text-neutral-700"
+						>
+							Description
+						</label>
+						<textarea
+							id="tracker-create-item-description"
+							value={description}
+							onChange={(e) => setDescription(e.target.value)}
+							rows={3}
+							className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						/>
 					</div>
 
@@ -144,6 +195,48 @@ export default function TrackerCreateModal({
 								))}
 							</div>
 						</fieldset>
+					)}
+
+					{labels.length > 0 && (
+						<fieldset>
+							<legend className="mb-1.5 text-sm font-medium text-neutral-700">
+								Labels
+							</legend>
+							<div className="flex flex-wrap gap-2">
+								{labels.map((label) => (
+									<label
+										key={label.id}
+										className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm transition-colors ${
+											labelIds.includes(label.id)
+												? "border-primary-600 bg-primary-50 text-primary-700"
+												: "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+										}`}
+									>
+										<input
+											type="checkbox"
+											className="sr-only"
+											checked={labelIds.includes(label.id)}
+											onChange={() => toggleLabel(label.id)}
+											aria-label={label.name}
+										/>
+										{label.name}
+									</label>
+								))}
+							</div>
+						</fieldset>
+					)}
+
+					{members.length > 0 && (
+						<div>
+							<span className="text-sm font-medium text-neutral-700">
+								Assignees
+							</span>
+							<AssigneePicker
+								members={members}
+								value={assigneeIds}
+								onChange={setAssigneeIds}
+							/>
+						</div>
 					)}
 
 					<div className="flex justify-end gap-2 pt-1">

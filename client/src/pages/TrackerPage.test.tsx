@@ -14,6 +14,7 @@ const {
 	mockListTrackerItems,
 	mockCreateTrackerItem,
 	mockListTrackerVocabularies,
+	mockGetWorkspaceMembers,
 	mockUseBoard,
 	mockNavigate,
 	mockLocation,
@@ -21,6 +22,7 @@ const {
 	mockListTrackerItems: vi.fn(),
 	mockCreateTrackerItem: vi.fn(),
 	mockListTrackerVocabularies: vi.fn(),
+	mockGetWorkspaceMembers: vi.fn(),
 	mockUseBoard: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockLocation: { pathname: "/tracker", key: "tracker-1" },
@@ -32,6 +34,7 @@ vi.mock("../api", () => ({
 		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		listTrackerVocabularies: (...a: unknown[]) =>
 			mockListTrackerVocabularies(...a),
+		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -88,6 +91,23 @@ const priorities: TrackerVocabulary[] = [
 	},
 ];
 
+const labels: TrackerVocabulary[] = [
+	{
+		id: 3,
+		kind: "label",
+		name: "Feature",
+		position: 1000,
+		colour: "oklch(0.7 0.1 260)",
+	},
+	{
+		id: 4,
+		kind: "label",
+		name: "Bug",
+		position: 2000,
+		colour: "oklch(0.7 0.1 15)",
+	},
+];
+
 function makeItem(overrides: Partial<TrackerItem> & { id: number }): TrackerItem {
 	return {
 		key: "CA-1",
@@ -116,9 +136,26 @@ beforeEach(() => {
 	mockListTrackerVocabularies.mockImplementation(
 		(_wsId: number, kind?: string) => {
 			if (kind === "priority") return Promise.resolve(priorities);
+			if (kind === "label") return Promise.resolve(labels);
 			return Promise.resolve(statuses);
 		},
 	);
+	mockGetWorkspaceMembers.mockResolvedValue({
+		members: [
+			{
+				userId: 7,
+				username: "alice",
+				displayName: "Alice",
+				role: "member",
+			},
+			{
+				userId: 8,
+				username: "bob",
+				displayName: "Bob",
+				role: "member",
+			},
+		],
+	});
 	mockListTrackerItems.mockResolvedValue([
 		makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
 		makeItem({
@@ -168,6 +205,28 @@ describe("TrackerPage", () => {
 		expect(screen.getByText("Backlog")).toBeTruthy();
 	});
 
+	it("matches search against description text", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 1,
+				key: "CA-9",
+				title: "Opaque title",
+				description: "hidden billing details",
+			}),
+		]);
+		render(<TrackerPage />);
+		fireEvent.change(screen.getByPlaceholderText(/search/i), {
+			target: { value: "billing" },
+		});
+		await waitFor(() => expect(screen.getByText("CA-9")).toBeTruthy());
+	});
+
+	it("renders status icon on tracker rows", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		expect(screen.getByLabelText("Backlog")).toBeTruthy();
+	});
+
 	it("resets collapsed sections when re-navigating to /tracker", async () => {
 		const { rerender } = render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Done"));
@@ -214,6 +273,36 @@ describe("TrackerPage", () => {
 					title: "Full",
 					statusId: 2,
 					priorityId: expect.any(Number),
+				}),
+			),
+		);
+	});
+
+	it("submits label and assignee pickers on create", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Backlog"));
+		fireEvent.click(
+			screen.getByRole("button", { name: /create tracker item/i }),
+		);
+		await waitFor(() => screen.getByLabelText("Feature"));
+		fireEvent.change(screen.getByLabelText(/title/i), {
+			target: { value: "Tagged task" },
+		});
+		fireEvent.change(screen.getByLabelText(/description/i), {
+			target: { value: "Needs review" },
+		});
+		fireEvent.click(screen.getByLabelText("Feature"));
+		fireEvent.click(screen.getByPlaceholderText(/search members/i));
+		fireEvent.click(screen.getByRole("option", { name: /Alice/i }));
+		fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+		await waitFor(() =>
+			expect(mockCreateTrackerItem).toHaveBeenCalledWith(
+				7,
+				expect.objectContaining({
+					title: "Tagged task",
+					description: "Needs review",
+					labelIds: [3],
+					assigneeIds: [7],
 				}),
 			),
 		);

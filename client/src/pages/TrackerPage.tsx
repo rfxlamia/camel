@@ -107,7 +107,8 @@ export default function TrackerPage() {
 		return items.filter(
 			(item) =>
 				item.title.toLowerCase().includes(q) ||
-				item.key.toLowerCase().includes(q),
+				item.key.toLowerCase().includes(q) ||
+				(item.description?.toLowerCase().includes(q) ?? false),
 		);
 	}, [items, search]);
 
