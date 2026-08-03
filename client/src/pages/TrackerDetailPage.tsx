@@ -20,7 +20,7 @@ function trackerEventKey(
 	if (event.trackerItemId != null && itemId != null) {
 		return event.trackerItemId === itemId;
 	}
-	return event.type === "tracker.updated" || event.type === "tracker.deleted";
+	return false;
 }
 
 export default function TrackerDetailPage() {
@@ -85,38 +85,10 @@ export default function TrackerDetailPage() {
 			}
 
 			if (event.type === "tracker.updated") {
-				const payload = event.payload as
-					| {
-							title?: string;
-							description?: string;
-							version?: number;
-					  }
-					| undefined;
-				if (payload?.title !== undefined) setTitle(payload.title);
-				if (payload?.description !== undefined) {
-					setDescription(payload.description);
-				}
-				setItem((prev) =>
-					prev
-						? {
-								...prev,
-								title: payload?.title ?? prev.title,
-								description: payload?.description ?? prev.description,
-								version: payload?.version ?? prev.version,
-							}
-						: prev,
-				);
-				if (payload?.title !== undefined || payload?.description !== undefined) {
-					baselineRef.current = {
-						title: payload?.title ?? baselineRef.current.title,
-						description:
-							payload?.description ?? baselineRef.current.description,
-						version: payload?.version ?? baselineRef.current.version,
-					};
-				}
+				void loadItem();
 			}
 		});
-	}, [subscribeTrackerEvents, item, navigate, refreshTrackerList]);
+	}, [subscribeTrackerEvents, item, navigate, refreshTrackerList, loadItem]);
 
 	const handleSave = async () => {
 		if (activeWorkspaceId === null || !item) return;

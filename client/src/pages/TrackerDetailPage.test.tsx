@@ -148,10 +148,21 @@ describe("TrackerDetailPage", () => {
 		);
 	});
 
-	it("applies tracker.updated SSE to live detail fields", async () => {
+	it("refetches item on tracker.updated SSE", async () => {
 		let sseHandler:
-			| ((e: { type: string; payload?: unknown }) => void)
+			| ((e: {
+					type: string;
+					payload?: unknown;
+					trackerItemId?: number;
+			  }) => void)
 			| undefined;
+		mockGetTrackerItem
+			.mockResolvedValueOnce(item)
+			.mockResolvedValueOnce({
+				...item,
+				title: "Live title",
+				version: 3,
+			});
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: 7,
 			showToast: mockShowToast,
@@ -163,13 +174,11 @@ describe("TrackerDetailPage", () => {
 		});
 		render(<TrackerDetailPage />);
 		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
-		sseHandler?.({
-			type: "tracker.updated",
-			payload: { key: "CK-42", title: "Live title", version: 3 },
-		});
+		sseHandler?.({ type: "tracker.updated", trackerItemId: 42 });
 		await waitFor(() =>
 			expect(screen.getByDisplayValue("Live title")).toBeTruthy(),
 		);
+		expect(mockGetTrackerItem).toHaveBeenCalledTimes(2);
 	});
 
 	it("removes item from list context on tracker.deleted SSE", async () => {

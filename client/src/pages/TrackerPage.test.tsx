@@ -308,6 +308,30 @@ describe("TrackerPage", () => {
 		);
 	});
 
+	it("removes row on tracker.deleted SSE by trackerItemId", async () => {
+		let sseHandler:
+			| ((e: {
+					type: string;
+					payload?: unknown;
+					trackerItemId?: number;
+			  }) => void)
+			| undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: typeof sseHandler) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+		});
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-2"));
+		sseHandler?.({ type: "tracker.deleted", trackerItemId: 2 });
+		await waitFor(() => expect(screen.queryByText("CA-2")).toBeNull());
+		expect(screen.getByText("CA-1")).toBeTruthy();
+	});
+
 	it("shows new vocab section on tracker.vocabulary.created SSE without refresh", async () => {
 		let sseHandler:
 			| ((e: { type: string; payload?: unknown }) => void)

@@ -58,6 +58,7 @@ export type ToastType = "success" | "error" | "warning" | "info";
 export type TrackerEventHandler = (event: {
 	type: string;
 	payload?: unknown;
+	trackerItemId?: number;
 }) => void;
 
 interface BoardContextValue {
@@ -563,7 +564,11 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					return;
 				}
 				if (typeof data.type === "string" && data.type.startsWith("tracker.")) {
-					const event = data as { type: string; payload?: unknown };
+					const event = data as {
+						type: string;
+						payload?: unknown;
+						trackerItemId?: number;
+					};
 					for (const handler of trackerEventSubscribers.current) {
 						handler(event);
 					}

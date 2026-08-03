@@ -82,9 +82,7 @@ export default function TrackerPage() {
 
 			if (event.type === "tracker.deleted") {
 				const payload = event.payload as { key?: string } | undefined;
-				const trackerItemId = (
-					event as { trackerItemId?: number }
-				).trackerItemId;
+				const { trackerItemId } = event;
 				setItems((prev) =>
 					prev.filter((item) => {
 						if (payload?.key) return item.key !== payload.key;
