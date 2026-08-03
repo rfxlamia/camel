@@ -55,6 +55,11 @@ export type SaveCardResult = "saved" | "conflict" | "error";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
+export type TrackerEventHandler = (event: {
+	type: string;
+	payload?: unknown;
+}) => void;
+
 interface BoardContextValue {
 	user: User;
 	activeWorkspaceId: number | null;
@@ -115,6 +120,7 @@ interface BoardContextValue {
 	ticketIntakeEnabled: boolean;
 	boardViewMode: BoardViewMode;
 	setBoardViewMode: (mode: BoardViewMode) => void;
+	subscribeTrackerEvents: (handler: TrackerEventHandler) => () => void;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -173,6 +179,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const trackerEventSubscribers = useRef(new Set<TrackerEventHandler>());
 	const prevWorkspaceIdRef = useRef<number | null>(null);
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
@@ -235,6 +242,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		setToast({ message, type });
 		if (toastTimer.current) clearTimeout(toastTimer.current);
 		toastTimer.current = setTimeout(() => setToast(null), 3500);
+	}, []);
+
+	const subscribeTrackerEvents = useCallback((handler: TrackerEventHandler) => {
+		trackerEventSubscribers.current.add(handler);
+		return () => {
+			trackerEventSubscribers.current.delete(handler);
+		};
 	}, []);
 
 	const clearAgentEvents = useCallback(() => setAgentEvents([]), []);
@@ -533,6 +547,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					]);
 					return;
 				}
+				if (typeof data.type === "string" && data.type.startsWith("tracker.")) {
+					const event = data as { type: string; payload?: unknown };
+					for (const handler of trackerEventSubscribers.current) {
+						handler(event);
+					}
+					return;
+				}
 			} catch {
 				// non-JSON keep-alive comment
 			}
@@ -679,6 +700,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				ticketIntakeEnabled,
 				boardViewMode,
 				setBoardViewMode,
+				subscribeTrackerEvents,
 			}}
 		>
 			{children}
