@@ -2,6 +2,12 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Calendar, Check } from "lucide-react";
 import { memo } from "react";
+import {
+	assigneeInitials,
+	formatDueDate,
+	isCardDone,
+	isDueOverdue,
+} from "../lib/boardViewUtils";
 import type { Card } from "../types";
 
 interface Props {
@@ -9,47 +15,9 @@ interface Props {
 	onOpen: (card: Card) => void;
 }
 
-const MONTHS = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
-];
-
-/** Initials for the assignee avatar: "Jane Doe" → "JD", "cher" → "CH". */
-function initials(name: string): string {
-	const parts = name.trim().split(/\s+/).filter(Boolean);
-	if (parts.length === 0) return "?";
-	if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-	return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-/** Today as a "YYYY-MM-DD" calendar string in the user's local timezone. */
-function todayISO(): string {
-	const d = new Date();
-	const m = String(d.getMonth() + 1).padStart(2, "0");
-	const day = String(d.getDate()).padStart(2, "0");
-	return `${d.getFullYear()}-${m}-${day}`;
-}
-
-/** "2026-06-21" → "Jun 21". Parsed from the string to avoid timezone shifts. */
-function formatDue(iso: string): string {
-	const [, m, d] = iso.split("-").map(Number);
-	return `${MONTHS[m - 1]} ${d}`;
-}
-
 export function CardBody({ card }: { card: Card }) {
-	const done = card.doneAt !== null;
-	// Date-only string compare is valid because ISO "YYYY-MM-DD" sorts lexically.
-	const overdue = card.dueDate !== null && !done && card.dueDate < todayISO();
+	const done = isCardDone(card);
+	const overdue = isDueOverdue(card);
 	return (
 		<>
 			<div className="flex items-start gap-2">
@@ -91,7 +59,7 @@ export function CardBody({ card }: { card: Card }) {
 							title={overdue ? "Overdue" : "Due date"}
 						>
 							<Calendar size={11} aria-hidden />
-							{formatDue(card.dueDate)}
+							{formatDueDate(card.dueDate)}
 						</span>
 					)}
 					{card.assignees.length > 0 && (
@@ -103,7 +71,7 @@ export function CardBody({ card }: { card: Card }) {
 									title={`Assigned to ${assignee.displayName}`}
 									aria-label={`Assigned to ${assignee.displayName}`}
 								>
-									{initials(assignee.displayName)}
+									{assigneeInitials(assignee.displayName)}
 								</span>
 							))}
 							{card.assignees.length > 3 && (
