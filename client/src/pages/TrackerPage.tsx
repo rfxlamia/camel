@@ -13,7 +13,11 @@ import {
 import type { TrackerItem, TrackerVocabulary } from "../types";
 
 export default function TrackerPage() {
-	const { activeWorkspaceId, subscribeTrackerEvents } = useBoard();
+	const {
+		activeWorkspaceId,
+		subscribeTrackerEvents,
+		registerRefreshTrackerList,
+	} = useBoard();
 	const location = useLocation();
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
@@ -51,6 +55,13 @@ export default function TrackerPage() {
 	}, [loadData]);
 
 	useEffect(() => {
+		registerRefreshTrackerList(() => {
+			void loadData();
+		});
+		return () => registerRefreshTrackerList(null);
+	}, [loadData, registerRefreshTrackerList]);
+
+	useEffect(() => {
 		if (!subscribeTrackerEvents) return;
 		return subscribeTrackerEvents((event) => {
 			if (
@@ -66,9 +77,29 @@ export default function TrackerPage() {
 						prev.some((s) => s.id === vocab.id) ? prev : [...prev, vocab],
 					),
 				);
+				return;
+			}
+
+			if (event.type === "tracker.deleted") {
+				const payload = event.payload as { key?: string } | undefined;
+				const trackerItemId = (
+					event as { trackerItemId?: number }
+				).trackerItemId;
+				setItems((prev) =>
+					prev.filter((item) => {
+						if (payload?.key) return item.key !== payload.key;
+						if (trackerItemId != null) return item.id !== trackerItemId;
+						return true;
+					}),
+				);
+				return;
+			}
+
+			if (event.type === "tracker.created" || event.type === "tracker.updated") {
+				void loadData();
 			}
 		});
-	}, [subscribeTrackerEvents]);
+	}, [subscribeTrackerEvents, loadData]);
 
 	const filteredItems = useMemo(() => {
 		const q = search.trim().toLowerCase();

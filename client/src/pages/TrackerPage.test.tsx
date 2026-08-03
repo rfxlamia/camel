@@ -134,7 +134,9 @@ beforeEach(() => {
 	);
 	mockUseBoard.mockReturnValue({
 		activeWorkspaceId: 7,
-		subscribeTrackerEvents: vi.fn(),
+		subscribeTrackerEvents: vi.fn(() => () => {}),
+		registerRefreshTrackerList: vi.fn(),
+		refreshTrackerList: vi.fn(),
 	});
 	mockLocation.key = "tracker-1";
 });
@@ -229,6 +231,8 @@ describe("TrackerPage", () => {
 				sseHandler = cb;
 				return () => {};
 			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
 		});
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));

@@ -355,6 +355,7 @@ export interface TrackerEvent {
 	trackerItemId: number | null;
 	title: string | null;
 	actor: { username: string; displayName: string } | null;
+	payload?: Record<string, unknown> | null;
 	createdAt: string;
 }
 

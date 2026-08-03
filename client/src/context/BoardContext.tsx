@@ -121,6 +121,9 @@ interface BoardContextValue {
 	boardViewMode: BoardViewMode;
 	setBoardViewMode: (mode: BoardViewMode) => void;
 	subscribeTrackerEvents: (handler: TrackerEventHandler) => () => void;
+	/** Reload the tracker list page (registered by TrackerPage). */
+	refreshTrackerList: () => void;
+	registerRefreshTrackerList: (fn: (() => void) | null) => void;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -180,6 +183,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const trackerEventSubscribers = useRef(new Set<TrackerEventHandler>());
+	const trackerListRefreshRef = useRef<(() => void) | null>(null);
 	const prevWorkspaceIdRef = useRef<number | null>(null);
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
@@ -249,6 +253,17 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		return () => {
 			trackerEventSubscribers.current.delete(handler);
 		};
+	}, []);
+
+	const registerRefreshTrackerList = useCallback(
+		(fn: (() => void) | null) => {
+			trackerListRefreshRef.current = fn;
+		},
+		[],
+	);
+
+	const refreshTrackerList = useCallback(() => {
+		trackerListRefreshRef.current?.();
 	}, []);
 
 	const clearAgentEvents = useCallback(() => setAgentEvents([]), []);
@@ -701,6 +716,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				boardViewMode,
 				setBoardViewMode,
 				subscribeTrackerEvents,
+				refreshTrackerList,
+				registerRefreshTrackerList,
 			}}
 		>
 			{children}
