@@ -15,6 +15,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate } from "react-router";
 import { ApiError, api } from "../api";
 import { CardBody } from "../components/CardView";
+import CalendarView from "../components/CalendarView";
 import ColumnView from "../components/ColumnView";
 import EmptyState from "../components/EmptyState";
 import TemplatePicker from "../components/TemplatePicker";
@@ -187,6 +188,7 @@ export default function BoardPage() {
 		cancelScheduledRefresh,
 		showToast,
 		deleteCard,
+		saveCard,
 		activeWorkspaceId,
 		boardViewMode,
 		setBoardViewMode,
@@ -570,7 +572,11 @@ export default function BoardPage() {
 					<div data-testid="list-view" />
 				)}
 				{!loadError && columns !== null && boardViewMode === "calendar" && (
-					<div data-testid="calendar-view" />
+					<CalendarView
+						columns={columns}
+						onOpenCard={onOpenCard}
+						saveCard={saveCard}
+					/>
 				)}
 			</div>
 
