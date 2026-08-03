@@ -17,6 +17,7 @@ import { ApiError, api } from "../api";
 import { CardBody } from "../components/CardView";
 import ColumnView from "../components/ColumnView";
 import EmptyState from "../components/EmptyState";
+import ListView from "../components/ListView";
 import TemplatePicker from "../components/TemplatePicker";
 import TrashZone from "../components/TrashZone";
 import ViewSwitcher from "../components/ViewSwitcher";
@@ -567,7 +568,7 @@ export default function BoardPage() {
 					</DndContext>
 				)}
 				{!loadError && columns !== null && boardViewMode === "list" && (
-					<div data-testid="list-view" />
+					<ListView columns={columns} onOpenCard={onOpenCard} />
 				)}
 				{!loadError && columns !== null && boardViewMode === "calendar" && (
 					<div data-testid="calendar-view" />
