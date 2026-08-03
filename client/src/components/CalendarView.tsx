@@ -1,4 +1,13 @@
 import {
+	DndContext,
+	type DragEndEvent,
+	PointerSensor,
+	useDraggable,
+	useDroppable,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
 	addMonths,
 	format,
 	isToday,
@@ -6,21 +15,149 @@ import {
 	subMonths,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import type { SaveCardResult } from "../context/BoardContext";
 import { isDueOverdue } from "../lib/boardViewUtils";
-import { buildMonthGrid } from "../lib/calendarGrid";
+import { buildMonthGrid, type CalendarGridCell } from "../lib/calendarGrid";
 import type { Card, Column } from "../types";
+import CalendarConflictNotice from "./CalendarConflictNotice";
 import CalendarDayModal from "./CalendarDayModal";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_VISIBLE_CHIPS = 2;
 
+function parseCardDragId(id: string | number): number | null {
+	const str = String(id);
+	if (!str.startsWith("calendar-card-")) return null;
+	const cardId = Number(str.slice("calendar-card-".length));
+	return Number.isFinite(cardId) ? cardId : null;
+}
+
+function parseDateDropId(id: string | number): string | null {
+	const str = String(id);
+	if (!str.startsWith("date-")) return null;
+	return str.slice("date-".length);
+}
+
+function CalendarCardChip({
+	card,
+	showConflict,
+	onConflictDismiss,
+}: {
+	card: Card;
+	showConflict: boolean;
+	onConflictDismiss: () => void;
+}) {
+	const { attributes, listeners, setNodeRef, transform, isDragging } =
+		useDraggable({ id: `calendar-card-${card.id}` });
+
+	const style = transform
+		? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+		: undefined;
+
+	return (
+		<span
+			ref={setNodeRef}
+			style={style}
+			id={`calendar-card-${card.id}`}
+			className={`truncate rounded bg-primary-100 px-1.5 py-0.5 text-[11px] font-medium text-primary-800 ${
+				isDragging ? "opacity-50" : ""
+			}`}
+			{...listeners}
+			{...attributes}
+		>
+			{card.title}
+			{showConflict && (
+				<CalendarConflictNotice onDismiss={onConflictDismiss} />
+			)}
+		</span>
+	);
+}
+
+function CalendarDateCell({
+	cell,
+	cards,
+	hideChips,
+	onCellClick,
+	conflictCardIds,
+	onConflictDismiss,
+}: {
+	cell: CalendarGridCell;
+	cards: Card[];
+	hideChips: boolean;
+	onCellClick: (iso: string, cards: Card[]) => void;
+	conflictCardIds: Set<number>;
+	onConflictDismiss: (cardId: number) => void;
+}) {
+	const { setNodeRef } = useDroppable({ id: `date-${cell.iso}` });
+
+	const visible = hideChips ? [] : cards.slice(0, MAX_VISIBLE_CHIPS);
+	const overflow = hideChips ? 0 : cards.length - MAX_VISIBLE_CHIPS;
+	const showOverdue = cards.some(isDueOverdue);
+	const todayCell = isToday(cell.date);
+
+	return (
+		<div
+			ref={setNodeRef}
+			id={`date-${cell.iso}`}
+			data-testid={`date-cell-${cell.iso}`}
+			role="button"
+			tabIndex={0}
+			onClick={() => onCellClick(cell.iso, cards)}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onCellClick(cell.iso, cards);
+				}
+			}}
+			className={`flex min-h-24 cursor-pointer flex-col border-b border-r border-neutral-200 p-1.5 text-left transition-colors hover:bg-primary-100/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 ${
+				cell.inMonth ? "bg-white" : "bg-neutral-50"
+			}`}
+		>
+			<span className="mb-1 flex items-center gap-1">
+				<span
+					className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-medium ${
+						todayCell
+							? "bg-primary-600 text-white"
+							: cell.inMonth
+								? "text-neutral-900"
+								: "text-neutral-400"
+					}`}
+				>
+					{format(cell.date, "d")}
+				</span>
+				{showOverdue && (
+					<span
+						data-testid="overdue-indicator"
+						className="h-1.5 w-1.5 rounded-full bg-error-500"
+						aria-label="Overdue"
+					/>
+				)}
+			</span>
+			<div className="flex flex-col gap-0.5 overflow-hidden">
+				{visible.map((card) => (
+					<CalendarCardChip
+						key={card.id}
+						card={card}
+						showConflict={conflictCardIds.has(card.id)}
+						onConflictDismiss={() => onConflictDismiss(card.id)}
+					/>
+				))}
+				{overflow > 0 && (
+					<span className="text-[11px] font-medium text-neutral-500">
+						+{overflow} more
+					</span>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export default function CalendarView({
 	columns,
 	onOpenCard: _onOpenCard,
-	saveCard: _saveCard,
+	saveCard,
 }: {
 	columns: Column[];
 	onOpenCard: (card: Card) => void;
@@ -32,6 +169,13 @@ export default function CalendarView({
 	const navigate = useNavigate();
 	const [month, setMonth] = useState(() => startOfMonth(new Date()));
 	const [modalDate, setModalDate] = useState<string | null>(null);
+	const [conflictCardIds, setConflictCardIds] = useState<Set<number>>(
+		new Set(),
+	);
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+	);
 
 	const cardsByDate = useMemo(() => {
 		const map = new Map<string, Card[]>();
@@ -41,6 +185,16 @@ export default function CalendarView({
 				const list = map.get(card.dueDate) ?? [];
 				list.push(card);
 				map.set(card.dueDate, list);
+			}
+		}
+		return map;
+	}, [columns]);
+
+	const cardById = useMemo(() => {
+		const map = new Map<number, Card>();
+		for (const col of columns) {
+			for (const card of col.cards) {
+				map.set(card.id, card);
 			}
 		}
 		return map;
@@ -58,6 +212,41 @@ export default function CalendarView({
 			setModalDate(iso);
 		}
 	};
+
+	const dismissConflict = useCallback((cardId: number) => {
+		setConflictCardIds((prev) => {
+			const next = new Set(prev);
+			next.delete(cardId);
+			return next;
+		});
+	}, []);
+
+	const showConflict = useCallback((cardId: number) => {
+		setConflictCardIds((prev) => new Set(prev).add(cardId));
+	}, []);
+
+	const handleDragEnd = useCallback(
+		async (event: DragEndEvent) => {
+			const { active, over } = event;
+			if (!over) return;
+
+			const cardId = parseCardDragId(active.id);
+			const targetDate = parseDateDropId(over.id);
+			if (cardId === null || targetDate === null) return;
+
+			const card = cardById.get(cardId);
+			if (!card || card.dueDate === targetDate) return;
+
+			const result = await saveCard(cardId, {
+				dueDate: targetDate,
+				version: card.version,
+			});
+			if (result === "conflict") {
+				showConflict(cardId);
+			}
+		},
+		[cardById, saveCard, showConflict],
+	);
 
 	return (
 		<div
@@ -106,66 +295,26 @@ export default function CalendarView({
 				))}
 			</div>
 
-			<div className="grid grid-cols-7">
-				{grid.map((cell) => {
-					const cards = cardsByDate.get(cell.iso) ?? [];
-					const hideChips = modalDate === cell.iso;
-					const visible = hideChips ? [] : cards.slice(0, MAX_VISIBLE_CHIPS);
-					const overflow = hideChips ? 0 : cards.length - MAX_VISIBLE_CHIPS;
-					const showOverdue = cards.some(isDueOverdue);
-					const todayCell = isToday(cell.date);
+			<DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+				<div className="grid grid-cols-7">
+					{grid.map((cell) => {
+						const cards = cardsByDate.get(cell.iso) ?? [];
+						const hideChips = modalDate === cell.iso;
 
-					return (
-						<button
-							key={cell.iso}
-							type="button"
-							data-testid={`date-cell-${cell.iso}`}
-							id={`date-${cell.iso}`}
-							onClick={() => handleCellClick(cell.iso, cards)}
-							className={`flex min-h-24 flex-col border-b border-r border-neutral-200 p-1.5 text-left transition-colors hover:bg-primary-100/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 ${
-								cell.inMonth ? "bg-white" : "bg-neutral-50"
-							}`}
-						>
-							<span className="mb-1 flex items-center gap-1">
-								<span
-									className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-medium ${
-										todayCell
-											? "bg-primary-600 text-white"
-											: cell.inMonth
-												? "text-neutral-900"
-												: "text-neutral-400"
-									}`}
-								>
-									{format(cell.date, "d")}
-								</span>
-								{showOverdue && (
-									<span
-										data-testid="overdue-indicator"
-										className="h-1.5 w-1.5 rounded-full bg-error-500"
-										aria-label="Overdue"
-									/>
-								)}
-							</span>
-							<div className="flex flex-col gap-0.5 overflow-hidden">
-								{visible.map((card) => (
-									<span
-										key={card.id}
-										id={`calendar-card-${card.id}`}
-										className="truncate rounded bg-primary-100 px-1.5 py-0.5 text-[11px] font-medium text-primary-800"
-									>
-										{card.title}
-									</span>
-								))}
-								{overflow > 0 && (
-									<span className="text-[11px] font-medium text-neutral-500">
-										+{overflow} more
-									</span>
-								)}
-							</div>
-						</button>
-					);
-				})}
-			</div>
+						return (
+							<CalendarDateCell
+								key={cell.iso}
+								cell={cell}
+								cards={cards}
+								hideChips={hideChips}
+								onCellClick={handleCellClick}
+								conflictCardIds={conflictCardIds}
+								onConflictDismiss={dismissConflict}
+							/>
+						);
+					})}
+				</div>
+			</DndContext>
 
 			{modalDate !== null && (
 				<CalendarDayModal
