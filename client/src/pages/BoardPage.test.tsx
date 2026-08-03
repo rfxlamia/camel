@@ -67,6 +67,8 @@ beforeEach(() => {
 		showToast,
 		deleteCard: vi.fn(),
 		activeWorkspaceId: 7,
+		boardViewMode: "board",
+		setBoardViewMode: vi.fn(),
 	});
 });
 afterEach(() => {

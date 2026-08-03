@@ -19,6 +19,7 @@ import ColumnView from "../components/ColumnView";
 import EmptyState from "../components/EmptyState";
 import TemplatePicker from "../components/TemplatePicker";
 import TrashZone from "../components/TrashZone";
+import ViewSwitcher from "../components/ViewSwitcher";
 import { useBoard } from "../context/BoardContext";
 import { WORKSPACE_TEMPLATES } from "../lib/templates";
 import type { WorkspaceTemplate } from "../lib/templates";
@@ -187,6 +188,8 @@ export default function BoardPage() {
 		showToast,
 		deleteCard,
 		activeWorkspaceId,
+		boardViewMode,
+		setBoardViewMode,
 	} = useBoard();
 	const navigate = useNavigate();
 	const [activeCard, setActiveCard] = useState<Card | null>(null);
@@ -487,6 +490,14 @@ export default function BoardPage() {
 			{columns && columns.length > 0 && <BoardToolbar columns={columns} />}
 
 			<div className="board-canvas relative flex-1 overflow-x-auto p-6">
+				{columns !== null && (
+					<div className="mb-4">
+						<ViewSwitcher
+							value={boardViewMode}
+							onChange={setBoardViewMode}
+						/>
+					</div>
+				)}
 				{loadError && (
 					<div className="mx-auto max-w-md rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
 						Couldn't load the board. Check that the server is running, then
@@ -496,7 +507,7 @@ export default function BoardPage() {
 				{!loadError && columns === null && (
 					<p className="text-sm text-neutral-500">Loading board...</p>
 				)}
-				{columns && (
+				{!loadError && columns && boardViewMode === "board" && (
 					<DndContext
 						sensors={sensors}
 						collisionDetection={closestCorners}
@@ -554,6 +565,12 @@ export default function BoardPage() {
 						</DragOverlay>
 						<TrashZone visible={activeCard !== null} />
 					</DndContext>
+				)}
+				{!loadError && columns !== null && boardViewMode === "list" && (
+					<div data-testid="list-view" />
+				)}
+				{!loadError && columns !== null && boardViewMode === "calendar" && (
+					<div data-testid="calendar-view" />
 				)}
 			</div>
 
