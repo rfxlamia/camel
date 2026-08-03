@@ -316,6 +316,18 @@ export const workspaceAccessService = createWorkspaceAccessService({
 				.where("card_assignees.user_id", "=", userId)
 				.execute();
 
+			await trx
+				.deleteFrom("tracker_item_assignees")
+				.using("tracker_items")
+				.whereRef(
+					"tracker_item_assignees.tracker_item_id",
+					"=",
+					"tracker_items.id",
+				)
+				.where("tracker_items.workspace_id", "=", workspaceId)
+				.where("tracker_item_assignees.user_id", "=", userId)
+				.execute();
+
 			const user = await trx
 				.selectFrom("users")
 				.select("username")
