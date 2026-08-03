@@ -355,3 +355,107 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_reminder_daily
   WHERE type = 'due_date_reminder';
 
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS board_id INTEGER;
+
+-- Tracker entity (2026-08: backlog/product items, independent of Board cards)
+
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracker_key_counter INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS tracker_vocabularies (
+  id           SERIAL PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL CHECK (kind IN ('status', 'priority', 'label')),
+  name         TEXT NOT NULL,
+  position     DOUBLE PRECISION NOT NULL,
+  colour       TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tracker_vocab_workspace_kind_name
+  ON tracker_vocabularies (workspace_id, kind, lower(name));
+
+CREATE INDEX IF NOT EXISTS idx_tracker_vocab_workspace_kind_position
+  ON tracker_vocabularies (workspace_id, kind, position);
+
+CREATE TABLE IF NOT EXISTS tracker_items (
+  id           SERIAL PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  key_number   INTEGER NOT NULL,
+  title        TEXT NOT NULL,
+  description  TEXT NOT NULL DEFAULT '',
+  status_id    INTEGER NOT NULL REFERENCES tracker_vocabularies(id),
+  priority_id  INTEGER REFERENCES tracker_vocabularies(id) ON DELETE SET NULL,
+  version      INTEGER NOT NULL DEFAULT 1,
+  deleted_at   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, key_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracker_items_workspace_active
+  ON tracker_items (workspace_id, created_at)
+  WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS tracker_item_labels (
+  tracker_item_id INTEGER NOT NULL REFERENCES tracker_items(id) ON DELETE CASCADE,
+  vocabulary_id   INTEGER NOT NULL REFERENCES tracker_vocabularies(id) ON DELETE CASCADE,
+  PRIMARY KEY (tracker_item_id, vocabulary_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracker_item_labels_vocab
+  ON tracker_item_labels (vocabulary_id);
+
+CREATE TABLE IF NOT EXISTS tracker_item_assignees (
+  tracker_item_id INTEGER NOT NULL REFERENCES tracker_items(id) ON DELETE CASCADE,
+  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (tracker_item_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracker_item_assignees_user
+  ON tracker_item_assignees (user_id);
+
+CREATE TABLE IF NOT EXISTS tracker_events (
+  id              SERIAL PRIMARY KEY,
+  tracker_item_id INTEGER REFERENCES tracker_items(id) ON DELETE SET NULL,
+  actor_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  event_type      TEXT NOT NULL,
+  payload         JSONB NOT NULL DEFAULT '{}',
+  workspace_id    INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracker_events_item_created
+  ON tracker_events (tracker_item_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tracker_events_workspace_created
+  ON tracker_events (workspace_id, created_at DESC, id DESC);
+
+-- Retroactive default vocabulary for all existing workspaces (idempotent re-run).
+DO $$
+DECLARE
+  ws RECORD;
+BEGIN
+  FOR ws IN SELECT id FROM workspaces LOOP
+    INSERT INTO tracker_vocabularies (workspace_id, kind, name, position, colour)
+    SELECT ws.id, v.kind, v.name, v.position, v.colour
+    FROM (VALUES
+      ('status',   'Backlog',       1024::double precision, 'oklch(0.89 0.07 250)'),
+      ('status',   'Todo',          2048::double precision, 'oklch(0.89 0.07 200)'),
+      ('status',   'In Progress',   3072::double precision, 'oklch(0.89 0.07 150)'),
+      ('status',   'Done',          4096::double precision, 'oklch(0.89 0.07 140)'),
+      ('status',   'Canceled',      5120::double precision, 'oklch(0.89 0.07 30)'),
+      ('priority', 'High',          1024::double precision, 'oklch(0.89 0.07 25)'),
+      ('priority', 'Medium',        2048::double precision, 'oklch(0.89 0.07 85)'),
+      ('priority', 'Low',           3072::double precision, 'oklch(0.89 0.07 220)'),
+      ('label',    'Feature',       1024::double precision, 'oklch(0.89 0.07 280)'),
+      ('label',    'Bug',           2048::double precision, 'oklch(0.89 0.07 15)'),
+      ('label',    'Maintain',      3072::double precision, 'oklch(0.89 0.07 180)')
+    ) AS v(kind, name, position, colour)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM tracker_vocabularies tv
+      WHERE tv.workspace_id = ws.id
+        AND tv.kind = v.kind
+        AND lower(tv.name) = lower(v.name)
+    );
+  END LOOP;
+END $$;
