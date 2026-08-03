@@ -23,21 +23,36 @@ import { buildMonthGrid, type CalendarGridCell } from "../lib/calendarGrid";
 import type { Card, Column } from "../types";
 import CalendarConflictNotice from "./CalendarConflictNotice";
 import CalendarDayModal from "./CalendarDayModal";
+import UnscheduledTray from "./UnscheduledTray";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_VISIBLE_CHIPS = 2;
 
-function parseCardDragId(id: string | number): number | null {
+type CardDragSource = "calendar" | "tray";
+
+function parseCardDragId(
+	id: string | number,
+): { cardId: number; source: CardDragSource } | null {
 	const str = String(id);
-	if (!str.startsWith("calendar-card-")) return null;
-	const cardId = Number(str.slice("calendar-card-".length));
-	return Number.isFinite(cardId) ? cardId : null;
+	if (str.startsWith("calendar-card-")) {
+		const cardId = Number(str.slice("calendar-card-".length));
+		return Number.isFinite(cardId) ? { cardId, source: "calendar" } : null;
+	}
+	if (str.startsWith("tray-card-")) {
+		const cardId = Number(str.slice("tray-card-".length));
+		return Number.isFinite(cardId) ? { cardId, source: "tray" } : null;
+	}
+	return null;
 }
 
 function parseDateDropId(id: string | number): string | null {
 	const str = String(id);
 	if (!str.startsWith("date-")) return null;
 	return str.slice("date-".length);
+}
+
+function isTrayDropId(id: string | number): boolean {
+	return String(id) === "unscheduled-tray";
 }
 
 function CalendarCardChip({
@@ -230,19 +245,34 @@ export default function CalendarView({
 			const { active, over } = event;
 			if (!over) return;
 
-			const cardId = parseCardDragId(active.id);
+			const drag = parseCardDragId(active.id);
+			if (!drag) return;
+
+			const card = cardById.get(drag.cardId);
+			if (!card) return;
+
+			if (isTrayDropId(over.id)) {
+				if (drag.source === "tray" || card.dueDate === null) return;
+
+				const result = await saveCard(drag.cardId, {
+					dueDate: null,
+					version: card.version,
+				});
+				if (result === "conflict") {
+					showConflict(drag.cardId);
+				}
+				return;
+			}
+
 			const targetDate = parseDateDropId(over.id);
-			if (cardId === null || targetDate === null) return;
+			if (targetDate === null || card.dueDate === targetDate) return;
 
-			const card = cardById.get(cardId);
-			if (!card || card.dueDate === targetDate) return;
-
-			const result = await saveCard(cardId, {
+			const result = await saveCard(drag.cardId, {
 				dueDate: targetDate,
 				version: card.version,
 			});
 			if (result === "conflict") {
-				showConflict(cardId);
+				showConflict(drag.cardId);
 			}
 		},
 		[cardById, saveCard, showConflict],
@@ -314,6 +344,13 @@ export default function CalendarView({
 						);
 					})}
 				</div>
+				<UnscheduledTray
+					columns={columns}
+					saveCard={saveCard}
+					onConflict={showConflict}
+					conflictCardIds={conflictCardIds}
+					onConflictDismiss={dismissConflict}
+				/>
 			</DndContext>
 
 			{modalDate !== null && (
