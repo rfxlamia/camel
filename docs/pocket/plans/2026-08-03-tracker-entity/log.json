@@ -38,25 +38,28 @@
     {
       "order": 2,
       "file": "execution-plan-phase-2.md",
-      "status": "WAITING",
+      "status": "DONE",
       "tasks": [
         {
           "id": "T4",
           "name": "Tracker items CRUD, search, assignees, changelog",
-          "status": "WAITING",
-          "depends": "T3"
+          "status": "DONE",
+          "depends": "T3",
+          "done_sha": "32cd059a6d9b865949cc363177f393110e2c5f04"
         },
         {
           "id": "T5",
           "name": "Tracker realtime SSE events",
-          "status": "WAITING",
-          "depends": "T4"
+          "status": "DONE",
+          "depends": "T4",
+          "done_sha": "a0c0b17bffddb92dd81b97e953566c0aa78ab0ba"
         },
         {
           "id": "T6",
           "name": "Client types and API layer",
-          "status": "WAITING",
-          "depends": "T4"
+          "status": "DONE",
+          "depends": "T4",
+          "done_sha": "c5a08a8d74bbcfa7eda11d1cbba21e797706b98b"
         }
       ]
     },
