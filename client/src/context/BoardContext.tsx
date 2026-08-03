@@ -13,6 +13,11 @@ import { ApiError, api } from "../api";
 import type { TicketIntakeResultEvent } from "../hooks/useTicketIntakeChat";
 import { shouldClearOnWorkspaceChange } from "../lib/agentStream";
 import {
+	type BoardViewMode,
+	readBoardViewMode,
+	writeBoardViewMode,
+} from "../lib/boardViewPrefs";
+import {
 	chooseInitialWorkspace,
 	clearSavedWorkspaceId,
 	getRemovalRedirect,
@@ -108,6 +113,8 @@ interface BoardContextValue {
 	clearFollowUpAgentEvents: () => void;
 	ticketIntakeEvents: TicketIntakeResultEvent[];
 	ticketIntakeEnabled: boolean;
+	boardViewMode: BoardViewMode;
+	setBoardViewMode: (mode: BoardViewMode) => void;
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null);
@@ -161,6 +168,9 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		TicketIntakeResultEvent[]
 	>([]);
 	const [ticketIntakeEnabled, setTicketIntakeEnabled] = useState(false);
+	const [boardViewMode, setBoardViewModeState] = useState<BoardViewMode>(() =>
+		readBoardViewMode(activeWorkspaceId ?? 0),
+	);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const prevWorkspaceIdRef = useRef<number | null>(null);
@@ -203,6 +213,21 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		}
 		prevWorkspaceIdRef.current = activeWorkspaceId;
 	}, [activeWorkspaceId]);
+
+	// Re-resolve view mode when active workspace changes.
+	useEffect(() => {
+		if (activeWorkspaceId === null) return;
+		setBoardViewModeState(readBoardViewMode(activeWorkspaceId));
+	}, [activeWorkspaceId]);
+
+	const setBoardViewMode = useCallback(
+		(mode: BoardViewMode) => {
+			if (activeWorkspaceId === null) return;
+			setBoardViewModeState(mode);
+			writeBoardViewMode(activeWorkspaceId, mode);
+		},
+		[activeWorkspaceId],
+	);
 
 	const membershipCount = workspaces.length;
 
@@ -652,6 +677,8 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				clearFollowUpAgentEvents,
 				ticketIntakeEvents,
 				ticketIntakeEnabled,
+				boardViewMode,
+				setBoardViewMode,
 			}}
 		>
 			{children}
