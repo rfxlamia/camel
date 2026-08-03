@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { generateRandomPastelBorder } from "../core/pastelColor.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { publishEvent } from "../realtime.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 
 const VOCAB_KINDS = ["status", "priority", "label"] as const;
@@ -137,6 +138,10 @@ trackerVocabulariesRouter.post(
 				return row;
 			});
 
+			await publishEvent(workspaceId, {
+				type: "tracker.vocabulary.created",
+				actor,
+			});
 			res.status(201).json(serializeVocabulary(created));
 		} catch (err: unknown) {
 			const pgErr = err as { code?: string };

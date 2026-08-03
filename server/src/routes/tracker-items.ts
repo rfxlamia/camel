@@ -13,6 +13,7 @@ import {
 	syncTrackerItemAssignees,
 	type TrackerItemAssignee,
 } from "./tracker-assignees.js";
+import { publishEvent } from "../realtime.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
@@ -379,6 +380,11 @@ trackerItemsRouter.post(
 			if (!row) return res.status(500).json({ error: "create failed" });
 
 			const [item] = await hydrateItems(db, [row], prefix);
+			await publishEvent(workspaceId, {
+				type: "tracker.created",
+				actor,
+				trackerItemId: created,
+			});
 			res.status(201).json(item);
 		} catch (err) {
 			if (err instanceof Error && err.message.includes("Backlog")) {
@@ -596,6 +602,11 @@ trackerItemsRouter.patch(
 				? formatKey(parsed.prefix, parsed.keyNumber)
 				: undefined;
 		const [item] = await hydrateItems(db, [row], prefix);
+		await publishEvent(workspaceId, {
+			type: "tracker.updated",
+			actor,
+			trackerItemId: existing.id,
+		});
 		if (redirectFrom) {
 			res.json({ ...item, canonicalKey: item.key, redirectFrom });
 			return;
@@ -680,6 +691,11 @@ trackerItemsRouter.delete(
 			});
 		}
 
+		await publishEvent(workspaceId, {
+			type: "tracker.deleted",
+			actor,
+			trackerItemId: existing.id,
+		});
 		res.status(204).send();
 	},
 );

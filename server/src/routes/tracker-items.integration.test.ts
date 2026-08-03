@@ -371,3 +371,68 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 		});
 	});
 });
+
+describe.skipIf(!process.env.RUN_INTEGRATION)("tracker realtime SSE", () => {
+	it("publishes tracker.created on item POST", async () => {
+		mockPublishEvent.mockClear();
+
+		const res = await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/items`)
+			.send({ title: "New item" });
+		expect(res.status).toBe(201);
+
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			WORKSPACE_ID,
+			expect.objectContaining({ type: "tracker.created" }),
+		);
+	});
+
+	it("publishes tracker.updated on item PATCH", async () => {
+		await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/items`)
+			.send({ title: "Live update" });
+
+		mockPublishEvent.mockClear();
+
+		const res = await request(app)
+			.patch(`/api/workspaces/${WORKSPACE_ID}/tracker/items/CA-1`)
+			.send({ title: "Live update v2", version: 1 });
+		expect(res.status).toBe(200);
+
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			WORKSPACE_ID,
+			expect.objectContaining({ type: "tracker.updated" }),
+		);
+	});
+
+	it("publishes tracker.deleted on soft delete", async () => {
+		await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/items`)
+			.send({ title: "Delete me" });
+		mockPublishEvent.mockClear();
+
+		const res = await request(app)
+			.delete(`/api/workspaces/${WORKSPACE_ID}/tracker/items/CA-1`)
+			.send({ version: 1 });
+		expect(res.status).toBe(204);
+
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			WORKSPACE_ID,
+			expect.objectContaining({ type: "tracker.deleted" }),
+		);
+	});
+
+	it("publishes tracker.vocabulary.created on vocab POST", async () => {
+		mockPublishEvent.mockClear();
+
+		const res = await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
+			.send({ kind: "status", name: "Blocked", position: 1500 });
+		expect(res.status).toBe(201);
+
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			WORKSPACE_ID,
+			expect.objectContaining({ type: "tracker.vocabulary.created" }),
+		);
+	});
+});
