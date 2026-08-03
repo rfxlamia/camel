@@ -314,6 +314,50 @@ export type StreamEvent =
 	| { type: "done"; messageId: number }
 	| { type: "error"; message: string; retryable?: boolean };
 
+// ---- Tracker ----
+
+export type TrackerVocabularyKind = "status" | "priority" | "label";
+
+export interface TrackerVocabulary {
+	id: number;
+	kind: TrackerVocabularyKind;
+	name: string;
+	position: number;
+	colour: string;
+	createdAt?: string;
+}
+
+export interface TrackerItemAssignee {
+	id: number;
+	username: string;
+	displayName: string;
+}
+
+export interface TrackerItem {
+	id: number;
+	key: string;
+	title: string;
+	description: string;
+	status: TrackerVocabulary;
+	priority: TrackerVocabulary | null;
+	labels: TrackerVocabulary[];
+	assignees: TrackerItemAssignee[];
+	version: number;
+	createdAt: string;
+	updatedAt: string;
+	canonicalKey?: string;
+	redirectFrom?: string;
+}
+
+export interface TrackerEvent {
+	id: number;
+	eventType: string;
+	trackerItemId: number | null;
+	title: string | null;
+	actor: { username: string; displayName: string } | null;
+	createdAt: string;
+}
+
 export interface AgentEvent {
 	type:
 		| "agent.board.generating"

@@ -16,6 +16,10 @@ import type {
 	PresenceUser,
 	SettingsMap,
 	User,
+	TrackerEvent,
+	TrackerItem,
+	TrackerVocabulary,
+	TrackerVocabularyKind,
 	Workspace,
 	WorkspaceListResponse,
 	WorkspaceMember,
@@ -431,6 +435,80 @@ export const api = {
 		}),
 	deleteWorkspace: (workspaceId: number) =>
 		request<void>(`/workspaces/${workspaceId}`, { method: "DELETE" }),
+
+	// ---- Tracker ----
+	createTrackerItem: (
+		workspaceId: number,
+		body: {
+			title: string;
+			description?: string;
+			statusId?: number;
+			priorityId?: number | null;
+			assigneeIds?: number[];
+		},
+	) =>
+		request<TrackerItem>(`/workspaces/${workspaceId}/tracker/items`, {
+			method: "POST",
+			body: JSON.stringify(body),
+		}),
+	listTrackerItems: (workspaceId: number, opts?: { q?: string }) => {
+		const params = new URLSearchParams();
+		if (opts?.q !== undefined) params.set("q", opts.q);
+		const query = params.toString();
+		return request<TrackerItem[]>(
+			query
+				? `/workspaces/${workspaceId}/tracker/items?${query}`
+				: `/workspaces/${workspaceId}/tracker/items`,
+		);
+	},
+	getTrackerItem: (workspaceId: number, key: string) =>
+		request<TrackerItem>(`/workspaces/${workspaceId}/tracker/items/${key}`),
+	updateTrackerItem: (
+		workspaceId: number,
+		key: string,
+		patch: {
+			title?: string;
+			description?: string;
+			statusId?: number;
+			priorityId?: number | null;
+			assigneeIds?: number[];
+			version?: number;
+		},
+	) =>
+		request<TrackerItem>(`/workspaces/${workspaceId}/tracker/items/${key}`, {
+			method: "PATCH",
+			body: JSON.stringify(patch),
+		}),
+	deleteTrackerItem: (
+		workspaceId: number,
+		key: string,
+		body?: { version?: number },
+	) =>
+		request<void>(`/workspaces/${workspaceId}/tracker/items/${key}`, {
+			method: "DELETE",
+			body: JSON.stringify(body ?? {}),
+		}),
+	getTrackerChangelog: (workspaceId: number, key: string) =>
+		request<{ events: TrackerEvent[] }>(
+			`/workspaces/${workspaceId}/tracker/items/${key}/events`,
+		),
+	listTrackerVocabularies: (workspaceId: number, kind: TrackerVocabularyKind) =>
+		request<TrackerVocabulary[]>(
+			`/workspaces/${workspaceId}/tracker/vocabularies?kind=${kind}`,
+		),
+	createTrackerVocabulary: (
+		workspaceId: number,
+		body: {
+			kind: TrackerVocabularyKind;
+			name: string;
+			position: number;
+			colour?: string;
+		},
+	) =>
+		request<TrackerVocabulary>(`/workspaces/${workspaceId}/tracker/vocabularies`, {
+			method: "POST",
+			body: JSON.stringify(body),
+		}),
 
 	// ---- Agent ----
 	createAgentBoard: (workspaceId: number, intent: string) =>
