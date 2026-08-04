@@ -23,6 +23,7 @@ import TemplatePicker from "../components/TemplatePicker";
 import TrashZone from "../components/TrashZone";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useBoard } from "../context/BoardContext";
+import { moveCardToColumn, revertCardMove } from "../lib/boardColumnMoves";
 import { WORKSPACE_TEMPLATES } from "../lib/templates";
 import type { WorkspaceTemplate } from "../lib/templates";
 import type { Card, Column } from "../types";
@@ -119,55 +120,6 @@ function findColumnOfCard(
 	return columns.find((col) => col.cards.some((c) => c.id === cardId));
 }
 
-function moveCardToColumn(
-	columns: Column[],
-	cardId: number,
-	targetColId: number,
-	insertAt?: number,
-): Column[] {
-	const sourceCol = findColumnOfCard(columns, cardId);
-	if (!sourceCol) return columns;
-	if (sourceCol.id === targetColId) return columns;
-	const card = sourceCol.cards.find((c) => c.id === cardId);
-	if (!card) return columns;
-
-	return columns.map((col) => {
-		if (col.id === sourceCol.id) {
-			return { ...col, cards: col.cards.filter((c) => c.id !== cardId) };
-		}
-		if (col.id === targetColId) {
-			const cards = col.cards.filter((c) => c.id !== cardId);
-			const at = insertAt ?? cards.length;
-			const moved = { ...card, columnId: targetColId };
-			return {
-				...col,
-				cards: [...cards.slice(0, at), moved, ...cards.slice(at)],
-			};
-		}
-		return col;
-	});
-}
-
-function revertCardMove(
-	columns: Column[],
-	cardId: number,
-	restore: { columnId: number; index: number; card: Card },
-): Column[] {
-	const without = columns.map((col) => ({
-		...col,
-		cards: col.cards.filter((c) => c.id !== cardId),
-	}));
-	return without.map((col) => {
-		if (col.id !== restore.columnId) return col;
-		const at = Math.min(restore.index, col.cards.length);
-		const reverted = { ...restore.card, columnId: restore.columnId };
-		return {
-			...col,
-			cards: [...col.cards.slice(0, at), reverted, ...col.cards.slice(at)],
-		};
-	});
-}
-
 function AddColumn({
 	onAddColumn,
 }: {
@@ -228,8 +180,6 @@ function AddColumn({
 		</div>
 	);
 }
-
-export { moveCardToColumn };
 
 export default function BoardPage() {
 	const {

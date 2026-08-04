@@ -53,8 +53,8 @@ vi.mock("../components/SuccessAnimation", () => ({
 }));
 
 import { ApiError } from "../api";
-import BoardPage, { moveCardToColumn } from "./BoardPage";
-import type { Column, Card } from "../types";
+import BoardPage from "./BoardPage";
+import type { Column } from "../types";
 import type { SetStateAction } from "react";
 
 function makeListBoardValue(
@@ -211,52 +211,6 @@ const listColumns = [
 		cards: [],
 	},
 ];
-
-describe("moveCardToColumn", () => {
-	const card: Card = {
-		id: 1,
-		columnId: 1,
-		title: "Ship feature",
-		description: "",
-		position: 1,
-		version: 1,
-		createdAt: "2026-08-01T00:00:00.000Z",
-		startedAt: null,
-		doneAt: null,
-		dueDate: null,
-		assignees: [],
-	};
-	const columns: Column[] = [
-		{
-			id: 1,
-			title: "To Do",
-			position: 0,
-			wipLimit: null,
-			policy: "",
-			isDone: false,
-			isSignable: false,
-			signableAssigneeId: null,
-			color: null,
-			cards: [card],
-		},
-		{
-			id: 2,
-			title: "In Progress",
-			position: 1,
-			wipLimit: null,
-			policy: "",
-			isDone: false,
-			isSignable: false,
-			signableAssigneeId: null,
-			color: null,
-			cards: [],
-		},
-	];
-
-	it("returns the same columns when source and target are identical", () => {
-		expect(moveCardToColumn(columns, 1, 1)).toBe(columns);
-	});
-});
 
 describe("BoardPage list view column change", () => {
 	it("moves a card via the list status picker", async () => {
