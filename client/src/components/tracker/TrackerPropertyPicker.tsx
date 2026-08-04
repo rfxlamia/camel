@@ -39,6 +39,8 @@ interface Props {
 	triggerLabel?: string;
 	/** Anchors the popover to the trigger's right edge instead of its left. */
 	align?: "left" | "right";
+	/** Compact matches label chips in the detail rail. */
+	size?: "default" | "compact";
 }
 
 export function TrackerPropertyPicker({
@@ -54,6 +56,7 @@ export function TrackerPropertyPicker({
 	variant = "chip",
 	triggerLabel,
 	align = "left",
+	size = "default",
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
@@ -130,6 +133,7 @@ export function TrackerPropertyPicker({
 
 	const chosen = value !== undefined;
 	const inline = variant === "inline";
+	const compact = size === "compact";
 
 	return (
 		<div ref={rootRef} className="relative">
@@ -146,11 +150,17 @@ export function TrackerPropertyPicker({
 						? `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600 ${
 								open ? "bg-neutral-200" : ""
 							}`
-						: `inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
-								chosen
-									? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
-									: "border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-							} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
+						: compact
+							? `inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-neutral-600 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+									chosen
+										? "border-neutral-200 bg-white hover:bg-neutral-50"
+										: "border-neutral-200 bg-white hover:bg-neutral-50"
+								} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
+							: `inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+									chosen
+										? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
+										: "border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+								} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
 				}
 			>
 				{icon}

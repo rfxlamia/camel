@@ -265,6 +265,51 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 			eventType: expect.any(String),
 			createdAt: expect.any(String),
 		});
+		const updated = res.body.events.find(
+			(e: { eventType: string }) => e.eventType === "tracker_item_updated",
+		);
+		expect(updated?.payload).toMatchObject({
+			changed: expect.arrayContaining(["title"]),
+		});
+	});
+
+	it("replaces labels on PATCH and records labels in activity", async () => {
+		await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/items`)
+			.send({ title: "Label patch test" });
+
+		const vocab = await request(app).get(
+			`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies?kind=label`,
+		);
+		const feature = vocab.body.find(
+			(v: { name: string }) => v.name === "Feature",
+		);
+		const bug = vocab.body.find((v: { name: string }) => v.name === "Bug");
+
+		const add = await request(app)
+			.patch(`/api/workspaces/${WORKSPACE_ID}/tracker/items/CA-1`)
+			.send({ labelIds: [feature.id], version: 1 });
+		expect(add.status).toBe(200);
+		expect(add.body.labels.map((l: { name: string }) => l.name)).toEqual([
+			"Feature",
+		]);
+
+		const replace = await request(app)
+			.patch(`/api/workspaces/${WORKSPACE_ID}/tracker/items/CA-1`)
+			.send({ labelIds: [bug.id], version: 2 });
+		expect(replace.status).toBe(200);
+		expect(replace.body.labels.map((l: { name: string }) => l.name)).toEqual([
+			"Bug",
+		]);
+
+		const events = await request(app).get(
+			`/api/workspaces/${WORKSPACE_ID}/tracker/items/CA-1/events`,
+		);
+		const labelUpdate = events.body.events.find(
+			(e: { payload?: { changed?: string[] } }) =>
+				e.payload?.changed?.includes("labels"),
+		);
+		expect(labelUpdate).toBeTruthy();
 	});
 
 	it("soft-deletes item: absent from list, search, detail 404; key_number not reused", async () => {
