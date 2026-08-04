@@ -53,8 +53,8 @@ vi.mock("../components/SuccessAnimation", () => ({
 }));
 
 import { ApiError } from "../api";
-import BoardPage from "./BoardPage";
-import type { Column } from "../types";
+import BoardPage, { moveCardToColumn } from "./BoardPage";
+import type { Column, Card } from "../types";
 import type { SetStateAction } from "react";
 
 function makeListBoardValue(
@@ -211,6 +211,52 @@ const listColumns = [
 		cards: [],
 	},
 ];
+
+describe("moveCardToColumn", () => {
+	const card: Card = {
+		id: 1,
+		columnId: 1,
+		title: "Ship feature",
+		description: "",
+		position: 1,
+		version: 1,
+		createdAt: "2026-08-01T00:00:00.000Z",
+		startedAt: null,
+		doneAt: null,
+		dueDate: null,
+		assignees: [],
+	};
+	const columns: Column[] = [
+		{
+			id: 1,
+			title: "To Do",
+			position: 0,
+			wipLimit: null,
+			policy: "",
+			isDone: false,
+			isSignable: false,
+			signableAssigneeId: null,
+			color: null,
+			cards: [card],
+		},
+		{
+			id: 2,
+			title: "In Progress",
+			position: 1,
+			wipLimit: null,
+			policy: "",
+			isDone: false,
+			isSignable: false,
+			signableAssigneeId: null,
+			color: null,
+			cards: [],
+		},
+	];
+
+	it("returns the same columns when source and target are identical", () => {
+		expect(moveCardToColumn(columns, 1, 1)).toBe(columns);
+	});
+});
 
 describe("BoardPage list view column change", () => {
 	it("moves a card via the list status picker", async () => {
@@ -408,5 +454,65 @@ describe("BoardPage list view column change", () => {
 		await waitFor(() => expect(showToast).toHaveBeenCalled());
 		expect(screen.getByLabelText("To Do, Ship feature")).toBeTruthy();
 		expect(screen.getByLabelText("In Progress, Other task")).toBeTruthy();
+	});
+
+	it("completes a queued A→B→A move using refreshed card state", async () => {
+		let resolveFirst: ((value: unknown) => void) | undefined;
+		moveCard
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirst = resolve;
+					}),
+			)
+			.mockResolvedValueOnce({
+				id: 1,
+				columnId: 1,
+				title: "Ship feature",
+				description: "",
+				position: 1,
+				version: 3,
+				createdAt: "2026-08-01T00:00:00.000Z",
+				startedAt: null,
+				doneAt: null,
+				dueDate: null,
+				assignees: [],
+			});
+		renderListBoard(listColumns);
+		await waitFor(() => screen.getByLabelText("To Do, Ship feature"));
+
+		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, Ship feature")).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByLabelText("In Progress, Ship feature"));
+		fireEvent.click(screen.getByRole("option", { name: /To Do/ }));
+		expect(moveCard).toHaveBeenCalledTimes(1);
+
+		resolveFirst?.({
+			id: 1,
+			columnId: 2,
+			title: "Ship feature",
+			description: "",
+			position: 1,
+			version: 2,
+			createdAt: "2026-08-01T00:00:00.000Z",
+			startedAt: null,
+			doneAt: null,
+			dueDate: null,
+			assignees: [],
+		});
+
+		await waitFor(() => expect(moveCard).toHaveBeenCalledTimes(2));
+		expect(moveCard).toHaveBeenLastCalledWith(7, 1, {
+			toColumnId: 1,
+			index: 0,
+			version: 2,
+		});
+		await waitFor(() =>
+			expect(screen.getByLabelText("To Do, Ship feature")).toBeTruthy(),
+		);
 	});
 });

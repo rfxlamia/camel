@@ -127,6 +127,7 @@ function moveCardToColumn(
 ): Column[] {
 	const sourceCol = findColumnOfCard(columns, cardId);
 	if (!sourceCol) return columns;
+	if (sourceCol.id === targetColId) return columns;
 	const card = sourceCol.cards.find((c) => c.id === cardId);
 	if (!card) return columns;
 
@@ -228,6 +229,8 @@ function AddColumn({
 	);
 }
 
+export { moveCardToColumn };
+
 export default function BoardPage() {
 	const {
 		columns,
@@ -251,6 +254,20 @@ export default function BoardPage() {
 	const snapshotRef = useRef<Column[] | null>(null);
 	const inFlightColumnRef = useRef<Set<number>>(new Set());
 	const queuedColumnRef = useRef<Map<number, number>>(new Map());
+	const columnsRef = useRef<Column[] | null>(columns);
+	columnsRef.current = columns;
+
+	const applyColumns = useCallback(
+		(updater: (cols: Column[]) => Column[]) => {
+			setColumns((cols) => {
+				if (!cols) return cols;
+				const next = updater(cols);
+				columnsRef.current = next;
+				return next;
+			});
+		},
+		[setColumns],
+	);
 
 	// Card click opens the route-driven context panel (deep-linkable URL).
 	const onOpenCard = useCallback(
@@ -260,12 +277,17 @@ export default function BoardPage() {
 
 	const changeColumn = useCallback(
 		async (card: Card, toColumnId: number) => {
-			if (!columns || activeWorkspaceId === null || toColumnId === card.columnId) {
+			const currentColumns = columnsRef.current;
+			if (
+				!currentColumns ||
+				activeWorkspaceId === null ||
+				toColumnId === card.columnId
+			) {
 				return;
 			}
-			const targetCol = columns.find((col) => col.id === toColumnId);
+			const targetCol = currentColumns.find((col) => col.id === toColumnId);
 			if (!targetCol) return;
-			const sourceCol = findColumnOfCard(columns, card.id);
+			const sourceCol = findColumnOfCard(currentColumns, card.id);
 			if (!sourceCol) return;
 
 			if (inFlightColumnRef.current.has(card.id)) {
@@ -273,7 +295,6 @@ export default function BoardPage() {
 				return;
 			}
 			inFlightColumnRef.current.add(card.id);
-			let settled = card;
 
 			const restore = {
 				columnId: card.columnId,
@@ -281,8 +302,8 @@ export default function BoardPage() {
 				card,
 			};
 			const insertAt = targetCol.cards.filter((c) => c.id !== card.id).length;
-			setColumns((cols) =>
-				cols ? moveCardToColumn(cols, card.id, toColumnId, insertAt) : cols,
+			applyColumns((cols) =>
+				moveCardToColumn(cols, card.id, toColumnId, insertAt),
 			);
 
 			try {
@@ -292,7 +313,12 @@ export default function BoardPage() {
 					index: insertAt,
 					version: card.version,
 				});
-				settled = updated;
+				applyColumns((cols) =>
+					cols.map((col) => ({
+						...col,
+						cards: col.cards.map((c) => (c.id === card.id ? updated : c)),
+					})),
+				);
 				await refresh();
 			} catch (err) {
 				if (err instanceof ApiError && err.code === "version_conflict") {
@@ -303,9 +329,7 @@ export default function BoardPage() {
 					queuedColumnRef.current.delete(card.id);
 					await refresh();
 				} else {
-					setColumns((cols) =>
-						cols ? revertCardMove(cols, card.id, restore) : cols,
-					);
+					applyColumns((cols) => revertCardMove(cols, card.id, restore));
 					if (err instanceof ApiError && err.status === 409) {
 						showToast("WIP limit reached — finish something first.", "warning");
 					} else {
@@ -320,16 +344,20 @@ export default function BoardPage() {
 				const queued = queuedColumnRef.current.get(card.id);
 				if (queued !== undefined) {
 					queuedColumnRef.current.delete(card.id);
-					void changeColumn(settled, queued);
+					const latest = columnsRef.current;
+					const liveCard =
+						latest
+							?.flatMap((col) => col.cards)
+							.find((c) => c.id === card.id) ?? card;
+					void changeColumn(liveCard, queued);
 				}
 			}
 		},
 		[
 			activeWorkspaceId,
-			columns,
+			applyColumns,
 			cancelScheduledRefresh,
 			refresh,
-			setColumns,
 			showToast,
 		],
 	);
