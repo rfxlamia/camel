@@ -1,10 +1,6 @@
 import { Calendar, ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import {
-	COLOR_PREVIEWS,
-	type ColumnColor,
-} from "../lib/columnColors";
-import { isStoredOklchColor } from "../lib/columnColorUtils";
+import { columnColorPreviewStyle } from "../lib/columnColorUtils";
 import {
 	assigneeInitials,
 	formatDueDate,
@@ -23,19 +19,6 @@ interface Props {
 	onColumnChange: (card: Card, toColumnId: number) => void;
 }
 
-function columnDotStyle(color: string | null): { backgroundColor: string } {
-	if (!color) {
-		return { backgroundColor: "var(--color-primary-400)" };
-	}
-	if (isStoredOklchColor(color)) {
-		return { backgroundColor: color };
-	}
-	if (color in COLOR_PREVIEWS) {
-		return { backgroundColor: COLOR_PREVIEWS[color as ColumnColor] };
-	}
-	return { backgroundColor: color };
-}
-
 function ColumnDot({
 	color,
 	size = 10,
@@ -46,7 +29,7 @@ function ColumnDot({
 	return (
 		<span
 			className="shrink-0 rounded-full border border-neutral-300/60"
-			style={{ width: size, height: size, ...columnDotStyle(color) }}
+			style={{ width: size, height: size, ...columnColorPreviewStyle(color) }}
 			aria-hidden
 		/>
 	);

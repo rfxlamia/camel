@@ -1,4 +1,5 @@
 import { clampChroma, formatCss, parse, random } from "culori";
+import { COLOR_PREVIEWS, type ColumnColor } from "./columnColors";
 
 /** Border lightness — matches legacy shade-200 OKLCH band (~L 84–94% in index.css). */
 export const PASTEL_BORDER_L = 0.89;
@@ -42,4 +43,19 @@ export function deriveBackgroundColor(borderCss: string): string {
 
 export function isStoredOklchColor(value: string): boolean {
 	return value.startsWith("oklch(");
+}
+
+export function columnColorPreviewStyle(
+	color: string | null,
+): { backgroundColor: string } {
+	if (!color) {
+		return { backgroundColor: "var(--color-primary-400)" };
+	}
+	if (isStoredOklchColor(color)) {
+		return { backgroundColor: color };
+	}
+	if (color in COLOR_PREVIEWS) {
+		return { backgroundColor: COLOR_PREVIEWS[color as ColumnColor] };
+	}
+	return { backgroundColor: color };
 }
