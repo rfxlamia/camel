@@ -6,6 +6,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrackerItem, TrackerVocabulary } from "../types";
@@ -108,7 +109,9 @@ const labels: TrackerVocabulary[] = [
 	},
 ];
 
-function makeItem(overrides: Partial<TrackerItem> & { id: number }): TrackerItem {
+function makeItem(
+	overrides: Partial<TrackerItem> & { id: number },
+): TrackerItem {
 	return {
 		key: "CA-1",
 		title: "Workspace Rename",
@@ -238,18 +241,23 @@ describe("TrackerPage", () => {
 		await waitFor(() => expect(screen.getByText("CA-2")).toBeTruthy());
 	});
 
-	it("opens create modal from global + and submits title-only defaults", async () => {
+	it("opens create modal from global + and submits the default status", async () => {
 		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
 			screen.getByRole("button", { name: /create tracker item/i }),
 		);
-		fireEvent.change(screen.getByLabelText(/title/i), {
+		const modal = within(screen.getByRole("dialog"));
+		await waitFor(() => modal.getByRole("button", { name: /Backlog/ }));
+		fireEvent.change(screen.getByLabelText(/item title/i), {
 			target: { value: "Fix realtime" },
 		});
-		fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
 			expect(mockCreateTrackerItem).toHaveBeenCalledWith(7, {
 				title: "Fix realtime",
+				statusId: 1,
+				priorityId: null,
 			}),
 		);
 	});
@@ -260,19 +268,22 @@ describe("TrackerPage", () => {
 		fireEvent.click(
 			screen.getByRole("button", { name: /create tracker item/i }),
 		);
-		fireEvent.change(screen.getByLabelText(/title/i), {
+		const modal = within(screen.getByRole("dialog"));
+		fireEvent.change(screen.getByLabelText(/item title/i), {
 			target: { value: "Full" },
 		});
-		fireEvent.click(screen.getByLabelText(/In Progress/i));
-		fireEvent.click(screen.getByLabelText(/High/i));
-		fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+		fireEvent.click(modal.getByRole("button", { name: /Backlog/ }));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		fireEvent.click(modal.getByRole("button", { name: /Priority/ }));
+		fireEvent.click(screen.getByRole("option", { name: /High/ }));
+		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
 			expect(mockCreateTrackerItem).toHaveBeenCalledWith(
 				7,
 				expect.objectContaining({
 					title: "Full",
 					statusId: 2,
-					priorityId: expect.any(Number),
+					priorityId: 10,
 				}),
 			),
 		);
@@ -284,17 +295,21 @@ describe("TrackerPage", () => {
 		fireEvent.click(
 			screen.getByRole("button", { name: /create tracker item/i }),
 		);
-		await waitFor(() => screen.getByLabelText("Feature"));
-		fireEvent.change(screen.getByLabelText(/title/i), {
+		const modal = within(screen.getByRole("dialog"));
+		await waitFor(() => modal.getByRole("button", { name: /Labels/ }));
+		fireEvent.change(screen.getByLabelText(/item title/i), {
 			target: { value: "Tagged task" },
 		});
 		fireEvent.change(screen.getByLabelText(/description/i), {
 			target: { value: "Needs review" },
 		});
-		fireEvent.click(screen.getByLabelText("Feature"));
-		fireEvent.click(screen.getByPlaceholderText(/search members/i));
-		fireEvent.click(screen.getByRole("option", { name: /Alice/i }));
-		fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+		fireEvent.click(modal.getByRole("button", { name: /Labels/ }));
+		fireEvent.click(screen.getByRole("option", { name: /Feature/ }));
+		fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+		fireEvent.click(modal.getByRole("button", { name: /Assignee/ }));
+		fireEvent.click(screen.getByRole("option", { name: /Alice/ }));
+		fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
 			expect(mockCreateTrackerItem).toHaveBeenCalledWith(
 				7,
