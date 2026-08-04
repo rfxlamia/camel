@@ -788,12 +788,13 @@ function toTrackerEvent(e: {
 	display_name: string | null;
 	current_item_title: string | null;
 }) {
-	const payload = e.payload as { title?: string } | null;
+	const payload = e.payload as { title?: string } | Record<string, unknown> | null;
 	return {
 		id: e.id,
 		eventType: e.event_type,
 		trackerItemId: e.tracker_item_id,
 		title: e.current_item_title ?? payload?.title ?? null,
+		payload: payload ?? null,
 		actor: e.username
 			? { username: e.username, displayName: e.display_name }
 			: null,

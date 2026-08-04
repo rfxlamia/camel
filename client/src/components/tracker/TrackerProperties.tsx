@@ -22,7 +22,8 @@ import {
 export interface PropertyPatch {
 	statusId?: number;
 	priorityId?: number | null;
-	assigneeIds?: number[];
+	/** Toggle one assignee; resolved against latest item state in the parent queue. */
+	assigneeToggle?: number;
 }
 
 interface Props {
@@ -171,14 +172,7 @@ export default function TrackerProperties({
 						options={assigneeOptions}
 						open={openPicker === "assignees"}
 						onOpenChange={(open) => setOpenPicker(open ? "assignees" : null)}
-						onSelect={(id) => {
-							const userId = Number(id);
-							onChange({
-								assigneeIds: assigneeIds.includes(userId)
-									? assigneeIds.filter((x) => x !== userId)
-									: [...assigneeIds, userId],
-							});
-						}}
+						onSelect={(id) => onChange({ assigneeToggle: Number(id) })}
 						multiple
 					/>
 				)}

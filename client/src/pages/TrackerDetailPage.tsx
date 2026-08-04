@@ -64,9 +64,10 @@ export default function TrackerDetailPage() {
 	// property PATCH or an SSE refresh moves the baseline without touching the
 	// draft — see loadItem.
 	const itemRef = useRef<TrackerItem | null>(null);
-	// Property picks are serialised: each PATCH carries a version, so two in
-	// flight at once would make the second one conflict with the first.
-	const propertyChainRef = useRef<Promise<void>>(Promise.resolve());
+	// Property picks and draft saves share one queue: each PATCH carries a
+	// version, so two in flight at once would make the second one conflict.
+	const mutationChainRef = useRef<Promise<void>>(Promise.resolve());
+	const loadSeqRef = useRef(0);
 
 	const titleRef = useRef<HTMLTextAreaElement>(null);
 	const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -91,12 +92,17 @@ export default function TrackerDetailPage() {
 
 	const loadItem = useCallback(async () => {
 		if (activeWorkspaceId === null || !routeKey) return;
+		const seq = ++loadSeqRef.current;
+		const workspaceId = activeWorkspaceId;
+		const key = routeKey;
 		setLoading(true);
 		try {
 			const [loaded, changelog] = await Promise.all([
-				api.getTrackerItem(activeWorkspaceId, routeKey),
-				api.getTrackerChangelog(activeWorkspaceId, routeKey),
+				api.getTrackerItem(workspaceId, key),
+				api.getTrackerChangelog(workspaceId, key),
 			]);
+
+			if (seq !== loadSeqRef.current) return;
 
 			if (loaded.canonicalKey && loaded.redirectFrom) {
 				navigate(`/tracker/${loaded.canonicalKey}`, { replace: true });
@@ -106,7 +112,9 @@ export default function TrackerDetailPage() {
 			applyItem(loaded);
 			setEvents(changelog.events);
 		} finally {
-			setLoading(false);
+			if (seq === loadSeqRef.current) {
+				setLoading(false);
+			}
 		}
 	}, [activeWorkspaceId, applyItem, navigate, routeKey]);
 
@@ -168,18 +176,44 @@ export default function TrackerDetailPage() {
 		}
 	};
 
+	const resolvePropertyPatch = (
+		patch: PropertyPatch,
+		current: TrackerItem,
+	): Record<string, unknown> => {
+		if (patch.assigneeToggle === undefined) return { ...patch };
+		const ids = current.assignees.map((a) => a.id);
+		const userId = patch.assigneeToggle;
+		const assigneeIds = ids.includes(userId)
+			? ids.filter((x) => x !== userId)
+			: [...ids, userId];
+		const { assigneeToggle: _, ...rest } = patch;
+		return { ...rest, assigneeIds };
+	};
+
+	const enqueueMutation = (task: () => Promise<void>) => {
+		mutationChainRef.current = mutationChainRef.current
+			.catch(() => {
+				// Prior task failed; the queue must stay usable.
+			})
+			.then(task);
+	};
+
 	// Properties commit on pick, matching the list row. The returned item moves
 	// the version forward so a later title save does not hit a phantom conflict.
 	const changeProperty = (patch: PropertyPatch) => {
 		if (activeWorkspaceId === null) return;
-		propertyChainRef.current = propertyChainRef.current.then(async () => {
+		enqueueMutation(async () => {
 			const current = itemRef.current;
 			if (!current) return;
+			const workspaceId = activeWorkspaceId;
 			try {
 				const updated = await api.updateTrackerItem(
-					activeWorkspaceId,
+					workspaceId,
 					current.key,
-					{ ...patch, version: current.version },
+					{
+						...resolvePropertyPatch(patch, current),
+						version: current.version,
+					},
 				);
 				applyItem(updated);
 				await refreshChangelog(updated.key);
@@ -190,7 +224,11 @@ export default function TrackerDetailPage() {
 						"Someone else updated this tracker item first — refreshed.",
 						"warning",
 					);
-					await loadItem();
+					try {
+						await loadItem();
+					} catch {
+						// Refresh failure must not break the mutation queue.
+					}
 					return;
 				}
 				showToast(
@@ -205,39 +243,54 @@ export default function TrackerDetailPage() {
 		item !== null &&
 		(title !== item.title || description !== (item.description ?? ""));
 
-	const handleSave = async () => {
+	const handleSave = () => {
 		const current = itemRef.current;
 		if (activeWorkspaceId === null || !current || !title.trim()) return;
+		const workspaceId = activeWorkspaceId;
+		const draftTitle = title;
+		const draftDescription = description;
 		setSaving(true);
-		try {
-			const updated = await api.updateTrackerItem(
-				activeWorkspaceId,
-				current.key,
-				{ title, description, version: current.version },
-			);
-			itemRef.current = updated;
-			setItem(updated);
-			setTitle(updated.title);
-			setDescription(updated.description ?? "");
-			await refreshChangelog(updated.key);
-			refreshTrackerList();
-			showToast("Tracker item saved", "success");
-		} catch (err) {
-			if (err instanceof ApiError && err.code === "version_conflict") {
-				showToast(
-					"Someone else updated this tracker item first — refreshed.",
-					"warning",
+		enqueueMutation(async () => {
+			try {
+				const latest = itemRef.current;
+				if (!latest) return;
+				const updated = await api.updateTrackerItem(
+					workspaceId,
+					latest.key,
+					{
+						title: draftTitle,
+						description: draftDescription,
+						version: latest.version,
+					},
 				);
-				await loadItem();
-				return;
+				itemRef.current = updated;
+				setItem(updated);
+				setTitle(updated.title);
+				setDescription(updated.description ?? "");
+				await refreshChangelog(updated.key);
+				refreshTrackerList();
+				showToast("Tracker item saved", "success");
+			} catch (err) {
+				if (err instanceof ApiError && err.code === "version_conflict") {
+					showToast(
+						"Someone else updated this tracker item first — refreshed.",
+						"warning",
+					);
+					try {
+						await loadItem();
+					} catch {
+						// Refresh failure must not break the mutation queue.
+					}
+					return;
+				}
+				showToast(
+					"Couldn't save the tracker item. Check your connection and try again.",
+					"error",
+				);
+			} finally {
+				setSaving(false);
 			}
-			showToast(
-				"Couldn't save the tracker item. Check your connection and try again.",
-				"error",
-			);
-		} finally {
-			setSaving(false);
-		}
+		});
 	};
 
 	const discardDraft = () => {

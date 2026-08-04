@@ -57,6 +57,7 @@ vi.mock("react-router", () => ({
 }));
 
 import { ApiError } from "../api";
+import type { TrackerItem } from "../types";
 import TrackerDetailPage from "./TrackerDetailPage";
 
 const backlog = {
@@ -296,5 +297,135 @@ describe("TrackerDetailPage", () => {
 			expect(mockNavigate).toHaveBeenCalledWith("/tracker", { replace: true }),
 		);
 		expect(refreshTrackerList).toHaveBeenCalled();
+	});
+
+	it("queues rapid assignee toggles against the latest assignee list", async () => {
+		const alice = {
+			userId: 10,
+			username: "alice",
+			displayName: "Alice",
+			role: "member" as const,
+		};
+		const bob = {
+			userId: 11,
+			username: "bob",
+			displayName: "Bob",
+			role: "member" as const,
+		};
+		mockGetWorkspaceMembers.mockResolvedValue({ members: [alice, bob] });
+		let resolveFirst: (value: TrackerItem) => void = () => {};
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirst = resolve;
+					}),
+			)
+			.mockResolvedValueOnce({
+				...item,
+				assignees: [
+					{ id: 10, username: "alice", displayName: "Alice" },
+					{ id: 11, username: "bob", displayName: "Bob" },
+				],
+				version: 3,
+			});
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /assignee/i })).toBeTruthy(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /assignee/i }));
+		fireEvent.click(screen.getByRole("option", { name: /alice/i }));
+		fireEvent.click(screen.getByRole("option", { name: /bob/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CK-42", {
+				assigneeIds: [10],
+				version: 1,
+			}),
+		);
+		resolveFirst({
+			...item,
+			assignees: [{ id: 10, username: "alice", displayName: "Alice" }],
+			version: 2,
+		});
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CK-42", {
+				assigneeIds: [10, 11],
+				version: 2,
+			}),
+		);
+	});
+
+	it("serialises a title save behind an in-flight property pick", async () => {
+		let resolveStatus: (value: typeof item) => void = () => {};
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveStatus = resolve;
+					}),
+			)
+			.mockResolvedValueOnce({ ...item, title: "Renamed", version: 3 });
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /backlog/i })).toBeTruthy(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /backlog/i }));
+		fireEvent.click(screen.getByRole("option", { name: /in progress/i }));
+		fireEvent.change(screen.getByDisplayValue("Workspace Rename"), {
+			target: { value: "Renamed" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save/i }));
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		resolveStatus({ ...item, status: inProgress, version: 2 });
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CK-42", {
+				title: "Renamed",
+				description: "details",
+				version: 2,
+			}),
+		);
+	});
+
+	it("ignores stale loadItem responses when a newer refresh finishes first", async () => {
+		let resolveStale: (value: typeof item) => void = () => {};
+		let resolveFresh: (value: typeof item) => void = () => {};
+		mockGetTrackerItem
+			.mockResolvedValueOnce(item)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveStale = resolve;
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFresh = resolve;
+					}),
+			);
+		let sseHandler:
+			| ((e: { type: string; trackerItemId?: number }) => void)
+			| undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			showToast: mockShowToast,
+			refreshTrackerList: vi.fn(),
+			subscribeTrackerEvents: (cb: typeof sseHandler) => {
+				sseHandler = cb;
+				return () => {};
+			},
+		});
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		sseHandler?.({ type: "tracker.updated", trackerItemId: 42 });
+		sseHandler?.({ type: "tracker.updated", trackerItemId: 42 });
+		resolveFresh({ ...item, title: "Fresh title", version: 4 });
+		resolveStale({ ...item, title: "Stale title", version: 3 });
+		await waitFor(() =>
+			expect(screen.getByDisplayValue("Fresh title")).toBeTruthy(),
+		);
+		expect(screen.queryByDisplayValue("Stale title")).toBeNull();
 	});
 });

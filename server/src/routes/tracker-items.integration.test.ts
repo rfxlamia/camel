@@ -265,6 +265,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 			eventType: expect.any(String),
 			createdAt: expect.any(String),
 		});
+		const updated = res.body.events.find(
+			(e: { eventType: string }) => e.eventType === "tracker_item_updated",
+		);
+		expect(updated?.payload).toMatchObject({
+			changed: expect.arrayContaining(["title"]),
+		});
 	});
 
 	it("soft-deletes item: absent from list, search, detail 404; key_number not reused", async () => {
