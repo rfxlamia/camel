@@ -1,61 +1,124 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
-import type { TrackerItem } from "../../types";
+import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import type { TrackerItem, TrackerVocabulary } from "../../types";
+import {
+	Avatar,
+	LabelDot,
+	PriorityGlyph,
+	StatusGlyph,
+	priorityBars,
+	statusGlyphSpec,
+} from "./TrackerGlyphs";
+import {
+	type PickerOption,
+	TrackerPropertyPicker,
+} from "./TrackerPropertyPicker";
 
 interface Props {
 	item: TrackerItem;
+	statuses: TrackerVocabulary[];
+	priorities: TrackerVocabulary[];
+	onStatusChange: (statusId: number) => void;
 }
 
-export default function TrackerRow({ item }: Props) {
+/**
+ * One issue line. Column rhythm is fixed (priority · key · status · title ·
+ * labels · assignee · date) so the eye scans straight down each property
+ * instead of following ragged content — the Linear reading pattern.
+ *
+ * The whole row opens the item, except the status glyph, which opens a status
+ * menu in place. That is why the navigation target is an overlay button behind
+ * the content rather than a wrapper: a button may not nest inside a button.
+ */
+export default function TrackerRow({
+	item,
+	statuses,
+	priorities,
+	onStatusChange,
+}: Props) {
 	const navigate = useNavigate();
+	const [menuOpen, setMenuOpen] = useState(false);
+	const glyph = statusGlyphSpec(statuses, item.status.id);
+	const bars = item.priority ? priorityBars(priorities, item.priority.id) : 0;
+
+	const statusOptions: PickerOption[] = sortStatusesByPosition(statuses).map(
+		(status) => ({
+			id: String(status.id),
+			label: status.name,
+			icon: <StatusGlyph spec={statusGlyphSpec(statuses, status.id)} />,
+			selected: status.id === item.status.id,
+		}),
+	);
 
 	return (
-		<button
-			type="button"
-			data-testid={`tracker-row-${item.key}`}
-			onClick={() => navigate(`/tracker/${item.key}`)}
-			className="flex w-full items-center gap-3 border-b border-neutral-200 px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600"
-		>
-			<span className="w-16 shrink-0 font-mono text-xs text-neutral-500 tabular-nums">
-				{item.key}
-			</span>
-			<span
-				className="h-2 w-2 shrink-0 rounded-full"
-				style={{ backgroundColor: item.status.colour }}
-				aria-label={item.status.name}
-				title={item.status.name}
+		<div className="group/row relative flex h-9 items-center transition-colors hover:bg-neutral-100/70">
+			<button
+				type="button"
+				data-testid={`tracker-row-${item.key}`}
+				aria-label={`${item.key} ${item.title}`}
+				onClick={() => navigate(`/tracker/${item.key}`)}
+				className="absolute inset-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600"
 			/>
-			<span className="min-w-0 flex-1 truncate font-medium text-neutral-900">
-				{item.title}
-			</span>
-			<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-				{item.labels.map((label) => (
-					<span
-						key={label.id}
-						className="rounded px-1.5 py-0.5 text-xs text-neutral-700"
-						style={{ backgroundColor: label.colour }}
-					>
-						{label.name}
-					</span>
-				))}
+			<div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2.5 px-4 text-left text-sm md:px-6">
+				<span
+					className="hidden shrink-0 sm:block"
+					title={item.priority ? item.priority.name : "No priority"}
+				>
+					<PriorityGlyph bars={bars} size={13} />
+				</span>
+				<span className="w-14 shrink-0 truncate font-mono text-neutral-500 text-xs tabular-nums">
+					{item.key}
+				</span>
+				<span className="pointer-events-auto shrink-0">
+					<TrackerPropertyPicker
+						variant="inline"
+						triggerLabel={item.status.name}
+						placeholder="Status"
+						searchPlaceholder="Change status…"
+						icon={<StatusGlyph spec={glyph} size={13} />}
+						options={statusOptions}
+						open={menuOpen}
+						onOpenChange={setMenuOpen}
+						onSelect={(id) => onStatusChange(Number(id))}
+					/>
+				</span>
+				<span className="min-w-0 flex-1 truncate text-neutral-900">
+					{item.title}
+				</span>
+				<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+					{item.labels.map((label) => (
+						<span
+							key={label.id}
+							className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 py-0.5 pr-2 pl-1.5 text-neutral-600 text-xs"
+						>
+							<LabelDot colour={label.colour} />
+							{label.name}
+						</span>
+					))}
+				</div>
+				<div className="-space-x-1 hidden w-12 shrink-0 items-center justify-end md:flex">
+					{item.assignees.length === 0 ? (
+						<span
+							className="h-[18px] w-[18px] rounded-full border border-neutral-300 border-dashed"
+							aria-hidden
+						/>
+					) : (
+						item.assignees.slice(0, 2).map((a) => (
+							<span key={a.id} title={a.displayName} className="flex">
+								<Avatar name={a.displayName} size={18} />
+							</span>
+						))
+					)}
+				</div>
+				{/* TODO: due date preference on date column */}
+				<time className="hidden w-12 shrink-0 text-right text-neutral-500 text-xs tabular-nums lg:block">
+					{new Date(item.createdAt).toLocaleDateString(undefined, {
+						month: "short",
+						day: "numeric",
+					})}
+				</time>
 			</div>
-			<div className="hidden w-24 shrink-0 items-center justify-end gap-1 md:flex">
-				{item.assignees.slice(0, 2).map((a) => (
-					<span
-						key={a.id}
-						className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-[10px] font-medium text-primary-700"
-						title={a.displayName}
-					>
-						{a.displayName.charAt(0).toUpperCase()}
-					</span>
-				))}
-			</div>
-			{/* TODO: due date preference on date column */}
-			<time className="hidden w-20 shrink-0 text-right text-xs text-neutral-500 tabular-nums lg:block">
-				{new Date(item.createdAt).toLocaleDateString(undefined, {
-					month: "short",
-					day: "numeric",
-				})}
-			</time>
-		</button>
+		</div>
 	);
 }

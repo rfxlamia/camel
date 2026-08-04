@@ -16,12 +16,16 @@ const {
 	mockCreateTrackerItem,
 	mockListTrackerVocabularies,
 	mockGetWorkspaceMembers,
+	mockUpdateTrackerItem,
+	mockShowToast,
 	mockUseBoard,
 	mockNavigate,
 	mockLocation,
 } = vi.hoisted(() => ({
 	mockListTrackerItems: vi.fn(),
 	mockCreateTrackerItem: vi.fn(),
+	mockUpdateTrackerItem: vi.fn(),
+	mockShowToast: vi.fn(),
 	mockListTrackerVocabularies: vi.fn(),
 	mockGetWorkspaceMembers: vi.fn(),
 	mockUseBoard: vi.fn(),
@@ -33,6 +37,7 @@ vi.mock("../api", () => ({
 	api: {
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
 		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
+		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		listTrackerVocabularies: (...a: unknown[]) =>
 			mockListTrackerVocabularies(...a),
 		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
@@ -177,6 +182,7 @@ beforeEach(() => {
 		subscribeTrackerEvents: vi.fn(() => () => {}),
 		registerRefreshTrackerList: vi.fn(),
 		refreshTrackerList: vi.fn(),
+		showToast: mockShowToast,
 	});
 	mockLocation.key = "tracker-1";
 });
@@ -228,6 +234,67 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		expect(screen.getByLabelText("Backlog")).toBeTruthy();
+	});
+
+	it("changes status inline from the row glyph without navigating", async () => {
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({ id: 1, key: "CA-1", status: statuses[1]! }),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		fireEvent.click(screen.getByLabelText("Backlog"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				statusId: 2,
+				version: 1,
+			}),
+		);
+		expect(mockNavigate).not.toHaveBeenCalled();
+		// The row now lives under the In Progress section.
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress")).toBeTruthy(),
+		);
+	});
+
+	it("restores the previous status when the update fails", async () => {
+		mockUpdateTrackerItem.mockRejectedValue(new Error("network down"));
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		fireEvent.click(screen.getByLabelText("Backlog"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+
+		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+		expect(mockShowToast.mock.calls[0]?.[1]).toBe("error");
+		expect(screen.getByLabelText("Backlog")).toBeTruthy();
+	});
+
+	it("keeps rows on screen while an SSE-triggered refresh is in flight", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+		let releaseItems: ((items: TrackerItem[]) => void) | undefined;
+		mockListTrackerItems.mockReturnValueOnce(
+			new Promise<TrackerItem[]>((resolve) => {
+				releaseItems = resolve;
+			}),
+		);
+		sseHandler?.({ type: "tracker.updated" });
+		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
+		releaseItems?.([makeItem({ id: 1, key: "CA-1" })]);
 	});
 
 	it("resets collapsed sections when re-navigating to /tracker", async () => {

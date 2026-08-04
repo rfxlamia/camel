@@ -22,6 +22,8 @@ interface Props {
 	onCreated: () => void;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
+	/** Preselected status — set when opening from a status group's + button. */
+	defaultStatusId?: number;
 }
 
 type PickerName = "status" | "priority" | "assignees" | "labels";
@@ -34,10 +36,11 @@ export default function TrackerCreateModal({
 	onCreated,
 	statuses,
 	priorities,
+	defaultStatusId,
 }: Props) {
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
-	const [statusId, setStatusId] = useState<number | undefined>();
+	const [statusId, setStatusId] = useState<number | undefined>(defaultStatusId);
 	const [priorityId, setPriorityId] = useState<number | null>(null);
 	const [labelIds, setLabelIds] = useState<number[]>([]);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
