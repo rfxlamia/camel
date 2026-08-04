@@ -233,7 +233,7 @@ describe("TrackerPage", () => {
 	it("renders status icon on tracker rows", async () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
-		expect(screen.getByLabelText("Backlog")).toBeTruthy();
+		expect(screen.getByLabelText("Backlog, CA-1")).toBeTruthy();
 	});
 
 	it("changes status inline from the row glyph without navigating", async () => {
@@ -242,7 +242,7 @@ describe("TrackerPage", () => {
 		);
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
-		fireEvent.click(screen.getByLabelText("Backlog"));
+		fireEvent.click(screen.getByLabelText("Backlog, CA-1"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
 
 		await waitFor(() =>
@@ -254,7 +254,7 @@ describe("TrackerPage", () => {
 		expect(mockNavigate).not.toHaveBeenCalled();
 		// The row now lives under the In Progress section.
 		await waitFor(() =>
-			expect(screen.getByLabelText("In Progress")).toBeTruthy(),
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
 		);
 	});
 
@@ -262,12 +262,12 @@ describe("TrackerPage", () => {
 		mockUpdateTrackerItem.mockRejectedValue(new Error("network down"));
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
-		fireEvent.click(screen.getByLabelText("Backlog"));
+		fireEvent.click(screen.getByLabelText("Backlog, CA-1"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
 
 		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
 		expect(mockShowToast.mock.calls[0]?.[1]).toBe("error");
-		expect(screen.getByLabelText("Backlog")).toBeTruthy();
+		expect(screen.getByLabelText("Backlog, CA-1")).toBeTruthy();
 	});
 
 	it("defers a second status pick until the first request settles", async () => {
@@ -285,11 +285,11 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 
-		fireEvent.click(screen.getByLabelText("Backlog"));
+		fireEvent.click(screen.getByLabelText("Backlog, CA-1"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
-		await waitFor(() => screen.getByLabelText("In Progress"));
+		await waitFor(() => screen.getByLabelText("In Progress, CA-1"));
 
-		fireEvent.click(screen.getByLabelText("In Progress"));
+		fireEvent.click(screen.getByLabelText("In Progress, CA-1"));
 		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
 		// The second pick waits instead of racing the first request.
 		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
@@ -303,7 +303,7 @@ describe("TrackerPage", () => {
 		});
 		// The failed request's rollback did not resurrect the old status.
 		await waitFor(() =>
-			expect(screen.getAllByLabelText("Done")).toHaveLength(2),
+			expect(screen.getByLabelText("Done, CA-1")).toBeTruthy(),
 		);
 	});
 

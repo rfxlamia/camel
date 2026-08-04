@@ -172,7 +172,12 @@ export default function TrackerPage() {
 				prev.map((it) => (it.id === updated.id ? updated : it)),
 			);
 		} catch (err) {
-			setItems((prev) => prev.map((it) => (it.id === item.id ? item : it)));
+			const priorStatus = item.status;
+			setItems((prev) =>
+				prev.map((it) =>
+					it.id === item.id ? { ...it, status: priorStatus } : it,
+				),
+			);
 			if (err instanceof ApiError && err.code === "version_conflict") {
 				showToast(
 					"Someone else updated this item first — refreshed.",

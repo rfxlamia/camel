@@ -73,7 +73,7 @@ export default function TrackerRow({
 				<span className="pointer-events-auto shrink-0">
 					<TrackerPropertyPicker
 						variant="inline"
-						triggerLabel={item.status.name}
+						triggerLabel={`${item.status.name}, ${item.key}`}
 						placeholder="Status"
 						searchPlaceholder="Change status…"
 						icon={<StatusGlyph spec={glyph} size={13} />}
