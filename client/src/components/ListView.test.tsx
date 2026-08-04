@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ListView from "./ListView";
 import type { Column, Card } from "../types";
@@ -19,13 +20,25 @@ const columns: Column[] = [
 ];
 
 describe("ListView", () => {
+	const renderListView = (
+		props: Partial<React.ComponentProps<typeof ListView>> = {},
+	) =>
+		render(
+			<ListView
+				columns={columns}
+				onOpenCard={vi.fn()}
+				onColumnChange={vi.fn()}
+				{...props}
+			/>,
+		);
+
 	afterEach(() => {
 		cleanup();
 		vi.useRealTimers();
 	});
 
 	it("groups cards under column headers in column order", () => {
-		render(<ListView columns={columns} onOpenCard={vi.fn()} />);
+		renderListView();
 		const headers = screen.getAllByRole("heading", { level: 3 });
 		expect(headers[0]!.textContent).toMatch(/To Do/);
 		expect(headers[1]!.textContent).toMatch(/Done/);
@@ -36,7 +49,7 @@ describe("ListView", () => {
 			...columns[0]!,
 			cards: [card(2, { position: 2, title: "Second" }), card(1, { position: 1, title: "First" })],
 		}];
-		render(<ListView columns={shuffled} onOpenCard={vi.fn()} />);
+		renderListView({ columns: shuffled });
 		const titles = screen.getAllByRole("button").map((el) => el.textContent);
 		expect(titles.indexOf("First")).toBeLessThan(titles.indexOf("Second"));
 	});
@@ -44,29 +57,101 @@ describe("ListView", () => {
 	it("shows overdue styling via data-testid for overdue not-done card", () => {
 		vi.setSystemTime(new Date("2026-08-03"));
 		const cols = [{ ...columns[0]!, cards: [card(1, { dueDate: "2026-08-01", doneAt: null })] }];
-		render(<ListView columns={cols} onOpenCard={vi.fn()} />);
+		renderListView({ columns: cols });
 		expect(screen.getByTestId("overdue-due-date")).toBeTruthy();
 	});
 
 	it("does not mark due date overdue when doneAt is set", () => {
 		vi.setSystemTime(new Date("2026-08-03"));
-		render(<ListView columns={[columns[1]!]} onOpenCard={vi.fn()} />);
+		renderListView({ columns: [columns[1]!] });
 		expect(screen.queryByTestId("overdue-due-date")).toBeNull();
 	});
 
 	it("shows empty group headers when column has zero cards", () => {
 		const empty = [{ ...columns[0]!, cards: [] }, { ...columns[1]!, cards: [] }];
-		render(<ListView columns={empty} onOpenCard={vi.fn()} />);
+		renderListView({ columns: empty });
 		expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2);
 	});
 
 	it("shows brand empty state when zero columns", () => {
-		render(<ListView columns={[]} onOpenCard={vi.fn()} />);
+		render(
+			<ListView
+				columns={[]}
+				onOpenCard={vi.fn()}
+				onColumnChange={vi.fn()}
+			/>,
+		);
 		expect(screen.getByText(/Nothing here yet/i)).toBeTruthy();
 	});
 
 	it("rows are not draggable — no dnd-kit sortable attributes", () => {
-		render(<ListView columns={columns} onOpenCard={vi.fn()} />);
+		renderListView();
 		expect(document.querySelector("[data-sortable-id]")).toBeNull();
+	});
+
+	it("changes column from the status glyph without opening the card", () => {
+		const onOpenCard = vi.fn();
+		const onColumnChange = vi.fn();
+		const cols: Column[] = [
+			{
+				...columns[0]!,
+				cards: [card(1, { title: "Ship feature", position: 1 })],
+			},
+			{
+				...columns[1]!,
+				title: "In Progress",
+				isDone: false,
+				cards: [],
+			},
+		];
+		render(
+			<ListView
+				columns={cols}
+				onOpenCard={onOpenCard}
+				onColumnChange={onColumnChange}
+			/>,
+		);
+		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+
+		expect(onColumnChange).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 1, title: "Ship feature" }),
+			2,
+		);
+		expect(onOpenCard).not.toHaveBeenCalled();
+	});
+
+	it("expands a collapsed target group when a card moves there", () => {
+		const onColumnChange = vi.fn();
+		const cols: Column[] = [
+			{
+				...columns[0]!,
+				cards: [card(1, { title: "Ship feature", position: 1 })],
+			},
+			{
+				...columns[1]!,
+				title: "In Progress",
+				isDone: false,
+				cards: [],
+			},
+		];
+		render(
+			<ListView
+				columns={cols}
+				onOpenCard={vi.fn()}
+				onColumnChange={onColumnChange}
+			/>,
+		);
+		const inProgressHeader = screen.getByRole("button", {
+			name: /In Progress/i,
+		});
+		fireEvent.click(inProgressHeader);
+		expect(inProgressHeader.getAttribute("aria-expanded")).toBe("false");
+
+		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+
+		expect(onColumnChange).toHaveBeenCalled();
+		expect(inProgressHeader.getAttribute("aria-expanded")).toBe("true");
 	});
 });

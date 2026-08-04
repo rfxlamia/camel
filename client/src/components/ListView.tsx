@@ -1,12 +1,10 @@
+import { Calendar, ChevronDown, ChevronRight } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import {
-	Calendar,
-	Check,
-	ChevronDown,
-	ChevronRight,
-	Circle,
-	GripVertical,
-} from "lucide-react";
-import { useMemo, useState } from "react";
+	COLOR_PREVIEWS,
+	type ColumnColor,
+} from "../lib/columnColors";
+import { isStoredOklchColor } from "../lib/columnColorUtils";
 import {
 	assigneeInitials,
 	formatDueDate,
@@ -14,46 +12,101 @@ import {
 	isDueOverdue,
 } from "../lib/boardViewUtils";
 import type { Card, Column } from "../types";
+import {
+	type PickerOption,
+	TrackerPropertyPicker,
+} from "./tracker/TrackerPropertyPicker";
 
 interface Props {
 	columns: Column[];
 	onOpenCard: (card: Card) => void;
+	onColumnChange: (card: Card, toColumnId: number) => void;
+}
+
+function columnDotStyle(color: string | null): { backgroundColor: string } {
+	if (!color) {
+		return { backgroundColor: "var(--color-primary-400)" };
+	}
+	if (isStoredOklchColor(color)) {
+		return { backgroundColor: color };
+	}
+	if (color in COLOR_PREVIEWS) {
+		return { backgroundColor: COLOR_PREVIEWS[color as ColumnColor] };
+	}
+	return { backgroundColor: color };
+}
+
+function ColumnDot({
+	color,
+	size = 10,
+}: {
+	color: string | null;
+	size?: number;
+}) {
+	return (
+		<span
+			className="shrink-0 rounded-full border border-neutral-300/60"
+			style={{ width: size, height: size, ...columnDotStyle(color) }}
+			aria-hidden
+		/>
+	);
 }
 
 function ListRow({
 	card,
+	columns,
+	currentColumn,
 	onOpenCard,
+	onColumnChange,
 }: {
 	card: Card;
+	columns: Column[];
+	currentColumn: Column;
 	onOpenCard: (card: Card) => void;
+	onColumnChange: (card: Card, toColumnId: number) => void;
 }) {
-	const done = isCardDone(card);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const overdue = isDueOverdue(card);
+	const done = isCardDone(card) || currentColumn.isDone;
+
+	const columnOptions: PickerOption[] = useMemo(
+		() =>
+			[...columns]
+				.sort((a, b) => a.position - b.position)
+				.map((column) => ({
+					id: String(column.id),
+					label: column.title,
+					icon: <ColumnDot color={column.color} />,
+					selected: column.id === card.columnId,
+				})),
+		[columns, card.columnId],
+	);
 
 	return (
-		<div className="group grid h-10 grid-cols-[24px_48px_28px_1fr_80px_88px] items-center gap-2 border-b border-neutral-100 px-3 last:border-b-0 hover:bg-neutral-50">
-			<GripVertical
-				size={14}
-				className="text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100"
-				aria-hidden
-			/>
+		<div className="group grid h-10 grid-cols-[48px_28px_1fr_80px_88px] items-center gap-2 border-b border-neutral-100 px-3 last:border-b-0 hover:bg-neutral-50">
 			<span className="text-xs tabular-nums text-neutral-400">{card.id}</span>
-			<span className="flex justify-center" aria-hidden>
-				{done ? (
-					<span className="flex h-4 w-4 items-center justify-center rounded-full bg-success-100 text-success-900">
-						<Check size={11} strokeWidth={3} />
-					</span>
-				) : (
-					<Circle size={14} className="text-neutral-300" />
-				)}
+			<span className="flex justify-center">
+				<TrackerPropertyPicker
+					variant="inline"
+					triggerLabel={`${currentColumn.title}, ${card.title}`}
+					placeholder="Column"
+					searchPlaceholder="Change column…"
+					icon={<ColumnDot color={currentColumn.color} size={12} />}
+					options={columnOptions}
+					open={menuOpen}
+					onOpenChange={setMenuOpen}
+					onSelect={(id) => {
+						const toColumnId = Number(id);
+						if (toColumnId === card.columnId) return;
+						onColumnChange(card, toColumnId);
+					}}
+				/>
 			</span>
 			<button
 				type="button"
 				onClick={() => onOpenCard(card)}
 				className={`min-w-0 truncate text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
-					done
-						? "text-neutral-500 line-through"
-						: "text-neutral-900"
+					done ? "text-neutral-500 line-through" : "text-neutral-900"
 				}`}
 			>
 				{card.title}
@@ -94,12 +147,19 @@ function ListRow({
 
 function ListGroup({
 	column,
+	columns,
+	collapsed,
+	onToggleCollapsed,
 	onOpenCard,
+	onColumnChange,
 }: {
 	column: Column;
+	columns: Column[];
+	collapsed: boolean;
+	onToggleCollapsed: () => void;
 	onOpenCard: (card: Card) => void;
+	onColumnChange: (card: Card, toColumnId: number) => void;
 }) {
-	const [collapsed, setCollapsed] = useState(false);
 	const sortedCards = useMemo(
 		() => [...column.cards].sort((a, b) => a.position - b.position),
 		[column.cards],
@@ -110,7 +170,7 @@ function ListGroup({
 			<header className="flex items-center gap-2 bg-neutral-50/80 px-3 py-2">
 				<button
 					type="button"
-					onClick={() => setCollapsed((c) => !c)}
+					onClick={onToggleCollapsed}
 					className="inline-flex items-center gap-2 rounded px-1 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 					aria-expanded={!collapsed}
 				>
@@ -119,10 +179,7 @@ function ListGroup({
 					) : (
 						<ChevronDown size={14} className="text-neutral-500" aria-hidden />
 					)}
-					<span
-						className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary-400"
-						aria-hidden
-					/>
+					<ColumnDot color={column.color} size={10} />
 					<h3 className="text-sm font-semibold text-neutral-900">
 						{column.title}
 						<span className="ml-1.5 font-normal text-neutral-500">
@@ -139,7 +196,14 @@ function ListGroup({
 						</p>
 					) : (
 						sortedCards.map((card) => (
-							<ListRow key={card.id} card={card} onOpenCard={onOpenCard} />
+							<ListRow
+								key={card.id}
+								card={card}
+								columns={columns}
+								currentColumn={column}
+								onOpenCard={onOpenCard}
+								onColumnChange={onColumnChange}
+							/>
 						))
 					)}
 				</div>
@@ -148,7 +212,27 @@ function ListGroup({
 	);
 }
 
-export default function ListView({ columns, onOpenCard }: Props) {
+export default function ListView({
+	columns,
+	onOpenCard,
+	onColumnChange,
+}: Props) {
+	const [collapsedIds, setCollapsedIds] = useState<Set<number>>(() => new Set());
+
+	const handleColumnChange = useCallback(
+		(card: Card, toColumnId: number) => {
+			if (toColumnId === card.columnId) return;
+			setCollapsedIds((prev) => {
+				if (!prev.has(toColumnId)) return prev;
+				const next = new Set(prev);
+				next.delete(toColumnId);
+				return next;
+			});
+			onColumnChange(card, toColumnId);
+		},
+		[onColumnChange],
+	);
+
 	if (columns.length === 0) {
 		return (
 			<div
@@ -163,10 +247,9 @@ export default function ListView({ columns, onOpenCard }: Props) {
 	return (
 		<div
 			data-testid="list-view"
-			className="mx-auto w-full max-w-[1100px] overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm"
+			className="mx-auto w-full max-w-[1100px] overflow-visible rounded-xl border border-neutral-200 bg-white shadow-sm"
 		>
-			<div className="grid grid-cols-[24px_48px_28px_1fr_80px_88px] gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium tracking-wide text-neutral-500 uppercase">
-				<span />
+			<div className="grid grid-cols-[48px_28px_1fr_80px_88px] gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium tracking-wide text-neutral-500 uppercase">
 				<span>ID</span>
 				<span />
 				<span>Title</span>
@@ -177,7 +260,18 @@ export default function ListView({ columns, onOpenCard }: Props) {
 				<ListGroup
 					key={column.id}
 					column={column}
+					columns={columns}
+					collapsed={collapsedIds.has(column.id)}
+					onToggleCollapsed={() =>
+						setCollapsedIds((prev) => {
+							const next = new Set(prev);
+							if (next.has(column.id)) next.delete(column.id);
+							else next.add(column.id);
+							return next;
+						})
+					}
 					onOpenCard={onOpenCard}
+					onColumnChange={handleColumnChange}
 				/>
 			))}
 		</div>
