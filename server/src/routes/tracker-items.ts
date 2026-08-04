@@ -8,6 +8,7 @@ import {
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { lookupMembership } from "./helpers.js";
+import { diffAssigneeIds } from "./card-assignees.js";
 import {
 	loadTrackerAssigneesForItems,
 	syncTrackerItemAssignees,
@@ -239,12 +240,35 @@ async function parseLabelIds(
 	return ids;
 }
 
+async function getTrackerItemLabelIds(
+	dbExec: DBExecutor,
+	trackerItemId: number,
+): Promise<number[]> {
+	const rows = await dbExec
+		.selectFrom("tracker_item_labels")
+		.select("vocabulary_id")
+		.where("tracker_item_id", "=", trackerItemId)
+		.orderBy("vocabulary_id")
+		.execute();
+	return rows.map((r) => r.vocabulary_id);
+}
+
 async function syncTrackerItemLabels(
 	dbExec: DBExecutor,
 	trackerItemId: number,
 	labelIds: number[],
 ): Promise<void> {
-	for (const vocabularyId of labelIds) {
+	const prev = await getTrackerItemLabelIds(dbExec, trackerItemId);
+	const { added, removed } = diffAssigneeIds(prev, labelIds);
+
+	if (removed.length > 0) {
+		await dbExec
+			.deleteFrom("tracker_item_labels")
+			.where("tracker_item_id", "=", trackerItemId)
+			.where("vocabulary_id", "in", removed)
+			.execute();
+	}
+	for (const vocabularyId of added) {
 		await dbExec
 			.insertInto("tracker_item_labels")
 			.values({ tracker_item_id: trackerItemId, vocabulary_id: vocabularyId })
@@ -549,8 +573,18 @@ trackerItemsRouter.patch(
 			parsedAssigneeIds = parsedAssignees;
 		}
 
+		const hasLabelIds = body.labelIds !== undefined;
+		let parsedLabelIds: number[] | undefined;
+		if (hasLabelIds) {
+			const parsedLabels = await parseLabelIds(body, workspaceId);
+			if ("error" in parsedLabels) {
+				return res.status(400).json({ error: parsedLabels.error });
+			}
+			parsedLabelIds = parsedLabels;
+		}
+
 		const hasSets = Object.keys(setFields).length > 0;
-		if (!hasSets && !hasAssigneeIds) {
+		if (!hasSets && !hasAssigneeIds && !hasLabelIds) {
 			return res.status(400).json({ error: "no updatable fields provided" });
 		}
 
@@ -615,6 +649,22 @@ trackerItemsRouter.patch(
 				}
 			}
 
+			if (hasLabelIds && parsedLabelIds !== undefined) {
+				await syncTrackerItemLabels(trx, existing.id, parsedLabelIds);
+				if (!hasSets && !hasAssigneeIds) {
+					await trx
+						.updateTable("tracker_items")
+						.set({ version: sql`version + 1`, updated_at: sql`now()` })
+						.where("id", "=", existing.id)
+						.where("workspace_id", "=", workspaceId)
+						.where("deleted_at", "is", null)
+						.$if(version !== undefined, (qb) =>
+							qb.where("version", "=", version as number),
+						)
+						.execute();
+				}
+			}
+
 			await recordTrackerActivity(
 				trx,
 				actor,
@@ -633,6 +683,7 @@ trackerItemsRouter.patch(
 							setFields.status_id !== undefined && "status",
 							setFields.priority_id !== undefined && "priority",
 							hasAssigneeIds && "assignees",
+							hasLabelIds && "labels",
 						].filter(Boolean),
 					},
 				},

@@ -74,6 +74,20 @@ const inProgress = {
 	position: 2000,
 	colour: "oklch(0.7 0.1 90)",
 };
+const bugLabel = {
+	id: 3,
+	kind: "label" as const,
+	name: "Bug",
+	position: 1000,
+	colour: "oklch(0.7 0.1 15)",
+};
+const featureLabel = {
+	id: 4,
+	kind: "label" as const,
+	name: "Feature",
+	position: 2000,
+	colour: "oklch(0.7 0.1 280)",
+};
 
 const item = {
 	id: 42,
@@ -123,7 +137,13 @@ beforeEach(() => {
 	});
 	mockUpdateTrackerItem.mockResolvedValue({ ...item, version: 2 });
 	mockListVocabularies.mockImplementation((_ws: number, kind: string) =>
-		Promise.resolve(kind === "status" ? [backlog, inProgress] : []),
+		Promise.resolve(
+			kind === "status"
+				? [backlog, inProgress]
+				: kind === "label"
+					? [bugLabel, featureLabel]
+					: [],
+		),
 	);
 	mockGetWorkspaceMembers.mockResolvedValue({ members: [] });
 	mockUseBoard.mockReturnValue({
@@ -427,5 +447,42 @@ describe("TrackerDetailPage", () => {
 			expect(screen.getByDisplayValue("Fresh title")).toBeTruthy(),
 		);
 		expect(screen.queryByDisplayValue("Stale title")).toBeNull();
+	});
+
+	it("queues rapid label toggles against the latest label list", async () => {
+		let resolveFirst: (value: TrackerItem) => void = () => {};
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirst = resolve;
+					}),
+			)
+			.mockResolvedValueOnce({
+				...item,
+				labels: [bugLabel, featureLabel],
+				version: 3,
+			});
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add label/i })).toBeTruthy(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /add label/i }));
+		fireEvent.click(screen.getByRole("option", { name: /bug/i }));
+		fireEvent.click(screen.getByRole("option", { name: /feature/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CK-42", {
+				labelIds: [3],
+				version: 1,
+			}),
+		);
+		resolveFirst({ ...item, labels: [bugLabel], version: 2 });
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CK-42", {
+				labelIds: [3, 4],
+				version: 2,
+			}),
+		);
 	});
 });

@@ -55,6 +55,7 @@ export default function TrackerDetailPage() {
 	const [events, setEvents] = useState<TrackerEvent[]>([]);
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
+	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
@@ -129,14 +130,17 @@ export default function TrackerDetailPage() {
 		let cancelled = false;
 		void (async () => {
 			try {
-				const [statusList, priorityList, memberList] = await Promise.all([
-					api.listTrackerVocabularies(activeWorkspaceId, "status"),
-					api.listTrackerVocabularies(activeWorkspaceId, "priority"),
-					api.getWorkspaceMembers(activeWorkspaceId),
-				]);
+				const [statusList, priorityList, labelList, memberList] =
+					await Promise.all([
+						api.listTrackerVocabularies(activeWorkspaceId, "status"),
+						api.listTrackerVocabularies(activeWorkspaceId, "priority"),
+						api.listTrackerVocabularies(activeWorkspaceId, "label"),
+						api.getWorkspaceMembers(activeWorkspaceId),
+					]);
 				if (cancelled) return;
 				setStatuses(statusList);
 				setPriorities(priorityList);
+				setLabels(labelList);
 				setMembers(memberList.members);
 			} catch {
 				// Rail degrades to read-only.
@@ -180,14 +184,22 @@ export default function TrackerDetailPage() {
 		patch: PropertyPatch,
 		current: TrackerItem,
 	): Record<string, unknown> => {
-		if (patch.assigneeToggle === undefined) return { ...patch };
-		const ids = current.assignees.map((a) => a.id);
-		const userId = patch.assigneeToggle;
-		const assigneeIds = ids.includes(userId)
-			? ids.filter((x) => x !== userId)
-			: [...ids, userId];
-		const { assigneeToggle: _, ...rest } = patch;
-		return { ...rest, assigneeIds };
+		const { assigneeToggle, labelToggle, ...rest } = patch;
+		const result: Record<string, unknown> = { ...rest };
+
+		if (assigneeToggle !== undefined) {
+			const ids = current.assignees.map((a) => a.id);
+			result.assigneeIds = ids.includes(assigneeToggle)
+				? ids.filter((x) => x !== assigneeToggle)
+				: [...ids, assigneeToggle];
+		}
+		if (labelToggle !== undefined) {
+			const ids = current.labels.map((l) => l.id);
+			result.labelIds = ids.includes(labelToggle)
+				? ids.filter((x) => x !== labelToggle)
+				: [...ids, labelToggle];
+		}
+		return result;
 	};
 
 	const enqueueMutation = (task: () => Promise<void>) => {
@@ -438,6 +450,7 @@ export default function TrackerDetailPage() {
 					item={item}
 					statuses={statuses}
 					priorities={priorities}
+					labels={labels}
 					members={members}
 					onChange={changeProperty}
 				/>

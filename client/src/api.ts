@@ -473,6 +473,7 @@ export const api = {
 			statusId?: number;
 			priorityId?: number | null;
 			assigneeIds?: number[];
+			labelIds?: number[];
 			version?: number;
 		},
 	) =>

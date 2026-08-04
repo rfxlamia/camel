@@ -1,4 +1,4 @@
-import { UserRound } from "lucide-react";
+import { Tag, UserRound } from "lucide-react";
 import { useState } from "react";
 import { sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
@@ -24,17 +24,20 @@ export interface PropertyPatch {
 	priorityId?: number | null;
 	/** Toggle one assignee; resolved against latest item state in the parent queue. */
 	assigneeToggle?: number;
+	/** Toggle one label; resolved against latest item state in the parent queue. */
+	labelToggle?: number;
 }
 
 interface Props {
 	item: TrackerItem;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
+	labels: TrackerVocabulary[];
 	members: WorkspaceMember[];
 	onChange: (patch: PropertyPatch) => void;
 }
 
-type PickerName = "status" | "priority" | "assignees";
+type PickerName = "status" | "priority" | "assignees" | "labels";
 
 const NO_PRIORITY = "none";
 
@@ -51,13 +54,13 @@ function formatDate(iso: string): string {
  * semantics as the inline status change on a list row — so the rail never
  * competes with the title/description draft for the Save button.
  *
- * Labels are read-only: the item PATCH takes no labelIds, so an editable
- * control here would silently drop the change.
+ * Labels commit on pick too — same queue semantics as assignees.
  */
 export default function TrackerProperties({
 	item,
 	statuses,
 	priorities,
+	labels,
 	members,
 	onChange,
 }: Props) {
@@ -65,6 +68,7 @@ export default function TrackerProperties({
 
 	const orderedStatuses = sortStatusesByPosition(statuses);
 	const orderedPriorities = sortStatusesByPosition(priorities);
+	const orderedLabels = sortStatusesByPosition(labels);
 	const assigneeIds = item.assignees.map((a) => a.id);
 
 	const statusOptions: PickerOption[] = orderedStatuses.map((s) => ({
@@ -103,6 +107,13 @@ export default function TrackerProperties({
 			: item.assignees.length === 1
 				? item.assignees[0].displayName
 				: `${item.assignees[0].displayName} +${item.assignees.length - 1}`;
+
+	const labelOptions: PickerOption[] = orderedLabels.map((l) => ({
+		id: String(l.id),
+		label: l.name,
+		selected: item.labels.some((label) => label.id === l.id),
+		icon: <LabelDot colour={l.colour} />,
+	}));
 
 	return (
 		// order-first keeps the properties reachable on a phone, where the rail
@@ -178,7 +189,7 @@ export default function TrackerProperties({
 				)}
 			</div>
 
-			{item.labels.length > 0 && (
+			{orderedLabels.length > 0 && (
 				<>
 					<h3 className="mt-6 font-medium text-[11px] text-neutral-500 uppercase tracking-[0.08em]">
 						Labels
@@ -193,6 +204,26 @@ export default function TrackerProperties({
 								{label.name}
 							</span>
 						))}
+						<TrackerPropertyPicker
+							placeholder="Add label"
+							icon={
+								item.labels.length > 0 ? (
+									<LabelDot colour={item.labels[0].colour} />
+								) : (
+									<Tag
+										size={14}
+										className="shrink-0 text-neutral-500"
+										aria-hidden
+									/>
+								)
+							}
+							searchPlaceholder="Change or add labels…"
+							options={labelOptions}
+							open={openPicker === "labels"}
+							onOpenChange={(open) => setOpenPicker(open ? "labels" : null)}
+							onSelect={(id) => onChange({ labelToggle: Number(id) })}
+							multiple
+						/>
 					</div>
 				</>
 			)}

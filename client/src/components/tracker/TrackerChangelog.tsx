@@ -12,6 +12,7 @@ const FIELD_LABELS: Record<string, string> = {
 	status: "the status",
 	priority: "the priority",
 	assignees: "the assignees",
+	labels: "the labels",
 };
 
 function listPhrase(parts: string[]): string {
