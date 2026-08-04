@@ -24,6 +24,7 @@ import TrashZone from "../components/TrashZone";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useBoard } from "../context/BoardContext";
 import { WORKSPACE_TEMPLATES } from "../lib/templates";
+import type { BoardViewMode } from "../lib/boardViewPrefs";
 import type { WorkspaceTemplate } from "../lib/templates";
 import type { Card, Column } from "../types";
 
@@ -51,7 +52,15 @@ function StatChip({
 	);
 }
 
-function BoardToolbar({ columns }: { columns: Column[] }) {
+function BoardToolbar({
+	columns,
+	boardViewMode,
+	setBoardViewMode,
+}: {
+	columns: Column[];
+	boardViewMode: BoardViewMode;
+	setBoardViewMode: (mode: BoardViewMode) => void;
+}) {
 	const s = useMemo(() => {
 		let total = 0;
 		let active = 0;
@@ -68,35 +77,46 @@ function BoardToolbar({ columns }: { columns: Column[] }) {
 		return { total, active, done, over, cols: columns.length };
 	}, [columns]);
 
+	const hasColumns = columns.length > 0;
+
 	return (
 		<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-4 py-2.5 md:px-6">
-			<StatChip dot="bg-neutral-300" value={s.total} label="cards" />
-			<StatChip dot="bg-primary-400" value={s.active} label="in progress" />
-			<StatChip dot="bg-success-500" value={s.done} label="done" />
-			<span className="hidden text-neutral-300 sm:inline" aria-hidden>
-				·
-			</span>
-			<span className="hidden text-xs text-neutral-500 sm:inline">
-				{s.cols} column{s.cols === 1 ? "" : "s"}
-			</span>
-			<div className="ml-auto">
-				{s.over > 0 ? (
-					<span className="inline-flex items-center gap-1.5 rounded-md bg-error-100 px-2.5 py-1 text-xs font-medium text-error-900">
-						<span
-							className="h-1.5 w-1.5 rounded-full bg-error-500"
-							aria-hidden
-						/>
-						WIP over in {s.over} column{s.over === 1 ? "" : "s"}
+			{hasColumns && (
+				<>
+					<StatChip dot="bg-neutral-300" value={s.total} label="cards" />
+					<StatChip dot="bg-primary-400" value={s.active} label="in progress" />
+					<StatChip dot="bg-success-500" value={s.done} label="done" />
+					<span className="hidden text-neutral-300 sm:inline" aria-hidden>
+						·
 					</span>
-				) : (
-					<span className="inline-flex items-center gap-1.5 rounded-md bg-success-100 px-2.5 py-1 text-xs font-medium text-success-900">
-						<span
-							className="h-1.5 w-1.5 rounded-full bg-success-500"
-							aria-hidden
-						/>
-						Flow healthy
+					<span className="hidden text-xs text-neutral-500 sm:inline">
+						{s.cols} column{s.cols === 1 ? "" : "s"}
 					</span>
-				)}
+				</>
+			)}
+			<div className="ml-auto flex items-center gap-2">
+				<ViewSwitcher
+					value={boardViewMode}
+					onChange={setBoardViewMode}
+				/>
+				{hasColumns &&
+					(s.over > 0 ? (
+						<span className="inline-flex items-center gap-1.5 rounded-md bg-error-100 px-2.5 py-1 text-xs font-medium text-error-900">
+							<span
+								className="h-1.5 w-1.5 rounded-full bg-error-500"
+								aria-hidden
+							/>
+							WIP over in {s.over} column{s.over === 1 ? "" : "s"}
+						</span>
+					) : (
+						<span className="inline-flex items-center gap-1.5 rounded-md bg-success-100 px-2.5 py-1 text-xs font-medium text-success-900">
+							<span
+								className="h-1.5 w-1.5 rounded-full bg-success-500"
+								aria-hidden
+							/>
+							Flow healthy
+						</span>
+					))}
 			</div>
 		</div>
 	);
@@ -490,17 +510,15 @@ export default function BoardPage() {
 			{/* Board identity heading — visually carried by the toolbar/columns, but
 			    kept in the document so heading order starts at h1 (topbar is a span). */}
 			<h1 className="sr-only">Board</h1>
-			{columns && columns.length > 0 && <BoardToolbar columns={columns} />}
+			{columns !== null && (
+				<BoardToolbar
+					columns={columns}
+					boardViewMode={boardViewMode}
+					setBoardViewMode={setBoardViewMode}
+				/>
+			)}
 
 			<div className="board-canvas relative flex-1 overflow-x-auto p-6">
-				{columns !== null && (
-					<div className="mb-4">
-						<ViewSwitcher
-							value={boardViewMode}
-							onChange={setBoardViewMode}
-						/>
-					</div>
-				)}
 				{loadError && (
 					<div className="mx-auto max-w-md rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
 						Couldn't load the board. Check that the server is running, then

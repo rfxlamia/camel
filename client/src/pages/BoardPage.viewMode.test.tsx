@@ -104,4 +104,36 @@ describe("BoardPage view mode routing", () => {
 		render(<BoardPage />);
 		expect(screen.getByTestId("calendar-view")).toBeTruthy();
 	});
+
+	it("renders ViewSwitcher in the toolbar, not in the board canvas", () => {
+		mockUseBoard.mockReturnValue({
+			columns: [
+				{
+					id: 1,
+					title: "Todo",
+					position: 0,
+					wipLimit: null,
+					policy: "",
+					isDone: false,
+					isSignable: false,
+					signableAssigneeId: null,
+					color: null,
+					cards: [],
+				},
+			],
+			setColumns: vi.fn(),
+			loadError: false,
+			refresh: vi.fn(),
+			cancelScheduledRefresh: vi.fn(),
+			showToast: vi.fn(),
+			deleteCard: vi.fn(),
+			activeWorkspaceId: 7,
+			boardViewMode: "board",
+			setBoardViewMode: vi.fn(),
+		});
+		const { container } = render(<BoardPage />);
+		const tablist = screen.getByRole("tablist", { name: "Board view" });
+		expect(tablist.closest(".board-canvas")).toBeNull();
+		expect(container.querySelector(".board-canvas .mb-4")).toBeNull();
+	});
 });
