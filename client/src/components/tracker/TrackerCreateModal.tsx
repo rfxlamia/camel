@@ -186,9 +186,13 @@ export default function TrackerCreateModal({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-900/40 p-4 pt-[10vh] backdrop-blur-[2px]">
+			{/* mousedown, not click: an open picker also closes itself on a
+			    document mousedown, so a click handler would read a stale
+			    openPicker and dismiss the whole modal. */}
 			<div
 				className="absolute inset-0"
-				onClick={() => (openPicker ? setOpenPicker(null) : onClose())}
+				data-testid="tracker-create-backdrop"
+				onMouseDown={() => (openPicker ? setOpenPicker(null) : onClose())}
 				aria-hidden
 			/>
 			<div

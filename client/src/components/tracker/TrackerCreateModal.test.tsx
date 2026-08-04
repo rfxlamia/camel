@@ -130,6 +130,19 @@ describe("TrackerCreateModal", () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
+	it("closes the picker on a backdrop press before closing the modal", async () => {
+		const { onClose } = renderModal();
+		fireEvent.click(await screen.findByText("Backlog"));
+		const backdrop = screen.getByTestId("tracker-create-backdrop");
+		fireEvent.mouseDown(backdrop);
+		fireEvent.click(backdrop);
+		expect(screen.queryByRole("listbox")).toBeNull();
+		expect(onClose).not.toHaveBeenCalled();
+
+		fireEvent.mouseDown(backdrop);
+		expect(onClose).toHaveBeenCalled();
+	});
+
 	it("closes the picker on Escape before closing the modal", async () => {
 		const { onClose } = renderModal();
 		fireEvent.click(await screen.findByText("Backlog"));
