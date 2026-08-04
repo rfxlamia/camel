@@ -270,6 +270,43 @@ describe("TrackerPage", () => {
 		expect(screen.getByLabelText("Backlog")).toBeTruthy();
 	});
 
+	it("defers a second status pick until the first request settles", async () => {
+		let rejectFirst: ((err: Error) => void) | undefined;
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise((_resolve, reject) => {
+						rejectFirst = reject;
+					}),
+			)
+			.mockResolvedValueOnce(
+				makeItem({ id: 1, key: "CA-1", status: statuses[2]!, version: 2 }),
+			);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+		fireEvent.click(screen.getByLabelText("Backlog"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() => screen.getByLabelText("In Progress"));
+
+		fireEvent.click(screen.getByLabelText("In Progress"));
+		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
+		// The second pick waits instead of racing the first request.
+		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+
+		rejectFirst?.(new Error("network down"));
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		// Runs against the rolled-back item, so the version is still the fresh one.
+		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+			statusId: 5,
+			version: 1,
+		});
+		// The failed request's rollback did not resurrect the old status.
+		await waitFor(() =>
+			expect(screen.getAllByLabelText("Done")).toHaveLength(2),
+		);
+	});
+
 	it("keeps rows on screen while an SSE-triggered refresh is in flight", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseBoard.mockReturnValue({

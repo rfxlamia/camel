@@ -1,5 +1,5 @@
 import { ListTodo, Plus, Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { ApiError, api } from "../api";
 import EmptyState from "../components/EmptyState";
@@ -28,6 +28,9 @@ export default function TrackerPage() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [createStatusId, setCreateStatusId] = useState<number | undefined>();
 	const [loading, setLoading] = useState(true);
+	/** Item ids with a status request in flight, and the pick waiting on it. */
+	const inFlightStatusRef = useRef<Set<number>>(new Set());
+	const queuedStatusRef = useRef<Map<number, number>>(new Map());
 
 	// Reset in-memory collapse when React Router re-navigates to /tracker.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: location.key is the intentional trigger
@@ -130,10 +133,22 @@ export default function TrackerPage() {
 
 	// Status changes land in the list before the request resolves — the row
 	// jumps to its new group at once, and a failure puts it back.
+	//
+	// One request per item at a time: the rollback restores a snapshot taken
+	// before the request, so a slow failure overlapping a newer success would
+	// resurrect a stale status. A pick made while a request is in flight waits
+	// for it and then runs against the settled item.
 	const changeStatus = async (item: TrackerItem, statusId: number) => {
 		if (activeWorkspaceId === null || statusId === item.status.id) return;
 		const nextStatus = statuses.find((s) => s.id === statusId);
 		if (!nextStatus) return;
+
+		if (inFlightStatusRef.current.has(item.id)) {
+			queuedStatusRef.current.set(item.id, statusId);
+			return;
+		}
+		inFlightStatusRef.current.add(item.id);
+		let settled = item;
 
 		setItems((prev) =>
 			prev.map((it) =>
@@ -152,6 +167,7 @@ export default function TrackerPage() {
 				statusId,
 				version: item.version,
 			});
+			settled = updated;
 			setItems((prev) =>
 				prev.map((it) => (it.id === updated.id ? updated : it)),
 			);
@@ -162,13 +178,23 @@ export default function TrackerPage() {
 					"Someone else updated this item first — refreshed.",
 					"warning",
 				);
+				// loadData brings fresh versions; a queued pick would carry a stale
+				// one straight into another conflict, so it is dropped.
+				queuedStatusRef.current.delete(item.id);
 				await loadData();
-				return;
+			} else {
+				showToast(
+					"Couldn't change the status. Check your connection and try again.",
+					"error",
+				);
 			}
-			showToast(
-				"Couldn't change the status. Check your connection and try again.",
-				"error",
-			);
+		} finally {
+			inFlightStatusRef.current.delete(item.id);
+			const queued = queuedStatusRef.current.get(item.id);
+			if (queued !== undefined) {
+				queuedStatusRef.current.delete(item.id);
+				void changeStatus(settled, queued);
+			}
 		}
 	};
 
