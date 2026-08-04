@@ -12,6 +12,8 @@ import { metricsRouter } from "./routes/metrics.js";
 import { notificationsRouter } from "./notifications/router.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
+import { trackerItemsRouter } from "./routes/tracker-items.js";
+import { trackerVocabulariesRouter } from "./routes/tracker-vocabularies.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility
@@ -53,6 +55,8 @@ api.use("/workspaces/:workspaceId", invitesRouter);
 api.use("/workspaces/:workspaceId", membersRouter);
 api.use("/workspaces/:workspaceId", metricsRouter);
 api.use("/workspaces/:workspaceId", presenceRouter);
+api.use("/workspaces/:workspaceId", trackerItemsRouter);
+api.use("/workspaces/:workspaceId", trackerVocabulariesRouter);
 api.use("/workspaces/:workspaceId/notifications", notificationsRouter);
 
 // ---- Integration test helpers (in-memory, no DB) ------------------------------

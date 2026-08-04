@@ -54,9 +54,14 @@ export interface BoardEvent {
 		| "agent.tool.started"
 		| "agent.tool.result"
 		| "agent.tool.failed"
-		| "ticket_intake.submit_result";
+		| "ticket_intake.submit_result"
+		| "tracker.created"
+		| "tracker.updated"
+		| "tracker.deleted"
+		| "tracker.vocabulary.created";
 	actor?: AuthUser;
 	cardId?: number;
+	trackerItemId?: number;
 	userId?: number;
 	workspaceId?: number;
 	workspaceName?: string;
