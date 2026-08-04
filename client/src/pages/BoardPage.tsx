@@ -147,6 +147,26 @@ function moveCardToColumn(
 	});
 }
 
+function revertCardMove(
+	columns: Column[],
+	cardId: number,
+	restore: { columnId: number; index: number; card: Card },
+): Column[] {
+	const without = columns.map((col) => ({
+		...col,
+		cards: col.cards.filter((c) => c.id !== cardId),
+	}));
+	return without.map((col) => {
+		if (col.id !== restore.columnId) return col;
+		const at = Math.min(restore.index, col.cards.length);
+		const reverted = { ...restore.card, columnId: restore.columnId };
+		return {
+			...col,
+			cards: [...col.cards.slice(0, at), reverted, ...col.cards.slice(at)],
+		};
+	});
+}
+
 function AddColumn({
 	onAddColumn,
 }: {
@@ -245,6 +265,8 @@ export default function BoardPage() {
 			}
 			const targetCol = columns.find((col) => col.id === toColumnId);
 			if (!targetCol) return;
+			const sourceCol = findColumnOfCard(columns, card.id);
+			if (!sourceCol) return;
 
 			if (inFlightColumnRef.current.has(card.id)) {
 				queuedColumnRef.current.set(card.id, toColumnId);
@@ -253,9 +275,15 @@ export default function BoardPage() {
 			inFlightColumnRef.current.add(card.id);
 			let settled = card;
 
-			const snapshot = structuredClone(columns);
+			const restore = {
+				columnId: card.columnId,
+				index: sourceCol.cards.findIndex((c) => c.id === card.id),
+				card,
+			};
 			const insertAt = targetCol.cards.filter((c) => c.id !== card.id).length;
-			setColumns(moveCardToColumn(columns, card.id, toColumnId, insertAt));
+			setColumns((cols) =>
+				cols ? moveCardToColumn(cols, card.id, toColumnId, insertAt) : cols,
+			);
 
 			try {
 				cancelScheduledRefresh();
@@ -267,7 +295,6 @@ export default function BoardPage() {
 				settled = updated;
 				await refresh();
 			} catch (err) {
-				setColumns(snapshot);
 				if (err instanceof ApiError && err.code === "version_conflict") {
 					showToast(
 						"Someone else moved this card first — board refreshed.",
@@ -275,13 +302,18 @@ export default function BoardPage() {
 					);
 					queuedColumnRef.current.delete(card.id);
 					await refresh();
-				} else if (err instanceof ApiError && err.status === 409) {
-					showToast("WIP limit reached — finish something first.", "warning");
 				} else {
-					showToast(
-						"Couldn't move the card. Check your connection and try again.",
-						"error",
+					setColumns((cols) =>
+						cols ? revertCardMove(cols, card.id, restore) : cols,
 					);
+					if (err instanceof ApiError && err.status === 409) {
+						showToast("WIP limit reached — finish something first.", "warning");
+					} else {
+						showToast(
+							"Couldn't move the card. Check your connection and try again.",
+							"error",
+						);
+					}
 				}
 			} finally {
 				inFlightColumnRef.current.delete(card.id);

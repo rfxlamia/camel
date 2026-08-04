@@ -354,4 +354,59 @@ describe("BoardPage list view column change", () => {
 			expect(screen.getByLabelText("Done, Ship feature")).toBeTruthy(),
 		);
 	});
+
+	it("rolls back only the failed card when another card moved concurrently", async () => {
+		const twoCardColumns: Column[] = [
+			{
+				...listColumns[0]!,
+				cards: [
+					listColumns[0]!.cards[0]!,
+					{
+						...listColumns[0]!.cards[0]!,
+						id: 2,
+						title: "Other task",
+						position: 2,
+					},
+				],
+			},
+			listColumns[1]!,
+		];
+		let rejectFirst: ((err: Error) => void) | undefined;
+		moveCard
+			.mockImplementationOnce(
+				() =>
+					new Promise((_resolve, reject) => {
+						rejectFirst = reject;
+					}),
+			)
+			.mockResolvedValueOnce({
+				id: 2,
+				columnId: 2,
+				title: "Other task",
+				description: "",
+				position: 1,
+				version: 1,
+				createdAt: "2026-08-01T00:00:00.000Z",
+				startedAt: null,
+				doneAt: null,
+				dueDate: null,
+				assignees: [],
+			});
+		renderListBoard(twoCardColumns);
+		await waitFor(() => screen.getByLabelText("To Do, Ship feature"));
+
+		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+
+		fireEvent.click(screen.getByLabelText("To Do, Other task"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, Other task")).toBeTruthy(),
+		);
+
+		rejectFirst?.(new Error("network down"));
+		await waitFor(() => expect(showToast).toHaveBeenCalled());
+		expect(screen.getByLabelText("To Do, Ship feature")).toBeTruthy();
+		expect(screen.getByLabelText("In Progress, Other task")).toBeTruthy();
+	});
 });
