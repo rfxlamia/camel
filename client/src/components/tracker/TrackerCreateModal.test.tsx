@@ -123,11 +123,51 @@ describe("TrackerCreateModal", () => {
 		fireEvent.click(screen.getByRole("switch", { name: /Create more/ }));
 		const title = screen.getByLabelText("Item title") as HTMLTextAreaElement;
 		fireEvent.change(title, { target: { value: "Second item" } });
+		fireEvent.click(await screen.findByText("Priority"));
+		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 
 		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
 		await waitFor(() => expect(title.value).toBe(""));
+		expect(screen.getByText("High")).toBeTruthy();
 		expect(onClose).not.toHaveBeenCalled();
+
+		fireEvent.change(title, { target: { value: "Third item" } });
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() => expect(createTrackerItem).toHaveBeenCalledTimes(2));
+		expect(createTrackerItem).toHaveBeenLastCalledWith(7, {
+			title: "Third item",
+			statusId: 1,
+			priorityId: 10,
+		});
+	});
+
+	it("shows an error and stays open when create fails", async () => {
+		createTrackerItem.mockRejectedValueOnce(new Error("network"));
+		renderModal();
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "Broken create" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+
+		expect(
+			await screen.findByText("Could not create the item. Try again."),
+		).toBeTruthy();
+		expect(screen.getByLabelText("Item title")).toBeTruthy();
+	});
+
+	it("closes the picker after create more resets the draft", async () => {
+		renderModal();
+		fireEvent.click(screen.getByRole("switch", { name: /Create more/ }));
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "With open picker" },
+		});
+		fireEvent.click(await screen.findByText("Labels"));
+		expect(screen.getByRole("listbox")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+
+		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 	});
 
 	it("closes the picker on a backdrop press before closing the modal", async () => {

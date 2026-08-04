@@ -44,6 +44,7 @@ export default function TrackerCreateModal({
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [submitting, setSubmitting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const [createMore, setCreateMore] = useState(false);
 	const [openPicker, setOpenPicker] = useState<PickerName | null>(null);
 	const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -156,6 +157,7 @@ export default function TrackerCreateModal({
 		setDescription("");
 		setLabelIds([]);
 		setAssigneeIds([]);
+		setOpenPicker(null);
 		titleRef.current?.focus();
 	};
 
@@ -163,6 +165,7 @@ export default function TrackerCreateModal({
 		e?.preventDefault();
 		if (!title.trim() || submitting) return;
 		setSubmitting(true);
+		setError(null);
 		try {
 			const body: {
 				title: string;
@@ -182,6 +185,8 @@ export default function TrackerCreateModal({
 			onCreated();
 			if (createMore) resetDraft();
 			else onClose();
+		} catch {
+			setError("Could not create the item. Try again.");
 		} finally {
 			setSubmitting(false);
 		}
@@ -375,6 +380,14 @@ export default function TrackerCreateModal({
 					</div>
 
 					<div className="flex items-center justify-end gap-3 border-neutral-200 border-t px-4 py-3">
+						{error && (
+							<p
+								role="alert"
+								className="mr-auto text-error-900 text-sm font-medium"
+							>
+								{error}
+							</p>
+						)}
 						<button
 							type="button"
 							role="switch"

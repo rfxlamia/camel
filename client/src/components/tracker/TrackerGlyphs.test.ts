@@ -43,7 +43,7 @@ describe("statusGlyphSpec", () => {
 
 	it("does not divide by zero for a single-status workspace", () => {
 		const spec = statusGlyphSpec([vocab(9, "Only", 1024)], 9);
-		expect(spec).toEqual({ shape: "pending", fraction: 0 });
+		expect(spec).toEqual({ shape: "done", fraction: 1 });
 	});
 
 	it("falls back to pending for an unknown status", () => {

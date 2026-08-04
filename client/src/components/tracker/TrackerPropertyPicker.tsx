@@ -52,7 +52,11 @@ export function TrackerPropertyPicker({
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return options;
-		return options.filter((o) => o.label.toLowerCase().includes(q));
+		return options.filter(
+			(o) =>
+				o.label.toLowerCase().includes(q) ||
+				(o.hint?.toLowerCase().includes(q) ?? false),
+		);
 	}, [options, query]);
 
 	useEffect(() => {
@@ -139,9 +143,15 @@ export function TrackerPropertyPicker({
 						type="text"
 						value={query}
 						role="combobox"
+						aria-label={searchPlaceholder}
 						aria-expanded
 						aria-controls={listboxId}
 						aria-autocomplete="list"
+						aria-activedescendant={
+							filtered[active]
+								? `${listboxId}-${filtered[active].id}`
+								: undefined
+						}
 						placeholder={searchPlaceholder}
 						onChange={(e) => {
 							setQuery(e.target.value);
@@ -153,6 +163,8 @@ export function TrackerPropertyPicker({
 					<ul
 						id={listboxId}
 						role="listbox"
+						aria-label={placeholder}
+						aria-multiselectable={multiple || undefined}
 						className="max-h-64 overflow-y-auto overscroll-contain p-1"
 					>
 						{filtered.length === 0 ? (
@@ -162,6 +174,7 @@ export function TrackerPropertyPicker({
 								<li key={option.id} role="presentation">
 									<button
 										type="button"
+										id={`${listboxId}-${option.id}`}
 										role="option"
 										aria-selected={option.selected}
 										onMouseEnter={() => setActive(i)}
@@ -187,7 +200,10 @@ export function TrackerPropertyPicker({
 											/>
 										)}
 										{i < 9 && (
-											<span className="w-3 shrink-0 text-right text-neutral-400 text-xs tabular-nums">
+											<span
+												aria-hidden
+												className="w-3 shrink-0 text-right text-neutral-400 text-xs tabular-nums"
+											>
 												{i + 1}
 											</span>
 										)}

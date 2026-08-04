@@ -27,8 +27,9 @@ export function statusGlyphSpec(
 	if (CANCELLED.test(status.name)) return { shape: "cancelled", fraction: 1 };
 
 	const flow = ordered.filter((s) => !CANCELLED.test(s.name));
+	if (flow.length === 1) return { shape: "done", fraction: 1 };
 	const index = flow.findIndex((s) => s.id === statusId);
-	const fraction = flow.length > 1 ? index / (flow.length - 1) : 0;
+	const fraction = index / (flow.length - 1);
 	if (fraction >= 1) return { shape: "done", fraction: 1 };
 	if (fraction <= 0) return { shape: "pending", fraction: 0 };
 	return { shape: "progress", fraction };
