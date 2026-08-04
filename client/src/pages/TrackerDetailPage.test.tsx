@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	mockGetTrackerItem,
 	mockUpdateTrackerItem,
 	mockGetTrackerChangelog,
+	mockListVocabularies,
+	mockGetWorkspaceMembers,
 	mockNavigate,
 	mockUseBoard,
 	mockShowToast,
@@ -13,6 +21,8 @@ const {
 	mockGetTrackerItem: vi.fn(),
 	mockUpdateTrackerItem: vi.fn(),
 	mockGetTrackerChangelog: vi.fn(),
+	mockListVocabularies: vi.fn(),
+	mockGetWorkspaceMembers: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseBoard: vi.fn(),
 	mockShowToast: vi.fn(),
@@ -23,6 +33,8 @@ vi.mock("../api", () => ({
 		getTrackerItem: (...a: unknown[]) => mockGetTrackerItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		getTrackerChangelog: (...a: unknown[]) => mockGetTrackerChangelog(...a),
+		listTrackerVocabularies: (...a: unknown[]) => mockListVocabularies(...a),
+		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -47,18 +59,27 @@ vi.mock("react-router", () => ({
 import { ApiError } from "../api";
 import TrackerDetailPage from "./TrackerDetailPage";
 
+const backlog = {
+	id: 1,
+	kind: "status" as const,
+	name: "Backlog",
+	position: 1000,
+	colour: "oklch(0.7 0.1 200)",
+};
+const inProgress = {
+	id: 2,
+	kind: "status" as const,
+	name: "In Progress",
+	position: 2000,
+	colour: "oklch(0.7 0.1 90)",
+};
+
 const item = {
 	id: 42,
 	key: "CK-42",
 	title: "Workspace Rename",
 	description: "details",
-	status: {
-		id: 1,
-		kind: "status" as const,
-		name: "Backlog",
-		position: 1000,
-		colour: "oklch(0.7 0.1 200)",
-	},
+	status: backlog,
 	priority: null,
 	labels: [],
 	assignees: [],
@@ -83,14 +104,27 @@ beforeEach(() => {
 				id: 2,
 				eventType: "tracker_item_updated",
 				trackerItemId: 42,
+				title: "Workspace Rename",
+				actor: { username: "alice", displayName: "Alice" },
+				payload: { title: "Workspace Rename", changed: ["status", "title"] },
+				createdAt: "2026-07-05T00:00:00Z",
+			},
+			{
+				id: 3,
+				eventType: "tracker_item_updated",
+				trackerItemId: 42,
 				title: null,
 				actor: { username: "alice", displayName: "Alice" },
 				payload: { field: "status", from: "Backlog", to: "In Progress" },
-				createdAt: "2026-07-05T00:00:00Z",
+				createdAt: "2026-07-06T00:00:00Z",
 			},
 		],
 	});
 	mockUpdateTrackerItem.mockResolvedValue({ ...item, version: 2 });
+	mockListVocabularies.mockImplementation((_ws: number, kind: string) =>
+		Promise.resolve(kind === "status" ? [backlog, inProgress] : []),
+	);
+	mockGetWorkspaceMembers.mockResolvedValue({ members: [] });
 	mockUseBoard.mockReturnValue({
 		activeWorkspaceId: 7,
 		showToast: mockShowToast,
@@ -110,9 +144,71 @@ describe("TrackerDetailPage", () => {
 		await waitFor(() =>
 			expect(screen.getByDisplayValue("Workspace Rename")).toBeTruthy(),
 		);
-		expect(screen.getByText(/tracker_item_created/i)).toBeTruthy();
-		expect(screen.getByText(/In Progress/i)).toBeTruthy();
+		expect(screen.getByText(/created this item/i)).toBeTruthy();
+		expect(screen.getByText(/changed the status and the title/i)).toBeTruthy();
+		expect(
+			screen.getByText(/changed the status from Backlog to In Progress/i),
+		).toBeTruthy();
 		expect(mockGetTrackerItem).toHaveBeenCalledWith(7, "CA-42");
+	});
+
+	it("commits a status pick straight away with the current version", async () => {
+		mockUpdateTrackerItem.mockResolvedValue({
+			...item,
+			status: inProgress,
+			version: 2,
+		});
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /backlog/i })).toBeTruthy(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /backlog/i }));
+		fireEvent.click(screen.getByRole("option", { name: /in progress/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CK-42", {
+				statusId: 2,
+				version: 1,
+			}),
+		);
+
+		// The pick moved the server version on; a following title save must
+		// carry the new one or it would conflict with the page's own write.
+		fireEvent.change(screen.getByDisplayValue("Workspace Rename"), {
+			target: { value: "Renamed" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CK-42", {
+				title: "Renamed",
+				description: "details",
+				version: 2,
+			}),
+		);
+	});
+
+	it("keeps an unsaved title through a background refresh", async () => {
+		let sseHandler:
+			| ((e: { type: string; trackerItemId?: number }) => void)
+			| undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			showToast: mockShowToast,
+			refreshTrackerList: vi.fn(),
+			subscribeTrackerEvents: (cb: typeof sseHandler) => {
+				sseHandler = cb;
+				return () => {};
+			},
+		});
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		fireEvent.change(screen.getByDisplayValue("Workspace Rename"), {
+			target: { value: "Half-typed draft" },
+		});
+		mockGetTrackerItem.mockResolvedValueOnce({ ...item, version: 5 });
+		sseHandler?.({ type: "tracker.updated", trackerItemId: 42 });
+		await waitFor(() => expect(mockGetTrackerItem).toHaveBeenCalledTimes(2));
+		expect(screen.getByDisplayValue("Half-typed draft")).toBeTruthy();
 	});
 
 	it("redirects to canonical key when API returns stale prefix", async () => {
@@ -156,13 +252,11 @@ describe("TrackerDetailPage", () => {
 					trackerItemId?: number;
 			  }) => void)
 			| undefined;
-		mockGetTrackerItem
-			.mockResolvedValueOnce(item)
-			.mockResolvedValueOnce({
-				...item,
-				title: "Live title",
-				version: 3,
-			});
+		mockGetTrackerItem.mockResolvedValueOnce(item).mockResolvedValueOnce({
+			...item,
+			title: "Live title",
+			version: 3,
+		});
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: 7,
 			showToast: mockShowToast,
