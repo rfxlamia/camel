@@ -1,4 +1,4 @@
-import { Tag, UserRound } from "lucide-react";
+import { Plus, Tag, UserRound } from "lucide-react";
 import { useState } from "react";
 import { sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
@@ -206,12 +206,15 @@ export default function TrackerProperties({
 						))}
 						<TrackerPropertyPicker
 							placeholder="Add label"
+							variant={item.labels.length > 0 ? "inline" : "chip"}
+							size="compact"
+							triggerLabel="Add label"
 							icon={
 								item.labels.length > 0 ? (
-									<LabelDot colour={item.labels[0].colour} />
+									<Plus size={14} className="text-neutral-500" aria-hidden />
 								) : (
 									<Tag
-										size={14}
+										size={12}
 										className="shrink-0 text-neutral-500"
 										aria-hidden
 									/>
