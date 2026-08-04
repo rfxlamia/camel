@@ -1,8 +1,7 @@
-import { ListTodo, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { ApiError, api } from "../api";
-import EmptyState from "../components/EmptyState";
 import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
 import TrackerSection from "../components/tracker/TrackerSection";
 import { useBoard } from "../context/BoardContext";
@@ -253,23 +252,6 @@ export default function TrackerPage() {
 				<p className="px-4 py-8 text-center text-neutral-500 text-sm md:px-6">
 					Loading…
 				</p>
-			) : items.length === 0 ? (
-				<EmptyState
-					className="px-4 py-16 md:px-6"
-					icon={ListTodo}
-					title="No items yet"
-					description="Track issues and tasks alongside your board. Create the first one to get started."
-					action={
-						<button
-							type="button"
-							onClick={() => openCreate()}
-							className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary-600 pr-4 pl-3 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-						>
-							<Plus size={16} aria-hidden />
-							New item
-						</button>
-					}
-				/>
 			) : noSearchResults ? (
 				<p className="px-4 py-16 text-center text-neutral-600 text-sm md:px-6">
 					No items match “{search.trim()}”.
