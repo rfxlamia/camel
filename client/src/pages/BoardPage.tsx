@@ -322,6 +322,7 @@ export default function BoardPage() {
 				await refresh();
 			} catch (err) {
 				if (err instanceof ApiError && err.code === "version_conflict") {
+					applyColumns((cols) => revertCardMove(cols, card.id, restore));
 					showToast(
 						"Someone else moved this card first — board refreshed.",
 						"warning",

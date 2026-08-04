@@ -313,30 +313,22 @@ describe("BoardPage list view column change", () => {
 		expect(setColumns.mock.calls.length).toBeGreaterThanOrEqual(2);
 	});
 
-	it("refreshes on version conflict and drops queued picks", async () => {
+	it("reverts and refreshes on version conflict, dropping queued picks", async () => {
 		moveCard.mockRejectedValueOnce(
 			new ApiError("conflict", 409, "version_conflict"),
 		);
-		const setColumns = vi.fn();
-		mockUseBoard.mockReturnValue({
-			columns: listColumns,
-			setColumns,
-			loadError: false,
-			refresh,
-			cancelScheduledRefresh: vi.fn(),
-			showToast,
-			deleteCard: vi.fn(),
-			saveCard: vi.fn(),
-			activeWorkspaceId: 7,
-			boardViewMode: "list",
-			setBoardViewMode: vi.fn(),
-		});
-		render(<BoardPage />);
+		renderListBoard(listColumns);
+		await waitFor(() => screen.getByLabelText("To Do, Ship feature"));
+
 		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, Ship feature")).toBeTruthy(),
+		);
 
 		await waitFor(() => expect(refresh).toHaveBeenCalled());
 		expect(showToast.mock.calls[0]?.[1]).toBe("warning");
+		expect(screen.getByLabelText("To Do, Ship feature")).toBeTruthy();
 	});
 
 	it("defers a second column pick until the first request settles", async () => {
