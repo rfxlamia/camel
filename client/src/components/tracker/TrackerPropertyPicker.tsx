@@ -30,6 +30,15 @@ interface Props {
 	onSelect: (id: string) => void;
 	/** Keeps the popover open after a choice, for multi-value properties. */
 	multiple?: boolean;
+	/**
+	 * "chip" is the labelled pill used in forms; "inline" is an icon-only
+	 * trigger for dense surfaces such as a list row.
+	 */
+	variant?: "chip" | "inline";
+	/** Accessible name for the inline trigger, which has no visible label. */
+	triggerLabel?: string;
+	/** Anchors the popover to the trigger's right edge instead of its left. */
+	align?: "left" | "right";
 }
 
 export function TrackerPropertyPicker({
@@ -42,6 +51,9 @@ export function TrackerPropertyPicker({
 	onOpenChange,
 	onSelect,
 	multiple = false,
+	variant = "chip",
+	triggerLabel,
+	align = "left",
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
@@ -117,6 +129,7 @@ export function TrackerPropertyPicker({
 	};
 
 	const chosen = value !== undefined;
+	const inline = variant === "inline";
 
 	return (
 		<div ref={rootRef} className="relative">
@@ -125,19 +138,33 @@ export function TrackerPropertyPicker({
 				type="button"
 				aria-haspopup="listbox"
 				aria-expanded={open}
+				aria-label={inline ? triggerLabel : undefined}
+				title={inline ? placeholder : undefined}
 				onClick={() => onOpenChange(!open)}
-				className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
-					chosen
-						? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
-						: "border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-				} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`}
+				className={
+					inline
+						? `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600 ${
+								open ? "bg-neutral-200" : ""
+							}`
+						: `inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+								chosen
+									? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
+									: "border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+							} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
+				}
 			>
 				{icon}
-				<span className="max-w-40 truncate">{value ?? placeholder}</span>
+				{!inline && (
+					<span className="max-w-40 truncate">{value ?? placeholder}</span>
+				)}
 			</button>
 
 			{open && (
-				<div className="absolute top-full left-0 z-50 mt-1.5 w-60 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(23,42,62,0.12)]">
+				<div
+					className={`absolute top-full z-50 mt-1.5 w-60 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(23,42,62,0.12)] ${
+						align === "right" ? "right-0" : "left-0"
+					}`}
+				>
 					<input
 						autoFocus
 						type="text"
