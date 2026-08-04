@@ -83,6 +83,9 @@ export default function TrackerCreateModal({
 		};
 	}, [workspaceId]);
 
+	// Escape peels one layer at a time. A picker closing itself does not stop
+	// the event, so this guard — not event propagation — decides whether the
+	// modal is the layer that closes.
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.key !== "Escape") return;

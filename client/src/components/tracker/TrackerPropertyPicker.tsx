@@ -82,7 +82,9 @@ export function TrackerPropertyPicker({
 
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if (e.key === "Escape") {
-			e.stopPropagation();
+			// The picker only closes itself and restores focus. Owners with their
+			// own Escape handling (a dialog, say) must check whether a picker is
+			// open before acting — this does not stop the event reaching them.
 			close();
 			return;
 		}
