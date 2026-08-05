@@ -70,6 +70,12 @@ const router = createBrowserRouter([
 				}),
 			},
 			{
+				path: "tracker/p/:projectId",
+				lazy: async () => ({
+					Component: (await import("./pages/TrackerProjectPage")).default,
+				}),
+			},
+			{
 				path: "tracker/:key",
 				lazy: async () => ({
 					Component: (await import("./pages/TrackerDetailPage")).default,
