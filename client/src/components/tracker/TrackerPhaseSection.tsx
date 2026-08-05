@@ -1,4 +1,20 @@
-import { ChevronRight, Pencil, Trash2 } from "lucide-react";
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	SortableContext,
+	sortableKeyboardCoordinates,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChevronRight, GripVertical, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatDueDate } from "../../lib/boardViewUtils";
 import {
@@ -22,6 +38,7 @@ interface Props {
 	onStatusChange?: (item: TrackerItem, statusId: number) => void;
 	onRename?: () => void;
 	onDelete?: () => void;
+	onReorder?: (oldIndex: number, newIndex: number, itemKey: string) => void;
 	children?: ReactNode;
 }
 
@@ -37,6 +54,61 @@ function formatDateRange(
 	return null;
 }
 
+function SortableTrackerRow({
+	item,
+	statuses,
+	priorities,
+	onStatusChange,
+}: {
+	item: TrackerItem;
+	statuses: TrackerVocabulary[];
+	priorities: TrackerVocabulary[];
+	onStatusChange?: (item: TrackerItem, statusId: number) => void;
+}) {
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		setActivatorNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({ id: item.key });
+
+	return (
+		<div
+			ref={setNodeRef}
+			data-sortable-key={item.key}
+			style={{
+				transform: CSS.Transform.toString(transform),
+				transition,
+			}}
+			className={isDragging ? "relative z-10 opacity-60" : undefined}
+		>
+			<div className="flex items-stretch">
+				<button
+					type="button"
+					ref={setActivatorNodeRef}
+					aria-label={`Reorder ${item.key}`}
+					{...attributes}
+					{...listeners}
+					className="flex w-7 shrink-0 cursor-grab items-center justify-center text-neutral-400 opacity-0 transition hover:text-neutral-600 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 active:cursor-grabbing group-hover/row:opacity-100"
+				>
+					<GripVertical size={14} aria-hidden />
+				</button>
+				<div className="min-w-0 flex-1">
+					<TrackerRow
+						item={item}
+						statuses={statuses}
+						priorities={priorities}
+						onStatusChange={(statusId) => onStatusChange?.(item, statusId)}
+					/>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export default function TrackerPhaseSection({
 	phase,
 	label,
@@ -48,8 +120,16 @@ export default function TrackerPhaseSection({
 	onStatusChange,
 	onRename,
 	onDelete,
+	onReorder,
 	children,
 }: Props) {
+	const sensors = useSensors(
+		useSensor(PointerSensor),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: sortableKeyboardCoordinates,
+		}),
+	);
+
 	const rollupResult = rollup(items);
 	const bounds = phase
 		? phaseBounds(phase, items)
@@ -76,6 +156,16 @@ export default function TrackerPhaseSection({
 		? isPhaseOverdue(phase, items)
 		: items.some(isTaskOverdue);
 	const subtitle = phase?.subtitle?.trim() ?? "";
+	const sortableIds = items.map((item) => item.key);
+
+	const handleDragEnd = (event: DragEndEvent) => {
+		const { active, over } = event;
+		if (!over || active.id === over.id || !onReorder) return;
+		const oldIndex = items.findIndex((item) => item.key === active.id);
+		const newIndex = items.findIndex((item) => item.key === over.id);
+		if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+		onReorder(oldIndex, newIndex, String(active.id));
+	};
 
 	return (
 		<section
@@ -144,17 +234,28 @@ export default function TrackerPhaseSection({
 			</div>
 			{children}
 			{!collapsed && items.length > 0 && (
-				<div className="divide-y divide-neutral-200/70 bg-white">
-					{items.map((item) => (
-						<TrackerRow
-							key={item.key}
-							item={item}
-							statuses={statuses}
-							priorities={priorities}
-							onStatusChange={(statusId) => onStatusChange?.(item, statusId)}
-						/>
-					))}
-				</div>
+				<DndContext
+					sensors={sensors}
+					collisionDetection={closestCenter}
+					onDragEnd={handleDragEnd}
+				>
+					<SortableContext
+						items={sortableIds}
+						strategy={verticalListSortingStrategy}
+					>
+						<div className="divide-y divide-neutral-200/70 bg-white">
+							{items.map((item) => (
+								<SortableTrackerRow
+									key={item.key}
+									item={item}
+									statuses={statuses}
+									priorities={priorities}
+									onStatusChange={onStatusChange}
+								/>
+							))}
+						</div>
+					</SortableContext>
+				</DndContext>
 			)}
 		</section>
 	);

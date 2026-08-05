@@ -1,6 +1,7 @@
 import { ArrowLeft, MoreHorizontal, Pencil, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { arrayMove } from "@dnd-kit/sortable";
 import { ApiError, api } from "../api";
 import TrackerPhaseEditor, {
 	type PhaseEditorValues,
@@ -49,6 +50,24 @@ function writeCollapsedPhases(projectId: number, collapsed: Set<string>): void {
 function releasedTaskMessage(count: number): string {
 	const noun = count === 1 ? "task" : "tasks";
 	return `${count} ${noun} will be released to the unassigned list`;
+}
+
+function sortByPosition(items: TrackerItem[]): TrackerItem[] {
+	return [...items].sort(
+		(a, b) =>
+			(a.position ?? Number.POSITIVE_INFINITY) -
+				(b.position ?? Number.POSITIVE_INFINITY) || a.id - b.id,
+	);
+}
+
+function reorderNeighborBody(
+	reordered: TrackerItem[],
+	newIndex: number,
+): { beforeId?: number; afterId?: number } {
+	if (newIndex === 0) {
+		return { afterId: reordered[1]!.id };
+	}
+	return { beforeId: reordered[newIndex - 1]!.id };
 }
 
 export default function TrackerProjectPage() {
@@ -141,6 +160,13 @@ export default function TrackerProjectPage() {
 			const bucket = map.get(key) ?? [];
 			bucket.push(item);
 			map.set(key, bucket);
+		}
+		for (const bucket of map.values()) {
+			bucket.sort(
+				(a, b) =>
+					(a.position ?? Number.POSITIVE_INFINITY) -
+						(b.position ?? Number.POSITIVE_INFINITY) || a.id - b.id,
+			);
 		}
 		return map;
 	}, [projectItems]);
@@ -346,6 +372,50 @@ export default function TrackerProjectPage() {
 		}
 	};
 
+	const reorderPhaseItems = async (
+		phaseId: number | null,
+		oldIndex: number,
+		newIndex: number,
+		itemKey: string,
+	) => {
+		if (activeWorkspaceId === null) return;
+		const phaseItems = sortByPosition(
+			projectItems.filter((item) => (item.phaseId ?? null) === phaseId),
+		);
+		if (oldIndex === newIndex) return;
+
+		const snapshot = items;
+		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
+		const withPositions = reordered.map((item, idx) => ({
+			...item,
+			position: (idx + 1) * 1024,
+		}));
+
+		setItems((prev) =>
+			prev.map((item) => {
+				const updated = withPositions.find((candidate) => candidate.id === item.id);
+				return updated ?? item;
+			}),
+		);
+
+		try {
+			const updated = await api.reorderTrackerItem(
+				activeWorkspaceId,
+				itemKey,
+				reorderNeighborBody(reordered, newIndex),
+			);
+			setItems((prev) =>
+				prev.map((item) => (item.id === updated.id ? updated : item)),
+			);
+		} catch {
+			setItems(snapshot);
+			showToast(
+				"Couldn't reorder the task. Check your connection and try again.",
+				"error",
+			);
+		}
+	};
+
 	if (activeWorkspaceId === null) return null;
 
 	if (!projectIdValid || (!loading && !project)) {
@@ -521,6 +591,14 @@ export default function TrackerProjectPage() {
 								priorities={[]}
 								collapsed={collapsedKeys.has(phaseKey)}
 								onToggle={() => togglePhase(phaseKey)}
+								onReorder={(oldIndex, newIndex, itemKey) =>
+									void reorderPhaseItems(
+										phase.id,
+										oldIndex,
+										newIndex,
+										itemKey,
+									)
+								}
 								onRename={() => {
 									setPhaseCreateOpen(false);
 									setPhaseEditorError(null);
@@ -556,6 +634,9 @@ export default function TrackerProjectPage() {
 							priorities={[]}
 							collapsed={collapsedKeys.has(NO_PHASE_KEY)}
 							onToggle={() => togglePhase(NO_PHASE_KEY)}
+							onReorder={(oldIndex, newIndex, itemKey) =>
+								void reorderPhaseItems(null, oldIndex, newIndex, itemKey)
+							}
 						/>
 					)}
 					{phaseCreateOpen ? (

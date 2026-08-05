@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // client/src/pages/TrackerProjectPage.test.tsx
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -18,6 +19,7 @@ const {
 	mockCreateTrackerPhase,
 	mockUpdateTrackerPhase,
 	mockDeleteTrackerPhase,
+	mockReorderTrackerItem,
 	mockNavigate,
 	mockUseParams,
 	mockUseBoard,
@@ -30,6 +32,7 @@ const {
 	mockCreateTrackerPhase: vi.fn(),
 	mockUpdateTrackerPhase: vi.fn(),
 	mockDeleteTrackerPhase: vi.fn(),
+	mockReorderTrackerItem: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseParams: vi.fn(),
 	mockUseBoard: vi.fn(),
@@ -45,6 +48,7 @@ vi.mock("../api", () => ({
 		createTrackerPhase: (...a: unknown[]) => mockCreateTrackerPhase(...a),
 		updateTrackerPhase: (...a: unknown[]) => mockUpdateTrackerPhase(...a),
 		deleteTrackerPhase: (...a: unknown[]) => mockDeleteTrackerPhase(...a),
+		reorderTrackerItem: (...a: unknown[]) => mockReorderTrackerItem(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -637,5 +641,133 @@ describe("TrackerProjectPage project and phase management", () => {
 		expect(
 			await screen.findByText("End date must be on or after the start date."),
 		).toBeTruthy();
+	});
+});
+
+async function pressReorder(
+	handleName: RegExp,
+	direction: "ArrowDown" | "ArrowUp",
+) {
+	const handle = screen.getByRole("button", { name: handleName });
+	act(() => {
+		handle.focus();
+		fireEvent.keyDown(handle, { key: " ", code: "Space" });
+	});
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	act(() => {
+		fireEvent.keyDown(document, { key: direction, code: direction });
+	});
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	act(() => {
+		fireEvent.keyDown(document, { key: " ", code: "Space" });
+	});
+}
+
+describe("TrackerProjectPage drag reorder", () => {
+	beforeEach(() => {
+		mockListTrackerItems.mockResolvedValue([
+			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
+			projectItem({ id: 3, key: "CB-1", phaseId: 10, position: 1024 }),
+			projectItem({ id: 4, key: "CB-2", phaseId: 10, position: 2048 }),
+		]);
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+			function (this: Element) {
+				const rows = Array.from(
+					document.querySelectorAll("[data-sortable-key]"),
+				);
+				const row =
+					this instanceof Element && this.hasAttribute("data-sortable-key")
+						? this
+						: this.closest("[data-sortable-key]");
+				const index =
+					row instanceof Element
+						? rows.findIndex((candidate) => candidate === row)
+						: -1;
+				const height = 36;
+				const top = index >= 0 ? index * height : 0;
+				return {
+					width: 400,
+					height,
+					top,
+					left: 0,
+					bottom: top + height,
+					right: 400,
+					x: 0,
+					y: top,
+					toJSON: () => ({}),
+				} as DOMRect;
+			},
+		);
+	});
+
+	it("calls reorderTrackerItem with the drop target when a task moves within its phase", async () => {
+		mockReorderTrackerItem.mockResolvedValue(
+			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 3072 }),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		await pressReorder(/reorder ca-1/i, "ArrowDown");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledWith(
+				7,
+				"CA-1",
+				expect.any(Object),
+			),
+		);
+	});
+
+	it("shows the new order optimistically before the request resolves", async () => {
+		let resolveReorder: (value: TrackerItem) => void = () => {};
+		mockReorderTrackerItem.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveReorder = resolve;
+				}),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		await pressReorder(/reorder ca-1/i, "ArrowDown");
+		await waitFor(() => expect(mockReorderTrackerItem).toHaveBeenCalled());
+		const order = screen
+			.getAllByTestId(/^tracker-row-CA-/)
+			.map((row) => row.dataset.testid);
+		expect(order).toEqual(["tracker-row-CA-2", "tracker-row-CA-1"]);
+		resolveReorder(projectItem({ id: 1, key: "CA-1", phaseId: 9 }));
+	});
+
+	it("restores the previous order and shows an error toast when the reorder fails", async () => {
+		mockReorderTrackerItem.mockRejectedValue(new Error("network down"));
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		await pressReorder(/reorder ca-1/i, "ArrowDown");
+		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+		expect(mockShowToast.mock.calls[0]?.[1]).toBe("error");
+		const order = screen
+			.getAllByTestId(/^tracker-row-CA-/)
+			.map((row) => row.dataset.testid);
+		expect(order).toEqual(["tracker-row-CA-1", "tracker-row-CA-2"]);
+	});
+
+	it("never lets a drag inside one phase touch another phase's order or items", async () => {
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const phaseBBefore = screen
+			.getAllByTestId(/^tracker-row-CB-/)
+			.map((row) => row.dataset.testid);
+
+		await pressReorder(/reorder ca-1/i, "ArrowDown");
+		await waitFor(() => expect(mockReorderTrackerItem).toHaveBeenCalled());
+
+		expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1);
+		expect(mockReorderTrackerItem.mock.calls[0]?.[1]).toBe("CA-1");
+		const phaseBAfter = screen
+			.getAllByTestId(/^tracker-row-CB-/)
+			.map((row) => row.dataset.testid);
+		expect(phaseBAfter).toEqual(phaseBBefore);
 	});
 });
