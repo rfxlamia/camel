@@ -18,6 +18,8 @@ import type {
 	User,
 	TrackerEvent,
 	TrackerItem,
+	TrackerPhase,
+	TrackerProject,
 	TrackerVocabulary,
 	TrackerVocabularyKind,
 	Workspace,
@@ -487,6 +489,10 @@ export const api = {
 			priorityId?: number | null;
 			assigneeIds?: number[];
 			labelIds?: number[];
+			projectId?: number | null;
+			phaseId?: number | null;
+			startDate?: string | null;
+			endDate?: string | null;
 			version?: number;
 		},
 	) =>
@@ -494,6 +500,18 @@ export const api = {
 			method: "PATCH",
 			body: JSON.stringify(patch),
 		}),
+	reorderTrackerItem: (
+		workspaceId: number,
+		key: string,
+		body: { beforeId?: number; afterId?: number },
+	) =>
+		request<TrackerItem>(
+			`/workspaces/${workspaceId}/tracker/items/${key}/position`,
+			{
+				method: "PATCH",
+				body: JSON.stringify(body),
+			},
+		),
 	deleteTrackerItem: (
 		workspaceId: number,
 		key: string,
@@ -523,6 +541,61 @@ export const api = {
 		request<TrackerVocabulary>(`/workspaces/${workspaceId}/tracker/vocabularies`, {
 			method: "POST",
 			body: JSON.stringify(body),
+		}),
+	listTrackerProjects: (workspaceId: number) =>
+		request<TrackerProject[]>(`/workspaces/${workspaceId}/tracker/projects`),
+	createTrackerProject: (workspaceId: number, body: { name: string }) =>
+		request<TrackerProject>(`/workspaces/${workspaceId}/tracker/projects`, {
+			method: "POST",
+			body: JSON.stringify(body),
+		}),
+	updateTrackerProject: (
+		workspaceId: number,
+		id: number,
+		patch: { name: string; version: number },
+	) =>
+		request<TrackerProject>(`/workspaces/${workspaceId}/tracker/projects/${id}`, {
+			method: "PATCH",
+			body: JSON.stringify(patch),
+		}),
+	deleteTrackerProject: (workspaceId: number, id: number) =>
+		request<void>(`/workspaces/${workspaceId}/tracker/projects/${id}`, {
+			method: "DELETE",
+		}),
+	createTrackerPhase: (
+		workspaceId: number,
+		projectId: number,
+		body: {
+			name: string;
+			subtitle?: string;
+			startDate?: string | null;
+			endDate?: string | null;
+		},
+	) =>
+		request<TrackerPhase>(
+			`/workspaces/${workspaceId}/tracker/projects/${projectId}/phases`,
+			{
+				method: "POST",
+				body: JSON.stringify(body),
+			},
+		),
+	updateTrackerPhase: (
+		workspaceId: number,
+		id: number,
+		patch: {
+			name: string;
+			version: number;
+			startDate?: string | null;
+			endDate?: string | null;
+		},
+	) =>
+		request<TrackerPhase>(`/workspaces/${workspaceId}/tracker/phases/${id}`, {
+			method: "PATCH",
+			body: JSON.stringify(patch),
+		}),
+	deleteTrackerPhase: (workspaceId: number, id: number) =>
+		request<void>(`/workspaces/${workspaceId}/tracker/phases/${id}`, {
+			method: "DELETE",
 		}),
 
 	// ---- Agent ----

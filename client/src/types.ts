@@ -318,12 +318,19 @@ export type StreamEvent =
 
 export type TrackerVocabularyKind = "status" | "priority" | "label";
 
+export type TrackerStatusCategory =
+	| "backlog"
+	| "started"
+	| "completed"
+	| "canceled";
+
 export interface TrackerVocabulary {
 	id: number;
 	kind: TrackerVocabularyKind;
 	name: string;
 	position: number;
 	colour: string;
+	category?: TrackerStatusCategory | null;
 	createdAt?: string;
 }
 
@@ -338,6 +345,12 @@ export interface TrackerItem {
 	key: string;
 	title: string;
 	description: string;
+	projectId?: number | null;
+	phaseId?: number | null;
+	startDate?: string | null;
+	endDate?: string | null;
+	completedAt?: string | null;
+	position?: number;
 	status: TrackerVocabulary;
 	priority: TrackerVocabulary | null;
 	labels: TrackerVocabulary[];
@@ -347,6 +360,31 @@ export interface TrackerItem {
 	updatedAt: string;
 	canonicalKey?: string;
 	redirectFrom?: string;
+}
+
+export interface TrackerPhase {
+	id: number;
+	projectId: number;
+	name: string;
+	subtitle: string;
+	startDate: string | null;
+	endDate: string | null;
+	position: number;
+	version: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface TrackerProject {
+	id: number;
+	name: string;
+	startDate: string | null;
+	endDate: string | null;
+	position: number;
+	version: number;
+	phases: TrackerPhase[];
+	createdAt?: string;
+	updatedAt?: string;
 }
 
 export interface TrackerEvent {

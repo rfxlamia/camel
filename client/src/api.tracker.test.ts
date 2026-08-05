@@ -9,6 +9,7 @@ const sampleVocab = {
 	name: "Backlog",
 	position: 1024,
 	colour: "oklch(0.89 0.07 250)",
+	category: "backlog" as const,
 };
 
 const sampleItem = {
@@ -16,11 +17,42 @@ const sampleItem = {
 	key: "CA-1",
 	title: "Fix realtime",
 	description: "",
+	projectId: null,
+	phaseId: null,
+	startDate: null,
+	endDate: null,
+	completedAt: null,
+	position: 1024,
 	status: sampleVocab,
 	priority: null,
 	labels: [],
 	assignees: [],
 	version: 1,
+	createdAt: "2026-08-03T00:00:00.000Z",
+	updatedAt: "2026-08-03T00:00:00.000Z",
+};
+
+const samplePhase = {
+	id: 20,
+	projectId: 3,
+	name: "Phase 1",
+	subtitle: "",
+	startDate: null,
+	endDate: null,
+	position: 1024,
+	version: 1,
+	createdAt: "2026-08-03T00:00:00.000Z",
+	updatedAt: "2026-08-03T00:00:00.000Z",
+};
+
+const sampleProject = {
+	id: 3,
+	name: "Realtime",
+	startDate: null,
+	endDate: null,
+	position: 1024,
+	version: 1,
+	phases: [samplePhase],
 	createdAt: "2026-08-03T00:00:00.000Z",
 	updatedAt: "2026-08-03T00:00:00.000Z",
 };
@@ -109,6 +141,61 @@ describe("tracker item API methods", () => {
 		);
 		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
 		expect(body).toEqual({ title: "Updated", version: 1 });
+	});
+
+	it("updateTrackerItem PATCHes project, phase, and date fields", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve({
+					...sampleItem,
+					projectId: 3,
+					phaseId: 20,
+					startDate: "2026-08-01",
+					endDate: "2026-08-31",
+					version: 2,
+				}),
+		});
+		const { api } = await import("./api");
+
+		await api.updateTrackerItem(7, "CA-1", {
+			projectId: 3,
+			phaseId: 20,
+			startDate: "2026-08-01",
+			endDate: "2026-08-31",
+			version: 1,
+		});
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/items/CA-1",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({
+			projectId: 3,
+			phaseId: 20,
+			startDate: "2026-08-01",
+			endDate: "2026-08-31",
+			version: 1,
+		});
+	});
+
+	it("reorderTrackerItem PATCHes /tracker/items/:key/position", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ ...sampleItem, position: 1536 }),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.reorderTrackerItem(7, "CA-1", { afterId: 9 });
+		expect(result.position).toBe(1536);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/items/CA-1/position",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ afterId: 9 });
 	});
 
 	it("deleteTrackerItem DELETEs with version in body", async () => {
@@ -200,5 +287,129 @@ describe("tracker vocabulary API methods", () => {
 		);
 		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
 		expect(body).toEqual({ kind: "label", name: "Feature", position: 1024 });
+	});
+});
+
+describe("tracker project API methods", () => {
+	beforeEach(() => mockFetch.mockReset());
+
+	it("listTrackerProjects GETs /tracker/projects", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve([sampleProject]),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.listTrackerProjects(7);
+		expect(result).toEqual([sampleProject]);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/projects",
+			expect.any(Object),
+		);
+	});
+
+	it("createTrackerProject POSTs to /tracker/projects", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () => Promise.resolve(sampleProject),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.createTrackerProject(7, { name: "Realtime" });
+		expect(result).toEqual(sampleProject);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/projects",
+			expect.objectContaining({ method: "POST" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ name: "Realtime" });
+	});
+
+	it("updateTrackerProject PATCHes with version", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve({ ...sampleProject, name: "Renamed", version: 2 }),
+		});
+		const { api } = await import("./api");
+
+		await api.updateTrackerProject(7, 3, { name: "Renamed", version: 1 });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/projects/3",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ name: "Renamed", version: 1 });
+	});
+
+	it("deleteTrackerProject DELETEs /tracker/projects/:id", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 204,
+		});
+		const { api } = await import("./api");
+
+		await api.deleteTrackerProject(7, 3);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/projects/3",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+	});
+});
+
+describe("tracker phase API methods", () => {
+	beforeEach(() => mockFetch.mockReset());
+
+	it("createTrackerPhase POSTs to /tracker/projects/:projectId/phases", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () => Promise.resolve(samplePhase),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.createTrackerPhase(7, 3, { name: "Phase 1" });
+		expect(result).toEqual(samplePhase);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/projects/3/phases",
+			expect.objectContaining({ method: "POST" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ name: "Phase 1" });
+	});
+
+	it("updateTrackerPhase PATCHes with version", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () =>
+				Promise.resolve({ ...samplePhase, name: "Renamed", version: 2 }),
+		});
+		const { api } = await import("./api");
+
+		await api.updateTrackerPhase(7, 20, { name: "Renamed", version: 1 });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/phases/20",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toEqual({ name: "Renamed", version: 1 });
+	});
+
+	it("deleteTrackerPhase DELETEs /tracker/phases/:id", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 204,
+		});
+		const { api } = await import("./api");
+
+		await api.deleteTrackerPhase(7, 20);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/tracker/phases/20",
+			expect.objectContaining({ method: "DELETE" }),
+		);
 	});
 });
