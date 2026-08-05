@@ -161,6 +161,25 @@ describe("ManageMembersSection interactions", () => {
 		await waitFor(() => {
 			expect(showToast).toHaveBeenCalledWith("Not found", "error");
 		});
+		expect(
+			(screen.getByLabelText("Role for Member User") as HTMLSelectElement)
+				.value,
+		).toBe("member");
+	});
+
+	it("dismisses remove dialog on Escape", async () => {
+		renderSection("admin", 2);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+		expect(
+			screen.getByRole("dialog", { name: "Confirm remove member" }),
+		).toBeTruthy();
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(
+			screen.queryByRole("dialog", { name: "Confirm remove member" }),
+		).toBeNull();
 	});
 
 	it("shows error toast when remove fails", async () => {
@@ -218,6 +237,32 @@ describe("ManageMembersSection interactions", () => {
 				showToast={showToast}
 			/>,
 		);
+		await waitFor(() => expect(getWorkspaceMembers).toHaveBeenCalledTimes(2));
+	});
+
+	it("keeps member list visible when refreshKey changes", async () => {
+		const { rerender } = render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				refreshKey={0}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+		rerender(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				refreshKey={1}
+				showToast={showToast}
+			/>,
+		);
+		expect(screen.getByText("Member User")).toBeTruthy();
 		await waitFor(() => expect(getWorkspaceMembers).toHaveBeenCalledTimes(2));
 	});
 });

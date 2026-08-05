@@ -314,13 +314,6 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 				return { status: 404 as const, error: canChange.error };
 			}
 
-			if (role !== "admin" && role !== "member") {
-				return {
-					status: 400 as const,
-					error: 'role must be "admin" or "member"',
-				};
-			}
-
 			const targetMembership = await deps.getTargetMembership(
 				workspaceId,
 				userId,

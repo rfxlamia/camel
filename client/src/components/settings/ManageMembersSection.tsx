@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
 import { initials } from "../tracker/TrackerGlyphs";
 import type { ToastType } from "../../context/BoardContext";
@@ -35,13 +35,16 @@ export default function ManageMembersSection({
 	);
 	const [removing, setRemoving] = useState(false);
 	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
+	const isFirstLoad = useRef(true);
 
 	const canRemove =
 		currentUserRole === "admin" || currentUserRole === "owner";
 	const canChangeRole = currentUserRole === "owner";
 
 	const loadMembers = useCallback(async () => {
-		setLoading(true);
+		if (isFirstLoad.current) {
+			setLoading(true);
+		}
 		setLoadError(false);
 		try {
 			const { members: rows } = await api.getWorkspaceMembers(workspaceId);
@@ -51,13 +54,30 @@ export default function ManageMembersSection({
 			showToast("Couldn't load members. Try again.", "error");
 		} finally {
 			setLoading(false);
+			isFirstLoad.current = false;
 		}
 	}, [workspaceId, showToast]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId change resets first-load state
+	useEffect(() => {
+		isFirstLoad.current = true;
+		setMembers([]);
+		setLoading(true);
+	}, [workspaceId]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey triggers re-fetch after invite
 	useEffect(() => {
 		void loadMembers();
 	}, [loadMembers, refreshKey]);
+
+	useEffect(() => {
+		if (!pendingRemove) return;
+		function onKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape") setPendingRemove(null);
+		}
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [pendingRemove]);
 
 	async function handleRoleChange(member: WorkspaceMember, role: "admin" | "member") {
 		if (role === member.role) return;
@@ -209,8 +229,13 @@ export default function ManageMembersSection({
 					role="dialog"
 					aria-modal="true"
 					aria-label="Confirm remove member"
+					onClick={() => setPendingRemove(null)}
 				>
-					<div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
+					<div
+						className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg"
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
+					>
 						<p className="font-medium text-neutral-800">
 							Remove {pendingRemove.displayName}?
 						</p>
