@@ -1,12 +1,10 @@
-import type { TrackerVocabulary } from "../../types";
+import type { TrackerStatusCategory, TrackerVocabulary } from "../../types";
 
 /**
- * Workflow glyphs derived from vocabulary order — a status renders as a ring
+ * Workflow glyphs derived from vocabulary category — a status renders as a ring
  * filled in proportion to how far along the workflow it sits, so custom
  * vocabularies get meaningful icons without hardcoded name lists.
  */
-
-const CANCELLED = /cancel/i;
 
 export type StatusShape = "pending" | "progress" | "done" | "cancelled";
 
@@ -16,6 +14,13 @@ export interface StatusGlyphSpec {
 	fraction: number;
 }
 
+const CATEGORY_SHAPE: Record<TrackerStatusCategory, StatusShape> = {
+	canceled: "cancelled",
+	completed: "done",
+	backlog: "pending",
+	started: "progress",
+};
+
 /** Ordered statuses, cancelled ones excluded from the progress scale. */
 export function statusGlyphSpec(
 	statuses: TrackerVocabulary[],
@@ -24,14 +29,19 @@ export function statusGlyphSpec(
 	const ordered = [...statuses].sort((a, b) => a.position - b.position);
 	const status = ordered.find((s) => s.id === statusId);
 	if (!status) return { shape: "pending", fraction: 0 };
-	if (CANCELLED.test(status.name)) return { shape: "cancelled", fraction: 1 };
 
-	const flow = ordered.filter((s) => !CANCELLED.test(s.name));
-	if (flow.length === 1) return { shape: "done", fraction: 1 };
+	const category = status.category ?? null;
+	if (category === null) return { shape: "pending", fraction: 0 };
+
+	const shape = CATEGORY_SHAPE[category];
+	if (category !== "started") {
+		return { shape, fraction: category === "backlog" ? 0 : 1 };
+	}
+
+	const flow = ordered.filter((s) => s.category !== "canceled");
+	if (flow.length === 1) return { shape: "progress", fraction: 1 };
 	const index = flow.findIndex((s) => s.id === statusId);
 	const fraction = index / (flow.length - 1);
-	if (fraction >= 1) return { shape: "done", fraction: 1 };
-	if (fraction <= 0) return { shape: "pending", fraction: 0 };
 	return { shape: "progress", fraction };
 }
 

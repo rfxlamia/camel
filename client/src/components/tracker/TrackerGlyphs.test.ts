@@ -2,21 +2,29 @@ import { describe, expect, it } from "vitest";
 import type { TrackerVocabulary } from "../../types";
 import { priorityBars, statusGlyphSpec } from "./TrackerGlyphs";
 
-function vocab(
+function statusVocab(
 	id: number,
 	name: string,
 	position: number,
-	kind: TrackerVocabulary["kind"] = "status",
+	category: TrackerVocabulary["category"] = null,
 ): TrackerVocabulary {
-	return { id, kind, name, position, colour: "#ccc" };
+	return { id, kind: "status", name, position, colour: "#ccc", category };
+}
+
+function priorityVocab(
+	id: number,
+	name: string,
+	position: number,
+): TrackerVocabulary {
+	return { id, kind: "priority", name, position, colour: "#ccc" };
 }
 
 const statuses = [
-	vocab(1, "Backlog", 1024),
-	vocab(2, "Todo", 2048),
-	vocab(3, "In Progress", 3072),
-	vocab(4, "Done", 4096),
-	vocab(5, "Canceled", 5120),
+	statusVocab(1, "Backlog", 1024, "backlog"),
+	statusVocab(2, "Todo", 2048, "backlog"),
+	statusVocab(3, "In Progress", 3072, "started"),
+	statusVocab(4, "Done", 4096, "completed"),
+	statusVocab(5, "Canceled", 5120, "canceled"),
 ];
 
 describe("statusGlyphSpec", () => {
@@ -41,21 +49,65 @@ describe("statusGlyphSpec", () => {
 		expect(statusGlyphSpec(statuses, 5).shape).toBe("cancelled");
 	});
 
-	it("does not divide by zero for a single-status workspace", () => {
-		const spec = statusGlyphSpec([vocab(9, "Only", 1024)], 9);
-		expect(spec).toEqual({ shape: "done", fraction: 1 });
+	it("does not divide by zero for a lone started status among non-canceled ones", () => {
+		const single = [statusVocab(9, "Only", 1024, "started")];
+		const spec = statusGlyphSpec(single, 9);
+		expect(spec.shape).toBe("progress");
+		expect(Number.isFinite(spec.fraction)).toBe(true);
 	});
 
 	it("falls back to pending for an unknown status", () => {
 		expect(statusGlyphSpec(statuses, 404).shape).toBe("pending");
 	});
+
+	it("renders the cancelled shape for a status named 'Batal' with category canceled", () => {
+		const custom = [statusVocab(1, "Batal", 1024, "canceled")];
+		expect(statusGlyphSpec(custom, 1).shape).toBe("cancelled");
+	});
+
+	it("renders the done shape for a status named 'Selesai' with category completed", () => {
+		const custom = [statusVocab(1, "Selesai", 1024, "completed")];
+		expect(statusGlyphSpec(custom, 1).shape).toBe("done");
+	});
+
+	it("renders pending for category backlog", () => {
+		const custom = [statusVocab(1, "Antrian", 1024, "backlog")];
+		expect(statusGlyphSpec(custom, 1).shape).toBe("pending");
+	});
+
+	it("renders progress for category started, fraction from position rank among non-canceled statuses", () => {
+		const custom = [
+			statusVocab(1, "Mulai", 1024, "started"),
+			statusVocab(2, "Lanjut", 2048, "started"),
+			statusVocab(3, "Selesai", 3072, "completed"),
+		];
+		const spec = statusGlyphSpec(custom, 2);
+		expect(spec.shape).toBe("progress");
+		expect(spec.fraction).toBeCloseTo(1 / 2);
+	});
+
+	it("falls back to pending without throwing when category is null", () => {
+		const custom = [statusVocab(1, "Legacy", 1024, null)];
+		expect(() => statusGlyphSpec(custom, 1)).not.toThrow();
+		expect(statusGlyphSpec(custom, 1).shape).toBe("pending");
+	});
+
+	it("ignores a name containing 'cancel' when its category is not canceled", () => {
+		const custom = [
+			statusVocab(1, "Cancel My Subscription Reminder", 1024, "started"),
+			statusVocab(2, "Done", 2048, "completed"),
+		];
+		const spec = statusGlyphSpec(custom, 1);
+		expect(spec.shape).not.toBe("cancelled");
+		expect(spec.shape).toBe("progress");
+	});
 });
 
 describe("priorityBars", () => {
 	const priorities = [
-		vocab(10, "High", 1024, "priority"),
-		vocab(11, "Medium", 2048, "priority"),
-		vocab(12, "Low", 3072, "priority"),
+		priorityVocab(10, "High", 1024),
+		priorityVocab(11, "Medium", 2048),
+		priorityVocab(12, "Low", 3072),
 	];
 
 	it("lights every bar for the highest priority", () => {
