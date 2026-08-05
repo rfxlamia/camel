@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { sql } from "kysely";
+import { positionBetween } from "../core/position.js";
 import {
 	derivePrefix,
 	formatKey,
@@ -8,7 +9,12 @@ import {
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { diffAssigneeIds } from "./card-assignees.js";
-import { parseAssigneeIds, parseLabelIds } from "./tracker-item-parsers.js";
+import {
+	parseAssigneeIds,
+	parseDateRange,
+	parseLabelIds,
+	parseProjectPhase,
+} from "./tracker-item-parsers.js";
 import {
 	loadTrackerAssigneesForItems,
 	syncTrackerItemAssignees,
@@ -299,6 +305,49 @@ async function getBacklogStatusId(
 	return row.id;
 }
 
+async function getStatusCategory(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	statusId: number,
+): Promise<string | null> {
+	const row = await dbExec
+		.selectFrom("tracker_vocabularies")
+		.select("category")
+		.where("id", "=", statusId)
+		.where("workspace_id", "=", workspaceId)
+		.where("kind", "=", "status")
+		.executeTakeFirst();
+	return row?.category ?? null;
+}
+
+async function endOfBucketPosition(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	projectId: number | null,
+	phaseId: number | null,
+): Promise<number> {
+	let query = dbExec
+		.selectFrom("tracker_items")
+		.select(sql<number | null>`max(position)`.as("max_position"))
+		.where("workspace_id", "=", workspaceId)
+		.where("deleted_at", "is", null);
+
+	if (projectId === null) {
+		query = query.where("project_id", "is", null);
+	} else {
+		query = query.where("project_id", "=", projectId);
+	}
+
+	if (phaseId === null) {
+		query = query.where("phase_id", "is", null);
+	} else {
+		query = query.where("phase_id", "=", phaseId);
+	}
+
+	const row = await query.executeTakeFirst();
+	return positionBetween(row?.max_position ?? null, null);
+}
+
 trackerItemsRouter.get(
 	"/tracker/items",
 	requireWorkspaceMember,
@@ -365,6 +414,28 @@ trackerItemsRouter.post(
 			labelIds = parsed;
 		}
 
+		let projectId: number | null = null;
+		let phaseId: number | null = null;
+		if ("projectId" in body || "phaseId" in body) {
+			const parsed = await parseProjectPhase(body, workspaceId);
+			if ("error" in parsed) {
+				return res.status(400).json({ error: parsed.error });
+			}
+			if (parsed.projectId !== undefined) projectId = parsed.projectId;
+			if (parsed.phaseId !== undefined) phaseId = parsed.phaseId;
+		}
+
+		let startDate: string | null | undefined;
+		let endDate: string | null | undefined;
+		if ("startDate" in body || "endDate" in body) {
+			const parsed = parseDateRange(body);
+			if ("error" in parsed) {
+				return res.status(400).json({ error: parsed.error });
+			}
+			if ("startDate" in body) startDate = parsed.startDate;
+			if ("endDate" in body) endDate = parsed.endDate;
+		}
+
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
@@ -391,16 +462,38 @@ trackerItemsRouter.post(
 							? body.priorityId
 							: null;
 
+				const statusCategory = await getStatusCategory(
+					trx,
+					workspaceId,
+					statusId,
+				);
+				const position = await endOfBucketPosition(
+					trx,
+					workspaceId,
+					projectId,
+					phaseId,
+				);
+
+				const insertValues: Record<string, unknown> = {
+					workspace_id: workspaceId,
+					key_number: counterRow.tracker_key_counter,
+					title: trimmedTitle,
+					description,
+					status_id: statusId,
+					priority_id: priorityId,
+					project_id: projectId,
+					phase_id: phaseId,
+					position,
+				};
+				if (startDate !== undefined) insertValues.start_date = startDate;
+				if (endDate !== undefined) insertValues.end_date = endDate;
+				if (statusCategory === "completed") {
+					insertValues.completed_at = sql`now()`;
+				}
+
 				const inserted = await trx
 					.insertInto("tracker_items")
-					.values({
-						workspace_id: workspaceId,
-						key_number: counterRow.tracker_key_counter,
-						title: trimmedTitle,
-						description,
-						status_id: statusId,
-						priority_id: priorityId,
-					})
+					.values(insertValues as never)
 					.returning("id")
 					.executeTakeFirstOrThrow();
 
@@ -541,6 +634,49 @@ trackerItemsRouter.patch(
 			setFields.priority_id = body.priorityId;
 		}
 
+		const hasProjectPhase = "projectId" in body || "phaseId" in body;
+		let parsedProjectPhase:
+			| { projectId?: number | null; phaseId?: number | null }
+			| undefined;
+		if (hasProjectPhase) {
+			const parsed = await parseProjectPhase(body, workspaceId);
+			if ("error" in parsed) {
+				return res.status(400).json({ error: parsed.error });
+			}
+			parsedProjectPhase = parsed;
+			if (parsed.projectId !== undefined) {
+				setFields.project_id = parsed.projectId;
+			}
+			if (parsed.phaseId !== undefined) {
+				setFields.phase_id = parsed.phaseId;
+			}
+		}
+
+		const hasDates = "startDate" in body || "endDate" in body;
+		if (hasDates) {
+			const parsed = parseDateRange(body);
+			if ("error" in parsed) {
+				return res.status(400).json({ error: parsed.error });
+			}
+			if ("startDate" in body) setFields.start_date = parsed.startDate;
+			if ("endDate" in body) setFields.end_date = parsed.endDate;
+		}
+
+		let newProjectId = existing.project_id;
+		let newPhaseId = existing.phase_id;
+		if (parsedProjectPhase) {
+			if (parsedProjectPhase.projectId !== undefined) {
+				newProjectId = parsedProjectPhase.projectId;
+			}
+			if (parsedProjectPhase.phaseId !== undefined) {
+				newPhaseId = parsedProjectPhase.phaseId;
+			}
+		}
+		const bucketChanged =
+			hasProjectPhase &&
+			(newProjectId !== existing.project_id ||
+				newPhaseId !== existing.phase_id);
+
 		const hasAssigneeIds = body.assigneeIds !== undefined;
 		let parsedAssigneeIds: number[] | undefined;
 		if (hasAssigneeIds) {
@@ -572,7 +708,31 @@ trackerItemsRouter.patch(
 			| { kind: "ok"; itemId: number };
 
 		const result: TxResult = await db.transaction().execute(async (trx) => {
-			if (hasSets) {
+			if (bucketChanged) {
+				setFields.position = await endOfBucketPosition(
+					trx,
+					workspaceId,
+					newProjectId,
+					newPhaseId,
+				);
+			}
+
+			if (body.statusId !== undefined) {
+				const targetCategory = await getStatusCategory(
+					trx,
+					workspaceId,
+					body.statusId as number,
+				);
+				if (targetCategory === "completed") {
+					setFields.completed_at = sql`COALESCE(completed_at, now())`;
+				} else {
+					setFields.completed_at = null;
+				}
+			}
+
+			const hasSetsNow = Object.keys(setFields).length > 0;
+
+			if (hasSetsNow) {
 				const updated = await trx
 					.updateTable("tracker_items")
 					.set({
@@ -613,7 +773,7 @@ trackerItemsRouter.patch(
 
 			if (hasAssigneeIds && parsedAssigneeIds !== undefined) {
 				await syncTrackerItemAssignees(trx, existing.id, parsedAssigneeIds);
-				if (!hasSets) {
+				if (!hasSetsNow) {
 					await trx
 						.updateTable("tracker_items")
 						.set({ version: sql`version + 1`, updated_at: sql`now()` })
@@ -629,7 +789,7 @@ trackerItemsRouter.patch(
 
 			if (hasLabelIds && parsedLabelIds !== undefined) {
 				await syncTrackerItemLabels(trx, existing.id, parsedLabelIds);
-				if (!hasSets && !hasAssigneeIds) {
+				if (!hasSetsNow && !hasAssigneeIds) {
 					await trx
 						.updateTable("tracker_items")
 						.set({ version: sql`version + 1`, updated_at: sql`now()` })
@@ -660,6 +820,11 @@ trackerItemsRouter.patch(
 							setFields.description !== undefined && "description",
 							setFields.status_id !== undefined && "status",
 							setFields.priority_id !== undefined && "priority",
+							setFields.project_id !== undefined && "project",
+							setFields.phase_id !== undefined && "phase",
+							(setFields.start_date !== undefined ||
+								setFields.end_date !== undefined) &&
+								"schedule",
 							hasAssigneeIds && "assignees",
 							hasLabelIds && "labels",
 						].filter(Boolean),
