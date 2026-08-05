@@ -25,11 +25,15 @@ const SWATCHES = [
 	"oklch(91% 0.06 40)",
 ];
 
-vi.mock("../lib/columnColorUtils", () => ({
-	generateSwatchCandidates: vi.fn(() => [...SWATCHES]),
-	deriveBackgroundColor: vi.fn((c: string) => c),
-	isStoredOklchColor: vi.fn((c: string) => c.startsWith("oklch(")),
-}));
+vi.mock("../lib/columnColorUtils", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../lib/columnColorUtils")>();
+	return {
+		...actual,
+		generateSwatchCandidates: vi.fn(() => [...SWATCHES]),
+		deriveBackgroundColor: vi.fn((c: string) => c),
+		isStoredOklchColor: vi.fn((c: string) => c.startsWith("oklch(")),
+	};
+});
 
 import { generateSwatchCandidates } from "../lib/columnColorUtils";
 import ColumnView from "./ColumnView";

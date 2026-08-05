@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	columnColorPreviewStyle,
 	deriveBackgroundColor,
 	generateRandomPastelBorder,
 	generateSwatchCandidates,
@@ -54,5 +55,32 @@ describe("isStoredOklchColor", () => {
 	it("returns true for oklch strings and false for legacy names", () => {
 		expect(isStoredOklchColor("oklch(88% 0.09 47.3)")).toBe(true);
 		expect(isStoredOklchColor("powder-blue")).toBe(false);
+	});
+});
+
+describe("columnColorPreviewStyle", () => {
+	it("uses primary fallback when color is null", () => {
+		expect(columnColorPreviewStyle(null)).toEqual({
+			backgroundColor: "var(--color-primary-400)",
+		});
+	});
+
+	it("returns oklch values as-is", () => {
+		const oklch = "oklch(88% 0.09 47.3)";
+		expect(columnColorPreviewStyle(oklch)).toEqual({
+			backgroundColor: oklch,
+		});
+	});
+
+	it("maps legacy palette names through COLOR_PREVIEWS", () => {
+		expect(columnColorPreviewStyle("powder-blue")).toEqual({
+			backgroundColor: "var(--color-powder-blue-200)",
+		});
+	});
+
+	it("passes through unknown raw css values", () => {
+		expect(columnColorPreviewStyle("#abcdef")).toEqual({
+			backgroundColor: "#abcdef",
+		});
 	});
 });

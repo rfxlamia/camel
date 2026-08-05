@@ -4,10 +4,16 @@ import {
 	type ReactNode,
 	useEffect,
 	useId,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
+import {
+	POPOVER_WIDTH,
+	computePopoverPosition,
+} from "../../lib/popoverPlacement";
 
 export interface PickerOption {
 	id: string;
@@ -60,8 +66,14 @@ export function TrackerPropertyPicker({
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
+	const [popoverCoords, setPopoverCoords] = useState<{
+		top: number;
+		left: number;
+	} | null>(null);
+	const [popoverPositioned, setPopoverPositioned] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
+	const popoverRef = useRef<HTMLDivElement>(null);
 	const listboxId = useId();
 
 	const filtered = useMemo(() => {
@@ -82,12 +94,58 @@ export function TrackerPropertyPicker({
 	useEffect(() => {
 		if (!open) return;
 		const onPointerDown = (e: MouseEvent) => {
-			if (rootRef.current?.contains(e.target as Node)) return;
+			const target = e.target as Node;
+			if (rootRef.current?.contains(target)) return;
+			if (popoverRef.current?.contains(target)) return;
 			onOpenChange(false);
 		};
 		document.addEventListener("mousedown", onPointerDown);
 		return () => document.removeEventListener("mousedown", onPointerDown);
 	}, [open, onOpenChange]);
+
+	useLayoutEffect(() => {
+		if (!open || variant !== "inline") {
+			setPopoverCoords(null);
+			setPopoverPositioned(false);
+			return;
+		}
+
+		const updatePosition = () => {
+			const trigger = triggerRef.current;
+			const popover = popoverRef.current;
+			if (!trigger) return;
+			const triggerRect = trigger.getBoundingClientRect();
+			const popoverHeight = popover?.offsetHeight ?? 280;
+			const popoverWidth = popover?.offsetWidth ?? POPOVER_WIDTH;
+			const position = computePopoverPosition({
+				trigger: triggerRect,
+				popoverWidth,
+				popoverHeight,
+				align,
+				viewportWidth: window.innerWidth,
+				viewportHeight: window.innerHeight,
+			});
+			setPopoverCoords({ top: position.top, left: position.left });
+			setPopoverPositioned(true);
+		};
+
+		updatePosition();
+		const raf = requestAnimationFrame(updatePosition);
+		window.addEventListener("resize", updatePosition);
+		document.addEventListener("scroll", updatePosition, true);
+		const popover = popoverRef.current;
+		const resizeObserver =
+			typeof ResizeObserver !== "undefined"
+				? new ResizeObserver(updatePosition)
+				: null;
+		if (popover && resizeObserver) resizeObserver.observe(popover);
+		return () => {
+			cancelAnimationFrame(raf);
+			window.removeEventListener("resize", updatePosition);
+			document.removeEventListener("scroll", updatePosition, true);
+			resizeObserver?.disconnect();
+		};
+	}, [open, variant, align]);
 
 	const close = () => {
 		onOpenChange(false);
@@ -134,6 +192,87 @@ export function TrackerPropertyPicker({
 	const chosen = value !== undefined;
 	const inline = variant === "inline";
 	const compact = size === "compact";
+	const popoverPanelClassName =
+		"w-60 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(23,42,62,0.12)]";
+
+	const popoverPanel = (
+		<>
+			<input
+				autoFocus
+				type="text"
+				value={query}
+				role="combobox"
+				aria-label={searchPlaceholder}
+				aria-expanded
+				aria-controls={listboxId}
+				aria-autocomplete="list"
+				aria-activedescendant={
+					filtered[active]
+						? `${listboxId}-${filtered[active].id}`
+						: undefined
+				}
+				placeholder={searchPlaceholder}
+				onChange={(e) => {
+					setQuery(e.target.value);
+					setActive(0);
+				}}
+				onKeyDown={onKeyDown}
+				className="w-full border-neutral-200 border-b px-3 py-2.5 text-neutral-900 text-sm placeholder:text-neutral-500 focus:outline-none"
+			/>
+			<ul
+				id={listboxId}
+				role="listbox"
+				aria-label={placeholder}
+				aria-multiselectable={multiple || undefined}
+				className="max-h-64 overflow-y-auto overscroll-contain p-1"
+			>
+				{filtered.length === 0 ? (
+					<li className="px-2 py-2 text-neutral-500 text-sm">No matches</li>
+				) : (
+					filtered.map((option, i) => (
+						<li key={option.id} role="presentation">
+							<button
+								type="button"
+								id={`${listboxId}-${option.id}`}
+								role="option"
+								aria-selected={option.selected}
+								onMouseEnter={() => setActive(i)}
+								onClick={() => choose(option.id)}
+								className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
+									i === active ? "bg-neutral-100" : ""
+								}`}
+							>
+								{option.icon}
+								<span className="min-w-0 flex-1 truncate">
+									{option.label}
+								</span>
+								{option.hint && (
+									<span className="shrink-0 text-neutral-500 text-xs">
+										{option.hint}
+									</span>
+								)}
+								{option.selected && (
+									<Check
+										size={14}
+										className="shrink-0 text-primary-600"
+										aria-hidden
+									/>
+								)}
+								{i < 9 && (
+									<span
+										aria-hidden
+										className="w-3 shrink-0 text-right text-neutral-400 text-xs tabular-nums"
+									>
+										{i + 1}
+									</span>
+								)}
+							</button>
+						</li>
+					))
+				)}
+			</ul>
+		</>
+	);
 
 	return (
 		<div ref={rootRef} className="relative">
@@ -169,88 +308,33 @@ export function TrackerPropertyPicker({
 				)}
 			</button>
 
-			{open && (
-				<div
-					className={`absolute top-full z-50 mt-1.5 w-60 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(23,42,62,0.12)] ${
-						align === "right" ? "right-0" : "left-0"
-					}`}
-				>
-					<input
-						autoFocus
-						type="text"
-						value={query}
-						role="combobox"
-						aria-label={searchPlaceholder}
-						aria-expanded
-						aria-controls={listboxId}
-						aria-autocomplete="list"
-						aria-activedescendant={
-							filtered[active]
-								? `${listboxId}-${filtered[active].id}`
-								: undefined
-						}
-						placeholder={searchPlaceholder}
-						onChange={(e) => {
-							setQuery(e.target.value);
-							setActive(0);
-						}}
-						onKeyDown={onKeyDown}
-						className="w-full border-neutral-200 border-b px-3 py-2.5 text-neutral-900 text-sm placeholder:text-neutral-500 focus:outline-none"
-					/>
-					<ul
-						id={listboxId}
-						role="listbox"
-						aria-label={placeholder}
-						aria-multiselectable={multiple || undefined}
-						className="max-h-64 overflow-y-auto overscroll-contain p-1"
-					>
-						{filtered.length === 0 ? (
-							<li className="px-2 py-2 text-neutral-500 text-sm">No matches</li>
-						) : (
-							filtered.map((option, i) => (
-								<li key={option.id} role="presentation">
-									<button
-										type="button"
-										id={`${listboxId}-${option.id}`}
-										role="option"
-										aria-selected={option.selected}
-										onMouseEnter={() => setActive(i)}
-										onClick={() => choose(option.id)}
-										className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
-											i === active ? "bg-neutral-100" : ""
-										}`}
-									>
-										{option.icon}
-										<span className="min-w-0 flex-1 truncate">
-											{option.label}
-										</span>
-										{option.hint && (
-											<span className="shrink-0 text-neutral-500 text-xs">
-												{option.hint}
-											</span>
-										)}
-										{option.selected && (
-											<Check
-												size={14}
-												className="shrink-0 text-primary-600"
-												aria-hidden
-											/>
-										)}
-										{i < 9 && (
-											<span
-												aria-hidden
-												className="w-3 shrink-0 text-right text-neutral-400 text-xs tabular-nums"
-											>
-												{i + 1}
-											</span>
-										)}
-									</button>
-								</li>
-							))
-						)}
-					</ul>
-				</div>
-			)}
+			{open &&
+				(inline
+					? createPortal(
+							<div
+								ref={popoverRef}
+								style={{
+									position: "fixed",
+									top: popoverCoords?.top ?? 0,
+									left: popoverCoords?.left ?? 0,
+									zIndex: 50,
+									visibility: popoverPositioned ? "visible" : "hidden",
+								}}
+								className={popoverPanelClassName}
+							>
+								{popoverPanel}
+							</div>,
+							document.body,
+						)
+					: (
+							<div
+								className={`absolute top-full z-50 mt-1.5 ${popoverPanelClassName} ${
+									align === "right" ? "right-0" : "left-0"
+								}`}
+							>
+								{popoverPanel}
+							</div>
+						))}
 		</div>
 	);
 }

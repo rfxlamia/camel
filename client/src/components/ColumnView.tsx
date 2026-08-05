@@ -9,12 +9,11 @@ import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
 import {
 	COLOR_LABELS,
-	COLOR_PREVIEWS,
 	type ColumnColor,
 } from "../lib/columnColors";
 import {
+	columnColorPreviewStyle,
 	generateSwatchCandidates,
-	isStoredOklchColor,
 } from "../lib/columnColorUtils";
 import { resolveColumnAppearance } from "../lib/columnStyleResolver";
 import type { Card, Column, WorkspaceMember } from "../types";
@@ -37,16 +36,6 @@ interface Props {
 			color?: string | null;
 		},
 	) => Promise<void>;
-}
-
-function swatchPreviewStyle(swatch: string): { backgroundColor: string } {
-	if (isStoredOklchColor(swatch)) {
-		return { backgroundColor: swatch };
-	}
-	if (swatch in COLOR_PREVIEWS) {
-		return { backgroundColor: COLOR_PREVIEWS[swatch as ColumnColor] };
-	}
-	return { backgroundColor: swatch };
 }
 
 function formatSelectedColorLabel(color: string): string {
@@ -230,7 +219,7 @@ function ColumnSettings({
 									? "border-neutral-800 scale-110 shadow-md"
 									: "border-neutral-300 hover:border-neutral-500 hover:scale-105"
 							}`}
-							style={swatchPreviewStyle(swatch)}
+							style={columnColorPreviewStyle(swatch)}
 							aria-label={`Color swatch ${i + 1}`}
 							aria-pressed={color === swatch}
 						/>
