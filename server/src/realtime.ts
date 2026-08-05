@@ -42,6 +42,7 @@ export interface BoardEvent {
 		| "presence.changed"
 		| "settings.updated"
 		| "membership.removed"
+		| "membership.role_changed"
 		// Agent events (Phase 1)
 		| "agent.board.generating"
 		| "agent.board.ready"
@@ -65,6 +66,7 @@ export interface BoardEvent {
 	userId?: number;
 	workspaceId?: number;
 	workspaceName?: string;
+	role?: string;
 	toolName?: string;
 	query?: string;
 	resultCount?: number;

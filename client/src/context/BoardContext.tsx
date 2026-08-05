@@ -530,7 +530,16 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					userId?: number;
 					workspaceId?: number;
 					workspaceName?: string;
+					role?: string;
 				};
+				if (
+					data.type === "membership.role_changed" &&
+					data.userId === user.id &&
+					data.workspaceId === activeWorkspaceId
+				) {
+					void reloadWorkspaces();
+					return;
+				}
 				if (
 					data.type === "membership.removed" &&
 					data.userId === user.id &&

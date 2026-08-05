@@ -178,6 +178,44 @@ membersRouter.post("/members", async (req, res) => {
 	});
 });
 
+membersRouter.patch("/members/:userId", async (req, res) => {
+	const { workspaceId: wsId, userId: uid } = req.params as {
+		workspaceId: string;
+		userId: string;
+	};
+	const workspaceId = Number(wsId);
+	const targetUserId = Number(uid);
+	if (!Number.isInteger(workspaceId) || !Number.isInteger(targetUserId)) {
+		return res
+			.status(400)
+			.json({ error: "workspaceId and userId must be integers" });
+	}
+
+	const { role } = req.body ?? {};
+	if (role !== "admin" && role !== "member") {
+		return res.status(400).json({ error: 'role must be "admin" or "member"' });
+	}
+
+	const result = await workspaceAccessService.updateMemberRole({
+		actorId: req.user!.id,
+		workspaceId,
+		userId: targetUserId,
+		role,
+	});
+
+	if (result.status === 200) {
+		res.json({
+			userId: result.member.userId,
+			username: result.member.username,
+			displayName: result.member.displayName,
+			role: result.member.role,
+		});
+		return;
+	}
+
+	return res.status(result.status).json({ error: result.error });
+});
+
 membersRouter.delete("/members/:userId", async (req, res) => {
 	const { workspaceId: wsId, userId: uid } = req.params as {
 		workspaceId: string;

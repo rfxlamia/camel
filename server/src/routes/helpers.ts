@@ -64,10 +64,23 @@ export function checkActorCanManage(role: string): AuthCheck {
 	return { allowed: false, status: 404, error: "Not found" };
 }
 
+export function checkActorCanChangeRole(role: string): AuthCheck {
+	if (role === "owner") return { allowed: true };
+	return { allowed: false, status: 404, error: "Not found" };
+}
+
 export function checkCanRemoveUser(
-	_actorRole: string,
+	actorId: number,
+	targetUserId: number,
 	targetRole: string,
 ): AuthCheck {
+	if (actorId === targetUserId) {
+		return {
+			allowed: false,
+			status: 403,
+			error: "Cannot remove yourself",
+		};
+	}
 	if (targetRole === "owner") {
 		return {
 			allowed: false,
@@ -198,14 +211,31 @@ export type WorkspaceAccessDeps = {
 		workspaceId: number,
 		userId: number,
 	) => Promise<{ userId: number; username: string } | null>;
+	updateMemberRole: (
+		workspaceId: number,
+		userId: number,
+		role: "admin" | "member",
+	) => Promise<{
+		userId: number;
+		username: string;
+		displayName: string;
+		role: string;
+	} | null>;
 	publishEvent: (
 		workspaceId: number,
-		event: {
-			type: "membership.removed";
-			userId: number;
-			workspaceId: number;
-			workspaceName: string;
-		},
+		event:
+			| {
+					type: "membership.removed";
+					userId: number;
+					workspaceId: number;
+					workspaceName: string;
+			  }
+			| {
+					type: "membership.role_changed";
+					userId: number;
+					workspaceId: number;
+					role: string;
+			  },
 	) => Promise<void>;
 	clearPresence: (workspaceId: number, userId: number) => Promise<void>;
 };
@@ -240,7 +270,8 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 				return { status: 404 as const, error: "Not found" };
 
 			const canRemove = checkCanRemoveUser(
-				actorMembership.role,
+				actorId,
+				userId,
 				targetMembership.role,
 			);
 			if (!canRemove.allowed) {
@@ -266,6 +297,65 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 					// best-effort; member already removed
 				});
 			return { status: 204 as const };
+		},
+
+		async updateMemberRole({
+			actorId,
+			workspaceId,
+			userId,
+			role,
+		}: {
+			actorId: number;
+			workspaceId: number;
+			userId: number;
+			role: "admin" | "member";
+		}) {
+			const actorMembership = await deps.getActorMembership(
+				workspaceId,
+				actorId,
+			);
+			if (!actorMembership) return { status: 404 as const, error: "Not found" };
+
+			const canChange = checkActorCanChangeRole(actorMembership.role);
+			if (!canChange.allowed) {
+				return { status: 404 as const, error: canChange.error };
+			}
+
+			const targetMembership = await deps.getTargetMembership(
+				workspaceId,
+				userId,
+			);
+			if (!targetMembership)
+				return { status: 404 as const, error: "Not found" };
+
+			if (targetMembership.role === "owner") {
+				return {
+					status: 403 as const,
+					error: "Cannot change workspace owner role",
+				};
+			}
+
+			if (targetMembership.role === role) {
+				const member = await deps.updateMemberRole(workspaceId, userId, role);
+				if (!member) return { status: 404 as const, error: "Not found" };
+				return { status: 200 as const, member };
+			}
+
+			const member = await deps.updateMemberRole(workspaceId, userId, role);
+			if (!member) return { status: 404 as const, error: "Not found" };
+
+			deps
+				.publishEvent(workspaceId, {
+					type: "membership.role_changed",
+					userId: member.userId,
+					workspaceId,
+					role: member.role,
+				})
+				.catch(() => {
+					// best-effort; role already updated
+				});
+
+			return { status: 200 as const, member };
 		},
 	};
 }
@@ -335,6 +425,62 @@ export const workspaceAccessService = createWorkspaceAccessService({
 				.executeTakeFirstOrThrow();
 
 			return { userId: deleted.user_id, username: user.username as string };
+		});
+	},
+	updateMemberRole: async (workspaceId, userId, role) => {
+		return db.transaction().execute(async (trx) => {
+			const existing = await trx
+				.selectFrom("workspace_members as wm")
+				.innerJoin("users as u", "u.id", "wm.user_id")
+				.select([
+					"wm.user_id as user_id",
+					"u.username as username",
+					"u.display_name as display_name",
+					"wm.role as role",
+				])
+				.where("wm.workspace_id", "=", workspaceId)
+				.where("wm.user_id", "=", userId)
+				.executeTakeFirst();
+
+			if (!existing) return null;
+			if (existing.role === role) {
+				return {
+					userId: existing.user_id,
+					username: existing.username as string,
+					displayName: existing.display_name as string,
+					role: existing.role as string,
+				};
+			}
+
+			const updated = await trx
+				.updateTable("workspace_members")
+				.set({ role })
+				.where("workspace_id", "=", workspaceId)
+				.where("user_id", "=", userId)
+				.returning("user_id")
+				.executeTakeFirst();
+			if (!updated) return null;
+
+			const row = await trx
+				.selectFrom("workspace_members as wm")
+				.innerJoin("users as u", "u.id", "wm.user_id")
+				.select([
+					"wm.user_id as user_id",
+					"u.username as username",
+					"u.display_name as display_name",
+					"wm.role as role",
+				])
+				.where("wm.workspace_id", "=", workspaceId)
+				.where("wm.user_id", "=", userId)
+				.executeTakeFirst();
+
+			if (!row) return null;
+			return {
+				userId: row.user_id,
+				username: row.username as string,
+				displayName: row.display_name as string,
+				role: row.role as string,
+			};
 		});
 	},
 	publishEvent,

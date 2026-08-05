@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import LogoCropper from "../components/LogoCropper";
+import ManageMembersSection from "../components/settings/ManageMembersSection";
 import { useBoard } from "../context/BoardContext";
 import {
 	canEditWorkspaceSettings,
@@ -99,6 +100,7 @@ export default function SettingsPage() {
 	const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
 	const [inviteError, setInviteError] = useState<string | null>(null);
 	const [isInviting, setIsInviting] = useState(false);
+	const [membersRefreshKey, setMembersRefreshKey] = useState(0);
 
 	const canEdit = activeWorkspace
 		? canEditWorkspaceSettings(activeWorkspace.role)
@@ -341,6 +343,8 @@ export default function SettingsPage() {
 			});
 			showToast("Invite sent", "success");
 			setInviteUsername("");
+			setMembersRefreshKey((k) => k + 1);
+			void reloadWorkspaces();
 		} catch (err: unknown) {
 			if (err instanceof ApiError) {
 				setInviteError(err.message);
@@ -462,6 +466,19 @@ export default function SettingsPage() {
 							{isInviting ? "Sending..." : "Invite"}
 						</button>
 					</div>
+				</SettingsSection>
+			)}
+
+			{user && (
+				<SettingsSection title="Manage Members">
+					<ManageMembersSection
+						workspaceId={activeWorkspaceId}
+						currentUserId={user.id}
+						currentUserRole={activeWorkspace.role}
+						refreshKey={membersRefreshKey}
+						onMembersChanged={() => void reloadWorkspaces()}
+						showToast={showToast}
+					/>
 				</SettingsSection>
 			)}
 

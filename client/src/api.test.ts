@@ -247,6 +247,8 @@ describe("workspace API methods", () => {
 		await api.updateWorkspace(7, { name: "Renamed" });
 		await api.getWorkspaceMembers(7);
 		await api.addWorkspaceMember(7, { username: "iris" });
+		await api.removeWorkspaceMember(7, 3);
+		await api.updateWorkspaceMemberRole(7, 3, { role: "admin" });
 		await api.acceptInvite(7, 12);
 		await api.declineInvite(7, 12);
 		await api.transferWorkspaceOwnership(7, {
@@ -274,6 +276,17 @@ describe("workspace API methods", () => {
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/members",
 			expect.objectContaining({ method: "POST" }),
+		);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/members/3",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/members/3",
+			expect.objectContaining({
+				method: "PATCH",
+				body: JSON.stringify({ role: "admin" }),
+			}),
 		);
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/invites/12/accept",
