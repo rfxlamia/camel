@@ -13,6 +13,7 @@ import { notificationsRouter } from "./notifications/router.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
 import { trackerItemsRouter } from "./routes/tracker-items.js";
+import { trackerPhasesRouter } from "./routes/tracker-phases.js";
 import { trackerProjectsRouter } from "./routes/tracker-projects.js";
 import { trackerVocabulariesRouter } from "./routes/tracker-vocabularies.js";
 import { workspacesRouter } from "./routes/workspaces.js";
@@ -59,6 +60,7 @@ api.use("/workspaces/:workspaceId", metricsRouter);
 api.use("/workspaces/:workspaceId", presenceRouter);
 api.use("/workspaces/:workspaceId", trackerItemsRouter);
 api.use("/workspaces/:workspaceId", trackerProjectsRouter);
+api.use("/workspaces/:workspaceId", trackerPhasesRouter);
 api.use("/workspaces/:workspaceId", trackerVocabulariesRouter);
 api.use("/workspaces/:workspaceId/notifications", notificationsRouter);
 
