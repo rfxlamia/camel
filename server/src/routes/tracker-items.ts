@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { positionBetween } from "../core/position.js";
+import { neighborsAt, positionBetween, rebalance } from "../core/position.js";
 import {
 	derivePrefix,
 	formatKey,
@@ -348,6 +348,41 @@ async function endOfBucketPosition(
 	return positionBetween(row?.max_position ?? null, null);
 }
 
+async function loadBucketSiblings(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	projectId: number | null,
+	phaseId: number | null,
+	excludeId: number,
+): Promise<Array<{ id: number; position: number }>> {
+	let query = dbExec
+		.selectFrom("tracker_items")
+		.select([
+			"id",
+			sql<number>`COALESCE(position, 1e15)`.as("position"),
+		])
+		.where("workspace_id", "=", workspaceId)
+		.where("deleted_at", "is", null)
+		.where("id", "<>", excludeId)
+		.orderBy(sql`COALESCE(position, 1e15)`)
+		.orderBy("id")
+		.forUpdate();
+
+	if (projectId === null) {
+		query = query.where("project_id", "is", null);
+	} else {
+		query = query.where("project_id", "=", projectId);
+	}
+
+	if (phaseId === null) {
+		query = query.where("phase_id", "is", null);
+	} else {
+		query = query.where("phase_id", "=", phaseId);
+	}
+
+	return query.execute();
+}
+
 trackerItemsRouter.get(
 	"/tracker/items",
 	requireWorkspaceMember,
@@ -573,6 +608,140 @@ trackerItemsRouter.get(
 				: undefined;
 
 		const [item] = await hydrateItems(db, [row], prefix);
+		if (redirectFrom) {
+			res.json({ ...item, canonicalKey: item.key, redirectFrom });
+			return;
+		}
+		res.json(item);
+	},
+);
+
+trackerItemsRouter.patch(
+	"/tracker/items/:key/position",
+	requireWorkspaceMember,
+	async (req, res) => {
+		const { workspaceId } = req.workspace!;
+		const actor = req.user!;
+		const parsed = parseKeyFromUrl(routeKeyParam(req.params.key));
+		if (!parsed) {
+			return res.status(400).json({ error: "invalid tracker key" });
+		}
+
+		const body = req.body ?? {};
+		if ("projectId" in body || "phaseId" in body) {
+			return res
+				.status(400)
+				.json({ error: "cross-bucket move not allowed on reorder" });
+		}
+
+		const { beforeId, afterId } = body as {
+			beforeId?: unknown;
+			afterId?: unknown;
+		};
+		if (beforeId !== undefined && !Number.isInteger(beforeId)) {
+			return res.status(400).json({ error: "beforeId must be an integer" });
+		}
+		if (afterId !== undefined && !Number.isInteger(afterId)) {
+			return res.status(400).json({ error: "afterId must be an integer" });
+		}
+		if (beforeId === undefined && afterId === undefined) {
+			return res
+				.status(400)
+				.json({ error: "beforeId or afterId is required" });
+		}
+
+		const prefix = await getWorkspacePrefix(workspaceId);
+		if (!prefix) return res.status(404).json({ error: "Not found" });
+
+		const existing = await findItemByKeyNumber(
+			db,
+			workspaceId,
+			parsed.keyNumber,
+		);
+		if (!existing) return res.status(404).json({ error: "Not found" });
+
+		type ReorderResult =
+			| { kind: "bad_neighbors" }
+			| { kind: "ok" };
+
+		const result: ReorderResult = await db.transaction().execute(async (trx) => {
+			const siblings = await loadBucketSiblings(
+				trx,
+				workspaceId,
+				existing.project_id,
+				existing.phase_id,
+				existing.id,
+			);
+
+			let index: number;
+			if (beforeId !== undefined) {
+				const idx = siblings.findIndex((s) => s.id === beforeId);
+				if (idx === -1) return { kind: "bad_neighbors" };
+				index = idx + 1;
+			} else {
+				const idx = siblings.findIndex((s) => s.id === afterId);
+				if (idx === -1) return { kind: "bad_neighbors" };
+				index = idx;
+			}
+
+			let position: number;
+			try {
+				const positions = siblings.map((s) => Number(s.position));
+				const { before, after } = neighborsAt(positions, index);
+				position = positionBetween(before, after);
+			} catch {
+				const fresh = rebalance(siblings.length);
+				for (let i = 0; i < siblings.length; i++) {
+					await trx
+						.updateTable("tracker_items")
+						.set({ position: fresh[i] })
+						.where("id", "=", siblings[i].id)
+						.execute();
+				}
+				const { before, after } = neighborsAt(fresh, index);
+				position = positionBetween(before, after);
+			}
+
+			await trx
+				.updateTable("tracker_items")
+				.set({ position })
+				.where("id", "=", existing.id)
+				.execute();
+
+			await recordTrackerActivity(
+				trx,
+				actor,
+				workspaceId,
+				"tracker_item_updated",
+				{
+					trackerItemId: existing.id,
+					payload: {
+						title: existing.title,
+						changed: ["position"],
+					},
+				},
+			);
+
+			return { kind: "ok" };
+		});
+
+		if (result.kind === "bad_neighbors") {
+			return res.status(400).json({ error: "neighbor not in bucket" });
+		}
+
+		const row = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
+		if (!row) return res.status(404).json({ error: "Not found" });
+
+		const redirectFrom =
+			parsed.prefix !== prefix
+				? formatKey(parsed.prefix, parsed.keyNumber)
+				: undefined;
+		const [item] = await hydrateItems(db, [row], prefix);
+		await publishEvent(workspaceId, {
+			type: "tracker.updated",
+			actor,
+			trackerItemId: existing.id,
+		});
 		if (redirectFrom) {
 			res.json({ ...item, canonicalKey: item.key, redirectFrom });
 			return;
