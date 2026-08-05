@@ -250,12 +250,18 @@ export interface TrackerItemLabels {
 }
 
 export interface TrackerItems {
+	completed_at: Timestamp | null;
 	created_at: Generated<Timestamp>;
 	deleted_at: Timestamp | null;
 	description: Generated<string>;
+	end_date: string | null;
 	id: Generated<number>;
 	key_number: number;
+	phase_id: number | null;
+	position: number | null;
 	priority_id: number | null;
+	project_id: number | null;
+	start_date: string | null;
 	status_id: number;
 	title: string;
 	updated_at: Generated<Timestamp>;
@@ -263,7 +269,35 @@ export interface TrackerItems {
 	workspace_id: number;
 }
 
+export interface TrackerPhases {
+	created_at: Generated<Timestamp>;
+	deleted_at: Timestamp | null;
+	end_date: string | null;
+	id: Generated<number>;
+	name: string;
+	position: number;
+	project_id: number;
+	start_date: string | null;
+	subtitle: Generated<string>;
+	updated_at: Generated<Timestamp>;
+	version: Generated<number>;
+}
+
+export interface TrackerProjects {
+	created_at: Generated<Timestamp>;
+	deleted_at: Timestamp | null;
+	end_date: string | null;
+	id: Generated<number>;
+	name: string;
+	position: number;
+	start_date: string | null;
+	updated_at: Generated<Timestamp>;
+	version: Generated<number>;
+	workspace_id: number;
+}
+
 export interface TrackerVocabularies {
+	category: string | null;
 	colour: string;
 	created_at: Generated<Timestamp>;
 	id: Generated<number>;
@@ -339,6 +373,8 @@ export interface DB {
 	tracker_item_assignees: TrackerItemAssignees;
 	tracker_item_labels: TrackerItemLabels;
 	tracker_items: TrackerItems;
+	tracker_phases: TrackerPhases;
+	tracker_projects: TrackerProjects;
 	tracker_vocabularies: TrackerVocabularies;
 	users: Users;
 	workspace_invites: WorkspaceInvites;

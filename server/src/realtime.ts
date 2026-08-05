@@ -59,7 +59,13 @@ export interface BoardEvent {
 		| "tracker.created"
 		| "tracker.updated"
 		| "tracker.deleted"
-		| "tracker.vocabulary.created";
+		| "tracker.vocabulary.created"
+		| "tracker.project.created"
+		| "tracker.project.updated"
+		| "tracker.project.deleted"
+		| "tracker.phase.created"
+		| "tracker.phase.updated"
+		| "tracker.phase.deleted";
 	actor?: AuthUser;
 	cardId?: number;
 	trackerItemId?: number;
