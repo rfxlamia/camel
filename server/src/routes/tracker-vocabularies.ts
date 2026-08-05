@@ -15,6 +15,7 @@ const RETURNING_COLUMNS = [
 	"name",
 	"position",
 	"colour",
+	"category",
 	"created_at",
 ] as const;
 
@@ -28,6 +29,7 @@ function serializeVocabulary(row: {
 	name: string;
 	position: number;
 	colour: string;
+	category: string | null;
 	created_at: Date | string;
 }) {
 	return {
@@ -36,6 +38,7 @@ function serializeVocabulary(row: {
 		name: row.name,
 		position: row.position,
 		colour: row.colour,
+		category: row.category,
 		createdAt: row.created_at,
 	};
 }
@@ -79,6 +82,12 @@ trackerVocabulariesRouter.post(
 			return res
 				.status(400)
 				.json({ error: "kind must be status, priority, or label" });
+		}
+
+		if (kind === "status") {
+			return res
+				.status(400)
+				.json({ error: "The status vocabulary is fixed." });
 		}
 
 		const trimmedName = typeof name === "string" ? name.trim() : "";
