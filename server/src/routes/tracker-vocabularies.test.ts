@@ -137,24 +137,30 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker vocabulary API", () => {
 		]);
 	});
 
-	it("creates status with fractional position between neighbors", async () => {
+	it("rejects status creation", async () => {
+		const before = await pool.query(
+			`SELECT count(*)::int AS n FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'`,
+			[WORKSPACE_ID],
+		);
 		const res = await request(app)
 			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
 			.send({ kind: "status", name: "Blocked", position: 1500 });
-		expect(res.status).toBe(201);
-		expect(res.body.name).toBe("Blocked");
-		expect(res.body.position).toBe(1500);
-		expect(res.body.colour).toMatch(/^oklch\(/i);
+		expect(res.status).toBe(400);
+		const after = await pool.query(
+			`SELECT count(*)::int AS n FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'`,
+			[WORKSPACE_ID],
+		);
+		expect(after.rows[0].n).toBe(before.rows[0].n);
 	});
 
 	it("rejects duplicate vocabulary name case-insensitively", async () => {
 		await request(app)
 			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
-			.send({ kind: "status", name: "Blocked", position: 1500 });
+			.send({ kind: "label", name: "Blocked", position: 1500 });
 
 		const dup = await request(app)
 			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
-			.send({ kind: "status", name: "blocked", position: 1600 });
+			.send({ kind: "label", name: "blocked", position: 1600 });
 
 		expect([400, 409]).toContain(dup.status);
 	});
@@ -167,3 +173,48 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker vocabulary API", () => {
 		expect(res.body.colour).toMatch(/^oklch\(/i);
 	});
 });
+
+describe.skipIf(!process.env.RUN_INTEGRATION)(
+	"tracker vocabulary category + status lock",
+	() => {
+		it("returns rows carrying category for kind=status", async () => {
+			const res = await request(app).get(
+				`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies?kind=status`,
+			);
+			expect(res.status).toBe(200);
+			expect(
+				res.body.every((v: { category: unknown }) => "category" in v),
+			).toBe(true);
+		});
+
+		it("rejects creating a new status and inserts nothing", async () => {
+			const before = await pool.query(
+				`SELECT count(*)::int AS n FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'`,
+				[WORKSPACE_ID],
+			);
+			const res = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
+				.send({ kind: "status", name: "Blocked", position: 1500 });
+			expect(res.status).toBe(400);
+			const after = await pool.query(
+				`SELECT count(*)::int AS n FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'`,
+				[WORKSPACE_ID],
+			);
+			expect(after.rows[0].n).toBe(before.rows[0].n);
+		});
+
+		it("still allows label creation", async () => {
+			const res = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
+				.send({ kind: "label", name: "Docs", position: 4000 });
+			expect(res.status).toBe(201);
+		});
+
+		it("still allows priority creation", async () => {
+			const res = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
+				.send({ kind: "priority", name: "Urgent", position: 4000 });
+			expect(res.status).toBe(201);
+		});
+	},
+);
