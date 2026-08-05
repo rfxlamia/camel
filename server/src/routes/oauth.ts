@@ -7,6 +7,7 @@ import {
 	requireAuth,
 	USERNAME_RE,
 } from "../auth.js";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { validateUsername } from "../validators/input-length.js";
 
@@ -86,6 +87,7 @@ oauthRouter.post("/set-username", requireAuth, async (req, res) => {
 						.values({ workspace_id: ws.id, user_id: m.userId, role: m.role })
 						.execute();
 				}
+				await seedTrackerVocabulary(trx, ws.id);
 				// Consume pending invites: grant membership THEN delete invite
 				for (const invite of pendingInvites) {
 					await trx

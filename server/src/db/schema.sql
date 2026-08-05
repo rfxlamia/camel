@@ -434,6 +434,7 @@ DO $$
 DECLARE
   ws RECORD;
 BEGIN
+  -- Keep in sync with tracker-vocabulary-seed.ts (DEFAULT_TRACKER_VOCABULARY); pairs with category backfill below
   FOR ws IN SELECT id FROM workspaces LOOP
     INSERT INTO tracker_vocabularies (workspace_id, kind, name, position, colour)
     SELECT ws.id, v.kind, v.name, v.position, v.colour

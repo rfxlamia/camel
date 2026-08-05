@@ -12,6 +12,7 @@ import { sql } from "kysely";
 import { RedisStore } from "rate-limit-redis";
 import { db } from "./db/kysely.js";
 import { getRedisClient } from "./db/redis.js";
+import { seedTrackerVocabulary } from "./core/tracker-vocabulary-seed.js";
 import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
 import {
 	validateDisplayName,
@@ -431,6 +432,8 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 						})
 						.execute();
 				}
+
+				await seedTrackerVocabulary(trx, ws.id);
 
 				// Consume pending invites: grant membership THEN delete invite
 				for (const invite of pendingInvites) {

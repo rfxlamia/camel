@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { sql } from "kysely";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { validateWorkspaceName } from "../validators/input-length.js";
 import {
@@ -98,6 +99,7 @@ workspacesRouter.post("/", async (req, res) => {
 				role: "owner",
 			})
 			.execute();
+		await seedTrackerVocabulary(trx, inserted.id);
 		return inserted;
 	});
 
