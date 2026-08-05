@@ -13,6 +13,11 @@ import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
 const {
 	mockListTrackerProjects,
 	mockListTrackerItems,
+	mockUpdateTrackerProject,
+	mockDeleteTrackerProject,
+	mockCreateTrackerPhase,
+	mockUpdateTrackerPhase,
+	mockDeleteTrackerPhase,
 	mockNavigate,
 	mockUseParams,
 	mockUseBoard,
@@ -20,6 +25,11 @@ const {
 } = vi.hoisted(() => ({
 	mockListTrackerProjects: vi.fn(),
 	mockListTrackerItems: vi.fn(),
+	mockUpdateTrackerProject: vi.fn(),
+	mockDeleteTrackerProject: vi.fn(),
+	mockCreateTrackerPhase: vi.fn(),
+	mockUpdateTrackerPhase: vi.fn(),
+	mockDeleteTrackerPhase: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseParams: vi.fn(),
 	mockUseBoard: vi.fn(),
@@ -30,6 +40,11 @@ vi.mock("../api", () => ({
 	api: {
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
+		updateTrackerProject: (...a: unknown[]) => mockUpdateTrackerProject(...a),
+		deleteTrackerProject: (...a: unknown[]) => mockDeleteTrackerProject(...a),
+		createTrackerPhase: (...a: unknown[]) => mockCreateTrackerPhase(...a),
+		updateTrackerPhase: (...a: unknown[]) => mockUpdateTrackerPhase(...a),
+		deleteTrackerPhase: (...a: unknown[]) => mockDeleteTrackerPhase(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -51,6 +66,7 @@ vi.mock("react-router", () => ({
 	useParams: () => mockUseParams(),
 }));
 
+import { ApiError } from "../api";
 import TrackerProjectPage from "./TrackerProjectPage";
 
 const persiapan: TrackerPhase = {
@@ -417,5 +433,209 @@ describe("TrackerProjectPage", () => {
 		await waitFor(() => screen.getByText("Persiapan"));
 		expect(screen.getByLabelText(/overdue/i)).toBeTruthy();
 		vi.useRealTimers();
+	});
+});
+
+describe("TrackerProjectPage project and phase management", () => {
+	it("renames the project with the current version and updates the header", async () => {
+		mockUpdateTrackerProject.mockResolvedValue({
+			...project,
+			name: "Rilis v2.1",
+			version: 2,
+		});
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Rilis v2"));
+		fireEvent.click(screen.getByRole("button", { name: /rename project/i }));
+		fireEvent.change(screen.getByLabelText(/project name/i), {
+			target: { value: "Rilis v2.1" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerProject).toHaveBeenCalledWith(7, 1, {
+				name: "Rilis v2.1",
+				version: 1,
+			}),
+		);
+		expect(await screen.findByText("Rilis v2.1")).toBeTruthy();
+	});
+
+	it("shows the card-mirror conflict UX when a project rename is stale", async () => {
+		mockUpdateTrackerProject.mockRejectedValueOnce(
+			new ApiError("conflict", 409, "version_conflict"),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Rilis v2"));
+		fireEvent.click(screen.getByRole("button", { name: /rename project/i }));
+		fireEvent.change(screen.getByLabelText(/project name/i), {
+			target: { value: "Rilis v2.1" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+		await waitFor(() =>
+			expect(mockShowToast).toHaveBeenCalledWith(
+				expect.stringMatching(/someone else updated this project/i),
+				"warning",
+			),
+		);
+		expect(mockListTrackerProjects).toHaveBeenCalledTimes(2);
+	});
+
+	it("states the released task count in the delete confirmation", async () => {
+		mockListTrackerItems.mockResolvedValueOnce(
+			Array.from({ length: 18 }, (_, i) =>
+				projectItem({ id: i + 1, key: `CA-${i + 1}`, phaseId: 9 }),
+			),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Rilis v2"));
+		fireEvent.click(screen.getByRole("button", { name: /project menu/i }));
+		fireEvent.click(screen.getByRole("menuitem", { name: /delete project/i }));
+		expect(
+			await screen.findByText(/18 tasks will be released to the unassigned list/i),
+		).toBeTruthy();
+	});
+
+	it("deletes the project on confirmation and returns to /tracker", async () => {
+		mockDeleteTrackerProject.mockResolvedValue(undefined);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Rilis v2"));
+		fireEvent.click(screen.getByRole("button", { name: /project menu/i }));
+		fireEvent.click(screen.getByRole("menuitem", { name: /delete project/i }));
+		await screen.findByText(/will be released to the unassigned list/i);
+		fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+		await waitFor(() => expect(mockDeleteTrackerProject).toHaveBeenCalledWith(7, 1));
+		expect(mockNavigate).toHaveBeenCalledWith("/tracker");
+	});
+
+	it("creates the first phase from the empty project's CTA", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([
+			{ ...project, id: 5, name: "Rilis v3", phases: [] },
+		]);
+		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockUseParams.mockReturnValue({ projectId: "5" });
+		mockCreateTrackerPhase.mockResolvedValue(persiapan);
+		render(<TrackerProjectPage />);
+		fireEvent.click(await screen.findByRole("button", { name: /create.*phase/i }));
+		fireEvent.change(screen.getByLabelText(/phase name/i), {
+			target: { value: "Persiapan" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+		await waitFor(() =>
+			expect(mockCreateTrackerPhase).toHaveBeenCalledWith(7, 5, {
+				name: "Persiapan",
+			}),
+		);
+	});
+
+	it("appends a new phase after the existing last phase", async () => {
+		mockCreateTrackerPhase.mockResolvedValue({
+			...pengembangan,
+			id: 11,
+			name: "Peluncuran",
+			position: 3072,
+		});
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Pengembangan"));
+		fireEvent.click(screen.getByRole("button", { name: /add phase/i }));
+		fireEvent.change(screen.getByLabelText(/phase name/i), {
+			target: { value: "Peluncuran" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+		await waitFor(() => expect(mockCreateTrackerPhase).toHaveBeenCalled());
+		const order = screen
+			.getAllByTestId(/^phase-/)
+			.map((section) => section.dataset.testid);
+		expect(order).toEqual(["phase-Persiapan", "phase-Pengembangan", "phase-Peluncuran"]);
+	});
+
+	it("renames a phase and shows the same 409 conflict UX on a stale version", async () => {
+		mockUpdateTrackerPhase.mockResolvedValueOnce({
+			...persiapan,
+			name: "Persiapan awal",
+			version: 2,
+		});
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Persiapan"));
+		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan/i }));
+		fireEvent.change(screen.getByLabelText(/phase name/i), {
+			target: { value: "Persiapan awal" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerPhase).toHaveBeenCalledWith(7, 9, {
+				name: "Persiapan awal",
+				version: 1,
+			}),
+		);
+		expect(await screen.findByText("Persiapan awal")).toBeTruthy();
+
+		mockUpdateTrackerPhase.mockRejectedValueOnce(
+			new ApiError("conflict", 409, "version_conflict"),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan awal/i }));
+		fireEvent.change(screen.getByLabelText(/phase name/i), {
+			target: { value: "Persiapan lagi" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+		await waitFor(() =>
+			expect(mockShowToast).toHaveBeenCalledWith(
+				expect.stringMatching(/someone else updated this phase/i),
+				"warning",
+			),
+		);
+	});
+
+	it('deletes a phase on confirmation and moves its tasks into "No phase" without a manual refresh', async () => {
+		mockDeleteTrackerPhase.mockResolvedValue(undefined);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Persiapan"));
+
+		mockListTrackerProjects.mockResolvedValueOnce([
+			{ ...project, phases: [pengembangan] },
+		]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			projectItem({ id: 1, key: "CA-1", phaseId: null }),
+			projectItem({ id: 2, key: "CA-2", phaseId: null }),
+		]);
+		fireEvent.click(screen.getByRole("button", { name: /delete phase persiapan/i }));
+		fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+		await waitFor(() => expect(mockDeleteTrackerPhase).toHaveBeenCalledWith(7, 9));
+		await waitFor(() => expect(screen.getByText("No phase")).toBeTruthy());
+		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
+	});
+
+	it("sets explicit phase dates and surfaces the server's 400 for an inverted range inline", async () => {
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Persiapan"));
+		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan/i }));
+		fireEvent.change(screen.getByLabelText(/start date/i), {
+			target: { value: "2026-09-01" },
+		});
+		fireEvent.change(screen.getByLabelText(/end date/i), {
+			target: { value: "2026-09-20" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerPhase).toHaveBeenCalledWith(7, 9, {
+				name: "Persiapan",
+				startDate: "2026-09-01",
+				endDate: "2026-09-20",
+				version: 1,
+			}),
+		);
+
+		mockUpdateTrackerPhase.mockRejectedValueOnce(
+			new ApiError("End date must be on or after the start date.", 400),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan/i }));
+		fireEvent.change(screen.getByLabelText(/start date/i), {
+			target: { value: "2026-09-30" },
+		});
+		fireEvent.change(screen.getByLabelText(/end date/i), {
+			target: { value: "2026-09-01" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+		expect(
+			await screen.findByText("End date must be on or after the start date."),
+		).toBeTruthy();
 	});
 });

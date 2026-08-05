@@ -1,4 +1,5 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pencil, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { formatDueDate } from "../../lib/boardViewUtils";
 import {
 	isPhaseOverdue,
@@ -19,6 +20,9 @@ interface Props {
 	collapsed: boolean;
 	onToggle: () => void;
 	onStatusChange?: (item: TrackerItem, statusId: number) => void;
+	onRename?: () => void;
+	onDelete?: () => void;
+	children?: ReactNode;
 }
 
 function formatDateRange(
@@ -42,6 +46,9 @@ export default function TrackerPhaseSection({
 	collapsed,
 	onToggle,
 	onStatusChange,
+	onRename,
+	onDelete,
+	children,
 }: Props) {
 	const rollupResult = rollup(items);
 	const bounds = phase
@@ -71,7 +78,10 @@ export default function TrackerPhaseSection({
 	const subtitle = phase?.subtitle?.trim() ?? "";
 
 	return (
-		<section className="border-neutral-200 border-b last:border-b-0">
+		<section
+			data-testid={`phase-${label}`}
+			className="border-neutral-200 border-b last:border-b-0"
+		>
 			<div className="group/head flex min-h-9 items-center gap-2 bg-neutral-100/80 px-4 py-1.5 md:px-6">
 				<button
 					type="button"
@@ -111,7 +121,28 @@ export default function TrackerPhaseSection({
 				{dateRange && (
 					<span className="shrink-0 text-neutral-500 text-xs">{dateRange}</span>
 				)}
+				{phase && onRename && (
+					<button
+						type="button"
+						aria-label={`Rename phase ${label}`}
+						onClick={onRename}
+						className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-500 opacity-0 transition hover:bg-neutral-200 hover:text-neutral-800 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 group-hover/head:opacity-100"
+					>
+						<Pencil size={13} aria-hidden />
+					</button>
+				)}
+				{phase && onDelete && (
+					<button
+						type="button"
+						aria-label={`Delete phase ${label}`}
+						onClick={onDelete}
+						className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-500 opacity-0 transition hover:bg-neutral-200 hover:text-neutral-800 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 group-hover/head:opacity-100"
+					>
+						<Trash2 size={13} aria-hidden />
+					</button>
+				)}
 			</div>
+			{children}
 			{!collapsed && items.length > 0 && (
 				<div className="divide-y divide-neutral-200/70 bg-white">
 					{items.map((item) => (
