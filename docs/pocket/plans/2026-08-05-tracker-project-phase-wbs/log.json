@@ -1,0 +1,152 @@
+{
+  "header": {
+    "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-08-05-tracker-project-phase-wbs",
+    "plan_type": "phased",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-08-05",
+    "date_completed": null,
+    "baseline_sha": "9dc131ca1cd9652d6ced3ecfd5b65291b4c1d94d"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "REVIEW",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Schema migration — projects, phases, item columns, guarded backfills",
+          "status": "DONE",
+          "done_sha": "9cd5abb3449434af6140223e4048e9b6e63fc1ad"
+        },
+        {
+          "id": "T2",
+          "name": "Shared contracts — Kysely table types and realtime event union",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "965ca590f07f999ad40e1587e30bb54b9d2f5754"
+        },
+        {
+          "id": "T3",
+          "name": "Vocabulary seeding at every workspace-creation path",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "6077a62479954610df93b96767a9ffb85e0f3559"
+        },
+        {
+          "id": "T4",
+          "name": "Vocabulary route — category on the wire, status vocabulary closed",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "723e57cc5337717ab0a10fb90880e6a8b9014e06"
+        },
+        {
+          "id": "T5",
+          "name": "Tracker item parsers — extract validators and add project/phase/date validation",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "d0e0b967a4826cb1255cfa5841ea77de1ed4a929"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T6",
+          "name": "Item read path — project and phase ids plus status category on payloads",
+          "status": "WAITING",
+          "depends": "T5"
+        },
+        {
+          "id": "T9",
+          "name": "Project routes — CRUD, cap, and delete-with-release",
+          "status": "WAITING",
+          "depends": "T5"
+        },
+        {
+          "id": "T7",
+          "name": "Item write path — create and update with assignment, dates, completed_at and version semantics",
+          "status": "WAITING",
+          "depends": "T6"
+        },
+        {
+          "id": "T10",
+          "name": "Phase routes — CRUD and delete-to-no-phase",
+          "status": "WAITING",
+          "depends": "T9"
+        },
+        {
+          "id": "T8",
+          "name": "Reorder endpoint — bucket positions without version bumps",
+          "status": "WAITING",
+          "depends": "T7"
+        },
+        {
+          "id": "T11",
+          "name": "Client contracts — types and API surface",
+          "status": "WAITING",
+          "depends": "T4, T6, T9, T10"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan-phase-3.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T12",
+          "name": "Rollup and schedule derivation helper",
+          "status": "WAITING",
+          "depends": "T11"
+        },
+        {
+          "id": "T13",
+          "name": "Glyphs read the category column",
+          "status": "WAITING",
+          "depends": "T11"
+        },
+        {
+          "id": "T16",
+          "name": "Date fields and project/phase pickers on input surfaces",
+          "status": "WAITING",
+          "depends": "T11"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "file": "execution-plan-phase-4.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T14",
+          "name": "Tracker home — project cards, search into projects, new realtime",
+          "status": "WAITING",
+          "depends": "T12, T13"
+        },
+        {
+          "id": "T15",
+          "name": "Project WBS page",
+          "status": "WAITING",
+          "depends": "T12, T13"
+        },
+        {
+          "id": "T18",
+          "name": "Project and phase management UI",
+          "status": "WAITING",
+          "depends": "T15, T16"
+        },
+        {
+          "id": "T17",
+          "name": "Drag reorder UI",
+          "status": "WAITING",
+          "depends": "T15, T8, T18"
+        }
+      ]
+    }
+  ]
+}
