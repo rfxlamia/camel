@@ -228,7 +228,7 @@ export default function ManageMembersSection({
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
 					role="dialog"
 					aria-modal="true"
-					aria-label="Confirm remove member"
+					aria-labelledby="confirm-remove-member-title"
 					onClick={() => setPendingRemove(null)}
 				>
 					<div
@@ -236,7 +236,10 @@ export default function ManageMembersSection({
 						onClick={(e) => e.stopPropagation()}
 						onKeyDown={(e) => e.stopPropagation()}
 					>
-						<p className="font-medium text-neutral-800">
+						<p
+							id="confirm-remove-member-title"
+							className="font-medium text-neutral-800"
+						>
 							Remove {pendingRemove.displayName}?
 						</p>
 						<p className="mt-1 text-sm text-neutral-500">

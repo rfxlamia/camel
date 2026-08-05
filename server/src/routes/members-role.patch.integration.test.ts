@@ -1,24 +1,37 @@
 /**
  * Integration tests for PATCH /members/:userId and DELETE self-removal guard.
  *
- * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
+ * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1
+ * (same flag as test:integration:routes in CI).
  *
- * Run:
- *   RUN_INTEGRATION=1 npx vitest run src/routes/members-role.patch.integration.test.ts
+ * Run from repo root:
+ *   RUN_INTEGRATION=1 npm run test -- server/src/routes/members-role.patch.integration.test.ts
  */
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AuthUser } from "../auth.js";
 import { db } from "../db/kysely.js";
 import { membersRouter } from "./members.js";
 
 let currentUserId: number;
 
+function testUser(id: number): AuthUser {
+	return {
+		id,
+		username: null,
+		displayName: "",
+		email: null,
+		emailVerified: false,
+		needsUsername: false,
+	};
+}
+
 const app = express();
 app.use(express.json());
 app.use((req, _res, next) => {
-	(req as Record<string, unknown>).user = { id: currentUserId };
+	req.user = testUser(currentUserId);
 	next();
 });
 app.use("/workspaces/:workspaceId", membersRouter);

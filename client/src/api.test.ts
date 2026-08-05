@@ -283,7 +283,10 @@ describe("workspace API methods", () => {
 		);
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/members/3",
-			expect.objectContaining({ method: "PATCH" }),
+			expect.objectContaining({
+				method: "PATCH",
+				body: JSON.stringify({ role: "admin" }),
+			}),
 		);
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/invites/12/accept",

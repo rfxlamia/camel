@@ -9,6 +9,7 @@ import {
 	createWorkspaceAccessService,
 	createWorkspaceIntegrationHarness,
 	legacyWorkspaceRouteMatrix,
+	type WorkspaceAccessDeps,
 	WORKSPACE_LIMIT,
 } from "../routes.js";
 
@@ -244,17 +245,20 @@ describe("updateMemberRole", () => {
 
 	it("promotes member to admin on happy path", async () => {
 		const promotedMember = { ...baseMember, role: "admin" as const };
-		const updateMemberRole = vi.fn(async (_ws, _uid, role) => ({
-			...baseMember,
-			role,
-		}));
+		const updateMemberRole: WorkspaceAccessDeps["updateMemberRole"] = vi.fn(
+			async (_ws, _uid, role) => ({
+				...baseMember,
+				role,
+			}),
+		);
+		const publishEvent = vi.fn(async () => undefined);
 		const service = createWorkspaceAccessService({
 			getActorMembership: vi.fn(async () => ({ userId: 1, role: "owner" })),
 			getWorkspace: vi.fn(),
 			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
 			updateMemberRole,
 			removeMember: vi.fn(),
-			publishEvent: vi.fn(),
+			publishEvent,
 			clearPresence: vi.fn(),
 		});
 		const result = await service.updateMemberRole({
@@ -265,6 +269,56 @@ describe("updateMemberRole", () => {
 		});
 		expect(result).toEqual({ status: 200, member: promotedMember });
 		expect(updateMemberRole).toHaveBeenCalledWith(8, 4, "admin");
+		expect(publishEvent).toHaveBeenCalledWith(8, {
+			type: "membership.role_changed",
+			userId: 4,
+			workspaceId: 8,
+			role: "admin",
+		});
+	});
+
+	it("returns 404 when updateMemberRole dep returns null", async () => {
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "owner" })),
+			getWorkspace: vi.fn(),
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole: vi.fn(async () => null),
+			removeMember: vi.fn(),
+			publishEvent: vi.fn(),
+			clearPresence: vi.fn(),
+		});
+		const result = await service.updateMemberRole({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 4,
+			role: "admin",
+		});
+		expect(result).toEqual({ status: 404, error: "Not found" });
+	});
+
+	it("does not publish when role is unchanged", async () => {
+		const publishEvent = vi.fn(async () => undefined);
+		const updateMemberRole = vi.fn(async () => ({
+			...baseMember,
+			role: "member" as const,
+		}));
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "owner" })),
+			getWorkspace: vi.fn(),
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole,
+			removeMember: vi.fn(),
+			publishEvent,
+			clearPresence: vi.fn(),
+		});
+		const result = await service.updateMemberRole({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 4,
+			role: "member",
+		});
+		expect(result).toEqual({ status: 200, member: baseMember });
+		expect(publishEvent).not.toHaveBeenCalled();
 	});
 });
 

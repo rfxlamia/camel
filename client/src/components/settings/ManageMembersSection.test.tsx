@@ -120,7 +120,7 @@ describe("ManageMembersSection interactions", () => {
 			expect(screen.getByText("Member User")).toBeTruthy();
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-		const dialog = screen.getByRole("dialog", { name: "Confirm remove member" });
+		const dialog = screen.getByRole("dialog", { name: /Remove Member User\?/ });
 		expect(within(dialog).getByText(/Remove Member User\?/)).toBeTruthy();
 		fireEvent.click(
 			within(dialog).getByRole("button", { name: "Confirm remove" }),
@@ -174,11 +174,11 @@ describe("ManageMembersSection interactions", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
 		expect(
-			screen.getByRole("dialog", { name: "Confirm remove member" }),
+			screen.getByRole("dialog", { name: /Remove Member User\?/ }),
 		).toBeTruthy();
 		fireEvent.keyDown(document, { key: "Escape" });
 		expect(
-			screen.queryByRole("dialog", { name: "Confirm remove member" }),
+			screen.queryByRole("dialog", { name: /Remove Member User\?/ }),
 		).toBeNull();
 	});
 
@@ -193,7 +193,7 @@ describe("ManageMembersSection interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
 		fireEvent.click(
 			within(
-				screen.getByRole("dialog", { name: "Confirm remove member" }),
+				screen.getByRole("dialog", { name: /Remove Member User\?/ }),
 			).getByRole("button", { name: "Confirm remove" }),
 		);
 		await waitFor(() => {

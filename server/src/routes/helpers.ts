@@ -223,12 +223,19 @@ export type WorkspaceAccessDeps = {
 	} | null>;
 	publishEvent: (
 		workspaceId: number,
-		event: {
-			type: "membership.removed";
-			userId: number;
-			workspaceId: number;
-			workspaceName: string;
-		},
+		event:
+			| {
+					type: "membership.removed";
+					userId: number;
+					workspaceId: number;
+					workspaceName: string;
+			  }
+			| {
+					type: "membership.role_changed";
+					userId: number;
+					workspaceId: number;
+					role: string;
+			  },
 	) => Promise<void>;
 	clearPresence: (workspaceId: number, userId: number) => Promise<void>;
 };
@@ -328,8 +335,25 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 				};
 			}
 
+			if (targetMembership.role === role) {
+				const member = await deps.updateMemberRole(workspaceId, userId, role);
+				if (!member) return { status: 404 as const, error: "Not found" };
+				return { status: 200 as const, member };
+			}
+
 			const member = await deps.updateMemberRole(workspaceId, userId, role);
 			if (!member) return { status: 404 as const, error: "Not found" };
+
+			deps
+				.publishEvent(workspaceId, {
+					type: "membership.role_changed",
+					userId: member.userId,
+					workspaceId,
+					role: member.role,
+				})
+				.catch(() => {
+					// best-effort; role already updated
+				});
 
 			return { status: 200 as const, member };
 		},
@@ -405,6 +429,29 @@ export const workspaceAccessService = createWorkspaceAccessService({
 	},
 	updateMemberRole: async (workspaceId, userId, role) => {
 		return db.transaction().execute(async (trx) => {
+			const existing = await trx
+				.selectFrom("workspace_members as wm")
+				.innerJoin("users as u", "u.id", "wm.user_id")
+				.select([
+					"wm.user_id as user_id",
+					"u.username as username",
+					"u.display_name as display_name",
+					"wm.role as role",
+				])
+				.where("wm.workspace_id", "=", workspaceId)
+				.where("wm.user_id", "=", userId)
+				.executeTakeFirst();
+
+			if (!existing) return null;
+			if (existing.role === role) {
+				return {
+					userId: existing.user_id,
+					username: existing.username as string,
+					displayName: existing.display_name as string,
+					role: existing.role as string,
+				};
+			}
+
 			const updated = await trx
 				.updateTable("workspace_members")
 				.set({ role })

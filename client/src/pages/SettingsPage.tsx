@@ -469,16 +469,18 @@ export default function SettingsPage() {
 				</SettingsSection>
 			)}
 
-			<SettingsSection title="Manage Members">
-				<ManageMembersSection
-					workspaceId={activeWorkspaceId}
-					currentUserId={user!.id}
-					currentUserRole={activeWorkspace.role}
-					refreshKey={membersRefreshKey}
-					onMembersChanged={() => void reloadWorkspaces()}
-					showToast={showToast}
-				/>
-			</SettingsSection>
+			{user && (
+				<SettingsSection title="Manage Members">
+					<ManageMembersSection
+						workspaceId={activeWorkspaceId}
+						currentUserId={user.id}
+						currentUserRole={activeWorkspace.role}
+						refreshKey={membersRefreshKey}
+						onMembersChanged={() => void reloadWorkspaces()}
+						showToast={showToast}
+					/>
+				</SettingsSection>
+			)}
 
 			{/* Board Name */}
 			<SettingsSection title="Identity">
