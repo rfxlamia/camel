@@ -26,6 +26,23 @@ describe("workspace authorization rules", () => {
 		expect(checkActorCanManage("owner")).toEqual({ allowed: true });
 	});
 
+	it("blocks non-owner from changing roles — returns 404", () => {
+		expect(checkActorCanChangeRole("member")).toEqual({
+			allowed: false,
+			status: 404,
+			error: "Not found",
+		});
+		expect(checkActorCanChangeRole("admin")).toEqual({
+			allowed: false,
+			status: 404,
+			error: "Not found",
+		});
+	});
+
+	it("allows owner to change roles", () => {
+		expect(checkActorCanChangeRole("owner")).toEqual({ allowed: true });
+	});
+
 	it("blocks removal of owner — returns 403", () => {
 		expect(checkCanRemoveUser(1, 2, "owner")).toEqual({
 			allowed: false,
@@ -110,6 +127,7 @@ describe("membership removal events", () => {
 			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
 			getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
 			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole: vi.fn(),
 			removeMember: vi.fn(async () => ({ userId: 4, username: "nina" })),
 			publishEvent,
 			clearPresence,
@@ -137,6 +155,7 @@ describe("membership removal events", () => {
 			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
 			// ...but a concurrent request already deleted the row by the time
 			// the actual DELETE runs.
+			updateMemberRole: vi.fn(),
 			removeMember: vi.fn(async () => null),
 			publishEvent,
 			clearPresence,
@@ -151,6 +170,101 @@ describe("membership removal events", () => {
 		expect(result).toEqual({ status: 404, error: "Not found" });
 		expect(publishEvent).not.toHaveBeenCalled();
 		expect(clearPresence).not.toHaveBeenCalled();
+	});
+
+	it("returns 403 when actor tries to remove themselves", async () => {
+		const removeMember = vi.fn();
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 5, role: "admin" })),
+			getWorkspace: vi.fn(),
+			getTargetMembership: vi.fn(async () => ({ userId: 5, role: "admin" })),
+			updateMemberRole: vi.fn(),
+			removeMember,
+			publishEvent: vi.fn(),
+			clearPresence: vi.fn(),
+		});
+		const result = await service.removeMember({
+			actorId: 5,
+			workspaceId: 8,
+			userId: 5,
+		});
+		expect(result).toEqual({ status: 403, error: "Cannot remove yourself" });
+		expect(removeMember).not.toHaveBeenCalled();
+	});
+});
+
+describe("updateMemberRole", () => {
+	const baseMember = {
+		userId: 4,
+		username: "nina",
+		displayName: "Nina",
+		role: "member" as const,
+	};
+
+	it("returns 404 when actor is not owner", async () => {
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
+			getWorkspace: vi.fn(),
+			getTargetMembership: vi.fn(),
+			updateMemberRole: vi.fn(),
+			removeMember: vi.fn(),
+			publishEvent: vi.fn(),
+			clearPresence: vi.fn(),
+		});
+		const result = await service.updateMemberRole({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 4,
+			role: "admin",
+		});
+		expect(result).toEqual({ status: 404, error: "Not found" });
+	});
+
+	it("returns 403 when target is owner", async () => {
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "owner" })),
+			getWorkspace: vi.fn(),
+			getTargetMembership: vi.fn(async () => ({ userId: 2, role: "owner" })),
+			updateMemberRole: vi.fn(),
+			removeMember: vi.fn(),
+			publishEvent: vi.fn(),
+			clearPresence: vi.fn(),
+		});
+		const result = await service.updateMemberRole({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 2,
+			role: "admin",
+		});
+		expect(result).toEqual({
+			status: 403,
+			error: "Cannot change workspace owner role",
+		});
+	});
+
+	it("promotes member to admin on happy path", async () => {
+		const promotedMember = { ...baseMember, role: "admin" as const };
+		const updateMemberRole = vi.fn(async (_ws, _uid, role) => ({
+			...baseMember,
+			role,
+		}));
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "owner" })),
+			getWorkspace: vi.fn(),
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole,
+			removeMember: vi.fn(),
+			publishEvent: vi.fn(),
+			clearPresence: vi.fn(),
+		});
+		const result = await service.updateMemberRole({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 4,
+			role: "admin",
+		});
+		expect(result).toEqual({ status: 200, member: promotedMember });
+		expect(updateMemberRole).toHaveBeenCalledWith(8, 4, "admin");
 	});
 });
 

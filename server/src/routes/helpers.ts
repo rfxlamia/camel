@@ -64,6 +64,11 @@ export function checkActorCanManage(role: string): AuthCheck {
 	return { allowed: false, status: 404, error: "Not found" };
 }
 
+export function checkActorCanChangeRole(role: string): AuthCheck {
+	if (role === "owner") return { allowed: true };
+	return { allowed: false, status: 404, error: "Not found" };
+}
+
 export function checkCanRemoveUser(
 	actorId: number,
 	targetUserId: number,
@@ -206,6 +211,16 @@ export type WorkspaceAccessDeps = {
 		workspaceId: number,
 		userId: number,
 	) => Promise<{ userId: number; username: string } | null>;
+	updateMemberRole: (
+		workspaceId: number,
+		userId: number,
+		role: "admin" | "member",
+	) => Promise<{
+		userId: number;
+		username: string;
+		displayName: string;
+		role: string;
+	} | null>;
 	publishEvent: (
 		workspaceId: number,
 		event: {
@@ -276,6 +291,55 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 				});
 			return { status: 204 as const };
 		},
+
+		async updateMemberRole({
+			actorId,
+			workspaceId,
+			userId,
+			role,
+		}: {
+			actorId: number;
+			workspaceId: number;
+			userId: number;
+			role: "admin" | "member";
+		}) {
+			const actorMembership = await deps.getActorMembership(
+				workspaceId,
+				actorId,
+			);
+			if (!actorMembership) return { status: 404 as const, error: "Not found" };
+
+			const canChange = checkActorCanChangeRole(actorMembership.role);
+			if (!canChange.allowed) {
+				return { status: canChange.status, error: canChange.error };
+			}
+
+			if (role !== "admin" && role !== "member") {
+				return {
+					status: 400 as const,
+					error: 'role must be "admin" or "member"',
+				};
+			}
+
+			const targetMembership = await deps.getTargetMembership(
+				workspaceId,
+				userId,
+			);
+			if (!targetMembership)
+				return { status: 404 as const, error: "Not found" };
+
+			if (targetMembership.role === "owner") {
+				return {
+					status: 403 as const,
+					error: "Cannot change workspace owner role",
+				};
+			}
+
+			const member = await deps.updateMemberRole(workspaceId, userId, role);
+			if (!member) return { status: 404 as const, error: "Not found" };
+
+			return { status: 200 as const, member };
+		},
 	};
 }
 
@@ -344,6 +408,39 @@ export const workspaceAccessService = createWorkspaceAccessService({
 				.executeTakeFirstOrThrow();
 
 			return { userId: deleted.user_id, username: user.username as string };
+		});
+	},
+	updateMemberRole: async (workspaceId, userId, role) => {
+		return db.transaction().execute(async (trx) => {
+			const updated = await trx
+				.updateTable("workspace_members")
+				.set({ role })
+				.where("workspace_id", "=", workspaceId)
+				.where("user_id", "=", userId)
+				.returning("user_id")
+				.executeTakeFirst();
+			if (!updated) return null;
+
+			const row = await trx
+				.selectFrom("workspace_members as wm")
+				.innerJoin("users as u", "u.id", "wm.user_id")
+				.select([
+					"wm.user_id as user_id",
+					"u.username as username",
+					"u.display_name as display_name",
+					"wm.role as role",
+				])
+				.where("wm.workspace_id", "=", workspaceId)
+				.where("wm.user_id", "=", userId)
+				.executeTakeFirst();
+
+			if (!row) return null;
+			return {
+				userId: row.user_id,
+				username: row.username as string,
+				displayName: row.display_name as string,
+				role: row.role as string,
+			};
 		});
 	},
 	publishEvent,

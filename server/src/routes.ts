@@ -20,6 +20,7 @@ import { workspacesRouter } from "./routes/workspaces.js";
 export {
 	type AuthCheck,
 	CAP_ERROR_MESSAGE,
+	checkActorCanChangeRole,
 	checkActorCanManage,
 	checkCanRemoveUser,
 	checkInviteeCap,
