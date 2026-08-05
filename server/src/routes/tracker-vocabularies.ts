@@ -85,9 +85,7 @@ trackerVocabulariesRouter.post(
 		}
 
 		if (kind === "status") {
-			return res
-				.status(400)
-				.json({ error: "The status vocabulary is fixed." });
+			return res.status(400).json({ error: "The status vocabulary is fixed." });
 		}
 
 		const trimmedName = typeof name === "string" ? name.trim() : "";

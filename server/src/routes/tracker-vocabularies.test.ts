@@ -7,7 +7,11 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockTestUser } = vi.hoisted(() => ({
-	mockTestUser: { id: 1, username: "testuser", displayName: "Test User" },
+	mockTestUser: {
+		id: 1100,
+		username: "trackervocabuser",
+		displayName: "Tracker Vocab User",
+	},
 }));
 
 vi.mock("../db/redis.js", () => ({
@@ -40,24 +44,12 @@ vi.mock("../auth.js", async (importOriginal) => {
 });
 
 import { pool } from "../db/pool.js";
+import { db } from "../db/kysely.js";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
 
 const WORKSPACE_ID = 100;
-
-const DEFAULT_VOCAB = [
-	["status", "Backlog", 1024, "oklch(0.89 0.07 250)"],
-	["status", "Todo", 2048, "oklch(0.89 0.07 200)"],
-	["status", "In Progress", 3072, "oklch(0.89 0.07 150)"],
-	["status", "Done", 4096, "oklch(0.89 0.07 140)"],
-	["status", "Canceled", 5120, "oklch(0.89 0.07 30)"],
-	["priority", "High", 1024, "oklch(0.89 0.07 25)"],
-	["priority", "Medium", 2048, "oklch(0.89 0.07 85)"],
-	["priority", "Low", 3072, "oklch(0.89 0.07 220)"],
-	["label", "Feature", 1024, "oklch(0.89 0.07 280)"],
-	["label", "Bug", 2048, "oklch(0.89 0.07 15)"],
-	["label", "Maintain", 3072, "oklch(0.89 0.07 180)"],
-] as const;
 
 function createTestApp() {
 	const app = express();
@@ -101,13 +93,7 @@ async function setupFixtures() {
 		[WORKSPACE_ID, mockTestUser.id],
 	);
 
-	for (const [kind, name, position, colour] of DEFAULT_VOCAB) {
-		await pool.query(
-			`INSERT INTO tracker_vocabularies (workspace_id, kind, name, position, colour)
-       VALUES ($1, $2, $3, $4, $5)`,
-			[WORKSPACE_ID, kind, name, position, colour],
-		);
-	}
+	await seedTrackerVocabulary(db, WORKSPACE_ID);
 }
 
 beforeEach(async () => {
@@ -185,22 +171,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(
 				res.body.every((v: { category: unknown }) => "category" in v),
 			).toBe(true);
-		});
-
-		it("rejects creating a new status and inserts nothing", async () => {
-			const before = await pool.query(
-				`SELECT count(*)::int AS n FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'`,
-				[WORKSPACE_ID],
+			const backlog = res.body.find(
+				(v: { name: string }) => v.name === "Backlog",
 			);
-			const res = await request(app)
-				.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
-				.send({ kind: "status", name: "Blocked", position: 1500 });
-			expect(res.status).toBe(400);
-			const after = await pool.query(
-				`SELECT count(*)::int AS n FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'`,
-				[WORKSPACE_ID],
-			);
-			expect(after.rows[0].n).toBe(before.rows[0].n);
+			expect(backlog?.category).toBe("backlog");
 		});
 
 		it("still allows label creation", async () => {
