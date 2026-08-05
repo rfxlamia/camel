@@ -7,8 +7,11 @@ import {
 } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
-import { lookupMembership } from "./helpers.js";
 import { diffAssigneeIds } from "./card-assignees.js";
+import {
+	parseAssigneeIds,
+	parseLabelIds,
+} from "./tracker-item-parsers.js";
 import {
 	loadTrackerAssigneesForItems,
 	syncTrackerItemAssignees,
@@ -210,36 +213,6 @@ async function findItemByKeyNumber(
 		.executeTakeFirst();
 }
 
-async function parseLabelIds(
-	body: Record<string, unknown>,
-	workspaceId: number,
-): Promise<number[] | { error: string }> {
-	const raw = body.labelIds;
-	if (!Array.isArray(raw)) {
-		return { error: "labelIds must be an array of integers" };
-	}
-	const ids: number[] = [];
-	for (const id of raw) {
-		if (!Number.isInteger(id)) {
-			return { error: "labelIds must be an array of integers" };
-		}
-		ids.push(id as number);
-	}
-	for (const labelId of [...new Set(ids)]) {
-		const row = await db
-			.selectFrom("tracker_vocabularies")
-			.select("id")
-			.where("id", "=", labelId)
-			.where("workspace_id", "=", workspaceId)
-			.where("kind", "=", "label")
-			.executeTakeFirst();
-		if (!row) {
-			return { error: "label must belong to this workspace" };
-		}
-	}
-	return ids;
-}
-
 async function getTrackerItemLabelIds(
 	dbExec: DBExecutor,
 	trackerItemId: number,
@@ -275,30 +248,6 @@ async function syncTrackerItemLabels(
 			.onConflict((oc) => oc.doNothing())
 			.execute();
 	}
-}
-
-async function parseAssigneeIds(
-	body: Record<string, unknown>,
-	workspaceId: number,
-): Promise<number[] | { error: string }> {
-	const raw = body.assigneeIds;
-	if (!Array.isArray(raw)) {
-		return { error: "assigneeIds must be an array of integers" };
-	}
-	const ids: number[] = [];
-	for (const id of raw) {
-		if (!Number.isInteger(id)) {
-			return { error: "assigneeIds must be an array of integers" };
-		}
-		ids.push(id as number);
-	}
-	for (const userId of [...new Set(ids)]) {
-		const role = await lookupMembership(userId, workspaceId);
-		if (!role) {
-			return { error: "assignee must be a member of this workspace" };
-		}
-	}
-	return ids;
 }
 
 async function getBacklogStatusId(
