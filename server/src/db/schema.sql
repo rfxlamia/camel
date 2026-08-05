@@ -459,3 +459,115 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- Tracker project / phase / WBS (2026-08-05)
+
+CREATE TABLE IF NOT EXISTS tracker_projects (
+  id           SERIAL PRIMARY KEY,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  start_date   DATE,
+  end_date     DATE,
+  position     DOUBLE PRECISION NOT NULL,
+  version      INTEGER NOT NULL DEFAULT 1,
+  deleted_at   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tracker_phases (
+  id           SERIAL PRIMARY KEY,
+  project_id   INTEGER NOT NULL REFERENCES tracker_projects(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  subtitle     TEXT NOT NULL DEFAULT '',
+  start_date   DATE,
+  end_date     DATE,
+  position     DOUBLE PRECISION NOT NULL,
+  version      INTEGER NOT NULL DEFAULT 1,
+  deleted_at   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE tracker_items ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES tracker_projects(id) ON DELETE SET NULL;
+ALTER TABLE tracker_items ADD COLUMN IF NOT EXISTS phase_id INTEGER REFERENCES tracker_phases(id) ON DELETE SET NULL;
+ALTER TABLE tracker_items ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE tracker_items ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE tracker_items ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE tracker_items ADD COLUMN IF NOT EXISTS position DOUBLE PRECISION;
+
+ALTER TABLE tracker_vocabularies ADD COLUMN IF NOT EXISTS category TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tracker_projects_workspace_name
+  ON tracker_projects (workspace_id, lower(name))
+  WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tracker_phases_project_name
+  ON tracker_phases (project_id, lower(name))
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tracker_projects_workspace_position
+  ON tracker_projects (workspace_id, position)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tracker_phases_project_position
+  ON tracker_phases (project_id, position)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tracker_items_project_phase_position
+  ON tracker_items (project_id, phase_id, position)
+  WHERE deleted_at IS NULL;
+
+-- tracker: category backfill
+UPDATE tracker_vocabularies
+SET category = 'backlog'
+WHERE kind = 'status'
+  AND lower(name) = lower('Backlog')
+  AND category IS NULL;
+
+-- Todo backlog
+UPDATE tracker_vocabularies
+SET category = 'backlog'
+WHERE kind = 'status'
+  AND lower(name) = lower('Todo')
+  AND category IS NULL;
+
+-- In Progress started
+UPDATE tracker_vocabularies
+SET category = 'started'
+WHERE kind = 'status'
+  AND lower(name) = lower('In Progress')
+  AND category IS NULL;
+
+-- Done completed
+UPDATE tracker_vocabularies
+SET category = 'completed'
+WHERE kind = 'status'
+  AND lower(name) = lower('Done')
+  AND category IS NULL;
+
+-- Canceled canceled
+UPDATE tracker_vocabularies
+SET category = 'canceled'
+WHERE kind = 'status'
+  AND lower(name) = lower('Canceled')
+  AND category IS NULL;
+
+UPDATE tracker_vocabularies
+SET category = 'backlog'
+WHERE category IS NULL
+  AND kind = 'status';
+
+UPDATE tracker_items
+SET position = sub.rn * 1024
+FROM (
+  SELECT
+    id,
+    row_number() OVER (
+      PARTITION BY workspace_id, project_id, phase_id
+      ORDER BY created_at, id
+    ) AS rn
+  FROM tracker_items
+) AS sub
+WHERE tracker_items.id = sub.id
+  AND tracker_items.position IS NULL;
