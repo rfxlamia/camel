@@ -20,8 +20,16 @@ vi.mock("../../api", () => ({
 		getWorkspaceMembers: (...args: unknown[]) => getWorkspaceMembers(...args),
 		createTrackerItem: (...args: unknown[]) => createTrackerItem(...args),
 	},
+	ApiError: class ApiError extends Error {
+		status: number;
+		constructor(message: string, status: number) {
+			super(message);
+			this.status = status;
+		}
+	},
 }));
 
+import { ApiError } from "../../api";
 import type { TrackerVocabulary } from "../../types";
 import TrackerCreateModal from "./TrackerCreateModal";
 
@@ -193,5 +201,66 @@ describe("TrackerCreateModal", () => {
 
 		fireEvent.keyDown(document, { key: "Escape" });
 		expect(onClose).toHaveBeenCalled();
+	});
+});
+
+describe("TrackerCreateModal dates", () => {
+	it("submits startDate and endDate when both are filled", async () => {
+		renderModal();
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "Ship the release" },
+		});
+		fireEvent.change(screen.getByLabelText(/start date/i), {
+			target: { value: "2026-09-21" },
+		});
+		fireEvent.change(screen.getByLabelText(/end date/i), {
+			target: { value: "2026-09-30" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() =>
+			expect(createTrackerItem).toHaveBeenCalledWith(7, {
+				title: "Ship the release",
+				statusId: 1,
+				priorityId: null,
+				startDate: "2026-09-21",
+				endDate: "2026-09-30",
+			}),
+		);
+	});
+
+	it("submits without startDate or endDate when both are left empty", async () => {
+		renderModal();
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "No dates" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
+		const [, body] = createTrackerItem.mock.calls[0] as [
+			number,
+			Record<string, unknown>,
+		];
+		expect(body).not.toHaveProperty("startDate");
+		expect(body).not.toHaveProperty("endDate");
+	});
+
+	it("surfaces the server's 400 for an inverted date range inline", async () => {
+		createTrackerItem.mockRejectedValueOnce(
+			new ApiError("End date must be on or after the start date.", 400),
+		);
+		renderModal();
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "Bad range" },
+		});
+		fireEvent.change(screen.getByLabelText(/start date/i), {
+			target: { value: "2026-09-30" },
+		});
+		fireEvent.change(screen.getByLabelText(/end date/i), {
+			target: { value: "2026-09-21" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		expect(
+			await screen.findByText("End date must be on or after the start date."),
+		).toBeTruthy();
+		expect(screen.getByLabelText("Item title")).toBeTruthy();
 	});
 });

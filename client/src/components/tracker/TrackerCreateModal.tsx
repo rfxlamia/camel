@@ -1,6 +1,7 @@
 import { ListTodo, Tag, UserRound, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../api";
+import { ApiError, api } from "../../api";
+import TrackerDateFields from "./TrackerDateFields";
 import { sortStatusesByPosition } from "../../lib/trackerUtils";
 import type { TrackerVocabulary, WorkspaceMember } from "../../types";
 import {
@@ -44,6 +45,8 @@ export default function TrackerCreateModal({
 	const [priorityId, setPriorityId] = useState<number | null>(null);
 	const [labelIds, setLabelIds] = useState<number[]>([]);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
+	const [startDate, setStartDate] = useState("");
+	const [endDate, setEndDate] = useState("");
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [submitting, setSubmitting] = useState(false);
@@ -160,6 +163,8 @@ export default function TrackerCreateModal({
 		setDescription("");
 		setLabelIds([]);
 		setAssigneeIds([]);
+		setStartDate("");
+		setEndDate("");
 		setOpenPicker(null);
 		titleRef.current?.focus();
 	};
@@ -177,6 +182,8 @@ export default function TrackerCreateModal({
 				priorityId?: number | null;
 				labelIds?: number[];
 				assigneeIds?: number[];
+				startDate?: string;
+				endDate?: string;
 			} = { title: title.trim() };
 			const trimmedDescription = description.trim();
 			if (trimmedDescription) body.description = trimmedDescription;
@@ -184,12 +191,18 @@ export default function TrackerCreateModal({
 			body.priorityId = priorityId;
 			if (labelIds.length > 0) body.labelIds = labelIds;
 			if (assigneeIds.length > 0) body.assigneeIds = assigneeIds;
+			if (startDate) body.startDate = startDate;
+			if (endDate) body.endDate = endDate;
 			await api.createTrackerItem(workspaceId, body);
 			onCreated();
 			if (createMore) resetDraft();
 			else onClose();
-		} catch {
-			setError("Could not create the item. Try again.");
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 400) {
+				setError(err.message);
+			} else {
+				setError("Could not create the item. Try again.");
+			}
 		} finally {
 			setSubmitting(false);
 		}
@@ -380,6 +393,14 @@ export default function TrackerCreateModal({
 								multiple
 							/>
 						)}
+
+						<TrackerDateFields
+							idPrefix="tracker-create"
+							startDate={startDate}
+							endDate={endDate}
+							onStartDateChange={setStartDate}
+							onEndDateChange={setEndDate}
+						/>
 					</div>
 
 					<div className="flex items-center justify-end gap-3 border-neutral-200 border-t px-4 py-3">

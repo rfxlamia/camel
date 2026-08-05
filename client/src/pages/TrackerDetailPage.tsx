@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Folder, Signpost } from "lucide-react";
 import {
 	type KeyboardEvent,
 	useCallback,
@@ -10,16 +10,28 @@ import {
 import { useNavigate, useParams } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerChangelog from "../components/tracker/TrackerChangelog";
+import TrackerDateFields from "../components/tracker/TrackerDateFields";
+import {
+	type PickerOption,
+	TrackerPropertyPicker,
+} from "../components/tracker/TrackerPropertyPicker";
 import TrackerProperties, {
 	type PropertyPatch,
 } from "../components/tracker/TrackerProperties";
 import { useBoard } from "../context/BoardContext";
+import { isTaskOverdue } from "../lib/trackerRollup";
 import type {
 	TrackerEvent,
 	TrackerItem,
+	TrackerProject,
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../types";
+
+type ItemPropertyPatch = PropertyPatch & {
+	projectId?: number;
+	phaseId?: number | null;
+};
 
 function trackerEventKey(
 	event: { type: string; payload?: unknown; trackerItemId?: number },
@@ -57,10 +69,16 @@ export default function TrackerDetailPage() {
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
+	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
+	const [startDate, setStartDate] = useState("");
+	const [endDate, setEndDate] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
+	const [openRailPicker, setOpenRailPicker] = useState<"project" | "phase" | null>(
+		null,
+	);
 	// The server copy is the draft's baseline, so `item` doubles as it. A
 	// property PATCH or an SSE refresh moves the baseline without touching the
 	// draft — see loadItem.
@@ -88,6 +106,12 @@ export default function TrackerDetailPage() {
 			prev && draft !== (prev.description ?? "")
 				? draft
 				: (next.description ?? ""),
+		);
+		setStartDate((draft) =>
+			prev && draft !== (prev.startDate ?? "") ? draft : (next.startDate ?? ""),
+		);
+		setEndDate((draft) =>
+			prev && draft !== (prev.endDate ?? "") ? draft : (next.endDate ?? ""),
 		);
 	}, []);
 
@@ -130,18 +154,20 @@ export default function TrackerDetailPage() {
 		let cancelled = false;
 		void (async () => {
 			try {
-				const [statusList, priorityList, labelList, memberList] =
+				const [statusList, priorityList, labelList, memberList, projectList] =
 					await Promise.all([
 						api.listTrackerVocabularies(activeWorkspaceId, "status"),
 						api.listTrackerVocabularies(activeWorkspaceId, "priority"),
 						api.listTrackerVocabularies(activeWorkspaceId, "label"),
 						api.getWorkspaceMembers(activeWorkspaceId),
+						api.listTrackerProjects(activeWorkspaceId),
 					]);
 				if (cancelled) return;
 				setStatuses(statusList);
 				setPriorities(priorityList);
 				setLabels(labelList);
 				setMembers(memberList.members);
+				setProjects(projectList);
 			} catch {
 				// Rail degrades to read-only.
 			}
@@ -181,7 +207,7 @@ export default function TrackerDetailPage() {
 	};
 
 	const resolvePropertyPatch = (
-		patch: PropertyPatch,
+		patch: ItemPropertyPatch,
 		current: TrackerItem,
 	): Record<string, unknown> => {
 		const { assigneeToggle, labelToggle, ...rest } = patch;
@@ -212,7 +238,7 @@ export default function TrackerDetailPage() {
 
 	// Properties commit on pick, matching the list row. The returned item moves
 	// the version forward so a later title save does not hit a phantom conflict.
-	const changeProperty = (patch: PropertyPatch) => {
+	const changeProperty = (patch: ItemPropertyPatch) => {
 		if (activeWorkspaceId === null) return;
 		enqueueMutation(async () => {
 			const current = itemRef.current;
@@ -253,7 +279,10 @@ export default function TrackerDetailPage() {
 
 	const dirty =
 		item !== null &&
-		(title !== item.title || description !== (item.description ?? ""));
+		(title !== item.title ||
+			description !== (item.description ?? "") ||
+			startDate !== (item.startDate ?? "") ||
+			endDate !== (item.endDate ?? ""));
 
 	const handleSave = () => {
 		const current = itemRef.current;
@@ -261,24 +290,41 @@ export default function TrackerDetailPage() {
 		const workspaceId = activeWorkspaceId;
 		const draftTitle = title;
 		const draftDescription = description;
+		const draftStartDate = startDate;
+		const draftEndDate = endDate;
 		setSaving(true);
 		enqueueMutation(async () => {
 			try {
 				const latest = itemRef.current;
 				if (!latest) return;
+				const patch: {
+					title: string;
+					description: string;
+					version: number;
+					startDate?: string | null;
+					endDate?: string | null;
+				} = {
+					title: draftTitle,
+					description: draftDescription,
+					version: latest.version,
+				};
+				if (draftStartDate !== (latest.startDate ?? "")) {
+					patch.startDate = draftStartDate || null;
+				}
+				if (draftEndDate !== (latest.endDate ?? "")) {
+					patch.endDate = draftEndDate || null;
+				}
 				const updated = await api.updateTrackerItem(
 					workspaceId,
 					latest.key,
-					{
-						title: draftTitle,
-						description: draftDescription,
-						version: latest.version,
-					},
+					patch,
 				);
 				itemRef.current = updated;
 				setItem(updated);
 				setTitle(updated.title);
 				setDescription(updated.description ?? "");
+				setStartDate(updated.startDate ?? "");
+				setEndDate(updated.endDate ?? "");
 				await refreshChangelog(updated.key);
 				refreshTrackerList();
 				showToast("Tracker item saved", "success");
@@ -310,6 +356,8 @@ export default function TrackerDetailPage() {
 		if (!current) return;
 		setTitle(current.title);
 		setDescription(current.description ?? "");
+		setStartDate(current.startDate ?? "");
+		setEndDate(current.endDate ?? "");
 	};
 
 	const onDraftKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -344,6 +392,21 @@ export default function TrackerDetailPage() {
 			</div>
 		);
 	}
+
+	const selectedProject = projects.find((p) => p.id === item.projectId);
+	const selectedPhase = selectedProject?.phases.find((p) => p.id === item.phaseId);
+	const projectOptions: PickerOption[] = projects.map((p) => ({
+		id: String(p.id),
+		label: p.name,
+		selected: p.id === item.projectId,
+	}));
+	const phaseOptions: PickerOption[] = (selectedProject?.phases ?? []).map(
+		(ph) => ({
+			id: String(ph.id),
+			label: ph.name,
+			selected: ph.id === item.phaseId,
+		}),
+	);
 
 	return (
 		<div className="min-h-full bg-white">
@@ -446,14 +509,87 @@ export default function TrackerDetailPage() {
 					</div>
 				</div>
 
-				<TrackerProperties
-					item={item}
-					statuses={statuses}
-					priorities={priorities}
-					labels={labels}
-					members={members}
-					onChange={changeProperty}
-				/>
+				<div className="order-first shrink-0 border-neutral-200 lg:order-none lg:w-[264px] lg:shrink-0 lg:border-l [&>aside]:lg:border-l-0 [&>aside]:lg:w-full">
+					<div className="border-neutral-200 border-b px-4 py-4 md:px-6 lg:border-b-0 lg:px-5 lg:pt-6 lg:pb-4">
+						<h2 className="font-medium text-[11px] text-neutral-500 uppercase tracking-[0.08em]">
+							Schedule
+						</h2>
+						<div className="mt-3">
+							<TrackerDateFields
+								idPrefix="tracker-detail"
+								layout="rail"
+								startDate={startDate}
+								endDate={endDate}
+								onStartDateChange={setStartDate}
+								onEndDateChange={setEndDate}
+							/>
+							{isTaskOverdue(item) && (
+								<p
+									aria-label="Overdue"
+									className="mt-2 font-medium text-error-900 text-xs"
+								>
+									Overdue
+								</p>
+							)}
+						</div>
+						{projects.length > 0 && (
+							<div className="mt-4 flex flex-col gap-1.5">
+								<TrackerPropertyPicker
+									placeholder="Project"
+									value={selectedProject?.name}
+									icon={
+										<Folder
+											size={14}
+											className="shrink-0 text-neutral-500"
+											aria-hidden
+										/>
+									}
+									searchPlaceholder="Set project to…"
+									options={projectOptions}
+									open={openRailPicker === "project"}
+									onOpenChange={(open) =>
+										setOpenRailPicker(open ? "project" : null)
+									}
+									onSelect={(id) =>
+										changeProperty({ projectId: Number(id), phaseId: null })
+									}
+								/>
+								<TrackerPropertyPicker
+									placeholder="Phase"
+									value={selectedPhase?.name}
+									icon={
+										<Signpost
+											size={14}
+											className="shrink-0 text-neutral-500"
+											aria-hidden
+										/>
+									}
+									searchPlaceholder="Set phase to…"
+									options={phaseOptions}
+									open={openRailPicker === "phase"}
+									onOpenChange={(open) =>
+										setOpenRailPicker(open ? "phase" : null)
+									}
+									onSelect={(id) => {
+										if (item.projectId == null) return;
+										changeProperty({
+											projectId: item.projectId,
+											phaseId: Number(id),
+										});
+									}}
+								/>
+							</div>
+						)}
+					</div>
+					<TrackerProperties
+						item={item}
+						statuses={statuses}
+						priorities={priorities}
+						labels={labels}
+						members={members}
+						onChange={changeProperty}
+					/>
+				</div>
 			</div>
 		</div>
 	);

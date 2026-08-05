@@ -13,6 +13,7 @@ const {
 	mockUpdateTrackerItem,
 	mockGetTrackerChangelog,
 	mockListVocabularies,
+	mockListTrackerProjects,
 	mockGetWorkspaceMembers,
 	mockNavigate,
 	mockUseBoard,
@@ -22,6 +23,7 @@ const {
 	mockUpdateTrackerItem: vi.fn(),
 	mockGetTrackerChangelog: vi.fn(),
 	mockListVocabularies: vi.fn(),
+	mockListTrackerProjects: vi.fn(),
 	mockGetWorkspaceMembers: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseBoard: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock("../api", () => ({
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		getTrackerChangelog: (...a: unknown[]) => mockGetTrackerChangelog(...a),
 		listTrackerVocabularies: (...a: unknown[]) => mockListVocabularies(...a),
+		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
 	},
 	ApiError: class ApiError extends Error {
@@ -57,8 +60,45 @@ vi.mock("react-router", () => ({
 }));
 
 import { ApiError } from "../api";
-import type { TrackerItem } from "../types";
+import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
 import TrackerDetailPage from "./TrackerDetailPage";
+
+const persiapan: TrackerPhase = {
+	id: 9,
+	projectId: 1,
+	name: "Persiapan",
+	subtitle: "",
+	startDate: null,
+	endDate: null,
+	position: 1024,
+	version: 1,
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
+
+const projectA: TrackerProject = {
+	id: 1,
+	name: "Rilis v2",
+	startDate: null,
+	endDate: null,
+	position: 1024,
+	version: 1,
+	phases: [persiapan],
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
+
+const projectB: TrackerProject = {
+	id: 2,
+	name: "Rilis v3",
+	startDate: null,
+	endDate: null,
+	position: 2048,
+	version: 1,
+	phases: [],
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
 
 const backlog = {
 	id: 1,
@@ -104,6 +144,7 @@ const item = {
 };
 
 beforeEach(() => {
+	mockListTrackerProjects.mockResolvedValue([projectA, projectB]);
 	mockGetTrackerItem.mockResolvedValue(item);
 	mockGetTrackerChangelog.mockResolvedValue({
 		events: [
@@ -484,5 +525,86 @@ describe("TrackerDetailPage", () => {
 				version: 2,
 			}),
 		);
+	});
+});
+
+describe("TrackerDetailPage dates and project/phase pickers", () => {
+	it("sets and saves start and end dates from the property rail", async () => {
+		mockUpdateTrackerItem.mockResolvedValue({
+			...item,
+			startDate: "2026-09-21",
+			endDate: "2026-09-30",
+			version: 2,
+		});
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		fireEvent.change(screen.getByLabelText(/start date/i), {
+			target: { value: "2026-09-21" },
+		});
+		fireEvent.change(screen.getByLabelText(/end date/i), {
+			target: { value: "2026-09-30" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CK-42", {
+				title: "Workspace Rename",
+				description: "details",
+				startDate: "2026-09-21",
+				endDate: "2026-09-30",
+				version: 1,
+			}),
+		);
+	});
+
+	it("resets the phase selection when a different project is picked", async () => {
+		mockUpdateTrackerItem
+			.mockResolvedValueOnce({ ...item, projectId: 1, phaseId: null, version: 2 })
+			.mockResolvedValueOnce({ ...item, projectId: 1, phaseId: 9, version: 3 })
+			.mockResolvedValueOnce({ ...item, projectId: 2, phaseId: null, version: 4 });
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+
+		fireEvent.click(await screen.findByRole("button", { name: /project/i }));
+		fireEvent.click(screen.getByRole("option", { name: /rilis v2/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CK-42", {
+				projectId: 1,
+				phaseId: null,
+				version: 1,
+			}),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /phase/i }));
+		fireEvent.click(screen.getByRole("option", { name: /persiapan/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CK-42", {
+				projectId: 1,
+				phaseId: 9,
+				version: 2,
+			}),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /rilis v2/i }));
+		fireEvent.click(screen.getByRole("option", { name: /rilis v3/i }));
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CK-42", {
+				projectId: 2,
+				phaseId: null,
+				version: 3,
+			}),
+		);
+	});
+
+	it("shows the overdue marker for a past end date with a live status", async () => {
+		mockGetTrackerItem.mockResolvedValue({
+			...item,
+			status: inProgress,
+			endDate: "2026-07-01",
+		});
+		vi.setSystemTime(new Date("2026-08-05T12:00:00"));
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		expect(screen.getByLabelText(/overdue/i)).toBeTruthy();
+		vi.useRealTimers();
 	});
 });
