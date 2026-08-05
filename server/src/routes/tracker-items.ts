@@ -8,10 +8,7 @@ import {
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { diffAssigneeIds } from "./card-assignees.js";
-import {
-	parseAssigneeIds,
-	parseLabelIds,
-} from "./tracker-item-parsers.js";
+import { parseAssigneeIds, parseLabelIds } from "./tracker-item-parsers.js";
 import {
 	loadTrackerAssigneesForItems,
 	syncTrackerItemAssignees,
@@ -306,7 +303,8 @@ trackerItemsRouter.post(
 		const actor = req.user!;
 		const body = req.body ?? {};
 
-		const trimmedTitle = typeof body.title === "string" ? body.title.trim() : "";
+		const trimmedTitle =
+			typeof body.title === "string" ? body.title.trim() : "";
 		if (!trimmedTitle) {
 			return res.status(400).json({ error: "title is required" });
 		}
@@ -438,11 +436,7 @@ trackerItemsRouter.get(
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
-		const row = await findItemByKeyNumber(
-			db,
-			workspaceId,
-			parsed.keyNumber,
-		);
+		const row = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
 		if (!row) return res.status(404).json({ error: "Not found" });
 
 		const redirectFrom =
@@ -788,7 +782,10 @@ function toTrackerEvent(e: {
 	display_name: string | null;
 	current_item_title: string | null;
 }) {
-	const payload = e.payload as { title?: string } | Record<string, unknown> | null;
+	const payload = e.payload as
+		| { title?: string }
+		| Record<string, unknown>
+		| null;
 	return {
 		id: e.id,
 		eventType: e.event_type,

@@ -10,6 +10,7 @@ vi.mock("../db/kysely.js", () => ({
 		selectFrom: vi.fn(() => {
 			const chain: any = {};
 			chain.select = vi.fn(() => chain);
+			chain.innerJoin = vi.fn(() => chain);
 			chain.where = vi.fn(() => chain);
 			chain.executeTakeFirst = mockExecuteTakeFirst;
 			return chain;
@@ -67,6 +68,27 @@ describe("parseProjectPhase", () => {
 		mockExecuteTakeFirst.mockResolvedValueOnce(undefined); // phase lookup misses
 		const result = await parseProjectPhase({ phaseId: 999 }, 7);
 		expect(result).toEqual({ error: expect.any(String) });
+	});
+
+	it("clears both ids when {projectId: null, phaseId: null} is supplied", async () => {
+		const result = await parseProjectPhase(
+			{ projectId: null, phaseId: null },
+			7,
+		);
+		expect(result).toEqual({ projectId: null, phaseId: null });
+		expect(mockExecuteTakeFirst).not.toHaveBeenCalled();
+	});
+
+	it("clears phase only when {phaseId: null} is supplied alone", async () => {
+		const result = await parseProjectPhase({ phaseId: null }, 7);
+		expect(result).toEqual({ phaseId: null });
+		expect(mockExecuteTakeFirst).not.toHaveBeenCalled();
+	});
+
+	it("returns an error when neither projectId nor phaseId is present", async () => {
+		const result = await parseProjectPhase({}, 7);
+		expect(result).toEqual({ error: expect.any(String) });
+		expect(mockExecuteTakeFirst).not.toHaveBeenCalled();
 	});
 });
 

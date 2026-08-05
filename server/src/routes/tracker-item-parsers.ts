@@ -16,13 +16,17 @@ async function lookupProject(
 }
 
 async function lookupPhase(
+	workspaceId: number,
 	phaseId: number,
 ): Promise<{ id: number; project_id: number } | undefined> {
 	return db
-		.selectFrom("tracker_phases")
-		.select(["id", "project_id"])
-		.where("id", "=", phaseId)
-		.where("deleted_at", "is", null)
+		.selectFrom("tracker_phases as tp")
+		.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
+		.select(["tp.id as id", "tp.project_id as project_id"])
+		.where("tp.id", "=", phaseId)
+		.where("tp.deleted_at", "is", null)
+		.where("tpr.workspace_id", "=", workspaceId)
+		.where("tpr.deleted_at", "is", null)
 		.executeTakeFirst();
 }
 
@@ -80,18 +84,32 @@ export async function parseAssigneeIds(
 	return ids;
 }
 
+/**
+ * Parse projectId / phaseId from a PATCH body.
+ *
+ * Callers must invoke only when `'projectId' in body || 'phaseId' in body`.
+ * A body with neither key is rejected.
+ */
 export async function parseProjectPhase(
 	body: Record<string, unknown>,
 	workspaceId: number,
 ): Promise<
-	{ projectId: number | null; phaseId: number | null } | { error: string }
+	{ projectId?: number | null; phaseId?: number | null } | { error: string }
 > {
 	const hasProjectId = "projectId" in body;
 	const hasPhaseId = "phaseId" in body;
 	const rawProjectId = body.projectId;
 	const rawPhaseId = body.phaseId;
 
-	if (hasProjectId && rawProjectId === null && !hasPhaseId) {
+	if (!hasProjectId && !hasPhaseId) {
+		return { error: "projectId and phaseId must be integers or null" };
+	}
+
+	if (
+		hasProjectId &&
+		rawProjectId === null &&
+		(!hasPhaseId || rawPhaseId === null || rawPhaseId === undefined)
+	) {
 		return { projectId: null, phaseId: null };
 	}
 
@@ -105,12 +123,16 @@ export async function parseProjectPhase(
 		return { error: "phase cannot be set without a project" };
 	}
 
+	if (hasPhaseId && rawPhaseId === null && !hasProjectId) {
+		return { phaseId: null };
+	}
+
 	if (
 		hasPhaseId &&
 		typeof rawPhaseId === "number" &&
 		Number.isInteger(rawPhaseId)
 	) {
-		const phase = await lookupPhase(rawPhaseId);
+		const phase = await lookupPhase(workspaceId, rawPhaseId);
 		if (!phase) {
 			return { error: "phase must belong to this workspace" };
 		}
@@ -167,16 +189,19 @@ function parseOptionalDate(
 	}
 	const validated = validateDueDate(value);
 	if (!validated.valid) {
-		return { error: validated.error ?? "invalid date" };
+		const message = validated.error ?? "invalid date";
+		return {
+			error: message.startsWith("due date")
+				? message.replace("due date", field)
+				: `${field}: ${message}`,
+		};
 	}
 	return validated.trimmed!;
 }
 
 export function parseDateRange(
 	body: Record<string, unknown>,
-):
-	| { startDate: string | null; endDate: string | null }
-	| { error: string } {
+): { startDate: string | null; endDate: string | null } | { error: string } {
 	const hasStart = "startDate" in body;
 	const hasEnd = "endDate" in body;
 
