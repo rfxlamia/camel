@@ -254,14 +254,14 @@ export interface TrackerItems {
 	created_at: Generated<Timestamp>;
 	deleted_at: Timestamp | null;
 	description: Generated<string>;
-	end_date: string | null;
+	end_date: Timestamp | null;
 	id: Generated<number>;
 	key_number: number;
 	phase_id: number | null;
 	position: number | null;
 	priority_id: number | null;
 	project_id: number | null;
-	start_date: string | null;
+	start_date: Timestamp | null;
 	status_id: number;
 	title: string;
 	updated_at: Generated<Timestamp>;
@@ -272,12 +272,12 @@ export interface TrackerItems {
 export interface TrackerPhases {
 	created_at: Generated<Timestamp>;
 	deleted_at: Timestamp | null;
-	end_date: string | null;
+	end_date: Timestamp | null;
 	id: Generated<number>;
 	name: string;
 	position: number;
 	project_id: number;
-	start_date: string | null;
+	start_date: Timestamp | null;
 	subtitle: Generated<string>;
 	updated_at: Generated<Timestamp>;
 	version: Generated<number>;
@@ -286,11 +286,11 @@ export interface TrackerPhases {
 export interface TrackerProjects {
 	created_at: Generated<Timestamp>;
 	deleted_at: Timestamp | null;
-	end_date: string | null;
+	end_date: Timestamp | null;
 	id: Generated<number>;
 	name: string;
 	position: number;
-	start_date: string | null;
+	start_date: Timestamp | null;
 	updated_at: Generated<Timestamp>;
 	version: Generated<number>;
 	workspace_id: number;
