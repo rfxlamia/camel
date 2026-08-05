@@ -76,6 +76,7 @@ export default function TrackerDetailPage() {
 	const [endDate, setEndDate] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const [openRailPicker, setOpenRailPicker] = useState<"project" | "phase" | null>(
 		null,
 	);
@@ -327,6 +328,7 @@ export default function TrackerDetailPage() {
 				setEndDate(updated.endDate ?? "");
 				await refreshChangelog(updated.key);
 				refreshTrackerList();
+				setSaveError(null);
 				showToast("Tracker item saved", "success");
 			} catch (err) {
 				if (err instanceof ApiError && err.code === "version_conflict") {
@@ -339,6 +341,10 @@ export default function TrackerDetailPage() {
 					} catch {
 						// Refresh failure must not break the mutation queue.
 					}
+					return;
+				}
+				if (err instanceof ApiError && err.status === 400) {
+					setSaveError(err.message);
 					return;
 				}
 				showToast(
@@ -358,6 +364,7 @@ export default function TrackerDetailPage() {
 		setDescription(current.description ?? "");
 		setStartDate(current.startDate ?? "");
 		setEndDate(current.endDate ?? "");
+		setSaveError(null);
 	};
 
 	const onDraftKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -480,6 +487,14 @@ export default function TrackerDetailPage() {
 								<span className="text-neutral-500 text-xs">
 									Unsaved changes
 								</span>
+								{saveError && (
+									<p
+										role="alert"
+										className="mr-auto text-error-900 text-sm font-medium"
+									>
+										{saveError}
+									</p>
+								)}
 								<span className="ml-auto flex items-center gap-1.5">
 									<button
 										type="button"

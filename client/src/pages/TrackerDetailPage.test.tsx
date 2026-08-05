@@ -595,6 +595,28 @@ describe("TrackerDetailPage dates and project/phase pickers", () => {
 		);
 	});
 
+	it("surfaces inverted date range validation inline instead of a connection toast", async () => {
+		mockUpdateTrackerItem.mockRejectedValue(
+			new ApiError("end date must not precede start date", 400),
+		);
+		render(<TrackerDetailPage />);
+		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
+		fireEvent.change(screen.getByLabelText(/start date/i), {
+			target: { value: "2026-09-30" },
+		});
+		fireEvent.change(screen.getByLabelText(/end date/i), {
+			target: { value: "2026-09-21" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: /save/i }));
+		expect(
+			await screen.findByText(/end date must not precede start date/i),
+		).toBeTruthy();
+		expect(mockShowToast).not.toHaveBeenCalledWith(
+			"Couldn't save the tracker item. Check your connection and try again.",
+			"error",
+		);
+	});
+
 	it("shows the overdue marker for a past end date with a live status", async () => {
 		mockGetTrackerItem.mockResolvedValue({
 			...item,
