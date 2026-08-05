@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	CAP_ERROR_MESSAGE,
+	checkActorCanChangeRole,
 	checkActorCanManage,
 	checkCanRemoveUser,
 	checkInviteeCap,
@@ -26,12 +27,20 @@ describe("workspace authorization rules", () => {
 	});
 
 	it("blocks removal of owner — returns 403", () => {
-		expect(checkCanRemoveUser("admin", "owner")).toEqual({
+		expect(checkCanRemoveUser(1, 2, "owner")).toEqual({
 			allowed: false,
 			status: 403,
 			error: "Cannot remove workspace owner",
 		});
-		expect(checkCanRemoveUser("owner", "member")).toEqual({ allowed: true });
+		expect(checkCanRemoveUser(1, 2, "member")).toEqual({ allowed: true });
+	});
+
+	it("blocks self-removal — returns 403", () => {
+		expect(checkCanRemoveUser(5, 5, "admin")).toEqual({
+			allowed: false,
+			status: 403,
+			error: "Cannot remove yourself",
+		});
 	});
 
 	it("blocks invitee at workspace cap with exact error message", () => {

@@ -65,9 +65,17 @@ export function checkActorCanManage(role: string): AuthCheck {
 }
 
 export function checkCanRemoveUser(
-	_actorRole: string,
+	actorId: number,
+	targetUserId: number,
 	targetRole: string,
 ): AuthCheck {
+	if (actorId === targetUserId) {
+		return {
+			allowed: false,
+			status: 403,
+			error: "Cannot remove yourself",
+		};
+	}
 	if (targetRole === "owner") {
 		return {
 			allowed: false,
@@ -240,7 +248,8 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 				return { status: 404 as const, error: "Not found" };
 
 			const canRemove = checkCanRemoveUser(
-				actorMembership.role,
+				actorId,
+				userId,
 				targetMembership.role,
 			);
 			if (!canRemove.allowed) {
