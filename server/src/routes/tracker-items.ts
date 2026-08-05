@@ -44,24 +44,45 @@ type ItemRow = {
 	status_kind: string;
 	status_position: number;
 	status_colour: string;
+	status_category: string | null;
 	priority_id: number | null;
 	priority_name: string | null;
 	priority_kind: string | null;
 	priority_position: number | null;
 	priority_colour: string | null;
+	project_id: number | null;
+	phase_id: number | null;
+	start_date: Date | string | null;
+	end_date: Date | string | null;
+	completed_at: Date | null;
+	position: number | null;
 };
 
+function formatDateOnly(value: Date | string | null): string | null {
+	if (value == null) return null;
+	if (typeof value === "string") return value.slice(0, 10);
+	return value.toISOString().slice(0, 10);
+}
+
 function serializeVocab(
-	row: Pick<VocabRow, "id" | "kind" | "name" | "position" | "colour"> | null,
+	row:
+		| (Pick<VocabRow, "id" | "kind" | "name" | "position" | "colour"> & {
+				category?: string | null;
+		  })
+		| null,
 ) {
 	if (!row) return null;
-	return {
+	const body: Record<string, unknown> = {
 		id: row.id,
 		kind: row.kind,
 		name: row.name,
 		position: row.position,
 		colour: row.colour,
 	};
+	if (row.category !== undefined) {
+		body.category = row.category;
+	}
+	return body;
 }
 
 function serializeItem(
@@ -77,12 +98,19 @@ function serializeItem(
 		key,
 		title: row.title,
 		description: row.description,
+		projectId: row.project_id,
+		phaseId: row.phase_id,
+		startDate: formatDateOnly(row.start_date),
+		endDate: formatDateOnly(row.end_date),
+		completedAt: row.completed_at?.toISOString() ?? null,
+		position: row.position,
 		status: serializeVocab({
 			id: row.status_id,
 			kind: row.status_kind,
 			name: row.status_name,
 			position: row.status_position,
 			colour: row.status_colour,
+			category: row.status_category,
 		}),
 		priority:
 			row.priority_id != null
@@ -120,11 +148,18 @@ function selectItemRows(dbExec: DBExecutor) {
 			"ti.version",
 			"ti.created_at",
 			"ti.updated_at",
+			"ti.project_id",
+			"ti.phase_id",
+			"ti.start_date",
+			"ti.end_date",
+			"ti.completed_at",
+			"ti.position",
 			"ti.status_id",
 			"st.name as status_name",
 			"st.kind as status_kind",
 			"st.position as status_position",
 			"st.colour as status_colour",
+			"st.category as status_category",
 			"ti.priority_id",
 			"pr.name as priority_name",
 			"pr.kind as priority_kind",
