@@ -1,15 +1,56 @@
-import { Plus, Search } from "lucide-react";
+import { ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
+import TrackerProjectCard from "../components/tracker/TrackerProjectCard";
+import TrackerProjectCreateModal from "../components/tracker/TrackerProjectCreateModal";
 import TrackerSection from "../components/tracker/TrackerSection";
 import { useBoard } from "../context/BoardContext";
 import {
 	groupItemsByStatus,
 	sortStatusesByPosition,
 } from "../lib/trackerUtils";
-import type { TrackerItem, TrackerVocabulary } from "../types";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+} from "../types";
+
+const TRACKER_PROJECT_LIMIT = 10;
+const TRACKER_PROJECT_CAP_MESSAGE = `You've reached the project limit (${TRACKER_PROJECT_LIMIT}).`;
+
+const PROJECT_RELOAD_EVENTS = new Set([
+	"tracker.project.created",
+	"tracker.project.updated",
+	"tracker.project.deleted",
+	"tracker.phase.created",
+	"tracker.phase.updated",
+	"tracker.phase.deleted",
+]);
+
+function itemMatchesSearch(item: TrackerItem, q: string): boolean {
+	return (
+		item.title.toLowerCase().includes(q) ||
+		item.key.toLowerCase().includes(q) ||
+		(item.description?.toLowerCase().includes(q) ?? false)
+	);
+}
+
+function projectMatchesSearch(project: TrackerProject, q: string): boolean {
+	return project.name.toLowerCase().includes(q);
+}
+
+function itemProjectTrail(
+	item: TrackerItem,
+	projects: TrackerProject[],
+): string | null {
+	const project = projects.find((p) => p.id === item.projectId);
+	if (!project) return null;
+	if (item.phaseId == null) return project.name;
+	const phase = project.phases.find((p) => p.id === item.phaseId);
+	return phase ? `${project.name} › ${phase.name}` : project.name;
+}
 
 export default function TrackerPage() {
 	const {
@@ -19,12 +60,16 @@ export default function TrackerPage() {
 		showToast,
 	} = useBoard();
 	const location = useLocation();
+	const navigate = useNavigate();
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [items, setItems] = useState<TrackerItem[]>([]);
+	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [search, setSearch] = useState("");
 	const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+	const [projectsCollapsed, setProjectsCollapsed] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
+	const [projectCreateOpen, setProjectCreateOpen] = useState(false);
 	const [createStatusId, setCreateStatusId] = useState<number | undefined>();
 	const [loading, setLoading] = useState(true);
 	/** Item ids with a status request in flight, and the pick waiting on it. */
@@ -35,20 +80,24 @@ export default function TrackerPage() {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: location.key is the intentional trigger
 	useEffect(() => {
 		setCollapsedIds(new Set());
+		setProjectsCollapsed(false);
 	}, [location.key]);
 
 	const loadData = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
 		setLoading(true);
 		try {
-			const [statusList, priorityList, itemList] = await Promise.all([
-				api.listTrackerVocabularies(activeWorkspaceId, "status"),
-				api.listTrackerVocabularies(activeWorkspaceId, "priority"),
-				api.listTrackerItems(activeWorkspaceId),
-			]);
+			const [statusList, priorityList, itemList, projectList] =
+				await Promise.all([
+					api.listTrackerVocabularies(activeWorkspaceId, "status"),
+					api.listTrackerVocabularies(activeWorkspaceId, "priority"),
+					api.listTrackerItems(activeWorkspaceId),
+					api.listTrackerProjects(activeWorkspaceId),
+				]);
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
 			setItems(itemList);
+			setProjects(projectList);
 		} finally {
 			setLoading(false);
 		}
@@ -97,6 +146,11 @@ export default function TrackerPage() {
 				return;
 			}
 
+			if (PROJECT_RELOAD_EVENTS.has(event.type)) {
+				void loadData();
+				return;
+			}
+
 			if (
 				event.type === "tracker.created" ||
 				event.type === "tracker.updated"
@@ -106,37 +160,75 @@ export default function TrackerPage() {
 		});
 	}, [subscribeTrackerEvents, loadData]);
 
-	const filteredItems = useMemo(() => {
-		const q = search.trim().toLowerCase();
-		if (!q) return items;
-		return items.filter(
-			(item) =>
-				item.title.toLowerCase().includes(q) ||
-				item.key.toLowerCase().includes(q) ||
-				(item.description?.toLowerCase().includes(q) ?? false),
-		);
-	}, [items, search]);
-
-	const grouped = useMemo(
-		() => groupItemsByStatus(filteredItems, statuses),
-		[filteredItems, statuses],
+	const unassignedItems = useMemo(
+		() => items.filter((item) => item.projectId == null),
+		[items],
 	);
 
-	const searchActive = search.trim().length > 0;
-	const noSearchResults = searchActive && filteredItems.length === 0;
+	const inProjectItems = useMemo(
+		() => items.filter((item) => item.projectId != null),
+		[items],
+	);
+
+	const searchQuery = search.trim().toLowerCase();
+	const searchActive = searchQuery.length > 0;
+
+	const filteredUnassigned = useMemo(() => {
+		if (!searchActive) return unassignedItems;
+		return unassignedItems.filter((item) =>
+			itemMatchesSearch(item, searchQuery),
+		);
+	}, [unassignedItems, searchActive, searchQuery]);
+
+	const filteredInProject = useMemo(() => {
+		if (!searchActive) return [];
+		return inProjectItems.filter((item) =>
+			itemMatchesSearch(item, searchQuery),
+		);
+	}, [inProjectItems, searchActive, searchQuery]);
+
+	const visibleProjects = useMemo(() => {
+		if (!searchActive) return projects;
+		return projects.filter(
+			(project) =>
+				projectMatchesSearch(project, searchQuery) ||
+				inProjectItems.some(
+					(item) =>
+						item.projectId === project.id &&
+						itemMatchesSearch(item, searchQuery),
+				),
+		);
+	}, [projects, searchActive, searchQuery, inProjectItems]);
+
+	const grouped = useMemo(
+		() => groupItemsByStatus(filteredUnassigned, statuses),
+		[filteredUnassigned, statuses],
+	);
+
+	const hasProjectNameMatch = useMemo(
+		() =>
+			searchActive &&
+			projects.some((project) => projectMatchesSearch(project, searchQuery)),
+		[projects, searchActive, searchQuery],
+	);
+
+	const noSearchResults =
+		searchActive &&
+		filteredUnassigned.length === 0 &&
+		filteredInProject.length === 0 &&
+		!hasProjectNameMatch;
+
+	const toolbarCount = searchActive
+		? filteredUnassigned.length + filteredInProject.length
+		: unassignedItems.length;
+
+	const atProjectCap = projects.length >= TRACKER_PROJECT_LIMIT;
 
 	const openCreate = (statusId?: number) => {
 		setCreateStatusId(statusId);
 		setCreateOpen(true);
 	};
 
-	// Status changes land in the list before the request resolves — the row
-	// jumps to its new group at once, and a failure puts it back.
-	//
-	// One request per item at a time: the rollback restores a snapshot taken
-	// before the request, so a slow failure overlapping a newer success would
-	// resurrect a stale status. A pick made while a request is in flight waits
-	// for it and then runs against the settled item.
 	const changeStatus = async (item: TrackerItem, statusId: number) => {
 		if (activeWorkspaceId === null || statusId === item.status.id) return;
 		const nextStatus = statuses.find((s) => s.id === statusId);
@@ -154,7 +246,6 @@ export default function TrackerPage() {
 				it.id === item.id ? { ...it, status: nextStatus } : it,
 			),
 		);
-		// Never let a moved row disappear into a collapsed group.
 		setCollapsedIds((prev) => {
 			if (!prev.has(statusId)) return prev;
 			const next = new Set(prev);
@@ -182,8 +273,6 @@ export default function TrackerPage() {
 					"Someone else updated this item first — refreshed.",
 					"warning",
 				);
-				// loadData brings fresh versions; a queued pick would carry a stale
-				// one straight into another conflict, so it is dropped.
 				queuedStatusRef.current.delete(item.id);
 				await loadData();
 			} else {
@@ -215,8 +304,6 @@ export default function TrackerPage() {
 
 	return (
 		<div className="min-h-full bg-white">
-			{/* Toolbar carries the page's only chrome — the global topbar already
-			    names the page, so no hero header competes with the list. */}
 			<div className="sticky top-0 z-20 flex items-center gap-3 border-neutral-200 border-b bg-white px-4 py-2 md:px-6">
 				<div className="relative min-w-0 flex-1 sm:max-w-xs">
 					<Search
@@ -233,7 +320,7 @@ export default function TrackerPage() {
 					/>
 				</div>
 				<span className="hidden text-neutral-500 text-xs tabular-nums sm:inline">
-					{filteredItems.length} item{filteredItems.length === 1 ? "" : "s"}
+					{toolbarCount} item{toolbarCount === 1 ? "" : "s"}
 				</span>
 				<button
 					type="button"
@@ -246,8 +333,6 @@ export default function TrackerPage() {
 				</button>
 			</div>
 
-			{/* Only the first load blanks the list — a refresh triggered by an SSE
-			    echo of your own edit must not flash the rows away. */}
 			{loading && items.length === 0 ? (
 				<p className="px-4 py-8 text-center text-neutral-500 text-sm md:px-6">
 					Loading…
@@ -258,6 +343,108 @@ export default function TrackerPage() {
 				</p>
 			) : (
 				<div>
+					<section className="border-neutral-200 border-b">
+						<div className="group/head flex h-9 items-center gap-2 bg-neutral-100/80 px-4 md:px-6">
+							<button
+								type="button"
+								data-testid="toggle-projects"
+								onClick={() => setProjectsCollapsed((v) => !v)}
+								className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								<ChevronRight
+									size={13}
+									className={`shrink-0 text-neutral-500 transition-transform duration-150 ${
+										projectsCollapsed ? "" : "rotate-90"
+									}`}
+									aria-hidden
+								/>
+								<FolderKanban
+									size={13}
+									className="shrink-0 text-neutral-500"
+									aria-hidden
+								/>
+								<span className="truncate font-medium text-neutral-800 text-sm">
+									Projects
+								</span>
+								<span className="text-neutral-500 text-xs tabular-nums">
+									{projects.length}
+								</span>
+							</button>
+							<button
+								type="button"
+								aria-label="New project"
+								disabled={atProjectCap}
+								title={atProjectCap ? TRACKER_PROJECT_CAP_MESSAGE : undefined}
+								onClick={() => setProjectCreateOpen(true)}
+								className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-neutral-600 text-xs transition hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+							>
+								<Plus size={13} aria-hidden />
+								New project
+							</button>
+						</div>
+						{atProjectCap && (
+							<p className="border-neutral-200 border-b bg-neutral-50 px-4 py-1.5 text-neutral-600 text-xs md:px-6">
+								{TRACKER_PROJECT_CAP_MESSAGE}
+							</p>
+						)}
+						{!projectsCollapsed && visibleProjects.length > 0 && (
+							<div className="grid gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-3 md:px-6">
+								{visibleProjects.map((project) => (
+									<TrackerProjectCard
+										key={project.id}
+										project={project}
+										items={items}
+									/>
+								))}
+							</div>
+						)}
+					</section>
+
+					{searchActive && filteredInProject.length > 0 && (
+						<section className="border-neutral-200 border-b">
+							<div className="flex h-9 items-center bg-neutral-100/80 px-4 md:px-6">
+								<span className="font-medium text-neutral-800 text-sm">
+									In projects
+								</span>
+								<span className="ml-2 text-neutral-500 text-xs tabular-nums">
+									{filteredInProject.length}
+								</span>
+							</div>
+							<div className="divide-y divide-neutral-200/70 bg-white">
+								{filteredInProject.map((item) => {
+									const trail = itemProjectTrail(item, projects);
+									return (
+										<div
+											key={item.key}
+											className="group/row relative flex h-9 items-center transition-colors hover:bg-neutral-100/70"
+										>
+											<button
+												type="button"
+												data-testid={`tracker-row-${item.key}`}
+												aria-label={`${item.key} ${item.title}`}
+												onClick={() => navigate(`/tracker/${item.key}`)}
+												className="absolute inset-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600"
+											/>
+											<div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2.5 px-4 text-left text-sm md:px-6">
+												<span className="w-14 shrink-0 truncate font-mono text-neutral-500 text-xs tabular-nums">
+													{item.key}
+												</span>
+												<span className="min-w-0 truncate text-neutral-900">
+													{item.title}
+												</span>
+												{trail && (
+													<span className="ml-auto shrink-0 truncate text-neutral-500 text-xs">
+														{trail}
+													</span>
+												)}
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						</section>
+					)}
+
 					{statuses.map((status) => {
 						const sectionItems = grouped.get(status.id) ?? [];
 						if (searchActive && sectionItems.length === 0) return null;
@@ -287,6 +474,14 @@ export default function TrackerPage() {
 					priorities={priorities}
 					defaultStatusId={createStatusId}
 					onClose={() => setCreateOpen(false)}
+					onCreated={() => void loadData()}
+				/>
+			)}
+
+			{projectCreateOpen && (
+				<TrackerProjectCreateModal
+					workspaceId={activeWorkspaceId}
+					onClose={() => setProjectCreateOpen(false)}
 					onCreated={() => void loadData()}
 				/>
 			)}
