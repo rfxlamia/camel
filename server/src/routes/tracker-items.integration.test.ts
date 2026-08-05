@@ -472,7 +472,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker realtime SSE", () => {
 
 		const res = await request(app)
 			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/vocabularies`)
-			.send({ kind: "status", name: "Blocked", position: 1500 });
+			.send({ kind: "label", name: "Docs", position: 1500 });
 		expect(res.status).toBe(201);
 
 		expect(mockPublishEvent).toHaveBeenCalledWith(
