@@ -416,6 +416,19 @@ export const api = {
 			method: "POST",
 			body: JSON.stringify(body),
 		}),
+	removeWorkspaceMember: (workspaceId: number, userId: number) =>
+		request<void>(`/workspaces/${workspaceId}/members/${userId}`, {
+			method: "DELETE",
+		}),
+	updateWorkspaceMemberRole: (
+		workspaceId: number,
+		userId: number,
+		body: { role: "admin" | "member" },
+	) =>
+		request<WorkspaceMember>(`/workspaces/${workspaceId}/members/${userId}`, {
+			method: "PATCH",
+			body: JSON.stringify(body),
+		}),
 	acceptInvite: (workspaceId: number, inviteId: number) =>
 		request<Workspace>(
 			`/workspaces/${workspaceId}/invites/${inviteId}/accept`,

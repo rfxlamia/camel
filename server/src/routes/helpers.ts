@@ -311,7 +311,7 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 
 			const canChange = checkActorCanChangeRole(actorMembership.role);
 			if (!canChange.allowed) {
-				return { status: canChange.status, error: canChange.error };
+				return { status: 404 as const, error: canChange.error };
 			}
 
 			if (role !== "admin" && role !== "member") {
