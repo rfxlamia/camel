@@ -10,7 +10,6 @@ import TrackerPhaseEditor, {
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
-import { positionBetween } from "../lib/position";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
 import type {
 	TrackerItem,
@@ -20,6 +19,7 @@ import type {
 } from "../types";
 
 const NO_PHASE_KEY = "no-phase";
+const POSITION_GAP = 1024;
 
 const RELOAD_EVENTS = new Set([
 	"tracker.project.created",
@@ -94,7 +94,10 @@ function optimisticReorderPosition(
 		newIndex < reordered.length - 1
 			? (reordered[newIndex + 1].position ?? null)
 			: null;
-	return positionBetween(beforePos, afterPos);
+	if (beforePos === null && afterPos === null) return POSITION_GAP;
+	if (beforePos === null) return (afterPos as number) - POSITION_GAP;
+	if (afterPos === null) return beforePos + POSITION_GAP;
+	return (beforePos + afterPos) / 2;
 }
 
 export default function TrackerProjectPage() {
@@ -453,16 +456,13 @@ export default function TrackerProjectPage() {
 		);
 		if (oldIndex === newIndex) return;
 
-		const neighbors = reorderNeighborBody(
-			arrayMove(phaseItems, oldIndex, newIndex),
-			newIndex,
-		);
+		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
+		const neighbors = reorderNeighborBody(reordered, newIndex);
 		if (!neighbors) return;
 
 		const seq = ++reorderSeqRef.current;
-		const snapshot = items;
-		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
 		const movedId = reordered[newIndex].id;
+		const priorPosition = phaseItems[oldIndex].position;
 		const optimisticPosition = optimisticReorderPosition(reordered, newIndex);
 
 		setItems((prev) =>
@@ -484,7 +484,11 @@ export default function TrackerProjectPage() {
 			}
 		} catch {
 			if (seq === reorderSeqRef.current) {
-				setItems(snapshot);
+				setItems((prev) =>
+					prev.map((item) =>
+						item.id === movedId ? { ...item, position: priorPosition } : item,
+					),
+				);
 				showToast(
 					"Couldn't reorder the task. Check your connection and try again.",
 					"error",
