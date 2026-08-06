@@ -11,6 +11,7 @@ import {
 	isTaskOverdue,
 	phaseBounds,
 	rollup,
+	sectionBounds,
 } from "./trackerRollup";
 
 let nextId = 1;
@@ -181,6 +182,30 @@ describe("phaseBounds", () => {
 			taskItem("started", { startDate: "2026-09-10", endDate: "2026-09-25" }),
 		];
 		expect(phaseBounds(ph, items)).toEqual({
+			startDate: "2026-09-01",
+			endDate: "2026-09-25",
+		});
+	});
+});
+
+describe("sectionBounds", () => {
+	it("returns derived MIN/MAX when phase is null", () => {
+		const items = [
+			taskItem("started", { startDate: "2026-09-05", endDate: "2026-09-15" }),
+			taskItem("started", { startDate: "2026-09-01", endDate: "2026-09-25" }),
+		];
+		expect(sectionBounds(null, items)).toEqual({
+			startDate: "2026-09-01",
+			endDate: "2026-09-25",
+		});
+	});
+
+	it("delegates to phaseBounds and honours explicit-date override when phase is set", () => {
+		const ph = phase({ startDate: "2026-09-01", endDate: null });
+		const items = [
+			taskItem("started", { startDate: "2026-09-10", endDate: "2026-09-25" }),
+		];
+		expect(sectionBounds(ph, items)).toEqual({
 			startDate: "2026-09-01",
 			endDate: "2026-09-25",
 		});

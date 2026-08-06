@@ -50,10 +50,14 @@ function readCollapsedPhases(projectId: number): Set<string> {
 }
 
 function writeCollapsedPhases(projectId: number, collapsed: Set<string>): void {
-	sessionStorage.setItem(
-		collapseStorageKey(projectId),
-		JSON.stringify([...collapsed]),
-	);
+	try {
+		sessionStorage.setItem(
+			collapseStorageKey(projectId),
+			JSON.stringify([...collapsed]),
+		);
+	} catch {
+		// sessionStorage may be unavailable or full
+	}
 }
 
 function releasedTaskMessage(count: number): string {
@@ -115,6 +119,8 @@ export default function TrackerProjectPage() {
 	const [phaseEditorError, setPhaseEditorError] = useState<string | null>(null);
 	const [phaseEditorSubmitting, setPhaseEditorSubmitting] = useState(false);
 	const reorderSeqRef = useRef(0);
+	const collapsedKeysRef = useRef(collapsedKeys);
+	collapsedKeysRef.current = collapsedKeys;
 
 	const projectId = Number(projectIdParam);
 	const projectIdValid = Number.isInteger(projectId) && projectId > 0;
@@ -196,11 +202,51 @@ export default function TrackerProjectPage() {
 
 	const togglePhase = (key: string) => {
 		if (!projectIdValid) return;
-		const next = new Set(collapsedKeys);
+		const next = new Set(collapsedKeysRef.current);
 		if (next.has(key)) next.delete(key);
 		else next.add(key);
 		writeCollapsedPhases(projectId, next);
 		setCollapsedKeys(next);
+	};
+
+	const changeStatus = async (item: TrackerItem, statusId: number) => {
+		if (activeWorkspaceId === null || statusId === item.status.id) return;
+		const nextStatus = statuses.find((s) => s.id === statusId);
+		if (!nextStatus) return;
+
+		const priorStatus = item.status;
+		setItems((prev) =>
+			prev.map((it) =>
+				it.id === item.id ? { ...it, status: nextStatus } : it,
+			),
+		);
+		try {
+			const updated = await api.updateTrackerItem(activeWorkspaceId, item.key, {
+				statusId,
+				version: item.version,
+			});
+			setItems((prev) =>
+				prev.map((it) => (it.id === updated.id ? updated : it)),
+			);
+		} catch (err) {
+			setItems((prev) =>
+				prev.map((it) =>
+					it.id === item.id ? { ...it, status: priorStatus } : it,
+				),
+			);
+			if (err instanceof ApiError && err.code === "version_conflict") {
+				showToast(
+					"Someone else updated this item first — refreshed.",
+					"warning",
+				);
+				await loadData();
+			} else {
+				showToast(
+					"Couldn't change the status. Check your connection and try again.",
+					"error",
+				);
+			}
+		}
 	};
 
 	const updateProjectInState = (updated: TrackerProject) => {
@@ -585,6 +631,9 @@ export default function TrackerProjectPage() {
 									setEditingPhaseId(phase.id);
 								}}
 								onDelete={() => setDeletingPhaseId(phase.id)}
+								onStatusChange={(item, statusId) =>
+									void changeStatus(item, statusId)
+								}
 							>
 								{isEditing && (
 									<TrackerPhaseEditor
@@ -614,6 +663,9 @@ export default function TrackerProjectPage() {
 							onToggle={() => togglePhase(NO_PHASE_KEY)}
 							onReorder={(oldIndex, newIndex, itemKey) =>
 								void reorderPhaseItems(null, oldIndex, newIndex, itemKey)
+							}
+							onStatusChange={(item, statusId) =>
+								void changeStatus(item, statusId)
 							}
 						/>
 					)}

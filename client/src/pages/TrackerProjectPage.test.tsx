@@ -21,6 +21,7 @@ const {
 	mockUpdateTrackerPhase,
 	mockDeleteTrackerPhase,
 	mockReorderTrackerItem,
+	mockUpdateTrackerItem,
 	mockNavigate,
 	mockUseParams,
 	mockUseBoard,
@@ -35,6 +36,7 @@ const {
 	mockUpdateTrackerPhase: vi.fn(),
 	mockDeleteTrackerPhase: vi.fn(),
 	mockReorderTrackerItem: vi.fn(),
+	mockUpdateTrackerItem: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseParams: vi.fn(),
 	mockUseBoard: vi.fn(),
@@ -53,6 +55,7 @@ vi.mock("../api", () => ({
 		updateTrackerPhase: (...a: unknown[]) => mockUpdateTrackerPhase(...a),
 		deleteTrackerPhase: (...a: unknown[]) => mockDeleteTrackerPhase(...a),
 		reorderTrackerItem: (...a: unknown[]) => mockReorderTrackerItem(...a),
+		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -193,6 +196,8 @@ afterEach(() => {
 });
 
 describe("TrackerProjectPage", () => {
+	afterEach(() => vi.useRealTimers());
+
 	it("renders phases with a rollup percentage and a derived date range", async () => {
 		mockListTrackerItems.mockResolvedValueOnce([
 			projectItem({
@@ -449,6 +454,27 @@ describe("TrackerProjectPage", () => {
 		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
 	});
 
+	it("changes status inline from the row glyph without navigating", async () => {
+		mockUpdateTrackerItem.mockResolvedValue(
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, status: backlog }),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-2"));
+		fireEvent.click(screen.getByLabelText("In Progress, CA-2"));
+		fireEvent.click(screen.getByRole("option", { name: /Backlog/ }));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-2", {
+				statusId: 1,
+				version: 1,
+			}),
+		);
+		expect(mockNavigate).not.toHaveBeenCalled();
+		await waitFor(() =>
+			expect(screen.getByLabelText("Backlog, CA-2")).toBeTruthy(),
+		);
+	});
+
 	it("carries the overdue marker on a near-complete phase with one live task past its end date", async () => {
 		vi.setSystemTime(new Date("2026-10-05T12:00:00"));
 		mockListTrackerItems.mockResolvedValueOnce([
@@ -465,7 +491,6 @@ describe("TrackerProjectPage", () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));
 		expect(screen.getByLabelText(/overdue/i)).toBeTruthy();
-		vi.useRealTimers();
 	});
 });
 
