@@ -158,6 +158,19 @@ describe("groupItems", () => {
 			groupItem(1, { projectId: 1, priority: priorities[0]! }),
 			groupItem(2, { status: statuses[1]! }),
 			groupItem(3, { projectId: 2 }),
+			// Status, project and priority each point at a record that is not in
+			// the vocabulary — the case that used to drop an item silently.
+			groupItem(4, {
+				status: vocab(99, "Ghost", 4096),
+				projectId: 99,
+				priority: {
+					id: 99,
+					kind: "priority",
+					name: "Ghost",
+					position: 4096,
+					colour: "#ccc",
+				},
+			}),
 		];
 		const ctx = {
 			...context,
@@ -179,6 +192,20 @@ describe("groupItems", () => {
 		expect(groups[0]?.key).toBe("status:1");
 		expect(groups[0]?.status?.id).toBe(1);
 		expect(groups[1]?.items).toEqual([]);
+	});
+
+	it("adds a No status bucket last, only when it has items", () => {
+		expect(
+			groupItems([groupItem(1)], "status", context).map((g) => g.label),
+		).toEqual(["Backlog", "Done"]);
+
+		const groups = groupItems(
+			[groupItem(1, { status: vocab(99, "Ghost", 4096) })],
+			"status",
+			context,
+		);
+		expect(groups.at(-1)?.key).toBe("status:none");
+		expect(groups.at(-1)?.items.map((i) => i.id)).toEqual([1]);
 	});
 
 	it("groups by project in position order and keeps an empty project visible", () => {

@@ -12,6 +12,10 @@ interface Props {
  * list — so they get two surfaces rather than two bands on one page. Underline
  * tabs read as page navigation, which keeps them distinct from the pill-shaped
  * Group by control in the toolbar below.
+ *
+ * These are page states held in the query string, not an ARIA tab widget: the
+ * roles are nav/aria-current rather than tablist/tab, because the ARIA tab
+ * pattern promises roving focus and arrow-key navigation this does not have.
  */
 export default function TrackerTabs({
 	value,
@@ -25,8 +29,7 @@ export default function TrackerTabs({
 	];
 
 	return (
-		<div
-			role="tablist"
+		<nav
 			aria-label="Tracker view"
 			className="flex items-stretch gap-4 border-neutral-200 border-b px-4 md:px-6"
 		>
@@ -36,8 +39,7 @@ export default function TrackerTabs({
 					<button
 						key={tab.id}
 						type="button"
-						role="tab"
-						aria-selected={active}
+						aria-current={active ? "page" : undefined}
 						onClick={() => onChange(tab.id)}
 						className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 font-medium text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 ${
 							active
@@ -52,6 +54,6 @@ export default function TrackerTabs({
 					</button>
 				);
 			})}
-		</div>
+		</nav>
 	);
 }

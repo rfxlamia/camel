@@ -37,6 +37,8 @@ const {
 	mockLocation: { pathname: "/tracker", key: "tracker-1" },
 }));
 
+let locationKeySeq = 0;
+
 vi.mock("../api", () => ({
 	api: {
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
@@ -63,6 +65,9 @@ vi.mock("../context/BoardContext", () => ({
 
 // useSearchParams is stateful here: the page reads the active tab from the
 // query string, so a stub returning a frozen value could never switch tabs.
+// Writing the params also mints a new location key, because that is what the
+// real router does — replace() is not key-preserving — and the page has to
+// tell that apart from a genuine re-navigation.
 vi.mock("react-router", async () => {
 	const React = await vi.importActual<typeof import("react")>("react");
 	return {
@@ -72,8 +77,10 @@ vi.mock("react-router", async () => {
 			const [params, setParams] = React.useState(() => new URLSearchParams());
 			const update = (
 				next: URLSearchParams | ((prev: URLSearchParams) => URLSearchParams),
-			) =>
+			) => {
+				mockLocation.key = `key-${++locationKeySeq}`;
 				setParams((prev) => (typeof next === "function" ? next(prev) : next));
+			};
 			return [params, update];
 		},
 	};
@@ -557,7 +564,11 @@ describe("TrackerPage", () => {
 
 /** The Projects tab is where project cards live now. */
 function showProjectsTab() {
-	fireEvent.click(screen.getByRole("tab", { name: /projects/i }));
+	fireEvent.click(screen.getByRole("button", { name: /^Projects/ }));
+}
+
+function showItemsTab() {
+	fireEvent.click(screen.getByRole("button", { name: /^Items/ }));
 }
 
 describe("TrackerPage items tab", () => {
@@ -653,6 +664,33 @@ describe("TrackerPage items tab", () => {
 			expect(screen.getByText(/nothing tracked yet/i)).toBeTruthy(),
 		);
 		expect(screen.getByRole("button", { name: /^new item$/i })).toBeTruthy();
+	});
+
+	it("keeps collapsed groups collapsed across a tab switch", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Done"));
+		fireEvent.click(screen.getByTestId("toggle-section-Done"));
+		expect(screen.queryByText("CA-2")).toBeNull();
+
+		// Writing ?tab= mints a new location key; only a real re-navigation to
+		// /tracker should clear collapse state.
+		showProjectsTab();
+		showItemsTab();
+		await waitFor(() => screen.getByText("Done"));
+		expect(screen.queryByText("CA-2")).toBeNull();
+	});
+
+	it("marks the active tab for assistive tech", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Backlog"));
+		expect(
+			screen.getByRole("button", { name: /^Items/, current: "page" }),
+		).toBeTruthy();
+
+		showProjectsTab();
+		expect(
+			screen.getByRole("button", { name: /^Projects/, current: "page" }),
+		).toBeTruthy();
 	});
 
 	it("keeps project cards off the items tab", async () => {

@@ -166,10 +166,25 @@ export function groupItems(
 
 	const ordered = sortStatusesByPosition(statuses);
 	const byStatus = groupItemsByStatus(items, ordered);
-	return ordered.map((status) => ({
+	const groups: TrackerGroup[] = ordered.map((status) => ({
 		key: statusGroupKey(status.id),
 		label: status.name,
 		status,
 		items: byStatus.get(status.id) ?? [],
 	}));
+
+	// groupItemsByStatus drops items whose status has no vocabulary. Catching
+	// them here keeps the conservation guarantee a property of this function
+	// rather than of whatever the vocabulary API happens to allow.
+	const loose = items.filter(
+		(item) => !ordered.some((status) => status.id === item.status.id),
+	);
+	if (loose.length > 0) {
+		groups.push({
+			key: "status:none",
+			label: "No status",
+			items: sortItemsOldestFirst(loose),
+		});
+	}
+	return groups;
 }

@@ -71,11 +71,16 @@ export default function TrackerPage() {
 	/** Item ids with a status request in flight, and the pick waiting on it. */
 	const inFlightStatusRef = useRef<Set<number>>(new Set());
 	const queuedStatusRef = useRef<Map<number, number>>(new Map());
+	/** Set while this page is the one changing the location, not the router. */
+	const skipCollapseResetRef = useRef(false);
 
 	const tab: TrackerTab =
 		searchParams.get("tab") === "projects" ? "projects" : "items";
 
 	const selectTab = (next: TrackerTab) => {
+		// Rewriting the query string mints a fresh location key, which would
+		// otherwise read as a re-navigation to /tracker and wipe collapse state.
+		skipCollapseResetRef.current = true;
 		setSearchParams(
 			(prev) => {
 				const params = new URLSearchParams(prev);
@@ -87,9 +92,14 @@ export default function TrackerPage() {
 		);
 	};
 
-	// Reset in-memory collapse when React Router re-navigates to /tracker.
+	// Reset in-memory collapse when React Router re-navigates to /tracker,
+	// but not when this page rewrote the query string itself.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: location.key is the intentional trigger
 	useEffect(() => {
+		if (skipCollapseResetRef.current) {
+			skipCollapseResetRef.current = false;
+			return;
+		}
 		setCollapsedKeys(new Set());
 	}, [location.key]);
 
