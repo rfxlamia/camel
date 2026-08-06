@@ -75,6 +75,14 @@ export function phaseBounds(
 	};
 }
 
+export function sectionBounds(
+	phase: TrackerPhase | null,
+	items: TrackerItem[],
+): { startDate: string | null; endDate: string | null } {
+	if (phase === null) return deriveBounds(items);
+	return phaseBounds(phase, items);
+}
+
 function allTasksDoneOrCanceled(items: TrackerItem[]): boolean {
 	return (
 		items.length > 0 &&

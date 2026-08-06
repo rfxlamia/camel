@@ -14,6 +14,7 @@ import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
 const {
 	mockListTrackerProjects,
 	mockListTrackerItems,
+	mockListTrackerVocabularies,
 	mockUpdateTrackerProject,
 	mockDeleteTrackerProject,
 	mockCreateTrackerPhase,
@@ -27,6 +28,7 @@ const {
 } = vi.hoisted(() => ({
 	mockListTrackerProjects: vi.fn(),
 	mockListTrackerItems: vi.fn(),
+	mockListTrackerVocabularies: vi.fn(),
 	mockUpdateTrackerProject: vi.fn(),
 	mockDeleteTrackerProject: vi.fn(),
 	mockCreateTrackerPhase: vi.fn(),
@@ -43,6 +45,8 @@ vi.mock("../api", () => ({
 	api: {
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
+		listTrackerVocabularies: (...a: unknown[]) =>
+			mockListTrackerVocabularies(...a),
 		updateTrackerProject: (...a: unknown[]) => mockUpdateTrackerProject(...a),
 		deleteTrackerProject: (...a: unknown[]) => mockDeleteTrackerProject(...a),
 		createTrackerPhase: (...a: unknown[]) => mockCreateTrackerPhase(...a),
@@ -167,6 +171,13 @@ beforeEach(() => {
 		projectItem({ id: 1, key: "CA-1", phaseId: 9, status: done }),
 		projectItem({ id: 2, key: "CA-2", phaseId: 9, status: inProgress }),
 	]);
+	mockListTrackerVocabularies.mockImplementation(
+		(_workspaceId: unknown, kind: string) => {
+			if (kind === "status") return Promise.resolve([backlog, inProgress, done]);
+			if (kind === "priority") return Promise.resolve([]);
+			return Promise.resolve([]);
+		},
+	);
 	mockUseBoard.mockReturnValue({
 		activeWorkspaceId: 7,
 		subscribeTrackerEvents: vi.fn(() => () => {}),
@@ -246,10 +257,29 @@ describe("TrackerProjectPage", () => {
 		expect(await screen.findByText(/not found/i)).toBeTruthy();
 	});
 
+	it("renders a Done task with the done status glyph, not the pending glyph", async () => {
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const trigger = screen.getByLabelText("Done, CA-1");
+		expect(
+			trigger.querySelector("circle[stroke-dasharray='1.6 2.2']"),
+		).toBeNull();
+		expect(trigger.querySelector("circle[fill='currentColor']")).toBeTruthy();
+	});
+
+	it("shows a load error instead of the 404 state when listTrackerProjects fails", async () => {
+		mockListTrackerProjects.mockRejectedValueOnce(new Error("network down"));
+		render(<TrackerProjectPage />);
+		expect(
+			await screen.findByText(/couldn't load the tracker/i),
+		).toBeTruthy();
+		expect(screen.queryByText(/not found/i)).toBeNull();
+	});
+
 	it("persists a collapsed phase across a fresh mount within the same session", async () => {
 		const { unmount } = render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
-		fireEvent.click(screen.getByTestId("toggle-phase-Persiapan"));
+		fireEvent.click(screen.getByTestId("toggle-phase-9"));
 		expect(screen.queryByTestId("tracker-row-CA-1")).toBeNull();
 		unmount();
 
@@ -270,7 +300,7 @@ describe("TrackerProjectPage", () => {
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
-		fireEvent.click(screen.getByTestId("toggle-phase-Persiapan"));
+		fireEvent.click(screen.getByTestId("toggle-phase-9"));
 		expect(screen.queryByTestId("tracker-row-CA-1")).toBeNull();
 
 		sseHandler?.({ type: "tracker.updated" });

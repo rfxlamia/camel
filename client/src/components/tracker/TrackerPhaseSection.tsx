@@ -20,8 +20,8 @@ import { formatDueDate } from "../../lib/boardViewUtils";
 import {
 	isPhaseOverdue,
 	isTaskOverdue,
-	phaseBounds,
 	rollup,
+	sectionBounds,
 } from "../../lib/trackerRollup";
 import type { TrackerItem, TrackerPhase, TrackerVocabulary } from "../../types";
 import TrackerProgressBar from "./TrackerProgressBar";
@@ -131,26 +131,8 @@ export default function TrackerPhaseSection({
 	);
 
 	const rollupResult = rollup(items);
-	const bounds = phase
-		? phaseBounds(phase, items)
-		: {
-				startDate:
-					items
-						.map((item) => item.startDate)
-						.filter((d): d is string => d != null)
-						.reduce<string | null>(
-							(min, d) => (min === null || d < min ? d : min),
-							null,
-						) ?? null,
-				endDate:
-					items
-						.map((item) => item.endDate)
-						.filter((d): d is string => d != null)
-						.reduce<string | null>(
-							(max, d) => (max === null || d > max ? d : max),
-							null,
-						) ?? null,
-			};
+	const bounds = sectionBounds(phase, items);
+	const sectionKey = phase ? String(phase.id) : "no-phase";
 	const dateRange = formatDateRange(bounds.startDate, bounds.endDate);
 	const overdue = phase
 		? isPhaseOverdue(phase, items)
@@ -175,7 +157,7 @@ export default function TrackerPhaseSection({
 			<div className="group/head flex min-h-9 items-center gap-2 bg-neutral-100/80 px-4 py-1.5 md:px-6">
 				<button
 					type="button"
-					data-testid={`toggle-phase-${label}`}
+					data-testid={`toggle-phase-${sectionKey}`}
 					onClick={onToggle}
 					className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 				>

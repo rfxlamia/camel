@@ -8,7 +8,13 @@ import TrackerPhaseEditor, {
 } from "../components/tracker/TrackerPhaseEditor";
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import { useBoard } from "../context/BoardContext";
-import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
+import { sortStatusesByPosition } from "../lib/trackerUtils";
+import type {
+	TrackerItem,
+	TrackerPhase,
+	TrackerProject,
+	TrackerVocabulary,
+} from "../types";
 
 const NO_PHASE_KEY = "no-phase";
 
@@ -76,7 +82,11 @@ export default function TrackerProjectPage() {
 	const { activeWorkspaceId, subscribeTrackerEvents, showToast } = useBoard();
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [items, setItems] = useState<TrackerItem[]>([]);
+	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
+	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [loadError, setLoadError] = useState(false);
+	const [loadSucceeded, setLoadSucceeded] = useState(false);
 	const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set());
 	const [renamingProject, setRenamingProject] = useState(false);
 	const [projectNameDraft, setProjectNameDraft] = useState("");
@@ -100,17 +110,31 @@ export default function TrackerProjectPage() {
 	const loadData = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
 		setLoading(true);
+		setLoadError(false);
 		try {
-			const [projectList, itemList] = await Promise.all([
-				api.listTrackerProjects(activeWorkspaceId),
-				api.listTrackerItems(activeWorkspaceId),
-			]);
+			const [projectList, itemList, statusList, priorityList] =
+				await Promise.all([
+					api.listTrackerProjects(activeWorkspaceId),
+					api.listTrackerItems(activeWorkspaceId),
+					api.listTrackerVocabularies(activeWorkspaceId, "status"),
+					api.listTrackerVocabularies(activeWorkspaceId, "priority"),
+				]);
 			setProjects(projectList);
 			setItems(itemList);
+			setStatuses(sortStatusesByPosition(statusList));
+			setPriorities(priorityList);
+			setLoadSucceeded(true);
+		} catch {
+			setLoadError(true);
+			setLoadSucceeded(false);
+			showToast(
+				"Couldn't load the tracker. Check your connection and try again.",
+				"error",
+			);
 		} finally {
 			setLoading(false);
 		}
-	}, [activeWorkspaceId]);
+	}, [activeWorkspaceId, showToast]);
 
 	useEffect(() => {
 		void loadData();
@@ -173,13 +197,11 @@ export default function TrackerProjectPage() {
 
 	const togglePhase = (key: string) => {
 		if (!projectIdValid) return;
-		setCollapsedKeys((prev) => {
-			const next = new Set(prev);
-			if (next.has(key)) next.delete(key);
-			else next.add(key);
-			writeCollapsedPhases(projectId, next);
-			return next;
-		});
+		const next = new Set(collapsedKeys);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		writeCollapsedPhases(projectId, next);
+		setCollapsedKeys(next);
 	};
 
 	const updateProjectInState = (updated: TrackerProject) => {
@@ -418,7 +440,7 @@ export default function TrackerProjectPage() {
 
 	if (activeWorkspaceId === null) return null;
 
-	if (!projectIdValid || (!loading && !project)) {
+	if (!projectIdValid) {
 		return (
 			<div className="min-h-full bg-white px-4 py-16 text-center md:px-6">
 				<p className="text-neutral-600 text-sm">Project not found.</p>
@@ -434,11 +456,44 @@ export default function TrackerProjectPage() {
 		);
 	}
 
-	if (loading && !project) {
+	if (loadError) {
+		return (
+			<div className="min-h-full bg-white px-4 py-16 text-center md:px-6">
+				<p className="text-neutral-600 text-sm">
+					Couldn&apos;t load the tracker. Check your connection and try again.
+				</p>
+				<button
+					type="button"
+					onClick={() => void loadData()}
+					className="mt-4 inline-flex items-center gap-1.5 text-primary-600 text-sm hover:text-primary-700"
+				>
+					Retry
+				</button>
+			</div>
+		);
+	}
+
+	if (loading && !loadSucceeded) {
 		return (
 			<p className="px-4 py-8 text-center text-neutral-500 text-sm md:px-6">
 				Loading…
 			</p>
+		);
+	}
+
+	if (loadSucceeded && !project) {
+		return (
+			<div className="min-h-full bg-white px-4 py-16 text-center md:px-6">
+				<p className="text-neutral-600 text-sm">Project not found.</p>
+				<button
+					type="button"
+					onClick={() => navigate("/tracker")}
+					className="mt-4 inline-flex items-center gap-1.5 text-primary-600 text-sm hover:text-primary-700"
+				>
+					<ArrowLeft size={14} aria-hidden />
+					Back to Tracker
+				</button>
+			</div>
 		);
 	}
 
@@ -587,8 +642,8 @@ export default function TrackerProjectPage() {
 								phase={phase}
 								label={phase.name}
 								items={phaseItems}
-								statuses={[]}
-								priorities={[]}
+								statuses={statuses}
+								priorities={priorities}
 								collapsed={collapsedKeys.has(phaseKey)}
 								onToggle={() => togglePhase(phaseKey)}
 								onReorder={(oldIndex, newIndex, itemKey) =>
@@ -630,8 +685,8 @@ export default function TrackerProjectPage() {
 							phase={null}
 							label="No phase"
 							items={noPhaseItems}
-							statuses={[]}
-							priorities={[]}
+							statuses={statuses}
+							priorities={priorities}
 							collapsed={collapsedKeys.has(NO_PHASE_KEY)}
 							onToggle={() => togglePhase(NO_PHASE_KEY)}
 							onReorder={(oldIndex, newIndex, itemKey) =>
