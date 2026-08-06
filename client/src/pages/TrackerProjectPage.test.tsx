@@ -173,7 +173,8 @@ beforeEach(() => {
 	]);
 	mockListTrackerVocabularies.mockImplementation(
 		(_workspaceId: unknown, kind: string) => {
-			if (kind === "status") return Promise.resolve([backlog, inProgress, done]);
+			if (kind === "status")
+				return Promise.resolve([backlog, inProgress, done]);
 			if (kind === "priority") return Promise.resolve([]);
 			return Promise.resolve([]);
 		},
@@ -270,9 +271,7 @@ describe("TrackerProjectPage", () => {
 	it("shows a load error instead of the 404 state when listTrackerProjects fails", async () => {
 		mockListTrackerProjects.mockRejectedValueOnce(new Error("network down"));
 		render(<TrackerProjectPage />);
-		expect(
-			await screen.findByText(/couldn't load the tracker/i),
-		).toBeTruthy();
+		expect(await screen.findByText(/couldn't load the tracker/i)).toBeTruthy();
 		expect(screen.queryByText(/not found/i)).toBeNull();
 	});
 
@@ -524,7 +523,9 @@ describe("TrackerProjectPage project and phase management", () => {
 		fireEvent.click(screen.getByRole("button", { name: /project menu/i }));
 		fireEvent.click(screen.getByRole("menuitem", { name: /delete project/i }));
 		expect(
-			await screen.findByText(/18 tasks will be released to the unassigned list/i),
+			await screen.findByText(
+				/18 tasks will be released to the unassigned list/i,
+			),
 		).toBeTruthy();
 	});
 
@@ -536,7 +537,9 @@ describe("TrackerProjectPage project and phase management", () => {
 		fireEvent.click(screen.getByRole("menuitem", { name: /delete project/i }));
 		await screen.findByText(/will be released to the unassigned list/i);
 		fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
-		await waitFor(() => expect(mockDeleteTrackerProject).toHaveBeenCalledWith(7, 1));
+		await waitFor(() =>
+			expect(mockDeleteTrackerProject).toHaveBeenCalledWith(7, 1),
+		);
 		expect(mockNavigate).toHaveBeenCalledWith("/tracker");
 	});
 
@@ -548,7 +551,9 @@ describe("TrackerProjectPage project and phase management", () => {
 		mockUseParams.mockReturnValue({ projectId: "5" });
 		mockCreateTrackerPhase.mockResolvedValue(persiapan);
 		render(<TrackerProjectPage />);
-		fireEvent.click(await screen.findByRole("button", { name: /create.*phase/i }));
+		fireEvent.click(
+			await screen.findByRole("button", { name: /create.*phase/i }),
+		);
 		fireEvent.change(screen.getByLabelText(/phase name/i), {
 			target: { value: "Persiapan" },
 		});
@@ -578,7 +583,11 @@ describe("TrackerProjectPage project and phase management", () => {
 		const order = screen
 			.getAllByTestId(/^phase-/)
 			.map((section) => section.dataset.testid);
-		expect(order).toEqual(["phase-Persiapan", "phase-Pengembangan", "phase-Peluncuran"]);
+		expect(order).toEqual([
+			"phase-Persiapan",
+			"phase-Pengembangan",
+			"phase-Peluncuran",
+		]);
 	});
 
 	it("renames a phase and shows the same 409 conflict UX on a stale version", async () => {
@@ -589,7 +598,9 @@ describe("TrackerProjectPage project and phase management", () => {
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));
-		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /rename phase persiapan/i }),
+		);
 		fireEvent.change(screen.getByLabelText(/phase name/i), {
 			target: { value: "Persiapan awal" },
 		});
@@ -605,7 +616,9 @@ describe("TrackerProjectPage project and phase management", () => {
 		mockUpdateTrackerPhase.mockRejectedValueOnce(
 			new ApiError("conflict", 409, "version_conflict"),
 		);
-		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan awal/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /rename phase persiapan awal/i }),
+		);
 		fireEvent.change(screen.getByLabelText(/phase name/i), {
 			target: { value: "Persiapan lagi" },
 		});
@@ -630,9 +643,13 @@ describe("TrackerProjectPage project and phase management", () => {
 			projectItem({ id: 1, key: "CA-1", phaseId: null }),
 			projectItem({ id: 2, key: "CA-2", phaseId: null }),
 		]);
-		fireEvent.click(screen.getByRole("button", { name: /delete phase persiapan/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /delete phase persiapan/i }),
+		);
 		fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
-		await waitFor(() => expect(mockDeleteTrackerPhase).toHaveBeenCalledWith(7, 9));
+		await waitFor(() =>
+			expect(mockDeleteTrackerPhase).toHaveBeenCalledWith(7, 9),
+		);
 		await waitFor(() => expect(screen.getByText("No phase")).toBeTruthy());
 		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
 	});
@@ -640,7 +657,9 @@ describe("TrackerProjectPage project and phase management", () => {
 	it("sets explicit phase dates and surfaces the server's 400 for an inverted range inline", async () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));
-		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /rename phase persiapan/i }),
+		);
 		fireEvent.change(screen.getByLabelText(/start date/i), {
 			target: { value: "2026-09-01" },
 		});
@@ -660,7 +679,9 @@ describe("TrackerProjectPage project and phase management", () => {
 		mockUpdateTrackerPhase.mockRejectedValueOnce(
 			new ApiError("End date must be on or after the start date.", 400),
 		);
-		fireEvent.click(screen.getByRole("button", { name: /rename phase persiapan/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /rename phase persiapan/i }),
+		);
 		fireEvent.change(screen.getByLabelText(/start date/i), {
 			target: { value: "2026-09-30" },
 		});
@@ -735,6 +756,10 @@ describe("TrackerProjectPage drag reorder", () => {
 		);
 	});
 
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("calls reorderTrackerItem with the drop target when a task moves within its phase", async () => {
 		mockReorderTrackerItem.mockResolvedValue(
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 3072 }),
@@ -799,5 +824,101 @@ describe("TrackerProjectPage drag reorder", () => {
 			.getAllByTestId(/^tracker-row-CB-/)
 			.map((row) => row.dataset.testid);
 		expect(phaseBAfter).toEqual(phaseBBefore);
+	});
+
+	it("keeps sibling positions when reordering so two sequential drags sort correctly", async () => {
+		mockListTrackerItems.mockResolvedValue([
+			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
+			projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 3072 }),
+		]);
+		mockReorderTrackerItem.mockResolvedValueOnce(
+			projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 0 }),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-3"));
+		await pressReorder(/reorder ca-3/i, "ArrowUp");
+		await pressReorder(/reorder ca-3/i, "ArrowUp");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1),
+		);
+
+		mockReorderTrackerItem.mockResolvedValueOnce(
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 512 }),
+		);
+		await pressReorder(/reorder ca-2/i, "ArrowUp");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(2),
+		);
+
+		const order = screen
+			.getAllByTestId(/^tracker-row-CA-/)
+			.map((row) => row.dataset.testid);
+		expect(order).toEqual([
+			"tracker-row-CA-3",
+			"tracker-row-CA-2",
+			"tracker-row-CA-1",
+		]);
+	});
+
+	it("does not roll back a later successful reorder when an earlier request fails", async () => {
+		mockListTrackerItems.mockResolvedValue([
+			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
+			projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 3072 }),
+		]);
+		let rejectFirst: (reason?: unknown) => void = () => {};
+		mockReorderTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise((_resolve, reject) => {
+						rejectFirst = reject;
+					}),
+			)
+			.mockResolvedValueOnce(
+				projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 2304 }),
+			);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		await pressReorder(/reorder ca-1/i, "ArrowDown");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1),
+		);
+		await pressReorder(/reorder ca-3/i, "ArrowUp");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(2),
+		);
+		await waitFor(() =>
+			expect(
+				screen
+					.getAllByTestId(/^tracker-row-CA-/)
+					.map((row) => row.dataset.testid),
+			).toEqual([
+				"tracker-row-CA-2",
+				"tracker-row-CA-3",
+				"tracker-row-CA-1",
+			]),
+		);
+		rejectFirst(new Error("network down"));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		});
+		const order = screen
+			.getAllByTestId(/^tracker-row-CA-/)
+			.map((row) => row.dataset.testid);
+		expect(order).toEqual([
+			"tracker-row-CA-2",
+			"tracker-row-CA-3",
+			"tracker-row-CA-1",
+		]);
+	});
+
+	it("shows the reorder grip on row hover when reordering is enabled", async () => {
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const grip = screen.getByRole("button", { name: /reorder ca-1/i });
+		expect(grip.className).toContain("group-hover/row:opacity-100");
+		const rowGroup = grip.closest(".group\\/row");
+		expect(rowGroup).toBeTruthy();
 	});
 });

@@ -59,11 +59,13 @@ function SortableTrackerRow({
 	statuses,
 	priorities,
 	onStatusChange,
+	reorderable,
 }: {
 	item: TrackerItem;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
 	onStatusChange?: (item: TrackerItem, statusId: number) => void;
+	reorderable: boolean;
 }) {
 	const {
 		attributes,
@@ -85,17 +87,19 @@ function SortableTrackerRow({
 			}}
 			className={isDragging ? "relative z-10 opacity-60" : undefined}
 		>
-			<div className="flex items-stretch">
-				<button
-					type="button"
-					ref={setActivatorNodeRef}
-					aria-label={`Reorder ${item.key}`}
-					{...attributes}
-					{...listeners}
-					className="flex w-7 shrink-0 cursor-grab items-center justify-center text-neutral-400 opacity-0 transition hover:text-neutral-600 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 active:cursor-grabbing group-hover/row:opacity-100"
-				>
-					<GripVertical size={14} aria-hidden />
-				</button>
+			<div className="group/row flex items-stretch">
+				{reorderable && (
+					<button
+						type="button"
+						ref={setActivatorNodeRef}
+						aria-label={`Reorder ${item.key}`}
+						{...attributes}
+						{...listeners}
+						className="flex w-7 shrink-0 cursor-grab items-center justify-center text-neutral-400 opacity-0 transition hover:text-neutral-600 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 active:cursor-grabbing group-hover/row:opacity-100"
+					>
+						<GripVertical size={14} aria-hidden />
+					</button>
+				)}
 				<div className="min-w-0 flex-1">
 					<TrackerRow
 						item={item}
@@ -233,6 +237,7 @@ export default function TrackerPhaseSection({
 									statuses={statuses}
 									priorities={priorities}
 									onStatusChange={onStatusChange}
+									reorderable={onReorder != null}
 								/>
 							))}
 						</div>

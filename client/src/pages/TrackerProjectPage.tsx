@@ -1,7 +1,7 @@
-import { ArrowLeft, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
 import { arrayMove } from "@dnd-kit/sortable";
+import { ArrowLeft, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerConfirmDialog from "../components/tracker/TrackerConfirmDialog";
 import TrackerPhaseEditor, {
@@ -10,6 +10,7 @@ import TrackerPhaseEditor, {
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
+import { positionBetween } from "../lib/position";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
 import type {
 	TrackerItem,
@@ -71,11 +72,25 @@ function sortByPosition(items: TrackerItem[]): TrackerItem[] {
 function reorderNeighborBody(
 	reordered: TrackerItem[],
 	newIndex: number,
-): { beforeId?: number; afterId?: number } {
+): { beforeId?: number; afterId?: number } | null {
+	if (reordered.length < 2) return null;
 	if (newIndex === 0) {
-		return { afterId: reordered[1]!.id };
+		return { afterId: reordered[1].id };
 	}
-	return { beforeId: reordered[newIndex - 1]!.id };
+	return { beforeId: reordered[newIndex - 1].id };
+}
+
+function optimisticReorderPosition(
+	reordered: TrackerItem[],
+	newIndex: number,
+): number {
+	const beforePos =
+		newIndex > 0 ? (reordered[newIndex - 1].position ?? null) : null;
+	const afterPos =
+		newIndex < reordered.length - 1
+			? (reordered[newIndex + 1].position ?? null)
+			: null;
+	return positionBetween(beforePos, afterPos);
 }
 
 export default function TrackerProjectPage() {
@@ -99,6 +114,7 @@ export default function TrackerProjectPage() {
 	const [deletingPhaseId, setDeletingPhaseId] = useState<number | null>(null);
 	const [phaseEditorError, setPhaseEditorError] = useState<string | null>(null);
 	const [phaseEditorSubmitting, setPhaseEditorSubmitting] = useState(false);
+	const reorderSeqRef = useRef(0);
 
 	const projectId = Number(projectIdParam);
 	const projectIdValid = Number.isInteger(projectId) && projectId > 0;
@@ -172,12 +188,8 @@ export default function TrackerProjectPage() {
 			bucket.push(item);
 			map.set(key, bucket);
 		}
-		for (const bucket of map.values()) {
-			bucket.sort(
-				(a, b) =>
-					(a.position ?? Number.POSITIVE_INFINITY) -
-						(b.position ?? Number.POSITIVE_INFINITY) || a.id - b.id,
-			);
+		for (const [key, bucket] of map) {
+			map.set(key, sortByPosition(bucket));
 		}
 		return map;
 	}, [projectItems]);
@@ -233,7 +245,8 @@ export default function TrackerProjectPage() {
 	};
 
 	const saveProjectRename = async () => {
-		if (activeWorkspaceId === null || !project || !projectNameDraft.trim()) return;
+		if (activeWorkspaceId === null || !project || !projectNameDraft.trim())
+			return;
 		try {
 			const updated = await api.updateTrackerProject(
 				activeWorkspaceId,
@@ -306,7 +319,10 @@ export default function TrackerProjectPage() {
 			appendPhaseInState(created);
 			closePhaseEditor();
 		} catch (err) {
-			if (err instanceof ApiError && (err.status === 400 || err.status === 409)) {
+			if (
+				err instanceof ApiError &&
+				(err.status === 400 || err.status === 409)
+			) {
 				setPhaseEditorError(err.message);
 			} else {
 				setPhaseEditorError("Could not create the phase. Try again.");
@@ -391,35 +407,43 @@ export default function TrackerProjectPage() {
 		);
 		if (oldIndex === newIndex) return;
 
+		const neighbors = reorderNeighborBody(
+			arrayMove(phaseItems, oldIndex, newIndex),
+			newIndex,
+		);
+		if (!neighbors) return;
+
+		const seq = ++reorderSeqRef.current;
 		const snapshot = items;
 		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
-		const withPositions = reordered.map((item, idx) => ({
-			...item,
-			position: (idx + 1) * 1024,
-		}));
+		const movedId = reordered[newIndex].id;
+		const optimisticPosition = optimisticReorderPosition(reordered, newIndex);
 
 		setItems((prev) =>
-			prev.map((item) => {
-				const updated = withPositions.find((candidate) => candidate.id === item.id);
-				return updated ?? item;
-			}),
+			prev.map((item) =>
+				item.id === movedId ? { ...item, position: optimisticPosition } : item,
+			),
 		);
 
 		try {
 			const updated = await api.reorderTrackerItem(
 				activeWorkspaceId,
 				itemKey,
-				reorderNeighborBody(reordered, newIndex),
+				neighbors,
 			);
-			setItems((prev) =>
-				prev.map((item) => (item.id === updated.id ? updated : item)),
-			);
+			if (seq === reorderSeqRef.current) {
+				setItems((prev) =>
+					prev.map((item) => (item.id === updated.id ? updated : item)),
+				);
+			}
 		} catch {
-			setItems(snapshot);
-			showToast(
-				"Couldn't reorder the task. Check your connection and try again.",
-				"error",
-			);
+			if (seq === reorderSeqRef.current) {
+				setItems(snapshot);
+				showToast(
+					"Couldn't reorder the task. Check your connection and try again.",
+					"error",
+				);
+			}
 		}
 	};
 
@@ -553,12 +577,7 @@ export default function TrackerProjectPage() {
 								collapsed={collapsedKeys.has(phaseKey)}
 								onToggle={() => togglePhase(phaseKey)}
 								onReorder={(oldIndex, newIndex, itemKey) =>
-									void reorderPhaseItems(
-										phase.id,
-										oldIndex,
-										newIndex,
-										itemKey,
-									)
+									void reorderPhaseItems(phase.id, oldIndex, newIndex, itemKey)
 								}
 								onRename={() => {
 									setPhaseCreateOpen(false);
@@ -575,9 +594,7 @@ export default function TrackerProjectPage() {
 										initialSubtitle={phase.subtitle ?? ""}
 										initialStartDate={phase.startDate ?? ""}
 										initialEndDate={phase.endDate ?? ""}
-										onSubmit={(values) =>
-											void submitPhaseUpdate(phase, values)
-										}
+										onSubmit={(values) => void submitPhaseUpdate(phase, values)}
 										onCancel={closePhaseEditor}
 										submitting={phaseEditorSubmitting}
 										error={phaseEditorError}
