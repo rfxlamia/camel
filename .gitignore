@@ -36,6 +36,7 @@ coverage/
 _bmad/
 _bmad-output/
 piolium/
+.commandcode/
 
 # Documentation (local only)
 docs/

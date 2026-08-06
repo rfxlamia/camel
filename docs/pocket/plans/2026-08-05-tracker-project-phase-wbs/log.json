@@ -2,16 +2,16 @@
   "header": {
     "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-08-05-tracker-project-phase-wbs",
     "plan_type": "phased",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "date_started": "2026-08-05",
-    "date_completed": null,
+    "date_completed": "2026-08-06",
     "baseline_sha": "9dc131ca1cd9652d6ced3ecfd5b65291b4c1d94d"
   },
   "phases": [
     {
       "order": 1,
       "file": "execution-plan-phase-1.md",
-      "status": "REVIEW",
+      "status": "DONE",
       "tasks": [
         {
           "id": "T1",
@@ -47,104 +47,241 @@
           "depends": "T2",
           "done_sha": "d0e0b967a4826cb1255cfa5841ea77de1ed4a929"
         }
+      ],
+      "corrections": [
+        {
+          "sha": "1127eb7c06f152d075713b9542275aef15d8555e",
+          "files": [
+            "server/src/routes/tracker-item-parsers.test.ts",
+            "server/src/routes/tracker-item-parsers.ts",
+            "server/src/routes/tracker-items.ts"
+          ],
+          "for_task": "T5"
+        },
+        {
+          "sha": "3f2a4091c406e41277f8877fcd2d7ccb6b05a5b3",
+          "files": [
+            "server/src/db/tracker-contracts.smoke.ts",
+            "server/src/db/types.ts"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "3b3da0f",
+          "files": [
+            "server/src/routes/tracker-vocabularies.test.ts",
+            "server/src/routes/tracker-vocabularies.ts"
+          ],
+          "for_task": "T4"
+        }
       ]
     },
     {
       "order": 2,
       "file": "execution-plan-phase-2.md",
-      "status": "WAITING",
+      "status": "DONE",
       "tasks": [
         {
           "id": "T6",
           "name": "Item read path — project and phase ids plus status category on payloads",
-          "status": "WAITING",
-          "depends": "T5"
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "98121857982d092fa9b6706d06c010f23bd22020"
         },
         {
           "id": "T9",
           "name": "Project routes — CRUD, cap, and delete-with-release",
-          "status": "WAITING",
-          "depends": "T5"
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "0405fcbb1e554e3ce629ece233ac72aa1ca69705"
         },
         {
           "id": "T7",
           "name": "Item write path — create and update with assignment, dates, completed_at and version semantics",
-          "status": "WAITING",
-          "depends": "T6"
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "671d1fb061d30eed43f076dbdd9476bc1cdc1a59"
         },
         {
           "id": "T10",
           "name": "Phase routes — CRUD and delete-to-no-phase",
-          "status": "WAITING",
-          "depends": "T9"
+          "status": "DONE",
+          "depends": "T9",
+          "done_sha": "1cc6071c04e129445b9ca6974c1f059084e6ebba"
         },
         {
           "id": "T8",
           "name": "Reorder endpoint — bucket positions without version bumps",
-          "status": "WAITING",
-          "depends": "T7"
+          "status": "DONE",
+          "depends": "T7",
+          "done_sha": "27877fde6088bee1baf9574f7e2d201cac0d63f2"
         },
         {
           "id": "T11",
           "name": "Client contracts — types and API surface",
-          "status": "WAITING",
-          "depends": "T4, T6, T9, T10"
+          "status": "DONE",
+          "depends": "T4, T6, T9, T10",
+          "done_sha": "5aaad1c0433475db5c00ab8eb3fceb37617b91d1"
         }
       ]
     },
     {
       "order": 3,
       "file": "execution-plan-phase-3.md",
-      "status": "WAITING",
+      "status": "DONE",
       "tasks": [
         {
           "id": "T12",
           "name": "Rollup and schedule derivation helper",
-          "status": "WAITING",
-          "depends": "T11"
+          "status": "DONE",
+          "depends": "T11",
+          "done_sha": "3bebd758607cea94be55505fb051d7968a710fd6"
         },
         {
           "id": "T13",
           "name": "Glyphs read the category column",
-          "status": "WAITING",
-          "depends": "T11"
+          "status": "DONE",
+          "depends": "T11",
+          "done_sha": "230bd5520dc49a8749e24eb3df79ba17d68920a5"
         },
         {
           "id": "T16",
           "name": "Date fields and project/phase pickers on input surfaces",
-          "status": "WAITING",
-          "depends": "T11"
+          "status": "DONE",
+          "depends": "T11",
+          "done_sha": "8de63454f537a1dea213c110fc9912ff337511a2"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "f6ba4599d81e5e6b22d0bbc7dc1048a64b78bf67",
+          "files": [
+            "client/src/pages/TrackerDetailPage.test.tsx",
+            "client/src/pages/TrackerDetailPage.tsx"
+          ],
+          "for_task": "T16"
         }
       ]
     },
     {
       "order": 4,
       "file": "execution-plan-phase-4.md",
-      "status": "WAITING",
+      "status": "DONE",
       "tasks": [
         {
           "id": "T14",
           "name": "Tracker home — project cards, search into projects, new realtime",
-          "status": "WAITING",
-          "depends": "T12, T13"
+          "status": "DONE",
+          "depends": "T12, T13",
+          "done_sha": "e846dde89c01d18b49f2efabb2247bccfc6c9037"
         },
         {
           "id": "T15",
           "name": "Project WBS page",
-          "status": "WAITING",
-          "depends": "T12, T13"
+          "status": "DONE",
+          "depends": "T12, T13",
+          "done_sha": "a421ad419c8c0507e699c14885b121d6eb4ba980"
         },
         {
           "id": "T18",
           "name": "Project and phase management UI",
-          "status": "WAITING",
-          "depends": "T15, T16"
+          "status": "DONE",
+          "depends": "T15, T16",
+          "done_sha": "02d15abd36a53b48c7c9f201f655a60e600796c4"
         },
         {
           "id": "T17",
           "name": "Drag reorder UI",
-          "status": "WAITING",
-          "depends": "T15, T8, T18"
+          "status": "DONE",
+          "depends": "T15, T8, T18",
+          "done_sha": "f4ebe9ae1409cfd214d7001e19ae05052121d687"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "67bbb60",
+          "files": [
+            "client/src/components/tracker/TrackerInProjectSection.tsx",
+            "client/src/components/tracker/TrackerProgressBar.tsx",
+            "client/src/components/tracker/TrackerProjectCard.tsx",
+            "client/src/components/tracker/TrackerProjectCreateModal.tsx",
+            "client/src/lib/trackerRollup.ts",
+            "client/src/lib/trackerSearch.ts",
+            "client/src/pages/TrackerPage.test.tsx",
+            "client/src/pages/TrackerPage.tsx"
+          ],
+          "for_task": "T14"
+        },
+        {
+          "sha": "f7ba1cd",
+          "files": [
+            "client/src/components/tracker/TrackerPhaseSection.tsx",
+            "client/src/lib/trackerRollup.ts",
+            "client/src/pages/TrackerProjectPage.test.tsx",
+            "client/src/pages/TrackerProjectPage.tsx"
+          ],
+          "for_task": "T15"
+        },
+        {
+          "sha": "a30973f",
+          "files": [
+            "client/src/components/tracker/TrackerConfirmDialog.tsx",
+            "client/src/components/tracker/TrackerPhaseEditor.tsx",
+            "client/src/components/tracker/TrackerProjectHeader.tsx",
+            "client/src/pages/TrackerProjectPage.tsx"
+          ],
+          "for_task": "T18"
+        },
+        {
+          "sha": "904a263",
+          "files": [
+            "client/src/components/tracker/TrackerPhaseSection.tsx",
+            "client/src/lib/position.ts",
+            "client/src/pages/TrackerProjectPage.test.tsx",
+            "client/src/pages/TrackerProjectPage.tsx"
+          ],
+          "for_task": "T17"
+        },
+        {
+          "sha": "e98772870775011b51d40c1134603a25e8f02df9",
+          "files": [
+            "client/src/lib/trackerRollup.test.ts",
+            "client/src/pages/TrackerProjectPage.test.tsx",
+            "client/src/pages/TrackerProjectPage.tsx"
+          ],
+          "for_task": "T15"
+        },
+        {
+          "sha": "10a4591b4f03f1bc994b08cde185b36365dfb9c0",
+          "files": [
+            "client/src/lib/position.ts",
+            "client/src/pages/TrackerProjectPage.tsx"
+          ],
+          "for_task": "T17"
+        },
+        {
+          "sha": "b98fadaa4974f2ffecdc06baa7a2e8c7049be7d7",
+          "files": [
+            "client/src/components/tracker/TrackerInProjectSection.tsx",
+            "client/src/components/tracker/TrackerProgressBar.tsx",
+            "client/src/components/tracker/TrackerProjectCreateModal.tsx",
+            "client/src/components/tracker/TrackerProjectsHeader.tsx",
+            "client/src/components/tracker/TrackerRow.tsx",
+            "client/src/components/tracker/TrackerRowShell.tsx",
+            "client/src/lib/trackerSearch.test.ts",
+            "client/src/lib/trackerSearch.ts",
+            "client/src/pages/TrackerPage.tsx"
+          ],
+          "for_task": "T14"
+        },
+        {
+          "sha": "e8862f876b6e0866e9d236bd6512fcfee4ac585d",
+          "files": [
+            "client/src/components/tracker/TrackerPhaseSection.tsx",
+            "client/src/pages/TrackerProjectPage.test.tsx",
+            "client/src/pages/TrackerProjectPage.tsx"
+          ],
+          "for_task": "T17"
         }
       ]
     }
