@@ -41,7 +41,10 @@ interface Props {
 	 * trigger for dense surfaces such as a list row.
 	 */
 	variant?: "chip" | "inline";
-	/** Accessible name for the inline trigger, which has no visible label. */
+	/**
+	 * Accessible name for the trigger. Required for the inline variant, which
+	 * has no visible label; optional on chips whose value alone is ambiguous.
+	 */
 	triggerLabel?: string;
 	/** Anchors the popover to the trigger's right edge instead of its left. */
 	align?: "left" | "right";
@@ -281,7 +284,7 @@ export function TrackerPropertyPicker({
 				type="button"
 				aria-haspopup="listbox"
 				aria-expanded={open}
-				aria-label={inline ? triggerLabel : undefined}
+				aria-label={triggerLabel}
 				title={inline ? placeholder : undefined}
 				onClick={() => onOpenChange(!open)}
 				className={
