@@ -15,24 +15,16 @@ export function projectMatchesSearch(
 	return project.name.toLowerCase().includes(q);
 }
 
-export function itemProjectTrail(
-	item: TrackerItem,
-	projects: TrackerProject[],
-): string | null {
-	const project = projects.find((p) => p.id === item.projectId);
-	if (!project) return null;
-	if (item.phaseId == null) return project.name;
-	const phase = project.phases.find((p) => p.id === item.phaseId);
-	return phase ? `${project.name} › ${phase.name}` : project.name;
-}
-
 export interface TrackerSearchPartition {
 	searchActive: boolean;
-	filteredUnassigned: TrackerItem[];
-	filteredInProject: TrackerItem[];
+	/**
+	 * Every item matching the query, whether or not it belongs to a project.
+	 * The Items tab renders one set: what the toolbar counts, what the group
+	 * counts add up to, and what is on screen are the same items.
+	 */
+	filteredItems: TrackerItem[];
+	/** Projects matching by name, or holding an item that matches. */
 	visibleProjects: TrackerProject[];
-	noSearchResults: boolean;
-	toolbarCount: number;
 }
 
 export function partitionTrackerSearch(
@@ -40,51 +32,21 @@ export function partitionTrackerSearch(
 	projects: TrackerProject[],
 	search: string,
 ): TrackerSearchPartition {
-	const unassignedItems = items.filter((item) => item.projectId == null);
-	const inProjectItems = items.filter((item) => item.projectId != null);
 	const searchQuery = search.trim().toLowerCase();
 	const searchActive = searchQuery.length > 0;
 
-	const filteredUnassigned = searchActive
-		? unassignedItems.filter((item) => itemMatchesSearch(item, searchQuery))
-		: unassignedItems;
+	if (!searchActive) {
+		return { searchActive, filteredItems: items, visibleProjects: projects };
+	}
 
-	const filteredInProject = searchActive
-		? inProjectItems.filter((item) => itemMatchesSearch(item, searchQuery))
-		: [];
+	const filteredItems = items.filter((item) =>
+		itemMatchesSearch(item, searchQuery),
+	);
+	const visibleProjects = projects.filter(
+		(project) =>
+			projectMatchesSearch(project, searchQuery) ||
+			filteredItems.some((item) => item.projectId === project.id),
+	);
 
-	const visibleProjects = searchActive
-		? projects.filter(
-				(project) =>
-					projectMatchesSearch(project, searchQuery) ||
-					inProjectItems.some(
-						(item) =>
-							item.projectId === project.id &&
-							itemMatchesSearch(item, searchQuery),
-					),
-			)
-		: projects;
-
-	const hasProjectNameMatch =
-		searchActive &&
-		projects.some((project) => projectMatchesSearch(project, searchQuery));
-
-	const noSearchResults =
-		searchActive &&
-		filteredUnassigned.length === 0 &&
-		filteredInProject.length === 0 &&
-		!hasProjectNameMatch;
-
-	const toolbarCount = searchActive
-		? filteredUnassigned.length + filteredInProject.length
-		: unassignedItems.length;
-
-	return {
-		searchActive,
-		filteredUnassigned,
-		filteredInProject,
-		visibleProjects,
-		noSearchResults,
-		toolbarCount,
-	};
+	return { searchActive, filteredItems, visibleProjects };
 }

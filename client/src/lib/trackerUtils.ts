@@ -1,4 +1,4 @@
-import type { TrackerItem, TrackerVocabulary } from "../types";
+import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 
 /** Status sections follow vocabulary position (fractional ordering). */
 export function sortStatusesByPosition(
@@ -31,4 +31,160 @@ export function groupItemsByStatus(
 		byStatus.set(id, sortItemsOldestFirst(bucket));
 	}
 	return byStatus;
+}
+
+export type TrackerGroupBy = "status" | "project" | "priority";
+
+export const TRACKER_GROUP_BY_LABELS: Record<TrackerGroupBy, string> = {
+	status: "Status",
+	project: "Project",
+	priority: "Priority",
+};
+
+export interface TrackerGroup {
+	/** Stable identity for collapse state and React keys. */
+	key: string;
+	label: string;
+	items: TrackerItem[];
+	/** Set on status groups — drives the header glyph and the + button. */
+	status?: TrackerVocabulary;
+	/** Set on priority groups — drives the header glyph. */
+	priority?: TrackerVocabulary;
+	/** Set on project groups — locks the + button to that project. */
+	projectId?: number;
+}
+
+export interface TrackerGroupContext {
+	statuses: TrackerVocabulary[];
+	priorities: TrackerVocabulary[];
+	projects: TrackerProject[];
+}
+
+export function statusGroupKey(statusId: number): string {
+	return `status:${statusId}`;
+}
+
+/**
+ * Items inside a project follow the WBS reading order — phase order first, then
+ * the manual position within the phase. Items with no phase sit at the end.
+ */
+function sortItemsForProject(
+	items: TrackerItem[],
+	project: TrackerProject,
+): TrackerItem[] {
+	const phasePosition = new Map(
+		project.phases.map((phase) => [phase.id, phase.position]),
+	);
+	const rank = (item: TrackerItem) =>
+		item.phaseId != null
+			? (phasePosition.get(item.phaseId) ?? Number.POSITIVE_INFINITY)
+			: Number.POSITIVE_INFINITY;
+
+	return [...items].sort((a, b) => {
+		const phaseA = rank(a);
+		const phaseB = rank(b);
+		if (phaseA !== phaseB) return phaseA < phaseB ? -1 : 1;
+		const posA = a.position ?? Number.POSITIVE_INFINITY;
+		const posB = b.position ?? Number.POSITIVE_INFINITY;
+		if (posA !== posB) return posA < posB ? -1 : 1;
+		return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+	});
+}
+
+function groupByProject(
+	items: TrackerItem[],
+	projects: TrackerProject[],
+): TrackerGroup[] {
+	const ordered = [...projects].sort((a, b) => a.position - b.position);
+	// An empty project still gets a header: a project you just created must not
+	// vanish from the list it was created in.
+	const groups: TrackerGroup[] = ordered.map((project) => ({
+		key: `project:${project.id}`,
+		label: project.name,
+		projectId: project.id,
+		items: sortItemsForProject(
+			items.filter((item) => item.projectId === project.id),
+			project,
+		),
+	}));
+
+	const loose = items.filter(
+		(item) =>
+			item.projectId == null ||
+			!ordered.some((project) => project.id === item.projectId),
+	);
+	if (loose.length > 0) {
+		groups.push({
+			key: "project:none",
+			label: "No project",
+			items: sortItemsOldestFirst(loose),
+		});
+	}
+	return groups;
+}
+
+function groupByPriority(
+	items: TrackerItem[],
+	priorities: TrackerVocabulary[],
+): TrackerGroup[] {
+	const ordered = sortStatusesByPosition(priorities);
+	const groups: TrackerGroup[] = ordered.map((priority) => ({
+		key: `priority:${priority.id}`,
+		label: priority.name,
+		priority,
+		items: sortItemsOldestFirst(
+			items.filter((item) => item.priority?.id === priority.id),
+		),
+	}));
+
+	const loose = items.filter(
+		(item) =>
+			item.priority == null ||
+			!ordered.some((priority) => priority.id === item.priority?.id),
+	);
+	if (loose.length > 0) {
+		groups.push({
+			key: "priority:none",
+			label: "No priority",
+			items: sortItemsOldestFirst(loose),
+		});
+	}
+	return groups;
+}
+
+/**
+ * One item set, three readings. Every item lands in exactly one group for any
+ * grouping, so the group counts always add back up to the item total.
+ */
+export function groupItems(
+	items: TrackerItem[],
+	groupBy: TrackerGroupBy,
+	{ statuses, priorities, projects }: TrackerGroupContext,
+): TrackerGroup[] {
+	if (groupBy === "project") return groupByProject(items, projects);
+	if (groupBy === "priority") return groupByPriority(items, priorities);
+
+	const ordered = sortStatusesByPosition(statuses);
+	const byStatus = groupItemsByStatus(items, ordered);
+	const groups: TrackerGroup[] = ordered.map((status) => ({
+		key: statusGroupKey(status.id),
+		label: status.name,
+		status,
+		items: byStatus.get(status.id) ?? [],
+	}));
+
+	// groupItemsByStatus drops items whose status has no vocabulary. Catching
+	// them here keeps the conservation guarantee a property of this function
+	// rather than of whatever the vocabulary API happens to allow.
+	const loose = items.filter(
+		(item) => !ordered.some((status) => status.id === item.status.id),
+	);
+	if (loose.length > 0) {
+		groups.push({
+			key: "status:none",
+			label: "No status",
+			items: sortItemsOldestFirst(loose),
+		});
+	}
+	return groups;
 }

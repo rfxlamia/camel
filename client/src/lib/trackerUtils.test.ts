@@ -3,8 +3,9 @@
 // down before trackerRollup.ts is built on top of it. No implementation
 // change is made here.
 import { describe, expect, it } from "vitest";
-import type { TrackerItem, TrackerVocabulary } from "../types";
+import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 import {
+	groupItems,
 	groupItemsByStatus,
 	sortItemsOldestFirst,
 	sortStatusesByPosition,
@@ -95,5 +96,179 @@ describe("groupItemsByStatus", () => {
 		const grouped = groupItemsByStatus(items, statuses);
 		expect(grouped.get(1)).toEqual([]);
 		expect(grouped.get(999)).toBeUndefined();
+	});
+});
+
+const statuses = [vocab(1, "Backlog", 1024), vocab(2, "Done", 2048)];
+const priorities: TrackerVocabulary[] = [
+	{ id: 10, kind: "priority", name: "Urgent", position: 1024, colour: "#ccc" },
+	{ id: 11, kind: "priority", name: "Low", position: 2048, colour: "#ccc" },
+];
+
+function project(
+	id: number,
+	name: string,
+	position: number,
+	phases: TrackerProject["phases"] = [],
+): TrackerProject {
+	return {
+		id,
+		name,
+		startDate: null,
+		endDate: null,
+		position,
+		version: 1,
+		phases,
+		createdAt: "2026-08-01T00:00:00.000Z",
+		updatedAt: "2026-08-01T00:00:00.000Z",
+	};
+}
+
+function phase(id: number, projectId: number, position: number) {
+	return {
+		id,
+		projectId,
+		name: `Phase ${id}`,
+		subtitle: "",
+		startDate: null,
+		endDate: null,
+		position,
+		version: 1,
+		createdAt: "2026-08-01T00:00:00.000Z",
+		updatedAt: "2026-08-01T00:00:00.000Z",
+	};
+}
+
+function groupItem(
+	id: number,
+	overrides: Partial<TrackerItem> = {},
+): TrackerItem {
+	return {
+		...item(id, 1, "2026-08-01T00:00:00.000Z"),
+		status: statuses[0]!,
+		...overrides,
+	};
+}
+
+describe("groupItems", () => {
+	const context = { statuses, priorities, projects: [] as TrackerProject[] };
+
+	it("keeps every item in exactly one group whatever the grouping", () => {
+		const items = [
+			groupItem(1, { projectId: 1, priority: priorities[0]! }),
+			groupItem(2, { status: statuses[1]! }),
+			groupItem(3, { projectId: 2 }),
+			// Status, project and priority each point at a record that is not in
+			// the vocabulary — the case that used to drop an item silently.
+			groupItem(4, {
+				status: vocab(99, "Ghost", 4096),
+				projectId: 99,
+				priority: {
+					id: 99,
+					kind: "priority",
+					name: "Ghost",
+					position: 4096,
+					colour: "#ccc",
+				},
+			}),
+		];
+		const ctx = {
+			...context,
+			projects: [project(1, "Alpha", 1024), project(2, "Beta", 2048)],
+		};
+
+		for (const groupBy of ["status", "project", "priority"] as const) {
+			const total = groupItems(items, groupBy, ctx).reduce(
+				(sum, group) => sum + group.items.length,
+				0,
+			);
+			expect(total).toBe(items.length);
+		}
+	});
+
+	it("groups by status in vocabulary order, keeping empty statuses", () => {
+		const groups = groupItems([groupItem(1)], "status", context);
+		expect(groups.map((g) => g.label)).toEqual(["Backlog", "Done"]);
+		expect(groups[0]?.key).toBe("status:1");
+		expect(groups[0]?.status?.id).toBe(1);
+		expect(groups[1]?.items).toEqual([]);
+	});
+
+	it("adds a No status bucket last, only when it has items", () => {
+		expect(
+			groupItems([groupItem(1)], "status", context).map((g) => g.label),
+		).toEqual(["Backlog", "Done"]);
+
+		const groups = groupItems(
+			[groupItem(1, { status: vocab(99, "Ghost", 4096) })],
+			"status",
+			context,
+		);
+		expect(groups.at(-1)?.key).toBe("status:none");
+		expect(groups.at(-1)?.items.map((i) => i.id)).toEqual([1]);
+	});
+
+	it("groups by project in position order and keeps an empty project visible", () => {
+		const ctx = {
+			...context,
+			projects: [project(2, "Beta", 2048), project(1, "Alpha", 1024)],
+		};
+		const groups = groupItems([groupItem(1, { projectId: 2 })], "project", ctx);
+
+		expect(groups.map((g) => g.label)).toEqual(["Alpha", "Beta"]);
+		expect(groups[0]?.items).toEqual([]);
+		expect(groups[1]?.projectId).toBe(2);
+	});
+
+	it("adds a No project bucket last, only when it has items", () => {
+		const ctx = { ...context, projects: [project(1, "Alpha", 1024)] };
+
+		expect(
+			groupItems([groupItem(1, { projectId: 1 })], "project", ctx).map(
+				(g) => g.label,
+			),
+		).toEqual(["Alpha"]);
+		expect(groupItems([groupItem(1)], "project", ctx).map((g) => g.label)).toEqual(
+			["Alpha", "No project"],
+		);
+	});
+
+	it("treats an item pointing at a deleted project as No project", () => {
+		const ctx = { ...context, projects: [project(1, "Alpha", 1024)] };
+		const groups = groupItems([groupItem(1, { projectId: 99 })], "project", ctx);
+		expect(groups.at(-1)?.key).toBe("project:none");
+		expect(groups.at(-1)?.items.map((i) => i.id)).toEqual([1]);
+	});
+
+	it("orders items in a project by phase, then position", () => {
+		const ctx = {
+			...context,
+			projects: [
+				project(1, "Alpha", 1024, [phase(5, 1, 2048), phase(4, 1, 1024)]),
+			],
+		};
+		const items = [
+			groupItem(1, { projectId: 1, phaseId: null, position: 1 }),
+			groupItem(2, { projectId: 1, phaseId: 5, position: 2048 }),
+			groupItem(3, { projectId: 1, phaseId: 4, position: 2048 }),
+			groupItem(4, { projectId: 1, phaseId: 4, position: 1024 }),
+		];
+
+		const groups = groupItems(items, "project", ctx);
+		// Phase 4 (position 1024) before phase 5, and unphased items last.
+		expect(groups[0]?.items.map((i) => i.id)).toEqual([4, 3, 2, 1]);
+	});
+
+	it("groups by priority, bucketing unset priorities last", () => {
+		const items = [
+			groupItem(1, { priority: priorities[1]! }),
+			groupItem(2),
+			groupItem(3, { priority: priorities[0]! }),
+		];
+		const groups = groupItems(items, "priority", context);
+
+		expect(groups.map((g) => g.label)).toEqual(["Urgent", "Low", "No priority"]);
+		expect(groups[0]?.items.map((i) => i.id)).toEqual([3]);
+		expect(groups[2]?.items.map((i) => i.id)).toEqual([2]);
 	});
 });

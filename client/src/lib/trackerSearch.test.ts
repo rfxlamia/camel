@@ -34,7 +34,9 @@ function trackerItem(overrides: Partial<TrackerItem> = {}): TrackerItem {
 	};
 }
 
-function trackerProject(overrides: Partial<TrackerProject> = {}): TrackerProject {
+function trackerProject(
+	overrides: Partial<TrackerProject> = {},
+): TrackerProject {
 	return {
 		id: 1,
 		name: "Release",
@@ -50,7 +52,7 @@ function trackerProject(overrides: Partial<TrackerProject> = {}): TrackerProject
 }
 
 describe("partitionTrackerSearch", () => {
-	it("returns all projects and unassigned items when search is empty", () => {
+	it("returns every item and project when search is empty", () => {
 		const unassigned = trackerItem({ key: "CA-1", title: "Backlog task" });
 		const inProject = trackerItem({
 			key: "CA-2",
@@ -66,14 +68,12 @@ describe("partitionTrackerSearch", () => {
 		);
 
 		expect(result.searchActive).toBe(false);
-		expect(result.filteredUnassigned).toEqual([unassigned]);
-		expect(result.filteredInProject).toEqual([]);
+		// Project membership never removes an item from the list.
+		expect(result.filteredItems).toEqual([unassigned, inProject]);
 		expect(result.visibleProjects).toEqual(projects);
-		expect(result.noSearchResults).toBe(false);
-		expect(result.toolbarCount).toBe(1);
 	});
 
-	it("reports noSearchResults when nothing matches unassigned, in-project, or project name", () => {
+	it("returns nothing when neither an item nor a project name matches", () => {
 		const result = partitionTrackerSearch(
 			[
 				trackerItem({ key: "CA-1", title: "Alpha", projectId: null }),
@@ -84,60 +84,50 @@ describe("partitionTrackerSearch", () => {
 		);
 
 		expect(result.searchActive).toBe(true);
-		expect(result.noSearchResults).toBe(true);
-		expect(result.filteredUnassigned).toEqual([]);
-		expect(result.filteredInProject).toEqual([]);
+		expect(result.filteredItems).toEqual([]);
 		expect(result.visibleProjects).toEqual([]);
-		expect(result.toolbarCount).toBe(0);
 	});
 
-	it("finds unassigned items and clears noSearchResults", () => {
-		const match = trackerItem({
+	it("matches unassigned and in-project items with one rule", () => {
+		const unassigned = trackerItem({
 			key: "CA-1",
 			title: "Fix login",
 			projectId: null,
 		});
-		const other = trackerItem({
+		const inProject = trackerItem({
 			key: "CA-2",
-			title: "Other",
-			projectId: null,
-		});
-
-		const result = partitionTrackerSearch([match, other], [], "login");
-
-		expect(result.noSearchResults).toBe(false);
-		expect(result.filteredUnassigned).toEqual([match]);
-		expect(result.filteredInProject).toEqual([]);
-		expect(result.toolbarCount).toBe(1);
-	});
-
-	it("finds in-project items and clears noSearchResults", () => {
-		const match = trackerItem({
-			key: "CA-1",
-			title: "Deploy",
+			title: "Fix login redirect",
 			projectId: 1,
 		});
-		const other = trackerItem({
-			key: "CA-2",
-			title: "Unrelated",
-			projectId: null,
-		});
-		const projects = [trackerProject({ id: 1, name: "Release" })];
+		const other = trackerItem({ key: "CA-3", title: "Other" });
 
 		const result = partitionTrackerSearch(
-			[match, other],
-			projects,
-			"deploy",
+			[unassigned, inProject, other],
+			[trackerProject({ id: 1, name: "Release" })],
+			"login",
 		);
 
-		expect(result.noSearchResults).toBe(false);
-		expect(result.filteredUnassigned).toEqual([]);
-		expect(result.filteredInProject).toEqual([match]);
-		expect(result.visibleProjects).toEqual([projects[0]]);
-		expect(result.toolbarCount).toBe(1);
+		expect(result.filteredItems).toEqual([unassigned, inProject]);
 	});
 
-	it("finds projects by name and clears noSearchResults", () => {
+	it("matches items by key and by description", () => {
+		const byKey = trackerItem({ key: "CA-77", title: "Opaque" });
+		const byDescription = trackerItem({
+			key: "CA-78",
+			title: "Opaque",
+			description: "hidden billing details",
+		});
+
+		expect(
+			partitionTrackerSearch([byKey, byDescription], [], "ca-77").filteredItems,
+		).toEqual([byKey]);
+		expect(
+			partitionTrackerSearch([byKey, byDescription], [], "billing")
+				.filteredItems,
+		).toEqual([byDescription]);
+	});
+
+	it("keeps a project visible when its name matches but none of its items do", () => {
 		const inProject = trackerItem({
 			key: "CA-1",
 			title: "Unrelated task",
@@ -148,16 +138,26 @@ describe("partitionTrackerSearch", () => {
 			trackerProject({ id: 2, name: "Other" }),
 		];
 
-		const result = partitionTrackerSearch(
-			[inProject],
-			projects,
-			"rilis",
-		);
+		const result = partitionTrackerSearch([inProject], projects, "rilis");
 
-		expect(result.noSearchResults).toBe(false);
-		expect(result.filteredUnassigned).toEqual([]);
-		expect(result.filteredInProject).toEqual([]);
+		expect(result.filteredItems).toEqual([]);
 		expect(result.visibleProjects).toEqual([projects[0]]);
-		expect(result.toolbarCount).toBe(0);
+	});
+
+	it("keeps a project visible when one of its items matches", () => {
+		const match = trackerItem({
+			key: "CA-1",
+			title: "Deploy",
+			projectId: 1,
+		});
+		const projects = [
+			trackerProject({ id: 1, name: "Release" }),
+			trackerProject({ id: 2, name: "Other" }),
+		];
+
+		const result = partitionTrackerSearch([match], projects, "deploy");
+
+		expect(result.filteredItems).toEqual([match]);
+		expect(result.visibleProjects).toEqual([projects[0]]);
 	});
 });

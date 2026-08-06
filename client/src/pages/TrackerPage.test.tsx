@@ -37,6 +37,8 @@ const {
 	mockLocation: { pathname: "/tracker", key: "tracker-1" },
 }));
 
+let locationKeySeq = 0;
+
 vi.mock("../api", () => ({
 	api: {
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
@@ -61,10 +63,28 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("react-router", () => ({
-	useNavigate: () => mockNavigate,
-	useLocation: () => mockLocation,
-}));
+// useSearchParams is stateful here: the page reads the active tab from the
+// query string, so a stub returning a frozen value could never switch tabs.
+// Writing the params also mints a new location key, because that is what the
+// real router does — replace() is not key-preserving — and the page has to
+// tell that apart from a genuine re-navigation.
+vi.mock("react-router", async () => {
+	const React = await vi.importActual<typeof import("react")>("react");
+	return {
+		useNavigate: () => mockNavigate,
+		useLocation: () => mockLocation,
+		useSearchParams: () => {
+			const [params, setParams] = React.useState(() => new URLSearchParams());
+			const update = (
+				next: URLSearchParams | ((prev: URLSearchParams) => URLSearchParams),
+			) => {
+				mockLocation.key = `key-${++locationKeySeq}`;
+				setParams((prev) => (typeof next === "function" ? next(prev) : next));
+			};
+			return [params, update];
+		},
+	};
+});
 
 import { ApiError } from "../api";
 import { KANBAN_NAV } from "../layout/sidebar/navItems";
@@ -242,6 +262,9 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	vi.useRealTimers();
+	// The grouping preference is persisted per workspace — otherwise one test's
+	// pick leaks into the next.
+	localStorage.clear();
 });
 
 describe("TrackerPage", () => {
@@ -401,7 +424,7 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
-			screen.getByRole("button", { name: /create tracker item/i }),
+			screen.getByRole("button", { name: /^New item$/ }),
 		);
 		const modal = within(screen.getByRole("dialog"));
 		await waitFor(() => modal.getByRole("button", { name: /Backlog/ }));
@@ -422,7 +445,7 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
-			screen.getByRole("button", { name: /create tracker item/i }),
+			screen.getByRole("button", { name: /^New item$/ }),
 		);
 		const modal = within(screen.getByRole("dialog"));
 		fireEvent.change(screen.getByLabelText(/item title/i), {
@@ -449,7 +472,7 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
-			screen.getByRole("button", { name: /create tracker item/i }),
+			screen.getByRole("button", { name: /^New item$/ }),
 		);
 		const modal = within(screen.getByRole("dialog"));
 		await waitFor(() => modal.getByRole("button", { name: /Labels/ }));
@@ -539,13 +562,199 @@ describe("TrackerPage", () => {
 	});
 });
 
+/** The Projects tab is where project cards live now. */
+function showProjectsTab() {
+	fireEvent.click(screen.getByRole("button", { name: /^Projects/ }));
+}
+
+function showItemsTab() {
+	fireEvent.click(screen.getByRole("button", { name: /^Items/ }));
+}
+
+describe("TrackerPage items tab", () => {
+	it("lists every item, project-assigned or not, and counts them all", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
+			inProjectItem({ id: 10, key: "CA-10", title: "Project task" }),
+		]);
+		render(<TrackerPage />);
+
+		await waitFor(() => expect(screen.getByText("CA-1")).toBeTruthy());
+		// The in-project item is on the same list, not hidden behind a search.
+		expect(screen.getByText("CA-10")).toBeTruthy();
+		// Toolbar total, group total and rows on screen describe one set.
+		expect(screen.getByText("2 items")).toBeTruthy();
+		const backlog = screen.getByTestId("toggle-section-Backlog");
+		expect(within(backlog).getByText("2")).toBeTruthy();
+	});
+
+	it("marks an item's project with a chip and leaves loose items unmarked", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
+			inProjectItem({ id: 10, key: "CA-10", title: "Project task" }),
+		]);
+		render(<TrackerPage />);
+
+		await waitFor(() => screen.getByText("CA-10"));
+		expect(screen.getByTestId("row-project-CA-10").textContent).toBe(
+			"Rilis v2",
+		);
+		expect(screen.queryByTestId("row-project-CA-1")).toBeNull();
+	});
+
+	it("regroups by project without losing or duplicating an item", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
+			inProjectItem({ id: 10, key: "CA-10", title: "Project task" }),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-10"));
+
+		fireEvent.click(screen.getByRole("button", { name: /group by: status/i }));
+		fireEvent.click(screen.getByRole("option", { name: /^Project$/ }));
+
+		await waitFor(() =>
+			expect(screen.getByTestId("toggle-section-Rilis v2")).toBeTruthy(),
+		);
+		expect(screen.getByTestId("toggle-section-No project")).toBeTruthy();
+		expect(screen.getByText("CA-1")).toBeTruthy();
+		expect(screen.getByText("CA-10")).toBeTruthy();
+		expect(screen.getByText("2 items")).toBeTruthy();
+		// The group header already names the project, so the chip stands down.
+		expect(screen.queryByTestId("row-project-CA-10")).toBeNull();
+	});
+
+	it("keeps an empty project visible when grouping by project", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+
+		fireEvent.click(screen.getByRole("button", { name: /group by: status/i }));
+		fireEvent.click(screen.getByRole("option", { name: /^Project$/ }));
+
+		await waitFor(() =>
+			expect(screen.getByTestId("toggle-section-Rilis v2")).toBeTruthy(),
+		);
+	});
+
+	it("shows the empty state when nothing matches, even if a project name does", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+		fireEvent.change(screen.getByPlaceholderText(/search tracker items/i), {
+			target: { value: "rilis" },
+		});
+		// A project-name hit no longer suppresses the item empty state: the
+		// Items tab has no project cards to point at.
+		await waitFor(() =>
+			expect(screen.getByText(/no items match/i)).toBeTruthy(),
+		);
+	});
+
+	it("offers a create CTA when the workspace has no items at all", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([]);
+		render(<TrackerPage />);
+		await waitFor(() =>
+			expect(screen.getByText(/nothing tracked yet/i)).toBeTruthy(),
+		);
+		expect(
+			screen.getByRole("button", { name: /create your first item/i }),
+		).toBeTruthy();
+	});
+
+	it("surfaces a retry panel when the initial load fails", async () => {
+		mockListTrackerItems.mockRejectedValueOnce(new Error("network down"));
+		render(<TrackerPage />);
+
+		await waitFor(() =>
+			expect(screen.getByText(/couldn't load the tracker/i)).toBeTruthy(),
+		);
+		expect(mockShowToast).toHaveBeenCalled();
+		expect(mockShowToast.mock.calls[0]?.[1]).toBe("error");
+		// Not the "nothing tracked yet" empty state — an empty page and a broken
+		// page must not look the same.
+		expect(screen.queryByText(/nothing tracked yet/i)).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+		await waitFor(() => expect(screen.getByText("CA-1")).toBeTruthy());
+		expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
+	});
+
+	it("keeps rows on screen when a background refresh fails", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+
+		mockListTrackerItems.mockRejectedValueOnce(new Error("network down"));
+		sseHandler?.({ type: "tracker.updated" });
+		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+		expect(screen.getByText("CA-1")).toBeTruthy();
+		expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
+	});
+
+	it("keeps collapsed groups collapsed across a tab switch", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Done"));
+		fireEvent.click(screen.getByTestId("toggle-section-Done"));
+		expect(screen.queryByText("CA-2")).toBeNull();
+
+		// Writing ?tab= mints a new location key; only a real re-navigation to
+		// /tracker should clear collapse state.
+		showProjectsTab();
+		showItemsTab();
+		await waitFor(() => screen.getByText("Done"));
+		expect(screen.queryByText("CA-2")).toBeNull();
+	});
+
+	it("marks the active tab for assistive tech", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Backlog"));
+		expect(
+			screen.getByRole("button", { name: /^Items/, current: "page" }),
+		).toBeTruthy();
+
+		showProjectsTab();
+		expect(
+			screen.getByRole("button", { name: /^Projects/, current: "page" }),
+		).toBeTruthy();
+	});
+
+	it("keeps project cards off the items tab", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+		expect(screen.queryByLabelText("Rilis v2")).toBeNull();
+
+		showProjectsTab();
+		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+	});
+});
+
 describe("TrackerPage projects", () => {
-	it("renders unassigned items unchanged, plus a New project affordance, when no projects exist", async () => {
+	it("shows a create CTA on the projects tab when none exist", async () => {
 		render(<TrackerPage />);
 		await waitFor(() => expect(screen.getByText("Backlog")).toBeTruthy());
-		expect(screen.getByText("CA-1")).toBeTruthy();
-		expect(screen.getByRole("button", { name: /new project/i })).toBeTruthy();
-		expect(screen.queryByText("In projects")).toBeNull();
+		showProjectsTab();
+		expect(screen.getByText(/no projects yet/i)).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: /create your first project/i }),
+		).toBeTruthy();
 	});
 
 	it("opens the project modal, creates a project and shows the card without a manual refresh", async () => {
@@ -555,7 +764,8 @@ describe("TrackerPage projects", () => {
 		mockCreateTrackerProject.mockResolvedValue(releaseProject);
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
-		fireEvent.click(screen.getByRole("button", { name: /new project/i }));
+		showProjectsTab();
+		fireEvent.click(screen.getByRole("button", { name: /^new project$/i }));
 		const modal = within(screen.getByRole("dialog"));
 		fireEvent.change(modal.getByLabelText(/project name/i), {
 			target: { value: "Rilis v2" },
@@ -575,7 +785,8 @@ describe("TrackerPage projects", () => {
 		);
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
-		fireEvent.click(screen.getByRole("button", { name: /new project/i }));
+		showProjectsTab();
+		fireEvent.click(screen.getByRole("button", { name: /^new project$/i }));
 		const modal = within(screen.getByRole("dialog"));
 		fireEvent.click(modal.getByRole("button", { name: /create project/i }));
 		expect(await modal.findByText("Name is required")).toBeTruthy();
@@ -591,8 +802,10 @@ describe("TrackerPage projects", () => {
 			})),
 		);
 		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("Backlog"));
+		showProjectsTab();
 		await waitFor(() => screen.getByText("Project 1"));
-		const button = screen.getByRole("button", { name: /new project/i });
+		const button = screen.getByRole("button", { name: /^new project$/i });
 		expect((button as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByText(/project limit \(10\)/i)).toBeTruthy();
 	});
@@ -611,51 +824,26 @@ describe("TrackerPage projects", () => {
 			}),
 		]);
 		render(<TrackerPage />);
+		showProjectsTab();
 		await waitFor(() => screen.getByText("Rilis v2"));
 		expect(screen.getByText("50%")).toBeTruthy();
 		expect(screen.getByText(/2 tasks/i)).toBeTruthy();
 		expect(screen.getByLabelText(/overdue/i)).toBeTruthy();
 	});
 
-	it('shows an in-project-only match under "In projects" with its trail, and never fires the empty state', async () => {
-		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
-			inProjectItem({ id: 10, key: "CA-10", title: "Ship realtime sync" }),
+	it("filters project cards by name and reports the count", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([
+			releaseProject,
+			{ ...releaseProject, id: 2, name: "Migrasi JSX", phases: [] },
 		]);
 		render(<TrackerPage />);
-		await waitFor(() => screen.getByText("Rilis v2"));
-		fireEvent.change(screen.getByPlaceholderText(/search/i), {
-			target: { value: "realtime" },
+		showProjectsTab();
+		await waitFor(() => expect(screen.getByText("2 projects")).toBeTruthy());
+		fireEvent.change(screen.getByPlaceholderText(/search projects/i), {
+			target: { value: "migrasi" },
 		});
-		await waitFor(() => expect(screen.getByText("In projects")).toBeTruthy());
-		expect(screen.getByText("CA-10")).toBeTruthy();
-		expect(screen.getByText("Rilis v2 › Persiapan")).toBeTruthy();
-		expect(screen.queryByText(/no items match/i)).toBeNull();
-	});
-
-	it("counts the in-project match in the toolbar total", async () => {
-		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
-			inProjectItem({ id: 10, key: "CA-10", title: "Ship realtime sync" }),
-		]);
-		render(<TrackerPage />);
-		await waitFor(() => screen.getByText("Rilis v2"));
-		fireEvent.change(screen.getByPlaceholderText(/search/i), {
-			target: { value: "realtime" },
-		});
-		await waitFor(() => expect(screen.getByText("1 item")).toBeTruthy());
-	});
-
-	it("still shows the empty state when neither a project name nor any item matches", async () => {
-		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		render(<TrackerPage />);
-		await waitFor(() => screen.getByText("Rilis v2"));
-		fireEvent.change(screen.getByPlaceholderText(/search/i), {
-			target: { value: "nonexistent-zzz" },
-		});
-		await waitFor(() =>
-			expect(screen.getByText(/no items match/i)).toBeTruthy(),
-		);
+		await waitFor(() => expect(screen.getByText("1 project")).toBeTruthy());
+		expect(screen.queryByText("Rilis v2")).toBeNull();
 	});
 
 	it("reloads and shows the card on tracker.project.created without a manual refresh", async () => {
@@ -672,12 +860,13 @@ describe("TrackerPage projects", () => {
 		});
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
+		showProjectsTab();
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
 		sseHandler?.({ type: "tracker.project.created" });
 		await waitFor(() => expect(screen.getByText("Rilis v2")).toBeTruthy());
 	});
 
-	it("removes the card and surfaces the released tasks on tracker.project.deleted", async () => {
+	it("drops the card and the item's chip on tracker.project.deleted", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseBoard.mockReturnValue({
 			activeWorkspaceId: 7,
@@ -694,7 +883,9 @@ describe("TrackerPage projects", () => {
 			inProjectItem({ id: 10, key: "CA-10", title: "Ship realtime sync" }),
 		]);
 		render(<TrackerPage />);
-		await waitFor(() => screen.getByText("Rilis v2"));
+		await waitFor(() =>
+			expect(screen.getByTestId("row-project-CA-10")).toBeTruthy(),
+		);
 
 		mockListTrackerProjects.mockResolvedValueOnce([]);
 		mockListTrackerItems.mockResolvedValueOnce([
@@ -707,7 +898,88 @@ describe("TrackerPage projects", () => {
 			}),
 		]);
 		sseHandler?.({ type: "tracker.project.deleted" });
-		await waitFor(() => expect(screen.queryByText("Rilis v2")).toBeNull());
-		await waitFor(() => expect(screen.getByText("CA-10")).toBeTruthy());
+		// The item never left the list — only its project marker did.
+		await waitFor(() =>
+			expect(screen.queryByTestId("row-project-CA-10")).toBeNull(),
+		);
+		expect(screen.getByText("CA-10")).toBeTruthy();
+
+		showProjectsTab();
+		await waitFor(() => expect(screen.queryByLabelText("Rilis v2")).toBeNull());
+	});
+
+	it("keeps the projects tab mounted when items are empty during a refresh", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		render(<TrackerPage />);
+		showProjectsTab();
+		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+
+		let resolveItems: (value: TrackerItem[]) => void = () => {};
+		mockListTrackerItems.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveItems = resolve;
+				}),
+		);
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		sseHandler?.({ type: "tracker.project.updated" });
+		expect(screen.queryByText("Loading…")).toBeNull();
+		expect(screen.getByLabelText("Rilis v2")).toBeTruthy();
+		resolveItems([]);
+		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+	});
+
+	it("ignores a stale failed load when a newer refresh already succeeded", async () => {
+		let resolveStale: (reason?: unknown) => void = () => {};
+		let resolveFresh: (value: TrackerItem[]) => void = () => {};
+		mockListTrackerItems
+			.mockResolvedValueOnce([makeItem({ id: 1, key: "CA-1" })])
+			.mockImplementationOnce(
+				() =>
+					new Promise((_, reject) => {
+						resolveStale = reject;
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFresh = resolve;
+					}),
+			);
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+
+		sseHandler?.({ type: "tracker.updated" });
+		sseHandler?.({ type: "tracker.updated" });
+		resolveFresh([makeItem({ id: 1, key: "CA-1", title: "Fresh title" })]);
+		await waitFor(() => expect(screen.getByText("Fresh title")).toBeTruthy());
+
+		resolveStale(new Error("network down"));
+		await waitFor(() => expect(screen.getByText("Fresh title")).toBeTruthy());
+		expect(mockShowToast).not.toHaveBeenCalled();
+		expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
 	});
 });

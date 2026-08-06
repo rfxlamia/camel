@@ -1,22 +1,37 @@
-import { Plus, Search } from "lucide-react";
+import { CloudOff, ListTodo, Plus, Rows3, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
-import TrackerInProjectSection from "../components/tracker/TrackerInProjectSection";
 import TrackerProjectCreateModal from "../components/tracker/TrackerProjectCreateModal";
-import TrackerProjectsHeader from "../components/tracker/TrackerProjectsHeader";
+import TrackerProjectsTab from "../components/tracker/TrackerProjectsTab";
+import {
+	type PickerOption,
+	TrackerPropertyPicker,
+} from "../components/tracker/TrackerPropertyPicker";
 import TrackerSection from "../components/tracker/TrackerSection";
+import TrackerTabs, {
+	type TrackerTab,
+} from "../components/tracker/TrackerTabs";
 import { useBoard } from "../context/BoardContext";
 import { partitionTrackerSearch } from "../lib/trackerSearch";
 import {
-	groupItemsByStatus,
+	TRACKER_GROUP_BY_LABELS,
+	type TrackerGroupBy,
+	groupItems,
 	sortStatusesByPosition,
+	statusGroupKey,
 } from "../lib/trackerUtils";
+import {
+	readTrackerGroupBy,
+	writeTrackerGroupBy,
+} from "../lib/trackerViewPrefs";
 import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 
 const TRACKER_PROJECT_LIMIT = 10;
 const TRACKER_PROJECT_CAP_MESSAGE = `You've reached the project limit (${TRACKER_PROJECT_LIMIT}).`;
+
+const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 
 const PROJECT_RELOAD_EVENTS = new Set([
 	"tracker.project.created",
@@ -27,6 +42,11 @@ const PROJECT_RELOAD_EVENTS = new Set([
 	"tracker.phase.deleted",
 ]);
 
+interface CreateDefaults {
+	statusId?: number;
+	projectId?: number;
+}
+
 export default function TrackerPage() {
 	const {
 		activeWorkspaceId,
@@ -35,31 +55,79 @@ export default function TrackerPage() {
 		showToast,
 	} = useBoard();
 	const location = useLocation();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [items, setItems] = useState<TrackerItem[]>([]);
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [search, setSearch] = useState("");
-	const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
-	const [projectsCollapsed, setProjectsCollapsed] = useState(false);
+	const [groupBy, setGroupBy] = useState<TrackerGroupBy>("status");
+	const [groupByOpen, setGroupByOpen] = useState(false);
+	const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set());
 	const [createOpen, setCreateOpen] = useState(false);
 	const [projectCreateOpen, setProjectCreateOpen] = useState(false);
-	const [createStatusId, setCreateStatusId] = useState<number | undefined>();
+	const [createDefaults, setCreateDefaults] = useState<CreateDefaults>({});
 	const [loading, setLoading] = useState(true);
+	const [loadFailed, setLoadFailed] = useState(false);
 	/** Item ids with a status request in flight, and the pick waiting on it. */
 	const inFlightStatusRef = useRef<Set<number>>(new Set());
 	const queuedStatusRef = useRef<Map<number, number>>(new Map());
+	/** Set while this page is the one changing the location, not the router. */
+	const skipCollapseResetRef = useRef(false);
+	/** Monotonic id so a slower stale loadData cannot clobber a newer one. */
+	const loadSeqRef = useRef(0);
+	const itemsLenRef = useRef(0);
+	const projectsLenRef = useRef(0);
+	itemsLenRef.current = items.length;
+	projectsLenRef.current = projects.length;
 
-	// Reset in-memory collapse when React Router re-navigates to /tracker.
+	const tab: TrackerTab =
+		searchParams.get("tab") === "projects" ? "projects" : "items";
+
+	const selectTab = (next: TrackerTab) => {
+		// Rewriting the query string mints a fresh location key, which would
+		// otherwise read as a re-navigation to /tracker and wipe collapse state.
+		skipCollapseResetRef.current = true;
+		setSearchParams(
+			(prev) => {
+				const params = new URLSearchParams(prev);
+				if (next === "items") params.delete("tab");
+				else params.set("tab", next);
+				return params;
+			},
+			{ replace: true },
+		);
+	};
+
+	// Reset in-memory collapse when React Router re-navigates to /tracker,
+	// but not when this page rewrote the query string itself.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: location.key is the intentional trigger
 	useEffect(() => {
-		setCollapsedIds(new Set());
-		setProjectsCollapsed(false);
+		if (skipCollapseResetRef.current) {
+			skipCollapseResetRef.current = false;
+			return;
+		}
+		setCollapsedKeys(new Set());
 	}, [location.key]);
+
+	useEffect(() => {
+		if (activeWorkspaceId === null) return;
+		setGroupBy(readTrackerGroupBy(activeWorkspaceId));
+	}, [activeWorkspaceId]);
+
+	const changeGroupBy = (next: TrackerGroupBy) => {
+		setGroupBy(next);
+		if (activeWorkspaceId !== null) writeTrackerGroupBy(activeWorkspaceId, next);
+	};
 
 	const loadData = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
-		setLoading(true);
+		const seq = ++loadSeqRef.current;
+		// Only the empty first paint needs a full-page spinner; background
+		// refreshes keep whatever is already on screen.
+		if (itemsLenRef.current === 0 && projectsLenRef.current === 0) {
+			setLoading(true);
+		}
 		try {
 			const [statusList, priorityList, itemList, projectList] =
 				await Promise.all([
@@ -68,14 +136,27 @@ export default function TrackerPage() {
 					api.listTrackerItems(activeWorkspaceId),
 					api.listTrackerProjects(activeWorkspaceId),
 				]);
+			if (seq !== loadSeqRef.current) return;
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
 			setItems(itemList);
 			setProjects(projectList);
+			setLoadFailed(false);
+		} catch {
+			if (seq !== loadSeqRef.current) return;
+			// A failed background refresh must not blank a page that already has
+			// rows on it, so the retry panel is gated on having nothing to show.
+			setLoadFailed(true);
+			showToast(
+				"Couldn't load the tracker. Check your connection and try again.",
+				"error",
+			);
 		} finally {
-			setLoading(false);
+			if (seq === loadSeqRef.current) {
+				setLoading(false);
+			}
 		}
-	}, [activeWorkspaceId]);
+	}, [activeWorkspaceId, showToast]);
 
 	useEffect(() => {
 		void loadData();
@@ -134,27 +215,31 @@ export default function TrackerPage() {
 		});
 	}, [subscribeTrackerEvents, loadData]);
 
-	const {
-		filteredUnassigned,
-		filteredInProject,
-		visibleProjects,
-		searchActive,
-		noSearchResults,
-		toolbarCount,
-	} = useMemo(
+	const { filteredItems, visibleProjects, searchActive } = useMemo(
 		() => partitionTrackerSearch(items, projects, search),
 		[items, projects, search],
 	);
 
-	const grouped = useMemo(
-		() => groupItemsByStatus(filteredUnassigned, statuses),
-		[filteredUnassigned, statuses],
+	const groups = useMemo(
+		() => groupItems(filteredItems, groupBy, { statuses, priorities, projects }),
+		[filteredItems, groupBy, statuses, priorities, projects],
 	);
+
+	const projectNames = useMemo(
+		() => new Map(projects.map((project) => [project.id, project.name])),
+		[projects],
+	);
+
+	const groupByOptions: PickerOption[] = GROUP_BY_ORDER.map((option) => ({
+		id: option,
+		label: TRACKER_GROUP_BY_LABELS[option],
+		selected: option === groupBy,
+	}));
 
 	const atProjectCap = projects.length >= TRACKER_PROJECT_LIMIT;
 
-	const openCreate = (statusId?: number) => {
-		setCreateStatusId(statusId);
+	const openCreate = (defaults: CreateDefaults = {}) => {
+		setCreateDefaults(defaults);
 		setCreateOpen(true);
 	};
 
@@ -175,10 +260,11 @@ export default function TrackerPage() {
 				it.id === item.id ? { ...it, status: nextStatus } : it,
 			),
 		);
-		setCollapsedIds((prev) => {
-			if (!prev.has(statusId)) return prev;
+		setCollapsedKeys((prev) => {
+			const key = statusGroupKey(statusId);
+			if (!prev.has(key)) return prev;
 			const next = new Set(prev);
-			next.delete(statusId);
+			next.delete(key);
 			return next;
 		});
 		try {
@@ -220,92 +306,180 @@ export default function TrackerPage() {
 		}
 	};
 
-	const toggleSection = (statusId: number) => {
-		setCollapsedIds((prev) => {
+	const toggleSection = (key: string) => {
+		setCollapsedKeys((prev) => {
 			const next = new Set(prev);
-			if (next.has(statusId)) next.delete(statusId);
-			else next.add(statusId);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
 			return next;
 		});
 	};
 
 	if (activeWorkspaceId === null) return null;
 
+	const projectsTab = tab === "projects";
+
 	return (
 		<div className="min-h-full bg-white">
-			<div className="sticky top-0 z-20 flex items-center gap-3 border-neutral-200 border-b bg-white px-4 py-2 md:px-6">
-				<div className="relative min-w-0 flex-1 sm:max-w-xs">
-					<Search
-						size={14}
-						className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-neutral-500"
-						aria-hidden
-					/>
-					<input
-						type="search"
-						placeholder="Search tracker items…"
-						value={search}
-						onChange={(e) => setSearch(e.target.value)}
-						className="h-8 w-full rounded-md border border-transparent bg-neutral-100 pr-3 pl-8 text-neutral-900 text-sm placeholder:text-neutral-500 hover:bg-neutral-200/70 focus:border-primary-600 focus:bg-white focus-visible:outline-none"
-					/>
+			<div className="sticky top-0 z-20 bg-white">
+				<TrackerTabs
+					value={tab}
+					itemCount={items.length}
+					projectCount={projects.length}
+					onChange={selectTab}
+				/>
+				<div className="flex items-center gap-3 border-neutral-200 border-b px-4 py-2 md:px-6">
+					<div className="relative min-w-0 flex-1 sm:max-w-xs">
+						<Search
+							size={14}
+							className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-neutral-500"
+							aria-hidden
+						/>
+						<input
+							type="search"
+							aria-label={
+								projectsTab
+									? "Search projects or items"
+									: "Search tracker items"
+							}
+							placeholder={
+								projectsTab
+									? "Search projects or items…"
+									: "Search tracker items…"
+							}
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+							className="h-8 w-full rounded-md border border-transparent bg-neutral-100 pr-3 pl-8 text-neutral-900 text-sm placeholder:text-neutral-500 hover:bg-neutral-200/70 focus:border-primary-600 focus:bg-white focus-visible:outline-none"
+						/>
+					</div>
+					{!projectsTab && (
+						<TrackerPropertyPicker
+							placeholder="Group by"
+							triggerLabel={`Group by: ${TRACKER_GROUP_BY_LABELS[groupBy]}`}
+							value={TRACKER_GROUP_BY_LABELS[groupBy]}
+							icon={
+								<Rows3 size={14} className="text-neutral-500" aria-hidden />
+							}
+							searchPlaceholder="Group by…"
+							options={groupByOptions}
+							open={groupByOpen}
+							onOpenChange={setGroupByOpen}
+							onSelect={(id) => changeGroupBy(id as TrackerGroupBy)}
+						/>
+					)}
+					<span className="hidden text-neutral-500 text-xs tabular-nums sm:inline">
+						{projectsTab
+							? `${visibleProjects.length} project${visibleProjects.length === 1 ? "" : "s"}`
+							: `${filteredItems.length} item${filteredItems.length === 1 ? "" : "s"}`}
+					</span>
+					{projectsTab ? (
+						<button
+							type="button"
+							aria-label="New project"
+							disabled={atProjectCap}
+							title={atProjectCap ? TRACKER_PROJECT_CAP_MESSAGE : undefined}
+							onClick={() => setProjectCreateOpen(true)}
+							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							<Plus size={15} aria-hidden />
+							New project
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={() => openCreate()}
+							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							<Plus size={15} aria-hidden />
+							New item
+						</button>
+					)}
 				</div>
-				<span className="hidden text-neutral-500 text-xs tabular-nums sm:inline">
-					{toolbarCount} item{toolbarCount === 1 ? "" : "s"}
-				</span>
-				<button
-					type="button"
-					aria-label="Create tracker item"
-					onClick={() => openCreate()}
-					className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-				>
-					<Plus size={15} aria-hidden />
-					New item
-				</button>
 			</div>
 
-			{loading && items.length === 0 ? (
+			{loadFailed && items.length === 0 && projects.length === 0 ? (
+				<div className="flex flex-col items-center px-4 py-16 text-center md:px-6">
+					<CloudOff size={20} className="text-neutral-400" aria-hidden />
+					<p className="mt-3 font-medium text-neutral-900 text-sm">
+						Couldn't load the tracker
+					</p>
+					<p className="mt-1 max-w-sm text-neutral-600 text-sm">
+						Check your connection and try again.
+					</p>
+					<button
+						type="button"
+						onClick={() => void loadData()}
+						disabled={loading}
+						className="mt-4 inline-flex h-8 items-center rounded-md border border-neutral-300 bg-neutral-100 px-3 font-medium text-primary-700 text-sm transition-colors hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
+					>
+						{loading ? "Retrying…" : "Try again"}
+					</button>
+				</div>
+			) : loading && items.length === 0 && projects.length === 0 ? (
 				<p className="px-4 py-8 text-center text-neutral-500 text-sm md:px-6">
 					Loading…
 				</p>
-			) : noSearchResults ? (
+			) : projectsTab ? (
+				<TrackerProjectsTab
+					visibleProjects={visibleProjects}
+					items={items}
+					searchActive={searchActive}
+					search={search}
+					atProjectCap={atProjectCap}
+					capMessage={TRACKER_PROJECT_CAP_MESSAGE}
+					onNewProject={() => setProjectCreateOpen(true)}
+				/>
+			) : searchActive && filteredItems.length === 0 ? (
 				<p className="px-4 py-16 text-center text-neutral-600 text-sm md:px-6">
 					No items match “{search.trim()}”.
 				</p>
+			) : items.length === 0 ? (
+				<div className="flex flex-col items-center px-4 py-16 text-center md:px-6">
+					<ListTodo size={20} className="text-neutral-400" aria-hidden />
+					<p className="mt-3 font-medium text-neutral-900 text-sm">
+						Nothing tracked yet
+					</p>
+					<p className="mt-1 max-w-sm text-neutral-600 text-sm">
+						Items live here whether or not they belong to a project. Create one
+						to get started.
+					</p>
+					<button
+						type="button"
+						onClick={() => openCreate()}
+						className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					>
+						<Plus size={15} aria-hidden />
+						Create your first item
+					</button>
+				</div>
 			) : (
 				<div>
-					<TrackerProjectsHeader
-						projects={projects}
-						visibleProjects={visibleProjects}
-						items={items}
-						collapsed={projectsCollapsed}
-						onToggleCollapsed={() => setProjectsCollapsed((v) => !v)}
-						atProjectCap={atProjectCap}
-						capMessage={TRACKER_PROJECT_CAP_MESSAGE}
-						onNewProject={() => setProjectCreateOpen(true)}
-					/>
-
-					{searchActive && filteredInProject.length > 0 && (
-						<TrackerInProjectSection
-							items={filteredInProject}
-							projects={projects}
-						/>
-					)}
-
-					{statuses.map((status) => {
-						const sectionItems = grouped.get(status.id) ?? [];
-						if (searchActive && sectionItems.length === 0) return null;
+					{groups.map((group) => {
+						// While searching, a group with no hits is noise.
+						if (searchActive && group.items.length === 0) return null;
+						const createDefaultsForGroup: CreateDefaults | null = group.status
+							? { statusId: group.status.id }
+							: group.projectId != null
+								? { projectId: group.projectId }
+								: null;
 						return (
 							<TrackerSection
-								key={status.id}
-								status={status}
-								items={sectionItems}
+								key={group.key}
+								group={group}
 								statuses={statuses}
 								priorities={priorities}
-								collapsed={collapsedIds.has(status.id)}
-								onToggle={() => toggleSection(status.id)}
-								onCreate={() => openCreate(status.id)}
+								collapsed={collapsedKeys.has(group.key)}
+								onToggle={() => toggleSection(group.key)}
+								onCreate={
+									createDefaultsForGroup
+										? () => openCreate(createDefaultsForGroup)
+										: undefined
+								}
 								onStatusChange={(item, statusId) =>
 									void changeStatus(item, statusId)
 								}
+								projectNames={projectNames}
+								showProjectChip={groupBy !== "project"}
 							/>
 						);
 					})}
@@ -317,7 +491,8 @@ export default function TrackerPage() {
 					workspaceId={activeWorkspaceId}
 					statuses={statuses}
 					priorities={priorities}
-					defaultStatusId={createStatusId}
+					defaultStatusId={createDefaults.statusId}
+					defaultProjectId={createDefaults.projectId}
 					onClose={() => setCreateOpen(false)}
 					onCreated={() => void loadData()}
 				/>

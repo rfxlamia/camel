@@ -20,6 +20,12 @@ interface Props {
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
 	onStatusChange: (statusId: number) => void;
+	/**
+	 * Project the item belongs to. Rendered as a chip so a mixed list still
+	 * shows where each item lives — omitted when the group header already says
+	 * it, or when the item has no project.
+	 */
+	projectLabel?: string | null;
 }
 
 /**
@@ -36,6 +42,7 @@ export default function TrackerRow({
 	statuses,
 	priorities,
 	onStatusChange,
+	projectLabel,
 }: Props) {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const glyph = statusGlyphSpec(statuses, item.status.id);
@@ -77,6 +84,14 @@ export default function TrackerRow({
 			<span className="min-w-0 flex-1 truncate text-neutral-900">
 				{item.title}
 			</span>
+			{projectLabel && (
+				<span
+					data-testid={`row-project-${item.key}`}
+					className="inline-block max-w-32 shrink-0 truncate rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs"
+				>
+					{projectLabel}
+				</span>
+			)}
 			<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
 				{item.labels.map((label) => (
 					<span
