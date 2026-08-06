@@ -67,29 +67,29 @@ export default function TrackerPhaseEditor({
 						className="h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-neutral-900 text-sm placeholder:text-neutral-500 focus:border-primary-600 focus-visible:outline-none"
 					/>
 				</label>
-				<label className="block">
-					<span className="mb-1 block font-medium text-neutral-700 text-sm">
-						Subtitle
-						<span className="font-normal text-neutral-500"> (optional)</span>
-					</span>
-					<input
-						type="text"
-						aria-label="Phase subtitle"
-						value={subtitle}
-						onChange={(e) => setSubtitle(e.target.value)}
-						className="h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-neutral-900 text-sm placeholder:text-neutral-500 focus:border-primary-600 focus-visible:outline-none"
-					/>
-				</label>
-				{mode === "edit" && (
-					<TrackerDateFields
-						layout="rail"
-						idPrefix={idPrefix}
-						startDate={startDate}
-						endDate={endDate}
-						onStartDateChange={setStartDate}
-						onEndDateChange={setEndDate}
-					/>
+				{mode === "create" && (
+					<label className="block">
+						<span className="mb-1 block font-medium text-neutral-700 text-sm">
+							Subtitle
+							<span className="font-normal text-neutral-500"> (optional)</span>
+						</span>
+						<input
+							type="text"
+							aria-label="Phase subtitle"
+							value={subtitle}
+							onChange={(e) => setSubtitle(e.target.value)}
+							className="h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-neutral-900 text-sm placeholder:text-neutral-500 focus:border-primary-600 focus-visible:outline-none"
+						/>
+					</label>
 				)}
+				<TrackerDateFields
+					layout="rail"
+					idPrefix={idPrefix}
+					startDate={startDate}
+					endDate={endDate}
+					onStartDateChange={setStartDate}
+					onEndDateChange={setEndDate}
+				/>
 			</div>
 			<div className="mt-3 flex items-center justify-end gap-3">
 				{error && (

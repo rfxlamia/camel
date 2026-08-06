@@ -1,12 +1,14 @@
-import { ArrowLeft, MoreHorizontal, Pencil, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { arrayMove } from "@dnd-kit/sortable";
 import { ApiError, api } from "../api";
+import TrackerConfirmDialog from "../components/tracker/TrackerConfirmDialog";
 import TrackerPhaseEditor, {
 	type PhaseEditorValues,
 } from "../components/tracker/TrackerPhaseEditor";
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
+import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
 import type {
@@ -97,7 +99,6 @@ export default function TrackerProjectPage() {
 	const [deletingPhaseId, setDeletingPhaseId] = useState<number | null>(null);
 	const [phaseEditorError, setPhaseEditorError] = useState<string | null>(null);
 	const [phaseEditorSubmitting, setPhaseEditorSubmitting] = useState(false);
-	const projectMenuRef = useRef<HTMLDivElement>(null);
 
 	const projectId = Number(projectIdParam);
 	const projectIdValid = Number.isInteger(projectId) && projectId > 0;
@@ -148,20 +149,6 @@ export default function TrackerProjectPage() {
 			}
 		});
 	}, [subscribeTrackerEvents, loadData]);
-
-	useEffect(() => {
-		if (!projectMenuOpen) return;
-		const handlePointerDown = (e: MouseEvent) => {
-			if (
-				projectMenuRef.current &&
-				!projectMenuRef.current.contains(e.target as Node)
-			) {
-				setProjectMenuOpen(false);
-			}
-		};
-		document.addEventListener("mousedown", handlePointerDown);
-		return () => document.removeEventListener("mousedown", handlePointerDown);
-	}, [projectMenuOpen]);
 
 	const project = useMemo(
 		() =>
@@ -358,8 +345,6 @@ export default function TrackerProjectPage() {
 			);
 			if (updated) {
 				updatePhaseInState(updated);
-			} else {
-				await loadData();
 			}
 			closePhaseEditor();
 		} catch (err) {
@@ -508,98 +493,19 @@ export default function TrackerProjectPage() {
 
 	return (
 		<div className="min-h-full bg-white">
-			<div className="sticky top-0 z-20 border-neutral-200 border-b bg-white px-4 py-3 md:px-6">
-				<div className="flex items-start gap-3">
-					<button
-						type="button"
-						aria-label="Back to Tracker"
-						onClick={() => navigate("/tracker")}
-						className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-					>
-						<ArrowLeft size={16} aria-hidden />
-					</button>
-					<div className="min-w-0 flex-1">
-						{renamingProject ? (
-							<div className="space-y-2">
-								<label className="block">
-									<span className="mb-1 block font-medium text-neutral-700 text-sm">
-										Project name
-									</span>
-									<input
-										type="text"
-										aria-label="Project name"
-										value={projectNameDraft}
-										onChange={(e) => setProjectNameDraft(e.target.value)}
-										className="h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-neutral-900 text-sm focus:border-primary-600 focus-visible:outline-none"
-									/>
-								</label>
-								<div className="flex gap-2">
-									<button
-										type="button"
-										onClick={() => setRenamingProject(false)}
-										className="rounded-md px-3 py-1.5 text-neutral-600 text-sm hover:bg-neutral-100"
-									>
-										Cancel
-									</button>
-									<button
-										type="button"
-										onClick={() => void saveProjectRename()}
-										className="rounded-md bg-primary-600 px-3 py-1.5 font-medium text-sm text-white hover:bg-primary-700"
-									>
-										Save
-									</button>
-								</div>
-							</div>
-						) : (
-							<h1 className="truncate font-medium text-neutral-900 text-sm">
-								{project.name}
-							</h1>
-						)}
-					</div>
-					{!renamingProject && (
-						<div className="flex shrink-0 items-center gap-1">
-							<button
-								type="button"
-								aria-label="Rename project"
-								onClick={startRenameProject}
-								className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								<Pencil size={14} aria-hidden />
-							</button>
-							<div ref={projectMenuRef} className="relative">
-								<button
-									type="button"
-									aria-label="Project menu"
-									aria-haspopup="menu"
-									aria-expanded={projectMenuOpen}
-									onClick={() => setProjectMenuOpen((open) => !open)}
-									className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-								>
-									<MoreHorizontal size={16} aria-hidden />
-								</button>
-								{projectMenuOpen && (
-									<div
-										role="menu"
-										className="absolute top-full right-0 z-30 mt-1 min-w-[10rem] rounded-lg border border-neutral-200 bg-white py-1 shadow-lg"
-									>
-										<button
-											type="button"
-											role="menuitem"
-											onClick={() => {
-												setProjectMenuOpen(false);
-												setProjectDeleteOpen(true);
-											}}
-											className="w-full px-3 py-1.5 text-left text-error-700 text-sm hover:bg-neutral-100"
-										>
-											Delete project
-										</button>
-									</div>
-								)}
-							</div>
-						</div>
-					)}
-				</div>
-			</div>
+			<TrackerProjectHeader
+				projectName={project.name}
+				renaming={renamingProject}
+				nameDraft={projectNameDraft}
+				menuOpen={projectMenuOpen}
+				onBack={() => navigate("/tracker")}
+				onStartRename={startRenameProject}
+				onCancelRename={() => setRenamingProject(false)}
+				onSaveRename={saveProjectRename}
+				onNameDraftChange={setProjectNameDraft}
+				onMenuOpenChange={setProjectMenuOpen}
+				onOpenDelete={() => setProjectDeleteOpen(true)}
+			/>
 
 			{isEmpty ? (
 				<div className="px-4 py-16 text-center md:px-6">
@@ -719,69 +625,23 @@ export default function TrackerProjectPage() {
 			)}
 
 			{projectDeleteOpen && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-					role="dialog"
-					aria-modal="true"
-					aria-label="Confirm delete project"
-				>
-					<div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
-						<p className="font-medium text-error-700">Delete this project?</p>
-						<p className="mt-1 text-neutral-600 text-sm">
-							{releasedTaskMessage(projectItems.length)}
-						</p>
-						<div className="mt-4 flex gap-2">
-							<button
-								type="button"
-								onClick={() => setProjectDeleteOpen(false)}
-								className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								onClick={() => void confirmDeleteProject()}
-								className="flex-1 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600"
-							>
-								Delete
-							</button>
-						</div>
-					</div>
-				</div>
+				<TrackerConfirmDialog
+					ariaLabel="Confirm delete project"
+					title="Delete this project?"
+					description={releasedTaskMessage(projectItems.length)}
+					onCancel={() => setProjectDeleteOpen(false)}
+					onConfirm={confirmDeleteProject}
+				/>
 			)}
 
-			{deletingPhase && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-					role="dialog"
-					aria-modal="true"
-					aria-label="Confirm delete phase"
-				>
-					<div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
-						<p className="font-medium text-error-700">
-							Delete phase “{deletingPhase.name}”?
-						</p>
-						<p className="mt-1 text-neutral-600 text-sm">
-							Tasks in this phase will move to No phase.
-						</p>
-						<div className="mt-4 flex gap-2">
-							<button
-								type="button"
-								onClick={() => setDeletingPhaseId(null)}
-								className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								onClick={() => void confirmDeletePhase()}
-								className="flex-1 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600"
-							>
-								Delete
-							</button>
-						</div>
-					</div>
-				</div>
+			{deletingPhaseId !== null && (
+				<TrackerConfirmDialog
+					ariaLabel="Confirm delete phase"
+					title={`Delete phase “${deletingPhase?.name ?? ""}”?`}
+					description="Tasks in this phase will move to No phase."
+					onCancel={() => setDeletingPhaseId(null)}
+					onConfirm={confirmDeletePhase}
+				/>
 			)}
 		</div>
 	);
