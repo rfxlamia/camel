@@ -1,8 +1,4 @@
-import type {
-	TrackerItem,
-	TrackerPhase,
-	TrackerProject,
-} from "../types";
+import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
 import { todayISODate } from "./boardViewUtils";
 
 export type RollupResult =
@@ -44,10 +40,10 @@ export function isTaskOverdue(item: TrackerItem): boolean {
 	return item.endDate < todayISODate();
 }
 
-export function phaseBounds(
-	phase: TrackerPhase,
-	items: TrackerItem[],
-): { startDate: string | null; endDate: string | null } {
+export function deriveBounds(items: TrackerItem[]): {
+	startDate: string | null;
+	endDate: string | null;
+} {
 	const startDates = items
 		.map((item) => item.startDate)
 		.filter((d): d is string => d != null);
@@ -55,14 +51,23 @@ export function phaseBounds(
 		.map((item) => item.endDate)
 		.filter((d): d is string => d != null);
 
-	const derivedStart =
+	const startDate =
 		startDates.length > 0
 			? startDates.reduce((min, d) => (d < min ? d : min))
 			: null;
-	const derivedEnd =
+	const endDate =
 		endDates.length > 0
 			? endDates.reduce((max, d) => (d > max ? d : max))
 			: null;
+
+	return { startDate, endDate };
+}
+
+export function phaseBounds(
+	phase: TrackerPhase,
+	items: TrackerItem[],
+): { startDate: string | null; endDate: string | null } {
+	const { startDate: derivedStart, endDate: derivedEnd } = deriveBounds(items);
 
 	return {
 		startDate: phase.startDate ?? derivedStart,
@@ -72,11 +77,15 @@ export function phaseBounds(
 
 function allTasksDoneOrCanceled(items: TrackerItem[]): boolean {
 	return (
-		items.length > 0 && items.every((item) => isCompleted(item) || isCanceled(item))
+		items.length > 0 &&
+		items.every((item) => isCompleted(item) || isCanceled(item))
 	);
 }
 
-export function isPhaseOverdue(phase: TrackerPhase, items: TrackerItem[]): boolean {
+export function isPhaseOverdue(
+	phase: TrackerPhase,
+	items: TrackerItem[],
+): boolean {
 	if (items.some(isTaskOverdue)) return true;
 	if (
 		phase.endDate !== null &&

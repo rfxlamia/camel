@@ -1,5 +1,5 @@
 import { FolderKanban, X } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { ApiError, api } from "../../api";
 
 interface Props {
@@ -16,7 +16,6 @@ export default function TrackerProjectCreateModal({
 	const [name, setName] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const nameRef = useRef<HTMLInputElement>(null);
 
 	const handleSubmit = async (e?: FormEvent) => {
 		e?.preventDefault();
@@ -28,7 +27,10 @@ export default function TrackerProjectCreateModal({
 			onCreated();
 			onClose();
 		} catch (err) {
-			if (err instanceof ApiError && (err.status === 400 || err.status === 409)) {
+			if (
+				err instanceof ApiError &&
+				(err.status === 400 || err.status === 409)
+			) {
 				setError(err.message);
 			} else {
 				setError("Could not create the project. Try again.");
@@ -88,7 +90,6 @@ export default function TrackerProjectCreateModal({
 						</label>
 						<input
 							id="tracker-project-create-name"
-							ref={nameRef}
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}

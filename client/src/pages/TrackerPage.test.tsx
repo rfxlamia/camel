@@ -67,9 +67,9 @@ vi.mock("react-router", () => ({
 }));
 
 import { ApiError } from "../api";
-import TrackerPage from "./TrackerPage";
 import { KANBAN_NAV } from "../layout/sidebar/navItems";
 import type { TrackerPhase, TrackerProject } from "../types";
+import TrackerPage from "./TrackerPage";
 
 const statuses: TrackerVocabulary[] = [
 	{
@@ -241,6 +241,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
+	vi.useRealTimers();
 });
 
 describe("TrackerPage", () => {
@@ -597,6 +598,7 @@ describe("TrackerPage projects", () => {
 	});
 
 	it("shows name, percentage, task count and an overdue marker on a project card", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
 		vi.setSystemTime(new Date("2026-10-05T12:00:00"));
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
 		mockListTrackerItems.mockResolvedValueOnce([
@@ -613,7 +615,6 @@ describe("TrackerPage projects", () => {
 		expect(screen.getByText("50%")).toBeTruthy();
 		expect(screen.getByText(/2 tasks/i)).toBeTruthy();
 		expect(screen.getByLabelText(/overdue/i)).toBeTruthy();
-		vi.useRealTimers();
 	});
 
 	it('shows an in-project-only match under "In projects" with its trail, and never fires the empty state', async () => {

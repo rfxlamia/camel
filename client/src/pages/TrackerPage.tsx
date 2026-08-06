@@ -1,21 +1,19 @@
 import { ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
+import TrackerInProjectSection from "../components/tracker/TrackerInProjectSection";
 import TrackerProjectCard from "../components/tracker/TrackerProjectCard";
 import TrackerProjectCreateModal from "../components/tracker/TrackerProjectCreateModal";
 import TrackerSection from "../components/tracker/TrackerSection";
 import { useBoard } from "../context/BoardContext";
+import { partitionTrackerSearch } from "../lib/trackerSearch";
 import {
 	groupItemsByStatus,
 	sortStatusesByPosition,
 } from "../lib/trackerUtils";
-import type {
-	TrackerItem,
-	TrackerProject,
-	TrackerVocabulary,
-} from "../types";
+import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 
 const TRACKER_PROJECT_LIMIT = 10;
 const TRACKER_PROJECT_CAP_MESSAGE = `You've reached the project limit (${TRACKER_PROJECT_LIMIT}).`;
@@ -29,29 +27,6 @@ const PROJECT_RELOAD_EVENTS = new Set([
 	"tracker.phase.deleted",
 ]);
 
-function itemMatchesSearch(item: TrackerItem, q: string): boolean {
-	return (
-		item.title.toLowerCase().includes(q) ||
-		item.key.toLowerCase().includes(q) ||
-		(item.description?.toLowerCase().includes(q) ?? false)
-	);
-}
-
-function projectMatchesSearch(project: TrackerProject, q: string): boolean {
-	return project.name.toLowerCase().includes(q);
-}
-
-function itemProjectTrail(
-	item: TrackerItem,
-	projects: TrackerProject[],
-): string | null {
-	const project = projects.find((p) => p.id === item.projectId);
-	if (!project) return null;
-	if (item.phaseId == null) return project.name;
-	const phase = project.phases.find((p) => p.id === item.phaseId);
-	return phase ? `${project.name} › ${phase.name}` : project.name;
-}
-
 export default function TrackerPage() {
 	const {
 		activeWorkspaceId,
@@ -60,7 +35,6 @@ export default function TrackerPage() {
 		showToast,
 	} = useBoard();
 	const location = useLocation();
-	const navigate = useNavigate();
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [items, setItems] = useState<TrackerItem[]>([]);
@@ -160,67 +134,22 @@ export default function TrackerPage() {
 		});
 	}, [subscribeTrackerEvents, loadData]);
 
-	const unassignedItems = useMemo(
-		() => items.filter((item) => item.projectId == null),
-		[items],
+	const {
+		filteredUnassigned,
+		filteredInProject,
+		visibleProjects,
+		searchActive,
+		noSearchResults,
+		toolbarCount,
+	} = useMemo(
+		() => partitionTrackerSearch(items, projects, search),
+		[items, projects, search],
 	);
-
-	const inProjectItems = useMemo(
-		() => items.filter((item) => item.projectId != null),
-		[items],
-	);
-
-	const searchQuery = search.trim().toLowerCase();
-	const searchActive = searchQuery.length > 0;
-
-	const filteredUnassigned = useMemo(() => {
-		if (!searchActive) return unassignedItems;
-		return unassignedItems.filter((item) =>
-			itemMatchesSearch(item, searchQuery),
-		);
-	}, [unassignedItems, searchActive, searchQuery]);
-
-	const filteredInProject = useMemo(() => {
-		if (!searchActive) return [];
-		return inProjectItems.filter((item) =>
-			itemMatchesSearch(item, searchQuery),
-		);
-	}, [inProjectItems, searchActive, searchQuery]);
-
-	const visibleProjects = useMemo(() => {
-		if (!searchActive) return projects;
-		return projects.filter(
-			(project) =>
-				projectMatchesSearch(project, searchQuery) ||
-				inProjectItems.some(
-					(item) =>
-						item.projectId === project.id &&
-						itemMatchesSearch(item, searchQuery),
-				),
-		);
-	}, [projects, searchActive, searchQuery, inProjectItems]);
 
 	const grouped = useMemo(
 		() => groupItemsByStatus(filteredUnassigned, statuses),
 		[filteredUnassigned, statuses],
 	);
-
-	const hasProjectNameMatch = useMemo(
-		() =>
-			searchActive &&
-			projects.some((project) => projectMatchesSearch(project, searchQuery)),
-		[projects, searchActive, searchQuery],
-	);
-
-	const noSearchResults =
-		searchActive &&
-		filteredUnassigned.length === 0 &&
-		filteredInProject.length === 0 &&
-		!hasProjectNameMatch;
-
-	const toolbarCount = searchActive
-		? filteredUnassigned.length + filteredInProject.length
-		: unassignedItems.length;
 
 	const atProjectCap = projects.length >= TRACKER_PROJECT_LIMIT;
 
@@ -401,48 +330,10 @@ export default function TrackerPage() {
 					</section>
 
 					{searchActive && filteredInProject.length > 0 && (
-						<section className="border-neutral-200 border-b">
-							<div className="flex h-9 items-center bg-neutral-100/80 px-4 md:px-6">
-								<span className="font-medium text-neutral-800 text-sm">
-									In projects
-								</span>
-								<span className="ml-2 text-neutral-500 text-xs tabular-nums">
-									{filteredInProject.length}
-								</span>
-							</div>
-							<div className="divide-y divide-neutral-200/70 bg-white">
-								{filteredInProject.map((item) => {
-									const trail = itemProjectTrail(item, projects);
-									return (
-										<div
-											key={item.key}
-											className="group/row relative flex h-9 items-center transition-colors hover:bg-neutral-100/70"
-										>
-											<button
-												type="button"
-												data-testid={`tracker-row-${item.key}`}
-												aria-label={`${item.key} ${item.title}`}
-												onClick={() => navigate(`/tracker/${item.key}`)}
-												className="absolute inset-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600"
-											/>
-											<div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-2.5 px-4 text-left text-sm md:px-6">
-												<span className="w-14 shrink-0 truncate font-mono text-neutral-500 text-xs tabular-nums">
-													{item.key}
-												</span>
-												<span className="min-w-0 truncate text-neutral-900">
-													{item.title}
-												</span>
-												{trail && (
-													<span className="ml-auto shrink-0 truncate text-neutral-500 text-xs">
-														{trail}
-													</span>
-												)}
-											</div>
-										</div>
-									);
-								})}
-							</div>
-						</section>
+						<TrackerInProjectSection
+							items={filteredInProject}
+							projects={projects}
+						/>
 					)}
 
 					{statuses.map((status) => {

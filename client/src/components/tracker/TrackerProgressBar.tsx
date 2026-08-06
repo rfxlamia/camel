@@ -6,15 +6,11 @@ interface Props {
 
 export default function TrackerProgressBar({ rollup }: Props) {
 	if (rollup.kind === "no-tasks") {
-		return (
-			<span className="text-neutral-500 text-xs">No tasks</span>
-		);
+		return <span className="text-neutral-500 text-xs">No tasks</span>;
 	}
 
 	if (rollup.kind === "no-active-work") {
-		return (
-			<span className="text-neutral-500 text-xs">No active work</span>
-		);
+		return <span className="text-neutral-500 text-xs">No active work</span>;
 	}
 
 	const pct = Math.round(rollup.ratio * 100);
