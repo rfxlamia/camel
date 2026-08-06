@@ -1,5 +1,5 @@
 import { FolderKanban, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ApiError, api } from "../../api";
 
 interface Props {
@@ -16,6 +16,15 @@ export default function TrackerProjectCreateModal({
 	const [name, setName] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== "Escape") return;
+			onClose();
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [onClose]);
 
 	const handleSubmit = async (e?: FormEvent) => {
 		e?.preventDefault();

@@ -20,6 +20,7 @@ export default function TrackerProgressBar({ rollup }: Props) {
 			<div
 				className="h-1.5 min-w-0 flex-1 rounded-full bg-neutral-200"
 				role="progressbar"
+				aria-label="Progress"
 				aria-valuenow={pct}
 				aria-valuemin={0}
 				aria-valuemax={100}

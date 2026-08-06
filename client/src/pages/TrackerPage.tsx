@@ -1,11 +1,11 @@
-import { ChevronRight, FolderKanban, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
 import TrackerInProjectSection from "../components/tracker/TrackerInProjectSection";
-import TrackerProjectCard from "../components/tracker/TrackerProjectCard";
 import TrackerProjectCreateModal from "../components/tracker/TrackerProjectCreateModal";
+import TrackerProjectsHeader from "../components/tracker/TrackerProjectsHeader";
 import TrackerSection from "../components/tracker/TrackerSection";
 import { useBoard } from "../context/BoardContext";
 import { partitionTrackerSearch } from "../lib/trackerSearch";
@@ -272,62 +272,16 @@ export default function TrackerPage() {
 				</p>
 			) : (
 				<div>
-					<section className="border-neutral-200 border-b">
-						<div className="group/head flex h-9 items-center gap-2 bg-neutral-100/80 px-4 md:px-6">
-							<button
-								type="button"
-								data-testid="toggle-projects"
-								onClick={() => setProjectsCollapsed((v) => !v)}
-								className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								<ChevronRight
-									size={13}
-									className={`shrink-0 text-neutral-500 transition-transform duration-150 ${
-										projectsCollapsed ? "" : "rotate-90"
-									}`}
-									aria-hidden
-								/>
-								<FolderKanban
-									size={13}
-									className="shrink-0 text-neutral-500"
-									aria-hidden
-								/>
-								<span className="truncate font-medium text-neutral-800 text-sm">
-									Projects
-								</span>
-								<span className="text-neutral-500 text-xs tabular-nums">
-									{projects.length}
-								</span>
-							</button>
-							<button
-								type="button"
-								aria-label="New project"
-								disabled={atProjectCap}
-								title={atProjectCap ? TRACKER_PROJECT_CAP_MESSAGE : undefined}
-								onClick={() => setProjectCreateOpen(true)}
-								className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-neutral-600 text-xs transition hover:bg-neutral-200 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
-							>
-								<Plus size={13} aria-hidden />
-								New project
-							</button>
-						</div>
-						{atProjectCap && (
-							<p className="border-neutral-200 border-b bg-neutral-50 px-4 py-1.5 text-neutral-600 text-xs md:px-6">
-								{TRACKER_PROJECT_CAP_MESSAGE}
-							</p>
-						)}
-						{!projectsCollapsed && visibleProjects.length > 0 && (
-							<div className="grid gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-3 md:px-6">
-								{visibleProjects.map((project) => (
-									<TrackerProjectCard
-										key={project.id}
-										project={project}
-										items={items}
-									/>
-								))}
-							</div>
-						)}
-					</section>
+					<TrackerProjectsHeader
+						projects={projects}
+						visibleProjects={visibleProjects}
+						items={items}
+						collapsed={projectsCollapsed}
+						onToggleCollapsed={() => setProjectsCollapsed((v) => !v)}
+						atProjectCap={atProjectCap}
+						capMessage={TRACKER_PROJECT_CAP_MESSAGE}
+						onNewProject={() => setProjectCreateOpen(true)}
+					/>
 
 					{searchActive && filteredInProject.length > 0 && (
 						<TrackerInProjectSection

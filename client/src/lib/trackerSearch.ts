@@ -27,14 +27,10 @@ export function itemProjectTrail(
 }
 
 export interface TrackerSearchPartition {
-	unassignedItems: TrackerItem[];
-	inProjectItems: TrackerItem[];
-	searchQuery: string;
 	searchActive: boolean;
 	filteredUnassigned: TrackerItem[];
 	filteredInProject: TrackerItem[];
 	visibleProjects: TrackerProject[];
-	hasProjectNameMatch: boolean;
 	noSearchResults: boolean;
 	toolbarCount: number;
 }
@@ -84,14 +80,10 @@ export function partitionTrackerSearch(
 		: unassignedItems.length;
 
 	return {
-		unassignedItems,
-		inProjectItems,
-		searchQuery,
 		searchActive,
 		filteredUnassigned,
 		filteredInProject,
 		visibleProjects,
-		hasProjectNameMatch,
 		noSearchResults,
 		toolbarCount,
 	};
