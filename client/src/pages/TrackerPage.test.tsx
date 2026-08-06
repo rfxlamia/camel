@@ -424,7 +424,7 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
-			screen.getByRole("button", { name: /create tracker item/i }),
+			screen.getByRole("button", { name: /^New item$/ }),
 		);
 		const modal = within(screen.getByRole("dialog"));
 		await waitFor(() => modal.getByRole("button", { name: /Backlog/ }));
@@ -445,7 +445,7 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
-			screen.getByRole("button", { name: /create tracker item/i }),
+			screen.getByRole("button", { name: /^New item$/ }),
 		);
 		const modal = within(screen.getByRole("dialog"));
 		fireEvent.change(screen.getByLabelText(/item title/i), {
@@ -472,7 +472,7 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(
-			screen.getByRole("button", { name: /create tracker item/i }),
+			screen.getByRole("button", { name: /^New item$/ }),
 		);
 		const modal = within(screen.getByRole("dialog"));
 		await waitFor(() => modal.getByRole("button", { name: /Labels/ }));
@@ -663,7 +663,49 @@ describe("TrackerPage items tab", () => {
 		await waitFor(() =>
 			expect(screen.getByText(/nothing tracked yet/i)).toBeTruthy(),
 		);
-		expect(screen.getByRole("button", { name: /^new item$/i })).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: /create your first item/i }),
+		).toBeTruthy();
+	});
+
+	it("surfaces a retry panel when the initial load fails", async () => {
+		mockListTrackerItems.mockRejectedValueOnce(new Error("network down"));
+		render(<TrackerPage />);
+
+		await waitFor(() =>
+			expect(screen.getByText(/couldn't load the tracker/i)).toBeTruthy(),
+		);
+		expect(mockShowToast).toHaveBeenCalled();
+		expect(mockShowToast.mock.calls[0]?.[1]).toBe("error");
+		// Not the "nothing tracked yet" empty state — an empty page and a broken
+		// page must not look the same.
+		expect(screen.queryByText(/nothing tracked yet/i)).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+		await waitFor(() => expect(screen.getByText("CA-1")).toBeTruthy());
+		expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
+	});
+
+	it("keeps rows on screen when a background refresh fails", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+
+		mockListTrackerItems.mockRejectedValueOnce(new Error("network down"));
+		sseHandler?.({ type: "tracker.updated" });
+		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+		expect(screen.getByText("CA-1")).toBeTruthy();
+		expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
 	});
 
 	it("keeps collapsed groups collapsed across a tab switch", async () => {

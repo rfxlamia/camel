@@ -1,4 +1,4 @@
-import { ListTodo, Plus, Rows3, Search } from "lucide-react";
+import { CloudOff, ListTodo, Plus, Rows3, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
@@ -68,6 +68,7 @@ export default function TrackerPage() {
 	const [projectCreateOpen, setProjectCreateOpen] = useState(false);
 	const [createDefaults, setCreateDefaults] = useState<CreateDefaults>({});
 	const [loading, setLoading] = useState(true);
+	const [loadFailed, setLoadFailed] = useState(false);
 	/** Item ids with a status request in flight, and the pick waiting on it. */
 	const inFlightStatusRef = useRef<Set<number>>(new Set());
 	const queuedStatusRef = useRef<Map<number, number>>(new Map());
@@ -128,10 +129,19 @@ export default function TrackerPage() {
 			setPriorities(priorityList);
 			setItems(itemList);
 			setProjects(projectList);
+			setLoadFailed(false);
+		} catch {
+			// A failed background refresh must not blank a page that already has
+			// rows on it, so the retry panel is gated on having nothing to show.
+			setLoadFailed(true);
+			showToast(
+				"Couldn't load the tracker. Check your connection and try again.",
+				"error",
+			);
 		} finally {
 			setLoading(false);
 		}
-	}, [activeWorkspaceId]);
+	}, [activeWorkspaceId, showToast]);
 
 	useEffect(() => {
 		void loadData();
@@ -355,7 +365,6 @@ export default function TrackerPage() {
 					) : (
 						<button
 							type="button"
-							aria-label="Create tracker item"
 							onClick={() => openCreate()}
 							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
@@ -366,7 +375,25 @@ export default function TrackerPage() {
 				</div>
 			</div>
 
-			{loading && items.length === 0 ? (
+			{loadFailed && items.length === 0 && projects.length === 0 ? (
+				<div className="flex flex-col items-center px-4 py-16 text-center md:px-6">
+					<CloudOff size={20} className="text-neutral-400" aria-hidden />
+					<p className="mt-3 font-medium text-neutral-900 text-sm">
+						Couldn't load the tracker
+					</p>
+					<p className="mt-1 max-w-sm text-neutral-600 text-sm">
+						Check your connection and try again.
+					</p>
+					<button
+						type="button"
+						onClick={() => void loadData()}
+						disabled={loading}
+						className="mt-4 inline-flex h-8 items-center rounded-md border border-neutral-300 bg-neutral-100 px-3 font-medium text-primary-700 text-sm transition-colors hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
+					>
+						{loading ? "Retrying…" : "Try again"}
+					</button>
+				</div>
+			) : loading && items.length === 0 ? (
 				<p className="px-4 py-8 text-center text-neutral-500 text-sm md:px-6">
 					Loading…
 				</p>
@@ -400,7 +427,7 @@ export default function TrackerPage() {
 						className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 					>
 						<Plus size={15} aria-hidden />
-						New item
+						Create your first item
 					</button>
 				</div>
 			) : (
