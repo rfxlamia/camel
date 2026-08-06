@@ -14,7 +14,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronRight, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatDueDate } from "../../lib/boardViewUtils";
 import {
@@ -38,6 +38,7 @@ interface Props {
 	onStatusChange?: (item: TrackerItem, statusId: number) => void;
 	onRename?: () => void;
 	onDelete?: () => void;
+	onAddTask?: () => void;
 	onReorder?: (oldIndex: number, newIndex: number, itemKey: string) => void;
 	children?: ReactNode;
 }
@@ -125,6 +126,7 @@ export default function TrackerPhaseSection({
 	onStatusChange,
 	onRename,
 	onDelete,
+	onAddTask,
 	onReorder,
 	children,
 }: Props) {
@@ -216,6 +218,16 @@ export default function TrackerPhaseSection({
 						className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-500 opacity-0 transition hover:bg-neutral-200 hover:text-neutral-800 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 group-hover/head:opacity-100"
 					>
 						<Trash2 size={13} aria-hidden />
+					</button>
+				)}
+				{onAddTask && (
+					<button
+						type="button"
+						aria-label={`Add task to ${label}`}
+						onClick={onAddTask}
+						className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-500 opacity-0 transition hover:bg-neutral-200 hover:text-neutral-800 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 group-hover/head:opacity-100"
+					>
+						<Plus size={14} aria-hidden />
 					</button>
 				)}
 			</div>

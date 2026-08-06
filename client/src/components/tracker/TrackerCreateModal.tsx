@@ -28,6 +28,10 @@ interface Props {
 	priorities: TrackerVocabulary[];
 	/** Preselected status — set when opening from a status group's + button. */
 	defaultStatusId?: number;
+	/** Locked project — set when opening from a project WBS page. */
+	defaultProjectId?: number;
+	/** Locked phase — omit for project-only; pass null for the No phase bucket. */
+	defaultPhaseId?: number | null;
 }
 
 type PickerName = "status" | "priority" | "assignees" | "labels" | "project" | "phase";
@@ -41,15 +45,22 @@ export default function TrackerCreateModal({
 	statuses,
 	priorities,
 	defaultStatusId,
+	defaultProjectId,
+	defaultPhaseId,
 }: Props) {
+	const lockProjectAssignment = defaultProjectId !== undefined;
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [statusId, setStatusId] = useState<number | undefined>(defaultStatusId);
 	const [priorityId, setPriorityId] = useState<number | null>(null);
 	const [labelIds, setLabelIds] = useState<number[]>([]);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
-	const [projectId, setProjectId] = useState<number | null>(null);
-	const [phaseId, setPhaseId] = useState<number | null>(null);
+	const [projectId, setProjectId] = useState<number | null>(
+		defaultProjectId ?? null,
+	);
+	const [phaseId, setPhaseId] = useState<number | null>(
+		defaultPhaseId !== undefined ? defaultPhaseId : null,
+	);
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
@@ -185,8 +196,13 @@ export default function TrackerCreateModal({
 		setDescription("");
 		setLabelIds([]);
 		setAssigneeIds([]);
-		setProjectId(null);
-		setPhaseId(null);
+		if (lockProjectAssignment) {
+			setProjectId(defaultProjectId ?? null);
+			setPhaseId(defaultPhaseId !== undefined ? defaultPhaseId : null);
+		} else {
+			setProjectId(null);
+			setPhaseId(null);
+		}
 		setOpenPicker(null);
 		titleRef.current?.focus();
 	};
@@ -418,7 +434,7 @@ export default function TrackerCreateModal({
 							/>
 						)}
 
-						{projects.length > 0 && (
+						{!lockProjectAssignment && projects.length > 0 && (
 							<>
 								<TrackerPropertyPicker
 									placeholder="Project"

@@ -336,3 +336,90 @@ describe("TrackerCreateModal project assignment", () => {
 		expect(screen.queryByText("Phase")).toBeNull();
 	});
 });
+
+describe("TrackerCreateModal locked project assignment", () => {
+	function renderLockedModal(phaseId: number | null = 9) {
+		const onClose = vi.fn();
+		const onCreated = vi.fn();
+		render(
+			<TrackerCreateModal
+				workspaceId={7}
+				statuses={statuses}
+				priorities={priorities}
+				defaultProjectId={1}
+				defaultPhaseId={phaseId}
+				onClose={onClose}
+				onCreated={onCreated}
+			/>,
+		);
+		return { onClose, onCreated };
+	}
+
+	it("hides project and phase pickers when defaultProjectId is set", async () => {
+		renderLockedModal();
+		await screen.findByText("Backlog");
+		expect(screen.queryByText("Project")).toBeNull();
+		expect(screen.queryByText("Phase")).toBeNull();
+	});
+
+	it("submits the locked projectId and phaseId", async () => {
+		renderLockedModal(9);
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "In-phase task" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() =>
+			expect(createTrackerItem).toHaveBeenCalledWith(7, {
+				title: "In-phase task",
+				statusId: 1,
+				priorityId: null,
+				projectId: 1,
+				phaseId: 9,
+			}),
+		);
+	});
+
+	it("submits projectId without phaseId when locked to no phase", async () => {
+		renderLockedModal(null);
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "No-phase task" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() =>
+			expect(createTrackerItem).toHaveBeenCalledWith(7, {
+				title: "No-phase task",
+				statusId: 1,
+				priorityId: null,
+				projectId: 1,
+			}),
+		);
+		const [, body] = createTrackerItem.mock.calls[0] as [
+			number,
+			Record<string, unknown>,
+		];
+		expect(body).not.toHaveProperty("phaseId");
+	});
+
+	it("keeps locked project and phase on create more reset", async () => {
+		renderLockedModal(9);
+		fireEvent.click(screen.getByRole("switch", { name: /Create more/ }));
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "First" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() => expect(createTrackerItem).toHaveBeenCalledTimes(1));
+
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "Second" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() => expect(createTrackerItem).toHaveBeenCalledTimes(2));
+		expect(createTrackerItem).toHaveBeenLastCalledWith(7, {
+			title: "Second",
+			statusId: 1,
+			priorityId: null,
+			projectId: 1,
+			phaseId: 9,
+		});
+	});
+});

@@ -22,6 +22,8 @@ const {
 	mockDeleteTrackerPhase,
 	mockReorderTrackerItem,
 	mockUpdateTrackerItem,
+	mockCreateTrackerItem,
+	mockGetWorkspaceMembers,
 	mockNavigate,
 	mockUseParams,
 	mockUseBoard,
@@ -37,6 +39,8 @@ const {
 	mockDeleteTrackerPhase: vi.fn(),
 	mockReorderTrackerItem: vi.fn(),
 	mockUpdateTrackerItem: vi.fn(),
+	mockCreateTrackerItem: vi.fn(),
+	mockGetWorkspaceMembers: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseParams: vi.fn(),
 	mockUseBoard: vi.fn(),
@@ -56,6 +60,8 @@ vi.mock("../api", () => ({
 		deleteTrackerPhase: (...a: unknown[]) => mockDeleteTrackerPhase(...a),
 		reorderTrackerItem: (...a: unknown[]) => mockReorderTrackerItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
+		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
+		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -187,6 +193,8 @@ beforeEach(() => {
 		subscribeTrackerEvents: vi.fn(() => () => {}),
 		showToast: mockShowToast,
 	});
+	mockGetWorkspaceMembers.mockResolvedValue({ members: [] });
+	mockCreateTrackerItem.mockResolvedValue({ id: 99, key: "CA-99" });
 });
 
 afterEach(() => {
@@ -236,6 +244,29 @@ describe("TrackerProjectPage", () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));
 		expect(screen.queryByText("No phase")).toBeNull();
+	});
+
+	it("opens the create modal from a phase and submits with locked project and phase ids", async () => {
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByText("Persiapan"));
+		fireEvent.click(
+			screen.getByRole("button", { name: "Add task to Persiapan" }),
+		);
+		expect(screen.getByRole("dialog")).toBeTruthy();
+		expect(screen.queryByText("Project")).toBeNull();
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "Gather requirements doc" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+		await waitFor(() =>
+			expect(mockCreateTrackerItem).toHaveBeenCalledWith(7, {
+				title: "Gather requirements doc",
+				statusId: 1,
+				priorityId: null,
+				projectId: 1,
+				phaseId: 9,
+			}),
+		);
 	});
 
 	it("shows a CTA empty state for a project with zero phases and zero tasks", async () => {

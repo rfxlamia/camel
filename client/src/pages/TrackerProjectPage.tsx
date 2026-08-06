@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ApiError, api } from "../api";
 import TrackerConfirmDialog from "../components/tracker/TrackerConfirmDialog";
+import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
 import TrackerPhaseEditor, {
 	type PhaseEditorValues,
 } from "../components/tracker/TrackerPhaseEditor";
@@ -117,6 +118,8 @@ export default function TrackerProjectPage() {
 	const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 	const [projectDeleteOpen, setProjectDeleteOpen] = useState(false);
 	const [phaseCreateOpen, setPhaseCreateOpen] = useState(false);
+	const [createOpen, setCreateOpen] = useState(false);
+	const [createPhaseId, setCreatePhaseId] = useState<number | null>(null);
 	const [editingPhaseId, setEditingPhaseId] = useState<number | null>(null);
 	const [deletingPhaseId, setDeletingPhaseId] = useState<number | null>(null);
 	const [phaseEditorError, setPhaseEditorError] = useState<string | null>(null);
@@ -338,6 +341,11 @@ export default function TrackerProjectPage() {
 		setEditingPhaseId(null);
 		setPhaseEditorError(null);
 		setPhaseCreateOpen(true);
+	};
+
+	const openCreateTask = (phaseId: number | null) => {
+		setCreatePhaseId(phaseId);
+		setCreateOpen(true);
 	};
 
 	const closePhaseEditor = () => {
@@ -632,6 +640,7 @@ export default function TrackerProjectPage() {
 									setEditingPhaseId(phase.id);
 								}}
 								onDelete={() => setDeletingPhaseId(phase.id)}
+								onAddTask={() => openCreateTask(phase.id)}
 								onStatusChange={(item, statusId) =>
 									void changeStatus(item, statusId)
 								}
@@ -665,6 +674,7 @@ export default function TrackerProjectPage() {
 							onReorder={(oldIndex, newIndex, itemKey) =>
 								void reorderPhaseItems(null, oldIndex, newIndex, itemKey)
 							}
+							onAddTask={() => openCreateTask(null)}
 							onStatusChange={(item, statusId) =>
 								void changeStatus(item, statusId)
 							}
@@ -711,6 +721,18 @@ export default function TrackerProjectPage() {
 					description="Tasks in this phase will move to No phase."
 					onCancel={() => setDeletingPhaseId(null)}
 					onConfirm={confirmDeletePhase}
+				/>
+			)}
+
+			{createOpen && (
+				<TrackerCreateModal
+					workspaceId={activeWorkspaceId}
+					statuses={statuses}
+					priorities={priorities}
+					defaultProjectId={project.id}
+					defaultPhaseId={createPhaseId}
+					onClose={() => setCreateOpen(false)}
+					onCreated={() => void loadData()}
 				/>
 			)}
 		</div>
