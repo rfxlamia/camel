@@ -793,11 +793,23 @@ describe("TrackerProjectPage drag reorder", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledWith(
-				7,
-				"CA-1",
-				expect.any(Object),
-			),
+			expect(mockReorderTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				beforeId: 2,
+			}),
+		);
+	});
+
+	it("calls reorderTrackerItem with afterId when a task moves to the top of its phase", async () => {
+		mockReorderTrackerItem.mockResolvedValue(
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 512 }),
+		);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-2"));
+		await pressReorder(/reorder ca-2/i, "ArrowUp");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledWith(7, "CA-2", {
+				afterId: 1,
+			}),
 		);
 	});
 
@@ -886,7 +898,7 @@ describe("TrackerProjectPage drag reorder", () => {
 		]);
 	});
 
-	it("does not roll back a later successful reorder when an earlier request fails", async () => {
+	it("rolls back only the failed item when an earlier request fails after a later reorder succeeds", async () => {
 		mockListTrackerItems.mockResolvedValue([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
@@ -925,25 +937,70 @@ describe("TrackerProjectPage drag reorder", () => {
 			]),
 		);
 		rejectFirst(new Error("network down"));
+		await waitFor(() =>
+			expect(mockShowToast).toHaveBeenCalledWith(
+				"Couldn't reorder the task. Check your connection and try again.",
+				"error",
+			),
+		);
+		const order = screen
+			.getAllByTestId(/^tracker-row-CA-/)
+			.map((row) => row.dataset.testid);
+		expect(order).toEqual([
+			"tracker-row-CA-1",
+			"tracker-row-CA-2",
+			"tracker-row-CA-3",
+		]);
+	});
+
+	it("does not roll back a later drag when a superseded response for the same item fails", async () => {
+		mockListTrackerItems.mockResolvedValue([
+			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
+			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
+		]);
+		let rejectFirst: (reason?: unknown) => void = () => {};
+		mockReorderTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise((_resolve, reject) => {
+						rejectFirst = reject;
+					}),
+			)
+			.mockResolvedValueOnce(
+				projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 512 }),
+			);
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		await pressReorder(/reorder ca-1/i, "ArrowDown");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1),
+		);
+		await pressReorder(/reorder ca-1/i, "ArrowUp");
+		await waitFor(() =>
+			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(2),
+		);
+		await waitFor(() =>
+			expect(
+				screen
+					.getAllByTestId(/^tracker-row-CA-/)
+					.map((row) => row.dataset.testid),
+			).toEqual(["tracker-row-CA-1", "tracker-row-CA-2"]),
+		);
+		rejectFirst(new Error("network down"));
 		await act(async () => {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 		});
 		const order = screen
 			.getAllByTestId(/^tracker-row-CA-/)
 			.map((row) => row.dataset.testid);
-		expect(order).toEqual([
-			"tracker-row-CA-2",
-			"tracker-row-CA-3",
-			"tracker-row-CA-1",
-		]);
+		expect(order).toEqual(["tracker-row-CA-1", "tracker-row-CA-2"]);
 	});
 
 	it("shows the reorder grip on row hover when reordering is enabled", async () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		const grip = screen.getByRole("button", { name: /reorder ca-1/i });
-		expect(grip.className).toContain("group-hover/row:opacity-100");
-		const rowGroup = grip.closest(".group\\/row");
-		expect(rowGroup).toBeTruthy();
+		expect(grip).toBeTruthy();
+		expect(grip.getAttribute("aria-label")).toBe("Reorder CA-1");
 	});
 });

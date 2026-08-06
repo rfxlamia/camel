@@ -80,6 +80,7 @@ function SortableTrackerRow({
 	return (
 		<div
 			ref={setNodeRef}
+			// Test hook for jsdom layout stub in TrackerProjectPage tests.
 			data-sortable-key={item.key}
 			style={{
 				transform: CSS.Transform.toString(transform),

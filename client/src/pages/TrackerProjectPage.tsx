@@ -19,6 +19,7 @@ import type {
 } from "../types";
 
 const NO_PHASE_KEY = "no-phase";
+// Keep in sync with server/src/core/position.ts POSITION_GAP.
 const POSITION_GAP = 1024;
 
 const RELOAD_EVENTS = new Set([
@@ -76,8 +77,7 @@ function sortByPosition(items: TrackerItem[]): TrackerItem[] {
 function reorderNeighborBody(
 	reordered: TrackerItem[],
 	newIndex: number,
-): { beforeId?: number; afterId?: number } | null {
-	if (reordered.length < 2) return null;
+): { beforeId?: number; afterId?: number } {
 	if (newIndex === 0) {
 		return { afterId: reordered[1].id };
 	}
@@ -121,7 +121,7 @@ export default function TrackerProjectPage() {
 	const [deletingPhaseId, setDeletingPhaseId] = useState<number | null>(null);
 	const [phaseEditorError, setPhaseEditorError] = useState<string | null>(null);
 	const [phaseEditorSubmitting, setPhaseEditorSubmitting] = useState(false);
-	const reorderSeqRef = useRef(0);
+	const reorderSeqMapRef = useRef<Map<number, number>>(new Map());
 	const collapsedKeysRef = useRef(collapsedKeys);
 	collapsedKeysRef.current = collapsedKeys;
 
@@ -454,14 +454,11 @@ export default function TrackerProjectPage() {
 		const phaseItems = sortByPosition(
 			projectItems.filter((item) => (item.phaseId ?? null) === phaseId),
 		);
-		if (oldIndex === newIndex) return;
-
 		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
 		const neighbors = reorderNeighborBody(reordered, newIndex);
-		if (!neighbors) return;
-
-		const seq = ++reorderSeqRef.current;
 		const movedId = reordered[newIndex].id;
+		const seq = (reorderSeqMapRef.current.get(movedId) ?? 0) + 1;
+		reorderSeqMapRef.current.set(movedId, seq);
 		const priorPosition = phaseItems[oldIndex].position;
 		const optimisticPosition = optimisticReorderPosition(reordered, newIndex);
 
@@ -477,23 +474,23 @@ export default function TrackerProjectPage() {
 				itemKey,
 				neighbors,
 			);
-			if (seq === reorderSeqRef.current) {
+			if (seq === reorderSeqMapRef.current.get(movedId)) {
 				setItems((prev) =>
 					prev.map((item) => (item.id === updated.id ? updated : item)),
 				);
 			}
 		} catch {
-			if (seq === reorderSeqRef.current) {
+			if (seq === reorderSeqMapRef.current.get(movedId)) {
 				setItems((prev) =>
 					prev.map((item) =>
 						item.id === movedId ? { ...item, position: priorPosition } : item,
 					),
 				);
-				showToast(
-					"Couldn't reorder the task. Check your connection and try again.",
-					"error",
-				);
 			}
+			showToast(
+				"Couldn't reorder the task. Check your connection and try again.",
+				"error",
+			);
 		}
 	};
 
