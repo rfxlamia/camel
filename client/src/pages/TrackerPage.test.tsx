@@ -899,7 +899,87 @@ describe("TrackerPage projects", () => {
 		]);
 		sseHandler?.({ type: "tracker.project.deleted" });
 		// The item never left the list — only its project marker did.
-		await waitFor(() => expect(screen.queryByText("Rilis v2")).toBeNull());
+		await waitFor(() =>
+			expect(screen.queryByTestId("row-project-CA-10")).toBeNull(),
+		);
 		expect(screen.getByText("CA-10")).toBeTruthy();
+
+		showProjectsTab();
+		await waitFor(() => expect(screen.queryByLabelText("Rilis v2")).toBeNull());
+	});
+
+	it("keeps the projects tab mounted when items are empty during a refresh", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		render(<TrackerPage />);
+		showProjectsTab();
+		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+
+		let resolveItems: (value: TrackerItem[]) => void = () => {};
+		mockListTrackerItems.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveItems = resolve;
+				}),
+		);
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		sseHandler?.({ type: "tracker.project.updated" });
+		expect(screen.queryByText("Loading…")).toBeNull();
+		expect(screen.getByLabelText("Rilis v2")).toBeTruthy();
+		resolveItems([]);
+		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+	});
+
+	it("ignores a stale failed load when a newer refresh already succeeded", async () => {
+		let resolveStale: (reason?: unknown) => void = () => {};
+		let resolveFresh: (value: TrackerItem[]) => void = () => {};
+		mockListTrackerItems
+			.mockResolvedValueOnce([makeItem({ id: 1, key: "CA-1" })])
+			.mockImplementationOnce(
+				() =>
+					new Promise((_, reject) => {
+						resolveStale = reject;
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFresh = resolve;
+					}),
+			);
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("CA-1"));
+
+		sseHandler?.({ type: "tracker.updated" });
+		sseHandler?.({ type: "tracker.updated" });
+		resolveFresh([makeItem({ id: 1, key: "CA-1", title: "Fresh title" })]);
+		await waitFor(() => expect(screen.getByText("Fresh title")).toBeTruthy());
+
+		resolveStale(new Error("network down"));
+		await waitFor(() => expect(screen.getByText("Fresh title")).toBeTruthy());
+		expect(mockShowToast).not.toHaveBeenCalled();
+		expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
 	});
 });

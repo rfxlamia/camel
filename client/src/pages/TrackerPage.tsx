@@ -74,6 +74,12 @@ export default function TrackerPage() {
 	const queuedStatusRef = useRef<Map<number, number>>(new Map());
 	/** Set while this page is the one changing the location, not the router. */
 	const skipCollapseResetRef = useRef(false);
+	/** Monotonic id so a slower stale loadData cannot clobber a newer one. */
+	const loadSeqRef = useRef(0);
+	const itemsLenRef = useRef(0);
+	const projectsLenRef = useRef(0);
+	itemsLenRef.current = items.length;
+	projectsLenRef.current = projects.length;
 
 	const tab: TrackerTab =
 		searchParams.get("tab") === "projects" ? "projects" : "items";
@@ -116,7 +122,12 @@ export default function TrackerPage() {
 
 	const loadData = useCallback(async () => {
 		if (activeWorkspaceId === null) return;
-		setLoading(true);
+		const seq = ++loadSeqRef.current;
+		// Only the empty first paint needs a full-page spinner; background
+		// refreshes keep whatever is already on screen.
+		if (itemsLenRef.current === 0 && projectsLenRef.current === 0) {
+			setLoading(true);
+		}
 		try {
 			const [statusList, priorityList, itemList, projectList] =
 				await Promise.all([
@@ -125,12 +136,14 @@ export default function TrackerPage() {
 					api.listTrackerItems(activeWorkspaceId),
 					api.listTrackerProjects(activeWorkspaceId),
 				]);
+			if (seq !== loadSeqRef.current) return;
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
 			setItems(itemList);
 			setProjects(projectList);
 			setLoadFailed(false);
 		} catch {
+			if (seq !== loadSeqRef.current) return;
 			// A failed background refresh must not blank a page that already has
 			// rows on it, so the retry panel is gated on having nothing to show.
 			setLoadFailed(true);
@@ -139,7 +152,9 @@ export default function TrackerPage() {
 				"error",
 			);
 		} finally {
-			setLoading(false);
+			if (seq === loadSeqRef.current) {
+				setLoading(false);
+			}
 		}
 	}, [activeWorkspaceId, showToast]);
 
@@ -322,8 +337,15 @@ export default function TrackerPage() {
 						/>
 						<input
 							type="search"
+							aria-label={
+								projectsTab
+									? "Search projects or items"
+									: "Search tracker items"
+							}
 							placeholder={
-								projectsTab ? "Search projects…" : "Search tracker items…"
+								projectsTab
+									? "Search projects or items…"
+									: "Search tracker items…"
 							}
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
@@ -393,7 +415,7 @@ export default function TrackerPage() {
 						{loading ? "Retrying…" : "Try again"}
 					</button>
 				</div>
-			) : loading && items.length === 0 ? (
+			) : loading && items.length === 0 && projects.length === 0 ? (
 				<p className="px-4 py-8 text-center text-neutral-500 text-sm md:px-6">
 					Loading…
 				</p>

@@ -87,7 +87,7 @@ export default function TrackerRow({
 			{projectLabel && (
 				<span
 					data-testid={`row-project-${item.key}`}
-					className="hidden max-w-32 shrink-0 truncate rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs sm:inline-block"
+					className="inline-block max-w-32 shrink-0 truncate rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs"
 				>
 					{projectLabel}
 				</span>
