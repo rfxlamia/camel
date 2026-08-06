@@ -461,6 +461,8 @@ export const api = {
 			priorityId?: number | null;
 			labelIds?: number[];
 			assigneeIds?: number[];
+			projectId?: number | null;
+			phaseId?: number | null;
 		},
 	) =>
 		request<TrackerItem>(`/workspaces/${workspaceId}/tracker/items`, {

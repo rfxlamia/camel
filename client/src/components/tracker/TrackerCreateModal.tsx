@@ -1,9 +1,12 @@
-import { ListTodo, Tag, UserRound, X } from "lucide-react";
+import { Folder, ListTodo, Signpost, Tag, UserRound, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import TrackerDateFields from "./TrackerDateFields";
 import { sortStatusesByPosition } from "../../lib/trackerUtils";
-import type { TrackerVocabulary, WorkspaceMember } from "../../types";
+import type {
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
 import {
 	Avatar,
 	LabelDot,
@@ -27,7 +30,7 @@ interface Props {
 	defaultStatusId?: number;
 }
 
-type PickerName = "status" | "priority" | "assignees" | "labels";
+type PickerName = "status" | "priority" | "assignees" | "labels" | "project" | "phase";
 
 const NO_PRIORITY = "none";
 
@@ -45,10 +48,11 @@ export default function TrackerCreateModal({
 	const [priorityId, setPriorityId] = useState<number | null>(null);
 	const [labelIds, setLabelIds] = useState<number[]>([]);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
-	const [startDate, setStartDate] = useState("");
-	const [endDate, setEndDate] = useState("");
+	const [projectId, setProjectId] = useState<number | null>(null);
+	const [phaseId, setPhaseId] = useState<number | null>(null);
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
+	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [createMore, setCreateMore] = useState(false);
@@ -77,13 +81,15 @@ export default function TrackerCreateModal({
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [labelList, memberList] = await Promise.all([
+			const [labelList, memberList, projectList] = await Promise.all([
 				api.listTrackerVocabularies(workspaceId, "label"),
 				api.getWorkspaceMembers(workspaceId),
+				api.listTrackerProjects(workspaceId),
 			]);
 			if (cancelled) return;
 			setLabels(labelList);
 			setMembers(memberList.members);
+			setProjects(projectList);
 		})();
 		return () => {
 			cancelled = true;
@@ -110,6 +116,8 @@ export default function TrackerCreateModal({
 	const selectedPriority = orderedPriorities.find((p) => p.id === priorityId);
 	const selectedLabels = labels.filter((l) => labelIds.includes(l.id));
 	const selectedMembers = members.filter((m) => assigneeIds.includes(m.userId));
+	const selectedProject = projects.find((p) => p.id === projectId);
+	const selectedPhase = selectedProject?.phases.find((p) => p.id === phaseId);
 
 	const statusOptions: PickerOption[] = orderedStatuses.map((s) => ({
 		id: String(s.id),
@@ -148,6 +156,20 @@ export default function TrackerCreateModal({
 		icon: <Avatar name={m.displayName} />,
 	}));
 
+	const projectOptions: PickerOption[] = projects.map((p) => ({
+		id: String(p.id),
+		label: p.name,
+		selected: p.id === projectId,
+	}));
+
+	const phaseOptions: PickerOption[] = (selectedProject?.phases ?? []).map(
+		(ph) => ({
+			id: String(ph.id),
+			label: ph.name,
+			selected: ph.id === phaseId,
+		}),
+	);
+
 	const toggle = (list: number[], id: number) =>
 		list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
@@ -163,8 +185,8 @@ export default function TrackerCreateModal({
 		setDescription("");
 		setLabelIds([]);
 		setAssigneeIds([]);
-		setStartDate("");
-		setEndDate("");
+		setProjectId(null);
+		setPhaseId(null);
 		setOpenPicker(null);
 		titleRef.current?.focus();
 	};
@@ -182,8 +204,8 @@ export default function TrackerCreateModal({
 				priorityId?: number | null;
 				labelIds?: number[];
 				assigneeIds?: number[];
-				startDate?: string;
-				endDate?: string;
+				projectId?: number;
+				phaseId?: number;
 			} = { title: title.trim() };
 			const trimmedDescription = description.trim();
 			if (trimmedDescription) body.description = trimmedDescription;
@@ -191,8 +213,10 @@ export default function TrackerCreateModal({
 			body.priorityId = priorityId;
 			if (labelIds.length > 0) body.labelIds = labelIds;
 			if (assigneeIds.length > 0) body.assigneeIds = assigneeIds;
-			if (startDate) body.startDate = startDate;
-			if (endDate) body.endDate = endDate;
+			if (projectId !== null) {
+				body.projectId = projectId;
+				if (phaseId !== null) body.phaseId = phaseId;
+			}
 			await api.createTrackerItem(workspaceId, body);
 			onCreated();
 			if (createMore) resetDraft();
@@ -394,13 +418,52 @@ export default function TrackerCreateModal({
 							/>
 						)}
 
-						<TrackerDateFields
-							idPrefix="tracker-create"
-							startDate={startDate}
-							endDate={endDate}
-							onStartDateChange={setStartDate}
-							onEndDateChange={setEndDate}
-						/>
+						{projects.length > 0 && (
+							<>
+								<TrackerPropertyPicker
+									placeholder="Project"
+									value={selectedProject?.name}
+									icon={
+										<Folder
+											size={14}
+											className="shrink-0 text-neutral-500"
+											aria-hidden
+										/>
+									}
+									searchPlaceholder="Set project to…"
+									options={projectOptions}
+									open={openPicker === "project"}
+									onOpenChange={(open) =>
+										setOpenPicker(open ? "project" : null)
+									}
+									onSelect={(id) => {
+										setProjectId(Number(id));
+										setPhaseId(null);
+									}}
+								/>
+								<TrackerPropertyPicker
+									placeholder="Phase"
+									value={selectedPhase?.name}
+									icon={
+										<Signpost
+											size={14}
+											className="shrink-0 text-neutral-500"
+											aria-hidden
+										/>
+									}
+									searchPlaceholder="Set phase to…"
+									options={phaseOptions}
+									open={openPicker === "phase"}
+									onOpenChange={(open) =>
+										setOpenPicker(open ? "phase" : null)
+									}
+									onSelect={(id) => {
+										if (projectId === null) return;
+										setPhaseId(Number(id));
+									}}
+								/>
+							</>
+						)}
 					</div>
 
 					<div className="flex items-center justify-end gap-3 border-neutral-200 border-t px-4 py-3">

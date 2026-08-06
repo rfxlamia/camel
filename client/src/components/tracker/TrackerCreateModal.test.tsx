@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const listTrackerVocabularies = vi.fn();
 const getWorkspaceMembers = vi.fn();
+const listTrackerProjects = vi.fn();
 const createTrackerItem = vi.fn();
 
 vi.mock("../../api", () => ({
@@ -18,6 +19,7 @@ vi.mock("../../api", () => ({
 		listTrackerVocabularies: (...args: unknown[]) =>
 			listTrackerVocabularies(...args),
 		getWorkspaceMembers: (...args: unknown[]) => getWorkspaceMembers(...args),
+		listTrackerProjects: (...args: unknown[]) => listTrackerProjects(...args),
 		createTrackerItem: (...args: unknown[]) => createTrackerItem(...args),
 	},
 	ApiError: class ApiError extends Error {
@@ -30,7 +32,7 @@ vi.mock("../../api", () => ({
 }));
 
 import { ApiError } from "../../api";
-import type { TrackerVocabulary } from "../../types";
+import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../../types";
 import TrackerCreateModal from "./TrackerCreateModal";
 
 const statuses: TrackerVocabulary[] = [
@@ -48,6 +50,43 @@ const priorities: TrackerVocabulary[] = [
 	{ id: 10, kind: "priority", name: "High", position: 1024, colour: "#eee" },
 	{ id: 11, kind: "priority", name: "Low", position: 2048, colour: "#eee" },
 ];
+
+const persiapan: TrackerPhase = {
+	id: 9,
+	projectId: 1,
+	name: "Persiapan",
+	subtitle: "",
+	startDate: null,
+	endDate: null,
+	position: 1024,
+	version: 1,
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
+
+const projectA: TrackerProject = {
+	id: 1,
+	name: "Rilis v2",
+	startDate: null,
+	endDate: null,
+	position: 1024,
+	version: 1,
+	phases: [persiapan],
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
+
+const projectB: TrackerProject = {
+	id: 2,
+	name: "Rilis v3",
+	startDate: null,
+	endDate: null,
+	position: 2048,
+	version: 1,
+	phases: [],
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
 
 function renderModal() {
 	const onClose = vi.fn();
@@ -78,6 +117,7 @@ beforeEach(() => {
 			},
 		],
 	});
+	listTrackerProjects.mockResolvedValue([projectA, projectB]);
 	createTrackerItem.mockResolvedValue({ id: 99, key: "CAM-1" });
 });
 
@@ -204,34 +244,32 @@ describe("TrackerCreateModal", () => {
 	});
 });
 
-describe("TrackerCreateModal dates", () => {
-	it("submits startDate and endDate when both are filled", async () => {
+describe("TrackerCreateModal project assignment", () => {
+	it("submits projectId and phaseId when both are chosen", async () => {
 		renderModal();
 		fireEvent.change(screen.getByLabelText("Item title"), {
 			target: { value: "Ship the release" },
 		});
-		fireEvent.change(screen.getByLabelText(/start date/i), {
-			target: { value: "2026-09-21" },
-		});
-		fireEvent.change(screen.getByLabelText(/end date/i), {
-			target: { value: "2026-09-30" },
-		});
+		fireEvent.click(await screen.findByText("Project"));
+		fireEvent.click(await screen.findByRole("option", { name: /Rilis v2/ }));
+		fireEvent.click(await screen.findByText("Phase"));
+		fireEvent.click(await screen.findByRole("option", { name: /Persiapan/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		await waitFor(() =>
 			expect(createTrackerItem).toHaveBeenCalledWith(7, {
 				title: "Ship the release",
 				statusId: 1,
 				priorityId: null,
-				startDate: "2026-09-21",
-				endDate: "2026-09-30",
+				projectId: 1,
+				phaseId: 9,
 			}),
 		);
 	});
 
-	it("submits without startDate or endDate when both are left empty", async () => {
+	it("submits without projectId or phaseId when both are left unset", async () => {
 		renderModal();
 		fireEvent.change(screen.getByLabelText("Item title"), {
-			target: { value: "No dates" },
+			target: { value: "Unassigned task" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
@@ -239,28 +277,62 @@ describe("TrackerCreateModal dates", () => {
 			number,
 			Record<string, unknown>,
 		];
-		expect(body).not.toHaveProperty("startDate");
-		expect(body).not.toHaveProperty("endDate");
+		expect(body).not.toHaveProperty("projectId");
+		expect(body).not.toHaveProperty("phaseId");
 	});
 
-	it("surfaces the server's 400 for an inverted date range inline", async () => {
+	it("clears the phase when the project changes", async () => {
+		renderModal();
+		fireEvent.click(await screen.findByText("Project"));
+		fireEvent.click(await screen.findByRole("option", { name: /Rilis v2/ }));
+		fireEvent.click(await screen.findByText("Phase"));
+		fireEvent.click(await screen.findByRole("option", { name: /Persiapan/ }));
+		expect(screen.getByText("Persiapan")).toBeTruthy();
+
+		fireEvent.click(screen.getByText("Rilis v2"));
+		fireEvent.click(await screen.findByRole("option", { name: /Rilis v3/ }));
+		expect(screen.queryByText("Persiapan")).toBeNull();
+	});
+
+	it("clears project and phase on create more reset", async () => {
+		renderModal();
+		fireEvent.click(screen.getByRole("switch", { name: /Create more/ }));
+		fireEvent.change(screen.getByLabelText("Item title"), {
+			target: { value: "In project" },
+		});
+		fireEvent.click(await screen.findByText("Project"));
+		fireEvent.click(await screen.findByRole("option", { name: /Rilis v2/ }));
+		fireEvent.click(await screen.findByText("Phase"));
+		fireEvent.click(await screen.findByRole("option", { name: /Persiapan/ }));
+		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+
+		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(screen.queryByText("Persiapan")).toBeNull());
+		expect(screen.queryByText("Rilis v2")).toBeNull();
+	});
+
+	it("surfaces the server's 400 for an invalid project inline", async () => {
 		createTrackerItem.mockRejectedValueOnce(
-			new ApiError("End date must be on or after the start date.", 400),
+			new ApiError("Phase does not belong to this project.", 400),
 		);
 		renderModal();
 		fireEvent.change(screen.getByLabelText("Item title"), {
-			target: { value: "Bad range" },
+			target: { value: "Bad assignment" },
 		});
-		fireEvent.change(screen.getByLabelText(/start date/i), {
-			target: { value: "2026-09-30" },
-		});
-		fireEvent.change(screen.getByLabelText(/end date/i), {
-			target: { value: "2026-09-21" },
-		});
+		fireEvent.click(await screen.findByText("Project"));
+		fireEvent.click(await screen.findByRole("option", { name: /Rilis v2/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		expect(
-			await screen.findByText("End date must be on or after the start date."),
+			await screen.findByText("Phase does not belong to this project."),
 		).toBeTruthy();
 		expect(screen.getByLabelText("Item title")).toBeTruthy();
+	});
+
+	it("hides project pickers when the workspace has no projects", async () => {
+		listTrackerProjects.mockResolvedValueOnce([]);
+		renderModal();
+		await screen.findByText("Backlog");
+		expect(screen.queryByText("Project")).toBeNull();
+		expect(screen.queryByText("Phase")).toBeNull();
 	});
 });
