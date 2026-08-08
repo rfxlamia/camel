@@ -19,7 +19,7 @@
 		"lint:fix": "biome check --write .",
 		"typecheck": "npm run typecheck --workspace=server && npm run typecheck --workspace=client",
 		"build": "npm run build --workspace=server && npm run build --workspace=client",
-		"prepare": "husky || true"
+		"prepare": "husky"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.0",
