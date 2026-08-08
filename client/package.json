@@ -8,7 +8,7 @@
 		"build": "tsc -b && vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "NODE_ENV=test vitest run"
 	},
 	"dependencies": {
 		"@assistant-ui/react": "^0.15.1",
@@ -24,7 +24,7 @@
 		"react-dom": "^18.3.1",
 		"react-easy-crop": "^6.0.2",
 		"react-markdown": "^10.1.0",
-		"react-router": "^7.17.0",
+		"react-router": "^7.18.2",
 		"recharts": "^3.8.1",
 		"remark-gfm": "^4.0.1"
 	},
