@@ -32,16 +32,16 @@ export default function TrackerProjectCard({ project, items }: Props) {
 	const taskLabel = `${projectItems.length} task${projectItems.length === 1 ? "" : "s"}`;
 
 	return (
-		<div className="relative rounded-lg border border-neutral-200 bg-white transition-colors hover:border-neutral-300 hover:bg-neutral-50">
+		<div className="relative rounded-lg border border-neutral-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-150 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-[0_8px_20px_-4px_rgba(15,23,42,0.12)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
 			<button
 				type="button"
 				aria-label={project.name}
 				onClick={() => navigate(`/tracker/p/${project.id}`)}
-				className="absolute inset-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				className="absolute inset-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 active:bg-neutral-900/[0.02]"
 			/>
 			<div className="pointer-events-none relative p-3">
 				<div className="flex items-start justify-between gap-2">
-					<h3 className="truncate font-medium text-neutral-900 text-sm">
+					<h3 className="truncate font-semibold text-neutral-900 text-sm">
 						{project.name}
 					</h3>
 					{overdue && (

@@ -16,7 +16,7 @@ export default function TrackerRowShell({
 	const navigate = useNavigate();
 
 	return (
-		<div className="group/row relative flex h-9 items-center transition-colors hover:bg-neutral-100/70">
+		<div className="group/row relative flex h-9 items-center transition-colors hover:bg-neutral-100/70 active:bg-neutral-200/60">
 			<button
 				type="button"
 				data-testid={`tracker-row-${itemKey}`}

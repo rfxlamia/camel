@@ -33,10 +33,7 @@ export default function TrackerProjectHeader({
 	useEffect(() => {
 		if (!menuOpen) return;
 		const handlePointerDown = (e: MouseEvent) => {
-			if (
-				menuRef.current &&
-				!menuRef.current.contains(e.target as Node)
-			) {
+			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
 				onMenuOpenChange(false);
 			}
 		};
@@ -55,7 +52,7 @@ export default function TrackerProjectHeader({
 	};
 
 	return (
-		<div className="sticky top-0 z-20 border-neutral-200 border-b bg-white px-4 py-3 md:px-6">
+		<div className="sticky top-0 z-20 border-neutral-200 border-b bg-white px-4 py-4 md:px-6">
 			<div className="flex items-start gap-3">
 				<button
 					type="button"
@@ -99,7 +96,7 @@ export default function TrackerProjectHeader({
 							</div>
 						</form>
 					) : (
-						<h1 className="truncate font-medium text-neutral-900 text-sm">
+						<h1 className="truncate font-semibold text-lg text-neutral-900 tracking-tight">
 							{projectName}
 						</h1>
 					)}

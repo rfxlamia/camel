@@ -26,7 +26,7 @@ export default function TrackerProgressBar({ rollup }: Props) {
 				aria-valuemax={100}
 			>
 				<div
-					className="h-full rounded-full bg-primary-600"
+					className="h-full rounded-full bg-primary-600 transition-[width] duration-300 ease-out motion-reduce:transition-none"
 					style={{ width: `${pct}%` }}
 				/>
 			</div>

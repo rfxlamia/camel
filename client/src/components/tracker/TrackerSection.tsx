@@ -3,8 +3,8 @@ import type { TrackerGroup } from "../../lib/trackerUtils";
 import type { TrackerItem, TrackerVocabulary } from "../../types";
 import {
 	PriorityGlyph,
-	StatusGlyph,
 	priorityBars,
+	StatusGlyph,
 	statusGlyphSpec,
 } from "./TrackerGlyphs";
 import TrackerRow from "./TrackerRow";
@@ -43,7 +43,10 @@ export default function TrackerSection({
 	const glyph = group.status ? (
 		<StatusGlyph spec={statusGlyphSpec(statuses, group.status.id)} size={13} />
 	) : group.priority ? (
-		<PriorityGlyph bars={priorityBars(priorities, group.priority.id)} size={13} />
+		<PriorityGlyph
+			bars={priorityBars(priorities, group.priority.id)}
+			size={13}
+		/>
 	) : (
 		<Folder size={13} className="shrink-0 text-neutral-500" aria-hidden />
 	);
@@ -65,7 +68,7 @@ export default function TrackerSection({
 						aria-hidden
 					/>
 					{glyph}
-					<span className="truncate font-medium text-neutral-800 text-sm">
+					<span className="truncate font-semibold text-neutral-600 text-xs uppercase tracking-wide">
 						{group.label}
 					</span>
 					<span className="text-neutral-500 text-xs tabular-nums">

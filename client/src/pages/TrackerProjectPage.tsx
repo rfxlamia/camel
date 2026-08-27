@@ -571,7 +571,7 @@ export default function TrackerProjectPage() {
 		: undefined;
 
 	return (
-		<div className="min-h-full bg-white">
+		<div className="min-h-full">
 			<TrackerProjectHeader
 				projectName={project.name}
 				renaming={renamingProject}

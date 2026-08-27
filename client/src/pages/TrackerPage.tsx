@@ -16,11 +16,11 @@ import TrackerTabs, {
 import { useBoard } from "../context/BoardContext";
 import { partitionTrackerSearch } from "../lib/trackerSearch";
 import {
-	TRACKER_GROUP_BY_LABELS,
-	type TrackerGroupBy,
 	groupItems,
 	sortStatusesByPosition,
 	statusGroupKey,
+	TRACKER_GROUP_BY_LABELS,
+	type TrackerGroupBy,
 } from "../lib/trackerUtils";
 import {
 	readTrackerGroupBy,
@@ -123,7 +123,8 @@ export default function TrackerPage() {
 
 	const changeGroupBy = (next: TrackerGroupBy) => {
 		setGroupBy(next);
-		if (activeWorkspaceId !== null) writeTrackerGroupBy(activeWorkspaceId, next);
+		if (activeWorkspaceId !== null)
+			writeTrackerGroupBy(activeWorkspaceId, next);
 	};
 
 	const loadData = useCallback(async () => {
@@ -228,7 +229,8 @@ export default function TrackerPage() {
 	);
 
 	const groups = useMemo(
-		() => groupItems(filteredItems, groupBy, { statuses, priorities, projects }),
+		() =>
+			groupItems(filteredItems, groupBy, { statuses, priorities, projects }),
 		[filteredItems, groupBy, statuses, priorities, projects],
 	);
 
@@ -327,7 +329,7 @@ export default function TrackerPage() {
 	const projectsTab = tab === "projects";
 
 	return (
-		<div className="min-h-full bg-white">
+		<div className="min-h-full">
 			<div className="sticky top-0 z-20 bg-white">
 				<TrackerTabs
 					value={tab}
@@ -386,7 +388,7 @@ export default function TrackerPage() {
 							disabled={atProjectCap}
 							title={atProjectCap ? TRACKER_PROJECT_CAP_MESSAGE : undefined}
 							onClick={() => setProjectCreateOpen(true)}
-							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 active:bg-primary-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
 						>
 							<Plus size={15} aria-hidden />
 							New project
@@ -395,7 +397,7 @@ export default function TrackerPage() {
 						<button
 							type="button"
 							onClick={() => openCreate()}
-							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 active:bg-primary-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
 							<Plus size={15} aria-hidden />
 							New item
