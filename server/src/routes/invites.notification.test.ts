@@ -9,18 +9,9 @@
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
-import * as helpers from "./helpers.js";
 import { invitesRouter } from "./invites.js";
 
 const inviteeUsername = `invitee-charlie-${Date.now()}`;
@@ -147,47 +138,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(res.status).toBe(404);
 		});
 
-		it("does not grant membership when the invite is revoked mid-request (TOCTOU)", async () => {
-			const invite = await db
-				.insertInto("workspace_invites")
-				.values({
-					workspace_id: workspaceId,
-					username: inviteeUsername,
-					role: "admin",
-				})
-				.returning("id")
-				.executeTakeFirstOrThrow();
-
-			// countUserMemberships runs after any pre-transaction invite read but
-			// before the transaction opens — the exact window a stale invite
-			// fetch would race against a concurrent revoke.
-			const originalCount = helpers.countUserMemberships;
-			const spy = vi
-				.spyOn(helpers, "countUserMemberships")
-				.mockImplementationOnce(async (...args) => {
-					await db
-						.deleteFrom("workspace_invites")
-						.where("id", "=", invite.id)
-						.execute();
-					return originalCount(...args);
-				});
-
-			try {
-				const res = await request(app).post(
-					`/workspaces/${workspaceId}/invites/${invite.id}/accept`,
-				);
-				expect(res.status).toBe(404);
-			} finally {
-				spy.mockRestore();
-			}
-
-			const membership = await db
-				.selectFrom("workspace_members")
-				.select("role")
-				.where("workspace_id", "=", workspaceId)
-				.where("user_id", "=", userId)
-				.executeTakeFirst();
-			expect(membership).toBeUndefined();
-		});
+		// A prior version of this suite injected a mid-request invite revoke by
+		// spying on countUserMemberships, the workspace-cap check that used to
+		// run (and `await`) before the transaction opened — that await was the
+		// TOCTOU window being exercised. The cap check is gone, so there is no
+		// pre-transaction await left to hook. The property under test — a
+		// revoked invite must not still be usable — is covered by the atomic
+		// delete-as-authorization-check inside the transaction (invites.ts) and
+		// exercised above by "rejects accept of an invite that no longer exists".
 	},
 );

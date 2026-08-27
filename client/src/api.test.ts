@@ -211,23 +211,23 @@ describe("workspace create and invite API contracts", () => {
 		);
 	});
 
-	it("surfaces the 409 cap message for create and accept failures", async () => {
+	it("surfaces the server's 409 conflict message for create and accept failures", async () => {
 		mockFetch.mockClear();
 		mockFetch.mockResolvedValue({
 			ok: false,
 			status: 409,
 			json: () =>
-				Promise.resolve({ error: "You've reached the workspace limit (10)." }),
+				Promise.resolve({ error: "User is already a member of this workspace" }),
 		});
 		const { api } = await import("./api");
 
 		await expect(api.createWorkspace({ name: "Extra" })).rejects.toMatchObject({
 			status: 409,
-			message: "You've reached the workspace limit (10).",
+			message: "User is already a member of this workspace",
 		});
 		await expect(api.acceptInvite(7, 12)).rejects.toMatchObject({
 			status: 409,
-			message: "You've reached the workspace limit (10).",
+			message: "User is already a member of this workspace",
 		});
 	});
 });

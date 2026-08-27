@@ -1,7 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useBoard } from "../../context/BoardContext";
-import { getWorkspaceLimitActionState } from "../../lib/workspaceSwitcher";
 import type { WorkspaceInvite } from "../../types";
 import { inputClass } from "./shared";
 import { WorkspaceAvatar } from "./WorkspaceSwitcher";
@@ -22,17 +21,9 @@ function ModalBackdrop({
 }
 
 function BlockingInviteModal({ invite }: { invite: WorkspaceInvite }) {
-	const {
-		acceptWorkspaceInvite,
-		declineWorkspaceInvite,
-		remindInviteLater,
-		membershipCount,
-	} = useBoard();
+	const { acceptWorkspaceInvite, declineWorkspaceInvite, remindInviteLater } =
+		useBoard();
 	const [busy, setBusy] = useState(false);
-	const acceptLimit = getWorkspaceLimitActionState({
-		membershipCount,
-		action: "accept-invite",
-	});
 
 	const run = async (action: () => Promise<void> | void) => {
 		if (busy) return;
@@ -61,15 +52,10 @@ function BlockingInviteModal({ invite }: { invite: WorkspaceInvite }) {
 					</span>{" "}
 					as {invite.role}.
 				</p>
-				{acceptLimit.disabled && acceptLimit.message && (
-					<p className="mt-3 text-xs font-medium text-error-900">
-						{acceptLimit.message}
-					</p>
-				)}
 				<div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
 					<button
 						type="button"
-						disabled={busy || acceptLimit.disabled}
+						disabled={busy}
 						onClick={() => void run(() => acceptWorkspaceInvite(invite))}
 						className="flex-1 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
 					>
@@ -101,14 +87,9 @@ function WorkspacePickerModal() {
 	const {
 		workspaces,
 		activeWorkspaceId,
-		membershipCount,
 		attemptSwitchWorkspace,
 		openCreateWorkspace,
 	} = useBoard();
-	const createLimit = getWorkspaceLimitActionState({
-		membershipCount,
-		action: "create-workspace",
-	});
 
 	return (
 		<ModalBackdrop>
@@ -144,19 +125,12 @@ function WorkspacePickerModal() {
 				<div className="mt-4 border-t border-neutral-200 pt-4">
 					<button
 						type="button"
-						disabled={createLimit.disabled}
-						title={createLimit.message ?? undefined}
 						onClick={openCreateWorkspace}
-						className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-primary-600 hover:bg-primary-100 disabled:cursor-not-allowed disabled:text-neutral-400"
+						className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-primary-600 hover:bg-primary-100"
 					>
 						<Plus size={16} aria-hidden />
 						Create workspace
 					</button>
-					{createLimit.disabled && createLimit.message && (
-						<p className="mt-2 text-center text-xs text-neutral-500">
-							{createLimit.message}
-						</p>
-					)}
 				</div>
 			</div>
 		</ModalBackdrop>
@@ -164,18 +138,10 @@ function WorkspacePickerModal() {
 }
 
 function CreateWorkspaceModal() {
-	const {
-		createWorkspaceOpen,
-		closeCreateWorkspace,
-		submitCreateWorkspace,
-		membershipCount,
-	} = useBoard();
+	const { createWorkspaceOpen, closeCreateWorkspace, submitCreateWorkspace } =
+		useBoard();
 	const [name, setName] = useState("");
 	const [busy, setBusy] = useState(false);
-	const limit = getWorkspaceLimitActionState({
-		membershipCount,
-		action: "create-workspace",
-	});
 
 	useEffect(() => {
 		if (createWorkspaceOpen) setName("");
@@ -185,7 +151,7 @@ function CreateWorkspaceModal() {
 
 	const submit = async (e: FormEvent) => {
 		e.preventDefault();
-		if (busy || limit.disabled) return;
+		if (busy) return;
 		setBusy(true);
 		try {
 			await submitCreateWorkspace(name);
@@ -226,14 +192,8 @@ function CreateWorkspaceModal() {
 						placeholder="Workspace name"
 						autoFocus
 						required
-						disabled={limit.disabled}
 					/>
 				</label>
-				{limit.disabled && limit.message && (
-					<p className="mt-2 text-xs font-medium text-error-900">
-						{limit.message}
-					</p>
-				)}
 				<div className="mt-5 flex justify-end gap-2">
 					<button
 						type="button"
@@ -244,7 +204,7 @@ function CreateWorkspaceModal() {
 					</button>
 					<button
 						type="submit"
-						disabled={busy || limit.disabled || !name.trim()}
+						disabled={busy || !name.trim()}
 						className="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
 					>
 						Create

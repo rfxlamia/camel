@@ -3,12 +3,7 @@ import { sql } from "kysely";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { validateWorkspaceName } from "../validators/input-length.js";
-import {
-	countUserMemberships,
-	getWorkspaceCapacity,
-	lookupMembership,
-	serializeWorkspaceList,
-} from "./helpers.js";
+import { lookupMembership, serializeWorkspaceList } from "./helpers.js";
 import { checkCanEditSettings } from "./settings.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
@@ -74,12 +69,6 @@ workspacesRouter.post("/", async (req, res) => {
 		return res.status(400).json({ error: nameResult.error });
 	}
 	const trimmedName = nameResult.trimmed!;
-
-	const membershipCount = await countUserMemberships(req.user!.id);
-	const cap = getWorkspaceCapacity(membershipCount);
-	if (!cap.ok) {
-		return res.status(cap.status).json({ error: cap.error });
-	}
 
 	const ws = await db.transaction().execute(async (trx) => {
 		const inserted = await trx

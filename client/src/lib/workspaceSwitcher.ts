@@ -1,11 +1,7 @@
 import type { Workspace, WorkspaceInvite } from "../types";
 import { WORKSPACE_STORAGE_KEY } from "./workspaceSelection";
 
-export const WORKSPACE_MEMBERSHIP_CAP = 10;
-export const CAP_MESSAGE = "You've reached the workspace limit (10).";
 export const REMINDED_INVITES_KEY = "camel.remindedInviteIds";
-
-export type WorkspaceLimitAction = "accept-invite" | "create-workspace";
 
 export interface SwitchAttemptInput {
 	activeWorkspaceId: number | null;
@@ -27,16 +23,6 @@ export interface InvitePopoverInput {
 export interface InvitePopoverState {
 	visible: boolean;
 	invites: WorkspaceInvite[];
-}
-
-export interface WorkspaceLimitActionInput {
-	membershipCount: number;
-	action: WorkspaceLimitAction;
-}
-
-export interface WorkspaceLimitActionState {
-	disabled: boolean;
-	message: string | null;
 }
 
 export function getSwitchAttemptState({
@@ -68,16 +54,6 @@ export function getInvitePopoverState({
 		visible: invites.length > 0,
 		invites,
 	};
-}
-
-export function getWorkspaceLimitActionState({
-	membershipCount,
-	action: _action,
-}: WorkspaceLimitActionInput): WorkspaceLimitActionState {
-	if (membershipCount >= WORKSPACE_MEMBERSHIP_CAP) {
-		return { disabled: true, message: CAP_MESSAGE };
-	}
-	return { disabled: false, message: null };
 }
 
 export function readRemindedInviteIds(): number[] {

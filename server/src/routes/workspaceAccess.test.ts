@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	CAP_ERROR_MESSAGE,
 	checkActorCanChangeRole,
 	checkActorCanManage,
 	checkCanRemoveUser,
-	checkInviteeCap,
 	createScopedBoardService,
 	createWorkspaceAccessService,
 	createWorkspaceIntegrationHarness,
 	legacyWorkspaceRouteMatrix,
 	type WorkspaceAccessDeps,
-	WORKSPACE_LIMIT,
 } from "../routes.js";
 
 describe("workspace authorization rules", () => {
@@ -58,16 +55,6 @@ describe("workspace authorization rules", () => {
 			allowed: false,
 			status: 403,
 			error: "Cannot remove yourself",
-		});
-	});
-
-	it("blocks invitee at workspace cap with exact error message", () => {
-		expect(WORKSPACE_LIMIT).toBe(10);
-		expect(checkInviteeCap(9)).toEqual({ ok: true });
-		expect(checkInviteeCap(10)).toEqual({
-			ok: false,
-			status: 409,
-			error: CAP_ERROR_MESSAGE,
 		});
 	});
 });

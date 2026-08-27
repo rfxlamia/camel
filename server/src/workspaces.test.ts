@@ -1,21 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-	getWorkspaceCapacity,
-	serializeWorkspaceList,
-	WORKSPACE_LIMIT,
-} from "./routes.js";
+import { serializeWorkspaceList } from "./routes.js";
 
 describe("workspace helper contracts", () => {
-	it("blocks create and invite accept at 10 memberships", () => {
-		expect(WORKSPACE_LIMIT).toBe(10);
-		expect(getWorkspaceCapacity(9)).toEqual({ ok: true });
-		expect(getWorkspaceCapacity(10)).toEqual({
-			ok: false,
-			status: 409,
-			error: "You've reached the workspace limit (10).",
-		});
-	});
-
 	it("serializes workspaces and pending invites for the client", () => {
 		const response = serializeWorkspaceList({
 			workspaces: [

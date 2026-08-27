@@ -1,8 +1,6 @@
 import { Router } from "express";
 import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
-import { checkInviteeCap, countUserMemberships } from "./helpers.js";
-
 export const invitesRouter = Router({ mergeParams: true });
 
 invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
@@ -16,12 +14,6 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 		return res
 			.status(400)
 			.json({ error: "workspaceId and inviteId must be integers" });
-	}
-
-	const membershipCount = await countUserMemberships(req.user!.id);
-	const cap = checkInviteeCap(membershipCount);
-	if (!cap.ok) {
-		return res.status(cap.status).json({ error: cap.error });
 	}
 
 	// Wrap invite consumption + membership insert in a single transaction to

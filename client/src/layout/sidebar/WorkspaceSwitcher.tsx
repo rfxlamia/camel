@@ -4,7 +4,6 @@ import { useBoard } from "../../context/BoardContext";
 import {
 	getInvitePopoverState,
 	getSwitchAttemptState,
-	getWorkspaceLimitActionState,
 	workspaceInitials,
 } from "../../lib/workspaceSwitcher";
 import type { Workspace, WorkspaceInvite } from "../../types";
@@ -60,7 +59,6 @@ export function WorkspaceSwitcher({
 		settings,
 		pendingInvites,
 		remindedInviteIds,
-		membershipCount,
 		hasUnsavedCardEdits,
 		attemptSwitchWorkspace,
 		switchConfirm,
@@ -99,11 +97,6 @@ export function WorkspaceSwitcher({
 		switcherOpen: open,
 		remindedInviteIds,
 		pendingInvites,
-	});
-
-	const createLimit = getWorkspaceLimitActionState({
-		membershipCount,
-		action: "create-workspace",
 	});
 
 	useEffect(() => {
@@ -195,22 +188,15 @@ export function WorkspaceSwitcher({
 					<div className="my-1 border-t border-neutral-200" />
 					<button
 						type="button"
-						disabled={createLimit.disabled}
-						title={createLimit.message ?? undefined}
 						onClick={() => {
 							setOpen(false);
 							openCreateWorkspace();
 						}}
-						className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700 disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent"
+						className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700"
 					>
 						<Plus size={16} aria-hidden />
 						Create workspace
 					</button>
-					{createLimit.disabled && createLimit.message && (
-						<p className="px-3 pb-2 text-xs text-neutral-500">
-							{createLimit.message}
-						</p>
-					)}
 				</div>
 			)}
 
@@ -257,10 +243,6 @@ export function WorkspaceSwitcher({
 					</p>
 					<ul className="mt-2 space-y-3">
 						{invitePopover.invites.map((invite) => {
-							const acceptLimit = getWorkspaceLimitActionState({
-								membershipCount,
-								action: "accept-invite",
-							});
 							const busy = busyInviteId === invite.id;
 							return (
 								<li key={invite.id} className="space-y-1.5">
@@ -270,15 +252,10 @@ export function WorkspaceSwitcher({
 										</span>
 										<span className="text-neutral-500"> · {invite.role}</span>
 									</p>
-									{acceptLimit.disabled && acceptLimit.message && (
-										<p className="text-xs text-error-600">
-											{acceptLimit.message}
-										</p>
-									)}
 									<div className="flex gap-1.5">
 										<button
 											type="button"
-											disabled={busy || acceptLimit.disabled}
+											disabled={busy}
 											onClick={() => void handleAcceptInvite(invite)}
 											className="flex-1 rounded-md bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 										>

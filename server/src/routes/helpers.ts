@@ -1,25 +1,8 @@
-import { sql } from "kysely";
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { clearPresence, publishEvent } from "../realtime.js";
 
-// ---- Workspace capacity -----------------------------------------------------
-
-export const WORKSPACE_LIMIT = 10;
-export const CAP_ERROR_MESSAGE = `You've reached the workspace limit (${WORKSPACE_LIMIT}).`;
-
-export type WorkspaceCapacity =
-	| { ok: true }
-	| { ok: false; status: 409; error: string };
-
-export function getWorkspaceCapacity(
-	membershipCount: number,
-): WorkspaceCapacity {
-	if (membershipCount >= WORKSPACE_LIMIT) {
-		return { ok: false, status: 409, error: CAP_ERROR_MESSAGE };
-	}
-	return { ok: true };
-}
+// ---- Workspace list serialization -------------------------------------------
 
 export function serializeWorkspaceList(input: {
 	workspaces: Array<{
@@ -91,20 +74,7 @@ export function checkCanRemoveUser(
 	return { allowed: true };
 }
 
-export function checkInviteeCap(membershipCount: number): WorkspaceCapacity {
-	return getWorkspaceCapacity(membershipCount);
-}
-
 // ---- Membership helpers -----------------------------------------------------
-
-export async function countUserMemberships(userId: number): Promise<number> {
-	const result = await db
-		.selectFrom("workspace_members")
-		.select(sql<number>`count(*)::int`.as("n"))
-		.where("user_id", "=", userId)
-		.executeTakeFirstOrThrow();
-	return result.n;
-}
 
 export async function lookupMembership(
 	userId: number,

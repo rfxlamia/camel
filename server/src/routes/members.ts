@@ -3,8 +3,6 @@ import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import {
 	checkActorCanManage,
-	checkInviteeCap,
-	countUserMemberships,
 	lookupMembership,
 	workspaceAccessService,
 } from "./helpers.js";
@@ -75,12 +73,6 @@ membersRouter.post("/members", async (req, res) => {
 			return res
 				.status(409)
 				.json({ error: "User is already a member of this workspace" });
-		}
-
-		const inviteeCount = await countUserMemberships(target.id);
-		const cap = checkInviteeCap(inviteeCount);
-		if (!cap.ok) {
-			return res.status(cap.status).json({ error: cap.error });
 		}
 
 		// Snapshot existing members + workspace name, then insert, as one unit —

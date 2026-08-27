@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { planWorkspaceRefresh } from "./workspaceSelection";
 import {
 	applyCreatedWorkspaceSelection,
-	CAP_MESSAGE,
 	getInvitePopoverState,
 	getSwitchAttemptState,
-	getWorkspaceLimitActionState,
 } from "./workspaceSwitcher";
 
 describe("workspace switcher state", () => {
@@ -39,27 +37,6 @@ describe("workspace switcher state", () => {
 		});
 	});
 
-	it("disables accept and create actions at the membership cap", () => {
-		expect(CAP_MESSAGE).toBe("You've reached the workspace limit (10).");
-		expect(
-			getWorkspaceLimitActionState({
-				membershipCount: 10,
-				action: "accept-invite",
-			}),
-		).toEqual({
-			disabled: true,
-			message: CAP_MESSAGE,
-		});
-		expect(
-			getWorkspaceLimitActionState({
-				membershipCount: 10,
-				action: "create-workspace",
-			}),
-		).toEqual({
-			disabled: true,
-			message: CAP_MESSAGE,
-		});
-	});
 });
 
 describe("workspace client integration plan", () => {

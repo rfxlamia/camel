@@ -11,8 +11,6 @@ vi.mock("./helpers.js", () => ({
 		removeMember: (...args: unknown[]) => mockRemoveMember(...args),
 	},
 	checkActorCanManage: vi.fn(),
-	checkInviteeCap: vi.fn(),
-	countUserMemberships: vi.fn(),
 	lookupMembership: vi.fn(),
 }));
 

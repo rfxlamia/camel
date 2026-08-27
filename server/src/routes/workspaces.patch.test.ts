@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockLookupMembership = vi.fn();
 vi.mock("./helpers.js", () => ({
 	lookupMembership: (...args: unknown[]) => mockLookupMembership(...args),
-	countUserMemberships: vi.fn(),
-	getWorkspaceCapacity: vi.fn(),
 	serializeWorkspaceList: vi.fn(),
 }));
 

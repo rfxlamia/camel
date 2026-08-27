@@ -26,7 +26,6 @@ import {
 } from "../lib/workspaceSelection";
 import {
 	applyCreatedWorkspaceSelection,
-	CAP_MESSAGE,
 	getSwitchAttemptState,
 	persistRemindedInviteIds,
 	readRemindedInviteIds,
@@ -69,7 +68,6 @@ interface BoardContextValue {
 	pendingInvites: WorkspaceInvite[];
 	pickerRequired: boolean;
 	workspacesReady: boolean;
-	membershipCount: number;
 	remindedInviteIds: number[];
 	hasUnsavedCardEdits: boolean;
 	setHasUnsavedCardEdits: (dirty: boolean) => void;
@@ -241,8 +239,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		[activeWorkspaceId],
 	);
 
-	const membershipCount = workspaces.length;
-
 	const showToast = useCallback((message: string, type: ToastType = "info") => {
 		setToast({ message, type });
 		if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -390,7 +386,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				);
 			} catch (err) {
 				if (err instanceof ApiError && err.status === 409) {
-					showToast(err.message || CAP_MESSAGE, "error");
+					showToast(
+						err.message || "Couldn't accept the invite. Try again.",
+						"error",
+					);
 					return;
 				}
 				showToast("Couldn't accept the invite. Try again.", "error");
@@ -444,11 +443,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				switchWorkspace(selection.activeWorkspaceId);
 				setCreateWorkspaceOpen(false);
 				showToast(selection.toast, "success");
-			} catch (err) {
-				if (err instanceof ApiError && err.status === 409) {
-					showToast(err.message || CAP_MESSAGE, "error");
-					return;
-				}
+			} catch {
 				showToast("Couldn't create the workspace. Try again.", "error");
 			}
 		},
@@ -688,7 +683,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				pendingInvites,
 				pickerRequired,
 				workspacesReady,
-				membershipCount,
 				remindedInviteIds,
 				hasUnsavedCardEdits,
 				setHasUnsavedCardEdits,
