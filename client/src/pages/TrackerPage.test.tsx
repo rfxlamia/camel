@@ -277,6 +277,16 @@ describe("TrackerPage", () => {
 		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
 	});
 
+	it("hides empty status sections outside of search", async () => {
+		render(<TrackerPage />);
+		await waitFor(() => expect(screen.getByText("Backlog")).toBeTruthy());
+		// Default fixture only seeds Backlog and Done items — In Progress has
+		// zero items and must not render an empty band.
+		expect(screen.queryByTestId("toggle-section-In Progress")).toBeNull();
+		expect(screen.getByTestId("toggle-section-Backlog")).toBeTruthy();
+		expect(screen.getByTestId("toggle-section-Done")).toBeTruthy();
+	});
+
 	it("hides empty sections when search is active", async () => {
 		mockListTrackerItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),

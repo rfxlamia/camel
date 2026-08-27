@@ -74,6 +74,12 @@ export default function TrackerPage() {
 	const queuedStatusRef = useRef<Map<number, number>>(new Map());
 	/** Set while this page is the one changing the location, not the router. */
 	const skipCollapseResetRef = useRef(false);
+	/**
+	 * Status ids created via a live SSE event this session. A freshly-created
+	 * status stays visible even at zero items — same reasoning as an empty
+	 * project — while a status that was already empty on load is noise.
+	 */
+	const sessionCreatedStatusIdsRef = useRef<Set<number>>(new Set());
 	/** Monotonic id so a slower stale loadData cannot clobber a newer one. */
 	const loadSeqRef = useRef(0);
 	const itemsLenRef = useRef(0);
@@ -180,6 +186,7 @@ export default function TrackerPage() {
 				event.payload.kind === "status"
 			) {
 				const vocab = event.payload as TrackerVocabulary;
+				sessionCreatedStatusIdsRef.current.add(vocab.id);
 				setStatuses((prev) =>
 					sortStatusesByPosition(
 						prev.some((s) => s.id === vocab.id) ? prev : [...prev, vocab],
@@ -455,8 +462,21 @@ export default function TrackerPage() {
 			) : (
 				<div>
 					{groups.map((group) => {
-						// While searching, a group with no hits is noise.
-						if (searchActive && group.items.length === 0) return null;
+						// A group with no hits is noise while searching (any kind), and
+						// an empty status/priority band is noise even outside search —
+						// but an empty project, or a status just created this session,
+						// keeps its header: it's a real thing the user made, not a vocab
+						// bucket that has always been empty.
+						const isFreshlyCreatedStatus =
+							group.status != null &&
+							sessionCreatedStatusIdsRef.current.has(group.status.id);
+						if (
+							group.items.length === 0 &&
+							(searchActive ||
+								(group.projectId == null && !isFreshlyCreatedStatus))
+						) {
+							return null;
+						}
 						const createDefaultsForGroup: CreateDefaults | null = group.status
 							? { statusId: group.status.id }
 							: group.projectId != null
