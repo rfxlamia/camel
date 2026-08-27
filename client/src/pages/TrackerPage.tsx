@@ -28,9 +28,6 @@ import {
 } from "../lib/trackerViewPrefs";
 import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 
-const TRACKER_PROJECT_LIMIT = 10;
-const TRACKER_PROJECT_CAP_MESSAGE = `You've reached the project limit (${TRACKER_PROJECT_LIMIT}).`;
-
 const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 
 const PROJECT_RELOAD_EVENTS = new Set([
@@ -245,8 +242,6 @@ export default function TrackerPage() {
 		selected: option === groupBy,
 	}));
 
-	const atProjectCap = projects.length >= TRACKER_PROJECT_LIMIT;
-
 	const openCreate = (defaults: CreateDefaults = {}) => {
 		setCreateDefaults(defaults);
 		setCreateOpen(true);
@@ -385,10 +380,8 @@ export default function TrackerPage() {
 						<button
 							type="button"
 							aria-label="New project"
-							disabled={atProjectCap}
-							title={atProjectCap ? TRACKER_PROJECT_CAP_MESSAGE : undefined}
 							onClick={() => setProjectCreateOpen(true)}
-							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 active:bg-primary-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+							className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary-600 pr-3 pl-2.5 font-medium text-sm text-white transition-colors hover:bg-primary-700 active:bg-primary-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 						>
 							<Plus size={15} aria-hidden />
 							New project
@@ -434,8 +427,6 @@ export default function TrackerPage() {
 					items={items}
 					searchActive={searchActive}
 					search={search}
-					atProjectCap={atProjectCap}
-					capMessage={TRACKER_PROJECT_CAP_MESSAGE}
 					onNewProject={() => setProjectCreateOpen(true)}
 				/>
 			) : searchActive && filteredItems.length === 0 ? (

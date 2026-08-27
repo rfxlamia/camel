@@ -7,8 +7,6 @@ interface Props {
 	items: TrackerItem[];
 	searchActive: boolean;
 	search: string;
-	atProjectCap: boolean;
-	capMessage: string;
 	onNewProject: () => void;
 }
 
@@ -17,8 +15,6 @@ export default function TrackerProjectsTab({
 	items,
 	searchActive,
 	search,
-	atProjectCap,
-	capMessage,
 	onNewProject,
 }: Props) {
 	if (visibleProjects.length === 0) {
@@ -50,11 +46,6 @@ export default function TrackerProjectsTab({
 
 	return (
 		<div>
-			{atProjectCap && (
-				<p className="border-neutral-200 border-b bg-neutral-50 px-4 py-1.5 text-neutral-600 text-xs md:px-6">
-					{capMessage}
-				</p>
-			)}
 			<div className="grid gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-3 md:px-6">
 				{visibleProjects.map((project) => (
 					<TrackerProjectCard

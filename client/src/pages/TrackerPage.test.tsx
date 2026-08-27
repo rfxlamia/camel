@@ -803,23 +803,6 @@ describe("TrackerPage projects", () => {
 		expect(screen.getByRole("dialog")).toBeTruthy();
 	});
 
-	it("disables New project with a visible reason at the 10-project cap", async () => {
-		mockListTrackerProjects.mockResolvedValueOnce(
-			Array.from({ length: 10 }, (_, i) => ({
-				...releaseProject,
-				id: i + 1,
-				name: `Project ${i + 1}`,
-			})),
-		);
-		render(<TrackerPage />);
-		await waitFor(() => screen.getByText("Backlog"));
-		showProjectsTab();
-		await waitFor(() => screen.getByText("Project 1"));
-		const button = screen.getByRole("button", { name: /^new project$/i });
-		expect((button as HTMLButtonElement).disabled).toBe(true);
-		expect(screen.getByText(/project limit \(10\)/i)).toBeTruthy();
-	});
-
 	it("shows name, percentage, task count and an overdue marker on a project card", async () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		vi.setSystemTime(new Date("2026-10-05T12:00:00"));

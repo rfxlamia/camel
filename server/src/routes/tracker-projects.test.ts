@@ -1,10 +1,11 @@
 // server/src/routes/tracker-projects.test.ts
 //
-// The create-cap race is simulated with a promise-chain "row lock": each
+// The position-read race is simulated with a promise-chain "row lock": each
 // transaction awaits the previous one before its callback runs, mirroring
 // what `SELECT ... FOR UPDATE` guarantees against real Postgres. This
-// proves the handler takes the lock before it counts, not that Postgres
-// itself locks correctly — that guarantee is Postgres's, not this test's.
+// proves the handler takes the lock before it reads position, not that
+// Postgres itself locks correctly — that guarantee is Postgres's, not this
+// test's.
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -152,18 +153,7 @@ describe("POST /tracker/projects", () => {
 		expect(mockTransaction).not.toHaveBeenCalled();
 	});
 
-	it("returns 409 naming the cap when 10 non-deleted projects exist", async () => {
-		sharedProjectCount = 10;
-		useTransactionalTrx();
-		const res = await request(app)
-			.post("/workspaces/7/tracker/projects")
-			.send({ name: "One too many" });
-		expect(res.status).toBe(409);
-		expect(res.body.error).toMatch(/10/);
-		expect(insertedValues).toHaveLength(0);
-	});
-
-	it("serializes two concurrent creates at 9 projects into one success and one 409, lock taken before count", async () => {
+	it("serializes two concurrent creates by taking the lock before reading position, so both succeed", async () => {
 		sharedProjectCount = 9;
 		useTransactionalTrx();
 		const [first, second] = await Promise.all([
@@ -171,7 +161,8 @@ describe("POST /tracker/projects", () => {
 			request(app).post("/workspaces/7/tracker/projects").send({ name: "B" }),
 		]);
 		const statuses = [first.status, second.status].sort();
-		expect(statuses).toEqual([201, 409]);
+		expect(statuses).toEqual([201, 201]);
+		expect(insertedValues).toHaveLength(2);
 
 		const lockIdx = callLog.flatMap((e, i) => (e === "lock" ? [i] : []));
 		const countIdx = callLog.flatMap((e, i) => (e === "count" ? [i] : []));

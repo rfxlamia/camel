@@ -7,9 +7,6 @@ import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 
-export const TRACKER_PROJECT_LIMIT = 10;
-export const TRACKER_PROJECT_CAP_ERROR = `You've reached the project limit (${TRACKER_PROJECT_LIMIT}).`;
-
 const PROJECT_COLUMNS = [
 	"id",
 	"workspace_id",
@@ -193,68 +190,53 @@ trackerProjectsRouter.post(
 			return res.status(400).json({ error: "name is required" });
 		}
 
-		try {
-			const created = await db.transaction().execute(async (trx) => {
-				await trx
-					.selectFrom("workspaces")
-					.select("id")
-					.where("id", "=", workspaceId)
-					.forUpdate()
-					.executeTakeFirstOrThrow();
+		const created = await db.transaction().execute(async (trx) => {
+			await trx
+				.selectFrom("workspaces")
+				.select("id")
+				.where("id", "=", workspaceId)
+				.forUpdate()
+				.executeTakeFirstOrThrow();
 
-				const capRow = await trx
-					.selectFrom("tracker_projects")
-					.select([
-						sql<number>`count(*)::int`.as("n"),
-						sql<number | null>`max(position)`.as("max_position"),
-					])
-					.where("workspace_id", "=", workspaceId)
-					.where("deleted_at", "is", null)
-					.executeTakeFirstOrThrow();
+			// Lock is held before this read so concurrent creates can't both
+			// compute the same max(position) and insert colliding positions.
+			const positionRow = await trx
+				.selectFrom("tracker_projects")
+				.select(sql<number | null>`max(position)`.as("max_position"))
+				.where("workspace_id", "=", workspaceId)
+				.where("deleted_at", "is", null)
+				.executeTakeFirstOrThrow();
 
-				if (capRow.n >= TRACKER_PROJECT_LIMIT) {
-					const err = new Error("project cap") as Error & { cap?: boolean };
-					err.cap = true;
-					throw err;
-				}
+			const position = positionBetween(positionRow.max_position ?? null, null);
 
-				const position = positionBetween(capRow.max_position ?? null, null);
+			const row = await trx
+				.insertInto("tracker_projects")
+				.values({
+					workspace_id: workspaceId,
+					name: trimmedName,
+					position,
+				})
+				.returning(PROJECT_COLUMNS)
+				.executeTakeFirstOrThrow();
 
-				const row = await trx
-					.insertInto("tracker_projects")
-					.values({
-						workspace_id: workspaceId,
-						name: trimmedName,
-						position,
-					})
-					.returning(PROJECT_COLUMNS)
-					.executeTakeFirstOrThrow();
-
-				await recordProjectActivity(
-					trx,
-					actor,
-					workspaceId,
-					"tracker_project_created",
-					{
-						payload: { projectId: row.id, name: trimmedName },
-					},
-				);
-
-				return row;
-			});
-
-			await publishEvent(workspaceId, {
-				type: "tracker.project.created",
+			await recordProjectActivity(
+				trx,
 				actor,
-			});
-			res.status(201).json(serializeProject(created));
-		} catch (err: unknown) {
-			const capErr = err as { cap?: boolean };
-			if (capErr.cap) {
-				return res.status(409).json({ error: TRACKER_PROJECT_CAP_ERROR });
-			}
-			throw err;
-		}
+				workspaceId,
+				"tracker_project_created",
+				{
+					payload: { projectId: row.id, name: trimmedName },
+				},
+			);
+
+			return row;
+		});
+
+		await publishEvent(workspaceId, {
+			type: "tracker.project.created",
+			actor,
+		});
+		res.status(201).json(serializeProject(created));
 	},
 );
 
