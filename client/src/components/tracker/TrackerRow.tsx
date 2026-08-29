@@ -1,6 +1,6 @@
 import { Folder, Signpost } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { formatDateRange, NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerProject,
@@ -10,9 +10,9 @@ import type {
 import {
 	PriorityGlyph,
 	StatusGlyph,
-	priorityBars,
 	statusGlyphSpec,
 } from "./TrackerGlyphs";
+import { TrackerRowKebabMenu } from "./TrackerRowKebabMenu";
 import { TrackerRowMemberLabelFields } from "./TrackerRowMemberLabel";
 import {
 	type PickerOption,
@@ -20,6 +20,7 @@ import {
 } from "./TrackerPropertyPicker";
 import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
 import TrackerRowShell from "./TrackerRowShell";
+import { buildTrackerRowPickerState } from "./trackerRowPickerOptions";
 
 type OpenPicker =
 	| "date"
@@ -29,6 +30,7 @@ type OpenPicker =
 	| "phase"
 	| "assignees"
 	| "labels"
+	| "kebab"
 	| null;
 
 interface Props {
@@ -76,18 +78,26 @@ export default function TrackerRow({
 }: Props) {
 	const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
 	const pendingPickerRef = useRef<OpenPicker>(null);
+	const kebabRef = useRef<HTMLButtonElement>(null);
 	const glyph = statusGlyphSpec(statuses, item.status.id);
-	const bars = item.priority ? priorityBars(priorities, item.priority.id) : 0;
-	const dateLabel =
-		formatDateRange(item.startDate ?? null, item.endDate ?? null) ??
-		"Set date";
-
-	const selectedProject = projects?.find((p) => p.id === item.projectId);
-	const selectedPhase = selectedProject?.phases.find(
-		(p) => p.id === item.phaseId,
-	);
-	const projectLabel = selectedProject?.name ?? "Set project";
-	const phaseLabel = selectedPhase?.name ?? "Set phase";
+	const {
+		selectedProject,
+		selectedPhase,
+		dateLabel,
+		projectLabel,
+		phaseLabel,
+		priorityLabel,
+		bars,
+		projectOptions,
+		phaseOptions,
+		priorityOptions,
+	} = buildTrackerRowPickerState({
+		item,
+		projects,
+		priorities,
+		labels,
+		members,
+	});
 
 	const requestPicker = (next: OpenPicker) => {
 		if (openPicker === "date" && next !== "date" && next !== null) {
@@ -115,43 +125,14 @@ export default function TrackerRow({
 		}),
 	);
 
-	const projectOptions: PickerOption[] =
-		projects?.map((p) => ({
-			id: String(p.id),
-			label: p.name,
-			selected: p.id === item.projectId,
-		})) ?? [];
-
-	const phaseOptions: PickerOption[] = (selectedProject?.phases ?? []).map(
-		(ph) => ({
-			id: String(ph.id),
-			label: ph.name,
-			selected: ph.id === item.phaseId,
-		}),
+	const hasKebabHandlers = Boolean(
+		onDateChange ||
+			onProjectChange ||
+			onPhaseChange ||
+			onPriorityChange ||
+			onAssigneeToggle ||
+			onLabelToggle,
 	);
-
-	const orderedPriorities = sortStatusesByPosition(priorities);
-	const priorityLabel = item.priority?.name ?? "No priority";
-
-	const priorityOptions: PickerOption[] = [
-		{
-			id: NO_PRIORITY,
-			label: "No priority",
-			selected: item.priority === null,
-			icon: <PriorityGlyph bars={0} size={13} />,
-		},
-		...orderedPriorities.map((priority) => ({
-			id: String(priority.id),
-			label: priority.name,
-			selected: priority.id === item.priority?.id,
-			icon: (
-				<PriorityGlyph
-					bars={priorityBars(orderedPriorities, priority.id)}
-					size={13}
-				/>
-			),
-		})),
-	];
 
 	return (
 		<TrackerRowShell itemKey={item.key} itemTitle={item.title}>
@@ -284,6 +265,41 @@ export default function TrackerRow({
 					})}
 				</time>
 			)}
+			{hasKebabHandlers ? (
+				<span className="pointer-events-auto shrink-0">
+					<button
+						ref={kebabRef}
+						type="button"
+						aria-label="More properties"
+						aria-haspopup="dialog"
+						aria-expanded={openPicker === "kebab"}
+						data-testid={`row-more-${item.key}`}
+						onClick={() =>
+							requestPicker(openPicker === "kebab" ? null : "kebab")
+						}
+						className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200 lg:hidden"
+					>
+						<span aria-hidden>⋯</span>
+					</button>
+					<TrackerRowKebabMenu
+						anchorRef={kebabRef}
+						idPrefix={`tracker-row-menu-${item.key}`}
+						item={item}
+						open={openPicker === "kebab"}
+						onOpenChange={(open) => requestPicker(open ? "kebab" : null)}
+						projects={projects}
+						priorities={priorities}
+						labels={labels}
+						members={members}
+						{...(onDateChange ? { onDateChange } : {})}
+						{...(onProjectChange ? { onProjectChange } : {})}
+						{...(onPhaseChange ? { onPhaseChange } : {})}
+						{...(onPriorityChange ? { onPriorityChange } : {})}
+						{...(onAssigneeToggle ? { onAssigneeToggle } : {})}
+						{...(onLabelToggle ? { onLabelToggle } : {})}
+					/>
+				</span>
+			) : null}
 		</TrackerRowShell>
 	);
 }
