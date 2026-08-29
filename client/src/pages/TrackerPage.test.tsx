@@ -52,9 +52,11 @@ vi.mock("../api", () => ({
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
-		constructor(message: string, status: number) {
+		code?: string;
+		constructor(message: string, status: number, code?: string) {
 			super(message);
 			this.status = status;
+			this.code = code;
 		}
 	},
 }));
@@ -116,6 +118,14 @@ const statuses: TrackerVocabulary[] = [
 		colour: "oklch(0.7 0.1 140)",
 		category: "completed",
 	},
+	{
+		id: 6,
+		kind: "status",
+		name: "Todo",
+		position: 2000,
+		colour: "oklch(0.7 0.1 180)",
+		category: "unstarted",
+	},
 ];
 
 const priorities: TrackerVocabulary[] = [
@@ -125,6 +135,13 @@ const priorities: TrackerVocabulary[] = [
 		name: "High",
 		position: 1000,
 		colour: "oklch(0.7 0.1 30)",
+	},
+	{
+		id: 11,
+		kind: "priority",
+		name: "Low",
+		position: 2000,
+		colour: "oklch(0.7 0.1 220)",
 	},
 ];
 
@@ -353,6 +370,209 @@ describe("TrackerPage", () => {
 		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
 		expect(mockShowToast.mock.calls[0]?.[1]).toBe("error");
 		expect(screen.getByLabelText("Backlog, CA-1")).toBeTruthy();
+	});
+
+	it("processes three rapid status picks in order", async () => {
+		const pending: Array<() => void> = [];
+		let version = 1;
+		mockUpdateTrackerItem.mockImplementation(
+			(_ws, _key, patch) =>
+				new Promise<TrackerItem>((resolve) => {
+					pending.push(() => {
+						version += 1;
+						const nextStatus = statuses.find((s) => s.id === patch.statusId)!;
+						resolve(
+							makeItem({
+								id: 1,
+								key: "CA-1",
+								status: nextStatus,
+								version,
+							}),
+						);
+					});
+				}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const statusTrigger = () =>
+			within(screen.getByTestId("tracker-row-CA-1").parentElement!).getByRole(
+				"button",
+				{ name: /, CA-1$/ },
+			);
+
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /^Todo$/ }));
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		pending.shift()?.();
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		pending.shift()?.();
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(3));
+		pending.shift()?.();
+
+		expect(mockUpdateTrackerItem.mock.calls[0]?.[2]).toEqual({
+			statusId: 6,
+			version: 1,
+		});
+		expect(mockUpdateTrackerItem.mock.calls[1]?.[2]).toEqual({
+			statusId: 2,
+			version: 2,
+		});
+		expect(mockUpdateTrackerItem.mock.calls[2]?.[2]).toEqual({
+			statusId: 5,
+			version: 3,
+		});
+		await waitFor(() =>
+			expect(screen.getByLabelText("Done, CA-1")).toBeTruthy(),
+		);
+	});
+
+	it("processes a queued status pick after 409 once refresh succeeds", async () => {
+		mockUpdateTrackerItem
+			.mockRejectedValueOnce(
+				new ApiError("conflict", 409, "version_conflict"),
+			)
+			.mockResolvedValueOnce(
+				makeItem({ id: 1, key: "CA-1", status: statuses[2]!, version: 6 }),
+			);
+		mockListTrackerItems
+			.mockResolvedValueOnce([
+				makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
+				makeItem({
+					id: 2,
+					key: "CA-2",
+					title: "Done task",
+					status: statuses[2]!,
+					labels: [],
+				}),
+			])
+			.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					title: "Workspace Rename",
+					version: 5,
+				}),
+				makeItem({
+					id: 2,
+					key: "CA-2",
+					title: "Done task",
+					status: statuses[2]!,
+					labels: [],
+				}),
+			]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const statusTrigger = () =>
+			within(screen.getByTestId("tracker-row-CA-1").parentElement!).getByRole(
+				"button",
+				{ name: /, CA-1$/ },
+			);
+
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+		);
+
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
+
+		await waitFor(() =>
+			expect(mockShowToast).toHaveBeenCalledWith(
+				"Someone else updated this item first — refreshed.",
+				"warning",
+			),
+		);
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+			statusId: 5,
+			version: 5,
+		});
+		await waitFor(() =>
+			expect(screen.getByLabelText("Done, CA-1")).toBeTruthy(),
+		);
+	});
+
+	it("skips a queued status pick when 409 recovery refresh fails", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		mockUpdateTrackerItem.mockRejectedValueOnce(
+			new ApiError("conflict", 409, "version_conflict"),
+		);
+		mockListTrackerItems
+			.mockResolvedValueOnce([
+				makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
+				makeItem({
+					id: 2,
+					key: "CA-2",
+					title: "Done task",
+					status: statuses[2]!,
+					labels: [],
+				}),
+			])
+			.mockRejectedValueOnce(new Error("network down"));
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const statusTrigger = () =>
+			within(screen.getByTestId("tracker-row-CA-1").parentElement!).getByRole(
+				"button",
+				{ name: /, CA-1$/ },
+			);
+
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+		);
+
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
+
+		await waitFor(() =>
+			expect(mockShowToast).toHaveBeenCalledWith(
+				"Someone else updated this item first — refreshed.",
+				"warning",
+			),
+		);
+		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+		expect(screen.getByLabelText("Backlog, CA-1")).toBeTruthy();
+
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({ id: 1, key: "CA-1", title: "Workspace Rename", version: 5 }),
+			makeItem({
+				id: 2,
+				key: "CA-2",
+				title: "Done task",
+				status: statuses[2]!,
+				labels: [],
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValueOnce(
+			makeItem({ id: 1, key: "CA-1", status: statuses[1]!, version: 6 }),
+		);
+		sseHandler?.({ type: "tracker.updated" });
+		await waitFor(() => screen.getByLabelText("Backlog, CA-1"));
+
+		fireEvent.click(statusTrigger());
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+		);
 	});
 
 	it("defers a second status pick until the first request settles", async () => {
