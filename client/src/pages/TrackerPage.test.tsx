@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // client/src/pages/TrackerPage.test.tsx
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -1924,6 +1925,274 @@ describe("TrackerPage projects", () => {
 		expect(screen.getByLabelText("Rilis v2")).toBeTruthy();
 		resolveItems([]);
 		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+	});
+
+	describe("auxiliary labels and members loading", () => {
+		it("fetches labels with workspace id and label kind", async () => {
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByText("CA-1"));
+			await waitFor(() =>
+				expect(mockListTrackerVocabularies).toHaveBeenCalledWith(7, "label"),
+			);
+			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
+				"Feature,Bug",
+			);
+		});
+
+		it("keeps rows visible when labels fetch fails", async () => {
+			mockListTrackerVocabularies.mockImplementation(
+				(_wsId: number, kind?: string) => {
+					if (kind === "priority") return Promise.resolve(priorities);
+					if (kind === "label") return Promise.reject(new Error("labels down"));
+					return Promise.resolve(statuses);
+				},
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByText("CA-1"));
+			expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
+			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
+		});
+
+		it("keeps rows visible when members fetch fails", async () => {
+			mockGetWorkspaceMembers.mockRejectedValueOnce(new Error("members down"));
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByText("CA-1"));
+			expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
+			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
+		});
+
+		it("ignores stale labels and members from an older load sequence", async () => {
+			let refreshCallback: (() => void) | undefined;
+			mockUseBoard.mockReturnValue({
+				activeWorkspaceId: 7,
+				subscribeTrackerEvents: vi.fn(() => () => {}),
+				registerRefreshTrackerList: vi.fn((cb: (() => void) | null) => {
+					refreshCallback = cb ?? undefined;
+				}),
+				refreshTrackerList: vi.fn(),
+				showToast: mockShowToast,
+			});
+
+			let resolveFirstLabels: (value: TrackerVocabulary[]) => void;
+			let resolveFirstMembers: (value: {
+				members: Array<{
+					userId: number;
+					username: string;
+					displayName: string;
+					role: string;
+				}>;
+			}) => void;
+			let resolveSecondLabels: (value: TrackerVocabulary[]) => void;
+			let resolveSecondMembers: (value: {
+				members: Array<{
+					userId: number;
+					username: string;
+					displayName: string;
+					role: string;
+				}>;
+			}) => void;
+
+			let labelCallCount = 0;
+			let memberCallCount = 0;
+
+			mockListTrackerVocabularies.mockImplementation(
+				(_wsId: number, kind?: string) => {
+					if (kind === "priority") return Promise.resolve(priorities);
+					if (kind === "label") {
+						labelCallCount += 1;
+						if (labelCallCount === 1) {
+							return new Promise((resolve) => {
+								resolveFirstLabels = resolve;
+							});
+						}
+						return new Promise((resolve) => {
+							resolveSecondLabels = resolve;
+						});
+					}
+					return Promise.resolve(statuses);
+				},
+			);
+			mockGetWorkspaceMembers.mockImplementation(() => {
+				memberCallCount += 1;
+				if (memberCallCount === 1) {
+					return new Promise((resolve) => {
+						resolveFirstMembers = resolve;
+					});
+				}
+				return new Promise((resolve) => {
+					resolveSecondMembers = resolve;
+				});
+			});
+
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByText("CA-1"));
+
+			refreshCallback?.();
+			await waitFor(() => expect(labelCallCount).toBe(2));
+
+			const sequenceBLabel: TrackerVocabulary = {
+				id: 100,
+				kind: "label",
+				name: "Sequence-B-Label",
+				position: 1000,
+				colour: "oklch(0.7 0.1 260)",
+			};
+			const sequenceAMember = {
+				userId: 88,
+				username: "stale",
+				displayName: "Sequence-A-Member",
+				role: "member",
+			};
+			const sequenceBMember = {
+				userId: 99,
+				username: "fresh",
+				displayName: "Sequence-B-Member",
+				role: "member",
+			};
+
+			resolveSecondLabels!([sequenceBLabel]);
+			resolveSecondMembers!({ members: [sequenceBMember] });
+			await waitFor(() =>
+				expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
+					"Sequence-B-Label",
+				),
+			);
+			expect(screen.getByTestId("tracker-aux-members").textContent).toBe(
+				"Sequence-B-Member",
+			);
+
+			resolveFirstLabels!([
+				{
+					id: 200,
+					kind: "label",
+					name: "Sequence-A-Label",
+					position: 1000,
+					colour: "oklch(0.7 0.1 15)",
+				},
+			]);
+			resolveFirstMembers!({ members: [sequenceAMember] });
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
+				"Sequence-B-Label",
+			);
+			expect(screen.getByTestId("tracker-aux-members").textContent).toBe(
+				"Sequence-B-Member",
+			);
+		});
+
+		it("clears labels and members when switching workspace", async () => {
+			const workspaceALabel: TrackerVocabulary = {
+				id: 3,
+				kind: "label",
+				name: "Workspace-A-Label",
+				position: 1000,
+				colour: "oklch(0.7 0.1 260)",
+			};
+			const workspaceBLabel: TrackerVocabulary = {
+				id: 4,
+				kind: "label",
+				name: "Workspace-B-Label",
+				position: 1000,
+				colour: "oklch(0.7 0.1 15)",
+			};
+			const workspaceAMember = {
+				userId: 7,
+				username: "alice-a",
+				displayName: "Workspace-A-Member",
+				role: "member",
+			};
+			const workspaceBMember = {
+				userId: 8,
+				username: "bob-b",
+				displayName: "Workspace-B-Member",
+				role: "member",
+			};
+
+			let resolveWorkspaceALabels: (value: TrackerVocabulary[]) => void;
+			let resolveWorkspaceBLabels: (value: TrackerVocabulary[]) => void;
+			let resolveWorkspaceAMembers: (value: {
+				members: typeof workspaceAMember[];
+			}) => void;
+			let resolveWorkspaceBMembers: (value: {
+				members: typeof workspaceBMember[];
+			}) => void;
+
+			mockListTrackerVocabularies.mockImplementation(
+				(wsId: number, kind?: string) => {
+					if (kind === "priority") return Promise.resolve(priorities);
+					if (kind === "label") {
+						if (wsId === 7) {
+							return new Promise((resolve) => {
+								resolveWorkspaceALabels = resolve;
+							});
+						}
+						return new Promise((resolve) => {
+							resolveWorkspaceBLabels = resolve;
+						});
+					}
+					return Promise.resolve(statuses);
+				},
+			);
+			mockGetWorkspaceMembers.mockImplementation((wsId: number) => {
+				if (wsId === 7) {
+					return new Promise((resolve) => {
+						resolveWorkspaceAMembers = resolve;
+					});
+				}
+				return new Promise((resolve) => {
+					resolveWorkspaceBMembers = resolve;
+				});
+			});
+
+			mockUseBoard.mockReturnValue({
+				activeWorkspaceId: 7,
+				subscribeTrackerEvents: vi.fn(() => () => {}),
+				registerRefreshTrackerList: vi.fn(),
+				refreshTrackerList: vi.fn(),
+				showToast: mockShowToast,
+			});
+
+			const { rerender } = render(<TrackerPage />);
+			await waitFor(() => screen.getByText("CA-1"));
+
+			mockUseBoard.mockReturnValue({
+				activeWorkspaceId: 8,
+				subscribeTrackerEvents: vi.fn(() => () => {}),
+				registerRefreshTrackerList: vi.fn(),
+				refreshTrackerList: vi.fn(),
+				showToast: mockShowToast,
+			});
+			rerender(<TrackerPage />);
+			await waitFor(() => screen.getByText("CA-1"));
+
+			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
+			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
+
+			resolveWorkspaceALabels!([workspaceALabel]);
+			resolveWorkspaceAMembers!({ members: [workspaceAMember] });
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
+			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
+
+			resolveWorkspaceBLabels!([workspaceBLabel]);
+			resolveWorkspaceBMembers!({ members: [workspaceBMember] });
+			await waitFor(() =>
+				expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
+					"Workspace-B-Label",
+				),
+			);
+			expect(screen.getByTestId("tracker-aux-members").textContent).toBe(
+				"Workspace-B-Member",
+			);
+		});
 	});
 
 	it("ignores a stale failed load when a newer refresh already succeeded", async () => {
