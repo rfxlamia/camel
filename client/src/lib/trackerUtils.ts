@@ -1,5 +1,89 @@
 import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 
+const MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+] as const;
+
+interface DateParts {
+	year: number;
+	month: number;
+	day: number;
+}
+
+function parseDateOnly(iso: string): DateParts | null {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+	if (!match) return null;
+	return {
+		year: Number(match[1]),
+		month: Number(match[2]),
+		day: Number(match[3]),
+	};
+}
+
+function formatOneDate({ year, month, day }: DateParts, withYear = false): string {
+	const mon = MONTHS[month - 1];
+	return withYear ? `${day} ${mon} ${year}` : `${day} ${mon}`;
+}
+
+function compareDates(a: DateParts, b: DateParts): number {
+	if (a.year !== b.year) return a.year - b.year;
+	if (a.month !== b.month) return a.month - b.month;
+	return a.day - b.day;
+}
+
+/** Locale- and timezone-independent date range label for tracker rows. */
+export function formatDateRange(
+	startDate: string | null,
+	endDate: string | null,
+): string | null {
+	if (startDate === null && endDate === null) return null;
+
+	if (startDate === null || endDate === null) {
+		const single = startDate
+			? parseDateOnly(startDate)
+			: endDate
+				? parseDateOnly(endDate)
+				: null;
+		return single ? formatOneDate(single) : null;
+	}
+
+	const start = parseDateOnly(startDate);
+	const end = parseDateOnly(endDate);
+	if (!start || !end) return null;
+
+	if (compareDates(start, end) > 0) return null;
+
+	if (
+		start.year === end.year &&
+		start.month === end.month &&
+		start.day === end.day
+	) {
+		return formatOneDate(start);
+	}
+
+	if (start.year === end.year && start.month === end.month) {
+		const mon = MONTHS[start.month - 1];
+		return `${start.day}–${end.day} ${mon}`;
+	}
+
+	if (start.year === end.year) {
+		return `${formatOneDate(start)}–${formatOneDate(end)}`;
+	}
+
+	return `${formatOneDate(start, true)}–${formatOneDate(end, true)}`;
+}
+
 /** Status sections follow vocabulary position (fractional ordering). */
 export function sortStatusesByPosition(
 	statuses: TrackerVocabulary[],
