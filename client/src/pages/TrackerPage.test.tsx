@@ -213,6 +213,48 @@ const releaseProject: TrackerProject = {
 	updatedAt: "2026-08-01T00:00:00Z",
 };
 
+const P1 = releaseProject.id;
+const Ph1 = persiapan.id;
+
+const projectB: TrackerProject = {
+	id: 2,
+	name: "Migrasi JSX",
+	startDate: null,
+	endDate: null,
+	position: 2048,
+	version: 1,
+	phases: [
+		{
+			id: 12,
+			projectId: 2,
+			name: "Cutover",
+			subtitle: "",
+			startDate: null,
+			endDate: null,
+			position: 1024,
+			version: 1,
+			createdAt: "2026-08-01T00:00:00Z",
+			updatedAt: "2026-08-01T00:00:00Z",
+		},
+	],
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
+
+const P2 = projectB.id;
+
+const zeroPhaseProject: TrackerProject = {
+	id: 3,
+	name: "FASTRACK TRACTOR",
+	startDate: null,
+	endDate: null,
+	position: 3072,
+	version: 1,
+	phases: [],
+	createdAt: "2026-08-01T00:00:00Z",
+	updatedAt: "2026-08-01T00:00:00Z",
+};
+
 function inProjectItem(
 	overrides: Partial<TrackerItem> & { id: number },
 ): TrackerItem {
@@ -974,7 +1016,7 @@ describe("TrackerPage items tab", () => {
 		expect(within(backlog).getByText("2")).toBeTruthy();
 	});
 
-	it("marks an item's project with a chip and leaves loose items unmarked", async () => {
+	it("marks an item's project with a chip and shows Set project for loose items", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
 		mockListTrackerItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
@@ -983,10 +1025,14 @@ describe("TrackerPage items tab", () => {
 		render(<TrackerPage />);
 
 		await waitFor(() => screen.getByText("CA-10"));
-		expect(screen.getByTestId("row-project-CA-10").textContent).toBe(
-			"Rilis v2",
-		);
-		expect(screen.queryByTestId("row-project-CA-1")).toBeNull();
+		const projectRow = screen.getByTestId("tracker-row-CA-10").parentElement!;
+		expect(
+			within(projectRow).getByRole("button", { name: "Project: Rilis v2" }),
+		).toBeTruthy();
+		const looseRow = screen.getByTestId("tracker-row-CA-1").parentElement!;
+		expect(
+			within(looseRow).getByRole("button", { name: "Project: Set project" }),
+		).toBeTruthy();
 	});
 
 	it("regroups by project without losing or duplicating an item", async () => {
@@ -1008,8 +1054,11 @@ describe("TrackerPage items tab", () => {
 		expect(screen.getByText("CA-1")).toBeTruthy();
 		expect(screen.getByText("CA-10")).toBeTruthy();
 		expect(screen.getByText("2 items")).toBeTruthy();
-		// The group header already names the project, so the chip stands down.
-		expect(screen.queryByTestId("row-project-CA-10")).toBeNull();
+		// Group header names the project, but the row chip still renders.
+		const projectRow = screen.getByTestId("tracker-row-CA-10").parentElement!;
+		expect(
+			within(projectRow).getByRole("button", { name: "Project: Rilis v2" }),
+		).toBeTruthy();
 	});
 
 	it("keeps an empty project visible when grouping by project", async () => {
@@ -1128,6 +1177,295 @@ describe("TrackerPage items tab", () => {
 
 		showProjectsTab();
 		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
+	});
+
+	it("shows Set project placeholder for items without a project", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+		const row = screen.getByTestId("tracker-row-CA-1").parentElement!;
+		expect(
+			within(row).getByRole("button", { name: "Project: Set project" }),
+		).toBeTruthy();
+	});
+
+	it("shows Set phase placeholder when project has no phase", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 10,
+				key: "TE-1",
+				title: "Unphased task",
+				projectId: P1,
+				phaseId: null,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-1"));
+		const row = screen.getByTestId("tracker-row-TE-1").parentElement!;
+		expect(
+			within(row).getByRole("button", { name: "Phase: Set phase" }),
+		).toBeTruthy();
+	});
+
+	it("PATCHes project and phase together when selecting a phase", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 3,
+				key: "TE-3",
+				title: "Phase me",
+				projectId: P1,
+				phaseId: null,
+				version: 2,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 3,
+				key: "TE-3",
+				title: "Phase me",
+				projectId: P1,
+				phaseId: Ph1,
+				version: 3,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
+		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
+
+		fireEvent.click(within(row).getByRole("button", { name: /Phase:/ }));
+		fireEvent.click(screen.getByRole("option", { name: /Persiapan/ }));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-3", {
+				projectId: P1,
+				phaseId: Ph1,
+				version: 2,
+			}),
+		);
+		await waitFor(() =>
+			expect(
+				within(row).getByRole("button", { name: "Phase: Persiapan" }),
+			).toBeTruthy(),
+		);
+	});
+
+	it("does not PATCH when re-picking the current phase", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			inProjectItem({
+				id: 3,
+				key: "TE-3",
+				title: "Phased task",
+				version: 2,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
+		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
+
+		fireEvent.click(within(row).getByRole("button", { name: "Phase: Persiapan" }));
+		fireEvent.click(screen.getByRole("option", { name: /Persiapan/ }));
+
+		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+	});
+
+	it("resets phase in one PATCH when changing project", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			inProjectItem({
+				id: 3,
+				key: "TE-3",
+				title: "Move project",
+				version: 2,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 3,
+				key: "TE-3",
+				title: "Move project",
+				projectId: P2,
+				phaseId: null,
+				version: 3,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
+		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
+
+		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1),
+		);
+		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-3", {
+			projectId: P2,
+			phaseId: null,
+			version: 2,
+		});
+		await waitFor(() =>
+			expect(
+				within(row).getByRole("button", { name: "Phase: Set phase" }),
+			).toBeTruthy(),
+		);
+	});
+
+	it("does not PATCH when re-picking the current project", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			inProjectItem({
+				id: 3,
+				key: "TE-3",
+				title: "Stay put",
+				version: 2,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
+		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
+
+		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(screen.getByRole("option", { name: /Rilis v2/ }));
+
+		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+		expect(
+			within(row).getByRole("button", { name: "Phase: Persiapan" }),
+		).toBeTruthy();
+	});
+
+	it("reverts to the original project after a rapid pick race resolves", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			inProjectItem({
+				id: 3,
+				key: "TE-3",
+				title: "Race task",
+				version: 2,
+			}),
+		]);
+		let resolveFirst: ((item: TrackerItem) => void) | undefined;
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise<TrackerItem>((resolve) => {
+						resolveFirst = resolve;
+					}),
+			)
+			.mockResolvedValueOnce(
+				makeItem({
+					id: 3,
+					key: "TE-3",
+					title: "Race task",
+					projectId: P1,
+					phaseId: null,
+					version: 4,
+				}),
+			);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
+		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
+
+		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+
+		fireEvent.click(within(row).getByRole("button", { name: "Project: Migrasi JSX" }));
+		fireEvent.click(screen.getByRole("option", { name: /Rilis v2/ }));
+		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+
+		resolveFirst?.(
+			makeItem({
+				id: 3,
+				key: "TE-3",
+				title: "Race task",
+				projectId: P2,
+				phaseId: null,
+				version: 3,
+			}),
+		);
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "TE-3", {
+			projectId: P1,
+			phaseId: null,
+			version: 3,
+		});
+	});
+
+	it("shows No matches when a project has zero phases", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([zeroPhaseProject]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 10,
+				key: "TE-4",
+				title: "Zero phase",
+				projectId: zeroPhaseProject.id,
+				phaseId: null,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-4"));
+		const row = screen.getByTestId("tracker-row-TE-4").parentElement!;
+
+		fireEvent.click(within(row).getByRole("button", { name: /Phase:/ }));
+		const listbox = screen.getByRole("listbox", { name: "Set phase" });
+		expect(within(listbox).getByText("No matches")).toBeTruthy();
+		expect(within(listbox).queryAllByRole("option")).toHaveLength(0);
+	});
+
+	it("auto-uncollapses the destination project group after a project change", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			inProjectItem({
+				id: 3,
+				key: "TE-3",
+				title: "Move groups",
+				version: 2,
+			}),
+			inProjectItem({
+				id: 11,
+				key: "CA-11",
+				title: "Already in P2",
+				projectId: P2,
+				phaseId: 12,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 3,
+				key: "TE-3",
+				title: "Move groups",
+				projectId: P2,
+				phaseId: null,
+				version: 3,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("TE-3"));
+
+		fireEvent.click(screen.getByRole("button", { name: /group by: status/i }));
+		fireEvent.click(screen.getByRole("option", { name: /^Project$/ }));
+		await waitFor(() =>
+			expect(screen.getByTestId("toggle-section-Migrasi JSX")).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByTestId("toggle-section-Migrasi JSX"));
+		expect(screen.queryByText("CA-11")).toBeNull();
+		expect(screen.getByText("TE-3")).toBeTruthy();
+
+		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
+		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByText("CA-11")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("TE-3")).toBeTruthy());
 	});
 });
 
@@ -1252,7 +1590,7 @@ describe("TrackerPage projects", () => {
 		]);
 		render(<TrackerPage />);
 		await waitFor(() =>
-			expect(screen.getByTestId("row-project-CA-10")).toBeTruthy(),
+			expect(screen.getByTestId("row-inline-project-CA-10")).toBeTruthy(),
 		);
 
 		mockListTrackerProjects.mockResolvedValueOnce([]);
@@ -1266,9 +1604,14 @@ describe("TrackerPage projects", () => {
 			}),
 		]);
 		sseHandler?.({ type: "tracker.project.deleted" });
-		// The item never left the list — only its project marker did.
+		// The item never left the list — only its project marker reverts to placeholder.
 		await waitFor(() =>
-			expect(screen.queryByTestId("row-project-CA-10")).toBeNull(),
+			expect(
+				within(screen.getByTestId("tracker-row-CA-10").parentElement!).getByRole(
+					"button",
+					{ name: "Project: Set project" },
+				),
+			).toBeTruthy(),
 		);
 		expect(screen.getByText("CA-10")).toBeTruthy();
 

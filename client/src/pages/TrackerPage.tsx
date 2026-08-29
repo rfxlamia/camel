@@ -18,6 +18,7 @@ import { partitionTrackerSearch } from "../lib/trackerSearch";
 import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
 import {
 	groupItems,
+	projectGroupKey,
 	sortStatusesByPosition,
 	statusGroupKey,
 	TRACKER_GROUP_BY_LABELS,
@@ -252,10 +253,62 @@ export default function TrackerPage() {
 		[filteredItems, groupBy, statuses, priorities, projects],
 	);
 
-	const projectNames = useMemo(
-		() => new Map(projects.map((project) => [project.id, project.name])),
-		[projects],
-	);
+	type ItemPatchBuild = (current: TrackerItem) => {
+		request: {
+			version: number;
+			statusId?: number;
+			startDate?: string | null;
+			endDate?: string | null;
+			projectId?: number | null;
+			phaseId?: number | null;
+		};
+		optimistic: TrackerItem;
+		rollback: (latest: TrackerItem) => TrackerItem;
+	} | null;
+
+	const applyItemPatch = async (
+		itemId: number,
+		build: ItemPatchBuild,
+		errorMessage: string,
+	): Promise<void> => {
+		if (activeWorkspaceId === null) return;
+		if (recoveryBlockedItemIdsRef.current.has(itemId)) return;
+		const current = itemsRef.current.find((it) => it.id === itemId);
+		if (!current) return;
+		const built = build(current);
+		if (!built) return;
+
+		const workspaceId = activeWorkspaceId;
+		const { request, optimistic, rollback } = built;
+
+		updateItems((prev) =>
+			prev.map((it) => (it.id === itemId ? optimistic : it)),
+		);
+		try {
+			const updated = await api.updateTrackerItem(
+				workspaceId,
+				current.key,
+				request,
+			);
+			updateItems((prev) =>
+				prev.map((it) => (it.id === updated.id ? updated : it)),
+			);
+		} catch (err) {
+			updateItems((prev) =>
+				prev.map((it) => (it.id === itemId ? rollback(it) : it)),
+			);
+			if (err instanceof ApiError && err.code === "version_conflict") {
+				recoveryBlockedItemIdsRef.current.add(itemId);
+				showToast(
+					"Someone else updated this item first — refreshed.",
+					"warning",
+				);
+				await loadData();
+			} else {
+				showToast(errorMessage, "error");
+			}
+		}
+	};
 
 	const groupByOptions: PickerOption[] = GROUP_BY_ORDER.map((option) => ({
 		id: option,
@@ -268,135 +321,47 @@ export default function TrackerPage() {
 		setCreateOpen(true);
 	};
 
-	const applyDateMutation = async (
-		workspaceId: number,
-		itemId: number,
-		itemKey: string,
-		itemVersion: number,
-		priorStartDate: string | null | undefined,
-		priorEndDate: string | null | undefined,
-		nextStartDate: string | null,
-		nextEndDate: string | null,
-	) => {
-		updateItems((prev) =>
-			prev.map((it) =>
-				it.id === itemId
-					? { ...it, startDate: nextStartDate, endDate: nextEndDate }
-					: it,
-			),
-		);
-		try {
-			const updated = await api.updateTrackerItem(workspaceId, itemKey, {
-				startDate: nextStartDate,
-				endDate: nextEndDate,
-				version: itemVersion,
-			});
-			updateItems((prev) =>
-				prev.map((it) => (it.id === updated.id ? updated : it)),
-			);
-		} catch (err) {
-			updateItems((prev) =>
-				prev.map((it) =>
-					it.id === itemId
-						? { ...it, startDate: priorStartDate, endDate: priorEndDate }
-						: it,
-				),
-			);
-			if (err instanceof ApiError && err.code === "version_conflict") {
-				recoveryBlockedItemIdsRef.current.add(itemId);
-				showToast(
-					"Someone else updated this item first — refreshed.",
-					"warning",
-				);
-				await loadData();
-			} else {
-				showToast(
-					"Couldn't update the date. Check your connection and try again.",
-					"error",
-				);
-			}
-		}
-	};
-
 	const changeDate = (
 		item: TrackerItem,
 		dates: { startDate: string | null; endDate: string | null },
 	) => {
-		if (activeWorkspaceId === null) return;
-		const workspaceId = activeWorkspaceId;
+		const nextStart = dates.startDate;
+		const nextEnd = dates.endDate;
 		void mutationQueueRef.current.enqueue(item.id, async () => {
-			if (recoveryBlockedItemIdsRef.current.has(item.id)) return;
-			const current = itemsRef.current.find((it) => it.id === item.id);
-			if (!current) return;
-			const nextStart = dates.startDate;
-			const nextEnd = dates.endDate;
-			if (
-				(current.startDate ?? null) === nextStart &&
-				(current.endDate ?? null) === nextEnd
-			) {
-				return;
-			}
-			await applyDateMutation(
-				workspaceId,
+			await applyItemPatch(
 				item.id,
-				current.key,
-				current.version,
-				current.startDate,
-				current.endDate,
-				nextStart,
-				nextEnd,
+				(current) => {
+					if (
+						(current.startDate ?? null) === nextStart &&
+						(current.endDate ?? null) === nextEnd
+					) {
+						return null;
+					}
+					return {
+						request: {
+							startDate: nextStart,
+							endDate: nextEnd,
+							version: current.version,
+						},
+						optimistic: {
+							...current,
+							startDate: nextStart,
+							endDate: nextEnd,
+						},
+						rollback: (latest) => ({
+							...latest,
+							startDate: current.startDate,
+							endDate: current.endDate,
+						}),
+					};
+				},
+				"Couldn't update the date. Check your connection and try again.",
 			);
 		});
 	};
 
-	const applyStatusMutation = async (
-		workspaceId: number,
-		itemId: number,
-		itemKey: string,
-		itemVersion: number,
-		priorStatus: TrackerVocabulary,
-		nextStatus: TrackerVocabulary,
-	) => {
-		updateItems((prev) =>
-			prev.map((it) =>
-				it.id === itemId ? { ...it, status: nextStatus } : it,
-			),
-		);
-		try {
-			const updated = await api.updateTrackerItem(workspaceId, itemKey, {
-				statusId: nextStatus.id,
-				version: itemVersion,
-			});
-			updateItems((prev) =>
-				prev.map((it) => (it.id === updated.id ? updated : it)),
-			);
-		} catch (err) {
-			updateItems((prev) =>
-				prev.map((it) =>
-					it.id === itemId ? { ...it, status: priorStatus } : it,
-				),
-			);
-			if (err instanceof ApiError && err.code === "version_conflict") {
-				recoveryBlockedItemIdsRef.current.add(itemId);
-				showToast(
-					"Someone else updated this item first — refreshed.",
-					"warning",
-				);
-				await loadData();
-			} else {
-				showToast(
-					"Couldn't change the status. Check your connection and try again.",
-					"error",
-				);
-			}
-		}
-	};
-
 	const changeStatus = (item: TrackerItem, statusId: number) => {
-		if (activeWorkspaceId === null) return;
-		const workspaceId = activeWorkspaceId;
 		void mutationQueueRef.current.enqueue(item.id, async () => {
-			if (recoveryBlockedItemIdsRef.current.has(item.id)) return;
 			const current = itemsRef.current.find((it) => it.id === item.id);
 			if (!current || current.status.id === statusId) return;
 			const nextStatus = statuses.find((s) => s.id === statusId);
@@ -409,13 +374,73 @@ export default function TrackerPage() {
 				next.delete(key);
 				return next;
 			});
-			await applyStatusMutation(
-				workspaceId,
+
+			await applyItemPatch(
 				item.id,
-				current.key,
-				current.version,
-				current.status,
-				nextStatus,
+				(c) => ({
+					request: { statusId, version: c.version },
+					optimistic: { ...c, status: nextStatus },
+					rollback: (latest) => ({ ...latest, status: current.status }),
+				}),
+				"Couldn't change the status. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changeProject = (item: TrackerItem, projectId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current || current.projectId === projectId) return;
+
+			setCollapsedKeys((prev) => {
+				if (groupBy !== "project") return prev;
+				const key = projectGroupKey(projectId);
+				if (!prev.has(key)) return prev;
+				const next = new Set(prev);
+				next.delete(key);
+				return next;
+			});
+
+			await applyItemPatch(
+				item.id,
+				(c) => ({
+					request: {
+						projectId,
+						phaseId: null,
+						version: c.version,
+					},
+					optimistic: { ...c, projectId, phaseId: null },
+					rollback: (latest) => ({
+						...latest,
+						projectId: current.projectId ?? null,
+						phaseId: current.phaseId ?? null,
+					}),
+				}),
+				"Couldn't change the project. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changePhase = (item: TrackerItem, phaseId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					if (current.phaseId === phaseId) return null;
+					return {
+						request: {
+							projectId: current.projectId ?? null,
+							phaseId,
+							version: current.version,
+						},
+						optimistic: { ...current, phaseId },
+						rollback: (latest) => ({
+							...latest,
+							phaseId: current.phaseId ?? null,
+						}),
+					};
+				},
+				"Couldn't change the phase. Check your connection and try again.",
 			);
 		});
 	};
@@ -602,8 +627,11 @@ export default function TrackerPage() {
 									void changeStatus(item, statusId)
 								}
 								onDateChange={(item, dates) => changeDate(item, dates)}
-								projectNames={projectNames}
-								showProjectChip={groupBy !== "project"}
+								onProjectChange={(item, projectId) =>
+									changeProject(item, projectId)
+								}
+								onPhaseChange={(item, phaseId) => changePhase(item, phaseId)}
+								projects={projects}
 							/>
 						);
 					})}

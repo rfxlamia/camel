@@ -148,6 +148,14 @@ export function statusGroupKey(statusId: number): string {
 	return `status:${statusId}`;
 }
 
+export function projectGroupKey(projectId: number | null): string {
+	return projectId == null ? "project:none" : `project:${projectId}`;
+}
+
+export function priorityGroupKey(priorityId: number | null): string {
+	return priorityId == null ? "priority:none" : `priority:${priorityId}`;
+}
+
 /**
  * Items inside a project follow the WBS reading order — phase order first, then
  * the manual position within the phase. Items with no phase sit at the end.
@@ -183,7 +191,7 @@ function groupByProject(
 	// An empty project still gets a header: a project you just created must not
 	// vanish from the list it was created in.
 	const groups: TrackerGroup[] = ordered.map((project) => ({
-		key: `project:${project.id}`,
+		key: projectGroupKey(project.id),
 		label: project.name,
 		projectId: project.id,
 		items: sortItemsForProject(
@@ -199,7 +207,7 @@ function groupByProject(
 	);
 	if (loose.length > 0) {
 		groups.push({
-			key: "project:none",
+			key: projectGroupKey(null),
 			label: "No project",
 			items: sortItemsOldestFirst(loose),
 		});
@@ -213,7 +221,7 @@ function groupByPriority(
 ): TrackerGroup[] {
 	const ordered = sortStatusesByPosition(priorities);
 	const groups: TrackerGroup[] = ordered.map((priority) => ({
-		key: `priority:${priority.id}`,
+		key: priorityGroupKey(priority.id),
 		label: priority.name,
 		priority,
 		items: sortItemsOldestFirst(
@@ -228,7 +236,7 @@ function groupByPriority(
 	);
 	if (loose.length > 0) {
 		groups.push({
-			key: "priority:none",
+			key: priorityGroupKey(null),
 			label: "No priority",
 			items: sortItemsOldestFirst(loose),
 		});

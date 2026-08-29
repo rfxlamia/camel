@@ -8,6 +8,8 @@ import {
 	formatDateRange,
 	groupItems,
 	groupItemsByStatus,
+	priorityGroupKey,
+	projectGroupKey,
 	sortItemsOldestFirst,
 	sortStatusesByPosition,
 } from "./trackerUtils";
@@ -186,6 +188,26 @@ function groupItem(
 		...overrides,
 	};
 }
+
+describe("projectGroupKey", () => {
+	it("maps a numeric project id to a stable group key", () => {
+		expect(projectGroupKey(42)).toBe("project:42");
+	});
+
+	it("maps null to the loose-project bucket key", () => {
+		expect(projectGroupKey(null)).toBe("project:none");
+	});
+});
+
+describe("priorityGroupKey", () => {
+	it("maps a numeric priority id to a stable group key", () => {
+		expect(priorityGroupKey(10)).toBe("priority:10");
+	});
+
+	it("maps null to the loose-priority bucket key", () => {
+		expect(priorityGroupKey(null)).toBe("priority:none");
+	});
+});
 
 describe("groupItems", () => {
 	const context = { statuses, priorities, projects: [] as TrackerProject[] };

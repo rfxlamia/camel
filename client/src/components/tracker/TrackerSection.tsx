@@ -1,6 +1,6 @@
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import type { TrackerGroup } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerVocabulary } from "../../types";
+import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../../types";
 import {
 	PriorityGlyph,
 	priorityBars,
@@ -22,10 +22,9 @@ interface Props {
 		item: TrackerItem,
 		dates: { startDate: string | null; endDate: string | null },
 	) => void;
-	/** Project name per id, for the row chip. */
-	projectNames: Map<number, string>;
-	/** Off while grouping by project — the header already names it. */
-	showProjectChip: boolean;
+	onProjectChange?: (item: TrackerItem, projectId: number) => void;
+	onPhaseChange?: (item: TrackerItem, phaseId: number) => void;
+	projects: TrackerProject[];
 }
 
 /**
@@ -42,8 +41,9 @@ export default function TrackerSection({
 	onCreate,
 	onStatusChange,
 	onDateChange,
-	projectNames,
-	showProjectChip,
+	onProjectChange,
+	onPhaseChange,
+	projects,
 }: Props) {
 	const glyph = group.status ? (
 		<StatusGlyph spec={statusGlyphSpec(statuses, group.status.id)} size={13} />
@@ -99,13 +99,13 @@ export default function TrackerSection({
 							item={item}
 							statuses={statuses}
 							priorities={priorities}
-							projectLabel={
-								showProjectChip && item.projectId != null
-									? (projectNames.get(item.projectId) ?? null)
-									: null
-							}
+							projects={projects}
 							onStatusChange={(statusId) => onStatusChange(item, statusId)}
 							onDateChange={(dates) => onDateChange(item, dates)}
+							onProjectChange={(projectId) =>
+								onProjectChange?.(item, projectId)
+							}
+							onPhaseChange={(phaseId) => onPhaseChange?.(item, phaseId)}
 						/>
 					))}
 				</div>

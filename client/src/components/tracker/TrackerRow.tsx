@@ -1,6 +1,7 @@
+import { Folder, Signpost } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatDateRange, sortStatusesByPosition } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerVocabulary } from "../../types";
+import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../../types";
 import {
 	Avatar,
 	LabelDot,
@@ -16,7 +17,7 @@ import {
 import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
 import TrackerRowShell from "./TrackerRowShell";
 
-type OpenPicker = "date" | "status" | null;
+type OpenPicker = "date" | "status" | "project" | "phase" | null;
 
 interface Props {
 	item: TrackerItem;
@@ -27,12 +28,9 @@ interface Props {
 		startDate: string | null;
 		endDate: string | null;
 	}) => void;
-	/**
-	 * Project the item belongs to. Rendered as a chip so a mixed list still
-	 * shows where each item lives — omitted when the group header already says
-	 * it, or when the item has no project.
-	 */
-	projectLabel?: string | null;
+	projects?: TrackerProject[];
+	onProjectChange?: (projectId: number) => void;
+	onPhaseChange?: (phaseId: number) => void;
 }
 
 /**
@@ -50,7 +48,9 @@ export default function TrackerRow({
 	priorities,
 	onStatusChange,
 	onDateChange,
-	projectLabel,
+	projects,
+	onProjectChange,
+	onPhaseChange,
 }: Props) {
 	const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
 	const pendingPickerRef = useRef<OpenPicker>(null);
@@ -59,6 +59,13 @@ export default function TrackerRow({
 	const dateLabel =
 		formatDateRange(item.startDate ?? null, item.endDate ?? null) ??
 		"Set date";
+
+	const selectedProject = projects?.find((p) => p.id === item.projectId);
+	const selectedPhase = selectedProject?.phases.find(
+		(p) => p.id === item.phaseId,
+	);
+	const projectLabel = selectedProject?.name ?? "Set project";
+	const phaseLabel = selectedPhase?.name ?? "Set phase";
 
 	const requestPicker = (next: OpenPicker) => {
 		if (openPicker === "date" && next !== "date" && next !== null) {
@@ -83,6 +90,21 @@ export default function TrackerRow({
 			label: status.name,
 			icon: <StatusGlyph spec={statusGlyphSpec(statuses, status.id)} />,
 			selected: status.id === item.status.id,
+		}),
+	);
+
+	const projectOptions: PickerOption[] =
+		projects?.map((p) => ({
+			id: String(p.id),
+			label: p.name,
+			selected: p.id === item.projectId,
+		})) ?? [];
+
+	const phaseOptions: PickerOption[] = (selectedProject?.phases ?? []).map(
+		(ph) => ({
+			id: String(ph.id),
+			label: ph.name,
+			selected: ph.id === item.phaseId,
 		}),
 	);
 
@@ -113,12 +135,54 @@ export default function TrackerRow({
 			<span className="min-w-0 flex-1 truncate text-neutral-900">
 				{item.title}
 			</span>
-			{projectLabel && (
+			{projects !== undefined && (
 				<span
-					data-testid={`row-project-${item.key}`}
-					className="inline-block max-w-32 shrink-0 truncate rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs"
+					data-testid={`row-inline-project-${item.key}`}
+					className="pointer-events-auto shrink-0"
 				>
-					{projectLabel}
+					<TrackerPropertyPicker
+						placeholder="Set project"
+						value={selectedProject?.name}
+						triggerLabel={`Project: ${projectLabel}`}
+						icon={
+							<Folder
+								size={12}
+								className="shrink-0 text-primary-700"
+								aria-hidden
+							/>
+						}
+						searchPlaceholder="Set project to…"
+						options={projectOptions}
+						open={openPicker === "project"}
+						onOpenChange={(open) => requestPicker(open ? "project" : null)}
+						onSelect={(id) => onProjectChange?.(Number(id))}
+						size="compact"
+					/>
+				</span>
+			)}
+			{projects !== undefined && (
+				<span
+					data-testid={`row-inline-phase-${item.key}`}
+					className="pointer-events-auto shrink-0"
+				>
+					<TrackerPropertyPicker
+						placeholder="Set phase"
+						value={selectedPhase?.name}
+						triggerLabel={`Phase: ${phaseLabel}`}
+						icon={
+							<Signpost
+								size={12}
+								className="shrink-0 text-primary-700"
+								aria-hidden
+							/>
+						}
+						searchPlaceholder="Set phase to…"
+						options={phaseOptions}
+						open={openPicker === "phase"}
+						onOpenChange={(open) => requestPicker(open ? "phase" : null)}
+						onSelect={(id) => onPhaseChange?.(Number(id))}
+						size="compact"
+					/>
 				</span>
 			)}
 			<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
