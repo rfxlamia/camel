@@ -1,6 +1,6 @@
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import type { TrackerGroup } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../../types";
+import type { TrackerItem, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../../types";
 import {
 	PriorityGlyph,
 	priorityBars,
@@ -26,6 +26,10 @@ interface Props {
 	onProjectChange?: (item: TrackerItem, projectId: number) => void;
 	onPhaseChange?: (item: TrackerItem, phaseId: number) => void;
 	projects: TrackerProject[];
+	members: WorkspaceMember[];
+	labels: TrackerVocabulary[];
+	onAssigneeToggle: (item: TrackerItem, toggledId: number) => void;
+	onLabelToggle: (item: TrackerItem, toggledId: number) => void;
 }
 
 /**
@@ -46,6 +50,10 @@ export default function TrackerSection({
 	onProjectChange,
 	onPhaseChange,
 	projects,
+	members,
+	labels,
+	onAssigneeToggle,
+	onLabelToggle,
 }: Props) {
 	const glyph = group.status ? (
 		<StatusGlyph spec={statusGlyphSpec(statuses, group.status.id)} size={13} />
@@ -111,6 +119,12 @@ export default function TrackerSection({
 								onProjectChange?.(item, projectId)
 							}
 							onPhaseChange={(phaseId) => onPhaseChange?.(item, phaseId)}
+							members={members}
+							labels={labels}
+							onAssigneeToggle={(toggledId) =>
+								onAssigneeToggle(item, toggledId)
+							}
+							onLabelToggle={(toggledId) => onLabelToggle(item, toggledId)}
 						/>
 					))}
 				</div>

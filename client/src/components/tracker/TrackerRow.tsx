@@ -1,7 +1,12 @@
-import { Folder, Signpost } from "lucide-react";
+import { Folder, Signpost, Tag, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatDateRange, NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../../types";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
 import {
 	Avatar,
 	LabelDot,
@@ -17,7 +22,15 @@ import {
 import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
 import TrackerRowShell from "./TrackerRowShell";
 
-type OpenPicker = "date" | "status" | "priority" | "project" | "phase" | null;
+type OpenPicker =
+	| "date"
+	| "status"
+	| "priority"
+	| "project"
+	| "phase"
+	| "assignees"
+	| "labels"
+	| null;
 
 interface Props {
 	item: TrackerItem;
@@ -32,6 +45,10 @@ interface Props {
 	projects?: TrackerProject[];
 	onProjectChange?: (projectId: number) => void;
 	onPhaseChange?: (phaseId: number) => void;
+	members?: WorkspaceMember[];
+	labels?: TrackerVocabulary[];
+	onAssigneeToggle?: (toggledId: number) => void;
+	onLabelToggle?: (toggledId: number) => void;
 }
 
 /**
@@ -53,6 +70,10 @@ export default function TrackerRow({
 	projects,
 	onProjectChange,
 	onPhaseChange,
+	members,
+	labels,
+	onAssigneeToggle,
+	onLabelToggle,
 }: Props) {
 	const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
 	const pendingPickerRef = useRef<OpenPicker>(null);
@@ -112,6 +133,36 @@ export default function TrackerRow({
 
 	const orderedPriorities = sortStatusesByPosition(priorities);
 	const priorityLabel = item.priority?.name ?? "No priority";
+	const assigneeIds = item.assignees.map((a) => a.id);
+	const assigneeOptions: PickerOption[] =
+		members?.map((m) => ({
+			id: String(m.userId),
+			label: m.displayName,
+			hint: `@${m.username}`,
+			selected: assigneeIds.includes(m.userId),
+			icon: <Avatar name={m.displayName} />,
+		})) ?? [];
+	const assigneeValue =
+		item.assignees.length === 0
+			? undefined
+			: item.assignees.length === 1
+				? item.assignees[0].displayName
+				: `${item.assignees[0].displayName} +${item.assignees.length - 1}`;
+
+	const orderedLabels = labels ? sortStatusesByPosition(labels) : [];
+	const labelOptions: PickerOption[] = orderedLabels.map((l) => ({
+		id: String(l.id),
+		label: l.name,
+		selected: item.labels.some((label) => label.id === l.id),
+		icon: <LabelDot colour={l.colour} />,
+	}));
+	const labelValue =
+		item.labels.length === 0
+			? undefined
+			: item.labels.length === 1
+				? item.labels[0].name
+				: `${item.labels[0].name} +${item.labels.length - 1}`;
+
 	const priorityOptions: PickerOption[] = [
 		{
 			id: NO_PRIORITY,
@@ -230,31 +281,93 @@ export default function TrackerRow({
 					/>
 				</span>
 			)}
-			<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-				{item.labels.map((label) => (
-					<span
-						key={label.id}
-						className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 py-0.5 pr-2 pl-1.5 text-neutral-600 text-xs"
-					>
-						<LabelDot colour={label.colour} />
-						{label.name}
-					</span>
-				))}
-			</div>
-			<div className="-space-x-1 hidden w-12 shrink-0 items-center justify-end md:flex">
-				{item.assignees.length === 0 ? (
-					<span
-						className="h-[18px] w-[18px] rounded-full border border-neutral-300 border-dashed"
-						aria-hidden
+			{labels !== undefined && onLabelToggle ? (
+				<span
+					data-testid={`row-inline-labels-${item.key}`}
+					className="pointer-events-auto hidden shrink-0 sm:flex"
+				>
+					<TrackerPropertyPicker
+						placeholder="Labels"
+						value={labelValue}
+						triggerLabel="Labels"
+						icon={
+							item.labels.length > 0 ? (
+								<LabelDot colour={item.labels[0].colour} />
+							) : (
+								<Tag
+									size={12}
+									className="shrink-0 text-neutral-500"
+									aria-hidden
+								/>
+							)
+						}
+						searchPlaceholder="Change or add labels…"
+						options={labelOptions}
+						open={openPicker === "labels"}
+						onOpenChange={(open) => requestPicker(open ? "labels" : null)}
+						onSelect={(id) => onLabelToggle(Number(id))}
+						multiple
+						size="compact"
 					/>
-				) : (
-					item.assignees.slice(0, 2).map((a) => (
-						<span key={a.id} title={a.displayName} className="flex">
-							<Avatar name={a.displayName} size={18} />
+				</span>
+			) : (
+				<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+					{item.labels.map((label) => (
+						<span
+							key={label.id}
+							className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 py-0.5 pr-2 pl-1.5 text-neutral-600 text-xs"
+						>
+							<LabelDot colour={label.colour} />
+							{label.name}
 						</span>
-					))
-				)}
-			</div>
+					))}
+				</div>
+			)}
+			{members !== undefined && onAssigneeToggle ? (
+				<span
+					data-testid={`row-inline-assignees-${item.key}`}
+					className="pointer-events-auto hidden shrink-0 md:flex"
+				>
+					<TrackerPropertyPicker
+						placeholder="Assignees"
+						value={assigneeValue}
+						triggerLabel="Assignees"
+						icon={
+							item.assignees.length > 0 ? (
+								<Avatar name={item.assignees[0].displayName} size={16} />
+							) : (
+								<UserRound
+									size={14}
+									className="shrink-0 text-neutral-500"
+									aria-hidden
+								/>
+							)
+						}
+						searchPlaceholder="Assign to…"
+						options={assigneeOptions}
+						open={openPicker === "assignees"}
+						onOpenChange={(open) => requestPicker(open ? "assignees" : null)}
+						onSelect={(id) => onAssigneeToggle(Number(id))}
+						multiple
+						size="compact"
+					/>
+				</span>
+			) : (
+				<div className="-space-x-1 hidden w-12 shrink-0 items-center justify-end md:flex">
+					{item.assignees.length === 0 ? (
+						<span
+							className="h-[18px] w-[18px] rounded-full border border-neutral-300 border-dashed"
+							aria-hidden
+						/>
+					) : (
+						item.assignees.slice(0, 2).map((a) => (
+							<span key={a.id} title={a.displayName} className="flex">
+								<Avatar name={a.displayName} size={18} />
+							</span>
+						))
+					)}
+				</div>
+			)}
 			{onDateChange ? (
 				<span className="pointer-events-auto hidden min-w-[9rem] shrink-0 truncate text-right text-neutral-500 text-xs tabular-nums lg:block">
 					<TrackerRowDatePopover

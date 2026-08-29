@@ -20,6 +20,7 @@ import {
 	groupItems,
 	priorityGroupKey,
 	projectGroupKey,
+	resolveToggle,
 	sortStatusesByPosition,
 	statusGroupKey,
 	TRACKER_GROUP_BY_LABELS,
@@ -129,6 +130,7 @@ export default function TrackerPage() {
 		setGroupBy(readTrackerGroupBy(activeWorkspaceId));
 	}, [activeWorkspaceId]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: activeWorkspaceId is the intentional trigger
 	useEffect(() => {
 		setLabels([]);
 		setMembers([]);
@@ -171,6 +173,7 @@ export default function TrackerPage() {
 		setMembers(memberList);
 	};
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAuxiliary is inlined and keyed by load sequence
 	const loadData = useCallback(async (): Promise<boolean> => {
 		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
@@ -298,6 +301,8 @@ export default function TrackerPage() {
 			projectId?: number | null;
 			phaseId?: number | null;
 			priorityId?: number | null;
+			assigneeIds?: number[];
+			labelIds?: number[];
 		};
 		optimistic: TrackerItem;
 		rollback: (latest: TrackerItem) => TrackerItem;
@@ -518,6 +523,64 @@ export default function TrackerPage() {
 		});
 	};
 
+	const changeAssignee = (item: TrackerItem, toggledId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					const currentIds = current.assignees.map((a) => a.id);
+					const nextIds = resolveToggle(currentIds, toggledId);
+					const nextAssignees = nextIds.map((id) => {
+						const member = members.find((m) => m.userId === id);
+						if (!member) return null;
+						return {
+							id: member.userId,
+							username: member.username,
+							displayName: member.displayName,
+						};
+					});
+					if (nextAssignees.some((a) => a === null)) return null;
+
+					return {
+						request: { assigneeIds: nextIds, version: current.version },
+						optimistic: {
+							...current,
+							assignees: nextAssignees as TrackerItem["assignees"],
+						},
+						rollback: (latest) => ({ ...latest, assignees: current.assignees }),
+					};
+				},
+				"Couldn't update assignees. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changeLabel = (item: TrackerItem, toggledId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					const currentIds = current.labels.map((l) => l.id);
+					const nextIds = resolveToggle(currentIds, toggledId);
+					const nextLabels = nextIds.map(
+						(id) => labels.find((l) => l.id === id) ?? null,
+					);
+					if (nextLabels.some((l) => l === null)) return null;
+
+					return {
+						request: { labelIds: nextIds, version: current.version },
+						optimistic: {
+							...current,
+							labels: nextLabels as TrackerVocabulary[],
+						},
+						rollback: (latest) => ({ ...latest, labels: current.labels }),
+					};
+				},
+				"Couldn't update labels. Check your connection and try again.",
+			);
+		});
+	};
+
 	const toggleSection = (key: string) => {
 		setCollapsedKeys((prev) => {
 			const next = new Set(prev);
@@ -714,6 +777,14 @@ export default function TrackerPage() {
 								}
 								onPhaseChange={(item, phaseId) => changePhase(item, phaseId)}
 								projects={projects}
+								members={members}
+								labels={labels}
+								onAssigneeToggle={(item, toggledId) =>
+									changeAssignee(item, toggledId)
+								}
+								onLabelToggle={(item, toggledId) =>
+									changeLabel(item, toggledId)
+								}
 							/>
 						);
 					})}

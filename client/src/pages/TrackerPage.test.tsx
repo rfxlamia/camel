@@ -293,6 +293,18 @@ beforeEach(() => {
 				displayName: "Bob",
 				role: "member",
 			},
+			{
+				userId: 9,
+				username: "carol",
+				displayName: "Carol",
+				role: "member",
+			},
+			{
+				userId: 10,
+				username: "dave",
+				displayName: "Dave",
+				role: "member",
+			},
 		],
 	});
 	mockListTrackerItems.mockResolvedValue([
@@ -987,6 +999,333 @@ describe("TrackerPage", () => {
 	it("includes Tracker nav between Board and Inbox", () => {
 		const paths = KANBAN_NAV.map((i) => i.to);
 		expect(paths).toEqual(["/board", "/tracker", "/inbox", "/dashboard"]);
+	});
+
+	describe("inline assignee and label toggles", () => {
+		function ca1Row() {
+			return screen.getByTestId("tracker-row-CA-1").parentElement!;
+		}
+
+		function openAssigneePicker() {
+			const btn = within(ca1Row()).getByRole("button", { name: "Assignees" });
+			if (btn.getAttribute("aria-expanded") !== "true") {
+				fireEvent.click(btn);
+			}
+		}
+
+		function openLabelPicker() {
+			fireEvent.click(
+				within(ca1Row()).getByRole("button", { name: "Labels" }),
+			);
+		}
+
+		it("adds an assignee from the row picker", async () => {
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					title: "Workspace Rename",
+					assignees: [{ id: 7, displayName: "Alice", username: "alice" }],
+					version: 2,
+				}),
+			]);
+			mockUpdateTrackerItem.mockResolvedValue(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					assignees: [
+						{ id: 7, displayName: "Alice", username: "alice" },
+						{ id: 8, displayName: "Bob", username: "bob" },
+					],
+					version: 3,
+				}),
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+			expect(
+				screen.getByTestId("row-inline-assignees-CA-1"),
+			).toBeTruthy();
+
+			openAssigneePicker();
+			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					assigneeIds: [7, 8],
+					version: 2,
+				}),
+			);
+		});
+
+		it("queues rapid assignee toggles against live settled state", async () => {
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					title: "Workspace Rename",
+					assignees: [{ id: 7, displayName: "Alice", username: "alice" }],
+					version: 5,
+				}),
+			]);
+			let resolveFirst: ((item: TrackerItem) => void) | undefined;
+			mockUpdateTrackerItem
+				.mockImplementationOnce(
+					(_ws, _key, patch) =>
+						new Promise<TrackerItem>((resolve) => {
+							resolveFirst = () =>
+								resolve(
+									makeItem({
+										id: 1,
+										key: "CA-1",
+										assignees: [
+											{ id: 7, displayName: "Alice", username: "alice" },
+											{ id: 8, displayName: "Bob", username: "bob" },
+										],
+										version: 6,
+									}),
+								);
+							void patch;
+						}),
+				)
+				.mockResolvedValueOnce(
+					makeItem({
+						id: 1,
+						key: "CA-1",
+						assignees: [
+							{ id: 7, displayName: "Alice", username: "alice" },
+							{ id: 8, displayName: "Bob", username: "bob" },
+							{ id: 9, displayName: "Carol", username: "carol" },
+						],
+						version: 7,
+					}),
+				);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+			openAssigneePicker();
+			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
+			fireEvent.click(screen.getByRole("option", { name: /Carol/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					assigneeIds: [7, 8],
+					version: 5,
+				}),
+			);
+			expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+
+			resolveFirst?.(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					assignees: [
+						{ id: 7, displayName: "Alice", username: "alice" },
+						{ id: 8, displayName: "Bob", username: "bob" },
+					],
+					version: 6,
+				}),
+			);
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					assigneeIds: [7, 8, 9],
+					version: 6,
+				}),
+			);
+			await waitFor(() => {
+				const btn = within(ca1Row()).getByRole("button", { name: "Assignees" });
+				expect(btn.textContent).toContain("Alice +2");
+			});
+		});
+
+		it("adds a label from the row picker", async () => {
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					title: "Workspace Rename",
+					labels: [labels[0]!],
+					version: 2,
+				}),
+			]);
+			mockUpdateTrackerItem.mockResolvedValue(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					labels: [labels[0]!, labels[1]!],
+					version: 3,
+				}),
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+			expect(screen.getByTestId("row-inline-labels-CA-1")).toBeTruthy();
+
+			openLabelPicker();
+			fireEvent.click(screen.getByRole("option", { name: /^Bug$/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					labelIds: [3, 4],
+					version: 2,
+				}),
+			);
+		});
+
+		it("removes an assignee from the row picker", async () => {
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					title: "Workspace Rename",
+					assignees: [
+						{ id: 7, displayName: "Alice", username: "alice" },
+						{ id: 8, displayName: "Bob", username: "bob" },
+					],
+					version: 2,
+				}),
+			]);
+			mockUpdateTrackerItem.mockResolvedValue(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					assignees: [{ id: 8, displayName: "Bob", username: "bob" }],
+					version: 3,
+				}),
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+			openAssigneePicker();
+			fireEvent.click(screen.getByRole("option", { name: /Alice/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					assigneeIds: [8],
+					version: 2,
+				}),
+			);
+			await waitFor(() => {
+				const btn = within(ca1Row()).getByRole("button", { name: "Assignees" });
+				expect(btn.textContent).toContain("Bob");
+			});
+			openAssigneePicker();
+			expect(
+				screen.getByRole("option", { name: /Alice/ }).getAttribute("aria-selected"),
+			).toBe("false");
+		});
+
+		it("removes a label from the row picker", async () => {
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					title: "Workspace Rename",
+					labels: [labels[0]!, labels[1]!],
+					version: 2,
+				}),
+			]);
+			mockUpdateTrackerItem.mockResolvedValue(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					labels: [labels[1]!],
+					version: 3,
+				}),
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+			openLabelPicker();
+			fireEvent.click(screen.getByRole("option", { name: /^Feature$/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					labelIds: [4],
+					version: 2,
+				}),
+			);
+		});
+
+		it("resumes the assignee queue after a 409 using refetched state", async () => {
+			mockListTrackerItems
+				.mockResolvedValueOnce([
+					makeItem({
+						id: 1,
+						key: "CA-1",
+						title: "Workspace Rename",
+						assignees: [{ id: 7, displayName: "Alice", username: "alice" }],
+						version: 5,
+					}),
+				])
+				.mockResolvedValueOnce([
+					makeItem({
+						id: 1,
+						key: "CA-1",
+						title: "Workspace Rename",
+						assignees: [
+							{ id: 7, displayName: "Alice", username: "alice" },
+							{ id: 10, displayName: "Dave", username: "dave" },
+						],
+						version: 9,
+					}),
+					makeItem({
+						id: 2,
+						key: "CA-2",
+						title: "Done task",
+						status: statuses[2]!,
+						labels: [],
+					}),
+				]);
+			let resolveFirst: (() => void) | undefined;
+			mockUpdateTrackerItem
+				.mockImplementationOnce(
+					() =>
+						new Promise((_resolve, reject) => {
+							resolveFirst = () =>
+								reject(new ApiError("conflict", 409, "version_conflict"));
+						}),
+				)
+				.mockResolvedValueOnce(
+					makeItem({
+						id: 1,
+						key: "CA-1",
+						assignees: [
+							{ id: 7, displayName: "Alice", username: "alice" },
+							{ id: 10, displayName: "Dave", username: "dave" },
+							{ id: 9, displayName: "Carol", username: "carol" },
+						],
+						version: 10,
+					}),
+				);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+			openAssigneePicker();
+			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
+			fireEvent.click(screen.getByRole("option", { name: /Carol/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					assigneeIds: [7, 8],
+					version: 5,
+				}),
+			);
+			resolveFirst?.();
+
+			await waitFor(() =>
+				expect(mockShowToast).toHaveBeenCalledWith(
+					"Someone else updated this item first — refreshed.",
+					"warning",
+				),
+			);
+			await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+					assigneeIds: [7, 10, 9],
+					version: 9,
+				}),
+			);
+		});
 	});
 });
 
