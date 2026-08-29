@@ -15,6 +15,7 @@ import TrackerTabs, {
 } from "../components/tracker/TrackerTabs";
 import { useBoard } from "../context/BoardContext";
 import { partitionTrackerSearch } from "../lib/trackerSearch";
+import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
 import {
 	groupItems,
 	sortStatusesByPosition,
@@ -66,9 +67,10 @@ export default function TrackerPage() {
 	const [createDefaults, setCreateDefaults] = useState<CreateDefaults>({});
 	const [loading, setLoading] = useState(true);
 	const [loadFailed, setLoadFailed] = useState(false);
-	/** Item ids with a status request in flight, and the pick waiting on it. */
-	const inFlightStatusRef = useRef<Set<number>>(new Set());
-	const queuedStatusRef = useRef<Map<number, number>>(new Map());
+	const mutationQueueRef = useRef(createItemMutationQueue());
+	const itemsRef = useRef<TrackerItem[]>(items);
+	itemsRef.current = items;
+	const recoveryBlockedItemIdsRef = useRef(new Set<number>());
 	/** Set while this page is the one changing the location, not the router. */
 	const skipCollapseResetRef = useRef(false);
 	/**
@@ -124,8 +126,19 @@ export default function TrackerPage() {
 			writeTrackerGroupBy(activeWorkspaceId, next);
 	};
 
-	const loadData = useCallback(async () => {
-		if (activeWorkspaceId === null) return;
+	const replaceItems = (next: TrackerItem[]) => {
+		itemsRef.current = next;
+		setItems(next);
+	};
+
+	const updateItems = (updater: (prev: TrackerItem[]) => TrackerItem[]) => {
+		const next = updater(itemsRef.current);
+		itemsRef.current = next;
+		setItems(next);
+	};
+
+	const loadData = useCallback(async (): Promise<boolean> => {
+		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
 		// Only the empty first paint needs a full-page spinner; background
 		// refreshes keep whatever is already on screen.
@@ -140,14 +153,18 @@ export default function TrackerPage() {
 					api.listTrackerItems(activeWorkspaceId),
 					api.listTrackerProjects(activeWorkspaceId),
 				]);
-			if (seq !== loadSeqRef.current) return;
+			if (seq !== loadSeqRef.current) return false;
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
-			setItems(itemList);
+			replaceItems(itemList);
+			for (const item of itemList) {
+				recoveryBlockedItemIdsRef.current.delete(item.id);
+			}
 			setProjects(projectList);
 			setLoadFailed(false);
+			return true;
 		} catch {
-			if (seq !== loadSeqRef.current) return;
+			if (seq !== loadSeqRef.current) return false;
 			// A failed background refresh must not blank a page that already has
 			// rows on it, so the retry panel is gated on having nothing to show.
 			setLoadFailed(true);
@@ -155,6 +172,7 @@ export default function TrackerPage() {
 				"Couldn't load the tracker. Check your connection and try again.",
 				"error",
 			);
+			return false;
 		} finally {
 			if (seq === loadSeqRef.current) {
 				setLoading(false);
@@ -196,7 +214,7 @@ export default function TrackerPage() {
 			if (event.type === "tracker.deleted") {
 				const payload = event.payload as { key?: string } | undefined;
 				const { trackerItemId } = event;
-				setItems((prev) =>
+				updateItems((prev) =>
 					prev.filter((item) => {
 						if (payload?.key) return item.key !== payload.key;
 						if (trackerItemId != null) return item.id !== trackerItemId;
@@ -247,67 +265,61 @@ export default function TrackerPage() {
 		setCreateOpen(true);
 	};
 
-	const changeStatus = async (item: TrackerItem, statusId: number) => {
-		if (activeWorkspaceId === null || statusId === item.status.id) return;
-		const nextStatus = statuses.find((s) => s.id === statusId);
-		if (!nextStatus) return;
+	const changeStatus = (item: TrackerItem, statusId: number) => {
+		if (activeWorkspaceId === null) return;
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			if (recoveryBlockedItemIdsRef.current.has(item.id)) return;
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current || current.status.id === statusId) return;
+			const nextStatus = statuses.find((s) => s.id === statusId);
+			if (!nextStatus) return;
 
-		if (inFlightStatusRef.current.has(item.id)) {
-			queuedStatusRef.current.set(item.id, statusId);
-			return;
-		}
-		inFlightStatusRef.current.add(item.id);
-		let settled = item;
-
-		setItems((prev) =>
-			prev.map((it) =>
-				it.id === item.id ? { ...it, status: nextStatus } : it,
-			),
-		);
-		setCollapsedKeys((prev) => {
-			const key = statusGroupKey(statusId);
-			if (!prev.has(key)) return prev;
-			const next = new Set(prev);
-			next.delete(key);
-			return next;
-		});
-		try {
-			const updated = await api.updateTrackerItem(activeWorkspaceId, item.key, {
-				statusId,
-				version: item.version,
-			});
-			settled = updated;
-			setItems((prev) =>
-				prev.map((it) => (it.id === updated.id ? updated : it)),
-			);
-		} catch (err) {
-			const priorStatus = item.status;
-			setItems((prev) =>
+			const priorStatus = current.status;
+			updateItems((prev) =>
 				prev.map((it) =>
-					it.id === item.id ? { ...it, status: priorStatus } : it,
+					it.id === item.id ? { ...it, status: nextStatus } : it,
 				),
 			);
-			if (err instanceof ApiError && err.code === "version_conflict") {
-				showToast(
-					"Someone else updated this item first — refreshed.",
-					"warning",
+			setCollapsedKeys((prev) => {
+				const key = statusGroupKey(statusId);
+				if (!prev.has(key)) return prev;
+				const next = new Set(prev);
+				next.delete(key);
+				return next;
+			});
+			try {
+				const updated = await api.updateTrackerItem(
+					activeWorkspaceId,
+					current.key,
+					{
+						statusId,
+						version: current.version,
+					},
 				);
-				queuedStatusRef.current.delete(item.id);
-				await loadData();
-			} else {
-				showToast(
-					"Couldn't change the status. Check your connection and try again.",
-					"error",
+				updateItems((prev) =>
+					prev.map((it) => (it.id === updated.id ? updated : it)),
 				);
+			} catch (err) {
+				updateItems((prev) =>
+					prev.map((it) =>
+						it.id === item.id ? { ...it, status: priorStatus } : it,
+					),
+				);
+				if (err instanceof ApiError && err.code === "version_conflict") {
+					recoveryBlockedItemIdsRef.current.add(item.id);
+					showToast(
+						"Someone else updated this item first — refreshed.",
+						"warning",
+					);
+					await loadData();
+				} else {
+					showToast(
+						"Couldn't change the status. Check your connection and try again.",
+						"error",
+					);
+				}
 			}
-		} finally {
-			inFlightStatusRef.current.delete(item.id);
-			const queued = queuedStatusRef.current.get(item.id);
-			if (queued !== undefined) {
-				queuedStatusRef.current.delete(item.id);
-				void changeStatus(settled, queued);
-			}
-		}
+		});
 	};
 
 	const toggleSection = (key: string) => {
