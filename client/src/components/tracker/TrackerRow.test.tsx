@@ -1,5 +1,5 @@
 // client/src/components/tracker/TrackerRow.test.tsx — jsdom.
-import type { ComponentProps } from "react";
+
 import {
 	cleanup,
 	fireEvent,
@@ -8,7 +8,9 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { TrackerGroup } from "../../lib/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerPhase,
@@ -17,6 +19,7 @@ import type {
 	WorkspaceMember,
 } from "../../types";
 import TrackerRow from "./TrackerRow";
+import TrackerSection from "./TrackerSection";
 
 const { mockNavigate } = vi.hoisted(() => ({
 	mockNavigate: vi.fn(),
@@ -140,9 +143,7 @@ const OPEN_QUERIES: Record<
 };
 
 function clickTrigger(kind: PickerKind) {
-	fireEvent.click(
-		screen.getByRole("button", { name: TRIGGER_LABELS[kind] }),
-	);
+	fireEvent.click(screen.getByRole("button", { name: TRIGGER_LABELS[kind] }));
 }
 
 function expectPickerOpen(kind: PickerKind) {
@@ -239,6 +240,92 @@ describe("TrackerRow", () => {
 		).toBeNull();
 	});
 
+	it("does not render project or phase editors without their callbacks", () => {
+		renderRow({
+			onProjectChange: undefined,
+			onPhaseChange: undefined,
+		});
+
+		expect(screen.queryByTestId("row-inline-project-CA-1")).toBeNull();
+		expect(screen.queryByTestId("row-inline-phase-CA-1")).toBeNull();
+	});
+
+	it("preserves omitted optional section capabilities", () => {
+		const group: TrackerGroup = {
+			key: "status:1",
+			label: "Backlog",
+			items: [defaultItem],
+			status: statuses[0],
+		};
+		render(
+			<TrackerSection
+				group={group}
+				statuses={statuses}
+				priorities={priorities}
+				collapsed={false}
+				onToggle={vi.fn()}
+				onStatusChange={vi.fn()}
+				onDateChange={vi.fn()}
+				projects={[releaseProject]}
+				members={members}
+				labels={labels}
+				labelsLoadState="ready"
+				membersLoadState="ready"
+				onAssigneeToggle={vi.fn()}
+				onLabelToggle={vi.fn()}
+			/>,
+		);
+
+		expect(screen.queryByTestId("row-inline-project-CA-1")).toBeNull();
+		expect(screen.queryByTestId("row-inline-phase-CA-1")).toBeNull();
+		expect(screen.queryByTestId("row-inline-priority-CA-1")).toBeNull();
+	});
+
+	it("keeps inline editors behind the large-screen breakpoint", () => {
+		renderRow();
+
+		expect(screen.getByTestId("row-inline-priority-CA-1").className).toContain(
+			"lg:block",
+		);
+		expect(screen.getByTestId("row-inline-project-CA-1").className).toContain(
+			"lg:block",
+		);
+		expect(screen.getByTestId("row-inline-phase-CA-1").className).toContain(
+			"lg:block",
+		);
+		expect(screen.getByTestId("row-inline-labels-CA-1").className).toContain(
+			"lg:flex",
+		);
+		expect(screen.getByTestId("row-inline-assignees-CA-1").className).toContain(
+			"lg:flex",
+		);
+	});
+
+	it("keeps an invalid date draft open when switching to another field", () => {
+		const onDateChange = vi.fn();
+		renderRow({ onDateChange });
+
+		clickTrigger("date");
+		fireEvent.change(screen.getByLabelText("Start date"), {
+			target: { value: "2026-08-10" },
+		});
+		fireEvent.change(screen.getByLabelText("End date"), {
+			target: { value: "2026-08-01" },
+		});
+		clickTrigger("project");
+
+		expect(
+			(screen.getByLabelText("Start date") as HTMLInputElement).value,
+		).toBe("2026-08-10");
+		expect(
+			screen.getByText("End date must be on or after start date"),
+		).toBeTruthy();
+		expect(
+			screen.queryByRole("combobox", { name: "Set project to…" }),
+		).toBeNull();
+		expect(onDateChange).not.toHaveBeenCalled();
+	});
+
 	describe("single-picker mutex", () => {
 		const transitions: Array<{
 			source: PickerKind;
@@ -255,48 +342,49 @@ describe("TrackerRow", () => {
 			{ source: "kebab", destination: "status" },
 		];
 
-		it.each(transitions)(
-			"closes $source and opens $destination",
-			async ({ source, destination, draftDateEdit }) => {
-				const onDateChange = vi.fn();
-				renderRow({ onDateChange });
+		it.each(transitions)("closes $source and opens $destination", async ({
+			source,
+			destination,
+			draftDateEdit,
+		}) => {
+			const onDateChange = vi.fn();
+			renderRow({ onDateChange });
 
-				clickTrigger(source);
-				expectPickerOpen(source);
+			clickTrigger(source);
+			expectPickerOpen(source);
 
-				if (draftDateEdit) {
-					fireEvent.change(screen.getByLabelText("Start date"), {
-						target: { value: "2026-08-06" },
-					});
-				}
-
-				clickTrigger(destination);
-
-				if (draftDateEdit) {
-					expect(onDateChange).toHaveBeenCalledTimes(1);
-					expect(onDateChange).toHaveBeenCalledWith({
-						startDate: "2026-08-06",
-						endDate: null,
-					});
-				}
-
-				await waitFor(() => {
-					expectPickerClosed(source);
-					expectPickerOpen(destination);
+			if (draftDateEdit) {
+				fireEvent.change(screen.getByLabelText("Start date"), {
+					target: { value: "2026-08-06" },
 				});
+			}
 
-				if (destination === "kebab") {
-					const panel = screen.getByRole("dialog", {
-						name: "More properties for CA-1",
-					});
-					expect(
-						within(panel).getByRole("button", {
-							name: "Date: Set date",
-						}),
-					).toBeTruthy();
-				}
-			},
-		);
+			clickTrigger(destination);
+
+			if (draftDateEdit) {
+				expect(onDateChange).toHaveBeenCalledTimes(1);
+				expect(onDateChange).toHaveBeenCalledWith({
+					startDate: "2026-08-06",
+					endDate: null,
+				});
+			}
+
+			await waitFor(() => {
+				expectPickerClosed(source);
+				expectPickerOpen(destination);
+			});
+
+			if (destination === "kebab") {
+				const panel = screen.getByRole("dialog", {
+					name: "More properties for CA-1",
+				});
+				expect(
+					within(panel).getByRole("button", {
+						name: "Date: Set date",
+					}),
+				).toBeTruthy();
+			}
+		});
 	});
 
 	it('renders a clickable "Set project" placeholder when projectId is null', () => {
@@ -390,21 +478,15 @@ describe("TrackerRow", () => {
 		const rowA = screen.getByTestId("row-inline-assignees-CA-1");
 		const rowB = screen.getByTestId("row-inline-assignees-CA-2");
 
-		fireEvent.click(
-			within(rowA).getByRole("button", { name: "Assignees" }),
-		);
-		fireEvent.click(
-			within(rowB).getByRole("button", { name: "Assignees" }),
-		);
+		fireEvent.click(within(rowA).getByRole("button", { name: "Assignees" }));
+		fireEvent.click(within(rowB).getByRole("button", { name: "Assignees" }));
 
 		const comboboxes = screen.getAllByRole("combobox", {
 			name: "Assign to…",
 		});
 		expect(comboboxes).toHaveLength(2);
 
-		fireEvent.click(
-			within(rowB).getByRole("option", { name: /Alice/ }),
-		);
+		fireEvent.click(within(rowB).getByRole("option", { name: /Alice/ }));
 
 		expect(onAssigneeToggleB).toHaveBeenCalledWith(7);
 		expect(onAssigneeToggleA).not.toHaveBeenCalled();
@@ -465,9 +547,7 @@ describe("TrackerRow", () => {
 
 		const pointerAutoTargets = [
 			screen.getByTestId("row-inline-priority-CA-1"),
-			screen
-				.getByRole("button", { name: "Backlog, CA-1" })
-				.closest("span"),
+			screen.getByRole("button", { name: "Backlog, CA-1" }).closest("span"),
 			screen.getByTestId("row-inline-project-CA-1"),
 			screen.getByTestId("row-inline-phase-CA-1"),
 			screen.getByTestId("row-inline-labels-CA-1"),

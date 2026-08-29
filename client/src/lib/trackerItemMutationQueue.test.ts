@@ -73,4 +73,20 @@ describe("createItemMutationQueue", () => {
 		await expect(secondResult).resolves.toBe("recovered");
 		expect(secondInvoked).toBe(true);
 	});
+
+	it("reports whether an item has queued work", async () => {
+		const queue = createItemMutationQueue();
+		let release!: () => void;
+		const blocking = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		const result = queue.enqueue(1, () => blocking);
+		expect(queue.hasPending(1)).toBe(true);
+
+		release();
+		await result;
+		await Promise.resolve();
+		expect(queue.hasPending(1)).toBe(false);
+	});
 });

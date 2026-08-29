@@ -7,19 +7,19 @@ import type {
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../../types";
-import {
-	PriorityGlyph,
-	StatusGlyph,
-	statusGlyphSpec,
-} from "./TrackerGlyphs";
-import { TrackerRowKebabTrigger } from "./TrackerRowKebabTrigger";
-import { TrackerRowMemberLabelFields } from "./TrackerRowMemberLabel";
+import { PriorityGlyph, StatusGlyph, statusGlyphSpec } from "./TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
 } from "./TrackerPropertyPicker";
-import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
+import {
+	TrackerRowDatePopover,
+	type TrackerRowDatePopoverHandle,
+} from "./TrackerRowDatePopover";
+import { TrackerRowKebabTrigger } from "./TrackerRowKebabTrigger";
+import { TrackerRowMemberLabelFields } from "./TrackerRowMemberLabel";
 import TrackerRowShell from "./TrackerRowShell";
+import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
 import { buildTrackerRowPickerState } from "./trackerRowPickerOptions";
 
 type OpenPicker =
@@ -48,6 +48,8 @@ interface Props {
 	onPhaseChange?: (phaseId: number) => void;
 	members?: WorkspaceMember[];
 	labels?: TrackerVocabulary[];
+	labelsLoadState?: TrackerAuxiliaryLoadState;
+	membersLoadState?: TrackerAuxiliaryLoadState;
 	onAssigneeToggle?: (toggledId: number) => void;
 	onLabelToggle?: (toggledId: number) => void;
 }
@@ -73,11 +75,14 @@ export default function TrackerRow({
 	onPhaseChange,
 	members,
 	labels,
+	labelsLoadState,
+	membersLoadState,
 	onAssigneeToggle,
 	onLabelToggle,
 }: Props) {
 	const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
 	const pendingPickerRef = useRef<OpenPicker>(null);
+	const datePopoverRef = useRef<TrackerRowDatePopoverHandle>(null);
 	const kebabRef = useRef<HTMLButtonElement>(null);
 	const glyph = statusGlyphSpec(statuses, item.status.id);
 	const {
@@ -101,6 +106,7 @@ export default function TrackerRow({
 
 	const requestPicker = (next: OpenPicker) => {
 		if (openPicker === "date" && next !== "date" && next !== null) {
+			if (datePopoverRef.current?.tryClose() === false) return;
 			pendingPickerRef.current = next;
 			setOpenPicker(null);
 			return;
@@ -130,7 +136,7 @@ export default function TrackerRow({
 			{onPriorityChange ? (
 				<span
 					data-testid={`row-inline-priority-${item.key}`}
-					className="pointer-events-auto hidden shrink-0 sm:block"
+					className="pointer-events-auto hidden shrink-0 lg:block"
 				>
 					<TrackerPropertyPicker
 						variant="inline"
@@ -173,10 +179,10 @@ export default function TrackerRow({
 			<span className="min-w-0 flex-1 truncate text-neutral-900">
 				{item.title}
 			</span>
-			{projects !== undefined && (
+			{projects !== undefined && onProjectChange && (
 				<span
 					data-testid={`row-inline-project-${item.key}`}
-					className="pointer-events-auto shrink-0"
+					className="pointer-events-auto hidden shrink-0 lg:block"
 				>
 					<TrackerPropertyPicker
 						placeholder="Set project"
@@ -193,15 +199,15 @@ export default function TrackerRow({
 						options={projectOptions}
 						open={openPicker === "project"}
 						onOpenChange={(open) => requestPicker(open ? "project" : null)}
-						onSelect={(id) => onProjectChange?.(Number(id))}
+						onSelect={(id) => onProjectChange(Number(id))}
 						size="compact"
 					/>
 				</span>
 			)}
-			{projects !== undefined && (
+			{projects !== undefined && onPhaseChange && (
 				<span
 					data-testid={`row-inline-phase-${item.key}`}
-					className="pointer-events-auto shrink-0"
+					className="pointer-events-auto hidden shrink-0 lg:block"
 				>
 					<TrackerPropertyPicker
 						placeholder="Set phase"
@@ -218,7 +224,7 @@ export default function TrackerRow({
 						options={phaseOptions}
 						open={openPicker === "phase"}
 						onOpenChange={(open) => requestPicker(open ? "phase" : null)}
-						onSelect={(id) => onPhaseChange?.(Number(id))}
+						onSelect={(id) => onPhaseChange(Number(id))}
 						size="compact"
 					/>
 				</span>
@@ -227,6 +233,8 @@ export default function TrackerRow({
 				item={item}
 				labels={labels}
 				members={members}
+				labelsLoadState={labelsLoadState}
+				membersLoadState={membersLoadState}
 				onLabelToggle={onLabelToggle}
 				onAssigneeToggle={onAssigneeToggle}
 				labelsOpen={openPicker === "labels"}
@@ -239,6 +247,7 @@ export default function TrackerRow({
 			{onDateChange ? (
 				<span className="pointer-events-auto hidden min-w-[9rem] shrink-0 truncate text-right text-neutral-500 text-xs tabular-nums lg:block">
 					<TrackerRowDatePopover
+						ref={datePopoverRef}
 						startDate={item.startDate ?? null}
 						endDate={item.endDate ?? null}
 						triggerLabel={dateLabel}
@@ -265,6 +274,8 @@ export default function TrackerRow({
 				priorities={priorities}
 				labels={labels}
 				members={members}
+				labelsLoadState={labelsLoadState}
+				membersLoadState={membersLoadState}
 				{...(onDateChange ? { onDateChange } : {})}
 				{...(onProjectChange ? { onProjectChange } : {})}
 				{...(onPhaseChange ? { onPhaseChange } : {})}

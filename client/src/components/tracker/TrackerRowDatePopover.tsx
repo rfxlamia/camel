@@ -1,14 +1,16 @@
 import {
+	forwardRef,
 	useCallback,
 	useEffect,
+	useImperativeHandle,
 	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
 import {
-	POPOVER_WIDTH,
 	computePopoverPosition,
+	POPOVER_WIDTH,
 } from "../../lib/popoverPlacement";
 import TrackerDateFields from "./TrackerDateFields";
 
@@ -23,6 +25,10 @@ export interface TrackerRowDatePopoverProps {
 		startDate: string | null;
 		endDate: string | null;
 	}) => void;
+}
+
+export interface TrackerRowDatePopoverHandle {
+	tryClose: () => boolean;
 }
 
 function draftMatchesProp(prop: string | null, draft: string): boolean {
@@ -46,15 +52,21 @@ function draftChanged(
 	);
 }
 
-export function TrackerRowDatePopover({
-	startDate,
-	endDate,
-	triggerLabel,
-	idPrefix,
-	open,
-	onOpenChange,
-	onCommit,
-}: TrackerRowDatePopoverProps) {
+export const TrackerRowDatePopover = forwardRef<
+	TrackerRowDatePopoverHandle,
+	TrackerRowDatePopoverProps
+>(function TrackerRowDatePopover(
+	{
+		startDate,
+		endDate,
+		triggerLabel,
+		idPrefix,
+		open,
+		onOpenChange,
+		onCommit,
+	}: TrackerRowDatePopoverProps,
+	ref,
+) {
 	const [draftStart, setDraftStart] = useState(startDate ?? "");
 	const [draftEnd, setDraftEnd] = useState(endDate ?? "");
 	const [validationError, setValidationError] = useState<string | null>(null);
@@ -97,6 +109,14 @@ export function TrackerRowDatePopover({
 			return true;
 		},
 		[draftStart, draftEnd, startDate, endDate, onCommit, onOpenChange],
+	);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			tryClose: () => close({ notifyParent: false }),
+		}),
+		[close],
 	);
 
 	useEffect(() => {
@@ -204,6 +224,7 @@ export function TrackerRowDatePopover({
 						<TrackerDateFields
 							layout="rail"
 							idPrefix={idPrefix}
+							autoFocusStart
 							startDate={draftStart}
 							endDate={draftEnd}
 							onStartDateChange={setDraftStart}
@@ -225,4 +246,4 @@ export function TrackerRowDatePopover({
 				)}
 		</div>
 	);
-}
+});

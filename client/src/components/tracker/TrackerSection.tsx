@@ -1,6 +1,11 @@
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import type { TrackerGroup } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../../types";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
 import {
 	PriorityGlyph,
 	priorityBars,
@@ -8,6 +13,7 @@ import {
 	statusGlyphSpec,
 } from "./TrackerGlyphs";
 import TrackerRow from "./TrackerRow";
+import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
 
 interface Props {
 	group: TrackerGroup;
@@ -28,6 +34,8 @@ interface Props {
 	projects: TrackerProject[];
 	members: WorkspaceMember[];
 	labels: TrackerVocabulary[];
+	labelsLoadState: TrackerAuxiliaryLoadState;
+	membersLoadState: TrackerAuxiliaryLoadState;
 	onAssigneeToggle: (item: TrackerItem, toggledId: number) => void;
 	onLabelToggle: (item: TrackerItem, toggledId: number) => void;
 }
@@ -52,6 +60,8 @@ export default function TrackerSection({
 	projects,
 	members,
 	labels,
+	labelsLoadState,
+	membersLoadState,
 	onAssigneeToggle,
 	onLabelToggle,
 }: Props) {
@@ -112,15 +122,28 @@ export default function TrackerSection({
 							projects={projects}
 							onStatusChange={(statusId) => onStatusChange(item, statusId)}
 							onDateChange={(dates) => onDateChange(item, dates)}
-							onPriorityChange={(priorityId) =>
-								onPriorityChange?.(item, priorityId)
-							}
-							onProjectChange={(projectId) =>
-								onProjectChange?.(item, projectId)
-							}
-							onPhaseChange={(phaseId) => onPhaseChange?.(item, phaseId)}
+							{...(onPriorityChange
+								? {
+										onPriorityChange: (priorityId: number | null) =>
+											onPriorityChange(item, priorityId),
+									}
+								: {})}
+							{...(onProjectChange
+								? {
+										onProjectChange: (projectId: number) =>
+											onProjectChange(item, projectId),
+									}
+								: {})}
+							{...(onPhaseChange
+								? {
+										onPhaseChange: (phaseId: number) =>
+											onPhaseChange(item, phaseId),
+									}
+								: {})}
 							members={members}
 							labels={labels}
+							labelsLoadState={labelsLoadState}
+							membersLoadState={membersLoadState}
 							onAssigneeToggle={(toggledId) =>
 								onAssigneeToggle(item, toggledId)
 							}

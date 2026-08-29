@@ -1,4 +1,5 @@
 import { Folder, Signpost, Tag, UserRound } from "lucide-react";
+import type { RefObject } from "react";
 import { NO_PRIORITY } from "../../lib/trackerUtils";
 import type {
 	TrackerItem,
@@ -8,7 +9,14 @@ import type {
 } from "../../types";
 import { Avatar, LabelDot, PriorityGlyph } from "./TrackerGlyphs";
 import { TrackerPropertyPicker } from "./TrackerPropertyPicker";
-import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
+import {
+	TrackerRowDatePopover,
+	type TrackerRowDatePopoverHandle,
+} from "./TrackerRowDatePopover";
+import {
+	type TrackerAuxiliaryLoadState,
+	trackerAuxiliaryMessage,
+} from "./trackerAuxiliaryState";
 import type { KebabActiveField } from "./trackerRowKebabMenuChrome";
 import { buildTrackerRowPickerState } from "./trackerRowPickerOptions";
 
@@ -17,10 +25,13 @@ export interface TrackerRowKebabMenuFieldsProps {
 	item: TrackerItem;
 	activeField: KebabActiveField;
 	requestField: (next: KebabActiveField) => void;
+	datePopoverRef: RefObject<TrackerRowDatePopoverHandle>;
 	projects?: TrackerProject[];
 	priorities: TrackerVocabulary[];
 	labels?: TrackerVocabulary[];
 	members?: WorkspaceMember[];
+	labelsLoadState?: TrackerAuxiliaryLoadState;
+	membersLoadState?: TrackerAuxiliaryLoadState;
 	onDateChange?: (dates: {
 		startDate: string | null;
 		endDate: string | null;
@@ -37,10 +48,13 @@ export function TrackerRowKebabMenuFields({
 	item,
 	activeField,
 	requestField,
+	datePopoverRef,
 	projects,
 	priorities,
 	labels,
 	members,
+	labelsLoadState,
+	membersLoadState,
 	onDateChange,
 	onProjectChange,
 	onPhaseChange,
@@ -48,6 +62,10 @@ export function TrackerRowKebabMenuFields({
 	onAssigneeToggle,
 	onLabelToggle,
 }: TrackerRowKebabMenuFieldsProps) {
+	const effectiveLabelsLoadState =
+		labelsLoadState ?? (labels === undefined ? "loading" : "ready");
+	const effectiveMembersLoadState =
+		membersLoadState ?? (members === undefined ? "loading" : "ready");
 	const {
 		selectedProject,
 		selectedPhase,
@@ -75,14 +93,13 @@ export function TrackerRowKebabMenuFields({
 		<div className="flex flex-col gap-2">
 			{onDateChange ? (
 				<TrackerRowDatePopover
+					ref={datePopoverRef}
 					startDate={item.startDate ?? null}
 					endDate={item.endDate ?? null}
 					triggerLabel={dateLabel}
 					idPrefix={idPrefix}
 					open={activeField === "date"}
-					onOpenChange={(nextOpen) =>
-						requestField(nextOpen ? "date" : null)
-					}
+					onOpenChange={(nextOpen) => requestField(nextOpen ? "date" : null)}
 					onCommit={onDateChange}
 				/>
 			) : null}
@@ -128,9 +145,7 @@ export function TrackerRowKebabMenuFields({
 						searchPlaceholder="Set phase to…"
 						options={phaseOptions}
 						open={activeField === "phase"}
-						onOpenChange={(nextOpen) =>
-							requestField(nextOpen ? "phase" : null)
-						}
+						onOpenChange={(nextOpen) => requestField(nextOpen ? "phase" : null)}
 						onSelect={(id) => onPhaseChange(Number(id))}
 						size="compact"
 					/>
@@ -160,7 +175,9 @@ export function TrackerRowKebabMenuFields({
 
 			{onAssigneeToggle ? (
 				<div data-testid={`${idPrefix}-assignees`}>
-					{members && members.length > 0 ? (
+					{effectiveMembersLoadState === "ready" &&
+					members &&
+					members.length > 0 ? (
 						<TrackerPropertyPicker
 							placeholder="Assignees"
 							value={assigneeValue}
@@ -188,7 +205,7 @@ export function TrackerRowKebabMenuFields({
 						/>
 					) : (
 						<p className="px-1 text-neutral-500 text-xs">
-							No members in this workspace
+							{trackerAuxiliaryMessage("members", effectiveMembersLoadState)}
 						</p>
 					)}
 				</div>
@@ -196,7 +213,9 @@ export function TrackerRowKebabMenuFields({
 
 			{onLabelToggle ? (
 				<div data-testid={`${idPrefix}-labels`}>
-					{labels && labels.length > 0 ? (
+					{effectiveLabelsLoadState === "ready" &&
+					labels &&
+					labels.length > 0 ? (
 						<TrackerPropertyPicker
 							placeholder="Labels"
 							value={labelValue}
@@ -224,7 +243,7 @@ export function TrackerRowKebabMenuFields({
 						/>
 					) : (
 						<p className="px-1 text-neutral-500 text-xs">
-							No labels in this workspace
+							{trackerAuxiliaryMessage("labels", effectiveLabelsLoadState)}
 						</p>
 					)}
 				</div>

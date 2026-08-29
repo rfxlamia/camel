@@ -7,6 +7,7 @@ import type {
 	WorkspaceMember,
 } from "../../types";
 import { TrackerRowKebabMenuFields } from "./TrackerRowKebabMenuFields";
+import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
 import { useTrackerRowKebabMenuChrome } from "./trackerRowKebabMenuChrome";
 
 export interface TrackerRowKebabMenuProps {
@@ -19,6 +20,8 @@ export interface TrackerRowKebabMenuProps {
 	priorities: TrackerVocabulary[];
 	labels?: TrackerVocabulary[];
 	members?: WorkspaceMember[];
+	labelsLoadState?: TrackerAuxiliaryLoadState;
+	membersLoadState?: TrackerAuxiliaryLoadState;
 	onDateChange?: (dates: {
 		startDate: string | null;
 		endDate: string | null;
@@ -40,6 +43,8 @@ export function TrackerRowKebabMenu({
 	priorities,
 	labels,
 	members,
+	labelsLoadState,
+	membersLoadState,
 	onDateChange,
 	onProjectChange,
 	onPhaseChange,
@@ -47,13 +52,19 @@ export function TrackerRowKebabMenu({
 	onAssigneeToggle,
 	onLabelToggle,
 }: TrackerRowKebabMenuProps) {
-	const { panelRef, panelCoords, activeField, requestField, closePanel } =
-		useTrackerRowKebabMenuChrome({
-			anchorRef,
-			idPrefix,
-			open,
-			onOpenChange,
-		});
+	const {
+		panelRef,
+		panelCoords,
+		activeField,
+		requestField,
+		closePanel,
+		datePopoverRef,
+	} = useTrackerRowKebabMenuChrome({
+		anchorRef,
+		idPrefix,
+		open,
+		onOpenChange,
+	});
 
 	if (!open) return null;
 
@@ -62,6 +73,26 @@ export function TrackerRowKebabMenu({
 			ref={panelRef}
 			role="dialog"
 			aria-label={`More properties for ${item.key}`}
+			aria-modal="true"
+			tabIndex={-1}
+			onKeyDown={(event) => {
+				if (event.key !== "Tab") return;
+				const focusableElements = Array.from(
+					event.currentTarget.querySelectorAll<HTMLElement>(
+						'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+					),
+				);
+				if (focusableElements.length === 0) return;
+				const first = focusableElements[0]!;
+				const last = focusableElements.at(-1)!;
+				if (event.shiftKey && document.activeElement === first) {
+					event.preventDefault();
+					last.focus();
+				} else if (!event.shiftKey && document.activeElement === last) {
+					event.preventDefault();
+					first.focus();
+				}
+			}}
 			style={{
 				position: "fixed",
 				top: panelCoords?.top ?? 0,
@@ -71,9 +102,7 @@ export function TrackerRowKebabMenu({
 			className="w-72 rounded-lg border border-neutral-200 bg-white p-3 shadow-[0_8px_24px_rgba(23,42,62,0.12)]"
 		>
 			<div className="mb-3 flex items-center justify-between gap-2">
-				<h2 className="font-medium text-neutral-900 text-sm">
-					Properties
-				</h2>
+				<h2 className="font-medium text-neutral-900 text-sm">Properties</h2>
 				<button
 					type="button"
 					aria-label="Close properties panel"
@@ -89,10 +118,13 @@ export function TrackerRowKebabMenu({
 				item={item}
 				activeField={activeField}
 				requestField={requestField}
+				datePopoverRef={datePopoverRef}
 				projects={projects}
 				priorities={priorities}
 				labels={labels}
 				members={members}
+				labelsLoadState={labelsLoadState}
+				membersLoadState={membersLoadState}
 				{...(onDateChange ? { onDateChange } : {})}
 				{...(onProjectChange ? { onProjectChange } : {})}
 				{...(onPhaseChange ? { onPhaseChange } : {})}

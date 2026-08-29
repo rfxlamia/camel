@@ -6,6 +6,7 @@ import type {
 	WorkspaceMember,
 } from "../../types";
 import { TrackerRowKebabMenu } from "./TrackerRowKebabMenu";
+import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
 
 type OpenPicker =
 	| "date"
@@ -27,6 +28,8 @@ export interface TrackerRowKebabTriggerProps {
 	priorities: TrackerVocabulary[];
 	labels?: TrackerVocabulary[];
 	members?: WorkspaceMember[];
+	labelsLoadState?: TrackerAuxiliaryLoadState;
+	membersLoadState?: TrackerAuxiliaryLoadState;
 	onDateChange?: (dates: {
 		startDate: string | null;
 		endDate: string | null;
@@ -47,6 +50,8 @@ export function TrackerRowKebabTrigger({
 	priorities,
 	labels,
 	members,
+	labelsLoadState,
+	membersLoadState,
 	onDateChange,
 	onProjectChange,
 	onPhaseChange,
@@ -74,9 +79,7 @@ export function TrackerRowKebabTrigger({
 				aria-haspopup="dialog"
 				aria-expanded={openPicker === "kebab"}
 				data-testid={`row-more-${item.key}`}
-				onClick={() =>
-					requestPicker(openPicker === "kebab" ? null : "kebab")
-				}
+				onClick={() => requestPicker(openPicker === "kebab" ? null : "kebab")}
 				className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200 lg:hidden"
 			>
 				<span aria-hidden>⋯</span>
@@ -91,6 +94,8 @@ export function TrackerRowKebabTrigger({
 				priorities={priorities}
 				labels={labels}
 				members={members}
+				labelsLoadState={labelsLoadState}
+				membersLoadState={membersLoadState}
 				{...(onDateChange ? { onDateChange } : {})}
 				{...(onProjectChange ? { onProjectChange } : {})}
 				{...(onPhaseChange ? { onPhaseChange } : {})}

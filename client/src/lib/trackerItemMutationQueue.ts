@@ -13,5 +13,8 @@ export function createItemMutationQueue() {
 		});
 		return next;
 	}
-	return { enqueue };
+	function hasPending(itemId: number): boolean {
+		return chains.has(itemId);
+	}
+	return { enqueue, hasPending };
 }

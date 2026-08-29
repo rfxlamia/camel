@@ -1,6 +1,5 @@
 // client/src/components/tracker/TrackerRowKebabMenu.test.tsx — jsdom.
-import type { ComponentProps } from "react";
-import { useRef } from "react";
+
 import {
 	cleanup,
 	fireEvent,
@@ -8,6 +7,8 @@ import {
 	screen,
 	within,
 } from "@testing-library/react";
+import type { ComponentProps } from "react";
+import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
 	TrackerItem,
@@ -121,7 +122,7 @@ function KebabHarness({
 			<TrackerRowKebabMenu
 				anchorRef={anchorRef}
 				idPrefix={idPrefix}
-				item={item}
+				item={props.item ?? item}
 				projects={[releaseProject]}
 				priorities={priorities}
 				labels={props.labels ?? labels}
@@ -155,18 +156,14 @@ describe("TrackerRowKebabMenu", () => {
 		const panel = getPanel();
 		const scope = within(panel);
 
-		expect(
-			scope.getByRole("button", { name: "Date: Set date" }),
-		).toBeTruthy();
+		expect(scope.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
 		expect(
 			scope.getByRole("button", { name: "Project: Rilis v2" }),
 		).toBeTruthy();
 		expect(
 			scope.getByRole("button", { name: "Phase: Persiapan" }),
 		).toBeTruthy();
-		expect(
-			scope.getByRole("button", { name: "Priority: High" }),
-		).toBeTruthy();
+		expect(scope.getByRole("button", { name: "Priority: High" })).toBeTruthy();
 		expect(scope.getByRole("button", { name: "Assignees" })).toBeTruthy();
 		expect(scope.getByRole("button", { name: "Labels" })).toBeTruthy();
 	});
@@ -177,18 +174,14 @@ describe("TrackerRowKebabMenu", () => {
 		const panel = getPanel();
 		const scope = within(panel);
 
-		expect(
-			scope.getByRole("button", { name: "Date: Set date" }),
-		).toBeTruthy();
+		expect(scope.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
 		expect(
 			scope.getByRole("button", { name: "Project: Rilis v2" }),
 		).toBeTruthy();
 		expect(
 			scope.queryByRole("button", { name: "Phase: Persiapan" }),
 		).toBeNull();
-		expect(
-			scope.getByRole("button", { name: "Priority: High" }),
-		).toBeTruthy();
+		expect(scope.getByRole("button", { name: "Priority: High" })).toBeTruthy();
 		expect(scope.getByRole("button", { name: "Assignees" })).toBeTruthy();
 		expect(scope.getByRole("button", { name: "Labels" })).toBeTruthy();
 	});
@@ -222,6 +215,85 @@ describe("TrackerRowKebabMenu", () => {
 				startDate: "2026-08-06",
 				endDate: null,
 			});
+		});
+
+		it("keeps an invalid date draft open when switching to another field", () => {
+			const onDateChange = vi.fn();
+			renderKebab({ onDateChange });
+
+			const panel = getPanel();
+			const scope = within(panel);
+			fireEvent.click(scope.getByRole("button", { name: "Date: Set date" }));
+			fireEvent.change(screen.getByLabelText("Start date"), {
+				target: { value: "2026-08-10" },
+			});
+			fireEvent.change(screen.getByLabelText("End date"), {
+				target: { value: "2026-08-01" },
+			});
+			fireEvent.click(scope.getByRole("button", { name: "Priority: High" }));
+
+			expect(
+				(screen.getByLabelText("Start date") as HTMLInputElement).value,
+			).toBe("2026-08-10");
+			expect(
+				screen.getByText("End date must be on or after start date"),
+			).toBeTruthy();
+			expect(
+				screen.queryByRole("combobox", { name: "Change priority…" }),
+			).toBeNull();
+			expect(onDateChange).not.toHaveBeenCalled();
+		});
+
+		it("closes only the nested picker on Escape", () => {
+			renderKebab();
+
+			const panel = getPanel();
+			fireEvent.click(
+				within(panel).getByRole("button", { name: "Priority: High" }),
+			);
+			expect(
+				screen.getByRole("combobox", { name: "Change priority…" }),
+			).toBeTruthy();
+
+			fireEvent.keyDown(
+				screen.getByRole("combobox", { name: "Change priority…" }),
+				{ key: "Escape" },
+			);
+
+			expect(getPanel()).toBeTruthy();
+			expect(
+				screen.queryByRole("combobox", { name: "Change priority…" }),
+			).toBeNull();
+		});
+
+		it("makes the properties panel modal and traps focus", () => {
+			renderKebab();
+
+			const panel = getPanel();
+			expect(panel.getAttribute("aria-modal")).toBe("true");
+
+			const focusables = within(panel).getAllByRole("button");
+			const first = focusables[0]!;
+			const last = focusables.at(-1)!;
+			expect(document.activeElement).toBe(first);
+
+			last.focus();
+			fireEvent.keyDown(panel, { key: "Tab" });
+			expect(document.activeElement).toBe(first);
+
+			first.focus();
+			fireEvent.keyDown(panel, { key: "Tab", shiftKey: true });
+			expect(document.activeElement).toBe(last);
+		});
+
+		it("focuses the start date when the date popover opens", () => {
+			renderKebab();
+
+			fireEvent.click(
+				within(getPanel()).getByRole("button", { name: "Date: Set date" }),
+			);
+
+			expect(document.activeElement).toBe(screen.getByLabelText("Start date"));
 		});
 
 		it("keeps the panel open when clicking inside the portaled date fields", () => {

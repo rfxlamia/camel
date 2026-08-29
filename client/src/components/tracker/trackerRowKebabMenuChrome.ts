@@ -7,9 +7,10 @@ import {
 	useState,
 } from "react";
 import {
-	POPOVER_WIDTH,
 	computePopoverPosition,
+	POPOVER_WIDTH,
 } from "../../lib/popoverPlacement";
+import type { TrackerRowDatePopoverHandle } from "./TrackerRowDatePopover";
 
 export type KebabActiveField =
 	| "date"
@@ -34,6 +35,7 @@ export function useTrackerRowKebabMenuChrome({
 	const [activeField, setActiveField] = useState<KebabActiveField>(null);
 	const pendingFieldRef = useRef<KebabActiveField>(null);
 	const pendingCloseRef = useRef(false);
+	const datePopoverRef = useRef<TrackerRowDatePopoverHandle>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 	const prevOpenRef = useRef(open);
 	const [panelCoords, setPanelCoords] = useState<{
@@ -48,6 +50,7 @@ export function useTrackerRowKebabMenuChrome({
 	const requestField = useCallback((next: KebabActiveField) => {
 		setActiveField((current) => {
 			if (current === "date" && next !== "date" && next !== null) {
+				if (datePopoverRef.current?.tryClose() === false) return current;
 				pendingFieldRef.current = next;
 				return null;
 			}
@@ -73,6 +76,7 @@ export function useTrackerRowKebabMenuChrome({
 
 	const closePanel = useCallback(() => {
 		if (activeField === "date") {
+			if (datePopoverRef.current?.tryClose() === false) return;
 			pendingCloseRef.current = true;
 			setActiveField(null);
 			return;
@@ -106,11 +110,23 @@ export function useTrackerRowKebabMenuChrome({
 	useEffect(() => {
 		if (!open) return;
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape") closePanel();
+			if (
+				e.key === "Escape" &&
+				(activeField === null || activeField === "date")
+			)
+				closePanel();
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [open, closePanel]);
+	}, [open, closePanel, activeField]);
+
+	useEffect(() => {
+		if (!open) return;
+		const focusTarget = panelRef.current?.querySelector<HTMLElement>(
+			"button:not([disabled])",
+		);
+		(focusTarget ?? panelRef.current)?.focus();
+	}, [open]);
 
 	useLayoutEffect(() => {
 		if (!open) {
@@ -148,5 +164,6 @@ export function useTrackerRowKebabMenuChrome({
 		activeField,
 		requestField,
 		closePanel,
+		datePopoverRef,
 	};
 }

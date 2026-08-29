@@ -13,9 +13,10 @@ import TrackerSection from "../components/tracker/TrackerSection";
 import TrackerTabs, {
 	type TrackerTab,
 } from "../components/tracker/TrackerTabs";
+import type { TrackerAuxiliaryLoadState } from "../components/tracker/trackerAuxiliaryState";
 import { useBoard } from "../context/BoardContext";
-import { partitionTrackerSearch } from "../lib/trackerSearch";
 import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
+import { partitionTrackerSearch } from "../lib/trackerSearch";
 import {
 	groupItems,
 	priorityGroupKey,
@@ -68,6 +69,10 @@ export default function TrackerPage() {
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
+	const [labelsLoadState, setLabelsLoadState] =
+		useState<TrackerAuxiliaryLoadState>("loading");
+	const [membersLoadState, setMembersLoadState] =
+		useState<TrackerAuxiliaryLoadState>("loading");
 	const [search, setSearch] = useState("");
 	const [groupBy, setGroupBy] = useState<TrackerGroupBy>("status");
 	const [groupByOpen, setGroupByOpen] = useState(false);
@@ -80,6 +85,10 @@ export default function TrackerPage() {
 	const mutationQueueRef = useRef(createItemMutationQueue());
 	const itemsRef = useRef<TrackerItem[]>(items);
 	itemsRef.current = items;
+	const labelsRef = useRef<TrackerVocabulary[]>(labels);
+	labelsRef.current = labels;
+	const membersRef = useRef<WorkspaceMember[]>(members);
+	membersRef.current = members;
 	const recoveryBlockedItemIdsRef = useRef(new Set<number>());
 	/** Set while this page is the one changing the location, not the router. */
 	const skipCollapseResetRef = useRef(false);
@@ -134,6 +143,8 @@ export default function TrackerPage() {
 	useEffect(() => {
 		setLabels([]);
 		setMembers([]);
+		setLabelsLoadState("loading");
+		setMembersLoadState("loading");
 	}, [activeWorkspaceId]);
 
 	const changeGroupBy = (next: TrackerGroupBy) => {
@@ -142,10 +153,35 @@ export default function TrackerPage() {
 			writeTrackerGroupBy(activeWorkspaceId, next);
 	};
 
-	const replaceItems = useCallback((next: TrackerItem[]) => {
-		itemsRef.current = next;
-		setItems(next);
-	}, []);
+	const replaceItems = useCallback(
+		(
+			next: TrackerItem[],
+			protectedItemIds: ReadonlySet<number> = new Set<number>(),
+		) => {
+			const currentById = new Map(
+				itemsRef.current.map((item) => [item.id, item] as const),
+			);
+			const merged = next.map((incoming) => {
+				const current = currentById.get(incoming.id);
+				if (!current) return incoming;
+				if (current.version > incoming.version) return current;
+				if (
+					protectedItemIds.has(incoming.id) &&
+					current.version >= incoming.version
+				)
+					return current;
+				if (
+					current.version === incoming.version &&
+					mutationQueueRef.current.hasPending(incoming.id)
+				)
+					return current;
+				return incoming;
+			});
+			itemsRef.current = merged;
+			setItems(merged);
+		},
+		[],
+	);
 
 	const updateItems = useCallback(
 		(updater: (prev: TrackerItem[]) => TrackerItem[]) => {
@@ -159,18 +195,27 @@ export default function TrackerPage() {
 	const loadAuxiliary = async (seq: number) => {
 		if (activeWorkspaceId === null) return;
 		const workspaceId = activeWorkspaceId;
-		const [labelList, memberList] = await Promise.all([
+		const [labelResult, memberResult] = await Promise.all([
 			api
 				.listTrackerVocabularies(workspaceId, "label")
-				.catch(() => [] as TrackerVocabulary[]),
+				.then((data) => ({ data, state: "ready" as const }))
+				.catch(() => ({
+					data: [] as TrackerVocabulary[],
+					state: "failed" as const,
+				})),
 			api
 				.getWorkspaceMembers(workspaceId)
-				.then((result) => result.members)
-				.catch(() => [] as WorkspaceMember[]),
+				.then((result) => ({ data: result.members, state: "ready" as const }))
+				.catch(() => ({
+					data: [] as WorkspaceMember[],
+					state: "failed" as const,
+				})),
 		]);
 		if (seq !== loadSeqRef.current) return;
-		setLabels(labelList);
-		setMembers(memberList);
+		setLabels(labelResult.data);
+		setLabelsLoadState(labelResult.state);
+		setMembers(memberResult.data);
+		setMembersLoadState(memberResult.state);
 	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAuxiliary is inlined and keyed by load sequence
@@ -178,6 +223,11 @@ export default function TrackerPage() {
 		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
 		const workspaceId = activeWorkspaceId;
+		const protectedItemIds = new Set(
+			itemsRef.current
+				.filter((item) => mutationQueueRef.current.hasPending(item.id))
+				.map((item) => item.id),
+		);
 		// Only the empty first paint needs a full-page spinner; background
 		// refreshes keep whatever is already on screen.
 		if (itemsLenRef.current === 0 && projectsLenRef.current === 0) {
@@ -195,7 +245,7 @@ export default function TrackerPage() {
 			if (seq !== loadSeqRef.current) return false;
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
-			replaceItems(itemList);
+			replaceItems(itemList, protectedItemIds);
 			for (const item of itemList) {
 				recoveryBlockedItemIdsRef.current.delete(item.id);
 			}
@@ -358,7 +408,10 @@ export default function TrackerPage() {
 					"Someone else updated this item first — refreshed.",
 					"warning",
 				);
-				await loadData();
+				const refreshed = await loadData();
+				if (!refreshed) {
+					recoveryBlockedItemIdsRef.current.delete(itemId);
+				}
 			} else {
 				showToast(errorMessage, "error");
 			}
@@ -531,7 +584,9 @@ export default function TrackerPage() {
 					const currentIds = current.assignees.map((a) => a.id);
 					const nextIds = resolveToggle(currentIds, toggledId);
 					const nextAssignees = nextIds.map((id) => {
-						const member = members.find((m) => m.userId === id);
+						const existing = current.assignees.find((a) => a.id === id);
+						if (existing) return existing;
+						const member = membersRef.current.find((m) => m.userId === id);
 						if (!member) return null;
 						return {
 							id: member.userId,
@@ -539,7 +594,13 @@ export default function TrackerPage() {
 							displayName: member.displayName,
 						};
 					});
-					if (nextAssignees.some((a) => a === null)) return null;
+					if (nextAssignees.some((a) => a === null)) {
+						showToast(
+							"Couldn't update assignees. Check your connection and try again.",
+							"error",
+						);
+						return null;
+					}
 
 					return {
 						request: { assigneeIds: nextIds, version: current.version },
@@ -562,10 +623,19 @@ export default function TrackerPage() {
 				(current) => {
 					const currentIds = current.labels.map((l) => l.id);
 					const nextIds = resolveToggle(currentIds, toggledId);
-					const nextLabels = nextIds.map(
-						(id) => labels.find((l) => l.id === id) ?? null,
-					);
-					if (nextLabels.some((l) => l === null)) return null;
+					const nextLabels = nextIds.map((id) => {
+						const existing = current.labels.find((l) => l.id === id);
+						return (
+							existing ?? labelsRef.current.find((l) => l.id === id) ?? null
+						);
+					});
+					if (nextLabels.some((l) => l === null)) {
+						showToast(
+							"Couldn't update labels. Check your connection and try again.",
+							"error",
+						);
+						return null;
+					}
 
 					return {
 						request: { labelIds: nextIds, version: current.version },
@@ -596,12 +666,6 @@ export default function TrackerPage() {
 
 	return (
 		<div className="min-h-full">
-			<div data-testid="tracker-aux-labels" hidden>
-				{labels.map((label) => label.name).join(",")}
-			</div>
-			<div data-testid="tracker-aux-members" hidden>
-				{members.map((member) => member.displayName).join(",")}
-			</div>
 			<div className="sticky top-0 z-20 bg-white">
 				<TrackerTabs
 					value={tab}
@@ -779,6 +843,8 @@ export default function TrackerPage() {
 								projects={projects}
 								members={members}
 								labels={labels}
+								labelsLoadState={labelsLoadState}
+								membersLoadState={membersLoadState}
 								onAssigneeToggle={(item, toggledId) =>
 									changeAssignee(item, toggledId)
 								}

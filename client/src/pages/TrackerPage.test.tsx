@@ -537,9 +537,7 @@ describe("TrackerPage", () => {
 		});
 		fireEvent.click(screen.getByLabelText("Backlog, TE-4"));
 
-		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1),
-		);
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
 		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-4", {
 			startDate: "2026-08-06",
 			endDate: "2026-08-26",
@@ -643,9 +641,7 @@ describe("TrackerPage", () => {
 
 	it("processes a queued status pick after 409 once refresh succeeds", async () => {
 		mockUpdateTrackerItem
-			.mockRejectedValueOnce(
-				new ApiError("conflict", 409, "version_conflict"),
-			)
+			.mockRejectedValueOnce(new ApiError("conflict", 409, "version_conflict"))
 			.mockResolvedValueOnce(
 				makeItem({ id: 1, key: "CA-1", status: statuses[2]!, version: 6 }),
 			);
@@ -708,21 +704,12 @@ describe("TrackerPage", () => {
 		);
 	});
 
-	it("skips a queued status pick when 409 recovery refresh fails", async () => {
-		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
-			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
-				sseHandler = cb;
-				return () => {};
-			},
-			registerRefreshTrackerList: vi.fn(),
-			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
-		});
-		mockUpdateTrackerItem.mockRejectedValueOnce(
-			new ApiError("conflict", 409, "version_conflict"),
-		);
+	it("continues a queued status pick when 409 recovery refresh fails", async () => {
+		mockUpdateTrackerItem
+			.mockRejectedValueOnce(new ApiError("conflict", 409, "version_conflict"))
+			.mockResolvedValueOnce(
+				makeItem({ id: 1, key: "CA-1", status: statuses[2]!, version: 2 }),
+			);
 		mockListTrackerItems
 			.mockResolvedValueOnce([
 				makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
@@ -758,30 +745,13 @@ describe("TrackerPage", () => {
 				"warning",
 			),
 		);
-		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
-		expect(screen.getByLabelText("Backlog, CA-1")).toBeTruthy();
-
-		mockListTrackerItems.mockResolvedValueOnce([
-			makeItem({ id: 1, key: "CA-1", title: "Workspace Rename", version: 5 }),
-			makeItem({
-				id: 2,
-				key: "CA-2",
-				title: "Done task",
-				status: statuses[2]!,
-				labels: [],
-			}),
-		]);
-		mockUpdateTrackerItem.mockResolvedValueOnce(
-			makeItem({ id: 1, key: "CA-1", status: statuses[1]!, version: 6 }),
-		);
-		sseHandler?.({ type: "tracker.updated" });
-		await waitFor(() => screen.getByLabelText("Backlog, CA-1"));
-
-		fireEvent.click(statusTrigger());
-		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
 		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+			statusId: 5,
+			version: 1,
+		});
 		await waitFor(() =>
-			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+			expect(screen.getByLabelText("Done, CA-1")).toBeTruthy(),
 		);
 	});
 
@@ -849,6 +819,57 @@ describe("TrackerPage", () => {
 		releaseItems?.([makeItem({ id: 1, key: "CA-1" })]);
 	});
 
+	it("does not let a stale SSE refresh overwrite newer item state", async () => {
+		let sseHandler: ((e: { type: string }) => void) | undefined;
+		mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
+				sseHandler = cb;
+				return () => {};
+			},
+			registerRefreshTrackerList: vi.fn(),
+			refreshTrackerList: vi.fn(),
+			showToast: mockShowToast,
+		});
+		const initialItem = makeItem({ id: 1, key: "CA-1", version: 1 });
+		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
+		let resolveUpdate: ((item: TrackerItem) => void) | undefined;
+		mockUpdateTrackerItem.mockImplementationOnce(
+			() =>
+				new Promise<TrackerItem>((resolve) => {
+					resolveUpdate = resolve;
+				}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+		fireEvent.click(screen.getByLabelText("Backlog, CA-1"));
+		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+		);
+		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+
+		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
+		sseHandler?.({ type: "tracker.updated" });
+		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy();
+
+		resolveUpdate?.(
+			makeItem({ id: 1, key: "CA-1", status: statuses[1]!, version: 2 }),
+		);
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+		);
+
+		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
+		sseHandler?.({ type: "tracker.updated" });
+		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(3));
+		await waitFor(() =>
+			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
+		);
+	});
+
 	it("resets collapsed sections when re-navigating to /tracker", async () => {
 		const { rerender } = render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Done"));
@@ -863,9 +884,7 @@ describe("TrackerPage", () => {
 	it("opens create modal from global + and submits the default status", async () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
-		fireEvent.click(
-			screen.getByRole("button", { name: /^New item$/ }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: /^New item$/ }));
 		const modal = within(screen.getByRole("dialog"));
 		await waitFor(() => modal.getByRole("button", { name: /Backlog/ }));
 		fireEvent.change(screen.getByLabelText(/item title/i), {
@@ -884,9 +903,7 @@ describe("TrackerPage", () => {
 	it("submits picker values on create", async () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
-		fireEvent.click(
-			screen.getByRole("button", { name: /^New item$/ }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: /^New item$/ }));
 		const modal = within(screen.getByRole("dialog"));
 		fireEvent.change(screen.getByLabelText(/item title/i), {
 			target: { value: "Full" },
@@ -911,9 +928,7 @@ describe("TrackerPage", () => {
 	it("submits label and assignee pickers on create", async () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
-		fireEvent.click(
-			screen.getByRole("button", { name: /^New item$/ }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: /^New item$/ }));
 		const modal = within(screen.getByRole("dialog"));
 		await waitFor(() => modal.getByRole("button", { name: /Labels/ }));
 		fireEvent.change(screen.getByLabelText(/item title/i), {
@@ -1014,9 +1029,7 @@ describe("TrackerPage", () => {
 		}
 
 		function openLabelPicker() {
-			fireEvent.click(
-				within(ca1Row()).getByRole("button", { name: "Labels" }),
-			);
+			fireEvent.click(within(ca1Row()).getByRole("button", { name: "Labels" }));
 		}
 
 		it("adds an assignee from the row picker", async () => {
@@ -1042,9 +1055,7 @@ describe("TrackerPage", () => {
 			);
 			render(<TrackerPage />);
 			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
-			expect(
-				screen.getByTestId("row-inline-assignees-CA-1"),
-			).toBeTruthy();
+			expect(screen.getByTestId("row-inline-assignees-CA-1")).toBeTruthy();
 
 			openAssigneePicker();
 			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
@@ -1052,6 +1063,42 @@ describe("TrackerPage", () => {
 			await waitFor(() =>
 				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [7, 8],
+					version: 2,
+				}),
+			);
+		});
+
+		it("preserves an assignee that is missing from the current member catalog", async () => {
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					assignees: [
+						{ id: 42, displayName: "Former member", username: "former" },
+					],
+					version: 2,
+				}),
+			]);
+			mockUpdateTrackerItem.mockResolvedValue(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					assignees: [
+						{ id: 42, displayName: "Former member", username: "former" },
+						{ id: 8, displayName: "Bob", username: "bob" },
+					],
+					version: 3,
+				}),
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+			openAssigneePicker();
+			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					assigneeIds: [42, 8],
 					version: 2,
 				}),
 			);
@@ -1171,6 +1218,44 @@ describe("TrackerPage", () => {
 			);
 		});
 
+		it("preserves a label that is missing from the current label catalog", async () => {
+			const legacyLabel: TrackerVocabulary = {
+				id: 99,
+				kind: "label",
+				name: "Legacy label",
+				position: 1000,
+				colour: "oklch(0.7 0.1 15)",
+			};
+			mockListTrackerItems.mockResolvedValueOnce([
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					labels: [legacyLabel],
+					version: 2,
+				}),
+			]);
+			mockUpdateTrackerItem.mockResolvedValue(
+				makeItem({
+					id: 1,
+					key: "CA-1",
+					labels: [legacyLabel, labels[0]!],
+					version: 3,
+				}),
+			);
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+			openLabelPicker();
+			fireEvent.click(screen.getByRole("option", { name: /^Feature$/ }));
+
+			await waitFor(() =>
+				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+					labelIds: [99, 3],
+					version: 2,
+				}),
+			);
+		});
+
 		it("removes an assignee from the row picker", async () => {
 			mockListTrackerItems.mockResolvedValueOnce([
 				makeItem({
@@ -1210,7 +1295,9 @@ describe("TrackerPage", () => {
 			});
 			openAssigneePicker();
 			expect(
-				screen.getByRole("option", { name: /Alice/ }).getAttribute("aria-selected"),
+				screen
+					.getByRole("option", { name: /Alice/ })
+					.getAttribute("aria-selected"),
 			).toBe("false");
 		});
 
@@ -1318,7 +1405,9 @@ describe("TrackerPage", () => {
 					"warning",
 				),
 			);
-			await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+			await waitFor(() =>
+				expect(mockListTrackerItems).toHaveBeenCalledTimes(2),
+			);
 			await waitFor(() =>
 				expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
 					assigneeIds: [7, 10, 9],
@@ -1608,7 +1697,9 @@ describe("TrackerPage items tab", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
 		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
 
-		fireEvent.click(within(row).getByRole("button", { name: "Phase: Persiapan" }));
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Phase: Persiapan" }),
+		);
 		fireEvent.click(screen.getByRole("option", { name: /Persiapan/ }));
 
 		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
@@ -1638,12 +1729,12 @@ describe("TrackerPage items tab", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
 		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
 
-		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Project: Rilis v2" }),
+		);
 		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
 
-		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1),
-		);
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
 		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-3", {
 			projectId: P2,
 			phaseId: null,
@@ -1670,7 +1761,9 @@ describe("TrackerPage items tab", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
 		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
 
-		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Project: Rilis v2" }),
+		);
 		fireEvent.click(screen.getByRole("option", { name: /Rilis v2/ }));
 
 		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
@@ -1711,11 +1804,15 @@ describe("TrackerPage items tab", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-TE-3"));
 		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
 
-		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Project: Rilis v2" }),
+		);
 		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
 		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
 
-		fireEvent.click(within(row).getByRole("button", { name: "Project: Migrasi JSX" }));
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Project: Migrasi JSX" }),
+		);
 		fireEvent.click(screen.getByRole("option", { name: /Rilis v2/ }));
 		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
 
@@ -2074,7 +2171,9 @@ describe("TrackerPage items tab", () => {
 		expect(screen.getByText("TE-3")).toBeTruthy();
 
 		const row = screen.getByTestId("tracker-row-TE-3").parentElement!;
-		fireEvent.click(within(row).getByRole("button", { name: "Project: Rilis v2" }));
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Project: Rilis v2" }),
+		);
 		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
 
 		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
@@ -2221,10 +2320,9 @@ describe("TrackerPage projects", () => {
 		// The item never left the list — only its project marker reverts to placeholder.
 		await waitFor(() =>
 			expect(
-				within(screen.getByTestId("tracker-row-CA-10").parentElement!).getByRole(
-					"button",
-					{ name: "Project: Set project" },
-				),
+				within(
+					screen.getByTestId("tracker-row-CA-10").parentElement!,
+				).getByRole("button", { name: "Project: Set project" }),
 			).toBeTruthy(),
 		);
 		expect(screen.getByText("CA-10")).toBeTruthy();
@@ -2267,14 +2365,48 @@ describe("TrackerPage projects", () => {
 	});
 
 	describe("auxiliary labels and members loading", () => {
+		it("does not show empty-state copy while labels and members are loading", async () => {
+			let resolveLabels: (value: TrackerVocabulary[]) => void = () => {};
+			let resolveMembers: (value: { members: never[] }) => void = () => {};
+			mockListTrackerVocabularies.mockImplementation(
+				(_wsId: number, kind?: string) => {
+					if (kind === "priority") return Promise.resolve(priorities);
+					if (kind === "label") {
+						return new Promise((resolve) => {
+							resolveLabels = resolve;
+						});
+					}
+					return Promise.resolve(statuses);
+				},
+			);
+			mockGetWorkspaceMembers.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveMembers = resolve;
+					}),
+			);
+
+			render(<TrackerPage />);
+			await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+			expect(screen.getAllByText("Loading labels…").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Loading members…").length).toBeGreaterThan(0);
+			expect(screen.queryByText("No labels in this workspace")).toBeNull();
+			expect(screen.queryByText("No members in this workspace")).toBeNull();
+
+			resolveLabels([]);
+			resolveMembers({ members: [] });
+		});
+
 		it("fetches labels with workspace id and label kind", async () => {
 			render(<TrackerPage />);
 			await waitFor(() => screen.getByText("CA-1"));
 			await waitFor(() =>
 				expect(mockListTrackerVocabularies).toHaveBeenCalledWith(7, "label"),
 			);
-			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
-				"Feature,Bug",
+			const row = screen.getByTestId("tracker-row-CA-1").parentElement!;
+			fireEvent.click(within(row).getByRole("button", { name: "Labels" }));
+			await waitFor(() =>
+				expect(screen.getByRole("option", { name: "Bug" })).toBeTruthy(),
 			);
 		});
 
@@ -2289,7 +2421,12 @@ describe("TrackerPage projects", () => {
 			render(<TrackerPage />);
 			await waitFor(() => screen.getByText("CA-1"));
 			expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
-			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
+			await waitFor(() =>
+				expect(
+					screen.getAllByText("Labels unavailable").length,
+				).toBeGreaterThan(0),
+			);
+			expect(screen.queryByText("No labels in this workspace")).toBeNull();
 		});
 
 		it("keeps rows visible when members fetch fails", async () => {
@@ -2297,7 +2434,12 @@ describe("TrackerPage projects", () => {
 			render(<TrackerPage />);
 			await waitFor(() => screen.getByText("CA-1"));
 			expect(screen.queryByText(/couldn't load the tracker/i)).toBeNull();
-			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
+			await waitFor(() =>
+				expect(
+					screen.getAllByText("Members unavailable").length,
+				).toBeGreaterThan(0),
+			);
+			expect(screen.queryByText("No members in this workspace")).toBeNull();
 		});
 
 		it("ignores stale labels and members from an older load sequence", async () => {
@@ -2391,14 +2533,32 @@ describe("TrackerPage projects", () => {
 
 			resolveSecondLabels!([sequenceBLabel]);
 			resolveSecondMembers!({ members: [sequenceBMember] });
+			const row = screen.getByTestId("tracker-row-CA-1").parentElement!;
 			await waitFor(() =>
-				expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
-					"Sequence-B-Label",
-				),
+				expect(within(row).queryByText("Loading labels…")).toBeNull(),
 			);
-			expect(screen.getByTestId("tracker-aux-members").textContent).toBe(
-				"Sequence-B-Member",
+			await waitFor(() =>
+				expect(within(row).queryByText("Loading members…")).toBeNull(),
 			);
+			fireEvent.click(within(row).getByRole("button", { name: "Labels" }));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("option", { name: "Sequence-B-Label" }),
+				).toBeTruthy(),
+			);
+			fireEvent.keyDown(
+				screen.getByRole("combobox", { name: "Change or add labels…" }),
+				{ key: "Escape" },
+			);
+			fireEvent.click(within(row).getByRole("button", { name: "Assignees" }));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("option", { name: /Sequence-B-Member/ }),
+				).toBeTruthy(),
+			);
+			fireEvent.keyDown(screen.getByRole("combobox", { name: "Assign to…" }), {
+				key: "Escape",
+			});
 
 			resolveFirstLabels!([
 				{
@@ -2415,12 +2575,28 @@ describe("TrackerPage projects", () => {
 				await Promise.resolve();
 			});
 
-			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
-				"Sequence-B-Label",
+			fireEvent.click(within(row).getByRole("button", { name: "Labels" }));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("option", { name: "Sequence-B-Label" }),
+				).toBeTruthy(),
 			);
-			expect(screen.getByTestId("tracker-aux-members").textContent).toBe(
-				"Sequence-B-Member",
+			expect(
+				screen.queryByRole("option", { name: "Sequence-A-Label" }),
+			).toBeNull();
+			fireEvent.keyDown(
+				screen.getByRole("combobox", { name: "Change or add labels…" }),
+				{ key: "Escape" },
 			);
+			fireEvent.click(within(row).getByRole("button", { name: "Assignees" }));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("option", { name: /Sequence-B-Member/ }),
+				).toBeTruthy(),
+			);
+			expect(
+				screen.queryByRole("option", { name: /Sequence-A-Member/ }),
+			).toBeNull();
 		});
 
 		it("clears labels and members when switching workspace", async () => {
@@ -2454,10 +2630,10 @@ describe("TrackerPage projects", () => {
 			let resolveWorkspaceALabels: (value: TrackerVocabulary[]) => void;
 			let resolveWorkspaceBLabels: (value: TrackerVocabulary[]) => void;
 			let resolveWorkspaceAMembers: (value: {
-				members: typeof workspaceAMember[];
+				members: (typeof workspaceAMember)[];
 			}) => void;
 			let resolveWorkspaceBMembers: (value: {
-				members: typeof workspaceBMember[];
+				members: (typeof workspaceBMember)[];
 			}) => void;
 
 			mockListTrackerVocabularies.mockImplementation(
@@ -2508,8 +2684,8 @@ describe("TrackerPage projects", () => {
 			rerender(<TrackerPage />);
 			await waitFor(() => screen.getByText("CA-1"));
 
-			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
-			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
+			expect(screen.getAllByText("Loading labels…").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Loading members…").length).toBeGreaterThan(0);
 
 			resolveWorkspaceALabels!([workspaceALabel]);
 			resolveWorkspaceAMembers!({ members: [workspaceAMember] });
@@ -2518,18 +2694,33 @@ describe("TrackerPage projects", () => {
 				await Promise.resolve();
 			});
 
-			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
-			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
+			expect(screen.getAllByText("Loading labels…").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Loading members…").length).toBeGreaterThan(0);
 
 			resolveWorkspaceBLabels!([workspaceBLabel]);
 			resolveWorkspaceBMembers!({ members: [workspaceBMember] });
+			const row = screen.getByTestId("tracker-row-CA-1").parentElement!;
 			await waitFor(() =>
-				expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
-					"Workspace-B-Label",
-				),
+				expect(within(row).queryByText("Loading labels…")).toBeNull(),
 			);
-			expect(screen.getByTestId("tracker-aux-members").textContent).toBe(
-				"Workspace-B-Member",
+			await waitFor(() =>
+				expect(within(row).queryByText("Loading members…")).toBeNull(),
+			);
+			fireEvent.click(within(row).getByRole("button", { name: "Labels" }));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("option", { name: "Workspace-B-Label" }),
+				).toBeTruthy(),
+			);
+			fireEvent.keyDown(
+				screen.getByRole("combobox", { name: "Change or add labels…" }),
+				{ key: "Escape" },
+			);
+			fireEvent.click(within(row).getByRole("button", { name: "Assignees" }));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("option", { name: /Workspace-B-Member/ }),
+				).toBeTruthy(),
 			);
 		});
 	});
