@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // client/src/pages/TrackerPage.test.tsx
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -2071,6 +2072,10 @@ describe("TrackerPage projects", () => {
 			]);
 			resolveFirstMembers!({ members: [sequenceAMember] });
 
+			await act(async () => {
+				await Promise.resolve();
+			});
+
 			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe(
 				"Sequence-B-Label",
 			);
@@ -2169,6 +2174,11 @@ describe("TrackerPage projects", () => {
 
 			resolveWorkspaceALabels!([workspaceALabel]);
 			resolveWorkspaceAMembers!({ members: [workspaceAMember] });
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
 			expect(screen.getByTestId("tracker-aux-labels").textContent).toBe("");
 			expect(screen.getByTestId("tracker-aux-members").textContent).toBe("");
 

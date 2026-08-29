@@ -154,6 +154,23 @@ export default function TrackerPage() {
 		[],
 	);
 
+	const loadAuxiliary = async (seq: number) => {
+		if (activeWorkspaceId === null) return;
+		const workspaceId = activeWorkspaceId;
+		const [labelList, memberList] = await Promise.all([
+			api
+				.listTrackerVocabularies(workspaceId, "label")
+				.catch(() => [] as TrackerVocabulary[]),
+			api
+				.getWorkspaceMembers(workspaceId)
+				.then((result) => result.members)
+				.catch(() => [] as WorkspaceMember[]),
+		]);
+		if (seq !== loadSeqRef.current) return;
+		setLabels(labelList);
+		setMembers(memberList);
+	};
+
 	const loadData = useCallback(async (): Promise<boolean> => {
 		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
@@ -197,20 +214,7 @@ export default function TrackerPage() {
 			if (seq === loadSeqRef.current) {
 				setLoading(false);
 				if (primaryOk) {
-					void (async () => {
-						const [labelList, memberList] = await Promise.all([
-							api
-								.listTrackerVocabularies(workspaceId, "label")
-								.catch(() => [] as TrackerVocabulary[]),
-							api
-								.getWorkspaceMembers(workspaceId)
-								.then((result) => result.members)
-								.catch(() => [] as WorkspaceMember[]),
-						]);
-						if (seq !== loadSeqRef.current) return;
-						setLabels(labelList);
-						setMembers(memberList);
-					})();
+					void loadAuxiliary(seq);
 				}
 			}
 		}
