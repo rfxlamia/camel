@@ -265,8 +265,52 @@ export default function TrackerPage() {
 		setCreateOpen(true);
 	};
 
+	const applyStatusMutation = async (
+		workspaceId: number,
+		itemId: number,
+		itemKey: string,
+		itemVersion: number,
+		priorStatus: TrackerVocabulary,
+		nextStatus: TrackerVocabulary,
+	) => {
+		updateItems((prev) =>
+			prev.map((it) =>
+				it.id === itemId ? { ...it, status: nextStatus } : it,
+			),
+		);
+		try {
+			const updated = await api.updateTrackerItem(workspaceId, itemKey, {
+				statusId: nextStatus.id,
+				version: itemVersion,
+			});
+			updateItems((prev) =>
+				prev.map((it) => (it.id === updated.id ? updated : it)),
+			);
+		} catch (err) {
+			updateItems((prev) =>
+				prev.map((it) =>
+					it.id === itemId ? { ...it, status: priorStatus } : it,
+				),
+			);
+			if (err instanceof ApiError && err.code === "version_conflict") {
+				recoveryBlockedItemIdsRef.current.add(itemId);
+				showToast(
+					"Someone else updated this item first — refreshed.",
+					"warning",
+				);
+				await loadData();
+			} else {
+				showToast(
+					"Couldn't change the status. Check your connection and try again.",
+					"error",
+				);
+			}
+		}
+	};
+
 	const changeStatus = (item: TrackerItem, statusId: number) => {
 		if (activeWorkspaceId === null) return;
+		const workspaceId = activeWorkspaceId;
 		void mutationQueueRef.current.enqueue(item.id, async () => {
 			if (recoveryBlockedItemIdsRef.current.has(item.id)) return;
 			const current = itemsRef.current.find((it) => it.id === item.id);
@@ -274,12 +318,6 @@ export default function TrackerPage() {
 			const nextStatus = statuses.find((s) => s.id === statusId);
 			if (!nextStatus) return;
 
-			const priorStatus = current.status;
-			updateItems((prev) =>
-				prev.map((it) =>
-					it.id === item.id ? { ...it, status: nextStatus } : it,
-				),
-			);
 			setCollapsedKeys((prev) => {
 				const key = statusGroupKey(statusId);
 				if (!prev.has(key)) return prev;
@@ -287,38 +325,14 @@ export default function TrackerPage() {
 				next.delete(key);
 				return next;
 			});
-			try {
-				const updated = await api.updateTrackerItem(
-					activeWorkspaceId,
-					current.key,
-					{
-						statusId,
-						version: current.version,
-					},
-				);
-				updateItems((prev) =>
-					prev.map((it) => (it.id === updated.id ? updated : it)),
-				);
-			} catch (err) {
-				updateItems((prev) =>
-					prev.map((it) =>
-						it.id === item.id ? { ...it, status: priorStatus } : it,
-					),
-				);
-				if (err instanceof ApiError && err.code === "version_conflict") {
-					recoveryBlockedItemIdsRef.current.add(item.id);
-					showToast(
-						"Someone else updated this item first — refreshed.",
-						"warning",
-					);
-					await loadData();
-				} else {
-					showToast(
-						"Couldn't change the status. Check your connection and try again.",
-						"error",
-					);
-				}
-			}
+			await applyStatusMutation(
+				workspaceId,
+				item.id,
+				current.key,
+				current.version,
+				current.status,
+				nextStatus,
+			);
 		});
 	};
 
