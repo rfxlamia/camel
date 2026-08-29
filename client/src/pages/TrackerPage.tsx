@@ -13,10 +13,15 @@ import TrackerSection from "../components/tracker/TrackerSection";
 import TrackerTabs, {
 	type TrackerTab,
 } from "../components/tracker/TrackerTabs";
+import type { TrackerAuxiliaryLoadState } from "../components/tracker/trackerAuxiliaryState";
 import { useBoard } from "../context/BoardContext";
+import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
 import { partitionTrackerSearch } from "../lib/trackerSearch";
 import {
 	groupItems,
+	priorityGroupKey,
+	projectGroupKey,
+	resolveToggle,
 	sortStatusesByPosition,
 	statusGroupKey,
 	TRACKER_GROUP_BY_LABELS,
@@ -26,7 +31,12 @@ import {
 	readTrackerGroupBy,
 	writeTrackerGroupBy,
 } from "../lib/trackerViewPrefs";
-import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../types";
 
 const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 
@@ -57,6 +67,12 @@ export default function TrackerPage() {
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [items, setItems] = useState<TrackerItem[]>([]);
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
+	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
+	const [members, setMembers] = useState<WorkspaceMember[]>([]);
+	const [labelsLoadState, setLabelsLoadState] =
+		useState<TrackerAuxiliaryLoadState>("loading");
+	const [membersLoadState, setMembersLoadState] =
+		useState<TrackerAuxiliaryLoadState>("loading");
 	const [search, setSearch] = useState("");
 	const [groupBy, setGroupBy] = useState<TrackerGroupBy>("status");
 	const [groupByOpen, setGroupByOpen] = useState(false);
@@ -66,9 +82,14 @@ export default function TrackerPage() {
 	const [createDefaults, setCreateDefaults] = useState<CreateDefaults>({});
 	const [loading, setLoading] = useState(true);
 	const [loadFailed, setLoadFailed] = useState(false);
-	/** Item ids with a status request in flight, and the pick waiting on it. */
-	const inFlightStatusRef = useRef<Set<number>>(new Set());
-	const queuedStatusRef = useRef<Map<number, number>>(new Map());
+	const mutationQueueRef = useRef(createItemMutationQueue());
+	const itemsRef = useRef<TrackerItem[]>(items);
+	itemsRef.current = items;
+	const labelsRef = useRef<TrackerVocabulary[]>(labels);
+	labelsRef.current = labels;
+	const membersRef = useRef<WorkspaceMember[]>(members);
+	membersRef.current = members;
+	const recoveryBlockedItemIdsRef = useRef(new Set<number>());
 	/** Set while this page is the one changing the location, not the router. */
 	const skipCollapseResetRef = useRef(false);
 	/**
@@ -118,36 +139,122 @@ export default function TrackerPage() {
 		setGroupBy(readTrackerGroupBy(activeWorkspaceId));
 	}, [activeWorkspaceId]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: activeWorkspaceId is the intentional trigger
+	useEffect(() => {
+		setLabels([]);
+		setMembers([]);
+		setLabelsLoadState("loading");
+		setMembersLoadState("loading");
+	}, [activeWorkspaceId]);
+
 	const changeGroupBy = (next: TrackerGroupBy) => {
 		setGroupBy(next);
 		if (activeWorkspaceId !== null)
 			writeTrackerGroupBy(activeWorkspaceId, next);
 	};
 
-	const loadData = useCallback(async () => {
+	const replaceItems = useCallback(
+		(
+			next: TrackerItem[],
+			protectedItemIds: ReadonlySet<number> = new Set<number>(),
+		) => {
+			const currentById = new Map(
+				itemsRef.current.map((item) => [item.id, item] as const),
+			);
+			const merged = next.map((incoming) => {
+				const current = currentById.get(incoming.id);
+				if (!current) return incoming;
+				if (current.version > incoming.version) return current;
+				if (
+					protectedItemIds.has(incoming.id) &&
+					current.version >= incoming.version
+				)
+					return current;
+				if (
+					current.version === incoming.version &&
+					mutationQueueRef.current.hasPending(incoming.id)
+				)
+					return current;
+				return incoming;
+			});
+			itemsRef.current = merged;
+			setItems(merged);
+		},
+		[],
+	);
+
+	const updateItems = useCallback(
+		(updater: (prev: TrackerItem[]) => TrackerItem[]) => {
+			const next = updater(itemsRef.current);
+			itemsRef.current = next;
+			setItems(next);
+		},
+		[],
+	);
+
+	const loadAuxiliary = async (seq: number) => {
 		if (activeWorkspaceId === null) return;
+		const workspaceId = activeWorkspaceId;
+		const [labelResult, memberResult] = await Promise.all([
+			api
+				.listTrackerVocabularies(workspaceId, "label")
+				.then((data) => ({ data, state: "ready" as const }))
+				.catch(() => ({
+					data: [] as TrackerVocabulary[],
+					state: "failed" as const,
+				})),
+			api
+				.getWorkspaceMembers(workspaceId)
+				.then((result) => ({ data: result.members, state: "ready" as const }))
+				.catch(() => ({
+					data: [] as WorkspaceMember[],
+					state: "failed" as const,
+				})),
+		]);
+		if (seq !== loadSeqRef.current) return;
+		setLabels(labelResult.data);
+		setLabelsLoadState(labelResult.state);
+		setMembers(memberResult.data);
+		setMembersLoadState(memberResult.state);
+	};
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAuxiliary is inlined and keyed by load sequence
+	const loadData = useCallback(async (): Promise<boolean> => {
+		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
+		const workspaceId = activeWorkspaceId;
+		const protectedItemIds = new Set(
+			itemsRef.current
+				.filter((item) => mutationQueueRef.current.hasPending(item.id))
+				.map((item) => item.id),
+		);
 		// Only the empty first paint needs a full-page spinner; background
 		// refreshes keep whatever is already on screen.
 		if (itemsLenRef.current === 0 && projectsLenRef.current === 0) {
 			setLoading(true);
 		}
+		let primaryOk = false;
 		try {
 			const [statusList, priorityList, itemList, projectList] =
 				await Promise.all([
-					api.listTrackerVocabularies(activeWorkspaceId, "status"),
-					api.listTrackerVocabularies(activeWorkspaceId, "priority"),
-					api.listTrackerItems(activeWorkspaceId),
-					api.listTrackerProjects(activeWorkspaceId),
+					api.listTrackerVocabularies(workspaceId, "status"),
+					api.listTrackerVocabularies(workspaceId, "priority"),
+					api.listTrackerItems(workspaceId),
+					api.listTrackerProjects(workspaceId),
 				]);
-			if (seq !== loadSeqRef.current) return;
+			if (seq !== loadSeqRef.current) return false;
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
-			setItems(itemList);
+			replaceItems(itemList, protectedItemIds);
+			for (const item of itemList) {
+				recoveryBlockedItemIdsRef.current.delete(item.id);
+			}
 			setProjects(projectList);
 			setLoadFailed(false);
+			primaryOk = true;
+			return true;
 		} catch {
-			if (seq !== loadSeqRef.current) return;
+			if (seq !== loadSeqRef.current) return false;
 			// A failed background refresh must not blank a page that already has
 			// rows on it, so the retry panel is gated on having nothing to show.
 			setLoadFailed(true);
@@ -155,12 +262,16 @@ export default function TrackerPage() {
 				"Couldn't load the tracker. Check your connection and try again.",
 				"error",
 			);
+			return false;
 		} finally {
 			if (seq === loadSeqRef.current) {
 				setLoading(false);
+				if (primaryOk) {
+					void loadAuxiliary(seq);
+				}
 			}
 		}
-	}, [activeWorkspaceId, showToast]);
+	}, [activeWorkspaceId, showToast, replaceItems]);
 
 	useEffect(() => {
 		void loadData();
@@ -196,7 +307,7 @@ export default function TrackerPage() {
 			if (event.type === "tracker.deleted") {
 				const payload = event.payload as { key?: string } | undefined;
 				const { trackerItemId } = event;
-				setItems((prev) =>
+				updateItems((prev) =>
 					prev.filter((item) => {
 						if (payload?.key) return item.key !== payload.key;
 						if (trackerItemId != null) return item.id !== trackerItemId;
@@ -218,7 +329,7 @@ export default function TrackerPage() {
 				void loadData();
 			}
 		});
-	}, [subscribeTrackerEvents, loadData]);
+	}, [subscribeTrackerEvents, loadData, updateItems]);
 
 	const { filteredItems, visibleProjects, searchActive } = useMemo(
 		() => partitionTrackerSearch(items, projects, search),
@@ -231,10 +342,81 @@ export default function TrackerPage() {
 		[filteredItems, groupBy, statuses, priorities, projects],
 	);
 
-	const projectNames = useMemo(
-		() => new Map(projects.map((project) => [project.id, project.name])),
-		[projects],
-	);
+	type ItemPatchBuild = (current: TrackerItem) => {
+		request: {
+			version: number;
+			statusId?: number;
+			startDate?: string | null;
+			endDate?: string | null;
+			projectId?: number | null;
+			phaseId?: number | null;
+			priorityId?: number | null;
+			assigneeIds?: number[];
+			labelIds?: number[];
+		};
+		optimistic: TrackerItem;
+		rollback: (latest: TrackerItem) => TrackerItem;
+	} | null;
+
+	const uncollapseGroupFor = (
+		targetGroupBy: TrackerGroupBy,
+		groupKey: string,
+	) => {
+		setCollapsedKeys((prev) => {
+			if (groupBy !== targetGroupBy) return prev;
+			if (!prev.has(groupKey)) return prev;
+			const next = new Set(prev);
+			next.delete(groupKey);
+			return next;
+		});
+	};
+
+	const applyItemPatch = async (
+		itemId: number,
+		build: ItemPatchBuild,
+		errorMessage: string,
+	): Promise<void> => {
+		if (activeWorkspaceId === null) return;
+		if (recoveryBlockedItemIdsRef.current.has(itemId)) return;
+		const current = itemsRef.current.find((it) => it.id === itemId);
+		if (!current) return;
+		const built = build(current);
+		if (!built) return;
+
+		const workspaceId = activeWorkspaceId;
+		const { request, optimistic, rollback } = built;
+
+		updateItems((prev) =>
+			prev.map((it) => (it.id === itemId ? optimistic : it)),
+		);
+		try {
+			const updated = await api.updateTrackerItem(
+				workspaceId,
+				current.key,
+				request,
+			);
+			updateItems((prev) =>
+				prev.map((it) => (it.id === updated.id ? updated : it)),
+			);
+		} catch (err) {
+			updateItems((prev) =>
+				prev.map((it) => (it.id === itemId ? rollback(it) : it)),
+			);
+			if (err instanceof ApiError && err.code === "version_conflict") {
+				recoveryBlockedItemIdsRef.current.add(itemId);
+				showToast(
+					"Someone else updated this item first — refreshed.",
+					"warning",
+				);
+				const refreshed = await loadData();
+				if (!refreshed) {
+					recoveryBlockedItemIdsRef.current.delete(itemId);
+				}
+			} else {
+				showToast(errorMessage, "error");
+			}
+		}
+	};
 
 	const groupByOptions: PickerOption[] = GROUP_BY_ORDER.map((option) => ({
 		id: option,
@@ -247,67 +429,226 @@ export default function TrackerPage() {
 		setCreateOpen(true);
 	};
 
-	const changeStatus = async (item: TrackerItem, statusId: number) => {
-		if (activeWorkspaceId === null || statusId === item.status.id) return;
-		const nextStatus = statuses.find((s) => s.id === statusId);
-		if (!nextStatus) return;
-
-		if (inFlightStatusRef.current.has(item.id)) {
-			queuedStatusRef.current.set(item.id, statusId);
-			return;
-		}
-		inFlightStatusRef.current.add(item.id);
-		let settled = item;
-
-		setItems((prev) =>
-			prev.map((it) =>
-				it.id === item.id ? { ...it, status: nextStatus } : it,
-			),
-		);
-		setCollapsedKeys((prev) => {
-			const key = statusGroupKey(statusId);
-			if (!prev.has(key)) return prev;
-			const next = new Set(prev);
-			next.delete(key);
-			return next;
+	const changeDate = (
+		item: TrackerItem,
+		dates: { startDate: string | null; endDate: string | null },
+	) => {
+		const nextStart = dates.startDate;
+		const nextEnd = dates.endDate;
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					if (
+						(current.startDate ?? null) === nextStart &&
+						(current.endDate ?? null) === nextEnd
+					) {
+						return null;
+					}
+					return {
+						request: {
+							startDate: nextStart,
+							endDate: nextEnd,
+							version: current.version,
+						},
+						optimistic: {
+							...current,
+							startDate: nextStart,
+							endDate: nextEnd,
+						},
+						rollback: (latest) => ({
+							...latest,
+							startDate: current.startDate,
+							endDate: current.endDate,
+						}),
+					};
+				},
+				"Couldn't update the date. Check your connection and try again.",
+			);
 		});
-		try {
-			const updated = await api.updateTrackerItem(activeWorkspaceId, item.key, {
-				statusId,
-				version: item.version,
+	};
+
+	const changeStatus = (item: TrackerItem, statusId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current || current.status.id === statusId) return;
+			const nextStatus = statuses.find((s) => s.id === statusId);
+			if (!nextStatus) return;
+
+			setCollapsedKeys((prev) => {
+				const key = statusGroupKey(statusId);
+				if (!prev.has(key)) return prev;
+				const next = new Set(prev);
+				next.delete(key);
+				return next;
 			});
-			settled = updated;
-			setItems((prev) =>
-				prev.map((it) => (it.id === updated.id ? updated : it)),
+
+			await applyItemPatch(
+				item.id,
+				(c) => ({
+					request: { statusId, version: c.version },
+					optimistic: { ...c, status: nextStatus },
+					rollback: (latest) => ({ ...latest, status: current.status }),
+				}),
+				"Couldn't change the status. Check your connection and try again.",
 			);
-		} catch (err) {
-			const priorStatus = item.status;
-			setItems((prev) =>
-				prev.map((it) =>
-					it.id === item.id ? { ...it, status: priorStatus } : it,
-				),
+		});
+	};
+
+	const changeProject = (item: TrackerItem, projectId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current || current.projectId === projectId) return;
+
+			uncollapseGroupFor("project", projectGroupKey(projectId));
+
+			await applyItemPatch(
+				item.id,
+				(c) => ({
+					request: {
+						projectId,
+						phaseId: null,
+						version: c.version,
+					},
+					optimistic: { ...c, projectId, phaseId: null },
+					rollback: (latest) => ({
+						...latest,
+						projectId: current.projectId ?? null,
+						phaseId: current.phaseId ?? null,
+					}),
+				}),
+				"Couldn't change the project. Check your connection and try again.",
 			);
-			if (err instanceof ApiError && err.code === "version_conflict") {
-				showToast(
-					"Someone else updated this item first — refreshed.",
-					"warning",
-				);
-				queuedStatusRef.current.delete(item.id);
-				await loadData();
-			} else {
-				showToast(
-					"Couldn't change the status. Check your connection and try again.",
-					"error",
-				);
-			}
-		} finally {
-			inFlightStatusRef.current.delete(item.id);
-			const queued = queuedStatusRef.current.get(item.id);
-			if (queued !== undefined) {
-				queuedStatusRef.current.delete(item.id);
-				void changeStatus(settled, queued);
-			}
-		}
+		});
+	};
+
+	const changePriority = (item: TrackerItem, priorityId: number | null) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current) return;
+
+			uncollapseGroupFor("priority", priorityGroupKey(priorityId));
+
+			await applyItemPatch(
+				item.id,
+				(c) => {
+					const currentPriorityId = c.priority?.id ?? null;
+					if (currentPriorityId === priorityId) return null;
+
+					const nextPriority =
+						priorityId === null
+							? null
+							: (priorities.find((p) => p.id === priorityId) ?? null);
+					if (priorityId !== null && nextPriority === null) return null;
+
+					return {
+						request: { priorityId, version: c.version },
+						optimistic: { ...c, priority: nextPriority },
+						rollback: (latest) => ({ ...latest, priority: current.priority }),
+					};
+				},
+				"Couldn't change the priority. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changePhase = (item: TrackerItem, phaseId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					if (current.phaseId === phaseId) return null;
+					return {
+						request: {
+							projectId: current.projectId ?? null,
+							phaseId,
+							version: current.version,
+						},
+						optimistic: { ...current, phaseId },
+						rollback: (latest) => ({
+							...latest,
+							phaseId: current.phaseId ?? null,
+						}),
+					};
+				},
+				"Couldn't change the phase. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changeAssignee = (item: TrackerItem, toggledId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					const currentIds = current.assignees.map((a) => a.id);
+					const nextIds = resolveToggle(currentIds, toggledId);
+					const nextAssignees = nextIds.map((id) => {
+						const existing = current.assignees.find((a) => a.id === id);
+						if (existing) return existing;
+						const member = membersRef.current.find((m) => m.userId === id);
+						if (!member) return null;
+						return {
+							id: member.userId,
+							username: member.username,
+							displayName: member.displayName,
+						};
+					});
+					if (nextAssignees.some((a) => a === null)) {
+						showToast(
+							"Couldn't update assignees. Check your connection and try again.",
+							"error",
+						);
+						return null;
+					}
+
+					return {
+						request: { assigneeIds: nextIds, version: current.version },
+						optimistic: {
+							...current,
+							assignees: nextAssignees as TrackerItem["assignees"],
+						},
+						rollback: (latest) => ({ ...latest, assignees: current.assignees }),
+					};
+				},
+				"Couldn't update assignees. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changeLabel = (item: TrackerItem, toggledId: number) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			await applyItemPatch(
+				item.id,
+				(current) => {
+					const currentIds = current.labels.map((l) => l.id);
+					const nextIds = resolveToggle(currentIds, toggledId);
+					const nextLabels = nextIds.map((id) => {
+						const existing = current.labels.find((l) => l.id === id);
+						return (
+							existing ?? labelsRef.current.find((l) => l.id === id) ?? null
+						);
+					});
+					if (nextLabels.some((l) => l === null)) {
+						showToast(
+							"Couldn't update labels. Check your connection and try again.",
+							"error",
+						);
+						return null;
+					}
+
+					return {
+						request: { labelIds: nextIds, version: current.version },
+						optimistic: {
+							...current,
+							labels: nextLabels as TrackerVocabulary[],
+						},
+						rollback: (latest) => ({ ...latest, labels: current.labels }),
+					};
+				},
+				"Couldn't update labels. Check your connection and try again.",
+			);
+		});
 	};
 
 	const toggleSection = (key: string) => {
@@ -491,8 +832,25 @@ export default function TrackerPage() {
 								onStatusChange={(item, statusId) =>
 									void changeStatus(item, statusId)
 								}
-								projectNames={projectNames}
-								showProjectChip={groupBy !== "project"}
+								onDateChange={(item, dates) => changeDate(item, dates)}
+								onPriorityChange={(item, priorityId) =>
+									changePriority(item, priorityId)
+								}
+								onProjectChange={(item, projectId) =>
+									changeProject(item, projectId)
+								}
+								onPhaseChange={(item, phaseId) => changePhase(item, phaseId)}
+								projects={projects}
+								members={members}
+								labels={labels}
+								labelsLoadState={labelsLoadState}
+								membersLoadState={membersLoadState}
+								onAssigneeToggle={(item, toggledId) =>
+									changeAssignee(item, toggledId)
+								}
+								onLabelToggle={(item, toggledId) =>
+									changeLabel(item, toggledId)
+								}
 							/>
 						);
 					})}

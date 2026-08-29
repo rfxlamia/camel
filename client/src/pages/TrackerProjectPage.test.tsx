@@ -7,6 +7,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
@@ -229,6 +230,18 @@ describe("TrackerProjectPage", () => {
 		await waitFor(() => screen.getByText("Persiapan"));
 		expect(screen.getByText("50%")).toBeTruthy();
 		expect(screen.getByText(/Sep 5.*Sep 25/)).toBeTruthy();
+	});
+
+	it("keeps WBS task rows free of item property editors", async () => {
+		render(<TrackerProjectPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
+
+		const row = screen.getByTestId("tracker-row-CA-1").parentElement!;
+		expect(
+			within(row).queryByRole("button", { name: "More properties" }),
+		).toBeNull();
+		expect(within(row).queryByRole("button", { name: /^Project:/ })).toBeNull();
+		expect(within(row).queryByRole("button", { name: /^Date:/ })).toBeNull();
 	});
 
 	it('shows a "No phase" section when phase-less tasks exist for this project', async () => {
@@ -961,11 +974,7 @@ describe("TrackerProjectPage drag reorder", () => {
 				screen
 					.getAllByTestId(/^tracker-row-CA-/)
 					.map((row) => row.dataset.testid),
-			).toEqual([
-				"tracker-row-CA-2",
-				"tracker-row-CA-3",
-				"tracker-row-CA-1",
-			]),
+			).toEqual(["tracker-row-CA-2", "tracker-row-CA-3", "tracker-row-CA-1"]),
 		);
 		rejectFirst(new Error("network down"));
 		await waitFor(() =>

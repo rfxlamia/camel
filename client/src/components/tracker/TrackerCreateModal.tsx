@@ -1,7 +1,7 @@
 import { Folder, ListTodo, Signpost, Tag, UserRound, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, resolveToggle, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	TrackerProject,
 	TrackerVocabulary,
@@ -35,8 +35,6 @@ interface Props {
 }
 
 type PickerName = "status" | "priority" | "assignees" | "labels" | "project" | "phase";
-
-const NO_PRIORITY = "none";
 
 export default function TrackerCreateModal({
 	workspaceId,
@@ -180,9 +178,6 @@ export default function TrackerCreateModal({
 			selected: ph.id === phaseId,
 		}),
 	);
-
-	const toggle = (list: number[], id: number) =>
-		list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
 	const summarise = (names: string[]) =>
 		names.length === 0
@@ -402,7 +397,7 @@ export default function TrackerCreateModal({
 									setOpenPicker(open ? "assignees" : null)
 								}
 								onSelect={(id) =>
-									setAssigneeIds((prev) => toggle(prev, Number(id)))
+									setAssigneeIds((prev) => resolveToggle(prev, Number(id)))
 								}
 								multiple
 							/>
@@ -428,7 +423,7 @@ export default function TrackerCreateModal({
 								open={openPicker === "labels"}
 								onOpenChange={(open) => setOpenPicker(open ? "labels" : null)}
 								onSelect={(id) =>
-									setLabelIds((prev) => toggle(prev, Number(id)))
+									setLabelIds((prev) => resolveToggle(prev, Number(id)))
 								}
 								multiple
 							/>

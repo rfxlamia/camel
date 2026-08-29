@@ -1,6 +1,11 @@
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import type { TrackerGroup } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerVocabulary } from "../../types";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
 import {
 	PriorityGlyph,
 	priorityBars,
@@ -8,6 +13,7 @@ import {
 	statusGlyphSpec,
 } from "./TrackerGlyphs";
 import TrackerRow from "./TrackerRow";
+import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
 
 interface Props {
 	group: TrackerGroup;
@@ -18,10 +24,20 @@ interface Props {
 	/** Omitted when the grouping has nothing to preselect on create. */
 	onCreate?: () => void;
 	onStatusChange: (item: TrackerItem, statusId: number) => void;
-	/** Project name per id, for the row chip. */
-	projectNames: Map<number, string>;
-	/** Off while grouping by project — the header already names it. */
-	showProjectChip: boolean;
+	onDateChange: (
+		item: TrackerItem,
+		dates: { startDate: string | null; endDate: string | null },
+	) => void;
+	onPriorityChange?: (item: TrackerItem, priorityId: number | null) => void;
+	onProjectChange?: (item: TrackerItem, projectId: number) => void;
+	onPhaseChange?: (item: TrackerItem, phaseId: number) => void;
+	projects: TrackerProject[];
+	members: WorkspaceMember[];
+	labels: TrackerVocabulary[];
+	labelsLoadState: TrackerAuxiliaryLoadState;
+	membersLoadState: TrackerAuxiliaryLoadState;
+	onAssigneeToggle: (item: TrackerItem, toggledId: number) => void;
+	onLabelToggle: (item: TrackerItem, toggledId: number) => void;
 }
 
 /**
@@ -37,8 +53,17 @@ export default function TrackerSection({
 	onToggle,
 	onCreate,
 	onStatusChange,
-	projectNames,
-	showProjectChip,
+	onDateChange,
+	onPriorityChange,
+	onProjectChange,
+	onPhaseChange,
+	projects,
+	members,
+	labels,
+	labelsLoadState,
+	membersLoadState,
+	onAssigneeToggle,
+	onLabelToggle,
 }: Props) {
 	const glyph = group.status ? (
 		<StatusGlyph spec={statusGlyphSpec(statuses, group.status.id)} size={13} />
@@ -94,12 +119,35 @@ export default function TrackerSection({
 							item={item}
 							statuses={statuses}
 							priorities={priorities}
-							projectLabel={
-								showProjectChip && item.projectId != null
-									? (projectNames.get(item.projectId) ?? null)
-									: null
-							}
+							projects={projects}
 							onStatusChange={(statusId) => onStatusChange(item, statusId)}
+							onDateChange={(dates) => onDateChange(item, dates)}
+							{...(onPriorityChange
+								? {
+										onPriorityChange: (priorityId: number | null) =>
+											onPriorityChange(item, priorityId),
+									}
+								: {})}
+							{...(onProjectChange
+								? {
+										onProjectChange: (projectId: number) =>
+											onProjectChange(item, projectId),
+									}
+								: {})}
+							{...(onPhaseChange
+								? {
+										onPhaseChange: (phaseId: number) =>
+											onPhaseChange(item, phaseId),
+									}
+								: {})}
+							members={members}
+							labels={labels}
+							labelsLoadState={labelsLoadState}
+							membersLoadState={membersLoadState}
+							onAssigneeToggle={(toggledId) =>
+								onAssigneeToggle(item, toggledId)
+							}
+							onLabelToggle={(toggledId) => onLabelToggle(item, toggledId)}
 						/>
 					))}
 				</div>

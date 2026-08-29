@@ -10,6 +10,8 @@ interface Props {
 	idPrefix?: string;
 	/** Chip row uses compact inline fields; the detail rail uses labelled blocks. */
 	layout?: "chips" | "rail";
+	/** Moves focus into a newly opened date popover. */
+	autoFocusStart?: boolean;
 }
 
 export default function TrackerDateFields({
@@ -19,6 +21,7 @@ export default function TrackerDateFields({
 	onEndDateChange,
 	idPrefix = "tracker",
 	layout = "chips",
+	autoFocusStart = false,
 }: Props) {
 	const startId = `${idPrefix}-start-date`;
 	const endId = `${idPrefix}-end-date`;
@@ -32,6 +35,7 @@ export default function TrackerDateFields({
 						id={startId}
 						type="date"
 						aria-label="Start date"
+						autoFocus={autoFocusStart}
 						className={`mt-1 w-full ${inputClass}`}
 						value={startDate}
 						onChange={(e) => onStartDateChange(e.target.value)}
@@ -63,6 +67,7 @@ export default function TrackerDateFields({
 					id={startId}
 					type="date"
 					aria-label="Start date"
+					autoFocus={autoFocusStart}
 					className="border-0 bg-transparent p-0 text-neutral-900 text-sm tabular-nums focus:outline-none"
 					value={startDate}
 					onChange={(e) => onStartDateChange(e.target.value)}

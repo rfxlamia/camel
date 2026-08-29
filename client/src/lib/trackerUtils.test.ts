@@ -5,8 +5,12 @@
 import { describe, expect, it } from "vitest";
 import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
 import {
+	formatDateRange,
 	groupItems,
 	groupItemsByStatus,
+	priorityGroupKey,
+	projectGroupKey,
+	resolveToggle,
 	sortItemsOldestFirst,
 	sortStatusesByPosition,
 } from "./trackerUtils";
@@ -36,6 +40,56 @@ function item(id: number, statusId: number, createdAt: string): TrackerItem {
 		updatedAt: createdAt,
 	};
 }
+
+describe("resolveToggle", () => {
+	it("adds the id when absent", () => {
+		expect(resolveToggle([1], 2)).toEqual([1, 2]);
+	});
+
+	it("removes the id when present", () => {
+		expect(resolveToggle([1, 2], 2)).toEqual([1]);
+	});
+
+	it("adds to an empty list", () => {
+		expect(resolveToggle([], 5)).toEqual([5]);
+	});
+});
+
+describe("formatDateRange", () => {
+	it("formats equal dates as a single day and month", () => {
+		expect(formatDateRange("2026-08-06", "2026-08-06")).toBe("6 Aug");
+	});
+
+	it("formats a range within the same month", () => {
+		expect(formatDateRange("2026-08-06", "2026-08-26")).toBe("6–26 Aug");
+	});
+
+	it("formats a range across different months in the same year", () => {
+		expect(formatDateRange("2026-08-28", "2026-09-03")).toBe("28 Aug–3 Sep");
+	});
+
+	it("formats a range across different years", () => {
+		expect(formatDateRange("2026-12-30", "2027-01-03")).toBe(
+			"30 Dec 2026–3 Jan 2027",
+		);
+	});
+
+	it("formats a single start date when end is unset", () => {
+		expect(formatDateRange("2026-08-06", null)).toBe("6 Aug");
+	});
+
+	it("formats a single end date when start is unset", () => {
+		expect(formatDateRange(null, "2026-08-26")).toBe("26 Aug");
+	});
+
+	it("returns null when both dates are unset", () => {
+		expect(formatDateRange(null, null)).toBeNull();
+	});
+
+	it("returns null for a reversed date range", () => {
+		expect(formatDateRange("2026-08-26", "2026-08-06")).toBeNull();
+	});
+});
 
 describe("sortStatusesByPosition", () => {
 	it("orders statuses by ascending position", () => {
@@ -149,6 +203,26 @@ function groupItem(
 		...overrides,
 	};
 }
+
+describe("projectGroupKey", () => {
+	it("maps a numeric project id to a stable group key", () => {
+		expect(projectGroupKey(42)).toBe("project:42");
+	});
+
+	it("maps null to the loose-project bucket key", () => {
+		expect(projectGroupKey(null)).toBe("project:none");
+	});
+});
+
+describe("priorityGroupKey", () => {
+	it("maps a numeric priority id to a stable group key", () => {
+		expect(priorityGroupKey(10)).toBe("priority:10");
+	});
+
+	it("maps null to the loose-priority bucket key", () => {
+		expect(priorityGroupKey(null)).toBe("priority:none");
+	});
+});
 
 describe("groupItems", () => {
 	const context = { statuses, priorities, projects: [] as TrackerProject[] };

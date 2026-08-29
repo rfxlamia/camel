@@ -1,31 +1,57 @@
-import { useState } from "react";
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
-import type { TrackerItem, TrackerVocabulary } from "../../types";
-import {
-	Avatar,
-	LabelDot,
-	PriorityGlyph,
-	StatusGlyph,
-	priorityBars,
-	statusGlyphSpec,
-} from "./TrackerGlyphs";
+import { Folder, Signpost } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
+import { PriorityGlyph, StatusGlyph, statusGlyphSpec } from "./TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
 } from "./TrackerPropertyPicker";
+import {
+	TrackerRowDatePopover,
+	type TrackerRowDatePopoverHandle,
+} from "./TrackerRowDatePopover";
+import { TrackerRowKebabTrigger } from "./TrackerRowKebabTrigger";
+import { TrackerRowMemberLabelFields } from "./TrackerRowMemberLabel";
 import TrackerRowShell from "./TrackerRowShell";
+import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
+import { buildTrackerRowPickerState } from "./trackerRowPickerOptions";
+
+type OpenPicker =
+	| "date"
+	| "status"
+	| "priority"
+	| "project"
+	| "phase"
+	| "assignees"
+	| "labels"
+	| "kebab"
+	| null;
 
 interface Props {
 	item: TrackerItem;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
 	onStatusChange: (statusId: number) => void;
-	/**
-	 * Project the item belongs to. Rendered as a chip so a mixed list still
-	 * shows where each item lives — omitted when the group header already says
-	 * it, or when the item has no project.
-	 */
-	projectLabel?: string | null;
+	onDateChange?: (dates: {
+		startDate: string | null;
+		endDate: string | null;
+	}) => void;
+	onPriorityChange?: (priorityId: number | null) => void;
+	projects?: TrackerProject[];
+	onProjectChange?: (projectId: number) => void;
+	onPhaseChange?: (phaseId: number) => void;
+	members?: WorkspaceMember[];
+	labels?: TrackerVocabulary[];
+	labelsLoadState?: TrackerAuxiliaryLoadState;
+	membersLoadState?: TrackerAuxiliaryLoadState;
+	onAssigneeToggle?: (toggledId: number) => void;
+	onLabelToggle?: (toggledId: number) => void;
 }
 
 /**
@@ -42,11 +68,59 @@ export default function TrackerRow({
 	statuses,
 	priorities,
 	onStatusChange,
-	projectLabel,
+	onDateChange,
+	onPriorityChange,
+	projects,
+	onProjectChange,
+	onPhaseChange,
+	members,
+	labels,
+	labelsLoadState,
+	membersLoadState,
+	onAssigneeToggle,
+	onLabelToggle,
 }: Props) {
-	const [menuOpen, setMenuOpen] = useState(false);
+	const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
+	const pendingPickerRef = useRef<OpenPicker>(null);
+	const datePopoverRef = useRef<TrackerRowDatePopoverHandle>(null);
+	const kebabRef = useRef<HTMLButtonElement>(null);
 	const glyph = statusGlyphSpec(statuses, item.status.id);
-	const bars = item.priority ? priorityBars(priorities, item.priority.id) : 0;
+	const {
+		selectedProject,
+		selectedPhase,
+		dateLabel,
+		projectLabel,
+		phaseLabel,
+		priorityLabel,
+		bars,
+		projectOptions,
+		phaseOptions,
+		priorityOptions,
+	} = buildTrackerRowPickerState({
+		item,
+		projects,
+		priorities,
+		labels,
+		members,
+	});
+
+	const requestPicker = (next: OpenPicker) => {
+		if (openPicker === "date" && next !== "date" && next !== null) {
+			if (datePopoverRef.current?.tryClose() === false) return;
+			pendingPickerRef.current = next;
+			setOpenPicker(null);
+			return;
+		}
+		setOpenPicker(next);
+	};
+
+	useEffect(() => {
+		if (openPicker === null && pendingPickerRef.current !== null) {
+			const pending = pendingPickerRef.current;
+			pendingPickerRef.current = null;
+			setOpenPicker(pending);
+		}
+	}, [openPicker]);
 
 	const statusOptions: PickerOption[] = sortStatusesByPosition(statuses).map(
 		(status) => ({
@@ -59,12 +133,33 @@ export default function TrackerRow({
 
 	return (
 		<TrackerRowShell itemKey={item.key} itemTitle={item.title}>
-			<span
-				className="hidden shrink-0 sm:block"
-				title={item.priority ? item.priority.name : "No priority"}
-			>
-				<PriorityGlyph bars={bars} size={13} />
-			</span>
+			{onPriorityChange ? (
+				<span
+					data-testid={`row-inline-priority-${item.key}`}
+					className="pointer-events-auto hidden shrink-0 lg:block"
+				>
+					<TrackerPropertyPicker
+						variant="inline"
+						triggerLabel={`Priority: ${priorityLabel}`}
+						placeholder="Priority"
+						searchPlaceholder="Change priority…"
+						icon={<PriorityGlyph bars={bars} size={13} />}
+						options={priorityOptions}
+						open={openPicker === "priority"}
+						onOpenChange={(open) => requestPicker(open ? "priority" : null)}
+						onSelect={(id) =>
+							onPriorityChange(id === NO_PRIORITY ? null : Number(id))
+						}
+					/>
+				</span>
+			) : (
+				<span
+					className="hidden shrink-0 sm:block"
+					title={item.priority ? item.priority.name : "No priority"}
+				>
+					<PriorityGlyph bars={bars} size={13} />
+				</span>
+			)}
 			<span className="w-14 shrink-0 truncate font-mono text-neutral-500 text-xs tabular-nums">
 				{item.key}
 			</span>
@@ -76,54 +171,118 @@ export default function TrackerRow({
 					searchPlaceholder="Change status…"
 					icon={<StatusGlyph spec={glyph} size={13} />}
 					options={statusOptions}
-					open={menuOpen}
-					onOpenChange={setMenuOpen}
+					open={openPicker === "status"}
+					onOpenChange={(open) => requestPicker(open ? "status" : null)}
 					onSelect={(id) => onStatusChange(Number(id))}
 				/>
 			</span>
 			<span className="min-w-0 flex-1 truncate text-neutral-900">
 				{item.title}
 			</span>
-			{projectLabel && (
+			{projects !== undefined && onProjectChange && (
 				<span
-					data-testid={`row-project-${item.key}`}
-					className="inline-block max-w-32 shrink-0 truncate rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs"
+					data-testid={`row-inline-project-${item.key}`}
+					className="pointer-events-auto hidden shrink-0 lg:block"
 				>
-					{projectLabel}
+					<TrackerPropertyPicker
+						placeholder="Set project"
+						value={selectedProject?.name}
+						triggerLabel={`Project: ${projectLabel}`}
+						icon={
+							<Folder
+								size={12}
+								className="shrink-0 text-primary-700"
+								aria-hidden
+							/>
+						}
+						searchPlaceholder="Set project to…"
+						options={projectOptions}
+						open={openPicker === "project"}
+						onOpenChange={(open) => requestPicker(open ? "project" : null)}
+						onSelect={(id) => onProjectChange(Number(id))}
+						size="compact"
+					/>
 				</span>
 			)}
-			<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-				{item.labels.map((label) => (
-					<span
-						key={label.id}
-						className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 py-0.5 pr-2 pl-1.5 text-neutral-600 text-xs"
-					>
-						<LabelDot colour={label.colour} />
-						{label.name}
-					</span>
-				))}
-			</div>
-			<div className="-space-x-1 hidden w-12 shrink-0 items-center justify-end md:flex">
-				{item.assignees.length === 0 ? (
-					<span
-						className="h-[18px] w-[18px] rounded-full border border-neutral-300 border-dashed"
-						aria-hidden
+			{projects !== undefined && onPhaseChange && (
+				<span
+					data-testid={`row-inline-phase-${item.key}`}
+					className="pointer-events-auto hidden shrink-0 lg:block"
+				>
+					<TrackerPropertyPicker
+						placeholder="Set phase"
+						value={selectedPhase?.name}
+						triggerLabel={`Phase: ${phaseLabel}`}
+						icon={
+							<Signpost
+								size={12}
+								className="shrink-0 text-primary-700"
+								aria-hidden
+							/>
+						}
+						searchPlaceholder="Set phase to…"
+						options={phaseOptions}
+						open={openPicker === "phase"}
+						onOpenChange={(open) => requestPicker(open ? "phase" : null)}
+						onSelect={(id) => onPhaseChange(Number(id))}
+						size="compact"
 					/>
-				) : (
-					item.assignees.slice(0, 2).map((a) => (
-						<span key={a.id} title={a.displayName} className="flex">
-							<Avatar name={a.displayName} size={18} />
-						</span>
-					))
-				)}
-			</div>
-			{/* TODO: due date preference on date column */}
-			<time className="hidden w-12 shrink-0 text-right text-neutral-500 text-xs tabular-nums lg:block">
-				{new Date(item.createdAt).toLocaleDateString(undefined, {
-					month: "short",
-					day: "numeric",
-				})}
-			</time>
+				</span>
+			)}
+			<TrackerRowMemberLabelFields
+				item={item}
+				labels={labels}
+				members={members}
+				labelsLoadState={labelsLoadState}
+				membersLoadState={membersLoadState}
+				onLabelToggle={onLabelToggle}
+				onAssigneeToggle={onAssigneeToggle}
+				labelsOpen={openPicker === "labels"}
+				assigneesOpen={openPicker === "assignees"}
+				onLabelsOpenChange={(open) => requestPicker(open ? "labels" : null)}
+				onAssigneesOpenChange={(open) =>
+					requestPicker(open ? "assignees" : null)
+				}
+			/>
+			{onDateChange ? (
+				<span className="pointer-events-auto hidden min-w-[9rem] shrink-0 truncate text-right text-neutral-500 text-xs tabular-nums lg:block">
+					<TrackerRowDatePopover
+						ref={datePopoverRef}
+						startDate={item.startDate ?? null}
+						endDate={item.endDate ?? null}
+						triggerLabel={dateLabel}
+						idPrefix={`tracker-row-inline-${item.key}`}
+						open={openPicker === "date"}
+						onOpenChange={(open) => requestPicker(open ? "date" : null)}
+						onCommit={onDateChange}
+					/>
+				</span>
+			) : (
+				<time className="hidden w-12 shrink-0 text-right text-neutral-500 text-xs tabular-nums lg:block">
+					{new Date(item.createdAt).toLocaleDateString(undefined, {
+						month: "short",
+						day: "numeric",
+					})}
+				</time>
+			)}
+			<TrackerRowKebabTrigger
+				item={item}
+				kebabRef={kebabRef}
+				openPicker={openPicker}
+				requestPicker={requestPicker}
+				projects={projects}
+				priorities={priorities}
+				labels={labels}
+				members={members}
+				labelsLoadState={labelsLoadState}
+				membersLoadState={membersLoadState}
+				{...(onDateChange ? { onDateChange } : {})}
+				{...(onProjectChange ? { onProjectChange } : {})}
+				{...(onPhaseChange ? { onPhaseChange } : {})}
+				{...(onPriorityChange ? { onPriorityChange } : {})}
+				{...(onAssigneeToggle ? { onAssigneeToggle } : {})}
+				{...(onLabelToggle ? { onLabelToggle } : {})}
+			/>
 		</TrackerRowShell>
 	);
 }
