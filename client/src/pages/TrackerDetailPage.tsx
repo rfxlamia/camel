@@ -20,6 +20,7 @@ import TrackerProperties, {
 } from "../components/tracker/TrackerProperties";
 import { useBoard } from "../context/BoardContext";
 import { isTaskOverdue } from "../lib/trackerRollup";
+import { resolveToggle } from "../lib/trackerUtils";
 import type {
 	TrackerEvent,
 	TrackerItem,
@@ -216,15 +217,11 @@ export default function TrackerDetailPage() {
 
 		if (assigneeToggle !== undefined) {
 			const ids = current.assignees.map((a) => a.id);
-			result.assigneeIds = ids.includes(assigneeToggle)
-				? ids.filter((x) => x !== assigneeToggle)
-				: [...ids, assigneeToggle];
+			result.assigneeIds = resolveToggle(ids, assigneeToggle);
 		}
 		if (labelToggle !== undefined) {
 			const ids = current.labels.map((l) => l.id);
-			result.labelIds = ids.includes(labelToggle)
-				? ids.filter((x) => x !== labelToggle)
-				: [...ids, labelToggle];
+			result.labelIds = resolveToggle(ids, labelToggle);
 		}
 		return result;
 	};

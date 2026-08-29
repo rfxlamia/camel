@@ -10,6 +10,7 @@ import {
 	groupItemsByStatus,
 	priorityGroupKey,
 	projectGroupKey,
+	resolveToggle,
 	sortItemsOldestFirst,
 	sortStatusesByPosition,
 } from "./trackerUtils";
@@ -39,6 +40,20 @@ function item(id: number, statusId: number, createdAt: string): TrackerItem {
 		updatedAt: createdAt,
 	};
 }
+
+describe("resolveToggle", () => {
+	it("adds the id when absent", () => {
+		expect(resolveToggle([1], 2)).toEqual([1, 2]);
+	});
+
+	it("removes the id when present", () => {
+		expect(resolveToggle([1, 2], 2)).toEqual([1]);
+	});
+
+	it("adds to an empty list", () => {
+		expect(resolveToggle([], 5)).toEqual([5]);
+	});
+});
 
 describe("formatDateRange", () => {
 	it("formats equal dates as a single day and month", () => {
