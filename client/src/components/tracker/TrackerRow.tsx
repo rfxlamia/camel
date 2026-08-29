@@ -12,7 +12,7 @@ import {
 	StatusGlyph,
 	statusGlyphSpec,
 } from "./TrackerGlyphs";
-import { TrackerRowKebabMenu } from "./TrackerRowKebabMenu";
+import { TrackerRowKebabTrigger } from "./TrackerRowKebabTrigger";
 import { TrackerRowMemberLabelFields } from "./TrackerRowMemberLabel";
 import {
 	type PickerOption,
@@ -123,15 +123,6 @@ export default function TrackerRow({
 			icon: <StatusGlyph spec={statusGlyphSpec(statuses, status.id)} />,
 			selected: status.id === item.status.id,
 		}),
-	);
-
-	const hasKebabHandlers = Boolean(
-		onDateChange ||
-			onProjectChange ||
-			onPhaseChange ||
-			onPriorityChange ||
-			onAssigneeToggle ||
-			onLabelToggle,
 	);
 
 	return (
@@ -265,41 +256,22 @@ export default function TrackerRow({
 					})}
 				</time>
 			)}
-			{hasKebabHandlers ? (
-				<span className="pointer-events-auto shrink-0">
-					<button
-						ref={kebabRef}
-						type="button"
-						aria-label="More properties"
-						aria-haspopup="dialog"
-						aria-expanded={openPicker === "kebab"}
-						data-testid={`row-more-${item.key}`}
-						onClick={() =>
-							requestPicker(openPicker === "kebab" ? null : "kebab")
-						}
-						className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200 lg:hidden"
-					>
-						<span aria-hidden>⋯</span>
-					</button>
-					<TrackerRowKebabMenu
-						anchorRef={kebabRef}
-						idPrefix={`tracker-row-menu-${item.key}`}
-						item={item}
-						open={openPicker === "kebab"}
-						onOpenChange={(open) => requestPicker(open ? "kebab" : null)}
-						projects={projects}
-						priorities={priorities}
-						labels={labels}
-						members={members}
-						{...(onDateChange ? { onDateChange } : {})}
-						{...(onProjectChange ? { onProjectChange } : {})}
-						{...(onPhaseChange ? { onPhaseChange } : {})}
-						{...(onPriorityChange ? { onPriorityChange } : {})}
-						{...(onAssigneeToggle ? { onAssigneeToggle } : {})}
-						{...(onLabelToggle ? { onLabelToggle } : {})}
-					/>
-				</span>
-			) : null}
+			<TrackerRowKebabTrigger
+				item={item}
+				kebabRef={kebabRef}
+				openPicker={openPicker}
+				requestPicker={requestPicker}
+				projects={projects}
+				priorities={priorities}
+				labels={labels}
+				members={members}
+				{...(onDateChange ? { onDateChange } : {})}
+				{...(onProjectChange ? { onProjectChange } : {})}
+				{...(onPhaseChange ? { onPhaseChange } : {})}
+				{...(onPriorityChange ? { onPriorityChange } : {})}
+				{...(onAssigneeToggle ? { onAssigneeToggle } : {})}
+				{...(onLabelToggle ? { onLabelToggle } : {})}
+			/>
 		</TrackerRowShell>
 	);
 }

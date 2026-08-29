@@ -117,4 +117,19 @@ describe("TrackerRow", () => {
 		expect(kebab.className).toContain("lg:hidden");
 		expect(kebab.getAttribute("data-testid")).toBe("row-more-CA-1");
 	});
+
+	it("renders no kebab trigger when all six field handlers are omitted", () => {
+		renderRow({
+			onDateChange: undefined,
+			onProjectChange: undefined,
+			onPhaseChange: undefined,
+			onPriorityChange: undefined,
+			onAssigneeToggle: undefined,
+			onLabelToggle: undefined,
+		});
+
+		expect(
+			screen.queryByRole("button", { name: "More properties" }),
+		).toBeNull();
+	});
 });

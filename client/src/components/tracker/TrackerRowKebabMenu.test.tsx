@@ -238,6 +238,52 @@ describe("TrackerRowKebabMenu", () => {
 			).toBeTruthy();
 		});
 
+		it("commits date once when closing the panel with an open date field", () => {
+			const onDateChange = vi.fn();
+			const onOpenChange = vi.fn();
+			renderKebab({ onDateChange, onOpenChange });
+
+			const panel = getPanel();
+			const scope = within(panel);
+
+			fireEvent.click(scope.getByRole("button", { name: "Date: Set date" }));
+			fireEvent.change(screen.getByLabelText("Start date"), {
+				target: { value: "2026-08-06" },
+			});
+			fireEvent.click(
+				scope.getByRole("button", { name: "Close properties panel" }),
+			);
+
+			expect(onDateChange).toHaveBeenCalledTimes(1);
+			expect(onDateChange).toHaveBeenCalledWith({
+				startDate: "2026-08-06",
+				endDate: null,
+			});
+			expect(onOpenChange).toHaveBeenCalledWith(false);
+		});
+
+		it("commits date once when pressing Escape with an open date field", () => {
+			const onDateChange = vi.fn();
+			const onOpenChange = vi.fn();
+			renderKebab({ onDateChange, onOpenChange });
+
+			const panel = getPanel();
+			const scope = within(panel);
+
+			fireEvent.click(scope.getByRole("button", { name: "Date: Set date" }));
+			fireEvent.change(screen.getByLabelText("Start date"), {
+				target: { value: "2026-08-06" },
+			});
+			fireEvent.keyDown(document, { key: "Escape" });
+
+			expect(onDateChange).toHaveBeenCalledTimes(1);
+			expect(onDateChange).toHaveBeenCalledWith({
+				startDate: "2026-08-06",
+				endDate: null,
+			});
+			expect(onOpenChange).toHaveBeenCalledWith(false);
+		});
+
 		it("returns focus to the kebab anchor when the panel closes", () => {
 			const onOpenChange = vi.fn();
 			const anchorRef = { current: null as HTMLButtonElement | null };
