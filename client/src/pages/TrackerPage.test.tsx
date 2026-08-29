@@ -345,7 +345,7 @@ describe("TrackerPage", () => {
 		await waitFor(() => expect(screen.getByText("Backlog")).toBeTruthy());
 		expect(screen.getByText("CA-1")).toBeTruthy();
 		expect(screen.getByText("Workspace Rename")).toBeTruthy();
-		expect(screen.getByText("Feature")).toBeTruthy();
+		expect(screen.getByTitle("Feature")).toBeTruthy();
 		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
 	});
 
@@ -1180,8 +1180,9 @@ describe("TrackerPage", () => {
 				}),
 			);
 			await waitFor(() => {
-				const btn = within(ca1Row()).getByRole("button", { name: "Assignees" });
-				expect(btn.textContent).toContain("Alice +2");
+				const stack = within(ca1Row()).getByTestId("row-avatar-stack-CA-1");
+				expect(within(stack).getByTitle("Alice")).toBeTruthy();
+				expect(within(stack).getByTitle("Bob")).toBeTruthy();
 			});
 		});
 
@@ -1290,8 +1291,8 @@ describe("TrackerPage", () => {
 				}),
 			);
 			await waitFor(() => {
-				const btn = within(ca1Row()).getByRole("button", { name: "Assignees" });
-				expect(btn.textContent).toContain("Bob");
+				const stack = within(ca1Row()).getByTestId("row-avatar-stack-CA-1");
+				expect(within(stack).getByTitle("Bob")).toBeTruthy();
 			});
 			openAssigneePicker();
 			expect(

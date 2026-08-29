@@ -495,6 +495,108 @@ describe("TrackerRow", () => {
 		).toBeTruthy();
 	});
 
+	it("styles an unset row-size property differently from a chosen one", () => {
+		renderRow();
+		const chosen = screen.getByRole("button", { name: "Project: Rilis v2" });
+		expect(chosen.className).toContain("text-neutral-700");
+		expect(chosen.className).not.toContain("text-neutral-500");
+		cleanup();
+
+		renderRow({ item: makeRowItem({ projectId: null, phaseId: null }) });
+		const unset = screen.getByRole("button", {
+			name: "Project: Set project",
+		});
+		expect(unset.className).toContain("text-neutral-500");
+		expect(unset.className).not.toContain("text-neutral-700");
+	});
+
+	it("renders assignees/labels as icon-only clusters, not visible name text", () => {
+		renderRow();
+
+		const assigneesField = screen.getByTestId("row-inline-assignees-CA-1");
+		expect(
+			within(assigneesField).getByTestId("row-avatar-stack-CA-1"),
+		).toBeTruthy();
+		expect(within(assigneesField).queryByText("Alice")).toBeNull();
+		expect(
+			within(assigneesField).getByRole("button", { name: "Assignees" }),
+		).toBeTruthy();
+
+		const labelsField = screen.getByTestId("row-inline-labels-CA-1");
+		expect(within(labelsField).getByTestId("row-label-dots-CA-1")).toBeTruthy();
+		expect(within(labelsField).queryByText("Feature")).toBeNull();
+		expect(
+			within(labelsField).getByRole("button", { name: "Labels" }),
+		).toBeTruthy();
+	});
+
+	describe("row-size wrapper does not clip its own popover", () => {
+		const rowSizeFields: Array<{
+			kind: Exclude<PickerKind, "kebab" | "date" | "status">;
+			testId: string;
+			openQuery: { role: "combobox"; name: string };
+		}> = [
+			{
+				kind: "project",
+				testId: "row-inline-project-CA-1",
+				openQuery: OPEN_QUERIES.project,
+			},
+			{
+				kind: "phase",
+				testId: "row-inline-phase-CA-1",
+				openQuery: OPEN_QUERIES.phase,
+			},
+			{
+				kind: "labels",
+				testId: "row-inline-labels-CA-1",
+				openQuery: OPEN_QUERIES.labels,
+			},
+			{
+				kind: "assignees",
+				testId: "row-inline-assignees-CA-1",
+				openQuery: OPEN_QUERIES.assignees,
+			},
+		];
+
+		it.each(
+			rowSizeFields,
+		)("$kind: fixed-width wrapper has no overflow-hidden, and its popover is reachable within the row (no portal)", async ({
+			kind,
+			testId,
+			openQuery,
+		}) => {
+			renderRow();
+
+			const wrapper = screen.getByTestId(testId);
+			expect(wrapper.className).not.toMatch(/\boverflow-hidden\b/);
+
+			clickTrigger(kind);
+			await waitFor(() => {
+				expect(
+					within(wrapper).getByRole(openQuery.role, {
+						name: openQuery.name,
+					}),
+				).toBeTruthy();
+			});
+		});
+	});
+
+	it("renders the same avatar-stack/dot-cluster helpers, with per-item name tooltips, when read-only", () => {
+		renderRow({ onAssigneeToggle: undefined, onLabelToggle: undefined });
+
+		const avatarStack = screen.getByTestId("row-avatar-stack-CA-1");
+		expect(avatarStack.closest("button")).toBeNull();
+		expect(screen.getByTitle("Alice")).toBeTruthy();
+		expect(screen.queryByRole("combobox", { name: "Assign to…" })).toBeNull();
+
+		const labelDots = screen.getByTestId("row-label-dots-CA-1");
+		expect(labelDots.closest("button")).toBeNull();
+		expect(screen.getByTitle("Feature")).toBeTruthy();
+		expect(
+			screen.queryByRole("combobox", { name: "Change or add labels…" }),
+		).toBeNull();
+	});
+
 	it("renders read-only createdAt and isolates navigation from inline triggers", () => {
 		renderRow({
 			item: makeRowItem(),

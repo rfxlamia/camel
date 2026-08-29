@@ -211,3 +211,76 @@ export function Avatar({ name, size = 18 }: { name: string; size?: number }) {
 		</span>
 	);
 }
+
+/**
+ * Quiet, name-free trigger content for a row's assignee field — up to 2
+ * overlapping avatars, each carrying the real name in a native tooltip so
+ * identity is still discoverable without a bordered name pill.
+ */
+export function AvatarStack({
+	members,
+	testId,
+}: {
+	members: { id: number; displayName: string }[];
+	testId?: string;
+}) {
+	return (
+		<span
+			data-testid={testId}
+			className="-space-x-1 flex shrink-0 items-center"
+		>
+			{members.length === 0 ? (
+				<span
+					className="h-[18px] w-[18px] rounded-full border border-neutral-300 border-dashed"
+					aria-hidden
+				/>
+			) : (
+				members.slice(0, 2).map((m) => (
+					<span key={m.id} title={m.displayName} className="flex">
+						<Avatar name={m.displayName} size={18} />
+					</span>
+				))
+			)}
+		</span>
+	);
+}
+
+const LABEL_DOT_CLUSTER_MAX = 3;
+
+/**
+ * Quiet, name-free trigger content for a row's label field — colored dots
+ * only, each carrying the real name in a native tooltip.
+ */
+export function LabelDotCluster({
+	labels,
+	testId,
+}: {
+	labels: { id: number; name: string; colour: string }[];
+	testId?: string;
+}) {
+	const shown = labels.slice(0, LABEL_DOT_CLUSTER_MAX);
+	const overflow = labels.length - shown.length;
+	return (
+		<span data-testid={testId} className="flex shrink-0 items-center gap-1">
+			{labels.length === 0 ? (
+				<span
+					className="h-2.5 w-2.5 rounded-full border border-neutral-300 border-dashed"
+					aria-hidden
+				/>
+			) : (
+				<>
+					{shown.map((l) => (
+						<span key={l.id} title={l.name} className="flex">
+							<LabelDot colour={l.colour} />
+						</span>
+					))}
+					{overflow > 0 && (
+						<span className="text-[10px] text-neutral-500" aria-hidden>
+							+{overflow}
+						</span>
+					)}
+				</>
+			)}
+		</span>
+	);
+}

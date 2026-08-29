@@ -11,8 +11,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-	POPOVER_WIDTH,
 	computePopoverPosition,
+	POPOVER_WIDTH,
 } from "../../lib/popoverPlacement";
 
 export interface PickerOption {
@@ -48,8 +48,19 @@ interface Props {
 	triggerLabel?: string;
 	/** Anchors the popover to the trigger's right edge instead of its left. */
 	align?: "left" | "right";
-	/** Compact matches label chips in the detail rail. */
-	size?: "default" | "compact";
+	/**
+	 * "compact" matches label chips in the detail rail. "row" is the quiet,
+	 * borderless trigger for a tracker list row — placeholder text with no
+	 * pill, chosen values as a tinted pill, per the creative brief's
+	 * borderless Badge/Tag atom.
+	 */
+	size?: "default" | "compact" | "row";
+	/**
+	 * Suppresses the value/placeholder text on a "chip" trigger, leaving only
+	 * the icon — the same visual idea as "inline", without switching variant
+	 * (so the popover stays non-portaled).
+	 */
+	iconOnly?: boolean;
 }
 
 export function TrackerPropertyPicker({
@@ -66,6 +77,7 @@ export function TrackerPropertyPicker({
 	triggerLabel,
 	align = "left",
 	size = "default",
+	iconOnly = false,
 }: Props) {
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
@@ -195,6 +207,7 @@ export function TrackerPropertyPicker({
 	const chosen = value !== undefined;
 	const inline = variant === "inline";
 	const compact = size === "compact";
+	const isRow = size === "row";
 	const popoverPanelClassName =
 		"w-60 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(23,42,62,0.12)]";
 
@@ -210,9 +223,7 @@ export function TrackerPropertyPicker({
 				aria-controls={listboxId}
 				aria-autocomplete="list"
 				aria-activedescendant={
-					filtered[active]
-						? `${listboxId}-${filtered[active].id}`
-						: undefined
+					filtered[active] ? `${listboxId}-${filtered[active].id}` : undefined
 				}
 				placeholder={searchPlaceholder}
 				onChange={(e) => {
@@ -246,9 +257,7 @@ export function TrackerPropertyPicker({
 								}`}
 							>
 								{option.icon}
-								<span className="min-w-0 flex-1 truncate">
-									{option.label}
-								</span>
+								<span className="min-w-0 flex-1 truncate">{option.label}</span>
 								{option.hint && (
 									<span className="shrink-0 text-neutral-500 text-xs">
 										{option.hint}
@@ -298,46 +307,56 @@ export function TrackerPropertyPicker({
 										? "border-neutral-200 bg-white hover:bg-neutral-50"
 										: "border-neutral-200 bg-white hover:bg-neutral-50"
 								} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
-							: `inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
-									chosen
-										? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
-										: "border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-								} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
+							: isRow
+								? `inline-flex w-full min-w-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+										chosen
+											? "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+											: "text-neutral-500 hover:bg-neutral-100"
+									} ${open ? "shadow-[0_0_0_2px_oklch(55%_0.076_250_/_0.35)]" : ""}`
+								: `inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+										chosen
+											? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
+											: "border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+									} ${open ? "border-primary-600 shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.12)]" : ""}`
 				}
 			>
 				{icon}
-				{!inline && (
-					<span className="max-w-40 truncate">{value ?? placeholder}</span>
+				{!inline && !iconOnly && (
+					<span
+						className={isRow ? "min-w-0 flex-1 truncate" : "max-w-40 truncate"}
+					>
+						{value ?? placeholder}
+					</span>
 				)}
 			</button>
 
 			{open &&
-				(inline
-					? createPortal(
-							<div
-								ref={popoverRef}
-								style={{
-									position: "fixed",
-									top: popoverCoords?.top ?? 0,
-									left: popoverCoords?.left ?? 0,
-									zIndex: 50,
-									visibility: popoverPositioned ? "visible" : "hidden",
-								}}
-								className={popoverPanelClassName}
-							>
-								{popoverPanel}
-							</div>,
-							document.body,
-						)
-					: (
-							<div
-								className={`absolute top-full z-50 mt-1.5 ${popoverPanelClassName} ${
-									align === "right" ? "right-0" : "left-0"
-								}`}
-							>
-								{popoverPanel}
-							</div>
-						))}
+				(inline ? (
+					createPortal(
+						<div
+							ref={popoverRef}
+							style={{
+								position: "fixed",
+								top: popoverCoords?.top ?? 0,
+								left: popoverCoords?.left ?? 0,
+								zIndex: 50,
+								visibility: popoverPositioned ? "visible" : "hidden",
+							}}
+							className={popoverPanelClassName}
+						>
+							{popoverPanel}
+						</div>,
+						document.body,
+					)
+				) : (
+					<div
+						className={`absolute top-full z-50 mt-1.5 ${popoverPanelClassName} ${
+							align === "right" ? "right-0" : "left-0"
+						}`}
+					>
+						{popoverPanel}
+					</div>
+				))}
 		</div>
 	);
 }

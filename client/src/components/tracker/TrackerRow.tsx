@@ -182,7 +182,7 @@ export default function TrackerRow({
 			{projects !== undefined && onProjectChange && (
 				<span
 					data-testid={`row-inline-project-${item.key}`}
-					className="pointer-events-auto hidden shrink-0 lg:block"
+					className="pointer-events-auto hidden w-28 shrink-0 lg:block"
 				>
 					<TrackerPropertyPicker
 						placeholder="Set project"
@@ -200,14 +200,14 @@ export default function TrackerRow({
 						open={openPicker === "project"}
 						onOpenChange={(open) => requestPicker(open ? "project" : null)}
 						onSelect={(id) => onProjectChange(Number(id))}
-						size="compact"
+						size="row"
 					/>
 				</span>
 			)}
 			{projects !== undefined && onPhaseChange && (
 				<span
 					data-testid={`row-inline-phase-${item.key}`}
-					className="pointer-events-auto hidden shrink-0 lg:block"
+					className="pointer-events-auto hidden w-24 shrink-0 lg:block"
 				>
 					<TrackerPropertyPicker
 						placeholder="Set phase"
@@ -225,7 +225,7 @@ export default function TrackerRow({
 						open={openPicker === "phase"}
 						onOpenChange={(open) => requestPicker(open ? "phase" : null)}
 						onSelect={(id) => onPhaseChange(Number(id))}
-						size="compact"
+						size="row"
 					/>
 				</span>
 			)}

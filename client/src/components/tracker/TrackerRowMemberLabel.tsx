@@ -1,11 +1,15 @@
-import { Tag, UserRound } from "lucide-react";
 import { sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../../types";
-import { Avatar, LabelDot } from "./TrackerGlyphs";
+import {
+	Avatar,
+	AvatarStack,
+	LabelDot,
+	LabelDotCluster,
+} from "./TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
@@ -97,7 +101,7 @@ export function TrackerRowMemberLabelFields({
 			{labels !== undefined && onLabelToggle ? (
 				<span
 					data-testid={`row-inline-labels-${item.key}`}
-					className="pointer-events-auto hidden shrink-0 items-center lg:flex"
+					className="pointer-events-auto hidden w-14 shrink-0 items-center lg:flex"
 				>
 					{effectiveLabelsLoadState === "ready" && labels.length > 0 ? (
 						<TrackerPropertyPicker
@@ -105,15 +109,10 @@ export function TrackerRowMemberLabelFields({
 							value={labelValue}
 							triggerLabel="Labels"
 							icon={
-								item.labels.length > 0 ? (
-									<LabelDot colour={item.labels[0].colour} />
-								) : (
-									<Tag
-										size={12}
-										className="shrink-0 text-neutral-500"
-										aria-hidden
-									/>
-								)
+								<LabelDotCluster
+									labels={item.labels}
+									testId={`row-label-dots-${item.key}`}
+								/>
 							}
 							searchPlaceholder="Change or add labels…"
 							options={labelOptions}
@@ -121,31 +120,27 @@ export function TrackerRowMemberLabelFields({
 							onOpenChange={onLabelsOpenChange}
 							onSelect={(id) => onLabelToggle(Number(id))}
 							multiple
-							size="compact"
+							size="row"
+							iconOnly
 						/>
 					) : (
-						<span className="px-1 text-neutral-500 text-xs">
+						<span className="w-full min-w-0 truncate px-1 text-neutral-500 text-xs">
 							{trackerAuxiliaryMessage("labels", effectiveLabelsLoadState)}
 						</span>
 					)}
 				</span>
 			) : (
-				<div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-					{item.labels.map((label) => (
-						<span
-							key={label.id}
-							className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 py-0.5 pr-2 pl-1.5 text-neutral-600 text-xs"
-						>
-							<LabelDot colour={label.colour} />
-							{label.name}
-						</span>
-					))}
+				<div className="hidden w-14 shrink-0 items-center overflow-hidden sm:flex">
+					<LabelDotCluster
+						labels={item.labels}
+						testId={`row-label-dots-${item.key}`}
+					/>
 				</div>
 			)}
 			{members !== undefined && onAssigneeToggle ? (
 				<span
 					data-testid={`row-inline-assignees-${item.key}`}
-					className="pointer-events-auto hidden shrink-0 items-center lg:flex"
+					className="pointer-events-auto hidden w-12 shrink-0 items-center lg:flex"
 				>
 					{effectiveMembersLoadState === "ready" && members.length > 0 ? (
 						<TrackerPropertyPicker
@@ -153,15 +148,10 @@ export function TrackerRowMemberLabelFields({
 							value={assigneeValue}
 							triggerLabel="Assignees"
 							icon={
-								item.assignees.length > 0 ? (
-									<Avatar name={item.assignees[0].displayName} size={16} />
-								) : (
-									<UserRound
-										size={14}
-										className="shrink-0 text-neutral-500"
-										aria-hidden
-									/>
-								)
+								<AvatarStack
+									members={item.assignees}
+									testId={`row-avatar-stack-${item.key}`}
+								/>
 							}
 							searchPlaceholder="Assign to…"
 							options={assigneeOptions}
@@ -169,28 +159,21 @@ export function TrackerRowMemberLabelFields({
 							onOpenChange={onAssigneesOpenChange}
 							onSelect={(id) => onAssigneeToggle(Number(id))}
 							multiple
-							size="compact"
+							size="row"
+							iconOnly
 						/>
 					) : (
-						<span className="px-1 text-neutral-500 text-xs">
+						<span className="w-full min-w-0 truncate px-1 text-neutral-500 text-xs">
 							{trackerAuxiliaryMessage("members", effectiveMembersLoadState)}
 						</span>
 					)}
 				</span>
 			) : (
-				<div className="-space-x-1 hidden w-12 shrink-0 items-center justify-end md:flex">
-					{item.assignees.length === 0 ? (
-						<span
-							className="h-[18px] w-[18px] rounded-full border border-neutral-300 border-dashed"
-							aria-hidden
-						/>
-					) : (
-						item.assignees.slice(0, 2).map((a) => (
-							<span key={a.id} title={a.displayName} className="flex">
-								<Avatar name={a.displayName} size={18} />
-							</span>
-						))
-					)}
+				<div className="hidden w-12 shrink-0 items-center justify-end overflow-hidden md:flex">
+					<AvatarStack
+						members={item.assignees}
+						testId={`row-avatar-stack-${item.key}`}
+					/>
 				</div>
 			)}
 		</>
