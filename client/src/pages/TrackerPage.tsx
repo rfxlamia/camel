@@ -29,7 +29,12 @@ import {
 	readTrackerGroupBy,
 	writeTrackerGroupBy,
 } from "../lib/trackerViewPrefs";
-import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
+import type {
+	TrackerItem,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../types";
 
 const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 
@@ -60,6 +65,8 @@ export default function TrackerPage() {
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [items, setItems] = useState<TrackerItem[]>([]);
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
+	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
+	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [search, setSearch] = useState("");
 	const [groupBy, setGroupBy] = useState<TrackerGroupBy>("status");
 	const [groupByOpen, setGroupByOpen] = useState(false);
@@ -122,6 +129,11 @@ export default function TrackerPage() {
 		setGroupBy(readTrackerGroupBy(activeWorkspaceId));
 	}, [activeWorkspaceId]);
 
+	useEffect(() => {
+		setLabels([]);
+		setMembers([]);
+	}, [activeWorkspaceId]);
+
 	const changeGroupBy = (next: TrackerGroupBy) => {
 		setGroupBy(next);
 		if (activeWorkspaceId !== null)
@@ -145,18 +157,20 @@ export default function TrackerPage() {
 	const loadData = useCallback(async (): Promise<boolean> => {
 		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
+		const workspaceId = activeWorkspaceId;
 		// Only the empty first paint needs a full-page spinner; background
 		// refreshes keep whatever is already on screen.
 		if (itemsLenRef.current === 0 && projectsLenRef.current === 0) {
 			setLoading(true);
 		}
+		let primaryOk = false;
 		try {
 			const [statusList, priorityList, itemList, projectList] =
 				await Promise.all([
-					api.listTrackerVocabularies(activeWorkspaceId, "status"),
-					api.listTrackerVocabularies(activeWorkspaceId, "priority"),
-					api.listTrackerItems(activeWorkspaceId),
-					api.listTrackerProjects(activeWorkspaceId),
+					api.listTrackerVocabularies(workspaceId, "status"),
+					api.listTrackerVocabularies(workspaceId, "priority"),
+					api.listTrackerItems(workspaceId),
+					api.listTrackerProjects(workspaceId),
 				]);
 			if (seq !== loadSeqRef.current) return false;
 			setStatuses(sortStatusesByPosition(statusList));
@@ -167,6 +181,7 @@ export default function TrackerPage() {
 			}
 			setProjects(projectList);
 			setLoadFailed(false);
+			primaryOk = true;
 			return true;
 		} catch {
 			if (seq !== loadSeqRef.current) return false;
@@ -181,6 +196,22 @@ export default function TrackerPage() {
 		} finally {
 			if (seq === loadSeqRef.current) {
 				setLoading(false);
+				if (primaryOk) {
+					void (async () => {
+						const [labelList, memberList] = await Promise.all([
+							api
+								.listTrackerVocabularies(workspaceId, "label")
+								.catch(() => [] as TrackerVocabulary[]),
+							api
+								.getWorkspaceMembers(workspaceId)
+								.then((result) => result.members)
+								.catch(() => [] as WorkspaceMember[]),
+						]);
+						if (seq !== loadSeqRef.current) return;
+						setLabels(labelList);
+						setMembers(memberList);
+					})();
+				}
 			}
 		}
 	}, [activeWorkspaceId, showToast, replaceItems]);
@@ -498,6 +529,12 @@ export default function TrackerPage() {
 
 	return (
 		<div className="min-h-full">
+			<div data-testid="tracker-aux-labels" hidden>
+				{labels.map((label) => label.name).join(",")}
+			</div>
+			<div data-testid="tracker-aux-members" hidden>
+				{members.map((member) => member.displayName).join(",")}
+			</div>
 			<div className="sticky top-0 z-20 bg-white">
 				<TrackerTabs
 					value={tab}
