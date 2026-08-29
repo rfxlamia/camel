@@ -283,3 +283,9 @@ export function groupItems(
 	}
 	return groups;
 }
+
+export function resolveToggle(currentIds: number[], toggledId: number): number[] {
+	return currentIds.includes(toggledId)
+		? currentIds.filter((id) => id !== toggledId)
+		: [...currentIds, toggledId];
+}
