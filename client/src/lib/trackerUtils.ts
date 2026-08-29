@@ -117,6 +117,9 @@ export function groupItemsByStatus(
 	return byStatus;
 }
 
+/** Sentinel id for the "No priority" picker option — not a real vocabulary id. */
+export const NO_PRIORITY = "none";
+
 export type TrackerGroupBy = "status" | "project" | "priority";
 
 export const TRACKER_GROUP_BY_LABELS: Record<TrackerGroupBy, string> = {

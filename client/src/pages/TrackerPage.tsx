@@ -18,6 +18,7 @@ import { partitionTrackerSearch } from "../lib/trackerSearch";
 import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
 import {
 	groupItems,
+	priorityGroupKey,
 	projectGroupKey,
 	sortStatusesByPosition,
 	statusGroupKey,
@@ -261,10 +262,24 @@ export default function TrackerPage() {
 			endDate?: string | null;
 			projectId?: number | null;
 			phaseId?: number | null;
+			priorityId?: number | null;
 		};
 		optimistic: TrackerItem;
 		rollback: (latest: TrackerItem) => TrackerItem;
 	} | null;
+
+	const uncollapseGroupFor = (
+		targetGroupBy: TrackerGroupBy,
+		groupKey: string,
+	) => {
+		setCollapsedKeys((prev) => {
+			if (groupBy !== targetGroupBy) return prev;
+			if (!prev.has(groupKey)) return prev;
+			const next = new Set(prev);
+			next.delete(groupKey);
+			return next;
+		});
+	};
 
 	const applyItemPatch = async (
 		itemId: number,
@@ -392,14 +407,7 @@ export default function TrackerPage() {
 			const current = itemsRef.current.find((it) => it.id === item.id);
 			if (!current || current.projectId === projectId) return;
 
-			setCollapsedKeys((prev) => {
-				if (groupBy !== "project") return prev;
-				const key = projectGroupKey(projectId);
-				if (!prev.has(key)) return prev;
-				const next = new Set(prev);
-				next.delete(key);
-				return next;
-			});
+			uncollapseGroupFor("project", projectGroupKey(projectId));
 
 			await applyItemPatch(
 				item.id,
@@ -417,6 +425,36 @@ export default function TrackerPage() {
 					}),
 				}),
 				"Couldn't change the project. Check your connection and try again.",
+			);
+		});
+	};
+
+	const changePriority = (item: TrackerItem, priorityId: number | null) => {
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current) return;
+
+			uncollapseGroupFor("priority", priorityGroupKey(priorityId));
+
+			await applyItemPatch(
+				item.id,
+				(c) => {
+					const currentPriorityId = c.priority?.id ?? null;
+					if (currentPriorityId === priorityId) return null;
+
+					const nextPriority =
+						priorityId === null
+							? null
+							: (priorities.find((p) => p.id === priorityId) ?? null);
+					if (priorityId !== null && nextPriority === null) return null;
+
+					return {
+						request: { priorityId, version: c.version },
+						optimistic: { ...c, priority: nextPriority },
+						rollback: (latest) => ({ ...latest, priority: current.priority }),
+					};
+				},
+				"Couldn't change the priority. Check your connection and try again.",
 			);
 		});
 	};
@@ -627,6 +665,9 @@ export default function TrackerPage() {
 									void changeStatus(item, statusId)
 								}
 								onDateChange={(item, dates) => changeDate(item, dates)}
+								onPriorityChange={(item, priorityId) =>
+									changePriority(item, priorityId)
+								}
 								onProjectChange={(item, projectId) =>
 									changeProject(item, projectId)
 								}

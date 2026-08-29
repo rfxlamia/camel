@@ -1,6 +1,6 @@
 import { Plus, Tag, UserRound } from "lucide-react";
 import { useState } from "react";
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerVocabulary,
@@ -38,8 +38,6 @@ interface Props {
 }
 
 type PickerName = "status" | "priority" | "assignees" | "labels";
-
-const NO_PRIORITY = "none";
 
 function formatDate(iso: string): string {
 	return new Date(iso).toLocaleDateString(undefined, {

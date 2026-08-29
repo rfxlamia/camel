@@ -1,7 +1,7 @@
 import { Folder, ListTodo, Signpost, Tag, UserRound, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	TrackerProject,
 	TrackerVocabulary,
@@ -35,8 +35,6 @@ interface Props {
 }
 
 type PickerName = "status" | "priority" | "assignees" | "labels" | "project" | "phase";
-
-const NO_PRIORITY = "none";
 
 export default function TrackerCreateModal({
 	workspaceId,

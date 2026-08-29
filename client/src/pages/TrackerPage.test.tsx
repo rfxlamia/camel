@@ -1419,6 +1419,280 @@ describe("TrackerPage items tab", () => {
 		expect(within(listbox).queryAllByRole("option")).toHaveLength(0);
 	});
 
+	it("changes priority inline from the row glyph", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Prioritize me",
+				priority: priorities[0]!,
+				version: 2,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Prioritize me",
+				priority: priorities[1]!,
+				version: 3,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-1"));
+		const row = screen.getByTestId("tracker-row-TE-1").parentElement!;
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-1", {
+				priorityId: 11,
+				version: 2,
+			}),
+		);
+	});
+
+	it('clears priority when selecting "No priority"', async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Clear priority",
+				priority: priorities[0]!,
+				version: 2,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Clear priority",
+				priority: null,
+				version: 3,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-1"));
+		const row = screen.getByTestId("tracker-row-TE-1").parentElement!;
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^No priority$/ }));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-1", {
+				priorityId: null,
+				version: 2,
+			}),
+		);
+	});
+
+	it("does not PATCH when re-picking the current priority", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Stay high",
+				priority: priorities[0]!,
+				version: 2,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-1"));
+		const row = screen.getByTestId("tracker-row-TE-1").parentElement!;
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^High$/ }));
+
+		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+	});
+
+	it("re-picks the original priority after an in-flight change settles", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Priority race",
+				priority: priorities[0]!,
+				version: 2,
+			}),
+		]);
+		let resolveFirst: ((item: TrackerItem) => void) | undefined;
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise<TrackerItem>((resolve) => {
+						resolveFirst = resolve;
+					}),
+			)
+			.mockResolvedValueOnce(
+				makeItem({
+					id: 1,
+					key: "TE-1",
+					title: "Priority race",
+					priority: priorities[0]!,
+					version: 4,
+				}),
+			);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-1"));
+		const row = screen.getByTestId("tracker-row-TE-1").parentElement!;
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: Low", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^High$/ }));
+		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+
+		resolveFirst?.(
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Priority race",
+				priority: priorities[1]!,
+				version: 3,
+			}),
+		);
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "TE-1", {
+			priorityId: 10,
+			version: 3,
+		});
+	});
+
+	it("auto-uncollapses the destination priority group after a priority change", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Move priority",
+				priority: priorities[0]!,
+				version: 2,
+			}),
+			makeItem({
+				id: 2,
+				key: "TE-2",
+				title: "Already low",
+				priority: priorities[1]!,
+				version: 1,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 1,
+				key: "TE-1",
+				title: "Move priority",
+				priority: priorities[1]!,
+				version: 3,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByText("TE-1"));
+
+		fireEvent.click(screen.getByRole("button", { name: /group by: status/i }));
+		fireEvent.click(screen.getByRole("option", { name: /^Priority$/ }));
+		await waitFor(() =>
+			expect(screen.getByTestId("toggle-section-Low")).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByTestId("toggle-section-Low"));
+		expect(screen.queryByText("TE-2")).toBeNull();
+		expect(screen.getByText("TE-1")).toBeTruthy();
+
+		const row = screen.getByTestId("tracker-row-TE-1").parentElement!;
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByText("TE-2")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("TE-1")).toBeTruthy());
+	});
+
+	it("queues priority change after project change with fresh version", async () => {
+		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
+		mockListTrackerItems.mockResolvedValueOnce([
+			inProjectItem({
+				id: 5,
+				key: "TE-5",
+				title: "Cross field",
+				priority: priorities[0]!,
+				version: 4,
+			}),
+		]);
+		let resolveProject: ((item: TrackerItem) => void) | undefined;
+		mockUpdateTrackerItem
+			.mockImplementationOnce(
+				() =>
+					new Promise<TrackerItem>((resolve) => {
+						resolveProject = resolve;
+					}),
+			)
+			.mockResolvedValueOnce(
+				inProjectItem({
+					id: 5,
+					key: "TE-5",
+					title: "Cross field",
+					projectId: P2,
+					phaseId: null,
+					priority: priorities[1]!,
+					version: 6,
+				}),
+			);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-5"));
+		const row = screen.getByTestId("tracker-row-TE-5").parentElement!;
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Project: Rilis v2" }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
+
+		fireEvent.click(
+			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
+		);
+		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-5", {
+			projectId: P2,
+			phaseId: null,
+			version: 4,
+		});
+
+		resolveProject?.(
+			inProjectItem({
+				id: 5,
+				key: "TE-5",
+				title: "Cross field",
+				projectId: P2,
+				phaseId: null,
+				priority: priorities[0]!,
+				version: 5,
+			}),
+		);
+
+		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "TE-5", {
+			priorityId: 11,
+			version: 5,
+		});
+	});
+
 	it("auto-uncollapses the destination project group after a project change", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
 		mockListTrackerItems.mockResolvedValueOnce([

@@ -1,6 +1,6 @@
 import { Folder, Signpost } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { formatDateRange, sortStatusesByPosition } from "../../lib/trackerUtils";
+import { formatDateRange, NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../../types";
 import {
 	Avatar,
@@ -17,7 +17,7 @@ import {
 import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
 import TrackerRowShell from "./TrackerRowShell";
 
-type OpenPicker = "date" | "status" | "project" | "phase" | null;
+type OpenPicker = "date" | "status" | "priority" | "project" | "phase" | null;
 
 interface Props {
 	item: TrackerItem;
@@ -28,6 +28,7 @@ interface Props {
 		startDate: string | null;
 		endDate: string | null;
 	}) => void;
+	onPriorityChange?: (priorityId: number | null) => void;
 	projects?: TrackerProject[];
 	onProjectChange?: (projectId: number) => void;
 	onPhaseChange?: (phaseId: number) => void;
@@ -48,6 +49,7 @@ export default function TrackerRow({
 	priorities,
 	onStatusChange,
 	onDateChange,
+	onPriorityChange,
 	projects,
 	onProjectChange,
 	onPhaseChange,
@@ -108,14 +110,57 @@ export default function TrackerRow({
 		}),
 	);
 
+	const orderedPriorities = sortStatusesByPosition(priorities);
+	const priorityLabel = item.priority?.name ?? "No priority";
+	const priorityOptions: PickerOption[] = [
+		{
+			id: NO_PRIORITY,
+			label: "No priority",
+			selected: item.priority === null,
+			icon: <PriorityGlyph bars={0} size={13} />,
+		},
+		...orderedPriorities.map((priority) => ({
+			id: String(priority.id),
+			label: priority.name,
+			selected: priority.id === item.priority?.id,
+			icon: (
+				<PriorityGlyph
+					bars={priorityBars(orderedPriorities, priority.id)}
+					size={13}
+				/>
+			),
+		})),
+	];
+
 	return (
 		<TrackerRowShell itemKey={item.key} itemTitle={item.title}>
-			<span
-				className="hidden shrink-0 sm:block"
-				title={item.priority ? item.priority.name : "No priority"}
-			>
-				<PriorityGlyph bars={bars} size={13} />
-			</span>
+			{onPriorityChange ? (
+				<span
+					data-testid={`row-inline-priority-${item.key}`}
+					className="pointer-events-auto hidden shrink-0 sm:block"
+				>
+					<TrackerPropertyPicker
+						variant="inline"
+						triggerLabel={`Priority: ${priorityLabel}`}
+						placeholder="Priority"
+						searchPlaceholder="Change priority…"
+						icon={<PriorityGlyph bars={bars} size={13} />}
+						options={priorityOptions}
+						open={openPicker === "priority"}
+						onOpenChange={(open) => requestPicker(open ? "priority" : null)}
+						onSelect={(id) =>
+							onPriorityChange(id === NO_PRIORITY ? null : Number(id))
+						}
+					/>
+				</span>
+			) : (
+				<span
+					className="hidden shrink-0 sm:block"
+					title={item.priority ? item.priority.name : "No priority"}
+				>
+					<PriorityGlyph bars={bars} size={13} />
+				</span>
+			)}
 			<span className="w-14 shrink-0 truncate font-mono text-neutral-500 text-xs tabular-nums">
 				{item.key}
 			</span>

@@ -22,6 +22,7 @@ interface Props {
 		item: TrackerItem,
 		dates: { startDate: string | null; endDate: string | null },
 	) => void;
+	onPriorityChange?: (item: TrackerItem, priorityId: number | null) => void;
 	onProjectChange?: (item: TrackerItem, projectId: number) => void;
 	onPhaseChange?: (item: TrackerItem, phaseId: number) => void;
 	projects: TrackerProject[];
@@ -41,6 +42,7 @@ export default function TrackerSection({
 	onCreate,
 	onStatusChange,
 	onDateChange,
+	onPriorityChange,
 	onProjectChange,
 	onPhaseChange,
 	projects,
@@ -102,6 +104,9 @@ export default function TrackerSection({
 							projects={projects}
 							onStatusChange={(statusId) => onStatusChange(item, statusId)}
 							onDateChange={(dates) => onDateChange(item, dates)}
+							onPriorityChange={(priorityId) =>
+								onPriorityChange?.(item, priorityId)
+							}
 							onProjectChange={(projectId) =>
 								onProjectChange?.(item, projectId)
 							}
