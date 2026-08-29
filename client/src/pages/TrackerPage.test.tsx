@@ -124,7 +124,7 @@ const statuses: TrackerVocabulary[] = [
 		name: "Todo",
 		position: 2000,
 		colour: "oklch(0.7 0.1 180)",
-		category: "unstarted",
+		category: "backlog",
 	},
 ];
 
@@ -336,6 +336,161 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		expect(screen.getByLabelText("Backlog, CA-1")).toBeTruthy();
+	});
+
+	it("sets both dates from the row date popover", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: null,
+				endDate: null,
+				version: 3,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: "2026-08-06",
+				endDate: "2026-08-26",
+				version: 4,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-4"));
+
+		fireEvent.click(screen.getByLabelText("Date: Set date"));
+		fireEvent.change(screen.getByLabelText("Start date"), {
+			target: { value: "2026-08-06" },
+		});
+		fireEvent.change(screen.getByLabelText("End date"), {
+			target: { value: "2026-08-26" },
+		});
+		fireEvent.click(screen.getByLabelText("Close date picker"));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-4", {
+				startDate: "2026-08-06",
+				endDate: "2026-08-26",
+				version: 3,
+			}),
+		);
+		await waitFor(() =>
+			expect(screen.getByLabelText("Date: 6–26 Aug")).toBeTruthy(),
+		);
+	});
+
+	it("does not PATCH when the date popover closes without edits", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: "2026-08-06",
+				endDate: "2026-08-26",
+				version: 3,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-4"));
+
+		fireEvent.click(screen.getByLabelText("Date: 6–26 Aug"));
+		fireEvent.click(screen.getByLabelText("Close date picker"));
+
+		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+	});
+
+	it("reverts the date and refetches after a version conflict", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: null,
+				endDate: null,
+				version: 3,
+			}),
+		]);
+		mockUpdateTrackerItem.mockRejectedValueOnce(
+			new ApiError("conflict", 409, "version_conflict"),
+		);
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: null,
+				endDate: null,
+				version: 4,
+			}),
+		]);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-4"));
+
+		fireEvent.click(screen.getByLabelText("Date: Set date"));
+		fireEvent.change(screen.getByLabelText("Start date"), {
+			target: { value: "2026-08-06" },
+		});
+		fireEvent.change(screen.getByLabelText("End date"), {
+			target: { value: "2026-08-26" },
+		});
+		fireEvent.click(screen.getByLabelText("Close date picker"));
+
+		await waitFor(() =>
+			expect(mockShowToast).toHaveBeenCalledWith(
+				"Someone else updated this item first — refreshed.",
+				"warning",
+			),
+		);
+		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		expect(screen.getByLabelText("Date: Set date")).toBeTruthy();
+	});
+
+	it("commits an edited date draft before opening the status picker", async () => {
+		mockListTrackerItems.mockResolvedValueOnce([
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: null,
+				endDate: null,
+				version: 3,
+			}),
+		]);
+		mockUpdateTrackerItem.mockResolvedValue(
+			makeItem({
+				id: 4,
+				key: "TE-4",
+				title: "Schedule me",
+				startDate: "2026-08-06",
+				endDate: "2026-08-26",
+				version: 4,
+			}),
+		);
+		render(<TrackerPage />);
+		await waitFor(() => screen.getByTestId("tracker-row-TE-4"));
+
+		fireEvent.click(screen.getByLabelText("Date: Set date"));
+		fireEvent.change(screen.getByLabelText("Start date"), {
+			target: { value: "2026-08-06" },
+		});
+		fireEvent.change(screen.getByLabelText("End date"), {
+			target: { value: "2026-08-26" },
+		});
+		fireEvent.click(screen.getByLabelText("Backlog, TE-4"));
+
+		await waitFor(() =>
+			expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1),
+		);
+		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-4", {
+			startDate: "2026-08-06",
+			endDate: "2026-08-26",
+			version: 3,
+		});
+		expect(screen.getByRole("option", { name: /In Progress/ })).toBeTruthy();
 	});
 
 	it("changes status inline from the row glyph without navigating", async () => {

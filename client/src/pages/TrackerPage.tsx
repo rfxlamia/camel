@@ -126,16 +126,19 @@ export default function TrackerPage() {
 			writeTrackerGroupBy(activeWorkspaceId, next);
 	};
 
-	const replaceItems = (next: TrackerItem[]) => {
+	const replaceItems = useCallback((next: TrackerItem[]) => {
 		itemsRef.current = next;
 		setItems(next);
-	};
+	}, []);
 
-	const updateItems = (updater: (prev: TrackerItem[]) => TrackerItem[]) => {
-		const next = updater(itemsRef.current);
-		itemsRef.current = next;
-		setItems(next);
-	};
+	const updateItems = useCallback(
+		(updater: (prev: TrackerItem[]) => TrackerItem[]) => {
+			const next = updater(itemsRef.current);
+			itemsRef.current = next;
+			setItems(next);
+		},
+		[],
+	);
 
 	const loadData = useCallback(async (): Promise<boolean> => {
 		if (activeWorkspaceId === null) return false;
@@ -178,7 +181,7 @@ export default function TrackerPage() {
 				setLoading(false);
 			}
 		}
-	}, [activeWorkspaceId, showToast]);
+	}, [activeWorkspaceId, showToast, replaceItems]);
 
 	useEffect(() => {
 		void loadData();
@@ -236,7 +239,7 @@ export default function TrackerPage() {
 				void loadData();
 			}
 		});
-	}, [subscribeTrackerEvents, loadData]);
+	}, [subscribeTrackerEvents, loadData, updateItems]);
 
 	const { filteredItems, visibleProjects, searchActive } = useMemo(
 		() => partitionTrackerSearch(items, projects, search),
@@ -263,6 +266,87 @@ export default function TrackerPage() {
 	const openCreate = (defaults: CreateDefaults = {}) => {
 		setCreateDefaults(defaults);
 		setCreateOpen(true);
+	};
+
+	const applyDateMutation = async (
+		workspaceId: number,
+		itemId: number,
+		itemKey: string,
+		itemVersion: number,
+		priorStartDate: string | null | undefined,
+		priorEndDate: string | null | undefined,
+		nextStartDate: string | null,
+		nextEndDate: string | null,
+	) => {
+		updateItems((prev) =>
+			prev.map((it) =>
+				it.id === itemId
+					? { ...it, startDate: nextStartDate, endDate: nextEndDate }
+					: it,
+			),
+		);
+		try {
+			const updated = await api.updateTrackerItem(workspaceId, itemKey, {
+				startDate: nextStartDate,
+				endDate: nextEndDate,
+				version: itemVersion,
+			});
+			updateItems((prev) =>
+				prev.map((it) => (it.id === updated.id ? updated : it)),
+			);
+		} catch (err) {
+			updateItems((prev) =>
+				prev.map((it) =>
+					it.id === itemId
+						? { ...it, startDate: priorStartDate, endDate: priorEndDate }
+						: it,
+				),
+			);
+			if (err instanceof ApiError && err.code === "version_conflict") {
+				recoveryBlockedItemIdsRef.current.add(itemId);
+				showToast(
+					"Someone else updated this item first — refreshed.",
+					"warning",
+				);
+				await loadData();
+			} else {
+				showToast(
+					"Couldn't update the date. Check your connection and try again.",
+					"error",
+				);
+			}
+		}
+	};
+
+	const changeDate = (
+		item: TrackerItem,
+		dates: { startDate: string | null; endDate: string | null },
+	) => {
+		if (activeWorkspaceId === null) return;
+		const workspaceId = activeWorkspaceId;
+		void mutationQueueRef.current.enqueue(item.id, async () => {
+			if (recoveryBlockedItemIdsRef.current.has(item.id)) return;
+			const current = itemsRef.current.find((it) => it.id === item.id);
+			if (!current) return;
+			const nextStart = dates.startDate;
+			const nextEnd = dates.endDate;
+			if (
+				(current.startDate ?? null) === nextStart &&
+				(current.endDate ?? null) === nextEnd
+			) {
+				return;
+			}
+			await applyDateMutation(
+				workspaceId,
+				item.id,
+				current.key,
+				current.version,
+				current.startDate,
+				current.endDate,
+				nextStart,
+				nextEnd,
+			);
+		});
 	};
 
 	const applyStatusMutation = async (
@@ -517,6 +601,7 @@ export default function TrackerPage() {
 								onStatusChange={(item, statusId) =>
 									void changeStatus(item, statusId)
 								}
+								onDateChange={(item, dates) => changeDate(item, dates)}
 								projectNames={projectNames}
 								showProjectChip={groupBy !== "project"}
 							/>

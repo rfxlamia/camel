@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import { useEffect, useRef, useState } from "react";
+import { formatDateRange, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type { TrackerItem, TrackerVocabulary } from "../../types";
 import {
 	Avatar,
@@ -13,13 +13,20 @@ import {
 	type PickerOption,
 	TrackerPropertyPicker,
 } from "./TrackerPropertyPicker";
+import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
 import TrackerRowShell from "./TrackerRowShell";
+
+type OpenPicker = "date" | "status" | null;
 
 interface Props {
 	item: TrackerItem;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
 	onStatusChange: (statusId: number) => void;
+	onDateChange?: (dates: {
+		startDate: string | null;
+		endDate: string | null;
+	}) => void;
 	/**
 	 * Project the item belongs to. Rendered as a chip so a mixed list still
 	 * shows where each item lives — omitted when the group header already says
@@ -42,11 +49,33 @@ export default function TrackerRow({
 	statuses,
 	priorities,
 	onStatusChange,
+	onDateChange,
 	projectLabel,
 }: Props) {
-	const [menuOpen, setMenuOpen] = useState(false);
+	const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
+	const pendingPickerRef = useRef<OpenPicker>(null);
 	const glyph = statusGlyphSpec(statuses, item.status.id);
 	const bars = item.priority ? priorityBars(priorities, item.priority.id) : 0;
+	const dateLabel =
+		formatDateRange(item.startDate ?? null, item.endDate ?? null) ??
+		"Set date";
+
+	const requestPicker = (next: OpenPicker) => {
+		if (openPicker === "date" && next !== "date" && next !== null) {
+			pendingPickerRef.current = next;
+			setOpenPicker(null);
+			return;
+		}
+		setOpenPicker(next);
+	};
+
+	useEffect(() => {
+		if (openPicker === null && pendingPickerRef.current !== null) {
+			const pending = pendingPickerRef.current;
+			pendingPickerRef.current = null;
+			setOpenPicker(pending);
+		}
+	}, [openPicker]);
 
 	const statusOptions: PickerOption[] = sortStatusesByPosition(statuses).map(
 		(status) => ({
@@ -76,8 +105,8 @@ export default function TrackerRow({
 					searchPlaceholder="Change status…"
 					icon={<StatusGlyph spec={glyph} size={13} />}
 					options={statusOptions}
-					open={menuOpen}
-					onOpenChange={setMenuOpen}
+					open={openPicker === "status"}
+					onOpenChange={(open) => requestPicker(open ? "status" : null)}
 					onSelect={(id) => onStatusChange(Number(id))}
 				/>
 			</span>
@@ -117,13 +146,26 @@ export default function TrackerRow({
 					))
 				)}
 			</div>
-			{/* TODO: due date preference on date column */}
-			<time className="hidden w-12 shrink-0 text-right text-neutral-500 text-xs tabular-nums lg:block">
-				{new Date(item.createdAt).toLocaleDateString(undefined, {
-					month: "short",
-					day: "numeric",
-				})}
-			</time>
+			{onDateChange ? (
+				<span className="pointer-events-auto hidden min-w-[9rem] shrink-0 truncate text-right text-neutral-500 text-xs tabular-nums lg:block">
+					<TrackerRowDatePopover
+						startDate={item.startDate ?? null}
+						endDate={item.endDate ?? null}
+						triggerLabel={dateLabel}
+						idPrefix={`tracker-row-inline-${item.key}`}
+						open={openPicker === "date"}
+						onOpenChange={(open) => requestPicker(open ? "date" : null)}
+						onCommit={onDateChange}
+					/>
+				</span>
+			) : (
+				<time className="hidden w-12 shrink-0 text-right text-neutral-500 text-xs tabular-nums lg:block">
+					{new Date(item.createdAt).toLocaleDateString(undefined, {
+						month: "short",
+						day: "numeric",
+					})}
+				</time>
+			)}
 		</TrackerRowShell>
 	);
 }

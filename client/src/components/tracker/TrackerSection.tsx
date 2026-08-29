@@ -18,6 +18,10 @@ interface Props {
 	/** Omitted when the grouping has nothing to preselect on create. */
 	onCreate?: () => void;
 	onStatusChange: (item: TrackerItem, statusId: number) => void;
+	onDateChange: (
+		item: TrackerItem,
+		dates: { startDate: string | null; endDate: string | null },
+	) => void;
 	/** Project name per id, for the row chip. */
 	projectNames: Map<number, string>;
 	/** Off while grouping by project — the header already names it. */
@@ -37,6 +41,7 @@ export default function TrackerSection({
 	onToggle,
 	onCreate,
 	onStatusChange,
+	onDateChange,
 	projectNames,
 	showProjectChip,
 }: Props) {
@@ -100,6 +105,7 @@ export default function TrackerSection({
 									: null
 							}
 							onStatusChange={(statusId) => onStatusChange(item, statusId)}
+							onDateChange={(dates) => onDateChange(item, dates)}
 						/>
 					))}
 				</div>
