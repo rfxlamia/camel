@@ -92,14 +92,12 @@ async function setupFixtures() {
      VALUES ($1, $2, 'owner') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
 		[WORKSPACE_ID, mockTestUser.id],
 	);
-
-	await seedTrackerVocabulary(db, WORKSPACE_ID);
 }
 
 beforeEach(async () => {
 	await setupFixtures();
 	await cleanup();
-	await setupFixtures();
+	await seedTrackerVocabulary(db, WORKSPACE_ID);
 	vi.clearAllMocks();
 });
 

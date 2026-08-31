@@ -72,6 +72,7 @@ import cookieParser from "cookie-parser";
 // ---------------------------------------------------------------------------
 import express from "express";
 import request from "supertest";
+import { seedTrackerVocabulary } from "./core/tracker-vocabulary-seed.js";
 import { db } from "./db/kysely.js";
 import { pool } from "./db/pool.js";
 import { api } from "./routes.js";
@@ -100,6 +101,31 @@ const app = createTestApp();
 /** Column IDs assigned during beforeEach setup. */
 let col1Id: number;
 let col2Id: number; // has wip_limit = 2
+const columnStatusIds = new Map<number, number>();
+
+async function statusIdForColumn(columnId: number) {
+	const cached = columnStatusIds.get(columnId);
+	if (cached !== undefined) return cached;
+	const column = await db
+		.selectFrom("columns")
+		.select(["title", "is_done"])
+		.where("id", "=", columnId)
+		.executeTakeFirstOrThrow();
+	const slot = column.is_done
+		? "done"
+		: column.title === "In Progress"
+			? "in_progress"
+			: "backlog";
+	const status = await db
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("workspace_id", "=", WS_ID)
+		.where("kind", "=", "status")
+		.where("slot", "=", slot)
+		.executeTakeFirstOrThrow();
+	columnStatusIds.set(columnId, status.id);
+	return status.id;
+}
 
 async function setupFixtures() {
 	// User — idempotent so multiple test files sharing user id=1 don't collide
@@ -139,7 +165,13 @@ async function setupFixtures() {
 
 	// Columns — clear workspace fixtures then insert predictable set
 	await db.deleteFrom("cards").where("workspace_id", "=", WS_ID).execute();
+	await db
+		.deleteFrom("tracker_vocabularies")
+		.where("workspace_id", "=", WS_ID)
+		.execute();
 	await db.deleteFrom("columns").where("workspace_id", "=", WS_ID).execute();
+	await seedTrackerVocabulary(db, WS_ID);
+	columnStatusIds.clear();
 
 	const cols = await db
 		.insertInto("columns")
@@ -187,6 +219,7 @@ async function insertCard(
 			position,
 			version,
 			workspace_id: WS_ID,
+			status_id: await statusIdForColumn(columnId),
 		})
 		.returning("id")
 		.executeTakeFirstOrThrow();

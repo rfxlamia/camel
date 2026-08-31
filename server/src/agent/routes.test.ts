@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import {
 	buildArtifactDownload,
@@ -104,6 +105,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		let userId: number;
 		let workspaceId: number;
 		let boardId: number;
+		let backlogStatusId: number;
 
 		beforeAll(async () => {
 			const user = await db
@@ -126,6 +128,15 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
+			await seedTrackerVocabulary(db, workspaceId);
+			const backlog = await db
+				.selectFrom("tracker_vocabularies")
+				.select("id")
+				.where("workspace_id", "=", workspaceId)
+				.where("kind", "=", "status")
+				.where("slot", "=", "backlog")
+				.executeTakeFirstOrThrow();
+			backlogStatusId = backlog.id;
 			const board = await db
 				.insertInto("agent_boards")
 				.values({
@@ -399,6 +410,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 						column_id: column.id,
 						position: 1000,
 						workspace_id: workspaceId,
+						status_id: backlogStatusId,
 					})
 					.execute();
 

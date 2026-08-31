@@ -9,6 +9,7 @@
  */
 import "dotenv/config";
 import { afterAll, describe, expect, expectTypeOf, it } from "vitest";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
 import { recordActivity } from "../../routes/helpers.js";
 import { getTicketHistory } from "./history.js";
@@ -38,6 +39,14 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("getTicketHistory", () => {
 			})
 			.returning("id")
 			.executeTakeFirstOrThrow();
+		await seedTrackerVocabulary(db, workspace.id);
+		const backlog = await db
+			.selectFrom("tracker_vocabularies")
+			.select("id")
+			.where("workspace_id", "=", workspace.id)
+			.where("kind", "=", "status")
+			.where("slot", "=", "backlog")
+			.executeTakeFirstOrThrow();
 		const column = await db
 			.insertInto("columns")
 			.values({ title: "Backlog", position: 1000, workspace_id: workspace.id })
@@ -50,6 +59,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("getTicketHistory", () => {
 				column_id: column.id,
 				position: 1000,
 				workspace_id: workspace.id,
+				status_id: backlog.id,
 			})
 			.returning("id")
 			.executeTakeFirstOrThrow();

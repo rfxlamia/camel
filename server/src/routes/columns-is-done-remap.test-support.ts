@@ -1,18 +1,59 @@
-import cookieParser from "cookie-parser";
-import express from "express";
-import request from "supertest";
 import { afterEach, beforeEach, vi } from "vitest";
-import { pool } from "../db/pool.js";
+
+const { mockPublishEventImpl, mockTestUser } = vi.hoisted(() => ({
+	mockPublishEventImpl: vi.fn().mockResolvedValue(undefined),
+	mockTestUser: {
+		id: 1,
+		username: "testuser",
+		displayName: "Test User",
+		email: null,
+		emailVerified: false,
+		needsUsername: false,
+	},
+}));
+
+vi.mock("../db/redis.js", () => ({
+	getRedisClient: vi.fn(),
+	connectRedis: vi.fn(),
+}));
+
+vi.mock("../realtime.js", () => ({
+	publishEvent: mockPublishEventImpl,
+	clearPresence: vi.fn(),
+	heartbeat: vi.fn(),
+	onlineUsers: vi.fn().mockResolvedValue([]),
+	sseHandler: vi.fn(),
+	createRealtimeHub: vi.fn(),
+	initRealtime: vi.fn(),
+	workspaceEventChannel: vi.fn(),
+	workspacePresenceKey: vi.fn(),
+	workspacePresencePattern: vi.fn(),
+}));
+
+vi.mock("../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../auth.js")>();
+	return {
+		...actual,
+		requireAuth: (req: Request, _res: Response, next: NextFunction) => {
+			(req as Request & { user: AuthUser }).user = mockTestUser as AuthUser;
+			next();
+		},
+	};
+});
+
+import cookieParser from "cookie-parser";
+import express, { type NextFunction, type Request, type Response } from "express";
+import supertest from "supertest";
+import { pool as dbPool } from "../db/pool.js";
+import type { AuthUser } from "../auth.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { publishEvent } from "../realtime.js";
 import { api } from "../routes.js";
 
 export const WORKSPACE_ID = 98;
-export const mockTestUser = {
-	id: 1,
-	username: "testuser",
-	displayName: "Test User",
-};
+export const pool = dbPool;
+export const request = supertest;
+export { mockTestUser };
 export const mockPublishEvent = vi.mocked(publishEvent);
 
 export const app = (() => {
@@ -207,5 +248,3 @@ export async function destroyWorkspace() {
 	]);
 	await pool.query("DELETE FROM workspaces WHERE id = $1", [WORKSPACE_ID]);
 }
-
-export { pool, request };
