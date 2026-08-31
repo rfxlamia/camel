@@ -454,41 +454,14 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		parsedLabelIds = parsed;
 	}
 
-	const existingCard = await db
-		.selectFrom("cards")
-		.select(["project_id"])
-		.where("id", "=", id)
-		.where("workspace_id", "=", workspaceId)
-		.where("deleted_at", "is", null)
-		.executeTakeFirst();
-	if (!existingCard) {
-		return res.status(404).json({ error: "card not found" });
-	}
-
-	if (hasProjectPhase) {
-		const parsed = await parseCardProjectPhase(
-			body,
-			workspaceId,
-			existingCard.project_id,
-		);
-		if ("error" in parsed) {
-			return res.status(400).json({ error: parsed.error });
-		}
-		if (parsed.projectId !== undefined) {
-			setFields.project_id = parsed.projectId;
-		}
-		if (parsed.phaseId !== undefined) {
-			setFields.phase_id = parsed.phaseId;
-		}
-	}
-
-	const hasSets = Object.keys(setFields).length > 0;
+	const hasSets = Object.keys(setFields).length > 0 || hasProjectPhase;
 	if (!hasSets && !hasAssigneeIds && !hasLabelIds) {
 		return res.status(400).json({ error: "no updatable fields provided" });
 	}
 
 	type TxResult =
 		| { kind: "not_found" }
+		| { kind: "bad_request"; error: string }
 		| { kind: "conflict"; card: ReturnType<typeof mapCardResponse> | null }
 		| {
 				kind: "ok";
@@ -499,21 +472,46 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		  };
 
 	const result: TxResult = await db.transaction().execute(async (trx) => {
-		const prevRow = await trx
+		const lockedRow = await trx
 			.selectFrom("cards")
-			.select(sql<string | null>`due_date::text`.as("due_date"))
+			.select([
+				sql<string | null>`due_date::text`.as("due_date"),
+				"project_id",
+			])
 			.where("id", "=", id)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
+			.forUpdate()
 			.executeTakeFirst();
-		const prevDueDate = prevRow?.due_date;
+		if (!lockedRow) {
+			return { kind: "not_found" };
+		}
+		const prevDueDate = lockedRow.due_date;
 		const prevAssigneeIds = await getCardAssigneeIds(trx, id);
+
+		const trxSetFields = { ...setFields };
+		if (hasProjectPhase) {
+			const parsed = await parseCardProjectPhase(
+				body,
+				workspaceId,
+				lockedRow.project_id,
+			);
+			if ("error" in parsed) {
+				return { kind: "bad_request", error: parsed.error };
+			}
+			if (parsed.projectId !== undefined) {
+				trxSetFields.project_id = parsed.projectId;
+			}
+			if (parsed.phaseId !== undefined) {
+				trxSetFields.phase_id = parsed.phaseId;
+			}
+		}
 
 		let updated: CardDbRow;
 		if (hasSets) {
 			const updatedRow = await trx
 				.updateTable("cards")
-				.set({ ...setFields, version: sql`version + 1` })
+				.set({ ...trxSetFields, version: sql`version + 1` })
 				.where("id", "=", id)
 				.where("workspace_id", "=", workspaceId)
 				.where("deleted_at", "is", null)
@@ -620,6 +618,9 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 
 	if (result.kind === "not_found") {
 		return res.status(404).json({ error: "card not found" });
+	}
+	if (result.kind === "bad_request") {
+		return res.status(400).json({ error: result.error });
 	}
 	if (result.kind === "conflict") {
 		if (result.card) {
