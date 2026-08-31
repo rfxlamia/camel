@@ -162,7 +162,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				[project.id, projectB.id],
 			);
 			const cards = await query<{ id: number }>(
-				"INSERT INTO cards (workspace_id, column_id, title, position, key_number, status_id, priority_id, project_id, phase_id) VALUES ($1, $2, 'First', 1024, 1, $3, $4, $5, $6), ($1, $2, 'Second', 2048, 2, $3, $7, $8, $9), ($1, $2, 'Third', 3072, 3, $3, NULL, NULL, NULL) RETURNING id",
+				"INSERT INTO cards (workspace_id, column_id, title, description, position, created_at, started_at, done_at, due_date, key_number, status_id, priority_id, project_id, phase_id) VALUES ($1, $2, 'First', 'First description', 1024, '2026-08-29T10:00:00.000Z', '2026-08-30T10:00:00.000Z', NULL, '2026-09-05', 1, $3, $4, $5, $6), ($1, $2, 'Second', 'Second description', 2048, '2026-08-29T11:00:00.000Z', NULL, '2026-08-31T10:00:00.000Z', '2026-09-06', 2, $3, $7, $8, $9), ($1, $2, 'Third', 'Third description', 3072, '2026-08-29T12:00:00.000Z', NULL, NULL, NULL, 3, $3, NULL, NULL, NULL) RETURNING id",
 				[
 					WORKSPACE_ID,
 					column.id,
@@ -186,6 +186,115 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				[cards[0]!.id, cards[1]!.id, ALICE_ID, BOB_ID],
 			);
 
+			const expectedLabels = [
+				{
+					id: labels.find((label) => label.name === "Bug")!.id,
+					kind: "label",
+					name: "Bug",
+					position: 1024,
+					colour: "orange",
+				},
+				{
+					id: labels.find((label) => label.name === "Feature")!.id,
+					kind: "label",
+					name: "Feature",
+					position: 2048,
+					colour: "purple",
+				},
+			];
+			const expectedStatus = {
+				id: status.id,
+				kind: "status",
+				name: "Todo",
+				position: 1024,
+				colour: "blue",
+				category: "backlog",
+				slot: "todo",
+			};
+			const expectedCards = [
+				{
+					id: cards[0]!.id,
+					key: "CT-1",
+					columnId: column.id,
+					title: "First",
+					description: "First description",
+					position: 1024,
+					version: 1,
+					createdAt: "2026-08-29T10:00:00.000Z",
+					startedAt: "2026-08-30T10:00:00.000Z",
+					doneAt: null,
+					dueDate: "2026-09-05",
+					status: expectedStatus,
+					priority: {
+						id: high.id,
+						kind: "priority",
+						name: "High",
+						position: 1024,
+						colour: "red",
+					},
+					labels: expectedLabels,
+					projectId: project.id,
+					phaseId: phase.id,
+					assignees: [
+						{
+							id: ALICE_ID,
+							username: "alice-card-response",
+							displayName: "Alice",
+						},
+					],
+				},
+				{
+					id: cards[1]!.id,
+					key: "CT-2",
+					columnId: column.id,
+					title: "Second",
+					description: "Second description",
+					position: 2048,
+					version: 1,
+					createdAt: "2026-08-29T11:00:00.000Z",
+					startedAt: null,
+					doneAt: "2026-08-31T10:00:00.000Z",
+					dueDate: "2026-09-06",
+					status: expectedStatus,
+					priority: {
+						id: low.id,
+						kind: "priority",
+						name: "Low",
+						position: 2048,
+						colour: "green",
+					},
+					labels: expectedLabels,
+					projectId: projectB.id,
+					phaseId: phaseB.id,
+					assignees: [
+						{
+							id: BOB_ID,
+							username: "bob-card-response",
+							displayName: "Bob",
+						},
+					],
+				},
+				{
+					id: cards[2]!.id,
+					key: "CT-3",
+					columnId: column.id,
+					title: "Third",
+					description: "Third description",
+					position: 3072,
+					version: 1,
+					createdAt: "2026-08-29T12:00:00.000Z",
+					startedAt: null,
+					doneAt: null,
+					dueDate: null,
+					status: expectedStatus,
+					priority: null,
+					labels: expectedLabels,
+					projectId: null,
+					phaseId: null,
+					assignees: [],
+				},
+			];
+
 			const board = await request(app).get(
 				`/api/workspaces/${WORKSPACE_ID}/board`,
 			);
@@ -193,37 +302,24 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			const boardCards = board.body.columns.flatMap(
 				(entry: { cards: unknown[] }) => entry.cards,
 			);
-			expect(boardCards.map((card: { id: number }) => card.id)).toEqual(
-				cards.map((card) => card.id),
-			);
+			expect(boardCards).toEqual(expectedCards);
 			expect(
 				new Set(boardCards.map((card: { id: number }) => card.id)).size,
 			).toBe(cards.length);
-			expect(
-				boardCards.every((card: { labels: unknown[] }) =>
-					Array.isArray(card.labels),
-				),
-			).toBe(true);
-			expect(boardCards[0].labels).toHaveLength(2);
-			expect(boardCards[0].key).toBe("CT-1");
-			expect(boardCards[0].priority.name).toBe("High");
-			expect(boardCards[2].priority).toBeNull();
-			expect(boardCards[2].projectId).toBeNull();
-			expect(boardCards[2].phaseId).toBeNull();
-			expect(boardCards[1].projectId).toBe(projectB.id);
-			expect(boardCards[1].phaseId).toBe(phaseB.id);
+			const cardIds = cards.map((card) => card.id);
 			expect(labelsQuerySpy).toHaveBeenCalledTimes(1);
+			expect(labelsQuerySpy.mock.calls[0]?.[1]).toEqual(cardIds);
 			expect(assigneesQuerySpy).toHaveBeenCalledTimes(1);
+			expect(assigneesQuerySpy.mock.calls[0]?.[1]).toEqual(cardIds);
 
 			const card = await request(app).get(
 				`/api/workspaces/${WORKSPACE_ID}/cards/${cards[1]!.id}`,
 			);
 			expect(card.status).toBe(200);
-			expect(card.body.id).toBe(cards[1]!.id);
-			expect(card.body.labels).toHaveLength(2);
-			expect(card.body.assignees[0].username).toBe("bob-card-response");
-			expect(card.body.projectId).toBe(projectB.id);
-			expect(card.body.phaseId).toBe(phaseB.id);
+			const individualCard = { ...card.body };
+			delete individualCard.workspaceId;
+			expect(individualCard).toEqual(expectedCards[1]);
+			expect(card.body.workspaceId).toBe(WORKSPACE_ID);
 		});
 	},
 );
