@@ -13,6 +13,7 @@ import {
 import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 import { AssigneePicker } from "./AssigneePicker";
+import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
 import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
 
 const inputClass =
@@ -28,6 +29,26 @@ function assigneeIdsEqual(a: number[], b: number[]): boolean {
 	const sortedA = [...a].sort((x, y) => x - y);
 	const sortedB = [...b].sort((x, y) => x - y);
 	return sortedA.every((id, i) => id === sortedB[i]);
+}
+
+function labelIdsEqual(a: number[], b: number[]): boolean {
+	return assigneeIdsEqual(a, b);
+}
+
+interface TaxonomyBaseline {
+	priorityId: number | null;
+	labelIds: number[];
+	projectId: number | null;
+	phaseId: number | null;
+}
+
+function taxonomyFromCard(card: Card): TaxonomyBaseline {
+	return {
+		priorityId: card.priority?.id ?? null,
+		labelIds: (card.labels ?? []).map((l) => l.id),
+		projectId: card.projectId ?? null,
+		phaseId: card.phaseId ?? null,
+	};
 }
 
 function MetaRow({ label, value }: { label: string; value: string | null }) {
@@ -55,6 +76,10 @@ function DetailsSection({
 			description?: string;
 			assigneeIds?: number[];
 			dueDate?: string | null;
+			priorityId?: number | null;
+			labelIds?: number[];
+			projectId?: number | null;
+			phaseId?: number | null;
 			version?: number;
 		},
 	) => Promise<SaveCardResult>;
@@ -69,6 +94,15 @@ function DetailsSection({
 		card.assignees.map((a) => a.id),
 	);
 	const [dueDate, setDueDate] = useState<string | null>(card.dueDate);
+	const initialTaxonomy = taxonomyFromCard(card);
+	const [priorityId, setPriorityId] = useState<number | null>(
+		initialTaxonomy.priorityId,
+	);
+	const [labelIds, setLabelIds] = useState<number[]>(initialTaxonomy.labelIds);
+	const [projectId, setProjectId] = useState<number | null>(
+		initialTaxonomy.projectId,
+	);
+	const [phaseId, setPhaseId] = useState<number | null>(initialTaxonomy.phaseId);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	// Card snapshot the draft is based on — "dirty" means the draft differs
 	// from it, and a dirty draft is never overwritten by a teammate's refresh.
@@ -79,6 +113,7 @@ function DetailsSection({
 		description: card.description,
 		assigneeIds: card.assignees.map((a) => a.id),
 		dueDate: card.dueDate,
+		...initialTaxonomy,
 		version: card.version,
 	});
 	const forceSyncRef = useRef(false);
@@ -109,6 +144,15 @@ function DetailsSection({
 		.map((a) => a.id)
 		.sort((a, b) => a - b)
 		.join(",");
+	const cardTaxonomyKey = [
+		card.priority?.id ?? "none",
+		(card.labels ?? [])
+			.map((l) => l.id)
+			.sort((a, b) => a - b)
+			.join(","),
+		card.projectId ?? "none",
+		card.phaseId ?? "none",
+	].join("|");
 
 	// Re-sync the form from the server card ONLY when the server card changes
 	// (card.* / version). The draft title/description/assigneeIds/dueDate are read
@@ -123,15 +167,21 @@ function DetailsSection({
 			title !== base.title ||
 			description !== base.description ||
 			!assigneeIdsEqual(assigneeIds, base.assigneeIds) ||
-			dueDate !== base.dueDate;
+			dueDate !== base.dueDate ||
+			priorityId !== base.priorityId ||
+			!labelIdsEqual(labelIds, base.labelIds) ||
+			projectId !== base.projectId ||
+			phaseId !== base.phaseId;
 		if (dirty && !forceSyncRef.current) return;
 		forceSyncRef.current = false;
 		const nextAssigneeIds = card.assignees.map((a) => a.id);
+		const nextTaxonomy = taxonomyFromCard(card);
 		baselineRef.current = {
 			title: card.title,
 			description: card.description,
 			assigneeIds: nextAssigneeIds,
 			dueDate: card.dueDate,
+			...nextTaxonomy,
 			version: card.version,
 		};
 		if (title !== card.title) setTitle(card.title);
@@ -140,10 +190,21 @@ function DetailsSection({
 			setAssigneeIds(nextAssigneeIds);
 		}
 		if (dueDate !== card.dueDate) setDueDate(card.dueDate);
+		if (priorityId !== nextTaxonomy.priorityId) {
+			setPriorityId(nextTaxonomy.priorityId);
+		}
+		if (!labelIdsEqual(labelIds, nextTaxonomy.labelIds)) {
+			setLabelIds(nextTaxonomy.labelIds);
+		}
+		if (projectId !== nextTaxonomy.projectId) {
+			setProjectId(nextTaxonomy.projectId);
+		}
+		if (phaseId !== nextTaxonomy.phaseId) setPhaseId(nextTaxonomy.phaseId);
 	}, [
 		card.title,
 		card.description,
 		cardAssigneeKey,
+		cardTaxonomyKey,
 		card.dueDate,
 		card.version,
 	]);
@@ -154,10 +215,24 @@ function DetailsSection({
 			title !== base.title ||
 			description !== base.description ||
 			!assigneeIdsEqual(assigneeIds, base.assigneeIds) ||
-			dueDate !== base.dueDate;
+			dueDate !== base.dueDate ||
+			priorityId !== base.priorityId ||
+			!labelIdsEqual(labelIds, base.labelIds) ||
+			projectId !== base.projectId ||
+			phaseId !== base.phaseId;
 		setHasUnsavedCardEdits(dirty);
 		return () => setHasUnsavedCardEdits(false);
-	}, [title, description, assigneeIds, dueDate, setHasUnsavedCardEdits]);
+	}, [
+		title,
+		description,
+		assigneeIds,
+		dueDate,
+		priorityId,
+		labelIds,
+		projectId,
+		phaseId,
+		setHasUnsavedCardEdits,
+	]);
 
 	const save = async () => {
 		const trimmed = title.trim();
@@ -168,12 +243,20 @@ function DetailsSection({
 			description: string;
 			assigneeIds?: number[];
 			dueDate?: string | null;
+			priorityId?: number | null;
+			labelIds?: number[];
+			projectId?: number | null;
+			phaseId?: number | null;
 			version?: number;
 		} = { title: trimmed, description, version: base.version };
 		if (!assigneeIdsEqual(assigneeIds, base.assigneeIds)) {
 			patch.assigneeIds = assigneeIds;
 		}
 		if (dueDate !== base.dueDate) patch.dueDate = dueDate;
+		if (priorityId !== base.priorityId) patch.priorityId = priorityId;
+		if (!labelIdsEqual(labelIds, base.labelIds)) patch.labelIds = labelIds;
+		if (projectId !== base.projectId) patch.projectId = projectId;
+		if (phaseId !== base.phaseId) patch.phaseId = phaseId;
 		const result = await saveCard(card.id, patch);
 		if (result === "saved") {
 			baselineRef.current = {
@@ -182,6 +265,10 @@ function DetailsSection({
 				description,
 				assigneeIds,
 				dueDate,
+				priorityId,
+				labelIds,
+				projectId,
+				phaseId,
 			};
 			setTitle(trimmed);
 		} else if (result === "conflict") {
@@ -249,6 +336,25 @@ function DetailsSection({
 					onChange={setAssigneeIds}
 				/>
 			</div>
+
+			{activeWorkspaceId !== null && (
+				<BoardCardTaxonomyFields
+					workspaceId={activeWorkspaceId}
+					priorityId={priorityId}
+					labelIds={labelIds}
+					projectId={projectId}
+					phaseId={phaseId}
+					priority={card.priority}
+					labels={card.labels}
+					onPriorityChange={setPriorityId}
+					onLabelIdsChange={setLabelIds}
+					onProjectChange={(nextProjectId, nextPhaseId) => {
+						setProjectId(nextProjectId);
+						setPhaseId(nextPhaseId);
+					}}
+					onPhaseChange={setPhaseId}
+				/>
+			)}
 
 			<dl className="space-y-1 rounded-md border border-neutral-200 bg-neutral-100 px-3 py-2">
 				<MetaRow label="Created" value={card.createdAt} />
