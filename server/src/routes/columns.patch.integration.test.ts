@@ -188,6 +188,27 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(row.rows[0].color).toBe(oklch);
 		});
 
+		it("clears a stored color when color is explicitly null", async () => {
+			const col = await pool.query(
+				`INSERT INTO columns (title, position, workspace_id, color)
+       VALUES ('Backlog', 1000, $1, 'powder-blue') RETURNING id`,
+				[WORKSPACE_ID],
+			);
+			const colId = col.rows[0].id;
+
+			const res = await request(app)
+				.patch(`/api/workspaces/${WORKSPACE_ID}/columns/${colId}`)
+				.send({ color: null });
+
+			expect(res.status).toBe(200);
+			expect(res.body.color).toBeNull();
+
+			const row = await pool.query("SELECT color FROM columns WHERE id = $1", [
+				colId,
+			]);
+			expect(row.rows[0].color).toBeNull();
+		});
+
 		it("rejects an invalid color with COLUMN_COLOR_VALIDATION_ERROR", async () => {
 			const col = await pool.query(
 				`INSERT INTO columns (title, position, workspace_id, color)

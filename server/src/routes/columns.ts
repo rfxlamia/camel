@@ -355,6 +355,11 @@ columnsRouter.delete(
 		for (const event of result.cardEvents) {
 			await publishEvent(workspaceId, { ...event, actor: req.user! });
 		}
+		await publishEvent(workspaceId, {
+			type: "column.deleted",
+			actor: req.user!,
+			payload: { columnTitle: result.deletedTitle },
+		} as BoardEvent);
 		res.status(204).end();
 	},
 );

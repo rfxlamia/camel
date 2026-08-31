@@ -76,7 +76,13 @@ function makeTrx() {
 	trx.updateTable = vi.fn((table: string) => ({
 		set: vi.fn((values: unknown) => {
 			updatedSets.push({ table, values });
-			return chainable(table === "tracker_items" ? itemRows : undefined);
+			const rows =
+				table === "tracker_items"
+					? itemRows
+					: table === "cards"
+						? cardRows.map((card) => ({ id: card.id }))
+						: undefined;
+			return chainable(rows);
 		}),
 	}));
 	return trx;
@@ -290,9 +296,23 @@ describe("DELETE /tracker/projects/:id", () => {
 		);
 	});
 
-	it("publishes exactly one SSE event", async () => {
+	it("publishes tracker delete and card.updated for each released board card", async () => {
 		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
-		expect(publishEvent).toHaveBeenCalledTimes(1);
+		expect(publishEvent).toHaveBeenCalledTimes(1 + releasedCards.length);
+		expect(publishEvent).toHaveBeenCalledWith(7, {
+			type: "tracker.project.deleted",
+			actor: expect.objectContaining({ id: 1 }),
+		});
+		expect(publishEvent).toHaveBeenCalledWith(7, {
+			type: "card.updated",
+			actor: expect.objectContaining({ id: 1 }),
+			cardId: 201,
+		});
+		expect(publishEvent).toHaveBeenCalledWith(7, {
+			type: "card.updated",
+			actor: expect.objectContaining({ id: 1 }),
+			cardId: 202,
+		});
 	});
 
 	it("leaves version and updated_at unchanged on released tasks", async () => {
@@ -327,16 +347,16 @@ describe("DELETE /tracker/projects/:id", () => {
 				cardId: 202,
 				payload: {
 					cardTitle: "Board card B",
-					changed: ["project", "phase"],
+					changed: ["project"],
 				},
 			}),
 		);
 	});
 
-	it("leaves version unchanged on released cards", async () => {
+	it("bumps version on released cards", async () => {
 		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
 		const cardRelease = updatedSets.find((u) => u.table === "cards");
-		expect(cardRelease?.values).not.toHaveProperty("version");
+		expect(cardRelease?.values).toHaveProperty("version");
 	});
 });
 

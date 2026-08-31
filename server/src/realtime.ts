@@ -39,6 +39,7 @@ export interface BoardEvent {
 		| "card.deleted"
 		| "column.created"
 		| "column.updated"
+		| "column.deleted"
 		| "presence.changed"
 		| "settings.updated"
 		| "membership.removed"

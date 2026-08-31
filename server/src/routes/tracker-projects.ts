@@ -354,6 +354,8 @@ trackerProjectsRouter.delete(
 				.where("deleted_at", "is", null)
 				.execute();
 
+			const releasedCardIds: number[] = [];
+
 			await trx
 				.updateTable("tracker_projects")
 				.set({ deleted_at: sql`now()`, updated_at: sql`now()` })
@@ -375,18 +377,30 @@ trackerProjectsRouter.delete(
 				.where("project_id", "=", projectId)
 				.execute();
 
-			await trx
-				.updateTable("cards")
-				.set({ project_id: null, phase_id: null })
-				.where("project_id", "=", projectId)
-				.execute();
+			if (cards.length > 0) {
+				const updatedCards = await trx
+					.updateTable("cards")
+					.set({
+						project_id: null,
+						phase_id: null,
+						version: sql`version + 1`,
+					})
+					.where("project_id", "=", projectId)
+					.where("workspace_id", "=", workspaceId)
+					.where("deleted_at", "is", null)
+					.returning(["id"])
+					.execute();
+				releasedCardIds.push(...updatedCards.map((card) => card.id));
+			}
 
 			for (const card of cards) {
+				const changed = ["project"];
+				if (card.phase_id != null) changed.push("phase");
 				await recordActivity(trx, actor, workspaceId, "update", {
 					cardId: card.id,
 					payload: {
 						cardTitle: card.title,
-						changed: ["project", "phase"],
+						changed,
 					},
 				});
 			}
@@ -401,7 +415,7 @@ trackerProjectsRouter.delete(
 				},
 			);
 
-			return { kind: "ok" as const };
+			return { kind: "ok" as const, releasedCardIds };
 		});
 
 		if (released.kind === "not_found") {
@@ -412,6 +426,13 @@ trackerProjectsRouter.delete(
 			type: "tracker.project.deleted",
 			actor,
 		});
+		for (const cardId of released.releasedCardIds) {
+			await publishEvent(workspaceId, {
+				type: "card.updated",
+				actor,
+				cardId,
+			});
+		}
 
 		res.status(204).end();
 	},

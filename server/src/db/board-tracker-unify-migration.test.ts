@@ -30,6 +30,18 @@ describe("board/tracker schema unification DDL", () => {
 		);
 	});
 
+	it("adds cards.status_id without ON DELETE SET NULL and swaps legacy FK", () => {
+		const statusIdColumn = schemaSql.match(
+			/ALTER TABLE cards ADD COLUMN IF NOT EXISTS status_id INTEGER[^;]*;/,
+		)?.[0];
+		expect(statusIdColumn).toBeTruthy();
+		expect(statusIdColumn).not.toMatch(/ON DELETE SET NULL/);
+		expect(schemaSql).toMatch(/DO \$cards_status_id_fk\$[\s\S]*?confdeltype = 'n'/);
+		expect(schemaSql).toMatch(
+			/ADD CONSTRAINT cards_status_id_fkey[\s\S]*?FOREIGN KEY \(status_id\) REFERENCES tracker_vocabularies\(id\);/,
+		);
+	});
+
 	it("adds all nullable card identity and taxonomy columns idempotently", () => {
 		for (const column of [
 			"status_id",

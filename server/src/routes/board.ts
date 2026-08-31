@@ -65,8 +65,16 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 		.leftJoin("tracker_vocabularies as pr", (join) =>
 			join.onRef("pr.id", "=", "c.priority_id").on("pr.kind", "=", "priority"),
 		)
-		.leftJoin("tracker_projects as tpr", "tpr.id", "c.project_id")
-		.leftJoin("tracker_phases as tph", "tph.id", "c.phase_id")
+		.leftJoin("tracker_projects as tpr", (join) =>
+			join
+				.onRef("tpr.id", "=", "c.project_id")
+				.on("tpr.deleted_at", "is", null),
+		)
+		.leftJoin("tracker_phases as tph", (join) =>
+			join
+				.onRef("tph.id", "=", "c.phase_id")
+				.on("tph.deleted_at", "is", null),
+		)
 		.select([
 			"c.id",
 			"c.column_id",

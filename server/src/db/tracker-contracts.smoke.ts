@@ -13,6 +13,7 @@ type _ItemCols = Pick<
 type _VocabCols = Pick<DB["tracker_vocabularies"], "category">;
 
 const _events: BoardEvent["type"][] = [
+	"column.deleted",
 	"tracker.project.created",
 	"tracker.project.updated",
 	"tracker.project.deleted",

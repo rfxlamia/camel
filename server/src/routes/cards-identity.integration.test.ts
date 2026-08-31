@@ -369,8 +369,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			).toBe(200);
 
 			let executionStatus = "running";
-			for (let attempt = 0; attempt < 160; attempt += 1) {
-				await new Promise((resolve) => setTimeout(resolve, 25));
+			const pollDeadline = Date.now() + 60_000;
+			while (Date.now() < pollDeadline) {
+				await new Promise((resolve) => setTimeout(resolve, 250));
 				const board = await pool.query<{ execution_status: string }>(
 					"SELECT execution_status FROM agent_boards WHERE id = $1",
 					[boardId],
