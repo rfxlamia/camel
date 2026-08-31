@@ -12,6 +12,9 @@ import {
 type PickerName = "priority" | "labels" | "project" | "phase";
 type LoadState = "loading" | "ready" | "error";
 
+const NO_PROJECT = "no-project";
+const NO_PHASE = "no-phase";
+
 export interface BoardCardTaxonomyFieldsProps {
 	workspaceId: number;
 	priorityId: number | null;
@@ -175,27 +178,40 @@ export default function BoardCardTaxonomyFields({
 		icon: <LabelDot colour={l.colour} />,
 	}));
 
-	const projectOptions: PickerOption[] = (
+	const projectList =
 		selectedProject && !projects.some((p) => p.id === selectedProject.id)
 			? [selectedProject, ...projects]
 			: projects.length > 0
 				? projects
 				: selectedProject
 					? [selectedProject]
-					: []
-	).map((p) => ({
-		id: String(p.id),
-		label: p.name,
-		selected: p.id === projectId,
-	}));
+					: [];
 
-	const phaseOptions: PickerOption[] = (selectedProject?.phases ?? []).map(
-		(ph) => ({
+	const projectOptions: PickerOption[] = [
+		{
+			id: NO_PROJECT,
+			label: "No project",
+			selected: projectId === null,
+		},
+		...projectList.map((p) => ({
+			id: String(p.id),
+			label: p.name,
+			selected: p.id === projectId,
+		})),
+	];
+
+	const phaseOptions: PickerOption[] = [
+		{
+			id: NO_PHASE,
+			label: "No phase",
+			selected: phaseId === null,
+		},
+		...(selectedProject?.phases ?? []).map((ph) => ({
 			id: String(ph.id),
 			label: ph.name,
 			selected: ph.id === phaseId,
-		}),
-	);
+		})),
+	];
 
 	const selectedPriority =
 		orderedPriorities.find((p) => p.id === priorityId) ?? priority;
@@ -206,10 +222,12 @@ export default function BoardCardTaxonomyFields({
 	const showLabelPicker =
 		orderedLabels.length > 0 || labelIds.length > 0 || selectedLabels.length > 0;
 	const showProjectPicker =
-		projectOptions.length > 0 || projectId != null;
+		projects.length > 0 || projectId != null || projectName != null;
 	const showPhasePicker =
 		projectId != null &&
-		(phaseOptions.length > 0 || phaseId != null || phaseName != null);
+		((selectedProject?.phases ?? []).length > 0 ||
+			phaseId != null ||
+			phaseName != null);
 
 	const listHint =
 		vocabularyLoadState === "loading" || projectsLoadState === "loading"
@@ -269,7 +287,12 @@ export default function BoardCardTaxonomyFields({
 						options={projectOptions}
 						open={openPicker === "project"}
 						onOpenChange={(open) => setOpenPicker(open ? "project" : null)}
-						onSelect={(id) => onProjectChange(Number(id), null)}
+						onSelect={(id) =>
+							onProjectChange(
+								id === NO_PROJECT ? null : Number(id),
+								null,
+							)
+						}
 					/>
 				)}
 
@@ -288,7 +311,9 @@ export default function BoardCardTaxonomyFields({
 						options={phaseOptions}
 						open={openPicker === "phase"}
 						onOpenChange={(open) => setOpenPicker(open ? "phase" : null)}
-						onSelect={(id) => onPhaseChange(Number(id))}
+						onSelect={(id) =>
+							onPhaseChange(id === NO_PHASE ? null : Number(id))
+						}
 					/>
 				)}
 			</div>

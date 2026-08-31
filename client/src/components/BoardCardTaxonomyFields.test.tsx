@@ -189,6 +189,36 @@ describe("BoardCardTaxonomyFields", () => {
 		);
 	});
 
+	it("clears project to null and phase with it", async () => {
+		const { onProjectChange } = renderFields({
+			projectId: 1,
+			phaseId: 9,
+		});
+
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /alpha/i })).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /alpha/i }));
+		fireEvent.click(screen.getByRole("option", { name: "No project" }));
+		expect(onProjectChange).toHaveBeenCalledWith(null, null);
+	});
+
+	it("clears phase to null", async () => {
+		const { onPhaseChange } = renderFields({
+			projectId: 1,
+			phaseId: 9,
+		});
+
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /q1/i })).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /q1/i }));
+		fireEvent.click(screen.getByRole("option", { name: "No phase" }));
+		expect(onPhaseChange).toHaveBeenCalledWith(null);
+	});
+
 	it("clears priority to null and labels to an empty array", async () => {
 		const { onPriorityChange, onLabelIdsChange } = renderFields({
 			priorityId: 10,
