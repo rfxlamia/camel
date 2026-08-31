@@ -22,6 +22,7 @@ import type { Request } from "express";
 import { Router } from "express";
 import { sql } from "kysely";
 import { requireAuth } from "../auth.js";
+import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { llmTimeout } from "../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
@@ -471,15 +472,23 @@ const realDeps: AgentBoardServiceDeps = {
 	// the human Activity Feed stays reserved for user-driven actions. Also, no
 	// actor is available here — runPipeline is fire-and-forget with no req.user.
 	insertCard: async (data) => {
-		await db
-			.insertInto("cards")
-			.values({
-				column_id: data.columnId,
-				title: data.title,
-				position: data.position,
-				workspace_id: data.workspaceId,
-			})
-			.execute();
+		await db.transaction().execute(async (trx) => {
+			const identity = await allocateCardIdentity(trx, {
+				workspaceId: data.workspaceId,
+				columnId: data.columnId,
+			});
+			await trx
+				.insertInto("cards")
+				.values({
+					column_id: data.columnId,
+					title: data.title,
+					position: data.position,
+					workspace_id: data.workspaceId,
+					key_number: identity.keyNumber,
+					status_id: identity.statusId,
+				})
+				.execute();
+		});
 	},
 
 	insertOutput: async (data) => {
