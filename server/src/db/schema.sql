@@ -543,7 +543,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tracker_vocab_workspace_status_slot
   WHERE kind = 'status' AND slot IS NOT NULL;
 
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS status_id INTEGER
-  REFERENCES tracker_vocabularies(id) ON DELETE SET NULL;
+  REFERENCES tracker_vocabularies(id);
+
+-- Align cards.status_id FK with tracker_items (NO ACTION, not SET NULL).
+DO $cards_status_id_fk$
+DECLARE
+  old_conname name;
+BEGIN
+  SELECT c.conname INTO old_conname
+  FROM pg_constraint c
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+  WHERE c.conrelid = 'cards'::regclass
+    AND c.contype = 'f'
+    AND a.attname = 'status_id'
+    AND c.confdeltype = 'n'
+  LIMIT 1;
+
+  IF old_conname IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE cards DROP CONSTRAINT %I', old_conname);
+    ALTER TABLE cards
+      ADD CONSTRAINT cards_status_id_fkey
+      FOREIGN KEY (status_id) REFERENCES tracker_vocabularies(id);
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN NULL;
+  WHEN undefined_column THEN NULL;
+END $cards_status_id_fk$;
+
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS key_number INTEGER;
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS priority_id INTEGER
   REFERENCES tracker_vocabularies(id) ON DELETE SET NULL;
