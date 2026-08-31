@@ -1,12 +1,12 @@
 import { Calendar, ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { columnColorPreviewStyle } from "../lib/columnColorUtils";
 import {
 	assigneeInitials,
 	formatDueDate,
 	isCardDone,
 	isDueOverdue,
 } from "../lib/boardViewUtils";
+import { columnColorPreviewStyle } from "../lib/columnColorUtils";
 import type { Card, Column } from "../types";
 import {
 	type PickerOption,
@@ -66,8 +66,10 @@ function ListRow({
 	);
 
 	return (
-		<div className="group grid h-10 grid-cols-[48px_28px_1fr_80px_88px] items-center gap-2 border-b border-neutral-100 px-3 last:border-b-0 hover:bg-neutral-50">
-			<span className="text-xs tabular-nums text-neutral-400">{card.id}</span>
+		<div className="group grid h-10 grid-cols-[minmax(7rem,max-content)_28px_minmax(0,1fr)_80px_88px] items-center gap-2 border-b border-neutral-100 px-3 last:border-b-0 hover:bg-neutral-50">
+			<span className="min-w-0 break-all font-mono text-neutral-500 text-xs tabular-nums">
+				{card.key}
+			</span>
 			<span className="flex justify-center">
 				<TrackerPropertyPicker
 					variant="inline"
@@ -232,7 +234,7 @@ export default function ListView({
 			data-testid="list-view"
 			className="mx-auto w-full max-w-[1100px] overflow-visible rounded-xl border border-neutral-200 bg-white shadow-sm"
 		>
-			<div className="grid grid-cols-[48px_28px_1fr_80px_88px] gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium tracking-wide text-neutral-500 uppercase">
+			<div className="grid grid-cols-[minmax(7rem,max-content)_28px_minmax(0,1fr)_80px_88px] gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium tracking-wide text-neutral-500 uppercase">
 				<span>ID</span>
 				<span />
 				<span>Title</span>
