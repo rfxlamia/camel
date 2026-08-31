@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { sql } from "kysely";
 import { POSITION_GAP } from "../core/position.js";
+import { buildRemapPlan } from "../core/remap-card-statuses.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
@@ -10,7 +11,7 @@ import {
 	validateColumnBatch,
 } from "../validators/column.js";
 import { validateColumnName } from "../validators/input-length.js";
-import { recordActivity } from "./helpers.js";
+import { getHumanColumns, recordActivity } from "./helpers.js";
 
 const RETURNING_COLUMNS = [
 	"id",
@@ -24,6 +25,24 @@ const RETURNING_COLUMNS = [
 	"color",
 ] as const;
 
+type ColumnRow = {
+	id: number;
+	title: string;
+	position: number;
+	wip_limit: number | null;
+	policy: string;
+	is_done: boolean;
+	is_signable: boolean;
+	signable_assignee_id: number | null;
+	color: string | null;
+};
+
+type RemapCardEvent = {
+	type: "card.updated";
+	cardId: number;
+	payload: Record<string, unknown>;
+};
+
 type ColumnPatchInput = {
 	title?: string;
 	wipLimit?: number | null;
@@ -32,7 +51,7 @@ type ColumnPatchInput = {
 	isSignable?: boolean;
 	signableAssigneeId?: number | null;
 	hasSignableAssigneeId: boolean;
-	color?: string;
+	color?: string | null;
 };
 
 function buildColumnPatchFields(input: ColumnPatchInput) {
@@ -43,7 +62,7 @@ function buildColumnPatchFields(input: ColumnPatchInput) {
 		is_done?: boolean;
 		is_signable?: boolean;
 		signable_assignee_id?: number | null;
-		color?: string;
+		color?: string | null;
 	} = {};
 	if (input.title != null) fields.title = input.title;
 	if (input.wipLimit !== undefined) fields.wip_limit = input.wipLimit ?? null;
@@ -270,75 +289,154 @@ columnsRouter.patch(
 			return res.status(400).json({ error: "no updatable fields provided" });
 		}
 
-		// Use transaction for isDone enforcement to ensure atomicity
-		if (isDone === true) {
-			const updated = await db.transaction().execute(async (trx) => {
-				// Lock the workspace so concurrent isDone=true requests serialize —
-				// otherwise two columns could both pass the exists check and both
-				// end up is_done=true (or clobber each other's unset).
-				await trx
-					.selectFrom("workspaces")
-					.select("id")
-					.where("id", "=", workspaceId)
-					.forUpdate()
-					.execute();
+		// isDone changes must serialize on the workspace row and update the
+		// normalized card status in the same transaction as the column geometry.
+		if (isDone !== undefined) {
+			type RemapResult =
+				| { kind: "not_found" }
+				| {
+						kind: "ok";
+						updated: ColumnRow;
+						cardEvents: RemapCardEvent[];
+				  };
 
-				// First verify column exists
-				const exists = await trx
-					.selectFrom("columns")
-					.select("id")
-					.where("id", "=", id)
-					.where("workspace_id", "=", workspaceId)
-					.executeTakeFirst();
-				if (!exists) {
-					return undefined;
-				}
+			const result: RemapResult = await db
+				.transaction()
+				.execute(async (trx) => {
+					await trx
+						.selectFrom("workspaces")
+						.select("id")
+						.where("id", "=", workspaceId)
+						.forUpdate()
+						.executeTakeFirstOrThrow();
 
-				// Unset other columns
-				await trx
-					.updateTable("columns")
-					.set({ is_done: false })
-					.where("workspace_id", "=", workspaceId)
-					.where("id", "!=", id)
-					.where("is_done", "=", true)
-					.execute();
+					const beforeColumns = await getHumanColumns(trx, workspaceId);
+					const exists = beforeColumns.some((column) => column.id === id);
+					if (!exists) return { kind: "not_found" };
 
-				// Set target column
-				return trx
-					.updateTable("columns")
-					.set({ ...patchFields, is_done: true })
-					.where("id", "=", id)
-					.where("workspace_id", "=", workspaceId)
-					.returning(RETURNING_COLUMNS)
-					.executeTakeFirstOrThrow();
-			});
+					if (isDone) {
+						await trx
+							.updateTable("columns")
+							.set({ is_done: false })
+							.where("workspace_id", "=", workspaceId)
+							.where("board_id", "is", null)
+							.where("id", "!=", id)
+							.where("is_done", "=", true)
+							.execute();
+					}
 
-			if (!updated) {
+					const updated = await trx
+						.updateTable("columns")
+						.set({ ...patchFields, is_done: isDone })
+						.where("id", "=", id)
+						.where("workspace_id", "=", workspaceId)
+						.where("board_id", "is", null)
+						.returning(RETURNING_COLUMNS)
+						.executeTakeFirstOrThrow();
+
+					const afterColumns = await getHumanColumns(trx, workspaceId);
+					const cards = await trx
+						.selectFrom("cards")
+						.select(["id", "column_id", "status_id", "deleted_at"])
+						.where("workspace_id", "=", workspaceId)
+						.where("deleted_at", "is", null)
+						.forUpdate()
+						.execute();
+					const statuses = await trx
+						.selectFrom("tracker_vocabularies")
+						.select(["id", "kind", "slot"])
+						.where("workspace_id", "=", workspaceId)
+						.where("kind", "=", "status")
+						.execute();
+					const plan = buildRemapPlan({
+						beforeColumns,
+						afterColumns,
+						cards,
+						statuses,
+					});
+
+					const firstColumnId = afterColumns[0]?.id;
+					const cardEvents: RemapCardEvent[] = [];
+					for (const remap of plan) {
+						const targetIsDone =
+							afterColumns.find((column) => column.id === remap.columnId)
+								?.is_done ?? false;
+						const updatedCard = await trx
+							.updateTable("cards")
+							.set({
+								status_id: remap.statusId,
+								version: sql`version + 1`,
+								started_at: sql`CASE WHEN started_at IS NULL AND (${targetIsDone} OR ${remap.columnId !== firstColumnId}) THEN now() ELSE started_at END`,
+								done_at: sql`CASE WHEN ${targetIsDone} THEN COALESCE(done_at, now()) ELSE NULL END`,
+							})
+							.where("id", "=", remap.cardId)
+							.where("workspace_id", "=", workspaceId)
+							.where("deleted_at", "is", null)
+							.returning([
+								"id",
+								"column_id",
+								"version",
+								"status_id",
+								"started_at",
+								"done_at",
+							])
+							.executeTakeFirstOrThrow();
+
+						await recordActivity(trx, req.user!, workspaceId, "update", {
+							cardId: updatedCard.id,
+							fromColumnId: updatedCard.column_id,
+							toColumnId: updatedCard.column_id,
+							payload: {
+								changed: ["status"],
+								statusId: updatedCard.status_id,
+							},
+						});
+						cardEvents.push({
+							type: "card.updated",
+							cardId: updatedCard.id,
+							payload: {
+								columnId: updatedCard.column_id,
+								statusId: updatedCard.status_id,
+								version: updatedCard.version,
+								startedAt: updatedCard.started_at?.toISOString() ?? null,
+								doneAt: updatedCard.done_at?.toISOString() ?? null,
+							},
+						});
+					}
+
+					await recordActivity(trx, req.user!, workspaceId, "update", {
+						payload: {
+							columnId: id,
+							columnTitle: updated.title,
+							isDone,
+							isSignable: updated.is_signable,
+							signableAssigneeId: updated.signable_assignee_id,
+							color: updated.color,
+						},
+					});
+
+					return { kind: "ok", updated, cardEvents };
+				});
+
+			if (result.kind === "not_found") {
 				return res.status(404).json({ error: "column not found" });
 			}
 
+			for (const event of result.cardEvents) {
+				await publishEvent(workspaceId, { ...event, actor: req.user! });
+			}
 			await publishEvent(workspaceId, {
 				type: "column.updated",
 				actor: req.user!,
 				payload: {
-					columnTitle: updated.title,
-					isDone: true,
-					isSignable: updated.is_signable,
-					signableAssigneeId: updated.signable_assignee_id,
-					color: updated.color,
+					columnTitle: result.updated.title,
+					isDone: result.updated.is_done,
+					isSignable: result.updated.is_signable,
+					signableAssigneeId: result.updated.signable_assignee_id,
+					color: result.updated.color,
 				},
 			} as BoardEvent);
-			await recordActivity(db, req.user!, workspaceId, "update", {
-				payload: {
-					columnId: id,
-					columnTitle: updated.title,
-					isDone: true,
-					isSignable: updated.is_signable,
-					signableAssigneeId: updated.signable_assignee_id,
-					color: updated.color,
-				},
-			});
-			res.json(updated);
+			res.json(result.updated);
 			return;
 		}
 

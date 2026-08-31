@@ -26,7 +26,8 @@ const SWATCHES = [
 ];
 
 vi.mock("../lib/columnColorUtils", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../lib/columnColorUtils")>();
+	const actual =
+		await importOriginal<typeof import("../lib/columnColorUtils")>();
 	return {
 		...actual,
 		generateSwatchCandidates: vi.fn(() => [...SWATCHES]),
@@ -36,8 +37,8 @@ vi.mock("../lib/columnColorUtils", async (importOriginal) => {
 });
 
 import { generateSwatchCandidates } from "../lib/columnColorUtils";
-import ColumnView from "./ColumnView";
 import type { Column } from "../types";
+import ColumnView from "./ColumnView";
 
 function makeColumn(overrides: Partial<Column> = {}): Column {
 	return {
@@ -55,7 +56,10 @@ function makeColumn(overrides: Partial<Column> = {}): Column {
 	};
 }
 
-function openSettings(column: Column, onUpdate = vi.fn().mockResolvedValue(undefined)) {
+function openSettings(
+	column: Column,
+	onUpdate = vi.fn().mockResolvedValue(undefined),
+) {
 	render(
 		<ColumnView
 			column={column}
@@ -109,6 +113,20 @@ describe("ColumnSettings color shuffle", () => {
 			1,
 			expect.objectContaining({ color: SWATCHES[0] }),
 		);
+	});
+});
+
+describe("ColumnSettings isDone tip", () => {
+	it("shows a copy-only tip when clearing a Done column", () => {
+		const { onUpdate } = openSettings(makeColumn({ isDone: true }));
+		fireEvent.click(screen.getByRole("checkbox", { name: /mark as done/i }));
+
+		expect(
+			screen.getByText(
+				/Clearing the last Done column is allowed; saving remains available/i,
+			),
+		).toBeTruthy();
+		expect(onUpdate).not.toHaveBeenCalled();
 	});
 });
 

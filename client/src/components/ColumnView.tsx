@@ -7,10 +7,7 @@ import { Plus, Settings2, Shuffle, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
-import {
-	COLOR_LABELS,
-	type ColumnColor,
-} from "../lib/columnColors";
+import { COLOR_LABELS, type ColumnColor } from "../lib/columnColors";
 import {
 	columnColorPreviewStyle,
 	generateSwatchCandidates,
@@ -256,6 +253,11 @@ function ColumnSettings({
 			<p className="-mt-1 text-xs text-neutral-500">
 				Cards moved here will be marked as completed
 			</p>
+			{column.isDone && !isDone && (
+				<p className="-mt-1 text-xs text-neutral-500">
+					Clearing the last Done column is allowed; saving remains available.
+				</p>
+			)}
 			<label className="flex items-center gap-2">
 				<input
 					type="checkbox"
