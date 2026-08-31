@@ -68,6 +68,71 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(finished).toBeGreaterThan(inbox);
 		});
 
+		it("serializes human card creation with concurrent is_done remapping", async () => {
+			const [inbox, finished] = await insertColumns([
+				{ title: "Inbox", position: 1000, isDone: false },
+				{ title: "Finished", position: 2000, isDone: true },
+			]);
+			await pool.query(
+				"UPDATE workspaces SET tracker_key_counter = 0 WHERE id = $1",
+				[WORKSPACE_ID],
+			);
+
+			const [postResponse, patchResponse] = await Promise.all([
+				request(app)
+					.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
+					.send({ columnId: inbox, title: "Racing card" }),
+				request(app)
+					.patch(`/api/workspaces/${WORKSPACE_ID}/columns/${inbox}`)
+					.send({ isDone: true }),
+			]);
+
+			expect(postResponse.status).toBe(201);
+			expect(patchResponse.status).toBe(200);
+			expect(patchResponse.body).toMatchObject({
+				id: inbox,
+				is_done: true,
+			});
+
+			const finalColumns = await columns();
+			expect(finalColumns.filter((column) => column.is_done)).toEqual([
+				expect.objectContaining({ id: inbox, is_done: true }),
+		]);
+			expect(finalColumns.find((column) => column.id === finished)?.is_done).toBe(
+				false,
+			);
+
+			const cardRows = await pool.query<{
+				id: number;
+				column_id: number;
+				key_number: number;
+				status_id: number;
+				version: number;
+				deleted_at: Date | null;
+			}>(
+				"SELECT id, column_id, key_number, status_id, version, deleted_at FROM cards WHERE workspace_id = $1",
+				[WORKSPACE_ID],
+			);
+			expect(cardRows.rows).toHaveLength(1);
+			expect(cardRows.rows[0]).toMatchObject({
+				column_id: inbox,
+				key_number: 1,
+				status_id: await statusId("done"),
+				deleted_at: null,
+			});
+			expect([1, 2]).toContain(cardRows.rows[0]!.version);
+		const keyRows = await pool.query<{ n: number }>(
+			"SELECT count(*)::int AS n FROM cards WHERE workspace_id = $1 AND key_number = 1",
+			[WORKSPACE_ID],
+		);
+		expect(keyRows.rows).toEqual([{ n: 1 }]);
+		expect(await cardActivities([cardRows.rows[0]!.id])).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ event_type: "create" }),
+		]),
+		);
+		});
+
 		it("serializes concurrent true/false changes on the workspace row", async () => {
 			const [a, b] = await insertColumns([
 				{ title: "A", position: 1000, isDone: false },

@@ -260,8 +260,15 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 		| { kind: "ok"; cardId: number; autoAssigneeId: number | null };
 
 	const result: CreateResult = await db.transaction().execute(async (trx) => {
-		// Lock the column row first so concurrent creates targeting the same
-		// column serialize on the WIP count instead of racing past it together.
+		// Lock the workspace before the column so card creation follows the
+		// workspace -> columns order used by is_done remapping.
+		await trx
+			.selectFrom("workspaces")
+			.select("id")
+			.where("id", "=", workspaceId)
+			.forUpdate()
+			.executeTakeFirstOrThrow();
+
 		const col = await trx
 			.selectFrom("columns")
 			.select(["id", "wip_limit", "is_signable", "signable_assignee_id"])
