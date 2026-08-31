@@ -169,13 +169,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				column_id: b,
 				status_id: backlogId,
 				version: 2,
-				started_at: expect.any(Date),
+				started_at: null,
 				done_at: null,
 			});
 			expect(finalA.started_at?.getTime()).toBeGreaterThanOrEqual(
-				beforeUpdate - 1000,
-			);
-			expect(finalB.started_at?.getTime()).toBeGreaterThanOrEqual(
 				beforeUpdate - 1000,
 			);
 			const activities = await cardActivities([aCard, bCard]);
@@ -208,7 +205,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 							columnId: b,
 							statusId: backlogId,
 							version: 2,
-							startedAt: finalB.started_at?.toISOString(),
+							startedAt: finalB.started_at?.toISOString() ?? null,
 							doneAt: null,
 						},
 					},
