@@ -48,14 +48,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				signable_assignee_id: null,
 				color: null,
 			});
-			expect((await readCard(doingCard)).status_id).toBe(doneId);
-			expect((await readCard(finishedCard)).status_id).toBe(todoId);
-			expect((await readCard(doingCard)).column_id).toBe(doing);
-			expect((await readCard(finishedCard)).column_id).toBe(finished);
-			expect((await readCard(doingCard)).version).toBe(2);
-			expect((await readCard(finishedCard)).version).toBe(2);
 			const doingAfter = await readCard(doingCard);
 			const finishedAfter = await readCard(finishedCard);
+			expect(doingAfter.status_id).toBe(doneId);
+			expect(finishedAfter.status_id).toBe(todoId);
 			expect(doingAfter.column_id).toBe(doing);
 			expect(finishedAfter.column_id).toBe(finished);
 			expect(doingAfter.version).toBe(2);
