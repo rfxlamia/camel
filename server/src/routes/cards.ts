@@ -18,11 +18,15 @@ import {
 } from "../validators/input-length.js";
 import {
 	addCardAssignee,
-	type CardAssignee,
 	getCardAssigneeIds,
 	loadCardAssigneesForCards,
 	syncCardAssignees,
 } from "./card-assignees.js";
+import {
+	buildCardResponse,
+	type CardResponseRow,
+	loadCardLabelsForCards,
+} from "./card-response.js";
 import {
 	createScopedBoardService,
 	lookupMembership,
@@ -32,9 +36,25 @@ import {
 
 export const cardsRouter = Router({ mergeParams: true });
 
+type FullCardRow = CardResponseRow & { workspace_id: number };
+type CardDbRow = CardResponseRow;
+
+function toCardDbRow(row: FullCardRow): CardDbRow {
+	return { ...row };
+}
+
+const mapCardResponse = buildCardResponse;
+
 function selectFullCard(dbExec: DBExecutor) {
 	return dbExec
 		.selectFrom("cards as c")
+		.innerJoin("workspaces as w", "w.id", "c.workspace_id")
+		.leftJoin("tracker_vocabularies as st", (join) =>
+			join.onRef("st.id", "=", "c.status_id").on("st.kind", "=", "status"),
+		)
+		.leftJoin("tracker_vocabularies as pr", (join) =>
+			join.onRef("pr.id", "=", "c.priority_id").on("pr.kind", "=", "priority"),
+		)
 		.select([
 			"c.id",
 			"c.workspace_id",
@@ -47,65 +67,23 @@ function selectFullCard(dbExec: DBExecutor) {
 			"c.started_at",
 			"c.done_at",
 			sql<string | null>`c.due_date::text`.as("due_date"),
+			"c.key_number",
+			"w.name as workspace_name",
+			"c.status_id",
+			"st.kind as status_kind",
+			"st.name as status_name",
+			"st.position as status_position",
+			"st.colour as status_colour",
+			"st.category as status_category",
+			"st.slot as status_slot",
+			"c.priority_id",
+			"pr.kind as priority_kind",
+			"pr.name as priority_name",
+			"pr.position as priority_position",
+			"pr.colour as priority_colour",
+			"c.project_id",
+			"c.phase_id",
 		]);
-}
-
-type FullCardRow = {
-	id: number;
-	workspace_id: number;
-	column_id: number;
-	title: string;
-	description: string;
-	position: number;
-	version: number;
-	created_at: Date;
-	started_at: Date | null;
-	done_at: Date | null;
-	due_date: string | null;
-};
-
-type CardDbRow = {
-	id: number;
-	column_id: number;
-	title: string;
-	description: string;
-	position: number;
-	version: number;
-	created_at: string;
-	started_at: string | null;
-	done_at: string | null;
-	due_date: string | null;
-};
-
-function toCardDbRow(row: FullCardRow): CardDbRow {
-	return {
-		id: row.id,
-		column_id: row.column_id,
-		title: row.title,
-		description: row.description,
-		position: row.position,
-		version: row.version,
-		created_at: row.created_at.toISOString(),
-		started_at: row.started_at?.toISOString() ?? null,
-		done_at: row.done_at?.toISOString() ?? null,
-		due_date: row.due_date,
-	};
-}
-
-function mapCardResponse(c: CardDbRow, assignees: CardAssignee[]) {
-	return {
-		id: c.id,
-		columnId: c.column_id,
-		title: c.title,
-		description: c.description,
-		position: c.position,
-		version: c.version,
-		createdAt: c.created_at,
-		startedAt: c.started_at,
-		doneAt: c.done_at,
-		dueDate: c.due_date,
-		assignees,
-	};
 }
 
 async function hydrateCard(cardId: number, workspaceId: number) {
@@ -115,8 +93,14 @@ async function hydrateCard(cardId: number, workspaceId: number) {
 		.where("c.deleted_at", "is", null)
 		.executeTakeFirst();
 	if (!row) return null;
-	const assigneesByCard = await loadCardAssigneesForCards(db, [cardId]);
-	return mapCardResponse(toCardDbRow(row), assigneesByCard.get(cardId) ?? []);
+	const [assigneesByCard, labelsByCard] = await Promise.all([
+		loadCardAssigneesForCards(db, [cardId]),
+		loadCardLabelsForCards(db, [cardId]),
+	]);
+	return buildCardResponse(row, {
+		assignees: assigneesByCard.get(cardId) ?? [],
+		labels: labelsByCard.get(cardId) ?? [],
+	});
 }
 
 function emitCardAssigned(
@@ -225,27 +209,23 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 				.where("c.deleted_at", "is", null)
 				.executeTakeFirst();
 			if (!row) return null;
-			const assigneesByCard = await loadCardAssigneesForCards(db, [cId]);
+			const [assigneesByCard, labelsByCard] = await Promise.all([
+				loadCardAssigneesForCards(db, [cId]),
+				loadCardLabelsForCards(db, [cId]),
+			]);
 			return {
-				id: row.id,
+				...buildCardResponse(row, {
+					assignees: assigneesByCard.get(cId) ?? [],
+					labels: labelsByCard.get(cId) ?? [],
+				}),
 				workspaceId: row.workspace_id,
-				title: row.title,
-				columnId: row.column_id,
-				description: row.description,
-				position: row.position,
-				version: row.version,
-				createdAt: row.created_at.toISOString(),
-				startedAt: row.started_at?.toISOString() ?? null,
-				doneAt: row.done_at?.toISOString() ?? null,
-				dueDate: row.due_date,
-				assignees: assigneesByCard.get(cId) ?? [],
 			};
 		},
 		getBoardRows: async () => [],
 		getActivityRows: async () => [],
 	}).getCard({ userId: req.user!.id, workspaceId, cardId });
 
-	if ("status" in result) {
+	if (typeof result.status === "number") {
 		return res.status(result.status).json({ error: result.error });
 	}
 	res.json(result);
@@ -470,13 +450,16 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 					.where("c.deleted_at", "is", null)
 					.executeTakeFirst();
 				if (!current) return { kind: "not_found" };
-				const assigneesByCard = await loadCardAssigneesForCards(trx, [id]);
+				const [assigneesByCard, labelsByCard] = await Promise.all([
+					loadCardAssigneesForCards(trx, [id]),
+					loadCardLabelsForCards(trx, [id]),
+				]);
 				return {
 					kind: "conflict",
-					card: mapCardResponse(
-						toCardDbRow(current),
-						assigneesByCard.get(id) ?? [],
-					),
+					card: mapCardResponse(toCardDbRow(current), {
+						assignees: assigneesByCard.get(id) ?? [],
+						labels: labelsByCard.get(id) ?? [],
+					}),
 				};
 			}
 			updated = {
@@ -590,7 +573,19 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		);
 	}
 
-	res.json(mapCardResponse(updated, assigneesByCard.get(id) ?? []));
+	const responseRow = await selectFullCard(db)
+		.where("c.id", "=", id)
+		.where("c.workspace_id", "=", workspaceId)
+		.where("c.deleted_at", "is", null)
+		.executeTakeFirst();
+	if (!responseRow) return res.status(404).json({ error: "card not found" });
+	const labelsByCard = await loadCardLabelsForCards(db, [id]);
+	res.json(
+		mapCardResponse(responseRow, {
+			assignees: assigneesByCard.get(id) ?? [],
+			labels: labelsByCard.get(id) ?? [],
+		}),
+	);
 });
 
 cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {

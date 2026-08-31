@@ -137,6 +137,7 @@ describe("buildBoardResponse", () => {
 
 		expect(card).toEqual({
 			id: 10,
+			key: null,
 			columnId: 1,
 			title: "My Card",
 			description: "Details here",
@@ -146,6 +147,11 @@ describe("buildBoardResponse", () => {
 			startedAt: "2026-06-02T08:00:00Z",
 			doneAt: "2026-06-03T16:00:00Z",
 			dueDate: "2026-06-10",
+			status: null,
+			priority: null,
+			labels: [],
+			projectId: null,
+			phaseId: null,
 			assignees: [],
 		});
 	});
