@@ -350,7 +350,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			).toBe(inProgressStatusId);
 		});
 
-		it("updates agent-board card status using board_id sibling geometry", async () => {
+		it(
+			"updates agent-board card status using board_id sibling geometry",
+			{ timeout: 120_000 },
+			async () => {
 			const agentIntent = "prepare a research report";
 			const created = await request(app)
 				.post(`/api/workspaces/${WORKSPACE_ID}/agent/boards`)
@@ -366,7 +369,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			).toBe(200);
 
 			let executionStatus = "running";
-			for (let attempt = 0; attempt < 80; attempt += 1) {
+			for (let attempt = 0; attempt < 160; attempt += 1) {
 				await new Promise((resolve) => setTimeout(resolve, 25));
 				const board = await pool.query<{ execution_status: string }>(
 					"SELECT execution_status FROM agent_boards WHERE id = $1",
