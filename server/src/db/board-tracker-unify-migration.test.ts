@@ -20,7 +20,7 @@ describe("board/tracker schema unification DDL", () => {
 			/ALTER TABLE tracker_vocabularies ADD COLUMN IF NOT EXISTS slot TEXT/,
 		);
 		expect(schemaSql).toMatch(
-			/slot\s+TEXT(?:\s+CHECK\s*\(\s*slot\s+IN\s*\([\s\S]*?'backlog'[\s\S]*?'todo'[\s\S]*?'in_progress'[\s\S]*?'done'[\s\S]*?'canceled'[\s\S]*?\)\s*\))?/,
+			/CHECK\s*\(\s*slot\s+IN\s*\(\s*'backlog'\s*,\s*'todo'\s*,\s*'in_progress'\s*,\s*'done'\s*,\s*'canceled'\s*\)\s*\)/,
 		);
 		expect(schemaSql).not.toMatch(
 			/ADD COLUMN IF NOT EXISTS slot TEXT\s+NOT NULL/,
