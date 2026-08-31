@@ -7,6 +7,7 @@ import {
 	insertColumns,
 	installDatabaseHooks,
 	mockPublishEvent,
+	mockTestUser,
 	pool,
 	readCard,
 	request,
@@ -189,7 +190,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				expect.arrayContaining([
 					{
 						type: "card.updated",
-						actor: { id: 1, username: "testuser", displayName: "Test User" },
+						actor: mockTestUser,
 						cardId: aCard,
 						payload: {
 							columnId: a,
@@ -201,7 +202,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					},
 					{
 						type: "card.updated",
-						actor: { id: 1, username: "testuser", displayName: "Test User" },
+						actor: mockTestUser,
 						cardId: bCard,
 						payload: {
 							columnId: b,
