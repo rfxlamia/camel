@@ -50,7 +50,7 @@ function buildColumnPatchFields(input: ColumnPatchInput) {
 	} else if (input.hasSignableAssigneeId) {
 		fields.signable_assignee_id = input.signableAssigneeId ?? null;
 	}
-	if (input.color != null) fields.color = input.color;
+	if (input.color !== undefined) fields.color = input.color;
 	return fields;
 }
 
