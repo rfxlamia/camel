@@ -3,25 +3,24 @@ import { sql } from "kysely";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { loadCardAssigneesForCards } from "./card-assignees.js";
+import {
+	buildCardResponse,
+	type CardResponseRow,
+	loadCardLabelsForCards,
+} from "./card-response.js";
 import { getHumanColumns, type HumanColumn } from "./helpers.js";
+import type { VocabularyRow } from "./vocabulary-response.js";
 
-type CardRow = {
-	id: number;
-	column_id: number;
-	title: string;
-	description: string;
-	position: number;
-	version: number;
-	created_at: string;
-	started_at: string | null;
-	done_at: string | null;
-	due_date: string | null;
-};
+type CardRow = CardResponseRow;
 
 export function buildBoardResponse(
 	columns: HumanColumn[],
 	cards: CardRow[],
-	assigneesByCard: Map<number, { id: number; username: string; displayName: string }[]>,
+	assigneesByCard: Map<
+		number,
+		{ id: number; username: string; displayName: string }[]
+	>,
+	labelsByCard: Map<number, VocabularyRow[]> = new Map(),
 ) {
 	const cardsByColumn = new Map<number, CardRow[]>();
 	for (const c of cards) {
@@ -41,19 +40,12 @@ export function buildBoardResponse(
 			isSignable: col.is_signable,
 			signableAssigneeId: col.signable_assignee_id,
 			color: col.color,
-			cards: (cardsByColumn.get(col.id) ?? []).map((c) => ({
-				id: c.id,
-				columnId: c.column_id,
-				title: c.title,
-				description: c.description,
-				position: c.position,
-				version: c.version,
-				createdAt: c.created_at,
-				startedAt: c.started_at,
-				doneAt: c.done_at,
-				dueDate: c.due_date,
-				assignees: assigneesByCard.get(c.id) ?? [],
-			})),
+			cards: (cardsByColumn.get(col.id) ?? []).map((c) =>
+				buildCardResponse(c, {
+					assignees: assigneesByCard.get(c.id) ?? [],
+					labels: labelsByCard.get(c.id) ?? [],
+				}),
+			),
 		})),
 	};
 }
@@ -65,22 +57,45 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 
 	const columns = await getHumanColumns(db, workspaceId);
 	const cardRows = await db
-		.selectFrom("cards")
+		.selectFrom("cards as c")
+		.innerJoin("workspaces as w", "w.id", "c.workspace_id")
+		.leftJoin("tracker_vocabularies as st", (join) =>
+			join.onRef("st.id", "=", "c.status_id").on("st.kind", "=", "status"),
+		)
+		.leftJoin("tracker_vocabularies as pr", (join) =>
+			join.onRef("pr.id", "=", "c.priority_id").on("pr.kind", "=", "priority"),
+		)
 		.select([
-			"id",
-			"column_id",
-			"title",
-			"description",
-			"position",
-			"version",
-			"created_at",
-			"started_at",
-			"done_at",
-			sql<string | null>`due_date::text`.as("due_date"),
+			"c.id",
+			"c.column_id",
+			"c.title",
+			"c.description",
+			"c.position",
+			"c.version",
+			"c.created_at",
+			"c.started_at",
+			"c.done_at",
+			sql<string | null>`c.due_date::text`.as("due_date"),
+			"c.key_number",
+			"w.name as workspace_name",
+			"c.status_id",
+			"st.kind as status_kind",
+			"st.name as status_name",
+			"st.position as status_position",
+			"st.colour as status_colour",
+			"st.category as status_category",
+			"st.slot as status_slot",
+			"c.priority_id",
+			"pr.kind as priority_kind",
+			"pr.name as priority_name",
+			"pr.position as priority_position",
+			"pr.colour as priority_colour",
+			"c.project_id",
+			"c.phase_id",
 		])
-		.where("workspace_id", "=", workspaceId)
-		.where("deleted_at", "is", null)
-		.orderBy("position")
+		.where("c.workspace_id", "=", workspaceId)
+		.where("c.deleted_at", "is", null)
+		.orderBy("c.position")
 		.execute();
 	const cards = cardRows.map((c) => ({
 		...c,
@@ -89,6 +104,9 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 		done_at: c.done_at?.toISOString() ?? null,
 	}));
 	const cardIds = cards.map((c) => c.id);
-	const assigneesByCard = await loadCardAssigneesForCards(db, cardIds);
-	res.json(buildBoardResponse(columns, cards, assigneesByCard));
+	const [assigneesByCard, labelsByCard] = await Promise.all([
+		loadCardAssigneesForCards(db, cardIds),
+		loadCardLabelsForCards(db, cardIds),
+	]);
+	res.json(buildBoardResponse(columns, cards, assigneesByCard, labelsByCard));
 });
