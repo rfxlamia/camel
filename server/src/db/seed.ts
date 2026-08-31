@@ -4,73 +4,100 @@ import { sql } from "kysely";
 import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import { POSITION_GAP } from "../core/position.js";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "./kysely.js";
+import { db, type DBExecutor } from "./kysely.js";
+
+type DemoCard = {
+	columnIndex: number;
+	title: string;
+	description: string;
+};
+
+const DEMO_CARDS: readonly DemoCard[] = [
+	{
+		columnIndex: 0,
+		title: "Set up CI pipeline",
+		description: "GitHub Actions: lint, test, build.",
+	},
+	{
+		columnIndex: 0,
+		title: "Dark mode support",
+		description: "Respect prefers-color-scheme.",
+	},
+	{
+		columnIndex: 1,
+		title: "Connect GitHub issues",
+		description: "Sync open issues into the board.",
+	},
+	{
+		columnIndex: 1,
+		title: "Card labels",
+		description: "Color-coded labels per card.",
+	},
+	{
+		columnIndex: 2,
+		title: "Board drag & drop",
+		description: "Move cards between columns.",
+	},
+	{
+		columnIndex: 3,
+		title: "Project scaffolding",
+		description: "Vite + React + Tailwind v4 + Express + Postgres.",
+	},
+];
+
+async function insertDemoCard(
+	trx: DBExecutor,
+	workspaceId: number,
+	columnId: number,
+	card: DemoCard,
+	column: { isDone: boolean },
+	position: number,
+) {
+	const identity = await allocateCardIdentity(trx, { workspaceId, columnId });
+	const inserted = await trx
+		.insertInto("cards")
+		.values({
+			column_id: columnId,
+			title: card.title,
+			description: card.description,
+			position: position * POSITION_GAP,
+			created_at: sql`now() - interval '5 days'`,
+			started_at: card.columnIndex >= 2 ? sql`now() - interval '3 days'` : null,
+			done_at: column.isDone ? sql`now() - interval '1 day'` : null,
+			workspace_id: workspaceId,
+			key_number: identity.keyNumber,
+			status_id: identity.statusId,
+		})
+		.returning("id")
+		.executeTakeFirstOrThrow();
+	await trx
+		.insertInto("card_events")
+		.values({
+			card_id: inserted.id,
+			from_column_id: null,
+			to_column_id: columnId,
+			workspace_id: workspaceId,
+		})
+		.execute();
+}
 
 export async function seedDemoCards(
 	workspaceId: number,
 	columnIds: readonly number[],
 	columns: readonly { isDone: boolean }[],
 ) {
-	const cards = [
-		{
-			col: 0,
-			title: "Set up CI pipeline",
-			desc: "GitHub Actions: lint, test, build.",
-		},
-		{
-			col: 0,
-			title: "Dark mode support",
-			desc: "Respect prefers-color-scheme.",
-		},
-		{
-			col: 1,
-			title: "Connect GitHub issues",
-			desc: "Sync open issues into the board.",
-		},
-		{ col: 1, title: "Card labels", desc: "Color-coded labels per card." },
-		{ col: 2, title: "Board drag & drop", desc: "Move cards between columns." },
-		{
-			col: 3,
-			title: "Project scaffolding",
-			desc: "Vite + React + Tailwind v4 + Express + Postgres.",
-		},
-	];
-
 	await db.transaction().execute(async (trx) => {
-		for (let i = 0; i < cards.length; i++) {
-			const card = cards[i];
-			const columnId = columnIds[card.col];
-			const isDone = columns[card.col].isDone;
-			const isStarted = card.col >= 2;
-			const identity = await allocateCardIdentity(trx, {
+		for (let i = 0; i < DEMO_CARDS.length; i++) {
+			const card = DEMO_CARDS[i];
+			const columnId = columnIds[card.columnIndex];
+			await insertDemoCard(
+				trx,
 				workspaceId,
 				columnId,
-			});
-			const inserted = await trx
-				.insertInto("cards")
-				.values({
-					column_id: columnId,
-					title: card.title,
-					description: card.desc,
-					position: (i + 1) * POSITION_GAP,
-					created_at: sql`now() - interval '5 days'`,
-					started_at: isStarted ? sql`now() - interval '3 days'` : null,
-					done_at: isDone ? sql`now() - interval '1 day'` : null,
-					workspace_id: workspaceId,
-					key_number: identity.keyNumber,
-					status_id: identity.statusId,
-				})
-				.returning("id")
-				.executeTakeFirstOrThrow();
-			await trx
-				.insertInto("card_events")
-				.values({
-					card_id: inserted.id,
-					from_column_id: null,
-					to_column_id: columnId,
-					workspace_id: workspaceId,
-				})
-				.execute();
+				card,
+				columns[card.columnIndex],
+				i + 1,
+			);
 		}
 	});
 }
