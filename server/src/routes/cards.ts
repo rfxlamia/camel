@@ -225,7 +225,7 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 		getActivityRows: async () => [],
 	}).getCard({ userId: req.user!.id, workspaceId, cardId });
 
-	if ("status" in result) {
+	if (typeof result.status === "number") {
 		return res.status(result.status).json({ error: result.error });
 	}
 	res.json(result);
