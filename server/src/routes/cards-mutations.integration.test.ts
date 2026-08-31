@@ -131,8 +131,8 @@ async function setupFixtures() {
 }
 
 beforeEach(async () => {
-	await setupFixtures();
 	await cleanup();
+	await setupFixtures();
 	vi.clearAllMocks();
 });
 
