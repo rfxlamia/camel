@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { sql } from "kysely";
 import { POSITION_GAP } from "../core/position.js";
-import { buildRemapPlan } from "../core/remap-card-statuses.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../realtime.js";
@@ -11,7 +10,8 @@ import {
 	validateColumnBatch,
 } from "../validators/column.js";
 import { validateColumnName } from "../validators/input-length.js";
-import { getHumanColumns, recordActivity } from "./helpers.js";
+import { updateColumnWithIsDoneRemap } from "./column-is-done-remap.js";
+import { recordActivity } from "./helpers.js";
 
 const RETURNING_COLUMNS = [
 	"id",
@@ -25,24 +25,6 @@ const RETURNING_COLUMNS = [
 	"color",
 ] as const;
 
-type ColumnRow = {
-	id: number;
-	title: string;
-	position: number;
-	wip_limit: number | null;
-	policy: string;
-	is_done: boolean;
-	is_signable: boolean;
-	signable_assignee_id: number | null;
-	color: string | null;
-};
-
-type RemapCardEvent = {
-	type: "card.updated";
-	cardId: number;
-	payload: Record<string, unknown>;
-};
-
 type ColumnPatchInput = {
 	title?: string;
 	wipLimit?: number | null;
@@ -55,15 +37,9 @@ type ColumnPatchInput = {
 };
 
 function buildColumnPatchFields(input: ColumnPatchInput) {
-	const fields: {
-		title?: string;
-		wip_limit?: number | null;
-		policy?: string;
-		is_done?: boolean;
-		is_signable?: boolean;
-		signable_assignee_id?: number | null;
-		color?: string | null;
-	} = {};
+	const fields: Parameters<
+		typeof updateColumnWithIsDoneRemap
+	>[0]["patchFields"] = {};
 	if (input.title != null) fields.title = input.title;
 	if (input.wipLimit !== undefined) fields.wip_limit = input.wipLimit ?? null;
 	if (input.policy != null) fields.policy = input.policy;
@@ -292,131 +268,13 @@ columnsRouter.patch(
 		// isDone changes must serialize on the workspace row and update the
 		// normalized card status in the same transaction as the column geometry.
 		if (isDone !== undefined) {
-			type RemapResult =
-				| { kind: "not_found" }
-				| {
-						kind: "ok";
-						updated: ColumnRow;
-						cardEvents: RemapCardEvent[];
-				  };
-
-			const result: RemapResult = await db
-				.transaction()
-				.execute(async (trx) => {
-					await trx
-						.selectFrom("workspaces")
-						.select("id")
-						.where("id", "=", workspaceId)
-						.forUpdate()
-						.executeTakeFirstOrThrow();
-
-					const beforeColumns = await getHumanColumns(trx, workspaceId);
-					const exists = beforeColumns.some((column) => column.id === id);
-					if (!exists) return { kind: "not_found" };
-
-					if (isDone) {
-						await trx
-							.updateTable("columns")
-							.set({ is_done: false })
-							.where("workspace_id", "=", workspaceId)
-							.where("board_id", "is", null)
-							.where("id", "!=", id)
-							.where("is_done", "=", true)
-							.execute();
-					}
-
-					const updated = await trx
-						.updateTable("columns")
-						.set({ ...patchFields, is_done: isDone })
-						.where("id", "=", id)
-						.where("workspace_id", "=", workspaceId)
-						.where("board_id", "is", null)
-						.returning(RETURNING_COLUMNS)
-						.executeTakeFirstOrThrow();
-
-					const afterColumns = await getHumanColumns(trx, workspaceId);
-					const cards = await trx
-						.selectFrom("cards")
-						.select(["id", "column_id", "status_id", "deleted_at"])
-						.where("workspace_id", "=", workspaceId)
-						.where("deleted_at", "is", null)
-						.forUpdate()
-						.execute();
-					const statuses = await trx
-						.selectFrom("tracker_vocabularies")
-						.select(["id", "kind", "slot"])
-						.where("workspace_id", "=", workspaceId)
-						.where("kind", "=", "status")
-						.execute();
-					const plan = buildRemapPlan({
-						beforeColumns,
-						afterColumns,
-						cards,
-						statuses,
-					});
-
-					const firstColumnId = afterColumns[0]?.id;
-					const cardEvents: RemapCardEvent[] = [];
-					for (const remap of plan) {
-						const targetIsDone =
-							afterColumns.find((column) => column.id === remap.columnId)
-								?.is_done ?? false;
-						const updatedCard = await trx
-							.updateTable("cards")
-							.set({
-								status_id: remap.statusId,
-								version: sql`version + 1`,
-								started_at: sql`CASE WHEN started_at IS NULL AND (${targetIsDone} OR ${remap.columnId !== firstColumnId}) THEN now() ELSE started_at END`,
-								done_at: sql`CASE WHEN ${targetIsDone} THEN COALESCE(done_at, now()) ELSE NULL END`,
-							})
-							.where("id", "=", remap.cardId)
-							.where("workspace_id", "=", workspaceId)
-							.where("deleted_at", "is", null)
-							.returning([
-								"id",
-								"column_id",
-								"version",
-								"status_id",
-								"started_at",
-								"done_at",
-							])
-							.executeTakeFirstOrThrow();
-
-						await recordActivity(trx, req.user!, workspaceId, "update", {
-							cardId: updatedCard.id,
-							fromColumnId: updatedCard.column_id,
-							toColumnId: updatedCard.column_id,
-							payload: {
-								changed: ["status"],
-								statusId: updatedCard.status_id,
-							},
-						});
-						cardEvents.push({
-							type: "card.updated",
-							cardId: updatedCard.id,
-							payload: {
-								columnId: updatedCard.column_id,
-								statusId: updatedCard.status_id,
-								version: updatedCard.version,
-								startedAt: updatedCard.started_at?.toISOString() ?? null,
-								doneAt: updatedCard.done_at?.toISOString() ?? null,
-							},
-						});
-					}
-
-					await recordActivity(trx, req.user!, workspaceId, "update", {
-						payload: {
-							columnId: id,
-							columnTitle: updated.title,
-							isDone,
-							isSignable: updated.is_signable,
-							signableAssigneeId: updated.signable_assignee_id,
-							color: updated.color,
-						},
-					});
-
-					return { kind: "ok", updated, cardEvents };
-				});
+			const result = await updateColumnWithIsDoneRemap({
+				workspaceId,
+				columnId: id,
+				isDone,
+				patchFields,
+				actor: req.user!,
+			});
 
 			if (result.kind === "not_found") {
 				return res.status(404).json({ error: "column not found" });
