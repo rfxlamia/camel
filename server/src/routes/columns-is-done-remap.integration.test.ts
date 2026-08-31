@@ -258,14 +258,19 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		it("does not bump unchanged cards and preserves soft-deleted cards", async () => {
 			const inserted = await pool.query<{ id: number; position: number }>(
 				`INSERT INTO columns (workspace_id, title, position, is_done)
-			 VALUES ($1, 'Inbox', 1000, false), ($1, 'Done', 2000, true)
+			 VALUES
+				($1, 'Inbox', 1000, false),
+				($1, 'Doing', 2000, false),
+				($1, 'Review', 3000, false),
+				($1, 'Finished', 4000, true),
+				($1, 'Archive', 5000, false)
 			 RETURNING id, position`,
 				[WORKSPACE_ID],
 			);
-			const [inbox, done] = inserted.rows
+			const [inbox, , , done, stable] = inserted.rows
 				.sort((left, right) => left.position - right.position)
 				.map((row) => row.id);
-			const unchanged = await addCard(inbox, "backlog");
+			const unchanged = await addCard(stable, "in_progress");
 			const deleted = await addCard(done, "done");
 			await pool.query("UPDATE cards SET deleted_at = now() WHERE id = $1", [
 				deleted,
@@ -276,6 +281,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.send({ isDone: true });
 
 			expect(response.status).toBe(200);
+			expect((await readCard(unchanged)).status_id).toBe(
+				await statusId("in_progress"),
+			);
 			expect((await readCard(unchanged)).version).toBe(1);
 			expect((await readCard(deleted)).version).toBe(1);
 			expect(mockPublishEvent).toHaveBeenCalledTimes(1);
@@ -325,7 +333,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				await statusId("done"),
 			);
 
-			await cleanup();
+			await setup();
 			const single = await pool.query<{ id: number }>(
 				`INSERT INTO columns (workspace_id, title, position, is_done)
 			 VALUES ($1, 'Inbox', 1000, false) RETURNING id`,
