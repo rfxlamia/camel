@@ -861,6 +861,10 @@ BEGIN
       AND table_name = 'cards'
       AND column_name = 'status_id'
       AND is_nullable = 'YES'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM cards
+    WHERE status_id IS NULL
   ) THEN
     ALTER TABLE cards ALTER COLUMN status_id SET NOT NULL;
   END IF;

@@ -148,6 +148,18 @@ describe("board/tracker migration seed and backfill contract", () => {
 		expect(backfillSql).not.toMatch(/\b(started_at|done_at)\s*=/i);
 	});
 
+	it("sets status_id NOT NULL only after all cards are mapped", () => {
+		const guardBlock = schemaSql.match(
+			/DO \$board_tracker_status_not_null\$[\s\S]*?END \$board_tracker_status_not_null\$;/,
+		)?.[0];
+		expect(guardBlock).toBeTruthy();
+		expect(guardBlock).toMatch(/information_schema\.columns/);
+		expect(guardBlock).toMatch(/is_nullable\s*=\s*'YES'/);
+		expect(guardBlock).toMatch(
+			/NOT EXISTS\s*\(\s*SELECT 1\s+FROM cards\s+WHERE status_id IS NULL\s*\)/i,
+		);
+	});
+
 	it("allocates keys only for live null-key cards under workspace locks", () => {
 		const backfillSql = schemaSql.slice(backfillIndex);
 		expect(backfillSql).toMatch(/FOR\s+UPDATE/i);
