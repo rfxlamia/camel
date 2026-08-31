@@ -230,6 +230,7 @@ async function setupFresh(client: Client): Promise<Fixture> {
 	await addCards(client, workspaceId, columns, freshCards, freshStarted);
 	const before = await readCards(client, workspaceId);
 	await applySchemaFromSlotSeed(client); // seed, backfill, and final NOT NULL
+	await assertFinalStatusNotNull(client, workspaceId);
 	return { workspaceId, before, expected: freshExpected };
 }
 
@@ -276,6 +277,7 @@ async function setupExisting(client: Client): Promise<Fixture> {
 	);
 	const before = await readCards(client, workspaceId);
 	await applySchemaFromBackfill(client);
+	await assertFinalStatusNotNull(client, workspaceId);
 	return { workspaceId, before, expected: existingExpected };
 }
 
@@ -297,6 +299,22 @@ function assertMigration(after: Card[], fixture: Fixture) {
 		deleted_at,
 	}: Card) => [title, column_id, started_at, done_at, deleted_at];
 	expect(after.map(preserve)).toEqual(fixture.before.map(preserve));
+}
+
+async function assertFinalStatusNotNull(client: Client, workspaceId: number) {
+	const column = await row<{ id: number }>(
+		client,
+		"SELECT id FROM columns WHERE workspace_id = $1 ORDER BY id LIMIT 1",
+		[workspaceId],
+	);
+	expect(column).toBeDefined();
+	await expect(
+		client.query(
+			`INSERT INTO cards (workspace_id, column_id, title, position, key_number)
+			 VALUES ($1, $2, 'post-migration-invalid', 1024, 999)`,
+			[workspaceId, column.id],
+		),
+	).rejects.toMatchObject({ code: "23502" });
 }
 
 async function counter(client: Client, workspaceId: number) {

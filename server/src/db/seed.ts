@@ -1,9 +1,79 @@
+import { pathToFileURL } from "node:url";
 import bcrypt from "bcryptjs";
 import { sql } from "kysely";
 import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import { POSITION_GAP } from "../core/position.js";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "./kysely.js";
+
+export async function seedDemoCards(
+	workspaceId: number,
+	columnIds: readonly number[],
+	columns: readonly { isDone: boolean }[],
+) {
+	const cards = [
+		{
+			col: 0,
+			title: "Set up CI pipeline",
+			desc: "GitHub Actions: lint, test, build.",
+		},
+		{
+			col: 0,
+			title: "Dark mode support",
+			desc: "Respect prefers-color-scheme.",
+		},
+		{
+			col: 1,
+			title: "Connect GitHub issues",
+			desc: "Sync open issues into the board.",
+		},
+		{ col: 1, title: "Card labels", desc: "Color-coded labels per card." },
+		{ col: 2, title: "Board drag & drop", desc: "Move cards between columns." },
+		{
+			col: 3,
+			title: "Project scaffolding",
+			desc: "Vite + React + Tailwind v4 + Express + Postgres.",
+		},
+	];
+
+	await db.transaction().execute(async (trx) => {
+		for (let i = 0; i < cards.length; i++) {
+			const card = cards[i];
+			const columnId = columnIds[card.col];
+			const isDone = columns[card.col].isDone;
+			const isStarted = card.col >= 2;
+			const identity = await allocateCardIdentity(trx, {
+				workspaceId,
+				columnId,
+			});
+			const inserted = await trx
+				.insertInto("cards")
+				.values({
+					column_id: columnId,
+					title: card.title,
+					description: card.desc,
+					position: (i + 1) * POSITION_GAP,
+					created_at: sql`now() - interval '5 days'`,
+					started_at: isStarted ? sql`now() - interval '3 days'` : null,
+					done_at: isDone ? sql`now() - interval '1 day'` : null,
+					workspace_id: workspaceId,
+					key_number: identity.keyNumber,
+					status_id: identity.statusId,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			await trx
+				.insertInto("card_events")
+				.values({
+					card_id: inserted.id,
+					from_column_id: null,
+					to_column_id: columnId,
+					workspace_id: workspaceId,
+				})
+				.execute();
+		}
+	});
+}
 
 async function seed() {
 	const countRow = await db
@@ -96,68 +166,7 @@ async function seed() {
 		columnIds.push(inserted.id);
 	}
 
-	const cards = [
-		{
-			col: 0,
-			title: "Set up CI pipeline",
-			desc: "GitHub Actions: lint, test, build.",
-		},
-		{
-			col: 0,
-			title: "Dark mode support",
-			desc: "Respect prefers-color-scheme.",
-		},
-		{
-			col: 1,
-			title: "Connect GitHub issues",
-			desc: "Sync open issues into the board.",
-		},
-		{ col: 1, title: "Card labels", desc: "Color-coded labels per card." },
-		{ col: 2, title: "Board drag & drop", desc: "Move cards between columns." },
-		{
-			col: 3,
-			title: "Project scaffolding",
-			desc: "Vite + React + Tailwind v4 + Express + Postgres.",
-		},
-	];
-
-	await db.transaction().execute(async (trx) => {
-		for (let i = 0; i < cards.length; i++) {
-			const card = cards[i];
-			const columnId = columnIds[card.col];
-			const isDone = columns[card.col].isDone;
-			const isStarted = card.col >= 2;
-			const identity = await allocateCardIdentity(trx, {
-				workspaceId,
-				columnId,
-			});
-			const inserted = await trx
-				.insertInto("cards")
-				.values({
-					column_id: columnId,
-					title: card.title,
-					description: card.desc,
-					position: (i + 1) * POSITION_GAP,
-					created_at: sql`now() - interval '5 days'`,
-					started_at: isStarted ? sql`now() - interval '3 days'` : null,
-					done_at: isDone ? sql`now() - interval '1 day'` : null,
-					workspace_id: workspaceId,
-					key_number: identity.keyNumber,
-					status_id: identity.statusId,
-				})
-				.returning("id")
-				.executeTakeFirstOrThrow();
-			await trx
-				.insertInto("card_events")
-				.values({
-					card_id: inserted.id,
-					from_column_id: null,
-					to_column_id: columnId,
-					workspace_id: workspaceId,
-				})
-				.execute();
-		}
-	});
+	await seedDemoCards(workspaceId, columnIds, columns);
 
 	console.log(
 		"Seeded demo user (username: demo, password: password), 4 columns and 6 cards.",
@@ -165,7 +174,12 @@ async function seed() {
 	await db.destroy();
 }
 
-seed().catch((err) => {
-	console.error("Seed failed:", err);
-	process.exit(1);
-});
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+	seed().catch((err) => {
+		console.error("Seed failed:", err);
+		process.exit(1);
+	});
+}
