@@ -824,6 +824,22 @@ BEGIN
   END LOOP;
 END $board_tracker_key_backfill$;
 
+-- Finalize the card identity migration only after all legacy rows have been
+-- assigned a status. The guard keeps repeated migrations idempotent.
+DO $board_tracker_status_not_null$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'cards'
+      AND column_name = 'status_id'
+      AND is_nullable = 'YES'
+  ) THEN
+    ALTER TABLE cards ALTER COLUMN status_id SET NOT NULL;
+  END IF;
+END $board_tracker_status_not_null$;
+
 -- tracker: category backfill
 UPDATE tracker_vocabularies
 SET category = 'backlog'

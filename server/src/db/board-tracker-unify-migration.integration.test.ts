@@ -17,6 +17,8 @@ const agentSchemaSql = readFileSync(
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
 const schemaName = `board_tracker_unify_${process.pid}_${randomUUID().replaceAll("-", "")}`;
 const quotedSchema = `"${schemaName}"`;
+const existingSchemaName = `${schemaName}_existing`;
+const existingQuotedSchema = `"${existingSchemaName}"`;
 
 type Client = Awaited<ReturnType<typeof pool.connect>>;
 type Slot = "backlog" | "todo" | "in_progress" | "done" | "canceled";
@@ -91,17 +93,35 @@ const existingExpected: Fixture["expected"] = {
 	"agent-deleted": ["done", null],
 };
 
-async function withSchema<T>(fn: (client: Client) => Promise<T>) {
+async function withSchema<T>(
+	fn: (client: Client) => Promise<T>,
+	schema = quotedSchema,
+) {
 	const client = await pool.connect();
 	try {
-		await client.query(`SET search_path TO ${quotedSchema}, public`);
+		await client.query(`SET search_path TO ${schema}, public`);
 		return await fn(client);
 	} finally {
 		client.release();
 	}
 }
 
+const slotSeedIndex = schemaSql.indexOf("-- T2 slot seed/update");
+const statusBackfillIndex = schemaSql.indexOf(
+	"-- board-tracker unify backfill",
+);
+if (slotSeedIndex < 0 || statusBackfillIndex < 0) {
+	throw new Error("schema.sql is missing the T2 migration markers");
+}
 const applySchema = (client: Client) => client.query(schemaSql);
+const applySchemaBeforeSlotSeed = (client: Client) =>
+	client.query(schemaSql.slice(0, slotSeedIndex));
+const applySchemaFromSlotSeed = (client: Client) =>
+	client.query(schemaSql.slice(slotSeedIndex));
+const applySchemaSlotSeed = (client: Client) =>
+	client.query(schemaSql.slice(slotSeedIndex, statusBackfillIndex));
+const applySchemaFromBackfill = (client: Client) =>
+	client.query(schemaSql.slice(statusBackfillIndex));
 const row = async <T extends Record<string, unknown>>(
 	client: Client,
 	sql: string,
@@ -195,7 +215,9 @@ async function statusId(client: Client, workspaceId: number, slot: Slot) {
 }
 
 async function setupFresh(client: Client): Promise<Fixture> {
-	await applySchema(client);
+	// Stage legacy NULL-status rows after additive DDL but before slot seed and
+	// the null-only backfills, including the final NOT NULL constraint.
+	await applySchemaBeforeSlotSeed(client);
 	await client.query(
 		`INSERT INTO users (username, display_name, password_hash)
 		 VALUES ('t2-migration-owner', 'T2 Migration Owner', 'test')`,
@@ -207,13 +229,22 @@ async function setupFresh(client: Client): Promise<Fixture> {
 	]);
 	await addCards(client, workspaceId, columns, freshCards, freshStarted);
 	const before = await readCards(client, workspaceId);
-	await applySchema(client); // no-board_id branch, before agent-schema.sql
+	await applySchemaFromSlotSeed(client); // seed, backfill, and final NOT NULL
+	await assertFinalStatusNotNull(client, workspaceId);
 	return { workspaceId, before, expected: freshExpected };
 }
 
 async function setupExisting(client: Client): Promise<Fixture> {
+	// Keep this board-aware fixture independent so its NULL-status rows are
+	// staged before the final migration constraint, just like the fresh fixture.
+	await applySchemaBeforeSlotSeed(client);
+	await client.query(
+		`INSERT INTO users (username, display_name, password_hash)
+		 VALUES ('t2-existing-migration-owner', 'T2 Existing Migration Owner', 'test')`,
+	);
 	const workspaceId = await workspace(client, "t2-existing", 4);
-	await applySchema(client); // board_id exists from the caller's agent schema
+	await client.query(agentSchemaSql);
+	await applySchemaSlotSeed(client);
 	const board = await client.query<{ id: number }>(
 		`INSERT INTO agent_boards (workspace_id, user_id, original_intent)
 		 VALUES ($1, (SELECT id FROM users ORDER BY id LIMIT 1), 'agent board') RETURNING id`,
@@ -245,7 +276,8 @@ async function setupExisting(client: Client): Promise<Fixture> {
 		[todo, workspaceId],
 	);
 	const before = await readCards(client, workspaceId);
-	await applySchema(client); // first board-aware backfill
+	await applySchemaFromBackfill(client);
+	await assertFinalStatusNotNull(client, workspaceId);
 	return { workspaceId, before, expected: existingExpected };
 }
 
@@ -267,6 +299,22 @@ function assertMigration(after: Card[], fixture: Fixture) {
 		deleted_at,
 	}: Card) => [title, column_id, started_at, done_at, deleted_at];
 	expect(after.map(preserve)).toEqual(fixture.before.map(preserve));
+}
+
+async function assertFinalStatusNotNull(client: Client, workspaceId: number) {
+	const column = await row<{ id: number }>(
+		client,
+		"SELECT id FROM columns WHERE workspace_id = $1 ORDER BY id LIMIT 1",
+		[workspaceId],
+	);
+	expect(column).toBeDefined();
+	await expect(
+		client.query(
+			`INSERT INTO cards (workspace_id, column_id, title, position, key_number)
+			 VALUES ($1, $2, 'post-migration-invalid', 1024, 999)`,
+			[workspaceId, column.id],
+		),
+	).rejects.toMatchObject({ code: "23502" });
 }
 
 async function counter(client: Client, workspaceId: number) {
@@ -303,6 +351,7 @@ describe.skipIf(!runIntegration)(
 
 		afterAll(async () => {
 			await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+			await pool.query(`DROP SCHEMA IF EXISTS ${existingQuotedSchema} CASCADE`);
 			await pool.end();
 		});
 
@@ -317,8 +366,8 @@ describe.skipIf(!runIntegration)(
 		});
 
 		it("maps human and agent boards independently, including deleted history", async () => {
+			await pool.query(`CREATE SCHEMA ${existingQuotedSchema}`);
 			await withSchema(async (client) => {
-				await client.query(agentSchemaSql);
 				const fixture = await setupExisting(client);
 				const first = await readCards(client, fixture.workspaceId);
 				assertMigration(first, fixture);
@@ -332,7 +381,7 @@ describe.skipIf(!runIntegration)(
 				);
 				expect(tracker.key_number).toBe(9);
 				await assertRerun(client, fixture, first, firstCounter);
-			});
+			}, existingQuotedSchema);
 		});
 	},
 );

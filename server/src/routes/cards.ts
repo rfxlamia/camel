@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { sql } from "kysely";
+import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import {
 	neighborsAt,
 	POSITION_GAP,
@@ -225,8 +226,10 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 		getActivityRows: async () => [],
 	}).getCard({ userId: req.user!.id, workspaceId, cardId });
 
-	if (typeof result.status === "number") {
-		return res.status(result.status).json({ error: result.error });
+	if ("status" in result && typeof result.status === "number") {
+		return res
+			.status(result.status)
+			.json({ error: "error" in result ? result.error : "Not found" });
 	}
 	res.json(result);
 });
@@ -234,7 +237,12 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
-	const { columnId, title, description } = req.body ?? {};
+	const { columnId, title, description, statusId } = req.body ?? {};
+	if (statusId !== undefined) {
+		return res
+			.status(400)
+			.json({ error: "statusId is not accepted for card creation" });
+	}
 	if (!Number.isInteger(columnId)) {
 		return res.status(400).json({ error: "columnId must be an integer" });
 	}
@@ -283,6 +291,10 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 			col.is_signable && col.signable_assignee_id
 				? col.signable_assignee_id
 				: null;
+		const identity = await allocateCardIdentity(trx, {
+			workspaceId,
+			columnId: Number(columnId),
+		});
 
 		const inserted = await trx
 			.insertInto("cards")
@@ -292,6 +304,8 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 				description: descValidation.trimmed ?? "",
 				position: sql<number>`COALESCE((SELECT MAX(position) FROM cards WHERE column_id = ${Number(columnId)}), 0) + ${POSITION_GAP}`,
 				workspace_id: workspaceId,
+				key_number: identity.keyNumber,
+				status_id: identity.statusId,
 			})
 			.returning("id")
 			.executeTakeFirstOrThrow();
@@ -343,6 +357,11 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const id = Number(req.params.id);
 	if (Number.isNaN(id)) {
 		return res.status(400).json({ error: "invalid card id" });
+	}
+	if ("statusId" in body) {
+		return res
+			.status(400)
+			.json({ error: "statusId is not accepted for card updates" });
 	}
 	if (version !== undefined && !Number.isInteger(version)) {
 		return res.status(400).json({ error: "version must be an integer" });
