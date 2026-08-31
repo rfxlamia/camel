@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 import type { AuthUser } from "../auth.js";
+import { firstNonDoneColumnId } from "../core/column-status-map.js";
 import { buildRemapPlan } from "../core/remap-card-statuses.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { getHumanColumns, recordActivity } from "./helpers.js";
@@ -161,7 +162,7 @@ async function applyCardRemaps(
 	input: { workspaceId: number; actor: AuthUser },
 	remapData: RemapData,
 ) {
-	const firstColumnId = remapData.afterColumns[0]?.id;
+	const backlogColumnId = firstNonDoneColumnId(remapData.afterColumns);
 	const cardEvents: RemapCardEvent[] = [];
 	for (const remap of remapData.plan) {
 		const targetIsDone =
@@ -172,7 +173,7 @@ async function applyCardRemaps(
 			input.workspaceId,
 			remap,
 			targetIsDone,
-			firstColumnId,
+			backlogColumnId,
 		);
 		await recordCardRemapActivity(
 			trx,
@@ -190,14 +191,14 @@ async function updateRemappedCard(
 	workspaceId: number,
 	remap: Remap,
 	targetIsDone: boolean,
-	firstColumnId: number | undefined,
+	backlogColumnId: number | undefined,
 ) {
 	return trx
 		.updateTable("cards")
 		.set({
 			status_id: remap.statusId,
 			version: sql`version + 1`,
-			started_at: sql`CASE WHEN started_at IS NULL AND (${targetIsDone} OR ${remap.columnId !== firstColumnId}) THEN now() ELSE started_at END`,
+			started_at: sql`CASE WHEN started_at IS NULL AND (${targetIsDone} OR ${remap.columnId !== backlogColumnId}) THEN now() ELSE started_at END`,
 			done_at: sql`CASE WHEN ${targetIsDone} THEN COALESCE(done_at, now()) ELSE NULL END`,
 		})
 		.where("id", "=", remap.cardId)

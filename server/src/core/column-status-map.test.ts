@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	firstNonDoneColumnId,
 	mapColumnSlots,
 	statusIdForSlot,
 	type StatusSlot,
@@ -121,6 +122,27 @@ describe("mapColumnSlots", () => {
 		]);
 
 		expect(renamed).toEqual(sameGeometry);
+	});
+});
+
+describe("firstNonDoneColumnId", () => {
+	it("returns the first non-done column by position, skipping done columns", () => {
+		expect(
+			firstNonDoneColumnId([
+				{ id: 31, position: 1024, is_done: true },
+				{ id: 32, position: 2048, is_done: false },
+				{ id: 33, position: 3072, is_done: false },
+			]),
+		).toBe(32);
+	});
+
+	it("uses the same id tie-breaker as mapColumnSlots", () => {
+		expect(
+			firstNonDoneColumnId([
+				{ id: 52, position: 1024, is_done: false },
+				{ id: 51, position: 1024, is_done: false },
+			]),
+		).toBe(51);
 	});
 });
 

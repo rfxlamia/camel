@@ -63,6 +63,14 @@ export function mapColumnSlots(
 	return mapped;
 }
 
+/** First non-done column by geometry — the backlog boundary for started_at. */
+export function firstNonDoneColumnId(
+	columns: readonly ColumnStatusInput[],
+): number | undefined {
+	const orderedColumns = [...columns].sort(compareColumns);
+	return orderedColumns.find((column) => !column.is_done)?.id;
+}
+
 /** Resolve a fixed status vocabulary id without consulting display metadata. */
 export function statusIdForSlot(
 	rows: readonly StatusVocabularyInput[],
