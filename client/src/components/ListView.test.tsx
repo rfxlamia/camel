@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Card, Column } from "../types";
 import ListView from "./ListView";
-import type { Column, Card } from "../types";
 
 const card = (id: number, overrides: Partial<Card> = {}): Card => ({
 	id, columnId: 1, title: `Card ${id}`, description: "", position: id, version: 1,
@@ -52,6 +52,30 @@ describe("ListView", () => {
 		renderListView({ columns: shuffled });
 		const titles = screen.getAllByRole("button").map((el) => el.textContent);
 		expect(titles.indexOf("First")).toBeLessThan(titles.indexOf("Second"));
+	});
+
+	it("shows formatted keys in the ID column while keeping titles and long prefixes readable", () => {
+		const cols = [
+			{
+				...columns[0]!,
+				cards: [
+					card(41, { key: "CA-41", title: "Keep list title", position: 1 }),
+					card(987654321, {
+						key: "CAMEL-TRACKER-123456789",
+						title: "Long key title",
+						position: 2,
+					}),
+				],
+			},
+		];
+		renderListView({ columns: cols });
+
+		expect(screen.getByText("CA-41")).toBeTruthy();
+		expect(screen.getByText("Keep list title")).toBeTruthy();
+		expect(screen.getByText("CAMEL-TRACKER-123456789")).toBeTruthy();
+		expect(screen.getByText("Long key title")).toBeTruthy();
+		expect(screen.queryByText("41", { exact: true })).toBeNull();
+		expect(screen.queryByText("987654321", { exact: true })).toBeNull();
 	});
 
 	it("shows overdue styling via data-testid for overdue not-done card", () => {
