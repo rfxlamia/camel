@@ -2,6 +2,10 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import {
+	mapColumnSlots,
+	statusIdForSlot,
+} from "../core/column-status-map.js";
+import {
 	neighborsAt,
 	POSITION_GAP,
 	positionBetween,
@@ -696,7 +700,12 @@ cardsRouter.post(
 		if (Number.isNaN(cardId)) {
 			return res.status(400).json({ error: "invalid card id" });
 		}
-		const { toColumnId, index, version } = req.body ?? {};
+		const { toColumnId, index, version, statusId } = req.body ?? {};
+		if (statusId !== undefined) {
+			return res
+				.status(400)
+				.json({ error: "statusId is not accepted for card moves" });
+		}
 		if (
 			!Number.isInteger(toColumnId) ||
 			!Number.isInteger(index) ||
@@ -748,6 +757,7 @@ cardsRouter.post(
 				.selectFrom("columns")
 				.select([
 					"id",
+					"board_id",
 					"wip_limit",
 					"is_done",
 					"is_signable",
@@ -762,6 +772,39 @@ cardsRouter.post(
 			if (!target) return { kind: "not_found_column" };
 
 			const isSameColumn = card.column_id === toColumnId;
+
+			let destinationStatusId: number | undefined;
+			if (!isSameColumn) {
+				const siblingColumns = await trx
+					.selectFrom("columns")
+					.select(["id", "position", "is_done"])
+					.where("workspace_id", "=", workspaceId)
+					.where(
+						sql<boolean>`board_id IS NOT DISTINCT FROM ${target.board_id}`,
+					)
+					.orderBy("position")
+					.orderBy("id")
+					.execute();
+
+				const slot = mapColumnSlots(siblingColumns).get(toColumnId);
+				if (!slot) {
+					throw new Error(
+						"Destination column is not in the workspace board geometry",
+					);
+				}
+
+				const statusRows = await trx
+					.selectFrom("tracker_vocabularies")
+					.select(["id", "kind", "slot"])
+					.where("workspace_id", "=", workspaceId)
+					.where("kind", "=", "status")
+					.execute();
+				const resolvedStatusId = statusIdForSlot(statusRows, slot);
+				if (resolvedStatusId === null) {
+					throw new Error(`Status vocabulary missing for slot: ${slot}`);
+				}
+				destinationStatusId = resolvedStatusId;
+			}
 
 			const siblings = await trx
 				.selectFrom("cards")
@@ -807,6 +850,9 @@ cardsRouter.post(
 					column_id: toColumnId,
 					position,
 					version: sql`version + 1`,
+					...(destinationStatusId !== undefined
+						? { status_id: destinationStatusId }
+						: {}),
 					started_at: sql`CASE WHEN started_at IS NULL AND (${target.is_done} OR NOT ${target.is_first}) THEN now() ELSE started_at END`,
 					done_at: sql`CASE WHEN ${target.is_done} THEN COALESCE(done_at, now()) ELSE NULL END`,
 				})

@@ -245,6 +245,206 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			addColumn,
 		});
 
+		it("updates status_id when moving To Do to In Review while preserving WIP, version, and timestamps", async () => {
+			await addColumn("Inbox", 1024);
+			const todo = await addColumn("To Do", 2048);
+			await addColumn("In Progress", 3072);
+			const review = await addColumn("In Review", 4096);
+			await addColumn("Done", 5120, true);
+			await pool.query(
+				"UPDATE columns SET wip_limit = 1 WHERE id = $1",
+				[review],
+			);
+
+			const created = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
+				.send({ columnId: todo, title: "Move me" });
+			expect(created.status).toBe(201);
+			expect(created.body.status.slot).toBe("todo");
+			const cardId = created.body.id as number;
+			const initialVersion = created.body.version as number;
+			expect(created.body.startedAt).toBeNull();
+
+			const blocker = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
+				.send({ columnId: review, title: "WIP blocker" });
+			expect(blocker.status).toBe(201);
+
+			const wipBlocked = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards/${cardId}/move`)
+				.send({ toColumnId: review, index: 0, version: initialVersion });
+			expect(wipBlocked.status).toBe(409);
+			expect(wipBlocked.body.error).toMatch(/WIP limit/i);
+
+			expect(
+				(
+					await request(app).delete(
+						`/api/workspaces/${WORKSPACE_ID}/cards/${blocker.body.id}`,
+					)
+				).status,
+			).toBe(204);
+
+			const todoStatusId = (
+				await pool.query<{ id: number }>(
+					`SELECT id FROM tracker_vocabularies
+					 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'todo'`,
+					[WORKSPACE_ID],
+				)
+			).rows[0]!.id;
+			const inProgressStatusId = (
+				await pool.query<{ id: number }>(
+					`SELECT id FROM tracker_vocabularies
+					 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'in_progress'`,
+					[WORKSPACE_ID],
+				)
+			).rows[0]!.id;
+
+			const beforeMove = (
+				await pool.query<{
+					status_id: number;
+					column_id: number;
+					started_at: Date | null;
+				}>("SELECT status_id, column_id, started_at FROM cards WHERE id = $1", [
+					cardId,
+				])
+			).rows[0]!;
+			expect(beforeMove.status_id).toBe(todoStatusId);
+			expect(beforeMove.column_id).toBe(todo);
+			expect(beforeMove.started_at).toBeNull();
+
+			const move = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards/${cardId}/move`)
+				.send({ toColumnId: review, index: 0, version: initialVersion });
+			expect(move.status).toBe(200);
+			expect(move.body.columnId).toBe(review);
+			expect(move.body.status.slot).toBe("in_progress");
+			expect(move.body.version).toBe(initialVersion + 1);
+			expect(move.body.startedAt).not.toBeNull();
+
+			const afterMove = (
+				await pool.query<{ status_id: number; column_id: number }>(
+					"SELECT status_id, column_id FROM cards WHERE id = $1",
+					[cardId],
+				)
+			).rows[0]!;
+			expect(afterMove.column_id).toBe(review);
+			expect(afterMove.status_id).toBe(inProgressStatusId);
+			expect(afterMove.status_id).not.toBe(todoStatusId);
+
+			const rejected = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards/${cardId}/move`)
+				.send({
+					toColumnId: todo,
+					index: 0,
+					version: move.body.version,
+					statusId: inProgressStatusId,
+				});
+			expect(rejected.status).toBe(400);
+			expect(
+				(
+					await pool.query<{ status_id: number }>(
+						"SELECT status_id FROM cards WHERE id = $1",
+						[cardId],
+					)
+				).rows[0]!.status_id,
+			).toBe(inProgressStatusId);
+		});
+
+		it("updates agent-board card status using board_id sibling geometry", async () => {
+			const agentIntent = "prepare a research report";
+			const created = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/agent/boards`)
+				.send({ intent: agentIntent });
+			expect(created.status).toBe(201);
+			const boardId = created.body.boardId as number;
+			expect(
+				(
+					await request(app).post(
+						`/api/workspaces/${WORKSPACE_ID}/agent/boards/${boardId}/approve`,
+					)
+				).status,
+			).toBe(200);
+
+			let executionStatus = "running";
+			for (let attempt = 0; attempt < 80; attempt += 1) {
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				const board = await pool.query<{ execution_status: string }>(
+					"SELECT execution_status FROM agent_boards WHERE id = $1",
+					[boardId],
+				);
+				executionStatus = board.rows[0]?.execution_status ?? "missing";
+				if (executionStatus === "done" || executionStatus === "failed") break;
+			}
+			expect(executionStatus).toBe("done");
+
+			await addColumn("Human Inbox", 1024);
+			await addColumn("Human Done", 2048, true);
+
+			const columns = await pool.query<{
+				id: number;
+				slug: string;
+				position: number;
+			}>(
+				`SELECT id, slug, position FROM columns
+				 WHERE board_id = $1 ORDER BY position, id`,
+				[boardId],
+			);
+			const fromColumn = columns.rows.find(
+				(column) => column.slug === "research-specialist",
+			)!;
+			const toColumn = columns.rows.find(
+				(column) => column.slug === "analysis-specialist",
+			)!;
+
+			const backlogStatusId = (
+				await pool.query<{ id: number }>(
+					`SELECT id FROM tracker_vocabularies
+					 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'backlog'`,
+					[WORKSPACE_ID],
+				)
+			).rows[0]!.id;
+			const todoStatusId = (
+				await pool.query<{ id: number }>(
+					`SELECT id FROM tracker_vocabularies
+					 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'todo'`,
+					[WORKSPACE_ID],
+				)
+			).rows[0]!.id;
+
+			const card = (
+				await pool.query<{ id: number; status_id: number; version: number }>(
+					`SELECT c.id, c.status_id, c.version
+					 FROM cards c
+					 JOIN columns col ON col.id = c.column_id
+					 WHERE col.board_id = $1 AND c.key_number = 1`,
+					[boardId],
+				)
+			).rows[0]!;
+			expect(card.status_id).toBe(backlogStatusId);
+
+			const move = await request(app)
+				.post(`/api/workspaces/${WORKSPACE_ID}/cards/${card.id}/move`)
+				.send({
+					toColumnId: toColumn.id,
+					index: 0,
+					version: card.version,
+				});
+			expect(move.status).toBe(200);
+			expect(move.body.columnId).toBe(toColumn.id);
+			expect(move.body.status.slot).toBe("todo");
+
+			const afterMove = (
+				await pool.query<{ status_id: number; column_id: number }>(
+					"SELECT status_id, column_id FROM cards WHERE id = $1",
+					[card.id],
+				)
+			).rows[0]!;
+			expect(afterMove.column_id).toBe(toColumn.id);
+			expect(afterMove.status_id).toBe(todoStatusId);
+			expect(afterMove.status_id).not.toBe(backlogStatusId);
+			expect(fromColumn.id).not.toBe(toColumn.id);
+		});
+
 		it("rejects a direct null status insert after final migration", async () => {
 			const columnId = await addColumn("Inbox", 1024);
 			await expect(
