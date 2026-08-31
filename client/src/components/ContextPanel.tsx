@@ -344,6 +344,8 @@ function DetailsSection({
 					labelIds={labelIds}
 					projectId={projectId}
 					phaseId={phaseId}
+					projectName={card.projectName}
+					phaseName={card.phaseName}
 					priority={card.priority}
 					labels={card.labels}
 					onPriorityChange={setPriorityId}

@@ -66,6 +66,8 @@ function selectFullCard(dbExec: DBExecutor) {
 		.leftJoin("tracker_vocabularies as pr", (join) =>
 			join.onRef("pr.id", "=", "c.priority_id").on("pr.kind", "=", "priority"),
 		)
+		.leftJoin("tracker_projects as tpr", "tpr.id", "c.project_id")
+		.leftJoin("tracker_phases as tph", "tph.id", "c.phase_id")
 		.select([
 			"c.id",
 			"c.workspace_id",
@@ -93,7 +95,9 @@ function selectFullCard(dbExec: DBExecutor) {
 			"pr.position as priority_position",
 			"pr.colour as priority_colour",
 			"c.project_id",
+			"tpr.name as project_name",
 			"c.phase_id",
+			"tph.name as phase_name",
 		]);
 }
 

@@ -374,7 +374,9 @@ describe("ContextPanel — taxonomy fields", () => {
 				priority: mockPriorities[0]!,
 				labels: mockLabels,
 				projectId: 1,
+				projectName: "Alpha",
 				phaseId: 9,
+				phaseName: "Q1",
 			}),
 		);
 		render(<ContextPanel />);

@@ -151,7 +151,9 @@ describe("buildBoardResponse", () => {
 			priority: null,
 			labels: [],
 			projectId: null,
+			projectName: null,
 			phaseId: null,
+			phaseName: null,
 			assignees: [],
 		});
 	});

@@ -37,7 +37,9 @@ export type CardResponseRow = {
 	priority_position?: number | null;
 	priority_colour?: string | null;
 	project_id?: number | null;
+	project_name?: string | null;
 	phase_id?: number | null;
+	phase_name?: string | null;
 };
 
 export type CardResponseHydration = {
@@ -97,7 +99,9 @@ export function buildCardResponse(
 		priority: priority ? serializeVocabulary(priority) : null,
 		labels: hydration.labels.map(serializeVocabulary),
 		projectId: row.project_id ?? null,
+		projectName: row.project_name ?? null,
 		phaseId: row.phase_id ?? null,
+		phaseName: row.phase_name ?? null,
 		assignees: hydration.assignees,
 	};
 }

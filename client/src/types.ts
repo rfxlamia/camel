@@ -21,7 +21,9 @@ export interface Card {
 	priority?: TrackerVocabulary | null;
 	labels?: TrackerVocabulary[];
 	projectId?: number | null;
+	projectName?: string | null;
 	phaseId?: number | null;
+	phaseName?: string | null;
 	assignees: CardAssignee[];
 	workspaceId?: number;
 }

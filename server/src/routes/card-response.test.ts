@@ -27,7 +27,9 @@ const row = {
 	priority_position: 1,
 	priority_colour: "red",
 	project_id: 5,
+	project_name: "Project A",
 	phase_id: 9,
+	phase_name: "Phase A",
 };
 
 describe("buildCardResponse", () => {
@@ -64,7 +66,9 @@ describe("buildCardResponse", () => {
 		});
 		expect(result.labels).toHaveLength(1);
 		expect(result.projectId).toBe(5);
+		expect(result.projectName).toBe("Project A");
 		expect(result.phaseId).toBe(9);
+		expect(result.phaseName).toBe("Phase A");
 		expect(result.assignees[0].username).toBe("alice");
 	});
 
@@ -76,7 +80,9 @@ describe("buildCardResponse", () => {
 				status_id: null,
 				priority_id: null,
 				project_id: null,
+				project_name: null,
 				phase_id: null,
+				phase_name: null,
 			},
 			{ assignees: [], labels: [] },
 		);
@@ -85,6 +91,8 @@ describe("buildCardResponse", () => {
 		expect(result).toHaveProperty("priority", null);
 		expect(result).toHaveProperty("labels", []);
 		expect(result).toHaveProperty("projectId", null);
+		expect(result).toHaveProperty("projectName", null);
 		expect(result).toHaveProperty("phaseId", null);
+		expect(result).toHaveProperty("phaseName", null);
 	});
 });

@@ -234,7 +234,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					},
 					labels: expectedLabels,
 					projectId: project.id,
+					projectName: "Project A",
 					phaseId: phase.id,
+					phaseName: "Phase A",
 					assignees: [
 						{
 							id: ALICE_ID,
@@ -265,7 +267,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					},
 					labels: expectedLabels,
 					projectId: projectB.id,
+					projectName: "Project B",
 					phaseId: phaseB.id,
+					phaseName: "Phase B",
 					assignees: [
 						{
 							id: BOB_ID,
@@ -290,7 +294,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					priority: null,
 					labels: expectedLabels,
 					projectId: null,
+					projectName: null,
 					phaseId: null,
+					phaseName: null,
 					assignees: [],
 				},
 			];
