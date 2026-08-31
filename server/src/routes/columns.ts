@@ -10,7 +10,10 @@ import {
 	validateColumnBatch,
 } from "../validators/column.js";
 import { validateColumnName } from "../validators/input-length.js";
-import { updateColumnWithIsDoneRemap } from "./column-is-done-remap.js";
+import {
+	deleteColumnWithStatusRemap,
+	updateColumnWithIsDoneRemap,
+} from "./column-is-done-remap.js";
 import { recordActivity } from "./helpers.js";
 
 const RETURNING_COLUMNS = [
@@ -341,16 +344,17 @@ columnsRouter.delete(
 		if (Number.isNaN(id)) {
 			return res.status(400).json({ error: "invalid column id" });
 		}
-		const deleted = await db
-			.deleteFrom("columns")
-			.where("id", "=", id)
-			.where("workspace_id", "=", workspaceId)
-			.returning(["title"])
-			.executeTakeFirst();
-		if (!deleted) return res.status(404).json({ error: "column not found" });
-		await recordActivity(db, req.user!, workspaceId, "delete", {
-			payload: { columnTitle: deleted.title },
+		const result = await deleteColumnWithStatusRemap({
+			workspaceId,
+			columnId: id,
+			actor: req.user!,
 		});
+		if (result.kind === "not_found") {
+			return res.status(404).json({ error: "column not found" });
+		}
+		for (const event of result.cardEvents) {
+			await publishEvent(workspaceId, { ...event, actor: req.user! });
+		}
 		res.status(204).end();
 	},
 );

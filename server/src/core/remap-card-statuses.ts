@@ -33,11 +33,13 @@ export type RemapPlanInput = {
 };
 
 /**
- * Build the status updates needed after a column's done marker changes.
+ * Build the status updates needed after board column geometry changes.
  *
- * The card's column is deliberately not part of the returned mutation: a
- * column is a geometry anchor, while status is the normalized representation
- * of that geometry. Only live cards whose fixed slot changes are returned.
+ * Used when a column's done marker changes or a column is deleted. The card's
+ * column is deliberately not part of the returned mutation: a column is a
+ * geometry anchor, while status is the normalized representation of that
+ * geometry. Only live cards whose fixed slot changes are returned; cards in
+ * a deleted column are omitted because their column no longer exists.
  */
 export function buildRemapPlan({
 	beforeColumns,

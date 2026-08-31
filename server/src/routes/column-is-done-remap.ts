@@ -53,6 +53,14 @@ export type IsDoneRemapResult =
 			cardEvents: RemapCardEvent[];
 	  };
 
+export type DeleteColumnRemapResult =
+	| { kind: "not_found" }
+	| {
+			kind: "ok";
+			deletedTitle: string;
+			cardEvents: RemapCardEvent[];
+	  };
+
 export function updateColumnWithIsDoneRemap(input: {
 	workspaceId: number;
 	columnId: number;
@@ -90,6 +98,47 @@ export function updateColumnWithIsDoneRemap(input: {
 		});
 
 		return { kind: "ok", updated, cardEvents };
+	});
+}
+
+export function deleteColumnWithStatusRemap(input: {
+	workspaceId: number;
+	columnId: number;
+	actor: AuthUser;
+}): Promise<DeleteColumnRemapResult> {
+	return db.transaction().execute(async (trx) => {
+		await trx
+			.selectFrom("workspaces")
+			.select("id")
+			.where("id", "=", input.workspaceId)
+			.forUpdate()
+			.executeTakeFirstOrThrow();
+
+		const beforeColumns = await getHumanColumns(trx, input.workspaceId);
+		if (!beforeColumns.some((column) => column.id === input.columnId)) {
+			return { kind: "not_found" };
+		}
+
+		const deleted = await trx
+			.deleteFrom("columns")
+			.where("id", "=", input.columnId)
+			.where("workspace_id", "=", input.workspaceId)
+			.where("board_id", "is", null)
+			.returning(["title"])
+			.executeTakeFirstOrThrow();
+
+		const remapData = await loadRemapPlan(
+			trx,
+			input.workspaceId,
+			beforeColumns,
+		);
+		const cardEvents = await applyCardRemaps(trx, input, remapData);
+
+		await recordActivity(trx, input.actor, input.workspaceId, "delete", {
+			payload: { columnTitle: deleted.title },
+		});
+
+		return { kind: "ok", deletedTitle: deleted.title, cardEvents };
 	});
 }
 

@@ -73,4 +73,30 @@ describe("buildRemapPlan", () => {
 			{ cardId: 32, columnId: 23, fromStatusId: 103, statusId: 102 },
 		]);
 	});
+
+	it("remaps surviving cards when a middle column is deleted", () => {
+		const beforeColumns: Column[] = [
+			{ id: 1, position: 1, is_done: false },
+			{ id: 2, position: 2, is_done: false },
+			{ id: 3, position: 3, is_done: false },
+			{ id: 4, position: 4, is_done: true },
+		];
+		const afterColumns = beforeColumns.filter((column) => column.id !== 2);
+
+		expect(
+			buildRemapPlan({
+				beforeColumns,
+				afterColumns,
+				cards: [
+					{ id: 11, column_id: 1, status_id: 101, deleted_at: null },
+					{ id: 12, column_id: 2, status_id: 102, deleted_at: null },
+					{ id: 13, column_id: 3, status_id: 103, deleted_at: null },
+					{ id: 14, column_id: 4, status_id: 104, deleted_at: null },
+				],
+				statuses,
+			}),
+		).toEqual([
+			{ cardId: 13, columnId: 3, fromStatusId: 103, statusId: 102 },
+		]);
+	});
 });
