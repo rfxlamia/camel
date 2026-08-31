@@ -16,14 +16,47 @@ const agentSchemaSql = readFileSync(
 );
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
 
-type QueryResultRow = Record<string, unknown>;
+type PgClient = Awaited<ReturnType<typeof pool.connect>>;
+type TrackerSlot = "backlog" | "todo" | "in_progress" | "done" | "canceled";
+
+type CardRow = {
+	title: string;
+	column_id: number;
+	status_id: number | null;
+	status_slot: TrackerSlot | null;
+	key_number: number | null;
+	started_at: string | null;
+	done_at: string | null;
+	deleted_at: string | null;
+};
+
+type CardSnapshot = Pick<
+	CardRow,
+	| "title"
+	| "column_id"
+	| "status_id"
+	| "key_number"
+	| "started_at"
+	| "done_at"
+	| "deleted_at"
+>;
+
+type ExpectedCard = {
+	title: string;
+	slot: TrackerSlot;
+	keyNumber: number | null;
+};
+
+type MigrationFixture = {
+	workspaceId: number;
+	baseline: Map<string, CardSnapshot>;
+	expectedCards: ExpectedCard[];
+};
 
 const schemaName = `board_tracker_unify_${process.pid}_${randomUUID().replaceAll("-", "")}`;
 const quotedSchema = `"${schemaName}"`;
 
-async function withSchema<T>(
-	fn: (client: Awaited<ReturnType<typeof pool.connect>>) => Promise<T>,
-) {
+async function withSchema<T>(fn: (client: PgClient) => Promise<T>) {
 	const client = await pool.connect();
 	try {
 		await client.query(`SET search_path TO ${quotedSchema}, public`);
@@ -33,60 +66,445 @@ async function withSchema<T>(
 	}
 }
 
-async function applySchema(client: Awaited<ReturnType<typeof pool.connect>>) {
+async function applySchema(client: PgClient) {
 	await client.query(schemaSql);
 }
 
-async function rows(
-	client: Awaited<ReturnType<typeof pool.connect>>,
-	sql: string,
-	values: unknown[] = [],
+async function readCards(client: PgClient, workspaceId: number) {
+	const result = await client.query<CardRow>(
+		`SELECT card.title,
+		        card.column_id,
+		        card.status_id,
+		        vocabulary.slot AS status_slot,
+		        card.key_number,
+		        card.started_at::text AS started_at,
+		        card.done_at::text AS done_at,
+		        card.deleted_at::text AS deleted_at
+		 FROM cards AS card
+		 LEFT JOIN tracker_vocabularies AS vocabulary
+		   ON vocabulary.id = card.status_id
+		  AND vocabulary.kind = 'status'
+		 WHERE card.workspace_id = $1
+		 ORDER BY card.title`,
+		[workspaceId],
+	);
+	return result.rows;
+}
+
+async function captureBaseline(client: PgClient, workspaceId: number) {
+	const cards = await readCards(client, workspaceId);
+	return new Map<string, CardSnapshot>(
+		cards.map((card) => [
+			card.title,
+			{
+				title: card.title,
+				column_id: card.column_id,
+				status_id: card.status_id,
+				key_number: card.key_number,
+				// Text casts preserve the exact PostgreSQL timestamp representation.
+				started_at: card.started_at,
+				done_at: card.done_at,
+				deleted_at: card.deleted_at,
+			},
+		]),
+	);
+}
+
+async function insertWorkspace(
+	client: PgClient,
+	name: string,
+	trackerKeyCounter: number,
 ) {
-	return (await client.query<QueryResultRow>(sql, values)).rows;
+	const result = await client.query<{ id: number }>(
+		`INSERT INTO workspaces (name, owner_user_id, tracker_key_counter)
+		 VALUES ($1, (SELECT id FROM users ORDER BY id LIMIT 1), $2)
+		 RETURNING id`,
+		[name, trackerKeyCounter],
+	);
+	return result.rows[0].id;
+}
+
+async function insertFreshColumns(client: PgClient, workspaceId: number) {
+	const result = await client.query<{ id: number }>(
+		`INSERT INTO columns (workspace_id, title, position, is_done)
+		 VALUES ($1, 'Fresh backlog', 1024, false),
+		        ($1, 'Fresh done', 2048, true)
+		 RETURNING id
+		`,
+		[workspaceId],
+	);
+	return result.rows.map((row) => row.id);
+}
+
+async function insertFreshCards(
+	client: PgClient,
+	workspaceId: number,
+	columnIds: number[],
+) {
+	await client.query(
+		`INSERT INTO cards
+		 (workspace_id, column_id, title, position, started_at, done_at)
+		 VALUES ($1, $2, 'fresh-live', 1024, '2026-01-02T03:04:05Z', NULL),
+		        ($1, $3, 'fresh-deleted', 1024, '2026-01-03T03:04:05Z',
+		         '2026-01-04T03:04:05Z')`,
+		[workspaceId, columnIds[0], columnIds[1]],
+	);
+	await client.query(
+		`UPDATE cards
+		 SET deleted_at = '2026-01-05T03:04:05Z'
+		 WHERE workspace_id = $1 AND title = 'fresh-deleted'`,
+		[workspaceId],
+	);
+}
+
+async function setupFreshFixture(client: PgClient): Promise<MigrationFixture> {
+	// The first two schema passes intentionally run before agent-schema.sql.
+	await applySchema(client);
+	await client.query(
+		`INSERT INTO users (username, display_name, password_hash)
+		 VALUES ('t2-migration-owner', 'T2 Migration Owner', 'test')`,
+	);
+	const workspaceId = await insertWorkspace(client, "t2-fresh", 0);
+	const columnIds = await insertFreshColumns(client, workspaceId);
+	await insertFreshCards(client, workspaceId, columnIds);
+	const baseline = await captureBaseline(client, workspaceId);
+	await applySchema(client);
+	return {
+		workspaceId,
+		baseline,
+		expectedCards: [
+			{ title: "fresh-live", slot: "backlog", keyNumber: 1 },
+			{ title: "fresh-deleted", slot: "done", keyNumber: null },
+		],
+	};
+}
+
+type ColumnSpec = {
+	title: string;
+	position: number;
+	isDone: boolean;
+};
+
+const humanColumnSpecs: ColumnSpec[] = [
+	{ title: "Human backlog", position: 100, isDone: false },
+	{ title: "Human todo", position: 400, isDone: false },
+	{ title: "Human in progress", position: 900, isDone: false },
+	{ title: "Human done", position: 3000, isDone: true },
+];
+
+const agentColumnSpecs: ColumnSpec[] = [
+	{ title: "Agent backlog", position: 200, isDone: false },
+	{ title: "Agent todo", position: 800, isDone: false },
+	{ title: "Agent in progress", position: 1600, isDone: false },
+	{ title: "Agent done", position: 2500, isDone: true },
+];
+
+async function insertColumnSet(
+	client: PgClient,
+	workspaceId: number,
+	boardId: number | null,
+	specs: ColumnSpec[],
+) {
+	const columns = new Map<string, number>();
+	for (const spec of specs) {
+		const result =
+			boardId === null
+				? await client.query<{ id: number }>(
+						`INSERT INTO columns (workspace_id, title, position, is_done)
+					 VALUES ($1, $2, $3, $4)
+					 RETURNING id`,
+						[workspaceId, spec.title, spec.position, spec.isDone],
+					)
+				: await client.query<{ id: number }>(
+						`INSERT INTO columns
+					 (workspace_id, board_id, title, position, is_done)
+					 VALUES ($1, $2, $3, $4, $5)
+					 RETURNING id`,
+						[workspaceId, boardId, spec.title, spec.position, spec.isDone],
+					);
+		columns.set(spec.title, result.rows[0].id);
+	}
+	return columns;
+}
+
+async function insertAgentBoard(client: PgClient, workspaceId: number) {
+	const result = await client.query<{ id: number }>(
+		`INSERT INTO agent_boards (workspace_id, user_id, original_intent)
+		 VALUES ($1, (SELECT id FROM users ORDER BY id LIMIT 1), 'agent board')
+		 RETURNING id`,
+		[workspaceId],
+	);
+	return result.rows[0].id;
+}
+
+async function getStatusId(
+	client: PgClient,
+	workspaceId: number,
+	slot: TrackerSlot,
+) {
+	const result = await client.query<{ id: number }>(
+		`SELECT id
+		 FROM tracker_vocabularies
+		 WHERE workspace_id = $1 AND kind = 'status' AND slot = $2`,
+		[workspaceId, slot],
+	);
+	return result.rows[0].id;
+}
+
+type ExistingCardSpec = {
+	columnId: number;
+	title: string;
+	keyNumber: number | null;
+	doneAt: string | null;
+	deletedAt: string | null;
+};
+
+async function insertExistingCards(
+	client: PgClient,
+	workspaceId: number,
+	cards: ExistingCardSpec[],
+) {
+	for (const card of cards) {
+		await client.query(
+			`INSERT INTO cards
+			 (workspace_id, column_id, title, position, key_number,
+			  started_at, done_at, deleted_at)
+			 VALUES ($1, $2, $3, 1024, $4,
+			         '2026-02-02T03:04:05Z', $5, $6)`,
+			[
+				workspaceId,
+				card.columnId,
+				card.title,
+				card.keyNumber,
+				card.doneAt,
+				card.deletedAt,
+			],
+		);
+	}
+}
+
+type ExistingCardTuple = [
+	number,
+	string,
+	number | null,
+	string | null,
+	string | null,
+];
+
+function existingCardSpecs(
+	humanColumns: Map<string, number>,
+	agentColumns: Map<string, number>,
+): ExistingCardSpec[] {
+	const cards: ExistingCardTuple[] = [
+		[humanColumns.get("Human backlog")!, "human-live", null, null, null],
+		[humanColumns.get("Human todo")!, "human-filled", 10, null, null],
+		[
+			humanColumns.get("Human in progress")!,
+			"human-in-progress",
+			null,
+			null,
+			null,
+		],
+		[
+			humanColumns.get("Human done")!,
+			"human-deleted",
+			null,
+			"2026-02-03T03:04:05Z",
+			"2026-02-04T03:04:05Z",
+		],
+		[agentColumns.get("Agent backlog")!, "agent-live", null, null, null],
+		[agentColumns.get("Agent todo")!, "agent-filled", 11, null, null],
+		[
+			agentColumns.get("Agent in progress")!,
+			"agent-in-progress",
+			null,
+			null,
+			null,
+		],
+		[
+			agentColumns.get("Agent done")!,
+			"agent-deleted",
+			null,
+			"2026-02-03T03:04:05Z",
+			"2026-02-04T03:04:05Z",
+		],
+	];
+	return cards.map(([columnId, title, keyNumber, doneAt, deletedAt]) => ({
+		columnId,
+		title,
+		keyNumber,
+		doneAt,
+		deletedAt,
+	}));
+}
+
+async function insertExistingTrackerKey(
+	client: PgClient,
+	workspaceId: number,
+	doneStatusId: number,
+) {
+	await client.query(
+		`INSERT INTO tracker_items (workspace_id, key_number, title, status_id)
+		 VALUES ($1, 9, 'existing tracker key', $2)`,
+		[workspaceId, doneStatusId],
+	);
+}
+
+async function markFilledCards(
+	client: PgClient,
+	workspaceId: number,
+	todoStatusId: number,
+) {
+	await client.query(
+		`UPDATE cards
+		 SET status_id = $1
+		 WHERE workspace_id = $2 AND title IN ('human-filled', 'agent-filled')`,
+		[todoStatusId, workspaceId],
+	);
+}
+
+const expectedExistingCards: ExpectedCard[] = [
+	{ title: "human-live", slot: "backlog", keyNumber: 12 },
+	{ title: "human-filled", slot: "todo", keyNumber: 10 },
+	{ title: "human-in-progress", slot: "in_progress", keyNumber: 13 },
+	{ title: "human-deleted", slot: "done", keyNumber: null },
+	{ title: "agent-live", slot: "backlog", keyNumber: 14 },
+	{ title: "agent-filled", slot: "todo", keyNumber: 11 },
+	{ title: "agent-in-progress", slot: "in_progress", keyNumber: 15 },
+	{ title: "agent-deleted", slot: "done", keyNumber: null },
+];
+
+async function setupExistingFixture(
+	client: PgClient,
+): Promise<MigrationFixture> {
+	const workspaceId = await insertWorkspace(client, "t2-existing", 4);
+	await applySchema(client);
+	const boardId = await insertAgentBoard(client, workspaceId);
+	const humanColumns = await insertColumnSet(
+		client,
+		workspaceId,
+		null,
+		humanColumnSpecs,
+	);
+	const agentColumns = await insertColumnSet(
+		client,
+		workspaceId,
+		boardId,
+		agentColumnSpecs,
+	);
+	const doneStatusId = await getStatusId(client, workspaceId, "done");
+	const todoStatusId = await getStatusId(client, workspaceId, "todo");
+	await insertExistingTrackerKey(client, workspaceId, doneStatusId);
+	await insertExistingCards(
+		client,
+		workspaceId,
+		existingCardSpecs(humanColumns, agentColumns),
+	);
+	await markFilledCards(client, workspaceId, todoStatusId);
+	// This snapshot is taken before the first board-aware backfill application.
+	const baseline = await captureBaseline(client, workspaceId);
+	await applySchema(client);
+	return {
+		workspaceId,
+		baseline,
+		expectedCards: expectedExistingCards,
+	};
+}
+
+function preservedFields(card: CardSnapshot | CardRow) {
+	return {
+		title: card.title,
+		column_id: card.column_id,
+		started_at: card.started_at,
+		done_at: card.done_at,
+		deleted_at: card.deleted_at,
+	};
+}
+
+function assertExpectedCards(cards: CardRow[], expectedCards: ExpectedCard[]) {
+	const byTitle = new Map(cards.map((card) => [card.title, card]));
+	expect(cards).toHaveLength(expectedCards.length);
+	for (const expected of expectedCards) {
+		const card = byTitle.get(expected.title);
+		expect(card).toBeDefined();
+		// The slot comes from the status vocabulary join, not card metadata.
+		expect(card?.status_id).toEqual(expect.any(Number));
+		expect(card?.status_slot).toBe(expected.slot);
+		expect(card?.key_number).toBe(expected.keyNumber);
+	}
+}
+
+function assertPreservedFields(
+	cards: CardRow[],
+	baseline: Map<string, CardSnapshot>,
+) {
+	const before = [...baseline.values()].map(preservedFields);
+	const after = cards.map(preservedFields);
+	// Includes column_id and exact timestamp strings from before first backfill.
+	expect(after).toEqual(before);
+}
+
+async function readCounter(client: PgClient, workspaceId: number) {
+	const result = await client.query<{ tracker_key_counter: number }>(
+		`SELECT tracker_key_counter FROM workspaces WHERE id = $1`,
+		[workspaceId],
+	);
+	return result.rows[0].tracker_key_counter;
+}
+
+async function expectNullOnlyRerun(
+	client: PgClient,
+	fixture: MigrationFixture,
+	firstRows: CardRow[],
+	firstCounter: number,
+) {
+	await applySchema(client);
+	const rerunRows = await readCards(client, fixture.workspaceId);
+	const rerunCounter = await readCounter(client, fixture.workspaceId);
+	expect(rerunRows).toEqual(firstRows);
+	expect(rerunCounter).toBe(firstCounter);
+}
+
+async function assertFreshMigration(
+	client: PgClient,
+	fixture: MigrationFixture,
+) {
+	const firstRows = await readCards(client, fixture.workspaceId);
+	assertExpectedCards(firstRows, fixture.expectedCards);
+	assertPreservedFields(firstRows, fixture.baseline);
+	const firstCounter = await readCounter(client, fixture.workspaceId);
+	expect(firstCounter).toBe(1);
+	await expectNullOnlyRerun(client, fixture, firstRows, firstCounter);
+}
+
+async function assertExistingMigration(
+	client: PgClient,
+	fixture: MigrationFixture,
+) {
+	const firstRows = await readCards(client, fixture.workspaceId);
+	assertExpectedCards(firstRows, fixture.expectedCards);
+	assertPreservedFields(firstRows, fixture.baseline);
+	const firstCounter = await readCounter(client, fixture.workspaceId);
+	expect(firstCounter).toBe(15);
+	const trackerKey = await client.query<{ key_number: number }>(
+		`SELECT key_number
+		 FROM tracker_items
+		 WHERE workspace_id = $1 AND title = 'existing tracker key'`,
+		[fixture.workspaceId],
+	);
+	expect(trackerKey.rows[0].key_number).toBe(9);
+	await expectNullOnlyRerun(client, fixture, firstRows, firstCounter);
 }
 
 describe.skipIf(!runIntegration)(
 	"board/tracker schema unification migration",
 	() => {
+		let freshFixture: MigrationFixture;
+
 		beforeAll(async () => {
 			await pool.query(`CREATE SCHEMA ${quotedSchema}`);
 			await withSchema(async (client) => {
-				// First pass is intentionally pre-agent: columns has no board_id yet.
-				await applySchema(client);
-				await client.query(
-					`INSERT INTO users (username, display_name, password_hash)
-				 VALUES ('t2-migration-owner', 'T2 Migration Owner', 'test')`,
-				);
-				const workspace = await client.query<{ id: number }>(
-					`INSERT INTO workspaces (name, owner_user_id, tracker_key_counter)
-				 VALUES ('t2-fresh', (SELECT id FROM users ORDER BY id LIMIT 1), 0)
-				 RETURNING id`,
-				);
-				const workspaceId = workspace.rows[0].id;
-				await client.query(
-					`INSERT INTO columns (workspace_id, title, position, is_done)
-				 VALUES ($1, 'Fresh backlog', 1024, false), ($1, 'Fresh done', 2048, true)`,
-					[workspaceId],
-				);
-				const columns = await client.query<{ id: number }>(
-					`SELECT id FROM columns WHERE workspace_id = $1 ORDER BY position`,
-					[workspaceId],
-				);
-				await client.query(
-					`INSERT INTO cards (workspace_id, column_id, title, position, started_at, done_at)
-				 VALUES ($1, $2, 'fresh-live', 1024, '2026-01-02T03:04:05Z', NULL),
-				        ($1, $3, 'fresh-deleted', 1024, '2026-01-03T03:04:05Z', '2026-01-04T03:04:05Z')`,
-					[workspaceId, columns.rows[0].id, columns.rows[1].id],
-				);
-				await client.query(
-					`UPDATE cards SET deleted_at = '2026-01-05T03:04:05Z'
-				 WHERE workspace_id = $1 AND title = 'fresh-deleted'`,
-					[workspaceId],
-				);
-				// The second pre-agent pass proves the no-board_id branch against existing rows.
-				await applySchema(client);
-				// Canonical migration order adds board_id only after schema.sql completes.
-				await client.query(agentSchemaSql);
+				freshFixture = await setupFreshFixture(client);
 			});
 		});
 
@@ -95,181 +513,16 @@ describe.skipIf(!runIntegration)(
 			await pool.end();
 		});
 
-		it("maps pre-agent human cards and allocates keys only to live rows", async () => {
-			await withSchema(async (client) => {
-				const cardRows = await rows(
-					client,
-					`SELECT title, status_id, key_number, started_at, done_at, deleted_at
-				 FROM cards WHERE title LIKE 'fresh-%' ORDER BY title`,
-				);
-				const byTitle = new Map(cardRows.map((row) => [row.title, row]));
-				expect(byTitle.get("fresh-live")).toMatchObject({
-					status_id: expect.any(Number),
-					key_number: 1,
-					started_at: expect.any(Date),
-				});
-				expect(byTitle.get("fresh-deleted")).toMatchObject({
-					status_id: expect.any(Number),
-					key_number: null,
-					deleted_at: expect.any(Date),
-				});
-				expect(byTitle.get("fresh-deleted")?.done_at).toBeInstanceOf(Date);
-				const counter = await rows(
-					client,
-					`SELECT tracker_key_counter FROM workspaces
-				 WHERE name = 't2-fresh'`,
-				);
-				expect(counter[0].tracker_key_counter).toBe(1);
-			});
+		it("maps pre-agent cards and allocates keys only to live rows", async () => {
+			await withSchema((client) => assertFreshMigration(client, freshFixture));
 		});
 
-		it("maps human and agent boards independently, including deleted agent history", async () => {
+		it("maps human and agent boards independently, including deleted history", async () => {
 			await withSchema(async (client) => {
-				const workspace = await client.query<{ id: number }>(
-					`INSERT INTO workspaces (name, owner_user_id, tracker_key_counter)
-				 VALUES ('t2-existing', (SELECT id FROM users ORDER BY id LIMIT 1), 4)
-				 RETURNING id`,
-				);
-				const workspaceId = workspace.rows[0].id;
-				// A workspace created after the initial retroactive seed gets its defaults
-				// from the normal migration rerun before its historical cards are loaded.
-				await applySchema(client);
-				const board = await client.query<{ id: number }>(
-					`INSERT INTO agent_boards (workspace_id, user_id, original_intent)
-				 VALUES ($1, (SELECT id FROM users ORDER BY id LIMIT 1), 'agent board')
-				 RETURNING id`,
-					[workspaceId],
-				);
-				const boardId = board.rows[0].id;
-				await client.query(
-					`INSERT INTO columns (workspace_id, title, position, is_done)
-				 VALUES ($1, 'Human backlog', 1024, false),
-				        ($1, 'Human todo', 2048, false),
-				        ($1, 'Human done', 3072, true)
-				 RETURNING id`,
-					[workspaceId],
-				);
-				await client.query(
-					`INSERT INTO columns (workspace_id, board_id, title, position, is_done)
-				 VALUES ($1, $2, 'Agent backlog', 1024, false),
-				        ($1, $2, 'Agent todo', 2048, false),
-				        ($1, $2, 'Agent done', 3072, true)
-				 RETURNING id`,
-					[workspaceId, boardId],
-				);
-				const orderedHumanColumns = await client.query<{ id: number }>(
-					`SELECT id FROM columns WHERE workspace_id = $1 AND board_id IS NULL
-				 AND title LIKE 'Human %' ORDER BY position`,
-					[workspaceId],
-				);
-				const orderedAgentColumns = await client.query<{ id: number }>(
-					`SELECT id FROM columns WHERE workspace_id = $1 AND board_id = $2
-				 AND title LIKE 'Agent %' ORDER BY position`,
-					[workspaceId, boardId],
-				);
-				const doneStatus = await client.query<{ id: number }>(
-					`SELECT id FROM tracker_vocabularies
-				 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'done'`,
-					[workspaceId],
-				);
-				const todoStatus = await client.query<{ id: number }>(
-					`SELECT id FROM tracker_vocabularies
-				 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'todo'`,
-					[workspaceId],
-				);
-				await client.query(
-					`INSERT INTO tracker_items (workspace_id, key_number, title, status_id)
-				 VALUES ($1, 9, 'existing tracker key', $2)`,
-					[workspaceId, doneStatus.rows[0].id],
-				);
-				const cardRows = [
-					[orderedHumanColumns.rows[0].id, "human-live", null],
-					[orderedHumanColumns.rows[1].id, "human-filled", 10],
-					[orderedHumanColumns.rows[2].id, "human-deleted", null],
-					[orderedAgentColumns.rows[0].id, "agent-live", null],
-					[orderedAgentColumns.rows[1].id, "agent-filled", 11],
-					[orderedAgentColumns.rows[2].id, "agent-deleted", null],
-				] as const;
-				for (const [columnId, title, key] of cardRows) {
-					await client.query(
-						`INSERT INTO cards
-					 (workspace_id, column_id, title, position, key_number, started_at, done_at, deleted_at)
-					 VALUES ($1, $2, $3, 1024, $4,
-					         '2026-02-02T03:04:05Z',
-					         CASE WHEN $3 LIKE '%done%' THEN '2026-02-03T03:04:05Z'::timestamptz ELSE NULL::timestamptz END,
-					         CASE WHEN $3 LIKE '%deleted%' THEN '2026-02-04T03:04:05Z'::timestamptz ELSE NULL::timestamptz END)`,
-						[workspaceId, columnId, title, key],
-					);
-				}
-				await client.query(
-					`UPDATE cards SET status_id = $1
-				 WHERE workspace_id = $2 AND title = 'human-filled'`,
-					[todoStatus.rows[0].id, workspaceId],
-				);
-				// Second pass now sees columns.board_id and must execute the guarded board branch.
-				await applySchema(client);
-				const mapped = await rows(
-					client,
-					`SELECT title, status_id, key_number, started_at, done_at, deleted_at
-				 FROM cards WHERE workspace_id = $1 ORDER BY title`,
-					[workspaceId],
-				);
-				const byTitle = new Map(mapped.map((row) => [row.title, row]));
-				for (const title of [
-					"human-live",
-					"human-deleted",
-					"agent-live",
-					"agent-deleted",
-				]) {
-					expect(byTitle.get(title)?.status_id).toEqual(expect.any(Number));
-				}
-				expect(byTitle.get("human-filled")).toMatchObject({ key_number: 10 });
-				expect(byTitle.get("human-filled")?.status_id).toBe(
-					todoStatus.rows[0].id,
-				);
-				expect(byTitle.get("agent-filled")).toMatchObject({ key_number: 11 });
-				expect(byTitle.get("human-deleted")).toMatchObject({
-					key_number: null,
-				});
-				expect(byTitle.get("agent-deleted")).toMatchObject({
-					key_number: null,
-				});
-				expect(byTitle.get("human-live")).toMatchObject({ key_number: 12 });
-				expect(byTitle.get("agent-live")).toMatchObject({ key_number: 13 });
-				const existingTrackerKey = await rows(
-					client,
-					`SELECT key_number FROM tracker_items
-				 WHERE workspace_id = $1 AND title = 'existing tracker key'`,
-					[workspaceId],
-				);
-				expect(existingTrackerKey[0].key_number).toBe(9);
-				const beforeRerun = mapped.map((row) => ({
-					title: row.title,
-					status_id: row.status_id,
-					key_number: row.key_number,
-					started_at: row.started_at,
-					done_at: row.done_at,
-					deleted_at: row.deleted_at,
-				}));
-				const beforeCounter = await rows(
-					client,
-					`SELECT tracker_key_counter FROM workspaces WHERE id = $1`,
-					[workspaceId],
-				);
-				await applySchema(client);
-				const afterRerun = await rows(
-					client,
-					`SELECT title, status_id, key_number, started_at, done_at, deleted_at
-				 FROM cards WHERE workspace_id = $1 ORDER BY title`,
-					[workspaceId],
-				);
-				const afterCounter = await rows(
-					client,
-					`SELECT tracker_key_counter FROM workspaces WHERE id = $1`,
-					[workspaceId],
-				);
-				expect(afterRerun).toEqual(beforeRerun);
-				expect(afterCounter).toEqual(beforeCounter);
+				// Canonical order adds board_id only after the no-board branch is proven.
+				await client.query(agentSchemaSql);
+				const fixture = await setupExistingFixture(client);
+				await assertExistingMigration(client, fixture);
 			});
 		});
 	},
