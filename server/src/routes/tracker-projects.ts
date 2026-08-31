@@ -5,6 +5,7 @@ import { positionBetween } from "../core/position.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
+import { recordActivity } from "./helpers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 
 const PROJECT_COLUMNS = [
@@ -345,6 +346,14 @@ trackerProjectsRouter.delete(
 				phaseId: item.phase_id,
 			}));
 
+			const cards = await trx
+				.selectFrom("cards")
+				.select(["id", "title", "project_id", "phase_id"])
+				.where("workspace_id", "=", workspaceId)
+				.where("project_id", "=", projectId)
+				.where("deleted_at", "is", null)
+				.execute();
+
 			await trx
 				.updateTable("tracker_projects")
 				.set({ deleted_at: sql`now()`, updated_at: sql`now()` })
@@ -365,6 +374,22 @@ trackerProjectsRouter.delete(
 				.set({ project_id: null, phase_id: null })
 				.where("project_id", "=", projectId)
 				.execute();
+
+			await trx
+				.updateTable("cards")
+				.set({ project_id: null, phase_id: null })
+				.where("project_id", "=", projectId)
+				.execute();
+
+			for (const card of cards) {
+				await recordActivity(trx, actor, workspaceId, "update", {
+					cardId: card.id,
+					payload: {
+						cardTitle: card.title,
+						changed: ["project", "phase"],
+					},
+				});
+			}
 
 			await recordProjectActivity(
 				trx,

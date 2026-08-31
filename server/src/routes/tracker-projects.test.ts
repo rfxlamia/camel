@@ -29,6 +29,7 @@ const callLog: string[] = [];
 let sharedProjectCount = 0;
 let phaseRows: any[] = [];
 let itemRows: any[] = [];
+let cardRows: any[] = [];
 let lockChain: Promise<unknown> = Promise.resolve();
 
 function withLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -62,6 +63,7 @@ function makeTrx() {
 		}
 		if (table === "tracker_phases") return chainable(phaseRows);
 		if (table === "tracker_items") return chainable(itemRows);
+		if (table === "cards") return chainable(cardRows);
 		return chainable([]);
 	});
 	trx.insertInto = vi.fn((table: string) => ({
@@ -98,9 +100,11 @@ vi.mock("../middleware/workspace.js", () => ({
 	},
 }));
 vi.mock("../realtime.js", () => ({ publishEvent: vi.fn() }));
+vi.mock("./helpers.js", () => ({ recordActivity: vi.fn() }));
 vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { publishEvent } from "../realtime.js";
+import { recordActivity } from "./helpers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import { trackerProjectsRouter } from "./tracker-projects.js";
 
@@ -126,10 +130,12 @@ beforeEach(() => {
 	sharedProjectCount = 0;
 	phaseRows = [];
 	itemRows = [];
+	cardRows = [];
 	mockSelectFrom.mockReset();
 	mockUpdateTable.mockReset();
 	mockTransaction.mockReset();
 	vi.mocked(publishEvent).mockReset();
+	vi.mocked(recordActivity).mockReset();
 	vi.mocked(recordTrackerActivity).mockReset();
 });
 
@@ -233,14 +239,29 @@ describe("DELETE /tracker/projects/:id", () => {
 			updated_at: "2026-08-01T00:00:00Z",
 		},
 	];
+	const releasedCards = [
+		{
+			id: 201,
+			title: "Board card A",
+			project_id: 3,
+			phase_id: 9,
+		},
+		{
+			id: 202,
+			title: "Board card B",
+			project_id: 3,
+			phase_id: null,
+		},
+	];
 
 	beforeEach(() => {
 		itemRows = releasedItems;
+		cardRows = releasedCards;
 		phaseRows = [{ id: 9 }, { id: 10 }];
 		useTransactionalTrx();
 	});
 
-	it("soft-deletes the project and its phases and nulls project_id/phase_id on its tasks", async () => {
+	it("soft-deletes the project and its phases and nulls project_id/phase_id on its tasks and cards", async () => {
 		const res = await request(app).delete("/workspaces/7/tracker/projects/3").send({});
 		expect(res.status).toBe(204);
 		expect(
@@ -252,6 +273,9 @@ describe("DELETE /tracker/projects/:id", () => {
 		const itemRelease = updatedSets.find((u) => u.table === "tracker_items");
 		expect(itemRelease?.values.project_id).toBeNull();
 		expect(itemRelease?.values.phase_id).toBeNull();
+		const cardRelease = updatedSets.find((u) => u.table === "cards");
+		expect(cardRelease?.values.project_id).toBeNull();
+		expect(cardRelease?.values.phase_id).toBeNull();
 	});
 
 	it("writes exactly one tracker_events row carrying the released (itemId, projectId, phaseId) triples", async () => {
@@ -276,6 +300,43 @@ describe("DELETE /tracker/projects/:id", () => {
 		const itemRelease = updatedSets.find((u) => u.table === "tracker_items");
 		expect(itemRelease?.values).not.toHaveProperty("version");
 		expect(itemRelease?.values).not.toHaveProperty("updated_at");
+	});
+
+	it("records card activity for each released board card", async () => {
+		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
+		expect(recordActivity).toHaveBeenCalledTimes(releasedCards.length);
+		expect(recordActivity).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ id: 1 }),
+			7,
+			"update",
+			expect.objectContaining({
+				cardId: 201,
+				payload: {
+					cardTitle: "Board card A",
+					changed: ["project", "phase"],
+				},
+			}),
+		);
+		expect(recordActivity).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ id: 1 }),
+			7,
+			"update",
+			expect.objectContaining({
+				cardId: 202,
+				payload: {
+					cardTitle: "Board card B",
+					changed: ["project", "phase"],
+				},
+			}),
+		);
+	});
+
+	it("leaves version unchanged on released cards", async () => {
+		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
+		const cardRelease = updatedSets.find((u) => u.table === "cards");
+		expect(cardRelease?.values).not.toHaveProperty("version");
 	});
 });
 
