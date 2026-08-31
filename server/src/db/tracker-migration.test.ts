@@ -50,6 +50,18 @@ describe("tracker migration schema", () => {
 		}
 		expect(schemaSql).toMatch(/ON CONFLICT|WHERE NOT EXISTS/i);
 	});
+
+	it("keeps tracker vocabulary slots distinct from category semantics", () => {
+		expect(schemaSql).toMatch(
+			/ALTER TABLE tracker_vocabularies ADD COLUMN IF NOT EXISTS slot TEXT/,
+		);
+		expect(schemaSql).toMatch(/slot\s+IN\s*\(\s*'backlog'/);
+		expect(schemaSql).toMatch(/slot\s+IN[\s\S]*'canceled'/);
+		const categoryBlock = schemaSql.slice(
+			schemaSql.indexOf("-- tracker: category backfill"),
+		);
+		expect(categoryBlock).not.toMatch(/slot\s*=/);
+	});
 });
 
 describe("project, phase and item scheduling columns", () => {
