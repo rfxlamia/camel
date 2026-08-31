@@ -6,9 +6,9 @@ import { afterAll } from "vitest";
 import { destroyWorkspace } from "./columns-is-done-remap.test-support.js";
 
 // The scenario modules install per-test setup and cleanup hooks.
-import "./columns-is-done-remap.basic.test.js";
-import "./columns-is-done-remap.edge.test.js";
-import "./columns-is-done-remap.failure.test.js";
+import "./columns-is-done-remap.basic.scenarios.js";
+import "./columns-is-done-remap.edge.scenarios.js";
+import "./columns-is-done-remap.failure.scenarios.js";
 
 // Keep teardown after every imported scenario suite has completed.
 afterAll(destroyWorkspace);
