@@ -8,6 +8,31 @@ const schemaSql = readFileSync(
 );
 
 describe("tracker migration schema", () => {
+	it("finalizes card status nullability only after additive DDL, slot seed, and null-only backfills", () => {
+		const ddlIndex = schemaSql.indexOf(
+			"-- Board/tracker vocabulary unification (T2)",
+		);
+		const slotSeedIndex = schemaSql.indexOf("-- T2 slot seed/update");
+		const statusBackfillIndex = schemaSql.indexOf(
+			"-- board-tracker unify backfill",
+		);
+		const keyBackfillIndex = schemaSql.indexOf(
+			"DO $board_tracker_key_backfill$",
+		);
+		const notNullIndex = schemaSql.indexOf(
+			"ALTER TABLE cards ALTER COLUMN status_id SET NOT NULL",
+		);
+
+		expect(ddlIndex).toBeGreaterThan(-1);
+		expect(slotSeedIndex).toBeGreaterThan(ddlIndex);
+		expect(statusBackfillIndex).toBeGreaterThan(slotSeedIndex);
+		expect(keyBackfillIndex).toBeGreaterThan(statusBackfillIndex);
+		expect(notNullIndex).toBeGreaterThan(keyBackfillIndex);
+		expect(schemaSql.slice(notNullIndex - 300, notNullIndex + 200)).toMatch(
+			/is_nullable\s*=\s*'YES'/,
+		);
+	});
+
 	it("declares tracker tables, workspace counter, and junction tables", () => {
 		expect(schemaSql).toContain("CREATE TABLE IF NOT EXISTS tracker_items");
 		expect(schemaSql).toContain(
@@ -32,13 +57,7 @@ describe("tracker migration schema", () => {
 
 	it("seeds default vocabulary for existing workspaces idempotently", () => {
 		expect(schemaSql).toMatch(/INSERT INTO tracker_vocabularies/i);
-		const statusNames = [
-			"Backlog",
-			"Todo",
-			"In Progress",
-			"Done",
-			"Canceled",
-		];
+		const statusNames = ["Backlog", "Todo", "In Progress", "Done", "Canceled"];
 		for (const name of statusNames) {
 			expect(schemaSql).toContain(name);
 		}
@@ -50,14 +69,30 @@ describe("tracker migration schema", () => {
 		}
 		expect(schemaSql).toMatch(/ON CONFLICT|WHERE NOT EXISTS/i);
 	});
+
+	it("keeps tracker vocabulary slots distinct from category semantics", () => {
+		expect(schemaSql).toMatch(
+			/ALTER TABLE tracker_vocabularies ADD COLUMN IF NOT EXISTS slot TEXT/,
+		);
+		expect(schemaSql).toMatch(/slot\s+IN\s*\(\s*'backlog'/);
+		expect(schemaSql).toMatch(/slot\s+IN[\s\S]*'canceled'/);
+		const categoryBlock = schemaSql.slice(
+			schemaSql.indexOf("-- tracker: category backfill"),
+		);
+		expect(categoryBlock).not.toMatch(/slot\s*=/);
+	});
 });
 
 describe("project, phase and item scheduling columns", () => {
 	it("declares tracker_projects and tracker_phases with the required shape", () => {
 		expect(schemaSql).toMatch(/CREATE TABLE IF NOT EXISTS tracker_projects/);
 		expect(schemaSql).toMatch(/CREATE TABLE IF NOT EXISTS tracker_phases/);
-		expect(schemaSql).toMatch(/tracker_projects[\s\S]*?position\s+DOUBLE PRECISION/);
-		expect(schemaSql).toMatch(/tracker_projects[\s\S]*?deleted_at\s+TIMESTAMPTZ/);
+		expect(schemaSql).toMatch(
+			/tracker_projects[\s\S]*?position\s+DOUBLE PRECISION/,
+		);
+		expect(schemaSql).toMatch(
+			/tracker_projects[\s\S]*?deleted_at\s+TIMESTAMPTZ/,
+		);
 		expect(schemaSql).toMatch(
 			/tracker_phases[\s\S]*?project_id\s+INTEGER NOT NULL REFERENCES tracker_projects/,
 		);
@@ -144,6 +179,8 @@ describe("project, phase and item scheduling columns", () => {
 	it("never backfills or approximates completed_at", () => {
 		expect(schemaSql).not.toMatch(/completed_at\s*=\s*updated_at/);
 		const alterBlock = schemaSql.slice(schemaSql.indexOf("tracker_projects"));
-		expect(alterBlock).not.toMatch(/UPDATE tracker_items[\s\S]*?completed_at\s*=\s*now\(\)/);
+		expect(alterBlock).not.toMatch(
+			/UPDATE tracker_items[\s\S]*?completed_at\s*=\s*now\(\)/,
+		);
 	});
 });

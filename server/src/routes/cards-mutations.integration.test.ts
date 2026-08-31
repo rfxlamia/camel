@@ -55,6 +55,8 @@ vi.mock("../auth.js", async (importOriginal) => {
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
+import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
@@ -74,6 +76,20 @@ function createTestApp() {
 }
 
 const app = createTestApp();
+let backlogStatusId: number | undefined;
+
+async function backlogStatusIdForWorkspace() {
+	if (backlogStatusId !== undefined) return backlogStatusId;
+	const row = await db
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("workspace_id", "=", WORKSPACE_ID)
+		.where("kind", "=", "status")
+		.where("slot", "=", "backlog")
+		.executeTakeFirstOrThrow();
+	backlogStatusId = row.id;
+	return backlogStatusId;
+}
 
 async function cleanup() {
 	await pool.query("DELETE FROM card_events WHERE workspace_id = $1", [
@@ -106,11 +122,17 @@ async function setupFixtures() {
      VALUES ($1, $2, 'owner') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
 		[WORKSPACE_ID, mockTestUser.id],
 	);
+	await db
+		.deleteFrom("tracker_vocabularies")
+		.where("workspace_id", "=", WORKSPACE_ID)
+		.execute();
+	await seedTrackerVocabulary(db, WORKSPACE_ID);
+	backlogStatusId = undefined;
 }
 
 beforeEach(async () => {
-	await setupFixtures();
 	await cleanup();
+	await setupFixtures();
 	vi.clearAllMocks();
 });
 
@@ -187,10 +209,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				[WORKSPACE_ID],
 			);
 			const colId = col.rows[0].id;
+			const statusId = await backlogStatusIdForWorkspace();
 			const card = await pool.query(
-				`INSERT INTO cards (title, column_id, position, workspace_id)
-         VALUES ('to delete', $1, 1000, $2) RETURNING id`,
-				[colId, WORKSPACE_ID],
+				`INSERT INTO cards (title, column_id, position, workspace_id, status_id)
+         VALUES ('to delete', $1, 1000, $2, $3) RETURNING id`,
+				[colId, WORKSPACE_ID, statusId],
 			);
 			const cardId = card.rows[0].id;
 
@@ -219,10 +242,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				[WORKSPACE_ID],
 			);
 			const colId = col.rows[0].id;
+			const statusId = await backlogStatusIdForWorkspace();
 			const card = await pool.query(
-				`INSERT INTO cards (title, column_id, position, workspace_id)
-         VALUES ('to delete', $1, 1000, $2) RETURNING id`,
-				[colId, WORKSPACE_ID],
+				`INSERT INTO cards (title, column_id, position, workspace_id, status_id)
+         VALUES ('to delete', $1, 1000, $2, $3) RETURNING id`,
+				[colId, WORKSPACE_ID, statusId],
 			);
 			const cardId = card.rows[0].id;
 
@@ -259,10 +283,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				[WORKSPACE_ID],
 			);
 			const colId = col.rows[0].id;
+			const statusId = await backlogStatusIdForWorkspace();
 			const card = await pool.query(
-				`INSERT INTO cards (title, column_id, position, workspace_id)
-         VALUES ('to delete', $1, 1000, $2) RETURNING id`,
-				[colId, WORKSPACE_ID],
+				`INSERT INTO cards (title, column_id, position, workspace_id, status_id)
+         VALUES ('to delete', $1, 1000, $2, $3) RETURNING id`,
+				[colId, WORKSPACE_ID, statusId],
 			);
 			const cardId = card.rows[0].id;
 
@@ -287,10 +312,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				[WORKSPACE_ID],
 			);
 			const colId = col.rows[0].id;
+			const statusId = await backlogStatusIdForWorkspace();
 			const card = await pool.query(
-				`INSERT INTO cards (title, column_id, position, workspace_id)
-         VALUES ('to delete', $1, 1000, $2) RETURNING id`,
-				[colId, WORKSPACE_ID],
+				`INSERT INTO cards (title, column_id, position, workspace_id, status_id)
+         VALUES ('to delete', $1, 1000, $2, $3) RETURNING id`,
+				[colId, WORKSPACE_ID, statusId],
 			);
 			const cardId = card.rows[0].id;
 

@@ -1,3 +1,4 @@
+import { diffIds } from "../core/diff-ids.js";
 import type { DBExecutor } from "../db/kysely.js";
 
 export type CardAssignee = {
@@ -5,20 +6,6 @@ export type CardAssignee = {
 	username: string;
 	displayName: string;
 };
-
-/** Compute added/removed assignee IDs between two sets (dedupes `next`). */
-export function diffAssigneeIds(
-	prev: number[],
-	next: number[],
-): { added: number[]; removed: number[] } {
-	const unique = [...new Set(next)];
-	const prevSet = new Set(prev);
-	const nextSet = new Set(unique);
-	return {
-		added: unique.filter((id) => !prevSet.has(id)),
-		removed: prev.filter((id) => !nextSet.has(id)),
-	};
-}
 
 export async function loadCardAssigneesForCards(
 	dbExec: DBExecutor,
@@ -82,7 +69,7 @@ export async function syncCardAssignees(
 	assigneeIds: number[],
 ): Promise<{ prev: number[]; added: number[]; removed: number[] }> {
 	const prev = await getCardAssigneeIds(dbExec, cardId);
-	const { added, removed } = diffAssigneeIds(prev, assigneeIds);
+	const { added, removed } = diffIds(prev, assigneeIds);
 
 	if (removed.length > 0) {
 		await dbExec

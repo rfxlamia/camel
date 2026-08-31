@@ -6,6 +6,7 @@ export interface CardAssignee {
 
 export interface Card {
 	id: number;
+	key?: string | null;
 	columnId: number;
 	title: string;
 	description: string;
@@ -16,6 +17,13 @@ export interface Card {
 	doneAt: string | null;
 	// Calendar date "YYYY-MM-DD" (no time-of-day) or null when unset.
 	dueDate: string | null;
+	status?: TrackerVocabulary | null;
+	priority?: TrackerVocabulary | null;
+	labels?: TrackerVocabulary[];
+	projectId?: number | null;
+	projectName?: string | null;
+	phaseId?: number | null;
+	phaseName?: string | null;
 	assignees: CardAssignee[];
 	workspaceId?: number;
 }
@@ -330,6 +338,7 @@ export interface TrackerVocabulary {
 	name: string;
 	position: number;
 	colour: string;
+	slot?: "backlog" | "todo" | "in_progress" | "done" | "canceled" | null;
 	category?: TrackerStatusCategory | null;
 	createdAt?: string;
 }

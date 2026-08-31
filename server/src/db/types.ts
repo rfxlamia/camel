@@ -164,6 +164,11 @@ export interface CardEvents {
 	workspace_id: number;
 }
 
+export interface CardLabels {
+	card_id: number;
+	vocabulary_id: number;
+}
+
 export interface Cards {
 	column_id: number;
 	created_at: Generated<Timestamp>;
@@ -172,8 +177,13 @@ export interface Cards {
 	done_at: Timestamp | null;
 	due_date: Timestamp | null;
 	id: Generated<number>;
+	key_number: number | null;
 	position: number;
+	priority_id: number | null;
+	project_id: number | null;
+	phase_id: number | null;
 	started_at: Timestamp | null;
+	status_id: number | null;
 	title: string;
 	version: Generated<number>;
 	workspace_id: number;
@@ -304,6 +314,7 @@ export interface TrackerVocabularies {
 	kind: string;
 	name: string;
 	position: number;
+	slot: "backlog" | "todo" | "in_progress" | "done" | "canceled" | null;
 	workspace_id: number;
 }
 
@@ -364,6 +375,7 @@ export interface DB {
 	chat_threads: ChatThreads;
 	card_assignees: CardAssignees;
 	card_events: CardEvents;
+	card_labels: CardLabels;
 	cards: Cards;
 	columns: Columns;
 	notifications: Notifications;

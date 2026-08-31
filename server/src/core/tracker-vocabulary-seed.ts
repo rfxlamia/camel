@@ -8,6 +8,7 @@ export type TrackerVocabularySeedRow = {
 	position: number;
 	colour: string;
 	category?: string | null;
+	slot?: "backlog" | "todo" | "in_progress" | "done" | "canceled" | null;
 };
 
 export const DEFAULT_TRACKER_VOCABULARY: TrackerVocabularySeedRow[] = [
@@ -17,6 +18,7 @@ export const DEFAULT_TRACKER_VOCABULARY: TrackerVocabularySeedRow[] = [
 		position: POSITION_GAP,
 		colour: "oklch(0.89 0.07 250)",
 		category: "backlog",
+		slot: "backlog",
 	},
 	{
 		kind: "status",
@@ -24,6 +26,7 @@ export const DEFAULT_TRACKER_VOCABULARY: TrackerVocabularySeedRow[] = [
 		position: POSITION_GAP * 2,
 		colour: "oklch(0.89 0.07 200)",
 		category: "backlog",
+		slot: "todo",
 	},
 	{
 		kind: "status",
@@ -31,6 +34,7 @@ export const DEFAULT_TRACKER_VOCABULARY: TrackerVocabularySeedRow[] = [
 		position: POSITION_GAP * 3,
 		colour: "oklch(0.89 0.07 150)",
 		category: "started",
+		slot: "in_progress",
 	},
 	{
 		kind: "status",
@@ -38,6 +42,7 @@ export const DEFAULT_TRACKER_VOCABULARY: TrackerVocabularySeedRow[] = [
 		position: POSITION_GAP * 4,
 		colour: "oklch(0.89 0.07 140)",
 		category: "completed",
+		slot: "done",
 	},
 	{
 		kind: "status",
@@ -45,6 +50,7 @@ export const DEFAULT_TRACKER_VOCABULARY: TrackerVocabularySeedRow[] = [
 		position: POSITION_GAP * 5,
 		colour: "oklch(0.89 0.07 30)",
 		category: "canceled",
+		slot: "canceled",
 	},
 	{
 		kind: "priority",
@@ -98,6 +104,7 @@ export async function seedTrackerVocabulary(
 				position: row.position,
 				colour: row.colour,
 				category: row.category ?? null,
+				slot: row.slot ?? null,
 			})),
 		)
 		.execute();

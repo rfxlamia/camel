@@ -18,7 +18,7 @@ vi.mock("../db/kysely.js", () => ({
 	},
 }));
 
-import { parseDateRange, parseProjectPhase } from "./tracker-item-parsers.js";
+import { parseDateRange, parseLabelIds, parsePriorityId, parseProjectPhase } from "./tracker-item-parsers.js";
 
 describe("parseProjectPhase", () => {
 	beforeEach(() => mockExecuteTakeFirst.mockReset());
@@ -89,6 +89,56 @@ describe("parseProjectPhase", () => {
 		const result = await parseProjectPhase({}, 7);
 		expect(result).toEqual({ error: expect.any(String) });
 		expect(mockExecuteTakeFirst).not.toHaveBeenCalled();
+	});
+});
+
+describe("parsePriorityId", () => {
+	beforeEach(() => mockExecuteTakeFirst.mockReset());
+
+	it("accepts a valid workspace priority id", async () => {
+		mockExecuteTakeFirst.mockResolvedValueOnce({ id: 11 });
+		const result = await parsePriorityId({ priorityId: 11 }, 7);
+		expect(result).toBe(11);
+	});
+
+	it("accepts null to clear priority", async () => {
+		const result = await parsePriorityId({ priorityId: null }, 7);
+		expect(result).toBeNull();
+		expect(mockExecuteTakeFirst).not.toHaveBeenCalled();
+	});
+
+	it("rejects a non-integer priorityId", async () => {
+		const result = await parsePriorityId({ priorityId: "high" }, 7);
+		expect(result).toEqual({ error: expect.any(String) });
+	});
+
+	it("rejects a cross-workspace or wrong-kind priority", async () => {
+		mockExecuteTakeFirst.mockResolvedValueOnce(undefined);
+		const result = await parsePriorityId({ priorityId: 999 }, 7);
+		expect(result).toEqual({ error: expect.any(String) });
+	});
+});
+
+describe("parseLabelIds", () => {
+	beforeEach(() => mockExecuteTakeFirst.mockReset());
+
+	it("accepts valid workspace label ids", async () => {
+		mockExecuteTakeFirst
+			.mockResolvedValueOnce({ id: 1 })
+			.mockResolvedValueOnce({ id: 2 });
+		const result = await parseLabelIds({ labelIds: [1, 2] }, 7);
+		expect(result).toEqual([1, 2]);
+	});
+
+	it("rejects non-array labelIds", async () => {
+		const result = await parseLabelIds({ labelIds: 1 }, 7);
+		expect(result).toEqual({ error: expect.any(String) });
+	});
+
+	it("rejects a cross-workspace or wrong-kind label", async () => {
+		mockExecuteTakeFirst.mockResolvedValueOnce(undefined);
+		const result = await parseLabelIds({ labelIds: [999] }, 7);
+		expect(result).toEqual({ error: expect.any(String) });
 	});
 });
 

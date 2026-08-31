@@ -1,5 +1,5 @@
 import type { DBExecutor } from "../db/kysely.js";
-import { diffAssigneeIds } from "./card-assignees.js";
+import { diffIds } from "../core/diff-ids.js";
 
 export type TrackerItemAssignee = {
 	id: number;
@@ -55,7 +55,7 @@ export async function syncTrackerItemAssignees(
 	assigneeIds: number[],
 ): Promise<{ prev: number[]; added: number[]; removed: number[] }> {
 	const prev = await getTrackerItemAssigneeIds(dbExec, trackerItemId);
-	const { added, removed } = diffAssigneeIds(prev, assigneeIds);
+	const { added, removed } = diffIds(prev, assigneeIds);
 
 	if (removed.length > 0) {
 		await dbExec

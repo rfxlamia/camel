@@ -8,6 +8,7 @@
  */
 import "dotenv/config";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { initNotificationService } from "./service.js";
@@ -18,6 +19,18 @@ let assigneeId: number;
 let memberAId: number;
 let memberBId: number;
 let cardId: number;
+let backlogStatusId: number;
+
+async function statusIdForSlot(workspaceId: number, slot: string) {
+	const row = await db
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("kind", "=", "status")
+		.where("slot", "=", slot)
+		.executeTakeFirstOrThrow();
+	return row.id;
+}
 
 async function notificationsFor(userId: number, type: string) {
 	return db
@@ -66,6 +79,8 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
+			await seedTrackerVocabulary(db, workspaceId);
+			backlogStatusId = await statusIdForSlot(workspaceId, "backlog");
 
 			const column = await db
 				.insertInto("columns")
@@ -75,7 +90,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 			const card = await db
 				.insertInto("cards")
-				.values({ title: "Fix login bug", column_id: column.id, position: 1000, workspace_id: workspaceId })
+				.values({
+					title: "Fix login bug",
+					column_id: column.id,
+					position: 1000,
+					workspace_id: workspaceId,
+					status_id: backlogStatusId,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			cardId = card.id;

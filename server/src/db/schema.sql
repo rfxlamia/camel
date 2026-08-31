@@ -367,6 +367,7 @@ CREATE TABLE IF NOT EXISTS tracker_vocabularies (
   name         TEXT NOT NULL,
   position     DOUBLE PRECISION NOT NULL,
   colour       TEXT NOT NULL,
+  slot         TEXT CHECK (slot IN ('backlog', 'todo', 'in_progress', 'done', 'canceled')),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -518,6 +519,356 @@ CREATE INDEX IF NOT EXISTS idx_tracker_phases_project_position
 CREATE INDEX IF NOT EXISTS idx_tracker_items_project_phase_position
   ON tracker_items (project_id, phase_id, position)
   WHERE deleted_at IS NULL;
+
+-- Board/tracker vocabulary unification (T2): additive DDL and indexes.
+-- Keep slot nullable until all legacy vocabulary rows have been classified.
+ALTER TABLE tracker_vocabularies ADD COLUMN IF NOT EXISTS slot TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'tracker_vocabularies'::regclass
+      AND conname = 'tracker_vocabularies_slot_check'
+  ) THEN
+    ALTER TABLE tracker_vocabularies
+      ADD CONSTRAINT tracker_vocabularies_slot_check
+      CHECK (slot IN ('backlog', 'todo', 'in_progress', 'done', 'canceled'));
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tracker_vocab_workspace_status_slot
+  ON tracker_vocabularies (workspace_id, slot)
+  WHERE kind = 'status' AND slot IS NOT NULL;
+
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS status_id INTEGER
+  REFERENCES tracker_vocabularies(id);
+
+-- Align cards.status_id FK with tracker_items (NO ACTION, not SET NULL).
+DO $cards_status_id_fk$
+DECLARE
+  old_conname name;
+BEGIN
+  SELECT c.conname INTO old_conname
+  FROM pg_constraint c
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+  WHERE c.conrelid = 'cards'::regclass
+    AND c.contype = 'f'
+    AND a.attname = 'status_id'
+    AND c.confdeltype = 'n'
+  LIMIT 1;
+
+  IF old_conname IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE cards DROP CONSTRAINT %I', old_conname);
+    ALTER TABLE cards
+      ADD CONSTRAINT cards_status_id_fkey
+      FOREIGN KEY (status_id) REFERENCES tracker_vocabularies(id);
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN NULL;
+  WHEN undefined_column THEN NULL;
+END $cards_status_id_fk$;
+
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS key_number INTEGER;
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS priority_id INTEGER
+  REFERENCES tracker_vocabularies(id) ON DELETE SET NULL;
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS project_id INTEGER
+  REFERENCES tracker_projects(id) ON DELETE SET NULL;
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS phase_id INTEGER
+  REFERENCES tracker_phases(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_cards_status
+  ON cards (status_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cards_priority
+  ON cards (priority_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cards_project
+  ON cards (project_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cards_phase
+  ON cards (phase_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cards_workspace_key_live
+  ON cards (workspace_id, key_number)
+  WHERE deleted_at IS NULL AND key_number IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS card_labels (
+  card_id       INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  vocabulary_id INTEGER NOT NULL REFERENCES tracker_vocabularies(id) ON DELETE CASCADE,
+  PRIMARY KEY (card_id, vocabulary_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_labels_vocabulary
+  ON card_labels (vocabulary_id);
+
+-- T2 slot seed/update: default statuses are named identity, while slot is the
+-- stable marker used for mapping. Priorities and labels intentionally remain
+-- unslotted. Existing non-null slots are never overwritten.
+DO $$
+DECLARE
+  ws RECORD;
+BEGIN
+  FOR ws IN SELECT id FROM workspaces LOOP
+    INSERT INTO tracker_vocabularies
+      (workspace_id, kind, name, position, colour, slot)
+    SELECT ws.id, v.kind, v.name, v.position, v.colour, v.slot
+    FROM (VALUES
+      ('status',   'Backlog',       1024::double precision, 'oklch(0.89 0.07 250)', 'backlog'::text),
+      ('status',   'Todo',          2048::double precision, 'oklch(0.89 0.07 200)', 'todo'::text),
+      ('status',   'In Progress',   3072::double precision, 'oklch(0.89 0.07 150)', 'in_progress'::text),
+      ('status',   'Done',          4096::double precision, 'oklch(0.89 0.07 140)', 'done'::text),
+      ('status',   'Canceled',      5120::double precision, 'oklch(0.89 0.07 30)',  'canceled'::text),
+      ('priority', 'High',          1024::double precision, 'oklch(0.89 0.07 25)',  NULL::text),
+      ('priority', 'Medium',        2048::double precision, 'oklch(0.89 0.07 85)', NULL::text),
+      ('priority', 'Low',           3072::double precision, 'oklch(0.89 0.07 220)', NULL::text),
+      ('label',    'Feature',       1024::double precision, 'oklch(0.89 0.07 280)', NULL::text),
+      ('label',    'Bug',           2048::double precision, 'oklch(0.89 0.07 15)',  NULL::text),
+      ('label',    'Maintain',      3072::double precision, 'oklch(0.89 0.07 180)', NULL::text)
+    ) AS v(kind, name, position, colour, slot)
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM tracker_vocabularies tv
+      WHERE tv.workspace_id = ws.id
+        AND tv.kind = v.kind
+        AND lower(tv.name) = lower(v.name)
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM tracker_vocabularies tv
+      WHERE v.kind = 'status'
+        AND v.slot IS NOT NULL
+        AND tv.workspace_id = ws.id
+        AND tv.kind = 'status'
+        AND tv.slot = v.slot
+    );
+
+    UPDATE tracker_vocabularies tv
+    SET slot = v.slot
+    FROM (VALUES
+      ('Backlog', 'backlog'::text),
+      ('Todo', 'todo'::text),
+      ('In Progress', 'in_progress'::text),
+      ('Done', 'done'::text),
+      ('Canceled', 'canceled'::text)
+    ) AS v(name, slot)
+    WHERE tv.workspace_id = ws.id
+      AND tv.kind = 'status'
+      AND lower(tv.name) = lower(v.name)
+      AND tv.slot IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM tracker_vocabularies conflict
+        WHERE conflict.workspace_id = tv.workspace_id
+          AND conflict.kind = 'status'
+          AND conflict.slot = v.slot
+          AND conflict.id <> tv.id
+      );
+  END LOOP;
+END $$;
+
+-- board-tracker unify backfill: null-only status mapping and live key allocation.
+-- The optional agent column is intentionally mentioned only inside guarded
+-- EXECUTE SQL;
+-- schema.sql runs before agent-schema.sql on a fresh database.
+DO $board_tracker_status_backfill$
+DECLARE
+  has_board_id BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'columns'
+      AND column_name = 'board_id'
+  ) INTO has_board_id;
+
+  IF has_board_id THEN
+    EXECUTE $sql$
+      WITH non_done_columns AS (
+        SELECT
+          col.id,
+          col.workspace_id,
+          col.board_id,
+          row_number() OVER (
+            PARTITION BY col.workspace_id, col.board_id
+            ORDER BY col.position, col.id
+          ) AS non_done_rank
+        FROM columns AS col
+        WHERE NOT col.is_done
+      ),
+      column_slots AS (
+        SELECT col.id, col.workspace_id, col.board_id, 'done'::text AS slot
+        FROM columns AS col
+        WHERE col.is_done
+        UNION ALL
+        SELECT
+          nd.id,
+          nd.workspace_id,
+          nd.board_id,
+          CASE
+            WHEN nd.non_done_rank = 1 THEN 'backlog'
+            WHEN nd.non_done_rank = 2 THEN 'todo'
+            ELSE 'in_progress'
+          END AS slot
+        FROM non_done_columns AS nd
+      ),
+      target AS (
+        SELECT
+          card.id AS card_id,
+          card.workspace_id,
+          card.column_id,
+          target_column.board_id
+        FROM cards AS card
+        JOIN columns AS target_column
+          ON target_column.id = card.column_id
+         AND target_column.workspace_id = card.workspace_id
+        WHERE card.status_id IS NULL
+      ),
+      resolved AS (
+        SELECT target.card_id, vocabulary.id AS status_id
+        FROM target
+        JOIN column_slots AS col
+         ON col.id = target.column_id
+         AND col.workspace_id = target.workspace_id
+         AND col.board_id IS NOT DISTINCT FROM target.board_id
+        JOIN tracker_vocabularies AS vocabulary
+          ON vocabulary.workspace_id = target.workspace_id
+         AND vocabulary.kind = 'status'
+         AND vocabulary.slot IS NOT NULL
+         AND vocabulary.slot = col.slot
+      )
+      UPDATE cards AS card
+      SET status_id = resolved.status_id
+      FROM resolved
+      WHERE card.id = resolved.card_id
+        AND card.status_id IS NULL
+    $sql$;
+  ELSE
+    EXECUTE $sql$
+      WITH non_done_columns AS (
+        SELECT
+          col.id,
+          col.workspace_id,
+          row_number() OVER (
+            PARTITION BY col.workspace_id
+            ORDER BY col.position, col.id
+          ) AS non_done_rank
+        FROM columns AS col
+        WHERE NOT col.is_done
+      ),
+      column_slots AS (
+        SELECT col.id, col.workspace_id, 'done'::text AS slot
+        FROM columns AS col
+        WHERE col.is_done
+        UNION ALL
+        SELECT
+          nd.id,
+          nd.workspace_id,
+          CASE
+            WHEN nd.non_done_rank = 1 THEN 'backlog'
+            WHEN nd.non_done_rank = 2 THEN 'todo'
+            ELSE 'in_progress'
+          END AS slot
+        FROM non_done_columns AS nd
+      ),
+      resolved AS (
+        SELECT card.id AS card_id, vocabulary.id AS status_id
+        FROM cards AS card
+        JOIN column_slots AS col
+          ON col.id = card.column_id
+         AND col.workspace_id = card.workspace_id
+        JOIN tracker_vocabularies AS vocabulary
+          ON vocabulary.workspace_id = card.workspace_id
+         AND vocabulary.kind = 'status'
+         AND vocabulary.slot IS NOT NULL
+         AND vocabulary.slot = col.slot
+        WHERE card.status_id IS NULL
+      )
+      UPDATE cards AS card
+      SET status_id = resolved.status_id
+      FROM resolved
+      WHERE card.id = resolved.card_id
+        AND card.status_id IS NULL
+    $sql$;
+  END IF;
+END $board_tracker_status_backfill$;
+
+DO $board_tracker_key_backfill$
+DECLARE
+  ws RECORD;
+  card_row RECORD;
+  allocated_key INTEGER;
+BEGIN
+  FOR ws IN SELECT id FROM workspaces ORDER BY id LOOP
+    -- Serialize allocation and bring the counter past every existing key.
+    PERFORM 1 FROM workspaces WHERE id = ws.id FOR UPDATE;
+    UPDATE workspaces AS workspace
+    SET tracker_key_counter = GREATEST(
+      workspace.tracker_key_counter,
+      COALESCE((
+        SELECT MAX(item.key_number)
+        FROM tracker_items AS item
+        WHERE item.workspace_id = workspace.id
+      ), 0),
+      COALESCE((
+        SELECT MAX(card.key_number)
+        FROM cards AS card
+        WHERE card.workspace_id = workspace.id
+      ), 0)
+    )
+    WHERE workspace.id = ws.id
+      AND EXISTS (
+        SELECT 1
+        FROM cards AS pending_card
+        WHERE pending_card.workspace_id = workspace.id
+          AND pending_card.deleted_at IS NULL
+          AND pending_card.key_number IS NULL
+      );
+
+    FOR card_row IN
+      SELECT id
+      FROM cards
+      WHERE workspace_id = ws.id
+        AND deleted_at IS NULL
+        AND key_number IS NULL
+      ORDER BY id
+      FOR UPDATE
+    LOOP
+      UPDATE workspaces
+      SET tracker_key_counter = tracker_key_counter + 1
+      WHERE id = ws.id
+      RETURNING tracker_key_counter INTO allocated_key;
+
+      UPDATE cards
+      SET key_number = allocated_key
+      WHERE id = card_row.id
+        AND deleted_at IS NULL
+        AND key_number IS NULL;
+    END LOOP;
+  END LOOP;
+END $board_tracker_key_backfill$;
+
+-- Finalize the card identity migration only after all legacy rows have been
+-- assigned a status. The guard keeps repeated migrations idempotent.
+DO $board_tracker_status_not_null$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'cards'
+      AND column_name = 'status_id'
+      AND is_nullable = 'YES'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM cards
+    WHERE status_id IS NULL
+  ) THEN
+    ALTER TABLE cards ALTER COLUMN status_id SET NOT NULL;
+  END IF;
+END $board_tracker_status_not_null$;
 
 -- tracker: category backfill
 UPDATE tracker_vocabularies

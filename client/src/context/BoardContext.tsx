@@ -102,6 +102,10 @@ interface BoardContextValue {
 			description?: string;
 			assigneeIds?: number[];
 			dueDate?: string | null;
+			priorityId?: number | null;
+			labelIds?: number[];
+			projectId?: number | null;
+			phaseId?: number | null;
 			version?: number;
 		},
 	) => Promise<SaveCardResult>;
@@ -616,6 +620,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				description?: string;
 				assigneeIds?: number[];
 				dueDate?: string | null;
+				priorityId?: number | null;
+				labelIds?: number[];
+				projectId?: number | null;
+				phaseId?: number | null;
 				version?: number;
 			},
 		): Promise<SaveCardResult> => {

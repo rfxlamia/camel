@@ -1,5 +1,10 @@
 import { Router } from "express";
 import { sql } from "kysely";
+import { allocateCardIdentity } from "../core/allocate-card-identity.js";
+import {
+	mapColumnSlots,
+	statusIdForSlot,
+} from "../core/column-status-map.js";
 import {
 	neighborsAt,
 	POSITION_GAP,
@@ -18,23 +23,59 @@ import {
 } from "../validators/input-length.js";
 import {
 	addCardAssignee,
-	type CardAssignee,
 	getCardAssigneeIds,
 	loadCardAssigneesForCards,
 	syncCardAssignees,
 } from "./card-assignees.js";
+import { syncCardLabels } from "./card-labels.js";
+import {
+	buildCardResponse,
+	type CardResponseRow,
+	loadCardLabelsForCards,
+} from "./card-response.js";
 import {
 	createScopedBoardService,
 	lookupMembership,
 	parseWorkspaceId,
 	recordActivity,
 } from "./helpers.js";
+import {
+	parseCardProjectPhase,
+	parseLabelIds,
+	parsePriorityId,
+} from "./tracker-item-parsers.js";
 
 export const cardsRouter = Router({ mergeParams: true });
+
+type FullCardRow = CardResponseRow & { workspace_id: number };
+type CardDbRow = CardResponseRow;
+
+function toCardDbRow(row: FullCardRow): CardDbRow {
+	return { ...row };
+}
+
+const mapCardResponse = buildCardResponse;
 
 function selectFullCard(dbExec: DBExecutor) {
 	return dbExec
 		.selectFrom("cards as c")
+		.innerJoin("workspaces as w", "w.id", "c.workspace_id")
+		.leftJoin("tracker_vocabularies as st", (join) =>
+			join.onRef("st.id", "=", "c.status_id").on("st.kind", "=", "status"),
+		)
+		.leftJoin("tracker_vocabularies as pr", (join) =>
+			join.onRef("pr.id", "=", "c.priority_id").on("pr.kind", "=", "priority"),
+		)
+		.leftJoin("tracker_projects as tpr", (join) =>
+			join
+				.onRef("tpr.id", "=", "c.project_id")
+				.on("tpr.deleted_at", "is", null),
+		)
+		.leftJoin("tracker_phases as tph", (join) =>
+			join
+				.onRef("tph.id", "=", "c.phase_id")
+				.on("tph.deleted_at", "is", null),
+		)
 		.select([
 			"c.id",
 			"c.workspace_id",
@@ -47,65 +88,25 @@ function selectFullCard(dbExec: DBExecutor) {
 			"c.started_at",
 			"c.done_at",
 			sql<string | null>`c.due_date::text`.as("due_date"),
+			"c.key_number",
+			"w.name as workspace_name",
+			"c.status_id",
+			"st.kind as status_kind",
+			"st.name as status_name",
+			"st.position as status_position",
+			"st.colour as status_colour",
+			"st.category as status_category",
+			"st.slot as status_slot",
+			"c.priority_id",
+			"pr.kind as priority_kind",
+			"pr.name as priority_name",
+			"pr.position as priority_position",
+			"pr.colour as priority_colour",
+			"c.project_id",
+			"tpr.name as project_name",
+			"c.phase_id",
+			"tph.name as phase_name",
 		]);
-}
-
-type FullCardRow = {
-	id: number;
-	workspace_id: number;
-	column_id: number;
-	title: string;
-	description: string;
-	position: number;
-	version: number;
-	created_at: Date;
-	started_at: Date | null;
-	done_at: Date | null;
-	due_date: string | null;
-};
-
-type CardDbRow = {
-	id: number;
-	column_id: number;
-	title: string;
-	description: string;
-	position: number;
-	version: number;
-	created_at: string;
-	started_at: string | null;
-	done_at: string | null;
-	due_date: string | null;
-};
-
-function toCardDbRow(row: FullCardRow): CardDbRow {
-	return {
-		id: row.id,
-		column_id: row.column_id,
-		title: row.title,
-		description: row.description,
-		position: row.position,
-		version: row.version,
-		created_at: row.created_at.toISOString(),
-		started_at: row.started_at?.toISOString() ?? null,
-		done_at: row.done_at?.toISOString() ?? null,
-		due_date: row.due_date,
-	};
-}
-
-function mapCardResponse(c: CardDbRow, assignees: CardAssignee[]) {
-	return {
-		id: c.id,
-		columnId: c.column_id,
-		title: c.title,
-		description: c.description,
-		position: c.position,
-		version: c.version,
-		createdAt: c.created_at,
-		startedAt: c.started_at,
-		doneAt: c.done_at,
-		dueDate: c.due_date,
-		assignees,
-	};
 }
 
 async function hydrateCard(cardId: number, workspaceId: number) {
@@ -115,8 +116,14 @@ async function hydrateCard(cardId: number, workspaceId: number) {
 		.where("c.deleted_at", "is", null)
 		.executeTakeFirst();
 	if (!row) return null;
-	const assigneesByCard = await loadCardAssigneesForCards(db, [cardId]);
-	return mapCardResponse(toCardDbRow(row), assigneesByCard.get(cardId) ?? []);
+	const [assigneesByCard, labelsByCard] = await Promise.all([
+		loadCardAssigneesForCards(db, [cardId]),
+		loadCardLabelsForCards(db, [cardId]),
+	]);
+	return buildCardResponse(row, {
+		assignees: assigneesByCard.get(cardId) ?? [],
+		labels: labelsByCard.get(cardId) ?? [],
+	});
 }
 
 function emitCardAssigned(
@@ -225,28 +232,26 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 				.where("c.deleted_at", "is", null)
 				.executeTakeFirst();
 			if (!row) return null;
-			const assigneesByCard = await loadCardAssigneesForCards(db, [cId]);
+			const [assigneesByCard, labelsByCard] = await Promise.all([
+				loadCardAssigneesForCards(db, [cId]),
+				loadCardLabelsForCards(db, [cId]),
+			]);
 			return {
-				id: row.id,
+				...buildCardResponse(row, {
+					assignees: assigneesByCard.get(cId) ?? [],
+					labels: labelsByCard.get(cId) ?? [],
+				}),
 				workspaceId: row.workspace_id,
-				title: row.title,
-				columnId: row.column_id,
-				description: row.description,
-				position: row.position,
-				version: row.version,
-				createdAt: row.created_at.toISOString(),
-				startedAt: row.started_at?.toISOString() ?? null,
-				doneAt: row.done_at?.toISOString() ?? null,
-				dueDate: row.due_date,
-				assignees: assigneesByCard.get(cId) ?? [],
 			};
 		},
 		getBoardRows: async () => [],
 		getActivityRows: async () => [],
 	}).getCard({ userId: req.user!.id, workspaceId, cardId });
 
-	if ("status" in result) {
-		return res.status(result.status).json({ error: result.error });
+	if ("status" in result && typeof result.status === "number") {
+		return res
+			.status(result.status)
+			.json({ error: "error" in result ? result.error : "Not found" });
 	}
 	res.json(result);
 });
@@ -254,7 +259,12 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
 
-	const { columnId, title, description } = req.body ?? {};
+	const { columnId, title, description, statusId } = req.body ?? {};
+	if (statusId !== undefined) {
+		return res
+			.status(400)
+			.json({ error: "statusId is not accepted for card creation" });
+	}
 	if (!Number.isInteger(columnId)) {
 		return res.status(400).json({ error: "columnId must be an integer" });
 	}
@@ -272,8 +282,15 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 		| { kind: "ok"; cardId: number; autoAssigneeId: number | null };
 
 	const result: CreateResult = await db.transaction().execute(async (trx) => {
-		// Lock the column row first so concurrent creates targeting the same
-		// column serialize on the WIP count instead of racing past it together.
+		// Lock the workspace before the column so card creation follows the
+		// workspace -> columns order used by is_done remapping.
+		await trx
+			.selectFrom("workspaces")
+			.select("id")
+			.where("id", "=", workspaceId)
+			.forUpdate()
+			.executeTakeFirstOrThrow();
+
 		const col = await trx
 			.selectFrom("columns")
 			.select(["id", "wip_limit", "is_signable", "signable_assignee_id"])
@@ -303,6 +320,10 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 			col.is_signable && col.signable_assignee_id
 				? col.signable_assignee_id
 				: null;
+		const identity = await allocateCardIdentity(trx, {
+			workspaceId,
+			columnId: Number(columnId),
+		});
 
 		const inserted = await trx
 			.insertInto("cards")
@@ -312,6 +333,8 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 				description: descValidation.trimmed ?? "",
 				position: sql<number>`COALESCE((SELECT MAX(position) FROM cards WHERE column_id = ${Number(columnId)}), 0) + ${POSITION_GAP}`,
 				workspace_id: workspaceId,
+				key_number: identity.keyNumber,
+				status_id: identity.statusId,
 			})
 			.returning("id")
 			.executeTakeFirstOrThrow();
@@ -364,6 +387,11 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	if (Number.isNaN(id)) {
 		return res.status(400).json({ error: "invalid card id" });
 	}
+	if ("statusId" in body) {
+		return res
+			.status(400)
+			.json({ error: "statusId is not accepted for card updates" });
+	}
 	if (version !== undefined && !Number.isInteger(version)) {
 		return res.status(400).json({ error: "version must be an integer" });
 	}
@@ -374,11 +402,17 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const hasDescription = "description" in body;
 	const hasAssigneeIds = "assigneeIds" in body;
 	const hasDueDate = "dueDate" in body;
+	const hasPriorityId = "priorityId" in body;
+	const hasLabelIds = "labelIds" in body;
+	const hasProjectPhase = "projectId" in body || "phaseId" in body;
 
 	const setFields: {
 		title?: string;
 		description?: string;
 		due_date?: string | null;
+		priority_id?: number | null;
+		project_id?: number | null;
+		phase_id?: number | null;
 	} = {};
 
 	if (hasTitle) {
@@ -411,13 +445,31 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		parsedAssigneeIds = parsed;
 	}
 
-	const hasSets = Object.keys(setFields).length > 0;
-	if (!hasSets && !hasAssigneeIds) {
+	if (hasPriorityId) {
+		const parsed = await parsePriorityId(body, workspaceId);
+		if (parsed !== null && typeof parsed === "object" && "error" in parsed) {
+			return res.status(400).json({ error: parsed.error });
+		}
+		setFields.priority_id = parsed;
+	}
+
+	let parsedLabelIds: number[] | undefined;
+	if (hasLabelIds) {
+		const parsed = await parseLabelIds(body, workspaceId);
+		if ("error" in parsed) {
+			return res.status(400).json({ error: parsed.error });
+		}
+		parsedLabelIds = parsed;
+	}
+
+	const hasSets = Object.keys(setFields).length > 0 || hasProjectPhase;
+	if (!hasSets && !hasAssigneeIds && !hasLabelIds) {
 		return res.status(400).json({ error: "no updatable fields provided" });
 	}
 
 	type TxResult =
 		| { kind: "not_found" }
+		| { kind: "bad_request"; error: string }
 		| { kind: "conflict"; card: ReturnType<typeof mapCardResponse> | null }
 		| {
 				kind: "ok";
@@ -428,21 +480,46 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		  };
 
 	const result: TxResult = await db.transaction().execute(async (trx) => {
-		const prevRow = await trx
+		const lockedRow = await trx
 			.selectFrom("cards")
-			.select(sql<string | null>`due_date::text`.as("due_date"))
+			.select([
+				sql<string | null>`due_date::text`.as("due_date"),
+				"project_id",
+			])
 			.where("id", "=", id)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
+			.forUpdate()
 			.executeTakeFirst();
-		const prevDueDate = prevRow?.due_date;
+		if (!lockedRow) {
+			return { kind: "not_found" };
+		}
+		const prevDueDate = lockedRow.due_date;
 		const prevAssigneeIds = await getCardAssigneeIds(trx, id);
+
+		const trxSetFields = { ...setFields };
+		if (hasProjectPhase) {
+			const parsed = await parseCardProjectPhase(
+				body,
+				workspaceId,
+				lockedRow.project_id,
+			);
+			if ("error" in parsed) {
+				return { kind: "bad_request", error: parsed.error };
+			}
+			if (parsed.projectId !== undefined) {
+				trxSetFields.project_id = parsed.projectId;
+			}
+			if (parsed.phaseId !== undefined) {
+				trxSetFields.phase_id = parsed.phaseId;
+			}
+		}
 
 		let updated: CardDbRow;
 		if (hasSets) {
 			const updatedRow = await trx
 				.updateTable("cards")
-				.set({ ...setFields, version: sql`version + 1` })
+				.set({ ...trxSetFields, version: sql`version + 1` })
 				.where("id", "=", id)
 				.where("workspace_id", "=", workspaceId)
 				.where("deleted_at", "is", null)
@@ -470,13 +547,16 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 					.where("c.deleted_at", "is", null)
 					.executeTakeFirst();
 				if (!current) return { kind: "not_found" };
-				const assigneesByCard = await loadCardAssigneesForCards(trx, [id]);
+				const [assigneesByCard, labelsByCard] = await Promise.all([
+					loadCardAssigneesForCards(trx, [id]),
+					loadCardLabelsForCards(trx, [id]),
+				]);
 				return {
 					kind: "conflict",
-					card: mapCardResponse(
-						toCardDbRow(current),
-						assigneesByCard.get(id) ?? [],
-					),
+					card: mapCardResponse(toCardDbRow(current), {
+						assignees: assigneesByCard.get(id) ?? [],
+						labels: labelsByCard.get(id) ?? [],
+					}),
 				};
 			}
 			updated = {
@@ -520,6 +600,10 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 			assigneeSync = await syncCardAssignees(trx, id, parsedAssigneeIds);
 		}
 
+		if (hasLabelIds && parsedLabelIds !== undefined) {
+			await syncCardLabels(trx, id, parsedLabelIds);
+		}
+
 		await recordActivity(trx, req.user!, workspaceId, "update", {
 			cardId: id,
 			payload: {
@@ -529,6 +613,10 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 					hasDescription && "description",
 					hasAssigneeIds && "assignees",
 					hasDueDate && "dueDate",
+					hasPriorityId && "priority",
+					hasLabelIds && "labels",
+					hasProjectPhase && "project",
+					hasProjectPhase && "phase",
 				].filter(Boolean),
 			},
 		});
@@ -538,6 +626,9 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 
 	if (result.kind === "not_found") {
 		return res.status(404).json({ error: "card not found" });
+	}
+	if (result.kind === "bad_request") {
+		return res.status(400).json({ error: result.error });
 	}
 	if (result.kind === "conflict") {
 		if (result.card) {
@@ -590,7 +681,19 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		);
 	}
 
-	res.json(mapCardResponse(updated, assigneesByCard.get(id) ?? []));
+	const responseRow = await selectFullCard(db)
+		.where("c.id", "=", id)
+		.where("c.workspace_id", "=", workspaceId)
+		.where("c.deleted_at", "is", null)
+		.executeTakeFirst();
+	if (!responseRow) return res.status(404).json({ error: "card not found" });
+	const labelsByCard = await loadCardLabelsForCards(db, [id]);
+	res.json(
+		mapCardResponse(responseRow, {
+			assignees: assigneesByCard.get(id) ?? [],
+			labels: labelsByCard.get(id) ?? [],
+		}),
+	);
 });
 
 cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
@@ -675,7 +778,12 @@ cardsRouter.post(
 		if (Number.isNaN(cardId)) {
 			return res.status(400).json({ error: "invalid card id" });
 		}
-		const { toColumnId, index, version } = req.body ?? {};
+		const { toColumnId, index, version, statusId } = req.body ?? {};
+		if (statusId !== undefined) {
+			return res
+				.status(400)
+				.json({ error: "statusId is not accepted for card moves" });
+		}
 		if (
 			!Number.isInteger(toColumnId) ||
 			!Number.isInteger(index) ||
@@ -727,6 +835,7 @@ cardsRouter.post(
 				.selectFrom("columns")
 				.select([
 					"id",
+					"board_id",
 					"wip_limit",
 					"is_done",
 					"is_signable",
@@ -741,6 +850,39 @@ cardsRouter.post(
 			if (!target) return { kind: "not_found_column" };
 
 			const isSameColumn = card.column_id === toColumnId;
+
+			let destinationStatusId: number | undefined;
+			if (!isSameColumn) {
+				const siblingColumns = await trx
+					.selectFrom("columns")
+					.select(["id", "position", "is_done"])
+					.where("workspace_id", "=", workspaceId)
+					.where(
+						sql<boolean>`board_id IS NOT DISTINCT FROM ${target.board_id}`,
+					)
+					.orderBy("position")
+					.orderBy("id")
+					.execute();
+
+				const slot = mapColumnSlots(siblingColumns).get(toColumnId);
+				if (!slot) {
+					throw new Error(
+						"Destination column is not in the workspace board geometry",
+					);
+				}
+
+				const statusRows = await trx
+					.selectFrom("tracker_vocabularies")
+					.select(["id", "kind", "slot"])
+					.where("workspace_id", "=", workspaceId)
+					.where("kind", "=", "status")
+					.execute();
+				const resolvedStatusId = statusIdForSlot(statusRows, slot);
+				if (resolvedStatusId === null) {
+					throw new Error(`Status vocabulary missing for slot: ${slot}`);
+				}
+				destinationStatusId = resolvedStatusId;
+			}
 
 			const siblings = await trx
 				.selectFrom("cards")
@@ -786,6 +928,9 @@ cardsRouter.post(
 					column_id: toColumnId,
 					position,
 					version: sql`version + 1`,
+					...(destinationStatusId !== undefined
+						? { status_id: destinationStatusId }
+						: {}),
 					started_at: sql`CASE WHEN started_at IS NULL AND (${target.is_done} OR NOT ${target.is_first}) THEN now() ELSE started_at END`,
 					done_at: sql`CASE WHEN ${target.is_done} THEN COALESCE(done_at, now()) ELSE NULL END`,
 				})

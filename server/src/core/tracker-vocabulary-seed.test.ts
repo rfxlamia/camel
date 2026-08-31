@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { POSITION_GAP } from "./position.js";
 import {
 	DEFAULT_TRACKER_VOCABULARY,
 	seedTrackerVocabulary,
 } from "./tracker-vocabulary-seed.js";
-import { POSITION_GAP } from "./position.js";
 
 describe("DEFAULT_TRACKER_VOCABULARY", () => {
 	it("has exactly 5 statuses, 3 priorities and 3 labels", () => {
@@ -26,10 +26,35 @@ describe("DEFAULT_TRACKER_VOCABULARY", () => {
 		expect(byName("Canceled")?.category).toBe("canceled");
 	});
 
+	it("assigns each seeded status its stable slot marker", () => {
+		const byName = (name: string) =>
+			DEFAULT_TRACKER_VOCABULARY.find(
+				(row) => row.kind === "status" && row.name === name,
+			);
+		const slot = (name: string) =>
+			(byName(name) as unknown as { slot?: string | null })?.slot;
+
+		expect(slot("Backlog")).toBe("backlog");
+		expect(slot("Todo")).toBe("todo");
+		expect(slot("In Progress")).toBe("in_progress");
+		expect(slot("Done")).toBe("done");
+		expect(slot("Canceled")).toBe("canceled");
+	});
+
 	it("carries no category on priorities or labels", () => {
 		for (const row of DEFAULT_TRACKER_VOCABULARY) {
 			if (row.kind !== "status") {
 				expect(row.category ?? null).toBeNull();
+			}
+		}
+	});
+
+	it("carries no slot marker on priorities or labels", () => {
+		for (const row of DEFAULT_TRACKER_VOCABULARY) {
+			if (row.kind !== "status") {
+				expect(
+					(row as unknown as { slot?: string | null }).slot ?? null,
+				).toBeNull();
 			}
 		}
 	});
@@ -62,6 +87,16 @@ describe("seedTrackerVocabulary", () => {
 		const rows = values.mock.calls[0][0] as Array<{ workspace_id: number }>;
 		expect(rows).toHaveLength(11);
 		expect(rows.every((row) => row.workspace_id === 42)).toBe(true);
+		const statusRows = rows.filter(
+			(row) => (row as unknown as { kind: string }).kind === "status",
+		) as Array<{ kind: string; name: string; slot?: string | null }>;
+		expect(statusRows.map((row) => row.slot)).toEqual([
+			"backlog",
+			"todo",
+			"in_progress",
+			"done",
+			"canceled",
+		]);
 		expect(execute).toHaveBeenCalledOnce();
 	});
 });

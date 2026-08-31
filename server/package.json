@@ -7,7 +7,7 @@
 		"dev": "tsx watch src/index.ts",
 		"build": "tsc -p tsconfig.json",
 		"start": "node dist/index.js",
-		"test": "vitest run --silent",
+		"test": "vitest run --silent=true",
 		"test:integration": "RUN_LLM_IT=1 vitest run src/agent/pipeline.integration.test.ts",
 		"test:integration:routes": "RUN_INTEGRATION=1 vitest run --no-file-parallelism",
 		"test:watch": "vitest",

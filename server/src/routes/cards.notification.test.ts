@@ -11,6 +11,7 @@ import "dotenv/config";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 
@@ -42,6 +43,18 @@ let userId: number;
 let assigneeId: number;
 let columnId: number;
 let signableColumnId: number;
+let backlogStatusId: number;
+
+async function statusIdForSlot(slot: string) {
+	const row = await db
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("kind", "=", "status")
+		.where("slot", "=", slot)
+		.executeTakeFirstOrThrow();
+	return row.id;
+}
 
 async function insertCard(title: string, targetColumnId: number, version = 1) {
 	const row = await db
@@ -52,6 +65,10 @@ async function insertCard(title: string, targetColumnId: number, version = 1) {
 			position: 1000,
 			version,
 			workspace_id: workspaceId,
+			status_id:
+				targetColumnId === signableColumnId
+					? await statusIdForSlot("done")
+					: backlogStatusId,
 		})
 		.returning("id")
 		.executeTakeFirstOrThrow();
@@ -94,6 +111,8 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
+			await seedTrackerVocabulary(db, workspaceId);
+			backlogStatusId = await statusIdForSlot("backlog");
 
 			await db
 				.insertInto("workspace_members")

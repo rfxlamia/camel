@@ -202,6 +202,10 @@ export const api = {
 			description?: string;
 			assigneeIds?: number[];
 			dueDate?: string | null;
+			priorityId?: number | null;
+			labelIds?: number[];
+			projectId?: number | null;
+			phaseId?: number | null;
 			version?: number;
 		},
 	) =>

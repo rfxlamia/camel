@@ -15,6 +15,7 @@
 import "dotenv/config";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "kysely";
+import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { runDueDateReminders } from "./scheduler.js";
 
@@ -22,6 +23,17 @@ const isMidnightHourUtc = new Date().getUTCHours() === 0;
 
 let workspaceId: number;
 let userId: number;
+
+async function statusIdForSlot(slot: string) {
+	const row = await db
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("kind", "=", "status")
+		.where("slot", "=", slot)
+		.executeTakeFirstOrThrow();
+	return row.id;
+}
 
 async function todayDateString(): Promise<string> {
 	const result = await sql<{ today: string }>`select to_char(now(), 'YYYY-MM-DD') as today`.execute(db);
@@ -44,6 +56,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
+			await seedTrackerVocabulary(db, workspaceId);
 		});
 
 		afterAll(async () => {
@@ -75,6 +88,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					position: 1000,
 					workspace_id: workspaceId,
 					due_date: today,
+					status_id: await statusIdForSlot("done"),
 				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
@@ -107,6 +121,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					position: 1000,
 					workspace_id: workspaceId,
 					due_date: "2099-01-01",
+					status_id: await statusIdForSlot("backlog"),
 				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
@@ -142,6 +157,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 						position: 1000,
 						workspace_id: workspaceId,
 						due_date: today,
+						status_id: await statusIdForSlot("backlog"),
 					})
 					.returning("id")
 					.executeTakeFirstOrThrow();

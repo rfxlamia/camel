@@ -8,7 +8,14 @@ import {
 } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
-import { diffAssigneeIds } from "./card-assignees.js";
+import { publishEvent } from "../realtime.js";
+import { diffIds } from "../core/diff-ids.js";
+import { recordTrackerActivity } from "./tracker-activity.js";
+import {
+	loadTrackerAssigneesForItems,
+	syncTrackerItemAssignees,
+	type TrackerItemAssignee,
+} from "./tracker-assignees.js";
 import {
 	parseAssigneeIds,
 	parseDateRange,
@@ -16,26 +23,15 @@ import {
 	parseProjectPhase,
 } from "./tracker-item-parsers.js";
 import {
-	loadTrackerAssigneesForItems,
-	syncTrackerItemAssignees,
-	type TrackerItemAssignee,
-} from "./tracker-assignees.js";
-import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
+	serializeVocabulary,
+	type VocabularyRow,
+} from "./vocabulary-response.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
 
 function routeKeyParam(raw: string | string[]): string {
 	return Array.isArray(raw) ? (raw[0] ?? "") : raw;
 }
-
-type VocabRow = {
-	id: number;
-	kind: string;
-	name: string;
-	position: number;
-	colour: string;
-};
 
 type ItemRow = {
 	id: number;
@@ -51,6 +47,7 @@ type ItemRow = {
 	status_position: number;
 	status_colour: string;
 	status_category: string | null;
+	status_slot: string | null;
 	priority_id: number | null;
 	priority_name: string | null;
 	priority_kind: string | null;
@@ -70,32 +67,11 @@ function formatDateOnly(value: Date | string | null): string | null {
 	return value.toISOString().slice(0, 10);
 }
 
-function serializeVocab(
-	row:
-		| (Pick<VocabRow, "id" | "kind" | "name" | "position" | "colour"> & {
-				category?: string | null;
-		  })
-		| null,
-) {
-	if (!row) return null;
-	const body: Record<string, unknown> = {
-		id: row.id,
-		kind: row.kind,
-		name: row.name,
-		position: row.position,
-		colour: row.colour,
-	};
-	if (row.category !== undefined) {
-		body.category = row.category;
-	}
-	return body;
-}
-
 function serializeItem(
 	row: ItemRow,
 	prefix: string,
 	assignees: TrackerItemAssignee[],
-	labels: VocabRow[] = [],
+	labels: VocabularyRow[] = [],
 	opts?: { redirectFrom?: string },
 ) {
 	const key = formatKey(prefix, row.key_number);
@@ -110,17 +86,18 @@ function serializeItem(
 		endDate: formatDateOnly(row.end_date),
 		completedAt: row.completed_at?.toISOString() ?? null,
 		position: row.position,
-		status: serializeVocab({
+		status: serializeVocabulary({
 			id: row.status_id,
 			kind: row.status_kind,
 			name: row.status_name,
 			position: row.status_position,
 			colour: row.status_colour,
 			category: row.status_category,
+			slot: row.status_slot,
 		}),
 		priority:
 			row.priority_id != null
-				? serializeVocab({
+				? serializeVocabulary({
 						id: row.priority_id,
 						kind: row.priority_kind!,
 						name: row.priority_name!,
@@ -128,7 +105,7 @@ function serializeItem(
 						colour: row.priority_colour!,
 					})
 				: null,
-		labels: labels.map((l) => serializeVocab(l)),
+		labels: labels.map(serializeVocabulary),
 		assignees,
 		version: row.version,
 		createdAt: row.created_at.toISOString(),
@@ -166,6 +143,7 @@ function selectItemRows(dbExec: DBExecutor) {
 			"st.position as status_position",
 			"st.colour as status_colour",
 			"st.category as status_category",
+			"st.slot as status_slot",
 			"ti.priority_id",
 			"pr.name as priority_name",
 			"pr.kind as priority_kind",
@@ -187,8 +165,8 @@ async function getWorkspacePrefix(workspaceId: number): Promise<string | null> {
 async function loadLabelsForItems(
 	dbExec: DBExecutor,
 	itemIds: number[],
-): Promise<Map<number, VocabRow[]>> {
-	const map = new Map<number, VocabRow[]>();
+): Promise<Map<number, VocabularyRow[]>> {
+	const map = new Map<number, VocabularyRow[]>();
 	if (itemIds.length === 0) return map;
 
 	const rows = await dbExec
@@ -270,7 +248,7 @@ async function syncTrackerItemLabels(
 	labelIds: number[],
 ): Promise<void> {
 	const prev = await getTrackerItemLabelIds(dbExec, trackerItemId);
-	const { added, removed } = diffAssigneeIds(prev, labelIds);
+	const { added, removed } = diffIds(prev, labelIds);
 
 	if (removed.length > 0) {
 		await dbExec
