@@ -30,6 +30,33 @@ async function lookupPhase(
 		.executeTakeFirst();
 }
 
+export async function parsePriorityId(
+	body: Record<string, unknown>,
+	workspaceId: number,
+): Promise<number | null | { error: string }> {
+	if (!("priorityId" in body)) {
+		return { error: "priorityId must be an integer or null" };
+	}
+	const raw = body.priorityId;
+	if (raw === null) {
+		return null;
+	}
+	if (!Number.isInteger(raw)) {
+		return { error: "priorityId must be an integer or null" };
+	}
+	const row = await db
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("id", "=", raw as number)
+		.where("workspace_id", "=", workspaceId)
+		.where("kind", "=", "priority")
+		.executeTakeFirst();
+	if (!row) {
+		return { error: "priority must belong to this workspace" };
+	}
+	return raw as number;
+}
+
 export async function parseLabelIds(
 	body: Record<string, unknown>,
 	workspaceId: number,
@@ -175,6 +202,52 @@ export async function parseProjectPhase(
 	}
 
 	return { error: "projectId and phaseId must be integers or null" };
+}
+
+/**
+ * Parse projectId / phaseId for card PATCH using the board effective-project contract.
+ *
+ * When only phaseId is sent, the card's current project_id is the effective project:
+ * phase-only updates are rejected if the card has no project, and the phase must
+ * belong to that effective project (not derived from the phase row).
+ */
+export async function parseCardProjectPhase(
+	body: Record<string, unknown>,
+	workspaceId: number,
+	cardProjectId: number | null,
+): Promise<
+	{ projectId?: number | null; phaseId?: number | null } | { error: string }
+> {
+	const hasProjectId = "projectId" in body;
+	const hasPhaseId = "phaseId" in body;
+
+	if (!hasProjectId && !hasPhaseId) {
+		return { error: "projectId and phaseId must be integers or null" };
+	}
+
+	if (
+		!hasProjectId &&
+		hasPhaseId &&
+		body.phaseId !== null &&
+		body.phaseId !== undefined
+	) {
+		if (cardProjectId === null) {
+			return { error: "phase cannot be set without a project" };
+		}
+		if (!Number.isInteger(body.phaseId)) {
+			return { error: "projectId and phaseId must be integers or null" };
+		}
+		const phase = await lookupPhase(workspaceId, body.phaseId as number);
+		if (!phase) {
+			return { error: "phase must belong to this workspace" };
+		}
+		if (phase.project_id !== cardProjectId) {
+			return { error: "phase must belong to the selected project" };
+		}
+		return { phaseId: body.phaseId as number };
+	}
+
+	return parseProjectPhase(body, workspaceId);
 }
 
 function parseOptionalDate(

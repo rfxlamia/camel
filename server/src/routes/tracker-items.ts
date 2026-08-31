@@ -9,7 +9,7 @@ import {
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
-import { diffAssigneeIds } from "./card-assignees.js";
+import { diffIds } from "../core/diff-ids.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import {
 	loadTrackerAssigneesForItems,
@@ -248,7 +248,7 @@ async function syncTrackerItemLabels(
 	labelIds: number[],
 ): Promise<void> {
 	const prev = await getTrackerItemLabelIds(dbExec, trackerItemId);
-	const { added, removed } = diffAssigneeIds(prev, labelIds);
+	const { added, removed } = diffIds(prev, labelIds);
 
 	if (removed.length > 0) {
 		await dbExec

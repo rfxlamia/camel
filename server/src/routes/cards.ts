@@ -27,6 +27,7 @@ import {
 	loadCardAssigneesForCards,
 	syncCardAssignees,
 } from "./card-assignees.js";
+import { syncCardLabels } from "./card-labels.js";
 import {
 	buildCardResponse,
 	type CardResponseRow,
@@ -38,6 +39,11 @@ import {
 	parseWorkspaceId,
 	recordActivity,
 } from "./helpers.js";
+import {
+	parseCardProjectPhase,
+	parseLabelIds,
+	parsePriorityId,
+} from "./tracker-item-parsers.js";
 
 export const cardsRouter = Router({ mergeParams: true });
 
@@ -384,11 +390,17 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const hasDescription = "description" in body;
 	const hasAssigneeIds = "assigneeIds" in body;
 	const hasDueDate = "dueDate" in body;
+	const hasPriorityId = "priorityId" in body;
+	const hasLabelIds = "labelIds" in body;
+	const hasProjectPhase = "projectId" in body || "phaseId" in body;
 
 	const setFields: {
 		title?: string;
 		description?: string;
 		due_date?: string | null;
+		priority_id?: number | null;
+		project_id?: number | null;
+		phase_id?: number | null;
 	} = {};
 
 	if (hasTitle) {
@@ -421,8 +433,53 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		parsedAssigneeIds = parsed;
 	}
 
+	if (hasPriorityId) {
+		const parsed = await parsePriorityId(body, workspaceId);
+		if (parsed !== null && typeof parsed === "object" && "error" in parsed) {
+			return res.status(400).json({ error: parsed.error });
+		}
+		setFields.priority_id = parsed;
+	}
+
+	let parsedLabelIds: number[] | undefined;
+	if (hasLabelIds) {
+		const parsed = await parseLabelIds(body, workspaceId);
+		if ("error" in parsed) {
+			return res.status(400).json({ error: parsed.error });
+		}
+		parsedLabelIds = parsed;
+	}
+
+	const existingCard = await db
+		.selectFrom("cards")
+		.select(["project_id"])
+		.where("id", "=", id)
+		.where("workspace_id", "=", workspaceId)
+		.where("deleted_at", "is", null)
+		.executeTakeFirst();
+	if (!existingCard) {
+		return res.status(404).json({ error: "card not found" });
+	}
+
+	if (hasProjectPhase) {
+		const parsed = await parseCardProjectPhase(
+			body,
+			workspaceId,
+			existingCard.project_id,
+		);
+		if ("error" in parsed) {
+			return res.status(400).json({ error: parsed.error });
+		}
+		if (parsed.projectId !== undefined) {
+			setFields.project_id = parsed.projectId;
+		}
+		if (parsed.phaseId !== undefined) {
+			setFields.phase_id = parsed.phaseId;
+		}
+	}
+
 	const hasSets = Object.keys(setFields).length > 0;
-	if (!hasSets && !hasAssigneeIds) {
+	if (!hasSets && !hasAssigneeIds && !hasLabelIds) {
 		return res.status(400).json({ error: "no updatable fields provided" });
 	}
 
@@ -533,6 +590,10 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 			assigneeSync = await syncCardAssignees(trx, id, parsedAssigneeIds);
 		}
 
+		if (hasLabelIds && parsedLabelIds !== undefined) {
+			await syncCardLabels(trx, id, parsedLabelIds);
+		}
+
 		await recordActivity(trx, req.user!, workspaceId, "update", {
 			cardId: id,
 			payload: {
@@ -542,6 +603,10 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 					hasDescription && "description",
 					hasAssigneeIds && "assignees",
 					hasDueDate && "dueDate",
+					hasPriorityId && "priority",
+					hasLabelIds && "labels",
+					hasProjectPhase && "project",
+					hasProjectPhase && "phase",
 				].filter(Boolean),
 			},
 		});
