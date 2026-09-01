@@ -32,11 +32,15 @@ import {
 	writeTrackerGroupBy,
 } from "../lib/trackerViewPrefs";
 import type {
-	TrackerItem,
+	WorkItem,
 	TrackerProject,
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../types";
+import {
+	updateWorkItem,
+	updateWorkItemStatus,
+} from "../lib/workItemMutations";
 
 const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 
@@ -65,7 +69,7 @@ export default function TrackerPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
-	const [items, setItems] = useState<TrackerItem[]>([]);
+	const [items, setItems] = useState<WorkItem[]>([]);
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -83,13 +87,13 @@ export default function TrackerPage() {
 	const [loading, setLoading] = useState(true);
 	const [loadFailed, setLoadFailed] = useState(false);
 	const mutationQueueRef = useRef(createItemMutationQueue());
-	const itemsRef = useRef<TrackerItem[]>(items);
+	const itemsRef = useRef<WorkItem[]>(items);
 	itemsRef.current = items;
 	const labelsRef = useRef<TrackerVocabulary[]>(labels);
 	labelsRef.current = labels;
 	const membersRef = useRef<WorkspaceMember[]>(members);
 	membersRef.current = members;
-	const recoveryBlockedItemIdsRef = useRef(new Set<number>());
+	const recoveryBlockedItemKeysRef = useRef(new Set<string>());
 	/** Set while this page is the one changing the location, not the router. */
 	const skipCollapseResetRef = useRef(false);
 	/**
@@ -155,24 +159,24 @@ export default function TrackerPage() {
 
 	const replaceItems = useCallback(
 		(
-			next: TrackerItem[],
-			protectedItemIds: ReadonlySet<number> = new Set<number>(),
+			next: WorkItem[],
+			protectedItemKeys: ReadonlySet<string> = new Set<string>(),
 		) => {
-			const currentById = new Map(
-				itemsRef.current.map((item) => [item.id, item] as const),
+			const currentByKey = new Map(
+				itemsRef.current.map((item) => [item.key, item] as const),
 			);
 			const merged = next.map((incoming) => {
-				const current = currentById.get(incoming.id);
+				const current = currentByKey.get(incoming.key);
 				if (!current) return incoming;
 				if (current.version > incoming.version) return current;
 				if (
-					protectedItemIds.has(incoming.id) &&
+					protectedItemKeys.has(incoming.key) &&
 					current.version >= incoming.version
 				)
 					return current;
 				if (
 					current.version === incoming.version &&
-					mutationQueueRef.current.hasPending(incoming.id)
+					mutationQueueRef.current.hasPending(incoming.key)
 				)
 					return current;
 				return incoming;
@@ -184,7 +188,7 @@ export default function TrackerPage() {
 	);
 
 	const updateItems = useCallback(
-		(updater: (prev: TrackerItem[]) => TrackerItem[]) => {
+		(updater: (prev: WorkItem[]) => WorkItem[]) => {
 			const next = updater(itemsRef.current);
 			itemsRef.current = next;
 			setItems(next);
@@ -223,10 +227,10 @@ export default function TrackerPage() {
 		if (activeWorkspaceId === null) return false;
 		const seq = ++loadSeqRef.current;
 		const workspaceId = activeWorkspaceId;
-		const protectedItemIds = new Set(
+		const protectedItemKeys = new Set(
 			itemsRef.current
-				.filter((item) => mutationQueueRef.current.hasPending(item.id))
-				.map((item) => item.id),
+				.filter((item) => mutationQueueRef.current.hasPending(item.key))
+				.map((item) => item.key),
 		);
 		// Only the empty first paint needs a full-page spinner; background
 		// refreshes keep whatever is already on screen.
@@ -245,9 +249,9 @@ export default function TrackerPage() {
 			if (seq !== loadSeqRef.current) return false;
 			setStatuses(sortStatusesByPosition(statusList));
 			setPriorities(priorityList);
-			replaceItems(itemList, protectedItemIds);
+			replaceItems(itemList, protectedItemKeys);
 			for (const item of itemList) {
-				recoveryBlockedItemIdsRef.current.delete(item.id);
+				recoveryBlockedItemKeysRef.current.delete(item.key);
 			}
 			setProjects(projectList);
 			setLoadFailed(false);
@@ -310,10 +314,23 @@ export default function TrackerPage() {
 				updateItems((prev) =>
 					prev.filter((item) => {
 						if (payload?.key) return item.key !== payload.key;
-						if (trackerItemId != null) return item.id !== trackerItemId;
+						if (trackerItemId != null && item.source === "tracker") {
+							return item.id !== trackerItemId;
+						}
 						return true;
 					}),
 				);
+				return;
+			}
+
+			if (
+				event.type === "card.created" ||
+				event.type === "card.updated" ||
+				event.type === "card.moved" ||
+				event.type === "card.reordered" ||
+				event.type === "card.deleted"
+			) {
+				void loadData();
 				return;
 			}
 
@@ -342,7 +359,7 @@ export default function TrackerPage() {
 		[filteredItems, groupBy, statuses, priorities, projects],
 	);
 
-	type ItemPatchBuild = (current: TrackerItem) => {
+	type ItemPatchBuild = (current: WorkItem) => {
 		request: {
 			version: number;
 			statusId?: number;
@@ -354,8 +371,8 @@ export default function TrackerPage() {
 			assigneeIds?: number[];
 			labelIds?: number[];
 		};
-		optimistic: TrackerItem;
-		rollback: (latest: TrackerItem) => TrackerItem;
+		optimistic: WorkItem;
+		rollback: (latest: WorkItem) => WorkItem;
 	} | null;
 
 	const uncollapseGroupFor = (
@@ -372,13 +389,13 @@ export default function TrackerPage() {
 	};
 
 	const applyItemPatch = async (
-		itemId: number,
+		itemKey: string,
 		build: ItemPatchBuild,
 		errorMessage: string,
 	): Promise<void> => {
 		if (activeWorkspaceId === null) return;
-		if (recoveryBlockedItemIdsRef.current.has(itemId)) return;
-		const current = itemsRef.current.find((it) => it.id === itemId);
+		if (recoveryBlockedItemKeysRef.current.has(itemKey)) return;
+		const current = itemsRef.current.find((it) => it.key === itemKey);
 		if (!current) return;
 		const built = build(current);
 		if (!built) return;
@@ -387,30 +404,38 @@ export default function TrackerPage() {
 		const { request, optimistic, rollback } = built;
 
 		updateItems((prev) =>
-			prev.map((it) => (it.id === itemId ? optimistic : it)),
+			prev.map((it) => (it.key === itemKey ? optimistic : it)),
 		);
 		try {
-			const updated = await api.updateTrackerItem(
-				workspaceId,
-				current.key,
-				request,
-			);
+			const isStatusOnly =
+				request.statusId !== undefined &&
+				Object.keys(request).every(
+					(key) => key === "statusId" || key === "version",
+				);
+			const updated = isStatusOnly
+				? await updateWorkItemStatus(
+						workspaceId,
+						current,
+						request.statusId!,
+						request.version,
+					)
+				: await updateWorkItem(workspaceId, current, request);
 			updateItems((prev) =>
-				prev.map((it) => (it.id === updated.id ? updated : it)),
+				prev.map((it) => (it.key === updated.key ? updated : it)),
 			);
 		} catch (err) {
 			updateItems((prev) =>
-				prev.map((it) => (it.id === itemId ? rollback(it) : it)),
+				prev.map((it) => (it.key === itemKey ? rollback(it) : it)),
 			);
 			if (err instanceof ApiError && err.code === "version_conflict") {
-				recoveryBlockedItemIdsRef.current.add(itemId);
+				recoveryBlockedItemKeysRef.current.add(itemKey);
 				showToast(
 					"Someone else updated this item first — refreshed.",
 					"warning",
 				);
 				const refreshed = await loadData();
 				if (!refreshed) {
-					recoveryBlockedItemIdsRef.current.delete(itemId);
+					recoveryBlockedItemKeysRef.current.delete(itemKey);
 				}
 			} else {
 				showToast(errorMessage, "error");
@@ -430,14 +455,15 @@ export default function TrackerPage() {
 	};
 
 	const changeDate = (
-		item: TrackerItem,
+		item: WorkItem,
 		dates: { startDate: string | null; endDate: string | null },
 	) => {
+		if (item.source === "board") return;
 		const nextStart = dates.startDate;
 		const nextEnd = dates.endDate;
-		void mutationQueueRef.current.enqueue(item.id, async () => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(current) => {
 					if (
 						(current.startDate ?? null) === nextStart &&
@@ -468,9 +494,9 @@ export default function TrackerPage() {
 		});
 	};
 
-	const changeStatus = (item: TrackerItem, statusId: number) => {
-		void mutationQueueRef.current.enqueue(item.id, async () => {
-			const current = itemsRef.current.find((it) => it.id === item.id);
+	const changeStatus = (item: WorkItem, statusId: number) => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
+			const current = itemsRef.current.find((it) => it.key === item.key);
 			if (!current || current.status.id === statusId) return;
 			const nextStatus = statuses.find((s) => s.id === statusId);
 			if (!nextStatus) return;
@@ -484,7 +510,7 @@ export default function TrackerPage() {
 			});
 
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(c) => ({
 					request: { statusId, version: c.version },
 					optimistic: { ...c, status: nextStatus },
@@ -495,15 +521,15 @@ export default function TrackerPage() {
 		});
 	};
 
-	const changeProject = (item: TrackerItem, projectId: number) => {
-		void mutationQueueRef.current.enqueue(item.id, async () => {
-			const current = itemsRef.current.find((it) => it.id === item.id);
+	const changeProject = (item: WorkItem, projectId: number) => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
+			const current = itemsRef.current.find((it) => it.key === item.key);
 			if (!current || current.projectId === projectId) return;
 
 			uncollapseGroupFor("project", projectGroupKey(projectId));
 
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(c) => ({
 					request: {
 						projectId,
@@ -522,15 +548,15 @@ export default function TrackerPage() {
 		});
 	};
 
-	const changePriority = (item: TrackerItem, priorityId: number | null) => {
-		void mutationQueueRef.current.enqueue(item.id, async () => {
-			const current = itemsRef.current.find((it) => it.id === item.id);
+	const changePriority = (item: WorkItem, priorityId: number | null) => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
+			const current = itemsRef.current.find((it) => it.key === item.key);
 			if (!current) return;
 
 			uncollapseGroupFor("priority", priorityGroupKey(priorityId));
 
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(c) => {
 					const currentPriorityId = c.priority?.id ?? null;
 					if (currentPriorityId === priorityId) return null;
@@ -552,10 +578,10 @@ export default function TrackerPage() {
 		});
 	};
 
-	const changePhase = (item: TrackerItem, phaseId: number) => {
-		void mutationQueueRef.current.enqueue(item.id, async () => {
+	const changePhase = (item: WorkItem, phaseId: number) => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(current) => {
 					if (current.phaseId === phaseId) return null;
 					return {
@@ -576,10 +602,10 @@ export default function TrackerPage() {
 		});
 	};
 
-	const changeAssignee = (item: TrackerItem, toggledId: number) => {
-		void mutationQueueRef.current.enqueue(item.id, async () => {
+	const changeAssignee = (item: WorkItem, toggledId: number) => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(current) => {
 					const currentIds = current.assignees.map((a) => a.id);
 					const nextIds = resolveToggle(currentIds, toggledId);
@@ -606,7 +632,7 @@ export default function TrackerPage() {
 						request: { assigneeIds: nextIds, version: current.version },
 						optimistic: {
 							...current,
-							assignees: nextAssignees as TrackerItem["assignees"],
+							assignees: nextAssignees as WorkItem["assignees"],
 						},
 						rollback: (latest) => ({ ...latest, assignees: current.assignees }),
 					};
@@ -616,10 +642,10 @@ export default function TrackerPage() {
 		});
 	};
 
-	const changeLabel = (item: TrackerItem, toggledId: number) => {
-		void mutationQueueRef.current.enqueue(item.id, async () => {
+	const changeLabel = (item: WorkItem, toggledId: number) => {
+		void mutationQueueRef.current.enqueue(item.key, async () => {
 			await applyItemPatch(
-				item.id,
+				item.key,
 				(current) => {
 					const currentIds = current.labels.map((l) => l.id);
 					const nextIds = resolveToggle(currentIds, toggledId);

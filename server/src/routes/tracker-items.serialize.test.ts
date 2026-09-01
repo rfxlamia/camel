@@ -88,6 +88,7 @@ describe("GET /tracker/items — serialization", () => {
 		mockSelectFrom
 			.mockReturnValueOnce(chain({ name: "Camel Team" }))
 			.mockReturnValueOnce(chain([baseRow]))
+			.mockReturnValueOnce(chain([]))
 			.mockReturnValueOnce(chain([]));
 
 		const res = await request(app).get("/workspaces/7/tracker/items");
@@ -99,7 +100,7 @@ describe("GET /tracker/items — serialization", () => {
 		expect(item.endDate).toBe("2026-09-30");
 		expect(item.completedAt).toBeNull();
 		expect(item.position).toBe(1024);
-		expect(item.status.category).toBe("started");
+		expect(item).toMatchObject({ source: "tracker" });
 	});
 
 	it("serializes a null project and phase as null, not omitted", async () => {
@@ -107,6 +108,7 @@ describe("GET /tracker/items — serialization", () => {
 		mockSelectFrom
 			.mockReturnValueOnce(chain({ name: "Camel Team" }))
 			.mockReturnValueOnce(chain([unassigned]))
+			.mockReturnValueOnce(chain([]))
 			.mockReturnValueOnce(chain([]));
 
 		const res = await request(app).get("/workspaces/7/tracker/items");
@@ -119,6 +121,7 @@ describe("GET /tracker/items — serialization", () => {
 		mockSelectFrom
 			.mockReturnValueOnce(chain({ name: "Camel Team" }))
 			.mockReturnValueOnce(chain([baseRow]))
+			.mockReturnValueOnce(chain([]))
 			.mockReturnValueOnce(chain([]));
 
 		const res = await request(app).get("/workspaces/7/tracker/items");

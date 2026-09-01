@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { TrackerItem, TrackerProject } from "../types";
+import type { TrackerProject, WorkItem } from "../types";
 import { partitionTrackerSearch } from "./trackerSearch";
 
 let nextId = 1;
 
-function trackerItem(overrides: Partial<TrackerItem> = {}): TrackerItem {
+function trackerItem(overrides: Partial<WorkItem> = {}): WorkItem {
 	const id = nextId++;
 	return {
 		id,
 		key: `CA-${id}`,
 		title: "Task",
 		description: "",
+		source: "tracker",
 		status: {
 			id: 1,
 			kind: "status",

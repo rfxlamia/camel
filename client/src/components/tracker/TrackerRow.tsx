@@ -2,7 +2,7 @@ import { Folder, Signpost } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
-	TrackerItem,
+	WorkItem,
 	TrackerProject,
 	TrackerVocabulary,
 	WorkspaceMember,
@@ -34,7 +34,7 @@ type OpenPicker =
 	| null;
 
 interface Props {
-	item: TrackerItem;
+	item: WorkItem;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
 	onStatusChange: (statusId: number) => void;

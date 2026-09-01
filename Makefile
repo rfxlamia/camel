@@ -26,13 +26,19 @@ dev-client: ## Start client dev server only
 
 # ---- Build & Test ----------------------------------------------------------
 
-.PHONY: build test test-watch start typecheck
+.PHONY: build test test-integration test-llm-integration test-watch start typecheck
 
 build: ## Build server and client
 	@$(NPM) run build
 
 test: ## Run server tests
 	@$(NPM) run test
+
+test-integration: ## Run DB/route integration tests (requires running DB + Redis; sets RUN_INTEGRATION=1)
+	@$(NPM) run test:integration:routes --workspace=server
+
+test-llm-integration: ## Run live LLM pipeline integration tests (requires ANTHROPIC_API_KEY; slow)
+	@$(NPM) run test:integration --workspace=server
 
 test-watch: ## Run server tests in watch mode
 	@$(NPM) run test:watch --workspace=server

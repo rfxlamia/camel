@@ -81,7 +81,10 @@ vi.mock("./tracker-assignees.js", () => ({
 	loadTrackerAssigneesForItems: vi.fn().mockResolvedValue(new Map()),
 	syncTrackerItemAssignees: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({ publishEvent: vi.fn() }));
+vi.mock("../realtime.js", () => ({
+	publishEvent: vi.fn(),
+	clearPresence: vi.fn(),
+}));
 vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 const mockParseProjectPhase = vi.fn();
@@ -150,6 +153,7 @@ beforeEach(() => {
 	}));
 	mockSelectFrom.mockImplementation((table: string) => {
 		if (table === "workspaces") return chainable({ name: "Camel Team" });
+		if (table === "cards as c") return chainable(undefined);
 		if (table === "tracker_vocabularies") {
 			return chainable({ category: "completed", id: 4 });
 		}
@@ -326,6 +330,7 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 	it("sets completed_at via COALESCE when transitioning into a completed status", async () => {
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
+			if (table === "cards as c") return chainable(undefined);
 			if (table === "tracker_vocabularies") {
 				return chainable({ category: "completed", id: 4 });
 			}
@@ -349,6 +354,7 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		};
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
+			if (table === "cards as c") return chainable(undefined);
 			if (table === "tracker_vocabularies") {
 				return chainable({ category: "started", id: 3 });
 			}
@@ -366,6 +372,7 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		trxStatusCategory = "canceled";
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
+			if (table === "cards as c") return chainable(undefined);
 			if (table === "tracker_vocabularies") {
 				return chainable({ category: "canceled", id: 5 });
 			}

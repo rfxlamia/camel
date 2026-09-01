@@ -371,6 +371,17 @@ export interface TrackerItem {
 	redirectFrom?: string;
 }
 
+export type WorkItemSource = "board" | "tracker";
+
+export interface WorkItem extends TrackerItem {
+	source: WorkItemSource;
+	columnId?: number;
+	columnName?: string | null;
+	dueDate?: string | null;
+	startedAt?: string | null;
+	doneAt?: string | null;
+}
+
 export interface TrackerPhase {
 	id: number;
 	projectId: number;

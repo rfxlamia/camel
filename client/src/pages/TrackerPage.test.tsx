@@ -10,7 +10,7 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrackerItem, TrackerVocabulary } from "../types";
+import type { TrackerVocabulary, WorkItem } from "../types";
 
 const {
 	mockListTrackerItems,
@@ -164,12 +164,13 @@ const labels: TrackerVocabulary[] = [
 ];
 
 function makeItem(
-	overrides: Partial<TrackerItem> & { id: number },
-): TrackerItem {
+	overrides: Partial<WorkItem> & { id: number },
+): WorkItem {
 	return {
 		key: "CA-1",
 		title: "Workspace Rename",
 		description: "",
+		source: "tracker",
 		status: statuses[0]!,
 		priority: null,
 		labels: [
@@ -257,8 +258,8 @@ const zeroPhaseProject: TrackerProject = {
 };
 
 function inProjectItem(
-	overrides: Partial<TrackerItem> & { id: number },
-): TrackerItem {
+	overrides: Partial<WorkItem> & { id: number },
+): WorkItem {
 	return makeItem({
 		projectId: 1,
 		phaseId: 9,
@@ -585,7 +586,7 @@ describe("TrackerPage", () => {
 		let version = 1;
 		mockUpdateTrackerItem.mockImplementation(
 			(_ws, _key, patch) =>
-				new Promise<TrackerItem>((resolve) => {
+				new Promise<WorkItem>((resolve) => {
 					pending.push(() => {
 						version += 1;
 						const nextStatus = statuses.find((s) => s.id === patch.statusId)!;
@@ -807,9 +808,9 @@ describe("TrackerPage", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 
-		let releaseItems: ((items: TrackerItem[]) => void) | undefined;
+		let releaseItems: ((items: WorkItem[]) => void) | undefined;
 		mockListTrackerItems.mockReturnValueOnce(
-			new Promise<TrackerItem[]>((resolve) => {
+			new Promise<WorkItem[]>((resolve) => {
 				releaseItems = resolve;
 			}),
 		);
@@ -833,10 +834,10 @@ describe("TrackerPage", () => {
 		});
 		const initialItem = makeItem({ id: 1, key: "CA-1", version: 1 });
 		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
-		let resolveUpdate: ((item: TrackerItem) => void) | undefined;
+		let resolveUpdate: ((item: WorkItem) => void) | undefined;
 		mockUpdateTrackerItem.mockImplementationOnce(
 			() =>
-				new Promise<TrackerItem>((resolve) => {
+				new Promise<WorkItem>((resolve) => {
 					resolveUpdate = resolve;
 				}),
 		);
@@ -1114,11 +1115,11 @@ describe("TrackerPage", () => {
 					version: 5,
 				}),
 			]);
-			let resolveFirst: ((item: TrackerItem) => void) | undefined;
+			let resolveFirst: ((item: WorkItem) => void) | undefined;
 			mockUpdateTrackerItem
 				.mockImplementationOnce(
 					(_ws, _key, patch) =>
-						new Promise<TrackerItem>((resolve) => {
+						new Promise<WorkItem>((resolve) => {
 							resolveFirst = () =>
 								resolve(
 									makeItem({
@@ -1783,11 +1784,11 @@ describe("TrackerPage items tab", () => {
 				version: 2,
 			}),
 		]);
-		let resolveFirst: ((item: TrackerItem) => void) | undefined;
+		let resolveFirst: ((item: WorkItem) => void) | undefined;
 		mockUpdateTrackerItem
 			.mockImplementationOnce(
 				() =>
-					new Promise<TrackerItem>((resolve) => {
+					new Promise<WorkItem>((resolve) => {
 						resolveFirst = resolve;
 					}),
 			)
@@ -1961,11 +1962,11 @@ describe("TrackerPage items tab", () => {
 				version: 2,
 			}),
 		]);
-		let resolveFirst: ((item: TrackerItem) => void) | undefined;
+		let resolveFirst: ((item: WorkItem) => void) | undefined;
 		mockUpdateTrackerItem
 			.mockImplementationOnce(
 				() =>
-					new Promise<TrackerItem>((resolve) => {
+					new Promise<WorkItem>((resolve) => {
 						resolveFirst = resolve;
 					}),
 			)
@@ -2072,11 +2073,11 @@ describe("TrackerPage items tab", () => {
 				version: 4,
 			}),
 		]);
-		let resolveProject: ((item: TrackerItem) => void) | undefined;
+		let resolveProject: ((item: WorkItem) => void) | undefined;
 		mockUpdateTrackerItem
 			.mockImplementationOnce(
 				() =>
-					new Promise<TrackerItem>((resolve) => {
+					new Promise<WorkItem>((resolve) => {
 						resolveProject = resolve;
 					}),
 			)
@@ -2350,7 +2351,7 @@ describe("TrackerPage projects", () => {
 		showProjectsTab();
 		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
 
-		let resolveItems: (value: TrackerItem[]) => void = () => {};
+		let resolveItems: (value: WorkItem[]) => void = () => {};
 		mockListTrackerItems.mockImplementationOnce(
 			() =>
 				new Promise((resolve) => {
@@ -2728,7 +2729,7 @@ describe("TrackerPage projects", () => {
 
 	it("ignores a stale failed load when a newer refresh already succeeded", async () => {
 		let resolveStale: (reason?: unknown) => void = () => {};
-		let resolveFresh: (value: TrackerItem[]) => void = () => {};
+		let resolveFresh: (value: WorkItem[]) => void = () => {};
 		mockListTrackerItems
 			.mockResolvedValueOnce([makeItem({ id: 1, key: "CA-1" })])
 			.mockImplementationOnce(
