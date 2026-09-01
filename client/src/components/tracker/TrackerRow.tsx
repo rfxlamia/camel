@@ -1,5 +1,6 @@
 import { Folder, Signpost } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { formatDueDate, isDueOverdue } from "../../lib/boardViewUtils";
 import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	WorkItem,
@@ -131,6 +132,16 @@ export default function TrackerRow({
 		}),
 	);
 
+	const isBoardItem = item.source === "board";
+	const boardBadgeLabel = item.columnName ?? "Board";
+	const boardDueOverdue =
+		isBoardItem &&
+		item.dueDate != null &&
+		isDueOverdue({
+			dueDate: item.dueDate,
+			doneAt: item.doneAt ?? null,
+		} as Parameters<typeof isDueOverdue>[0]);
+
 	return (
 		<TrackerRowShell itemKey={item.key} itemTitle={item.title}>
 			{onPriorityChange ? (
@@ -163,6 +174,15 @@ export default function TrackerRow({
 			<span className="w-14 shrink-0 truncate font-mono text-neutral-500 text-xs tabular-nums">
 				{item.key}
 			</span>
+			{isBoardItem ? (
+				<span
+					data-testid={`row-board-badge-${item.key}`}
+					className="pointer-events-none hidden max-w-24 shrink-0 truncate rounded bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs sm:block"
+					title={boardBadgeLabel}
+				>
+					{boardBadgeLabel}
+				</span>
+			) : null}
 			<span className="pointer-events-auto shrink-0">
 				<TrackerPropertyPicker
 					variant="inline"
@@ -244,7 +264,30 @@ export default function TrackerRow({
 					requestPicker(open ? "assignees" : null)
 				}
 			/>
-			{onDateChange ? (
+			{isBoardItem ? (
+				<span className="pointer-events-none hidden min-w-[9rem] shrink-0 truncate text-right text-xs tabular-nums lg:block">
+					{item.dueDate ? (
+						<time
+							data-testid={`row-board-due-${item.key}`}
+							dateTime={item.dueDate}
+							className={`inline-flex items-center rounded px-1.5 py-0.5 font-medium ${
+								boardDueOverdue
+									? "bg-error-100 text-error-900"
+									: "bg-neutral-100 text-neutral-600"
+							}`}
+						>
+							{formatDueDate(item.dueDate)}
+						</time>
+					) : (
+						<span
+							data-testid={`row-board-due-${item.key}`}
+							className="text-neutral-400"
+						>
+							—
+						</span>
+					)}
+				</span>
+			) : onDateChange ? (
 				<span className="pointer-events-auto hidden min-w-[9rem] shrink-0 truncate text-right text-neutral-500 text-xs tabular-nums lg:block">
 					<TrackerRowDatePopover
 						ref={datePopoverRef}

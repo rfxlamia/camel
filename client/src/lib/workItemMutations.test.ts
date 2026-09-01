@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import { updateWorkItem, updateWorkItemStatus } from "./workItemMutations";
+import { updateWorkItem, updateWorkItemStatus, reorderWorkItem } from "./workItemMutations";
 import type { WorkItem } from "../types";
 
 vi.mock("../api", () => ({
 	api: {
 		updateCard: vi.fn(),
 		updateTrackerItem: vi.fn(),
+		reorderTrackerItem: vi.fn(),
 	},
 }));
 
@@ -69,5 +70,28 @@ describe("workItemMutations", () => {
 			statusId: 4,
 			version: 1,
 		});
+	});
+
+	it("routes reorder through tracker API and preserves source", async () => {
+		const trackerItem: WorkItem = {
+			...boardItem,
+			source: "tracker",
+			key: "CA-5",
+		};
+		vi.mocked(api.reorderTrackerItem).mockResolvedValue({
+			...trackerItem,
+			position: 2048,
+			version: 2,
+		});
+
+		const updated = await reorderWorkItem(1, trackerItem, {
+			afterId: 3,
+		});
+
+		expect(api.reorderTrackerItem).toHaveBeenCalledWith(1, "CA-5", {
+			afterId: 3,
+		});
+		expect(updated.source).toBe("tracker");
+		expect(updated.position).toBe(2048);
 	});
 });

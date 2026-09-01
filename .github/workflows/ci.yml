@@ -36,6 +36,53 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  db-integration:
+    name: DB Integration Tests
+    needs: [primary]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: camel
+          POSTGRES_PASSWORD: camel
+          POSTGRES_DB: camel_kanban
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://camel:camel@localhost:5432/camel_kanban
+      REDIS_URL: redis://localhost:6379
+      RUN_INTEGRATION: "1"
+      # Required by config.ts at import — migrate/tests do not call the LLM.
+      ANTHROPIC_API_KEY: test-not-a-real-key
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run test:integration:unified --workspace=server
+
   integration:
     name: Integration Tests
     needs: [primary]
