@@ -12,7 +12,7 @@ import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
-import { updateWorkItemStatus } from "../lib/workItemMutations";
+import { updateWorkItemStatus, reorderWorkItem } from "../lib/workItemMutations";
 import type {
 	TrackerPhase,
 	TrackerProject,
@@ -488,9 +488,9 @@ export default function TrackerProjectPage() {
 		);
 
 		try {
-			const updated = await api.reorderTrackerItem(
+			const updated = await reorderWorkItem(
 				activeWorkspaceId,
-				itemKey,
+				movedItem,
 				neighbors,
 			);
 			if (seq === reorderSeqMapRef.current.get(itemKey)) {

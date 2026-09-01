@@ -65,6 +65,17 @@ export async function updateWorkItemStatus(
 	return { ...item, ...updated, source: "tracker" };
 }
 
+type ReorderBody = Parameters<typeof api.reorderTrackerItem>[2];
+
+export async function reorderWorkItem(
+	workspaceId: number,
+	item: WorkItem,
+	body: ReorderBody,
+): Promise<WorkItem> {
+	const updated = await api.reorderTrackerItem(workspaceId, item.key, body);
+	return { ...item, ...updated, source: item.source };
+}
+
 export function isBoardWorkItem(item: TrackerItem | WorkItem): item is WorkItem {
 	return "source" in item && item.source === "board";
 }

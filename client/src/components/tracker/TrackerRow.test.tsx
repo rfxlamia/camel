@@ -666,4 +666,85 @@ describe("TrackerRow", () => {
 			.closest("span");
 		expect(dateWrapper?.className).toContain("pointer-events-auto");
 	});
+
+	describe("board items", () => {
+		function makeBoardItem(overrides: Partial<WorkItem> = {}): WorkItem {
+			return makeRowItem({
+				id: 7,
+				key: "TE-9",
+				source: "board",
+				columnId: 3,
+				columnName: "In Progress",
+				dueDate: "2026-08-15",
+				startDate: null,
+				endDate: null,
+				...overrides,
+			});
+		}
+
+		it("renders a board badge with column name", () => {
+			renderRow({ item: makeBoardItem() });
+
+			const badge = screen.getByTestId("row-board-badge-TE-9");
+			expect(badge.textContent).toBe("In Progress");
+			expect(badge.className).toContain("bg-primary-100");
+		});
+
+		it("falls back to Board when columnName is missing", () => {
+			renderRow({ item: makeBoardItem({ columnName: null }) });
+
+			expect(screen.getByTestId("row-board-badge-TE-9").textContent).toBe(
+				"Board",
+			);
+		});
+
+		it("shows formatted dueDate instead of createdAt", () => {
+			renderRow({ item: makeBoardItem({ dueDate: "2026-08-15" }) });
+
+			const dueEl = screen.getByTestId("row-board-due-TE-9");
+			expect(dueEl.textContent).toBe("Aug 15");
+			expect(dueEl.tagName).toBe("TIME");
+			expect(dueEl.getAttribute("dateTime")).toBe("2026-08-15");
+
+			const createdAt = new Date("2026-07-04T00:00:00Z").toLocaleDateString(
+				undefined,
+				{ month: "short", day: "numeric" },
+			);
+			expect(screen.queryByText(createdAt, { selector: "time" })).toBeNull();
+		});
+
+		it("shows a placeholder when dueDate is unset", () => {
+			renderRow({ item: makeBoardItem({ dueDate: null }) });
+
+			expect(screen.getByTestId("row-board-due-TE-9").textContent).toBe("—");
+		});
+
+		it("applies overdue styling for past-due board items", () => {
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-09-01T12:00:00Z"));
+
+			renderRow({
+				item: makeBoardItem({ dueDate: "2026-08-01", doneAt: null }),
+			});
+
+			expect(screen.getByTestId("row-board-due-TE-9").className).toContain(
+				"bg-error-100",
+			);
+
+			vi.useRealTimers();
+		});
+
+		it("does not render a date popover for board items", () => {
+			renderRow({ item: makeBoardItem() });
+
+			expect(screen.queryByRole("button", { name: /Date:/ })).toBeNull();
+		});
+
+		it("keeps tracker item date behavior unchanged", () => {
+			renderRow({ item: makeRowItem({ source: "tracker" }) });
+
+			expect(screen.queryByTestId("row-board-badge-CA-1")).toBeNull();
+			expect(screen.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
+		});
+	});
 });
