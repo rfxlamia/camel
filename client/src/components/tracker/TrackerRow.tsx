@@ -265,7 +265,7 @@ export default function TrackerRow({
 				}
 			/>
 			{isBoardItem ? (
-				<span className="pointer-events-none min-w-[9rem] shrink-0 truncate text-right text-xs tabular-nums md:block">
+				<span className="pointer-events-none hidden min-w-[9rem] shrink-0 truncate text-right text-xs tabular-nums md:block">
 					{item.dueDate ? (
 						<time
 							data-testid={`row-board-due-${item.key}`}

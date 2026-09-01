@@ -273,6 +273,7 @@ export async function getUnifiedWorkspaceActivity(
 			LEFT JOIN columns fc ON fc.id = e.from_column_id
 			LEFT JOIN columns tc ON tc.id = e.to_column_id
 			WHERE e.workspace_id = ${workspaceId}
+				AND e.card_id IS NOT NULL
 			UNION ALL
 			SELECT
 				'tracker'::text AS source,
@@ -290,7 +291,7 @@ export async function getUnifiedWorkspaceActivity(
 			LEFT JOIN tracker_items ti ON ti.id = e.tracker_item_id AND ti.deleted_at IS NULL
 			WHERE e.workspace_id = ${workspaceId}
 		) unified
-		ORDER BY created_at DESC, id DESC
+		ORDER BY created_at DESC, id DESC, source DESC
 		LIMIT ${limit}
 	`.execute(db);
 

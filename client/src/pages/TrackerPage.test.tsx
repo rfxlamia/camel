@@ -13,26 +13,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrackerVocabulary, WorkItem } from "../types";
 
 const {
+	mockListWorkItems,
 	mockListTrackerItems,
+	mockCreateWorkItem,
 	mockCreateTrackerItem,
 	mockListTrackerProjects,
 	mockCreateTrackerProject,
 	mockListTrackerVocabularies,
 	mockGetWorkspaceMembers,
+	mockUpdateWorkItem,
 	mockUpdateTrackerItem,
 	mockShowToast,
 	mockUseBoard,
 	mockNavigate,
 	mockLocation,
 } = vi.hoisted(() => ({
+	mockListWorkItems: vi.fn(),
 	mockListTrackerItems: vi.fn(),
+	mockCreateWorkItem: vi.fn(),
 	mockCreateTrackerItem: vi.fn(),
 	mockListTrackerProjects: vi.fn(),
 	mockCreateTrackerProject: vi.fn(),
-	mockUpdateTrackerItem: vi.fn(),
-	mockShowToast: vi.fn(),
 	mockListTrackerVocabularies: vi.fn(),
 	mockGetWorkspaceMembers: vi.fn(),
+	mockUpdateWorkItem: vi.fn(),
+	mockUpdateTrackerItem: vi.fn(),
+	mockShowToast: vi.fn(),
 	mockUseBoard: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockLocation: { pathname: "/tracker", key: "tracker-1" },
@@ -42,13 +48,13 @@ let locationKeySeq = 0;
 
 vi.mock("../api", () => ({
 	api: {
-		listWorkItems: (...a: unknown[]) => mockListTrackerItems(...a),
+		listWorkItems: (...a: unknown[]) => mockListWorkItems(...a),
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
-		createWorkItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
+		createWorkItem: (...a: unknown[]) => mockCreateWorkItem(...a),
 		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 		createTrackerProject: (...a: unknown[]) => mockCreateTrackerProject(...a),
-		updateWorkItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
+		updateWorkItem: (...a: unknown[]) => mockUpdateWorkItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		listTrackerVocabularies: (...a: unknown[]) =>
 			mockListTrackerVocabularies(...a),
@@ -311,7 +317,7 @@ beforeEach(() => {
 			},
 		],
 	});
-	mockListTrackerItems.mockResolvedValue([
+	mockListWorkItems.mockResolvedValue([
 		makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
 		makeItem({
 			id: 2,
@@ -321,7 +327,7 @@ beforeEach(() => {
 			labels: [],
 		}),
 	]);
-	mockCreateTrackerItem.mockResolvedValue(
+	mockCreateWorkItem.mockResolvedValue(
 		makeItem({ id: 3, key: "CA-3", title: "New" }),
 	);
 	mockUseBoard.mockReturnValue({
@@ -364,7 +370,7 @@ describe("TrackerPage", () => {
 	});
 
 	it("hides empty sections when search is active", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
 		]);
 		render(<TrackerPage />);
@@ -376,7 +382,7 @@ describe("TrackerPage", () => {
 	});
 
 	it("matches search against description text", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 1,
 				key: "CA-9",
@@ -398,7 +404,7 @@ describe("TrackerPage", () => {
 	});
 
 	it("sets both dates from the row date popover", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -408,7 +414,7 @@ describe("TrackerPage", () => {
 				version: 3,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -431,7 +437,7 @@ describe("TrackerPage", () => {
 		fireEvent.click(screen.getByLabelText("Close date picker"));
 
 		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-4", {
+			expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-4", {
 				startDate: "2026-08-06",
 				endDate: "2026-08-26",
 				version: 3,
@@ -443,7 +449,7 @@ describe("TrackerPage", () => {
 	});
 
 	it("does not PATCH when the date popover closes without edits", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -459,11 +465,11 @@ describe("TrackerPage", () => {
 		fireEvent.click(screen.getByLabelText("Date: 6–26 Aug"));
 		fireEvent.click(screen.getByLabelText("Close date picker"));
 
-		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+		expect(mockUpdateWorkItem).not.toHaveBeenCalled();
 	});
 
 	it("reverts the date and refetches after a version conflict", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -473,10 +479,10 @@ describe("TrackerPage", () => {
 				version: 3,
 			}),
 		]);
-		mockUpdateTrackerItem.mockRejectedValueOnce(
+		mockUpdateWorkItem.mockRejectedValueOnce(
 			new ApiError("conflict", 409, "version_conflict"),
 		);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -504,12 +510,12 @@ describe("TrackerPage", () => {
 				"warning",
 			),
 		);
-		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockListWorkItems).toHaveBeenCalledTimes(2));
 		expect(screen.getByLabelText("Date: Set date")).toBeTruthy();
 	});
 
 	it("commits an edited date draft before opening the status picker", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -519,7 +525,7 @@ describe("TrackerPage", () => {
 				version: 3,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 4,
 				key: "TE-4",
@@ -541,8 +547,8 @@ describe("TrackerPage", () => {
 		});
 		fireEvent.click(screen.getByLabelText("Backlog, TE-4"));
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
-		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-4", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
+		expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-4", {
 			startDate: "2026-08-06",
 			endDate: "2026-08-26",
 			version: 3,
@@ -551,7 +557,7 @@ describe("TrackerPage", () => {
 	});
 
 	it("changes status inline from the row glyph without navigating", async () => {
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({ id: 1, key: "CA-1", status: statuses[1]! }),
 		);
 		render(<TrackerPage />);
@@ -560,7 +566,7 @@ describe("TrackerPage", () => {
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
 
 		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+			expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 				statusId: 2,
 				version: 1,
 			}),
@@ -573,7 +579,7 @@ describe("TrackerPage", () => {
 	});
 
 	it("restores the previous status when the update fails", async () => {
-		mockUpdateTrackerItem.mockRejectedValue(new Error("network down"));
+		mockUpdateWorkItem.mockRejectedValue(new Error("network down"));
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		fireEvent.click(screen.getByLabelText("Backlog, CA-1"));
@@ -587,7 +593,7 @@ describe("TrackerPage", () => {
 	it("processes three rapid status picks in order", async () => {
 		const pending: Array<() => void> = [];
 		let version = 1;
-		mockUpdateTrackerItem.mockImplementation(
+		mockUpdateWorkItem.mockImplementation(
 			(_ws, _key, patch) =>
 				new Promise<WorkItem>((resolve) => {
 					pending.push(() => {
@@ -619,22 +625,22 @@ describe("TrackerPage", () => {
 		fireEvent.click(statusTrigger());
 		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
 		pending.shift()?.();
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
 		pending.shift()?.();
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(3));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(3));
 		pending.shift()?.();
 
-		expect(mockUpdateTrackerItem.mock.calls[0]?.[2]).toEqual({
+		expect(mockUpdateWorkItem.mock.calls[0]?.[2]).toEqual({
 			statusId: 6,
 			version: 1,
 		});
-		expect(mockUpdateTrackerItem.mock.calls[1]?.[2]).toEqual({
+		expect(mockUpdateWorkItem.mock.calls[1]?.[2]).toEqual({
 			statusId: 2,
 			version: 2,
 		});
-		expect(mockUpdateTrackerItem.mock.calls[2]?.[2]).toEqual({
+		expect(mockUpdateWorkItem.mock.calls[2]?.[2]).toEqual({
 			statusId: 5,
 			version: 3,
 		});
@@ -644,12 +650,12 @@ describe("TrackerPage", () => {
 	});
 
 	it("processes a queued status pick after 409 once refresh succeeds", async () => {
-		mockUpdateTrackerItem
+		mockUpdateWorkItem
 			.mockRejectedValueOnce(new ApiError("conflict", 409, "version_conflict"))
 			.mockResolvedValueOnce(
 				makeItem({ id: 1, key: "CA-1", status: statuses[2]!, version: 6 }),
 			);
-		mockListTrackerItems
+		mockListWorkItems
 			.mockResolvedValueOnce([
 				makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
 				makeItem({
@@ -698,8 +704,8 @@ describe("TrackerPage", () => {
 				"warning",
 			),
 		);
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
-		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "CA-1", {
 			statusId: 5,
 			version: 5,
 		});
@@ -709,12 +715,12 @@ describe("TrackerPage", () => {
 	});
 
 	it("continues a queued status pick when 409 recovery refresh fails", async () => {
-		mockUpdateTrackerItem
+		mockUpdateWorkItem
 			.mockRejectedValueOnce(new ApiError("conflict", 409, "version_conflict"))
 			.mockResolvedValueOnce(
 				makeItem({ id: 1, key: "CA-1", status: statuses[2]!, version: 2 }),
 			);
-		mockListTrackerItems
+		mockListWorkItems
 			.mockResolvedValueOnce([
 				makeItem({ id: 1, key: "CA-1", title: "Workspace Rename" }),
 				makeItem({
@@ -749,8 +755,8 @@ describe("TrackerPage", () => {
 				"warning",
 			),
 		);
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
-		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "CA-1", {
 			statusId: 5,
 			version: 1,
 		});
@@ -761,7 +767,7 @@ describe("TrackerPage", () => {
 
 	it("defers a second status pick until the first request settles", async () => {
 		let rejectFirst: ((err: Error) => void) | undefined;
-		mockUpdateTrackerItem
+		mockUpdateWorkItem
 			.mockImplementationOnce(
 				() =>
 					new Promise((_resolve, reject) => {
@@ -781,12 +787,12 @@ describe("TrackerPage", () => {
 		fireEvent.click(screen.getByLabelText("In Progress, CA-1"));
 		fireEvent.click(screen.getByRole("option", { name: /Done/ }));
 		// The second pick waits instead of racing the first request.
-		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+		expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1);
 
 		rejectFirst?.(new Error("network down"));
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
 		// Runs against the rolled-back item, so the version is still the fresh one.
-		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+		expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "CA-1", {
 			statusId: 5,
 			version: 1,
 		});
@@ -812,13 +818,13 @@ describe("TrackerPage", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 
 		let releaseItems: ((items: WorkItem[]) => void) | undefined;
-		mockListTrackerItems.mockReturnValueOnce(
+		mockListWorkItems.mockReturnValueOnce(
 			new Promise<WorkItem[]>((resolve) => {
 				releaseItems = resolve;
 			}),
 		);
 		sseHandler?.({ type: "tracker.updated" });
-		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockListWorkItems).toHaveBeenCalledTimes(2));
 		expect(screen.getByTestId("tracker-row-CA-1")).toBeTruthy();
 		releaseItems?.([makeItem({ id: 1, key: "CA-1" })]);
 	});
@@ -836,9 +842,9 @@ describe("TrackerPage", () => {
 			showToast: mockShowToast,
 		});
 		const initialItem = makeItem({ id: 1, key: "CA-1", version: 1 });
-		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
+		mockListWorkItems.mockResolvedValueOnce([initialItem]);
 		let resolveUpdate: ((item: WorkItem) => void) | undefined;
-		mockUpdateTrackerItem.mockImplementationOnce(
+		mockUpdateWorkItem.mockImplementationOnce(
 			() =>
 				new Promise<WorkItem>((resolve) => {
 					resolveUpdate = resolve;
@@ -852,11 +858,11 @@ describe("TrackerPage", () => {
 		await waitFor(() =>
 			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
 		);
-		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+		expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1);
 
-		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
+		mockListWorkItems.mockResolvedValueOnce([initialItem]);
 		sseHandler?.({ type: "tracker.updated" });
-		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockListWorkItems).toHaveBeenCalledTimes(2));
 		expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy();
 
 		resolveUpdate?.(
@@ -866,9 +872,9 @@ describe("TrackerPage", () => {
 			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
 		);
 
-		mockListTrackerItems.mockResolvedValueOnce([initialItem]);
+		mockListWorkItems.mockResolvedValueOnce([initialItem]);
 		sseHandler?.({ type: "tracker.updated" });
-		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(3));
+		await waitFor(() => expect(mockListWorkItems).toHaveBeenCalledTimes(3));
 		await waitFor(() =>
 			expect(screen.getByLabelText("In Progress, CA-1")).toBeTruthy(),
 		);
@@ -896,7 +902,7 @@ describe("TrackerPage", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
-			expect(mockCreateTrackerItem).toHaveBeenCalledWith(7, {
+			expect(mockCreateWorkItem).toHaveBeenCalledWith(7, {
 				title: "Fix realtime",
 				statusId: 1,
 				priorityId: null,
@@ -918,7 +924,7 @@ describe("TrackerPage", () => {
 		fireEvent.click(screen.getByRole("option", { name: /High/ }));
 		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
-			expect(mockCreateTrackerItem).toHaveBeenCalledWith(
+			expect(mockCreateWorkItem).toHaveBeenCalledWith(
 				7,
 				expect.objectContaining({
 					title: "Full",
@@ -949,7 +955,7 @@ describe("TrackerPage", () => {
 		fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
 		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
-			expect(mockCreateTrackerItem).toHaveBeenCalledWith(
+			expect(mockCreateWorkItem).toHaveBeenCalledWith(
 				7,
 				expect.objectContaining({
 					title: "Tagged task",
@@ -1037,7 +1043,7 @@ describe("TrackerPage", () => {
 		}
 
 		it("adds an assignee from the row picker", async () => {
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1046,7 +1052,7 @@ describe("TrackerPage", () => {
 					version: 2,
 				}),
 			]);
-			mockUpdateTrackerItem.mockResolvedValue(
+			mockUpdateWorkItem.mockResolvedValue(
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1065,7 +1071,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [7, 8],
 					version: 2,
 				}),
@@ -1073,7 +1079,7 @@ describe("TrackerPage", () => {
 		});
 
 		it("preserves an assignee that is missing from the current member catalog", async () => {
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1083,7 +1089,7 @@ describe("TrackerPage", () => {
 					version: 2,
 				}),
 			]);
-			mockUpdateTrackerItem.mockResolvedValue(
+			mockUpdateWorkItem.mockResolvedValue(
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1101,7 +1107,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /Bob/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [42, 8],
 					version: 2,
 				}),
@@ -1109,7 +1115,7 @@ describe("TrackerPage", () => {
 		});
 
 		it("queues rapid assignee toggles against live settled state", async () => {
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1119,7 +1125,7 @@ describe("TrackerPage", () => {
 				}),
 			]);
 			let resolveFirst: ((item: WorkItem) => void) | undefined;
-			mockUpdateTrackerItem
+			mockUpdateWorkItem
 				.mockImplementationOnce(
 					(_ws, _key, patch) =>
 						new Promise<WorkItem>((resolve) => {
@@ -1158,12 +1164,12 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /Carol/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [7, 8],
 					version: 5,
 				}),
 			);
-			expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+			expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1);
 
 			resolveFirst?.(
 				makeItem({
@@ -1178,7 +1184,7 @@ describe("TrackerPage", () => {
 			);
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [7, 8, 9],
 					version: 6,
 				}),
@@ -1191,7 +1197,7 @@ describe("TrackerPage", () => {
 		});
 
 		it("adds a label from the row picker", async () => {
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1200,7 +1206,7 @@ describe("TrackerPage", () => {
 					version: 2,
 				}),
 			]);
-			mockUpdateTrackerItem.mockResolvedValue(
+			mockUpdateWorkItem.mockResolvedValue(
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1216,7 +1222,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /^Bug$/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					labelIds: [3, 4],
 					version: 2,
 				}),
@@ -1231,7 +1237,7 @@ describe("TrackerPage", () => {
 				position: 1000,
 				colour: "oklch(0.7 0.1 15)",
 			};
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1239,7 +1245,7 @@ describe("TrackerPage", () => {
 					version: 2,
 				}),
 			]);
-			mockUpdateTrackerItem.mockResolvedValue(
+			mockUpdateWorkItem.mockResolvedValue(
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1254,7 +1260,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /^Feature$/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					labelIds: [99, 3],
 					version: 2,
 				}),
@@ -1262,7 +1268,7 @@ describe("TrackerPage", () => {
 		});
 
 		it("removes an assignee from the row picker", async () => {
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1274,7 +1280,7 @@ describe("TrackerPage", () => {
 					version: 2,
 				}),
 			]);
-			mockUpdateTrackerItem.mockResolvedValue(
+			mockUpdateWorkItem.mockResolvedValue(
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1289,7 +1295,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /Alice/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [8],
 					version: 2,
 				}),
@@ -1307,7 +1313,7 @@ describe("TrackerPage", () => {
 		});
 
 		it("removes a label from the row picker", async () => {
-			mockListTrackerItems.mockResolvedValueOnce([
+			mockListWorkItems.mockResolvedValueOnce([
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1316,7 +1322,7 @@ describe("TrackerPage", () => {
 					version: 2,
 				}),
 			]);
-			mockUpdateTrackerItem.mockResolvedValue(
+			mockUpdateWorkItem.mockResolvedValue(
 				makeItem({
 					id: 1,
 					key: "CA-1",
@@ -1331,7 +1337,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /^Feature$/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					labelIds: [4],
 					version: 2,
 				}),
@@ -1339,7 +1345,7 @@ describe("TrackerPage", () => {
 		});
 
 		it("resumes the assignee queue after a 409 using refetched state", async () => {
-			mockListTrackerItems
+			mockListWorkItems
 				.mockResolvedValueOnce([
 					makeItem({
 						id: 1,
@@ -1369,7 +1375,7 @@ describe("TrackerPage", () => {
 					}),
 				]);
 			let resolveFirst: (() => void) | undefined;
-			mockUpdateTrackerItem
+			mockUpdateWorkItem
 				.mockImplementationOnce(
 					() =>
 						new Promise((_resolve, reject) => {
@@ -1397,7 +1403,7 @@ describe("TrackerPage", () => {
 			fireEvent.click(screen.getByRole("option", { name: /Carol/ }));
 
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 					assigneeIds: [7, 8],
 					version: 5,
 				}),
@@ -1411,10 +1417,10 @@ describe("TrackerPage", () => {
 				),
 			);
 			await waitFor(() =>
-				expect(mockListTrackerItems).toHaveBeenCalledTimes(2),
+				expect(mockListWorkItems).toHaveBeenCalledTimes(2),
 			);
 			await waitFor(() =>
-				expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "CA-1", {
+				expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "CA-1", {
 					assigneeIds: [7, 10, 9],
 					version: 9,
 				}),
@@ -1435,7 +1441,7 @@ function showItemsTab() {
 describe("TrackerPage items tab", () => {
 	it("lists every item, project-assigned or not, and counts them all", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
 			inProjectItem({ id: 10, key: "CA-10", title: "Project task" }),
 		]);
@@ -1452,7 +1458,7 @@ describe("TrackerPage items tab", () => {
 
 	it("marks an item's project with a chip and shows Set project for loose items", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
 			inProjectItem({ id: 10, key: "CA-10", title: "Project task" }),
 		]);
@@ -1471,7 +1477,7 @@ describe("TrackerPage items tab", () => {
 
 	it("regroups by project without losing or duplicating an item", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
 			inProjectItem({ id: 10, key: "CA-10", title: "Project task" }),
 		]);
@@ -1497,7 +1503,7 @@ describe("TrackerPage items tab", () => {
 
 	it("keeps an empty project visible when grouping by project", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
 		]);
 		render(<TrackerPage />);
@@ -1526,7 +1532,7 @@ describe("TrackerPage items tab", () => {
 	});
 
 	it("offers a create CTA when the workspace has no items at all", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockListWorkItems.mockResolvedValueOnce([]);
 		render(<TrackerPage />);
 		await waitFor(() =>
 			expect(screen.getByText(/nothing tracked yet/i)).toBeTruthy(),
@@ -1537,7 +1543,7 @@ describe("TrackerPage items tab", () => {
 	});
 
 	it("surfaces a retry panel when the initial load fails", async () => {
-		mockListTrackerItems.mockRejectedValueOnce(new Error("network down"));
+		mockListWorkItems.mockRejectedValueOnce(new Error("network down"));
 		render(<TrackerPage />);
 
 		await waitFor(() =>
@@ -1569,7 +1575,7 @@ describe("TrackerPage items tab", () => {
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("CA-1"));
 
-		mockListTrackerItems.mockRejectedValueOnce(new Error("network down"));
+		mockListWorkItems.mockRejectedValueOnce(new Error("network down"));
 		sseHandler?.({ type: "tracker.updated" });
 		await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
 		expect(screen.getByText("CA-1")).toBeTruthy();
@@ -1615,7 +1621,7 @@ describe("TrackerPage items tab", () => {
 
 	it("shows Set project placeholder for items without a project", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({ id: 1, key: "CA-1", title: "Loose task" }),
 		]);
 		render(<TrackerPage />);
@@ -1628,7 +1634,7 @@ describe("TrackerPage items tab", () => {
 
 	it("shows Set phase placeholder when project has no phase", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 10,
 				key: "TE-1",
@@ -1647,7 +1653,7 @@ describe("TrackerPage items tab", () => {
 
 	it("PATCHes project and phase together when selecting a phase", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 3,
 				key: "TE-3",
@@ -1657,7 +1663,7 @@ describe("TrackerPage items tab", () => {
 				version: 2,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 3,
 				key: "TE-3",
@@ -1675,7 +1681,7 @@ describe("TrackerPage items tab", () => {
 		fireEvent.click(screen.getByRole("option", { name: /Persiapan/ }));
 
 		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-3", {
+			expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-3", {
 				projectId: P1,
 				phaseId: Ph1,
 				version: 2,
@@ -1690,7 +1696,7 @@ describe("TrackerPage items tab", () => {
 
 	it("does not PATCH when re-picking the current phase", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({
 				id: 3,
 				key: "TE-3",
@@ -1707,12 +1713,12 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /Persiapan/ }));
 
-		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+		expect(mockUpdateWorkItem).not.toHaveBeenCalled();
 	});
 
 	it("resets phase in one PATCH when changing project", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({
 				id: 3,
 				key: "TE-3",
@@ -1720,7 +1726,7 @@ describe("TrackerPage items tab", () => {
 				version: 2,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 3,
 				key: "TE-3",
@@ -1739,8 +1745,8 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
-		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-3", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
+		expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-3", {
 			projectId: P2,
 			phaseId: null,
 			version: 2,
@@ -1754,7 +1760,7 @@ describe("TrackerPage items tab", () => {
 
 	it("does not PATCH when re-picking the current project", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({
 				id: 3,
 				key: "TE-3",
@@ -1771,7 +1777,7 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /Rilis v2/ }));
 
-		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+		expect(mockUpdateWorkItem).not.toHaveBeenCalled();
 		expect(
 			within(row).getByRole("button", { name: "Phase: Persiapan" }),
 		).toBeTruthy();
@@ -1779,7 +1785,7 @@ describe("TrackerPage items tab", () => {
 
 	it("reverts to the original project after a rapid pick race resolves", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({
 				id: 3,
 				key: "TE-3",
@@ -1788,7 +1794,7 @@ describe("TrackerPage items tab", () => {
 			}),
 		]);
 		let resolveFirst: ((item: WorkItem) => void) | undefined;
-		mockUpdateTrackerItem
+		mockUpdateWorkItem
 			.mockImplementationOnce(
 				() =>
 					new Promise<WorkItem>((resolve) => {
@@ -1813,13 +1819,13 @@ describe("TrackerPage items tab", () => {
 			within(row).getByRole("button", { name: "Project: Rilis v2" }),
 		);
 		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
 
 		fireEvent.click(
 			within(row).getByRole("button", { name: "Project: Migrasi JSX" }),
 		);
 		fireEvent.click(screen.getByRole("option", { name: /Rilis v2/ }));
-		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+		expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1);
 
 		resolveFirst?.(
 			makeItem({
@@ -1832,8 +1838,8 @@ describe("TrackerPage items tab", () => {
 			}),
 		);
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
-		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "TE-3", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "TE-3", {
 			projectId: P1,
 			phaseId: null,
 			version: 3,
@@ -1842,7 +1848,7 @@ describe("TrackerPage items tab", () => {
 
 	it("shows No matches when a project has zero phases", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([zeroPhaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 10,
 				key: "TE-4",
@@ -1862,7 +1868,7 @@ describe("TrackerPage items tab", () => {
 	});
 
 	it("changes priority inline from the row glyph", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -1871,7 +1877,7 @@ describe("TrackerPage items tab", () => {
 				version: 2,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -1890,7 +1896,7 @@ describe("TrackerPage items tab", () => {
 		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
 
 		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-1", {
+			expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-1", {
 				priorityId: 11,
 				version: 2,
 			}),
@@ -1898,7 +1904,7 @@ describe("TrackerPage items tab", () => {
 	});
 
 	it('clears priority when selecting "No priority"', async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -1907,7 +1913,7 @@ describe("TrackerPage items tab", () => {
 				version: 2,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -1926,7 +1932,7 @@ describe("TrackerPage items tab", () => {
 		fireEvent.click(screen.getByRole("option", { name: /^No priority$/ }));
 
 		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-1", {
+			expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-1", {
 				priorityId: null,
 				version: 2,
 			}),
@@ -1934,7 +1940,7 @@ describe("TrackerPage items tab", () => {
 	});
 
 	it("does not PATCH when re-picking the current priority", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -1952,11 +1958,11 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /^High$/ }));
 
-		expect(mockUpdateTrackerItem).not.toHaveBeenCalled();
+		expect(mockUpdateWorkItem).not.toHaveBeenCalled();
 	});
 
 	it("re-picks the original priority after an in-flight change settles", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -1966,7 +1972,7 @@ describe("TrackerPage items tab", () => {
 			}),
 		]);
 		let resolveFirst: ((item: WorkItem) => void) | undefined;
-		mockUpdateTrackerItem
+		mockUpdateWorkItem
 			.mockImplementationOnce(
 				() =>
 					new Promise<WorkItem>((resolve) => {
@@ -1990,13 +1996,13 @@ describe("TrackerPage items tab", () => {
 			within(row).getByRole("button", { name: "Priority: High", hidden: true }),
 		);
 		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
 
 		fireEvent.click(
 			within(row).getByRole("button", { name: "Priority: Low", hidden: true }),
 		);
 		fireEvent.click(screen.getByRole("option", { name: /^High$/ }));
-		expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1);
+		expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1);
 
 		resolveFirst?.(
 			makeItem({
@@ -2008,15 +2014,15 @@ describe("TrackerPage items tab", () => {
 			}),
 		);
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
-		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "TE-1", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "TE-1", {
 			priorityId: 10,
 			version: 3,
 		});
 	});
 
 	it("auto-uncollapses the destination priority group after a priority change", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -2032,7 +2038,7 @@ describe("TrackerPage items tab", () => {
 				version: 1,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 1,
 				key: "TE-1",
@@ -2060,14 +2066,14 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(screen.getByText("TE-2")).toBeTruthy());
 		await waitFor(() => expect(screen.getByText("TE-1")).toBeTruthy());
 	});
 
 	it("queues priority change after project change with fresh version", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({
 				id: 5,
 				key: "TE-5",
@@ -2077,7 +2083,7 @@ describe("TrackerPage items tab", () => {
 			}),
 		]);
 		let resolveProject: ((item: WorkItem) => void) | undefined;
-		mockUpdateTrackerItem
+		mockUpdateWorkItem
 			.mockImplementationOnce(
 				() =>
 					new Promise<WorkItem>((resolve) => {
@@ -2109,8 +2115,8 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /^Low$/ }));
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
-		expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "TE-5", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
+		expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "TE-5", {
 			projectId: P2,
 			phaseId: null,
 			version: 4,
@@ -2128,8 +2134,8 @@ describe("TrackerPage items tab", () => {
 			}),
 		);
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(2));
-		expect(mockUpdateTrackerItem).toHaveBeenLastCalledWith(7, "TE-5", {
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(2));
+		expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "TE-5", {
 			priorityId: 11,
 			version: 5,
 		});
@@ -2137,7 +2143,7 @@ describe("TrackerPage items tab", () => {
 
 	it("auto-uncollapses the destination project group after a project change", async () => {
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject, projectB]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({
 				id: 3,
 				key: "TE-3",
@@ -2152,7 +2158,7 @@ describe("TrackerPage items tab", () => {
 				phaseId: 12,
 			}),
 		]);
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			makeItem({
 				id: 3,
 				key: "TE-3",
@@ -2181,7 +2187,7 @@ describe("TrackerPage items tab", () => {
 		);
 		fireEvent.click(screen.getByRole("option", { name: /Migrasi JSX/ }));
 
-		await waitFor(() => expect(mockUpdateTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(mockUpdateWorkItem).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(screen.getByText("CA-11")).toBeTruthy());
 		await waitFor(() => expect(screen.getByText("TE-3")).toBeTruthy());
 	});
@@ -2238,7 +2244,7 @@ describe("TrackerPage projects", () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		vi.setSystemTime(new Date("2026-10-05T12:00:00"));
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({ id: 10, key: "CA-10", status: statuses[2]! }),
 			inProjectItem({
 				id: 11,
@@ -2303,7 +2309,7 @@ describe("TrackerPage projects", () => {
 			showToast: mockShowToast,
 		});
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			inProjectItem({ id: 10, key: "CA-10", title: "Ship realtime sync" }),
 		]);
 		render(<TrackerPage />);
@@ -2312,7 +2318,7 @@ describe("TrackerPage projects", () => {
 		);
 
 		mockListTrackerProjects.mockResolvedValueOnce([]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			makeItem({
 				id: 10,
 				key: "CA-10",
@@ -2348,14 +2354,14 @@ describe("TrackerPage projects", () => {
 			refreshTrackerList: vi.fn(),
 			showToast: mockShowToast,
 		});
-		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockListWorkItems.mockResolvedValueOnce([]);
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
 		render(<TrackerPage />);
 		showProjectsTab();
 		await waitFor(() => expect(screen.getByLabelText("Rilis v2")).toBeTruthy());
 
 		let resolveItems: (value: WorkItem[]) => void = () => {};
-		mockListTrackerItems.mockImplementationOnce(
+		mockListWorkItems.mockImplementationOnce(
 			() =>
 				new Promise((resolve) => {
 					resolveItems = resolve;
@@ -2733,7 +2739,7 @@ describe("TrackerPage projects", () => {
 	it("ignores a stale failed load when a newer refresh already succeeded", async () => {
 		let resolveStale: (reason?: unknown) => void = () => {};
 		let resolveFresh: (value: WorkItem[]) => void = () => {};
-		mockListTrackerItems
+		mockListWorkItems
 			.mockResolvedValueOnce([makeItem({ id: 1, key: "CA-1" })])
 			.mockImplementationOnce(
 				() =>

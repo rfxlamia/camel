@@ -17,7 +17,7 @@ PR #99 shipped a unified Tracker view where board cards appear alongside tracker
 
 1. **Shared key namespace** — Both tables use `workspaces.tracker_key_counter`. Board cards allocate via `allocateCardIdentity()`; tracker items increment on POST.
 
-2. **Tracker-wins dedup** — `listMergedWorkItems()` excludes board rows whose `key_number` already exists in `tracker_items`. Collisions must not occur in normal operation.
+2. **Tracker-wins dedup** — `listMergedWorkItems()` excludes board rows whose `key_number` already exists in `tracker_items`. Duplicate `key_number` values across both tables must not occur in normal operation; if they do, the tracker row wins and the board row is hidden from the merged list (not a supported coexistence case).
 
 3. **Split writes** — Client routes mutations via `workItemMutations.ts` using `item.source`:
    - `source: "tracker"` → `PATCH /tracker/items/:key` (or `/work-items/:key`)
@@ -25,7 +25,7 @@ PR #99 shipped a unified Tracker view where board cards appear alongside tracker
 
 4. **Split audit tables** — `card_events` for board mutations; `tracker_events` for tracker mutations. Unified changelog is an HTTP adapter concern, not a merged table.
 
-5. **API naming** — `/work-items` is the canonical path for unified reads/writes. `/tracker/items` remains as a legacy alias.
+5. **API naming** — `/work-items` is the canonical path for unified reads and tracker-native writes (including board status-reverse via `PATCH /work-items/:key`). Board field mutations continue to use `PATCH /cards/:id`. `/tracker/items` remains as a legacy alias.
 
 ### Explicitly deferred
 

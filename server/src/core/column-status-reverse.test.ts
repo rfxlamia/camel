@@ -37,8 +37,10 @@ describe("resolveColumnForStatusChange", () => {
 		expect(resolveColumnForStatusChange(10, "in_progress", cols)).toBe(12);
 	});
 
-	it("moves done card to backlog when in_progress has no dedicated column", () => {
-		expect(resolveColumnForStatusChange(2, "in_progress", twoCol)).toBe(1);
+	it("rejects in_progress when no in_progress column exists on two-column board", () => {
+		expect(resolveColumnForStatusChange(2, "in_progress", twoCol)).toBe(
+			"unmappable",
+		);
 	});
 
 	it("rejects in_progress when no in_progress column and card is not in done", () => {
@@ -88,12 +90,14 @@ describe("resolveColumnForStatusChange", () => {
 		expect(resolveColumnForStatusChange(15, "in_progress", sdBoard)).toBe(13);
 	});
 
-	it("uses todo fallback when only one non-done column exists", () => {
+	it("rejects todo when no todo column exists", () => {
 		const singleNonDone = [
 			{ id: 1, position: 1024, is_done: false },
 			{ id: 2, position: 2048, is_done: true },
 		];
-		expect(resolveColumnForStatusChange(1, "todo", singleNonDone)).toBe(1);
+		expect(resolveColumnForStatusChange(1, "todo", singleNonDone)).toBe(
+			"unmappable",
+		);
 	});
 
 	it("maps leftmost is_done column when resolving done slot", () => {

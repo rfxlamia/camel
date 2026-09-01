@@ -7,7 +7,7 @@
 
 ## Summary
 
-Introduce `/work-items` as the canonical REST path for unified board+tracker reads and writes. `/tracker/items` remains a supported legacy alias.
+Introduce `/work-items` as the canonical REST path for unified board+tracker reads and tracker-native writes. Board field edits remain on `PATCH /cards/:id` (see `workItemMutations.ts`). `/tracker/items` remains a supported legacy alias.
 
 ## Routes
 

@@ -194,6 +194,27 @@ async function hydrateItems(
 	);
 }
 
+async function hydrateMutationItem(
+	dbExec: DBExecutor,
+	row: ItemRow,
+	prefix: string,
+	opts?: { canonicalWorkItem?: boolean; redirectFrom?: string },
+) {
+	if (opts?.canonicalWorkItem) {
+		const [item] = await hydrateTrackerWorkItems(dbExec, [row], prefix);
+		if (opts.redirectFrom) {
+			return { ...item, canonicalKey: item.key, redirectFrom: opts.redirectFrom };
+		}
+		return item;
+	}
+
+	const [item] = await hydrateItems(dbExec, [row], prefix);
+	if (opts?.redirectFrom) {
+		return { ...item, canonicalKey: item.key, redirectFrom: opts.redirectFrom };
+	}
+	return item;
+}
+
 const findItemByKeyNumber = findTrackerItemByKeyNumber;
 
 async function resolveWorkItemByKey(
@@ -531,7 +552,9 @@ trackerItemsRouter.post(
 			);
 			if (!row) return res.status(500).json({ error: "create failed" });
 
-			const [item] = await hydrateItems(db, [row], prefix);
+			const item = await hydrateMutationItem(db, row, prefix, {
+				canonicalWorkItem: req.canonicalWorkItemsRoute,
+			});
 			await publishEvent(workspaceId, {
 				type: "tracker.created",
 				actor,
@@ -710,16 +733,15 @@ trackerItemsRouter.patch(
 			parsed.prefix !== prefix
 				? formatKey(parsed.prefix, parsed.keyNumber)
 				: undefined;
-		const [item] = await hydrateItems(db, [row], prefix);
+		const item = await hydrateMutationItem(db, row, prefix, {
+			canonicalWorkItem: req.canonicalWorkItemsRoute,
+			redirectFrom,
+		});
 		await publishEvent(workspaceId, {
 			type: "tracker.updated",
 			actor,
 			trackerItemId: existing.id,
 		});
-		if (redirectFrom) {
-			res.json({ ...item, canonicalKey: item.key, redirectFrom });
-			return;
-		}
 		res.json(item);
 	},
 );
@@ -1086,16 +1108,15 @@ trackerItemsRouter.patch(
 			parsed.prefix !== prefix
 				? formatKey(parsed.prefix, parsed.keyNumber)
 				: undefined;
-		const [item] = await hydrateItems(db, [row], prefix);
+		const item = await hydrateMutationItem(db, row, prefix, {
+			canonicalWorkItem: req.canonicalWorkItemsRoute,
+			redirectFrom,
+		});
 		await publishEvent(workspaceId, {
 			type: "tracker.updated",
 			actor,
 			trackerItemId: existing.id,
 		});
-		if (redirectFrom) {
-			res.json({ ...item, canonicalKey: item.key, redirectFrom });
-			return;
-		}
 		res.json(item);
 	},
 );

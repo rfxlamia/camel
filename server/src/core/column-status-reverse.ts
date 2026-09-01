@@ -34,7 +34,6 @@ export function resolveColumnForStatusChange(
 
 	const slotByColumn = mapColumnSlots(columns);
 	const currentSlot = slotByColumn.get(currentColumnId);
-	const currentColumn = columns.find((column) => column.id === currentColumnId);
 	const nonDone = nonDoneColumns(columns);
 
 	if (targetSlot === "in_progress") {
@@ -45,9 +44,6 @@ export function resolveColumnForStatusChange(
 			(column) => slotByColumn.get(column.id) === "in_progress",
 		);
 		if (inProgressColumn) return inProgressColumn.id;
-		if (currentColumn?.is_done && nonDone.length > 0) {
-			return nonDone[0]!.id;
-		}
 		return "unmappable";
 	}
 
@@ -70,7 +66,7 @@ export function resolveColumnForStatusChange(
 			(column) => slotByColumn.get(column.id) === "todo",
 		);
 		if (todoColumn) return todoColumn.id;
-		return (nonDone[1] ?? nonDone[0])!.id;
+		return "unmappable";
 	}
 
 	return "unmappable";

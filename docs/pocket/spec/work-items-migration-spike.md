@@ -72,15 +72,21 @@ CREATE TABLE work_items (
 Run periodically:
 
 ```sql
-SELECT w.id,
-       (SELECT COUNT(*) FROM cards c WHERE c.workspace_id = w.id AND c.deleted_at IS NULL) AS cards,
-       (SELECT COUNT(*) FROM tracker_items t WHERE t.workspace_id = w.id AND t.deleted_at IS NULL) AS tracker_items
-FROM workspaces w
+WITH workspace_counts AS (
+  SELECT w.id,
+         (SELECT COUNT(*) FROM cards c
+          WHERE c.workspace_id = w.id AND c.deleted_at IS NULL) AS cards,
+         (SELECT COUNT(*) FROM tracker_items t
+          WHERE t.workspace_id = w.id AND t.deleted_at IS NULL) AS tracker_items
+  FROM workspaces w
+)
+SELECT id, cards, tracker_items
+FROM workspace_counts
 ORDER BY cards + tracker_items DESC
 LIMIT 20;
 ```
 
-At spike time, typical workspaces have low overlap (board cards with keys appearing in tracker list is the integration case, not bulk duplication).
+At spike time, typical workspaces have both board cards and tracker items with different keys. Same-key overlap (a board card and tracker item sharing one `key_number`) is an anomaly handled by tracker-wins dedup, not expected coexistence.
 
 ## Decision matrix
 
