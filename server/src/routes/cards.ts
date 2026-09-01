@@ -12,7 +12,9 @@ import {
 	rebalance,
 } from "../core/position.js";
 import { checkWipLimit } from "../core/wip.js";
+import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
+import type { AuthUser } from "../auth.js";
 import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
@@ -107,6 +109,42 @@ function selectFullCard(dbExec: DBExecutor) {
 			"c.phase_id",
 			"tph.name as phase_name",
 		]);
+}
+
+async function cardEventPayload(
+	cardId: number,
+	workspaceId: number,
+): Promise<Record<string, unknown>> {
+	const row = await db
+		.selectFrom("cards as c")
+		.innerJoin("workspaces as w", "w.id", "c.workspace_id")
+		.select(["c.key_number", "w.name as workspace_name"])
+		.where("c.id", "=", cardId)
+		.where("c.workspace_id", "=", workspaceId)
+		.executeTakeFirst();
+	if (row?.key_number == null || row.workspace_name == null) return {};
+	return {
+		key: formatKey(derivePrefix(row.workspace_name), row.key_number),
+	};
+}
+
+async function publishCardWorkspaceEvent(
+	workspaceId: number,
+	event: {
+		type:
+			| "card.created"
+			| "card.updated"
+			| "card.moved"
+			| "card.reordered"
+			| "card.deleted";
+		actor: AuthUser;
+		cardId: number;
+	},
+) {
+	await publishEvent(workspaceId, {
+		...event,
+		payload: await cardEventPayload(event.cardId, workspaceId),
+	});
 }
 
 async function hydrateCard(cardId: number, workspaceId: number) {
@@ -358,7 +396,7 @@ cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
 	}
 	const { cardId, autoAssigneeId } = result;
 
-	await publishEvent(workspaceId, {
+	await publishCardWorkspaceEvent(workspaceId, {
 		type: "card.created",
 		actor: req.user!,
 		cardId,
@@ -646,7 +684,7 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 
 	const { updated, prevDueDate, prevAssigneeIds, assigneeSync } = result;
 
-	await publishEvent(workspaceId, {
+	await publishCardWorkspaceEvent(workspaceId, {
 		type: "card.updated",
 		actor: req.user!,
 		cardId: id,
@@ -752,7 +790,7 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		});
 	}
 
-	await publishEvent(workspaceId, {
+	await publishCardWorkspaceEvent(workspaceId, {
 		type: "card.deleted",
 		actor: req.user!,
 		cardId: id,
@@ -993,7 +1031,7 @@ cardsRouter.post(
 			});
 		}
 
-		await publishEvent(workspaceId, {
+		await publishCardWorkspaceEvent(workspaceId, {
 			type: result.isSameColumn ? "card.reordered" : "card.moved",
 			actor: req.user!,
 			cardId,

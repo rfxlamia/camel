@@ -11,7 +11,7 @@ describe("createItemMutationQueue", () => {
 		let firstInvoked = false;
 		let secondInvoked = false;
 
-		const firstResult = queue.enqueue(1, async () => {
+		const firstResult = queue.enqueue("TE-1", async () => {
 			firstInvoked = true;
 			return firstControlled;
 		});
@@ -19,7 +19,7 @@ describe("createItemMutationQueue", () => {
 		await Promise.resolve();
 		expect(firstInvoked).toBe(true);
 
-		const secondResult = queue.enqueue(1, async () => {
+		const secondResult = queue.enqueue("TE-1", async () => {
 			secondInvoked = true;
 			return "second";
 		});
@@ -40,12 +40,12 @@ describe("createItemMutationQueue", () => {
 		});
 		let secondInvoked = false;
 
-		void queue.enqueue(1, async () => {
+		void queue.enqueue("TE-1", async () => {
 			await firstBlocking;
 			return "first";
 		});
 
-		const secondResult = queue.enqueue(2, async () => {
+		const secondResult = queue.enqueue("TE-2", async () => {
 			secondInvoked = true;
 			return "second";
 		});
@@ -61,10 +61,10 @@ describe("createItemMutationQueue", () => {
 		const queue = createItemMutationQueue();
 		let secondInvoked = false;
 
-		const firstResult = queue.enqueue(1, async () => {
+		const firstResult = queue.enqueue("TE-1", async () => {
 			throw new Error("409 conflict");
 		});
-		const secondResult = queue.enqueue(1, async () => {
+		const secondResult = queue.enqueue("TE-1", async () => {
 			secondInvoked = true;
 			return "recovered";
 		});
@@ -81,12 +81,12 @@ describe("createItemMutationQueue", () => {
 			release = resolve;
 		});
 
-		const result = queue.enqueue(1, () => blocking);
-		expect(queue.hasPending(1)).toBe(true);
+		const result = queue.enqueue("TE-1", () => blocking);
+		expect(queue.hasPending("TE-1")).toBe(true);
 
 		release();
 		await result;
 		await Promise.resolve();
-		expect(queue.hasPending(1)).toBe(false);
+		expect(queue.hasPending("TE-1")).toBe(false);
 	});
 });

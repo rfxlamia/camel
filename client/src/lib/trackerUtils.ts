@@ -1,4 +1,4 @@
-import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
+import type { TrackerProject, TrackerVocabulary, WorkItem } from "../types";
 
 const MONTHS = [
 	"Jan",
@@ -92,7 +92,7 @@ export function sortStatusesByPosition(
 }
 
 /** Items within a section: oldest createdAt first. */
-export function sortItemsOldestFirst(items: TrackerItem[]): TrackerItem[] {
+export function sortItemsOldestFirst(items: WorkItem[]): WorkItem[] {
 	return [...items].sort(
 		(a, b) =>
 			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -100,10 +100,10 @@ export function sortItemsOldestFirst(items: TrackerItem[]): TrackerItem[] {
 }
 
 export function groupItemsByStatus(
-	items: TrackerItem[],
+	items: WorkItem[],
 	statuses: TrackerVocabulary[],
-): Map<number, TrackerItem[]> {
-	const byStatus = new Map<number, TrackerItem[]>();
+): Map<number, WorkItem[]> {
+	const byStatus = new Map<number, WorkItem[]>();
 	for (const status of statuses) {
 		byStatus.set(status.id, []);
 	}
@@ -132,7 +132,7 @@ export interface TrackerGroup {
 	/** Stable identity for collapse state and React keys. */
 	key: string;
 	label: string;
-	items: TrackerItem[];
+	items: WorkItem[];
 	/** Set on status groups — drives the header glyph and the + button. */
 	status?: TrackerVocabulary;
 	/** Set on priority groups — drives the header glyph. */
@@ -164,13 +164,13 @@ export function priorityGroupKey(priorityId: number | null): string {
  * the manual position within the phase. Items with no phase sit at the end.
  */
 function sortItemsForProject(
-	items: TrackerItem[],
+	items: WorkItem[],
 	project: TrackerProject,
-): TrackerItem[] {
+): WorkItem[] {
 	const phasePosition = new Map(
 		project.phases.map((phase) => [phase.id, phase.position]),
 	);
-	const rank = (item: TrackerItem) =>
+	const rank = (item: WorkItem) =>
 		item.phaseId != null
 			? (phasePosition.get(item.phaseId) ?? Number.POSITIVE_INFINITY)
 			: Number.POSITIVE_INFINITY;
@@ -187,7 +187,7 @@ function sortItemsForProject(
 }
 
 function groupByProject(
-	items: TrackerItem[],
+	items: WorkItem[],
 	projects: TrackerProject[],
 ): TrackerGroup[] {
 	const ordered = [...projects].sort((a, b) => a.position - b.position);
@@ -219,7 +219,7 @@ function groupByProject(
 }
 
 function groupByPriority(
-	items: TrackerItem[],
+	items: WorkItem[],
 	priorities: TrackerVocabulary[],
 ): TrackerGroup[] {
 	const ordered = sortStatusesByPosition(priorities);
@@ -252,7 +252,7 @@ function groupByPriority(
  * grouping, so the group counts always add back up to the item total.
  */
 export function groupItems(
-	items: TrackerItem[],
+	items: WorkItem[],
 	groupBy: TrackerGroupBy,
 	{ statuses, priorities, projects }: TrackerGroupContext,
 ): TrackerGroup[] {

@@ -3,7 +3,7 @@
 // down before trackerRollup.ts is built on top of it. No implementation
 // change is made here.
 import { describe, expect, it } from "vitest";
-import type { TrackerItem, TrackerProject, TrackerVocabulary } from "../types";
+import type { TrackerProject, TrackerVocabulary, WorkItem } from "../types";
 import {
 	formatDateRange,
 	groupItems,
@@ -19,12 +19,13 @@ function vocab(id: number, name: string, position: number): TrackerVocabulary {
 	return { id, kind: "status", name, position, colour: "#ccc" };
 }
 
-function item(id: number, statusId: number, createdAt: string): TrackerItem {
+function item(id: number, statusId: number, createdAt: string): WorkItem {
 	return {
 		id,
 		key: `CA-${id}`,
 		title: `Task ${id}`,
 		description: "",
+		source: "tracker",
 		status: {
 			id: statusId,
 			kind: "status",
@@ -195,8 +196,8 @@ function phase(id: number, projectId: number, position: number) {
 
 function groupItem(
 	id: number,
-	overrides: Partial<TrackerItem> = {},
-): TrackerItem {
+	overrides: Partial<WorkItem> = {},
+): WorkItem {
 	return {
 		...item(id, 1, "2026-08-01T00:00:00.000Z"),
 		status: statuses[0]!,

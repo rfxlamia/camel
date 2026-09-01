@@ -26,6 +26,15 @@ import {
 	serializeVocabulary,
 	type VocabularyRow,
 } from "./vocabulary-response.js";
+import { applyBoardCardStatusChange } from "../core/board-card-status-change.js";
+import {
+	type BoardWorkItemRow,
+	findBoardCardByKeyNumber,
+	findTrackerItemByKeyNumber,
+	hydrateBoardWorkItems,
+	hydrateTrackerWorkItems,
+	listMergedWorkItems,
+} from "./work-item-response.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
 
@@ -118,40 +127,6 @@ function serializeItem(
 	return body;
 }
 
-function selectItemRows(dbExec: DBExecutor) {
-	return dbExec
-		.selectFrom("tracker_items as ti")
-		.innerJoin("tracker_vocabularies as st", "st.id", "ti.status_id")
-		.leftJoin("tracker_vocabularies as pr", "pr.id", "ti.priority_id")
-		.select([
-			"ti.id",
-			"ti.key_number",
-			"ti.title",
-			"ti.description",
-			"ti.version",
-			"ti.created_at",
-			"ti.updated_at",
-			"ti.project_id",
-			"ti.phase_id",
-			"ti.start_date",
-			"ti.end_date",
-			"ti.completed_at",
-			"ti.position",
-			"ti.status_id",
-			"st.name as status_name",
-			"st.kind as status_kind",
-			"st.position as status_position",
-			"st.colour as status_colour",
-			"st.category as status_category",
-			"st.slot as status_slot",
-			"ti.priority_id",
-			"pr.name as priority_name",
-			"pr.kind as priority_kind",
-			"pr.position as priority_position",
-			"pr.colour as priority_colour",
-		]);
-}
-
 async function getWorkspacePrefix(workspaceId: number): Promise<string | null> {
 	const ws = await db
 		.selectFrom("workspaces")
@@ -217,16 +192,40 @@ async function hydrateItems(
 	);
 }
 
-async function findItemByKeyNumber(
+const findItemByKeyNumber = findTrackerItemByKeyNumber;
+
+async function resolveWorkItemByKey(
 	dbExec: DBExecutor,
 	workspaceId: number,
 	keyNumber: number,
+	prefix: string,
+	redirectFrom?: string,
 ) {
-	return selectItemRows(dbExec)
-		.where("ti.workspace_id", "=", workspaceId)
-		.where("ti.key_number", "=", keyNumber)
-		.where("ti.deleted_at", "is", null)
-		.executeTakeFirst();
+	const trackerRow = await findTrackerItemByKeyNumber(
+		dbExec,
+		workspaceId,
+		keyNumber,
+	);
+	if (trackerRow) {
+		const [item] = await hydrateTrackerWorkItems(dbExec, [trackerRow], prefix);
+		if (redirectFrom) {
+			return { ...item, canonicalKey: item.key, redirectFrom };
+		}
+		return item;
+	}
+
+	const boardRow = await findBoardCardByKeyNumber(
+		dbExec,
+		workspaceId,
+		keyNumber,
+	);
+	if (!boardRow || boardRow.key_number == null) return null;
+
+	const [item] = await hydrateBoardWorkItems(dbExec, [boardRow as BoardWorkItemRow], prefix);
+	if (redirectFrom) {
+		return { ...item, canonicalKey: item.key, redirectFrom };
+	}
+	return item;
 }
 
 async function getTrackerItemLabelIds(
@@ -370,25 +369,7 @@ trackerItemsRouter.get(
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
 		const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-
-		let query = selectItemRows(db)
-			.where("ti.workspace_id", "=", workspaceId)
-			.where("ti.deleted_at", "is", null)
-			.orderBy("ti.created_at", "asc");
-
-		if (q) {
-			const pattern = `%${q}%`;
-			query = query.where((eb) =>
-				eb.or([
-					eb("ti.title", "ilike", pattern),
-					eb("ti.description", "ilike", pattern),
-					eb(sql`ti.key_number::text`, "ilike", pattern),
-				]),
-			);
-		}
-
-		const rows = await query.execute();
-		res.json(await hydrateItems(db, rows, prefix));
+		res.json(await listMergedWorkItems(db, workspaceId, prefix, q));
 	},
 );
 
@@ -577,19 +558,19 @@ trackerItemsRouter.get(
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
-		const row = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
-		if (!row) return res.status(404).json({ error: "Not found" });
-
 		const redirectFrom =
 			parsed.prefix !== prefix
 				? formatKey(parsed.prefix, parsed.keyNumber)
 				: undefined;
 
-		const [item] = await hydrateItems(db, [row], prefix);
-		if (redirectFrom) {
-			res.json({ ...item, canonicalKey: item.key, redirectFrom });
-			return;
-		}
+		const item = await resolveWorkItemByKey(
+			db,
+			workspaceId,
+			parsed.keyNumber,
+			prefix,
+			redirectFrom,
+		);
+		if (!item) return res.status(404).json({ error: "Not found" });
 		res.json(item);
 	},
 );
@@ -630,6 +611,18 @@ trackerItemsRouter.patch(
 
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
+
+		const boardCard = await findBoardCardByKeyNumber(
+			db,
+			workspaceId,
+			parsed.keyNumber,
+		);
+		if (boardCard) {
+			return res.status(409).json({
+				error: "Board items cannot be reordered from Tracker.",
+				code: "board_item_use_card_api",
+			});
+		}
 
 		const existing = await findItemByKeyNumber(
 			db,
@@ -747,6 +740,75 @@ trackerItemsRouter.patch(
 
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
+
+		const boardCard = await findBoardCardByKeyNumber(
+			db,
+			workspaceId,
+			parsed.keyNumber,
+		);
+		if (boardCard) {
+			const allowedKeys = new Set(["version", "statusId"]);
+			const bodyKeys = Object.keys(body).filter((key) => body[key] !== undefined);
+			const hasOnlyStatus =
+				bodyKeys.length > 0 &&
+				bodyKeys.every((key) => allowedKeys.has(key)) &&
+				body.statusId !== undefined;
+			if (!hasOnlyStatus) {
+				return res.status(409).json({
+					error: "Board items must be updated via the card API.",
+					code: "board_item_use_card_api",
+				});
+			}
+			if (!Number.isInteger(body.statusId)) {
+				return res.status(400).json({ error: "statusId must be an integer" });
+			}
+
+			const result = await db.transaction().execute(async (trx) =>
+				applyBoardCardStatusChange(trx, {
+					workspaceId,
+					actor,
+					cardId: boardCard.id,
+					targetStatusId: body.statusId as number,
+					version: version as number | undefined,
+				}),
+			);
+
+			if (result.kind === "not_found") {
+				return res.status(404).json({ error: "Not found" });
+			}
+			if (result.kind === "conflict") {
+				return res.status(409).json({
+					error: "Someone else updated this item first.",
+					code: "version_conflict",
+				});
+			}
+			if (result.kind === "invalid_status") {
+				return res.status(400).json({ error: "invalid status" });
+			}
+			if (result.kind === "wip") {
+				return res.status(409).json({
+					error: "WIP limit reached for this column",
+					reason: result.reason,
+				});
+			}
+
+			const key = formatKey(prefix, parsed.keyNumber);
+			await publishEvent(workspaceId, {
+				type: result.moved ? "card.moved" : "card.updated",
+				actor,
+				cardId: boardCard.id,
+				payload: { key },
+			});
+
+			const item = await resolveWorkItemByKey(
+				db,
+				workspaceId,
+				parsed.keyNumber,
+				prefix,
+			);
+			if (!item) return res.status(404).json({ error: "Not found" });
+			return res.json(item);
+		}
 
 		const existing = await findItemByKeyNumber(
 			db,
@@ -1029,6 +1091,18 @@ trackerItemsRouter.delete(
 			return res.status(400).json({ error: "version must be an integer" });
 		}
 
+		const boardCard = await findBoardCardByKeyNumber(
+			db,
+			workspaceId,
+			parsed.keyNumber,
+		);
+		if (boardCard) {
+			return res.status(409).json({
+				error: "Board items must be deleted from the board.",
+				code: "board_item_use_card_api",
+			});
+		}
+
 		const existing = await findItemByKeyNumber(
 			db,
 			workspaceId,
@@ -1146,6 +1220,71 @@ function toTrackerEvent(e: {
 	};
 }
 
+function toCardTrackerEvent(e: {
+	id: number;
+	event_type: string;
+	payload: unknown;
+	created_at: Date;
+	card_id: number | null;
+	username: string | null;
+	display_name: string | null;
+	current_card_title: string | null;
+	from_column_title: string | null;
+	to_column_title: string | null;
+}) {
+	const payload = e.payload as
+		| { title?: string; cardTitle?: string }
+		| Record<string, unknown>
+		| null;
+	const eventType =
+		e.event_type === "create"
+			? "tracker_item_created"
+			: e.event_type === "delete"
+				? "tracker_item_deleted"
+				: "tracker_item_updated";
+	return {
+		id: e.id,
+		eventType,
+		trackerItemId: null,
+		title: e.current_card_title ?? payload?.cardTitle ?? payload?.title ?? null,
+		payload:
+			e.event_type === "move"
+				? {
+						field: "status",
+						from: e.from_column_title,
+						to: e.to_column_title,
+					}
+				: (payload ?? null),
+		actor: e.username
+			? { username: e.username, displayName: e.display_name }
+			: null,
+		createdAt: e.created_at.toISOString(),
+	};
+}
+
+function cardEventSelect() {
+	return db
+		.selectFrom("card_events as e")
+		.leftJoin("users as u", "u.id", "e.actor_id")
+		.leftJoin("cards as c", (join) =>
+			join.onRef("c.id", "=", "e.card_id").on("c.deleted_at", "is", null),
+		)
+		.leftJoin("columns as fc", "fc.id", "e.from_column_id")
+		.leftJoin("columns as tc", "tc.id", "e.to_column_id")
+		.select([
+			"e.id",
+			"e.event_type",
+			"e.payload",
+			"e.created_at",
+			"e.card_id",
+			"u.username",
+			"u.display_name",
+			"c.title as current_card_title",
+			"fc.title as from_column_title",
+			"tc.title as to_column_title",
+		]);
+}
+
 trackerItemsRouter.get(
 	"/tracker/items/:key/events",
 	requireWorkspaceMember,
@@ -1154,6 +1293,21 @@ trackerItemsRouter.get(
 		const parsed = parseKeyFromUrl(routeKeyParam(req.params.key));
 		if (!parsed) {
 			return res.status(400).json({ error: "invalid tracker key" });
+		}
+
+		const boardCard = await findBoardCardByKeyNumber(
+			db,
+			workspaceId,
+			parsed.keyNumber,
+		);
+		if (boardCard) {
+			const rows = await cardEventSelect()
+				.where("e.card_id", "=", boardCard.id)
+				.where("e.workspace_id", "=", workspaceId)
+				.orderBy("e.created_at", "desc")
+				.orderBy("e.id", "desc")
+				.execute();
+			return res.json({ events: rows.map(toCardTrackerEvent) });
 		}
 
 		const item = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);

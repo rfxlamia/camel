@@ -23,19 +23,19 @@ import {
 	rollup,
 	sectionBounds,
 } from "../../lib/trackerRollup";
-import type { TrackerItem, TrackerPhase, TrackerVocabulary } from "../../types";
+import type { TrackerPhase, TrackerVocabulary, WorkItem } from "../../types";
 import TrackerProgressBar from "./TrackerProgressBar";
 import TrackerRow from "./TrackerRow";
 
 interface Props {
 	phase: TrackerPhase | null;
 	label: string;
-	items: TrackerItem[];
+	items: WorkItem[];
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
 	collapsed: boolean;
 	onToggle: () => void;
-	onStatusChange?: (item: TrackerItem, statusId: number) => void;
+	onStatusChange?: (item: WorkItem, statusId: number) => void;
 	onRename?: () => void;
 	onDelete?: () => void;
 	onAddTask?: () => void;
@@ -62,10 +62,10 @@ function SortableTrackerRow({
 	onStatusChange,
 	reorderable,
 }: {
-	item: TrackerItem;
+	item: WorkItem;
 	statuses: TrackerVocabulary[];
 	priorities: TrackerVocabulary[];
-	onStatusChange?: (item: TrackerItem, statusId: number) => void;
+	onStatusChange?: (item: WorkItem, statusId: number) => void;
 	reorderable: boolean;
 }) {
 	const {
@@ -250,7 +250,7 @@ export default function TrackerPhaseSection({
 									statuses={statuses}
 									priorities={priorities}
 									onStatusChange={onStatusChange}
-									reorderable={onReorder != null}
+									reorderable={onReorder != null && item.source !== "board"}
 								/>
 							))}
 						</div>

@@ -12,11 +12,12 @@ import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
+import { updateWorkItemStatus } from "../lib/workItemMutations";
 import type {
-	TrackerItem,
 	TrackerPhase,
 	TrackerProject,
 	TrackerVocabulary,
+	WorkItem,
 } from "../types";
 
 const NO_PHASE_KEY = "no-phase";
@@ -67,7 +68,7 @@ function releasedTaskMessage(count: number): string {
 	return `${count} ${noun} will be released to the unassigned list`;
 }
 
-function sortByPosition(items: TrackerItem[]): TrackerItem[] {
+function sortByPosition(items: WorkItem[]): WorkItem[] {
 	return [...items].sort(
 		(a, b) =>
 			(a.position ?? Number.POSITIVE_INFINITY) -
@@ -76,7 +77,7 @@ function sortByPosition(items: TrackerItem[]): TrackerItem[] {
 }
 
 function reorderNeighborBody(
-	reordered: TrackerItem[],
+	reordered: WorkItem[],
 	newIndex: number,
 ): { beforeId?: number; afterId?: number } {
 	if (newIndex === 0) {
@@ -86,7 +87,7 @@ function reorderNeighborBody(
 }
 
 function optimisticReorderPosition(
-	reordered: TrackerItem[],
+	reordered: WorkItem[],
 	newIndex: number,
 ): number {
 	const beforePos =
@@ -106,7 +107,7 @@ export default function TrackerProjectPage() {
 	const navigate = useNavigate();
 	const { activeWorkspaceId, subscribeTrackerEvents, showToast } = useBoard();
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
-	const [items, setItems] = useState<TrackerItem[]>([]);
+	const [items, setItems] = useState<WorkItem[]>([]);
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -124,7 +125,7 @@ export default function TrackerProjectPage() {
 	const [deletingPhaseId, setDeletingPhaseId] = useState<number | null>(null);
 	const [phaseEditorError, setPhaseEditorError] = useState<string | null>(null);
 	const [phaseEditorSubmitting, setPhaseEditorSubmitting] = useState(false);
-	const reorderSeqMapRef = useRef<Map<number, number>>(new Map());
+	const reorderSeqMapRef = useRef<Map<string, number>>(new Map());
 	const collapsedKeysRef = useRef(collapsedKeys);
 	collapsedKeysRef.current = collapsedKeys;
 
@@ -193,7 +194,7 @@ export default function TrackerProjectPage() {
 	);
 
 	const itemsByPhase = useMemo(() => {
-		const map = new Map<number | null, TrackerItem[]>();
+		const map = new Map<number | null, WorkItem[]>();
 		for (const item of projectItems) {
 			const key = item.phaseId ?? null;
 			const bucket = map.get(key) ?? [];
@@ -215,7 +216,7 @@ export default function TrackerProjectPage() {
 		setCollapsedKeys(next);
 	};
 
-	const changeStatus = async (item: TrackerItem, statusId: number) => {
+	const changeStatus = async (item: WorkItem, statusId: number) => {
 		if (activeWorkspaceId === null || statusId === item.status.id) return;
 		const nextStatus = statuses.find((s) => s.id === statusId);
 		if (!nextStatus) return;
@@ -223,21 +224,23 @@ export default function TrackerProjectPage() {
 		const priorStatus = item.status;
 		setItems((prev) =>
 			prev.map((it) =>
-				it.id === item.id ? { ...it, status: nextStatus } : it,
+				it.key === item.key ? { ...it, status: nextStatus } : it,
 			),
 		);
 		try {
-			const updated = await api.updateTrackerItem(activeWorkspaceId, item.key, {
+			const updated = await updateWorkItemStatus(
+				activeWorkspaceId,
+				item,
 				statusId,
-				version: item.version,
-			});
+				item.version,
+			);
 			setItems((prev) =>
-				prev.map((it) => (it.id === updated.id ? updated : it)),
+				prev.map((it) => (it.key === updated.key ? updated : it)),
 			);
 		} catch (err) {
 			setItems((prev) =>
 				prev.map((it) =>
-					it.id === item.id ? { ...it, status: priorStatus } : it,
+					it.key === item.key ? { ...it, status: priorStatus } : it,
 				),
 			);
 			if (err instanceof ApiError && err.code === "version_conflict") {
@@ -462,17 +465,19 @@ export default function TrackerProjectPage() {
 		const phaseItems = sortByPosition(
 			projectItems.filter((item) => (item.phaseId ?? null) === phaseId),
 		);
+		const movedItem = phaseItems[oldIndex];
+		if (!movedItem || movedItem.source === "board") return;
+
 		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
 		const neighbors = reorderNeighborBody(reordered, newIndex);
-		const movedId = reordered[newIndex].id;
-		const seq = (reorderSeqMapRef.current.get(movedId) ?? 0) + 1;
-		reorderSeqMapRef.current.set(movedId, seq);
+		const seq = (reorderSeqMapRef.current.get(itemKey) ?? 0) + 1;
+		reorderSeqMapRef.current.set(itemKey, seq);
 		const priorPosition = phaseItems[oldIndex].position;
 		const optimisticPosition = optimisticReorderPosition(reordered, newIndex);
 
 		setItems((prev) =>
 			prev.map((item) =>
-				item.id === movedId ? { ...item, position: optimisticPosition } : item,
+				item.key === itemKey ? { ...item, position: optimisticPosition } : item,
 			),
 		);
 
@@ -482,16 +487,16 @@ export default function TrackerProjectPage() {
 				itemKey,
 				neighbors,
 			);
-			if (seq === reorderSeqMapRef.current.get(movedId)) {
+			if (seq === reorderSeqMapRef.current.get(itemKey)) {
 				setItems((prev) =>
-					prev.map((item) => (item.id === updated.id ? updated : item)),
+					prev.map((item) => (item.key === updated.key ? updated : item)),
 				);
 			}
 		} catch {
-			if (seq === reorderSeqMapRef.current.get(movedId)) {
+			if (seq === reorderSeqMapRef.current.get(itemKey)) {
 				setItems((prev) =>
 					prev.map((item) =>
-						item.id === movedId ? { ...item, position: priorPosition } : item,
+						item.key === itemKey ? { ...item, position: priorPosition } : item,
 					),
 				);
 			}

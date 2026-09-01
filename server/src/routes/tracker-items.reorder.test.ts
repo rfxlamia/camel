@@ -106,6 +106,7 @@ const itemC = {
 function mockDbSelect() {
 	mockSelectFrom.mockImplementation((table: string) => {
 		if (table === "workspaces") return chainable({ name: "Camel Team" });
+		if (table === "cards as c") return chainable(undefined);
 		return chainable(itemC);
 	});
 }

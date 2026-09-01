@@ -23,11 +23,12 @@ import { isTaskOverdue } from "../lib/trackerRollup";
 import { resolveToggle } from "../lib/trackerUtils";
 import type {
 	TrackerEvent,
-	TrackerItem,
 	TrackerProject,
 	TrackerVocabulary,
+	WorkItem,
 	WorkspaceMember,
 } from "../types";
+import { updateWorkItem, updateWorkItemStatus } from "../lib/workItemMutations";
 
 type ItemPropertyPatch = PropertyPatch & {
 	projectId?: number;
@@ -38,10 +39,18 @@ function trackerEventKey(
 	event: { type: string; payload?: unknown; trackerItemId?: number },
 	itemKey: string,
 	itemId: number | null,
+	itemSource: WorkItem["source"] | null,
 ): boolean {
 	const payload = event.payload as { key?: string } | undefined;
 	if (payload?.key) return payload.key === itemKey;
-	if (event.trackerItemId != null && itemId != null) {
+	if (
+		event.type.startsWith("card.") &&
+		payload?.key &&
+		payload.key === itemKey
+	) {
+		return true;
+	}
+	if (event.trackerItemId != null && itemId != null && itemSource === "tracker") {
 		return event.trackerItemId === itemId;
 	}
 	return false;
@@ -64,7 +73,7 @@ export default function TrackerDetailPage() {
 		subscribeTrackerEvents,
 	} = useBoard();
 
-	const [item, setItem] = useState<TrackerItem | null>(null);
+	const [item, setItem] = useState<WorkItem | null>(null);
 	const [events, setEvents] = useState<TrackerEvent[]>([]);
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);
 	const [priorities, setPriorities] = useState<TrackerVocabulary[]>([]);
@@ -84,7 +93,7 @@ export default function TrackerDetailPage() {
 	// The server copy is the draft's baseline, so `item` doubles as it. A
 	// property PATCH or an SSE refresh moves the baseline without touching the
 	// draft — see loadItem.
-	const itemRef = useRef<TrackerItem | null>(null);
+	const itemRef = useRef<WorkItem | null>(null);
 	// Property picks and draft saves share one queue: each PATCH carries a
 	// version, so two in flight at once would make the second one conflict.
 	const mutationChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -98,7 +107,7 @@ export default function TrackerDetailPage() {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: as above, for the description
 	useLayoutEffect(() => autoGrow(descriptionRef.current), [description]);
 
-	const applyItem = useCallback((next: TrackerItem) => {
+	const applyItem = useCallback((next: WorkItem) => {
 		const prev = itemRef.current;
 		itemRef.current = next;
 		setItem(next);
@@ -182,7 +191,7 @@ export default function TrackerDetailPage() {
 	useEffect(() => {
 		if (!subscribeTrackerEvents || !item) return;
 		return subscribeTrackerEvents((event) => {
-			if (!trackerEventKey(event, item.key, item.id)) return;
+			if (!trackerEventKey(event, item.key, item.id, item.source)) return;
 
 			if (event.type === "tracker.deleted") {
 				refreshTrackerList();
@@ -190,8 +199,18 @@ export default function TrackerDetailPage() {
 				return;
 			}
 
-			if (event.type === "tracker.updated") {
+			if (
+				event.type === "tracker.updated" ||
+				event.type === "card.updated" ||
+				event.type === "card.moved" ||
+				event.type === "card.reordered"
+			) {
 				void loadItem();
+			}
+
+			if (event.type === "card.deleted") {
+				refreshTrackerList();
+				navigate("/tracker", { replace: true });
 			}
 		});
 	}, [subscribeTrackerEvents, item, navigate, refreshTrackerList, loadItem]);
@@ -210,7 +229,7 @@ export default function TrackerDetailPage() {
 
 	const resolvePropertyPatch = (
 		patch: ItemPropertyPatch,
-		current: TrackerItem,
+		current: WorkItem,
 	): Record<string, unknown> => {
 		const { assigneeToggle, labelToggle, ...rest } = patch;
 		const result: Record<string, unknown> = { ...rest };
@@ -243,14 +262,20 @@ export default function TrackerDetailPage() {
 			if (!current) return;
 			const workspaceId = activeWorkspaceId;
 			try {
-				const updated = await api.updateTrackerItem(
-					workspaceId,
-					current.key,
-					{
-						...resolvePropertyPatch(patch, current),
-						version: current.version,
-					},
-				);
+				const resolved = resolvePropertyPatch(patch, current);
+				const { statusId, ...rest } = resolved;
+				const updated =
+					statusId !== undefined && typeof statusId === "number"
+						? await updateWorkItemStatus(
+								workspaceId,
+								current,
+								statusId,
+								current.version,
+							)
+						: await updateWorkItem(workspaceId, current, {
+								...rest,
+								version: current.version,
+							} as Parameters<typeof updateWorkItem>[2]);
 				applyItem(updated);
 				await refreshChangelog(updated.key);
 				refreshTrackerList();
@@ -312,11 +337,7 @@ export default function TrackerDetailPage() {
 				if (draftEndDate !== (latest.endDate ?? "")) {
 					patch.endDate = draftEndDate || null;
 				}
-				const updated = await api.updateTrackerItem(
-					workspaceId,
-					latest.key,
-					patch,
-				);
+				const updated = await updateWorkItem(workspaceId, latest, patch);
 				itemRef.current = updated;
 				setItem(updated);
 				setTitle(updated.title);
@@ -512,6 +533,35 @@ export default function TrackerDetailPage() {
 							</div>
 						)}
 
+						{item.source === "board" && (
+							<section className="mt-8 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+								<h2 className="font-medium text-[11px] text-neutral-500 uppercase tracking-[0.08em]">
+									Board
+								</h2>
+								<dl className="mt-2 space-y-1 text-sm text-neutral-700">
+									{item.columnName && (
+										<div className="flex gap-2">
+											<dt className="text-neutral-500">Column</dt>
+											<dd>{item.columnName}</dd>
+										</div>
+									)}
+									{item.dueDate && (
+										<div className="flex gap-2">
+											<dt className="text-neutral-500">Due</dt>
+											<dd>{item.dueDate}</dd>
+										</div>
+									)}
+								</dl>
+								<button
+									type="button"
+									onClick={() => navigate("/board")}
+									className="mt-3 font-medium text-primary-700 text-sm hover:text-primary-800"
+								>
+									Open on board
+								</button>
+							</section>
+						)}
+
 						<section className="mt-10 border-neutral-200 border-t pt-6">
 							<h2 className="mb-4 font-medium text-[11px] text-neutral-500 uppercase tracking-[0.08em]">
 								Activity
@@ -524,24 +574,32 @@ export default function TrackerDetailPage() {
 				<div className="order-first shrink-0 border-neutral-200 lg:order-none lg:w-[264px] lg:shrink-0 lg:border-l [&>aside]:lg:border-l-0 [&>aside]:lg:w-full">
 					<div className="border-neutral-200 border-b px-4 py-4 md:px-6 lg:border-b-0 lg:px-5 lg:pt-6 lg:pb-4">
 						<h2 className="font-medium text-[11px] text-neutral-500 uppercase tracking-[0.08em]">
-							Schedule
+							{item.source === "board" ? "Due date" : "Schedule"}
 						</h2>
 						<div className="mt-3">
-							<TrackerDateFields
-								idPrefix="tracker-detail"
-								layout="rail"
-								startDate={startDate}
-								endDate={endDate}
-								onStartDateChange={setStartDate}
-								onEndDateChange={setEndDate}
-							/>
-							{isTaskOverdue(item) && (
-								<p
-									aria-label="Overdue"
-									className="mt-2 font-medium text-error-900 text-xs"
-								>
-									Overdue
+							{item.source === "board" ? (
+								<p className="text-neutral-700 text-sm">
+									{item.dueDate ?? "No due date"}
 								</p>
+							) : (
+								<>
+									<TrackerDateFields
+										idPrefix="tracker-detail"
+										layout="rail"
+										startDate={startDate}
+										endDate={endDate}
+										onStartDateChange={setStartDate}
+										onEndDateChange={setEndDate}
+									/>
+									{isTaskOverdue(item) && (
+										<p
+											aria-label="Overdue"
+											className="mt-2 font-medium text-error-900 text-xs"
+										>
+											Overdue
+										</p>
+									)}
+								</>
 							)}
 						</div>
 						{projects.length > 0 && (

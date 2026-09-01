@@ -60,7 +60,7 @@ vi.mock("react-router", () => ({
 }));
 
 import { ApiError } from "../api";
-import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
+import type { TrackerPhase, TrackerProject, WorkItem } from "../types";
 import TrackerDetailPage from "./TrackerDetailPage";
 
 const persiapan: TrackerPhase = {
@@ -134,6 +134,7 @@ const item = {
 	key: "CK-42",
 	title: "Workspace Rename",
 	description: "details",
+	source: "tracker" as const,
 	status: backlog,
 	priority: null,
 	labels: [],
@@ -374,7 +375,7 @@ describe("TrackerDetailPage", () => {
 			role: "member" as const,
 		};
 		mockGetWorkspaceMembers.mockResolvedValue({ members: [alice, bob] });
-		let resolveFirst: (value: TrackerItem) => void = () => {};
+		let resolveFirst: (value: WorkItem) => void = () => {};
 		mockUpdateTrackerItem
 			.mockImplementationOnce(
 				() =>
@@ -491,7 +492,7 @@ describe("TrackerDetailPage", () => {
 	});
 
 	it("queues rapid label toggles against the latest label list", async () => {
-		let resolveFirst: (value: TrackerItem) => void = () => {};
+		let resolveFirst: (value: WorkItem) => void = () => {};
 		mockUpdateTrackerItem
 			.mockImplementationOnce(
 				() =>

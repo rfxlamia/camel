@@ -1,7 +1,7 @@
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import type { TrackerGroup } from "../../lib/trackerUtils";
 import type {
-	TrackerItem,
+	WorkItem,
 	TrackerProject,
 	TrackerVocabulary,
 	WorkspaceMember,
@@ -23,21 +23,21 @@ interface Props {
 	onToggle: () => void;
 	/** Omitted when the grouping has nothing to preselect on create. */
 	onCreate?: () => void;
-	onStatusChange: (item: TrackerItem, statusId: number) => void;
+	onStatusChange: (item: WorkItem, statusId: number) => void;
 	onDateChange: (
-		item: TrackerItem,
+		item: WorkItem,
 		dates: { startDate: string | null; endDate: string | null },
 	) => void;
-	onPriorityChange?: (item: TrackerItem, priorityId: number | null) => void;
-	onProjectChange?: (item: TrackerItem, projectId: number) => void;
-	onPhaseChange?: (item: TrackerItem, phaseId: number) => void;
+	onPriorityChange?: (item: WorkItem, priorityId: number | null) => void;
+	onProjectChange?: (item: WorkItem, projectId: number) => void;
+	onPhaseChange?: (item: WorkItem, phaseId: number) => void;
 	projects: TrackerProject[];
 	members: WorkspaceMember[];
 	labels: TrackerVocabulary[];
 	labelsLoadState: TrackerAuxiliaryLoadState;
 	membersLoadState: TrackerAuxiliaryLoadState;
-	onAssigneeToggle: (item: TrackerItem, toggledId: number) => void;
-	onLabelToggle: (item: TrackerItem, toggledId: number) => void;
+	onAssigneeToggle: (item: WorkItem, toggledId: number) => void;
+	onLabelToggle: (item: WorkItem, toggledId: number) => void;
 }
 
 /**
@@ -121,7 +121,9 @@ export default function TrackerSection({
 							priorities={priorities}
 							projects={projects}
 							onStatusChange={(statusId) => onStatusChange(item, statusId)}
-							onDateChange={(dates) => onDateChange(item, dates)}
+							{...(item.source !== "board"
+								? { onDateChange: (dates) => onDateChange(item, dates) }
+								: {})}
 							{...(onPriorityChange
 								? {
 										onPriorityChange: (priorityId: number | null) =>

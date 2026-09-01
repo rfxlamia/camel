@@ -1,6 +1,6 @@
-import type { TrackerItem, TrackerProject } from "../types";
+import type { TrackerProject, WorkItem } from "../types";
 
-export function itemMatchesSearch(item: TrackerItem, q: string): boolean {
+export function itemMatchesSearch(item: WorkItem, q: string): boolean {
 	return (
 		item.title.toLowerCase().includes(q) ||
 		item.key.toLowerCase().includes(q) ||
@@ -22,13 +22,13 @@ export interface TrackerSearchPartition {
 	 * The Items tab renders one set: what the toolbar counts, what the group
 	 * counts add up to, and what is on screen are the same items.
 	 */
-	filteredItems: TrackerItem[];
+	filteredItems: WorkItem[];
 	/** Projects matching by name, or holding an item that matches. */
 	visibleProjects: TrackerProject[];
 }
 
 export function partitionTrackerSearch(
-	items: TrackerItem[],
+	items: WorkItem[],
 	projects: TrackerProject[],
 	search: string,
 ): TrackerSearchPartition {

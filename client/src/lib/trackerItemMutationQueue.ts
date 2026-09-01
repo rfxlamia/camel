@@ -1,20 +1,20 @@
 export function createItemMutationQueue() {
-	const chains = new Map<number, Promise<unknown>>();
-	function enqueue<R>(itemId: number, task: () => Promise<R>): Promise<R> {
-		const prior = chains.get(itemId) ?? Promise.resolve();
+	const chains = new Map<string, Promise<unknown>>();
+	function enqueue<R>(itemKey: string, task: () => Promise<R>): Promise<R> {
+		const prior = chains.get(itemKey) ?? Promise.resolve();
 		const next = prior.then(task, task);
 		const settled = next.then(
 			() => undefined,
 			() => undefined,
 		);
-		chains.set(itemId, settled);
+		chains.set(itemKey, settled);
 		void settled.then(() => {
-			if (chains.get(itemId) === settled) chains.delete(itemId);
+			if (chains.get(itemKey) === settled) chains.delete(itemKey);
 		});
 		return next;
 	}
-	function hasPending(itemId: number): boolean {
-		return chains.has(itemId);
+	function hasPending(itemKey: string): boolean {
+		return chains.has(itemKey);
 	}
 	return { enqueue, hasPending };
 }

@@ -12,10 +12,10 @@ import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrackerGroup } from "../../lib/trackerUtils";
 import type {
-	TrackerItem,
 	TrackerPhase,
 	TrackerProject,
 	TrackerVocabulary,
+	WorkItem,
 	WorkspaceMember,
 } from "../../types";
 import TrackerRow from "./TrackerRow";
@@ -86,12 +86,13 @@ const releaseProject: TrackerProject = {
 	updatedAt: "2026-08-01T00:00:00Z",
 };
 
-function makeRowItem(overrides: Partial<TrackerItem> = {}): TrackerItem {
+function makeRowItem(overrides: Partial<WorkItem> = {}): WorkItem {
 	return {
 		id: 1,
 		key: "CA-1",
 		title: "Workspace Rename",
 		description: "",
+		source: "tracker",
 		projectId: 1,
 		phaseId: 9,
 		startDate: null,

@@ -18,6 +18,7 @@ import type {
 	User,
 	TrackerEvent,
 	TrackerItem,
+	WorkItem,
 	TrackerPhase,
 	TrackerProject,
 	TrackerVocabulary,
@@ -477,14 +478,14 @@ export const api = {
 		const params = new URLSearchParams();
 		if (opts?.q !== undefined) params.set("q", opts.q);
 		const query = params.toString();
-		return request<TrackerItem[]>(
+		return request<WorkItem[]>(
 			query
 				? `/workspaces/${workspaceId}/tracker/items?${query}`
 				: `/workspaces/${workspaceId}/tracker/items`,
 		);
 	},
 	getTrackerItem: (workspaceId: number, key: string) =>
-		request<TrackerItem>(`/workspaces/${workspaceId}/tracker/items/${key}`),
+		request<WorkItem>(`/workspaces/${workspaceId}/tracker/items/${key}`),
 	updateTrackerItem: (
 		workspaceId: number,
 		key: string,
@@ -502,7 +503,7 @@ export const api = {
 			version?: number;
 		},
 	) =>
-		request<TrackerItem>(`/workspaces/${workspaceId}/tracker/items/${key}`, {
+		request<WorkItem>(`/workspaces/${workspaceId}/tracker/items/${key}`, {
 			method: "PATCH",
 			body: JSON.stringify(patch),
 		}),
@@ -511,7 +512,7 @@ export const api = {
 		key: string,
 		body: { beforeId?: number; afterId?: number },
 	) =>
-		request<TrackerItem>(
+		request<WorkItem>(
 			`/workspaces/${workspaceId}/tracker/items/${key}/position`,
 			{
 				method: "PATCH",
