@@ -884,6 +884,7 @@ cardsRouter.post(
 				])
 				.where("id", "=", toColumnId)
 				.where("workspace_id", "=", workspaceId)
+				.forUpdate()
 				.executeTakeFirst();
 			if (!target) return { kind: "not_found_column" };
 

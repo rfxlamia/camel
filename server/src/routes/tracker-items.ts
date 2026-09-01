@@ -27,6 +27,7 @@ import {
 	type VocabularyRow,
 } from "./vocabulary-response.js";
 import { applyBoardCardStatusChange } from "../core/board-card-status-change.js";
+import { domainBus, EVENTS } from "../events.js";
 import {
 	type BoardWorkItemRow,
 	findBoardCardByKeyNumber,
@@ -612,24 +613,25 @@ trackerItemsRouter.patch(
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
-		const boardCard = await findBoardCardByKeyNumber(
-			db,
-			workspaceId,
-			parsed.keyNumber,
-		);
-		if (boardCard) {
-			return res.status(409).json({
-				error: "Board items cannot be reordered from Tracker.",
-				code: "board_item_use_card_api",
-			});
-		}
-
 		const existing = await findItemByKeyNumber(
 			db,
 			workspaceId,
 			parsed.keyNumber,
 		);
-		if (!existing) return res.status(404).json({ error: "Not found" });
+		if (!existing) {
+			const boardCard = await findBoardCardByKeyNumber(
+				db,
+				workspaceId,
+				parsed.keyNumber,
+			);
+			if (boardCard) {
+				return res.status(409).json({
+					error: "Board items cannot be reordered from Tracker.",
+					code: "board_item_use_card_api",
+				});
+			}
+			return res.status(404).json({ error: "Not found" });
+		}
 
 		type ReorderResult =
 			| { kind: "bad_neighbors" }
@@ -741,12 +743,21 @@ trackerItemsRouter.patch(
 		const prefix = await getWorkspacePrefix(workspaceId);
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
-		const boardCard = await findBoardCardByKeyNumber(
+		const existing = await findItemByKeyNumber(
 			db,
 			workspaceId,
 			parsed.keyNumber,
 		);
-		if (boardCard) {
+		if (!existing) {
+			const boardCard = await findBoardCardByKeyNumber(
+				db,
+				workspaceId,
+				parsed.keyNumber,
+			);
+			if (!boardCard) {
+				return res.status(404).json({ error: "Not found" });
+			}
+
 			const allowedKeys = new Set(["version", "statusId"]);
 			const bodyKeys = Object.keys(body).filter((key) => body[key] !== undefined);
 			const hasOnlyStatus =
@@ -785,6 +796,12 @@ trackerItemsRouter.patch(
 			if (result.kind === "invalid_status") {
 				return res.status(400).json({ error: "invalid status" });
 			}
+			if (result.kind === "unmappable") {
+				return res.status(409).json({
+					error: "This status cannot be mapped to the current board columns.",
+					code: "status_column_unmappable",
+				});
+			}
 			if (result.kind === "wip") {
 				return res.status(409).json({
 					error: "WIP limit reached for this column",
@@ -800,6 +817,20 @@ trackerItemsRouter.patch(
 				payload: { key },
 			});
 
+			if (result.addedSignableAssignee != null) {
+				domainBus.emit(EVENTS.CARD_ASSIGNED, {
+					type: EVENTS.CARD_ASSIGNED,
+					workspaceId,
+					actorId: actor.id,
+					payload: {
+						cardId: boardCard.id,
+						assigneeId: result.addedSignableAssignee,
+						cardTitle: result.cardTitle,
+						actorDisplayName: actor.displayName,
+					},
+				});
+			}
+
 			const item = await resolveWorkItemByKey(
 				db,
 				workspaceId,
@@ -809,13 +840,6 @@ trackerItemsRouter.patch(
 			if (!item) return res.status(404).json({ error: "Not found" });
 			return res.json(item);
 		}
-
-		const existing = await findItemByKeyNumber(
-			db,
-			workspaceId,
-			parsed.keyNumber,
-		);
-		if (!existing) return res.status(404).json({ error: "Not found" });
 
 		const setFields: Record<string, unknown> = {};
 		if (typeof body.title === "string") {
@@ -1091,24 +1115,25 @@ trackerItemsRouter.delete(
 			return res.status(400).json({ error: "version must be an integer" });
 		}
 
-		const boardCard = await findBoardCardByKeyNumber(
-			db,
-			workspaceId,
-			parsed.keyNumber,
-		);
-		if (boardCard) {
-			return res.status(409).json({
-				error: "Board items must be deleted from the board.",
-				code: "board_item_use_card_api",
-			});
-		}
-
 		const existing = await findItemByKeyNumber(
 			db,
 			workspaceId,
 			parsed.keyNumber,
 		);
-		if (!existing) return res.status(404).json({ error: "Not found" });
+		if (!existing) {
+			const boardCard = await findBoardCardByKeyNumber(
+				db,
+				workspaceId,
+				parsed.keyNumber,
+			);
+			if (boardCard) {
+				return res.status(409).json({
+					error: "Board items must be deleted from the board.",
+					code: "board_item_use_card_api",
+				});
+			}
+			return res.status(404).json({ error: "Not found" });
+		}
 
 		type DeleteResult =
 			| { kind: "not_found" }
@@ -1295,6 +1320,17 @@ trackerItemsRouter.get(
 			return res.status(400).json({ error: "invalid tracker key" });
 		}
 
+		const existing = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
+		if (existing) {
+			const rows = await trackerEventSelect()
+				.where("e.tracker_item_id", "=", existing.id)
+				.where("e.workspace_id", "=", workspaceId)
+				.orderBy("e.created_at", "desc")
+				.orderBy("e.id", "desc")
+				.execute();
+			return res.json({ events: rows.map(toTrackerEvent) });
+		}
+
 		const boardCard = await findBoardCardByKeyNumber(
 			db,
 			workspaceId,
@@ -1310,16 +1346,6 @@ trackerItemsRouter.get(
 			return res.json({ events: rows.map(toCardTrackerEvent) });
 		}
 
-		const item = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
-		if (!item) return res.status(404).json({ error: "Not found" });
-
-		const rows = await trackerEventSelect()
-			.where("e.tracker_item_id", "=", item.id)
-			.where("e.workspace_id", "=", workspaceId)
-			.orderBy("e.created_at", "desc")
-			.orderBy("e.id", "desc")
-			.execute();
-
-		res.json({ events: rows.map(toTrackerEvent) });
+		return res.status(404).json({ error: "Not found" });
 	},
 );

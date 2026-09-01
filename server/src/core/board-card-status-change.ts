@@ -16,8 +16,14 @@ export type BoardCardStatusChangeResult =
 	| { kind: "not_found" }
 	| { kind: "conflict" }
 	| { kind: "invalid_status" }
+	| { kind: "unmappable" }
 	| { kind: "wip"; reason?: string }
-	| { kind: "ok"; moved: boolean; cardTitle: string };
+	| {
+			kind: "ok";
+			moved: boolean;
+			cardTitle: string;
+			addedSignableAssignee?: number;
+	  };
 
 export async function applyBoardCardStatusChange(
 	trx: DBExecutor,
@@ -78,13 +84,24 @@ export async function applyBoardCardStatusChange(
 		.orderBy("id")
 		.execute();
 
-	const toColumnId = resolveColumnForStatusChange(
+	const statusRows = await trx
+		.selectFrom("tracker_vocabularies")
+		.select(["id", "kind", "slot"])
+		.where("workspace_id", "=", params.workspaceId)
+		.where("kind", "=", "status")
+		.execute();
+
+	const resolvedColumn = resolveColumnForStatusChange(
 		card.column_id,
 		targetSlot,
 		siblingColumns,
 	);
 
-	if (toColumnId === null) {
+	if (resolvedColumn === "unmappable") {
+		return { kind: "unmappable" };
+	}
+
+	if (resolvedColumn === null) {
 		await trx
 			.updateTable("cards")
 			.set({
@@ -100,11 +117,17 @@ export async function applyBoardCardStatusChange(
 		return { kind: "ok", moved: false, cardTitle: card.title };
 	}
 
+	const toColumnId = resolvedColumn;
+	const slot = mapColumnSlots(siblingColumns).get(toColumnId);
+	if (!slot) return { kind: "not_found" };
+	const effectiveStatusId = statusIdForSlot(statusRows, slot);
+	if (effectiveStatusId === null) return { kind: "invalid_status" };
+
 	if (toColumnId === card.column_id) {
 		await trx
 			.updateTable("cards")
 			.set({
-				status_id: params.targetStatusId,
+				status_id: effectiveStatusId,
 				version: sql`version + 1`,
 			})
 			.where("id", "=", params.cardId)
@@ -130,6 +153,7 @@ export async function applyBoardCardStatusChange(
 		])
 		.where("id", "=", toColumnId)
 		.where("workspace_id", "=", params.workspaceId)
+		.forUpdate()
 		.executeTakeFirst();
 	if (!target) return { kind: "not_found" };
 
@@ -156,23 +180,12 @@ export async function applyBoardCardStatusChange(
 		null,
 	);
 
-	const slot = mapColumnSlots(siblingColumns).get(toColumnId);
-	if (!slot) return { kind: "not_found" };
-	const statusRows = await trx
-		.selectFrom("tracker_vocabularies")
-		.select(["id", "kind", "slot"])
-		.where("workspace_id", "=", params.workspaceId)
-		.where("kind", "=", "status")
-		.execute();
-	const destinationStatusId = statusIdForSlot(statusRows, slot);
-	if (destinationStatusId === null) return { kind: "invalid_status" };
-
 	await trx
 		.updateTable("cards")
 		.set({
 			column_id: toColumnId,
 			position,
-			status_id: destinationStatusId,
+			status_id: effectiveStatusId,
 			version: sql`version + 1`,
 			started_at: sql`CASE WHEN started_at IS NULL AND (${target.is_done} OR NOT ${target.is_first}) THEN now() ELSE started_at END`,
 			done_at: sql`CASE WHEN ${target.is_done} THEN COALESCE(done_at, now()) ELSE NULL END`,
@@ -180,8 +193,16 @@ export async function applyBoardCardStatusChange(
 		.where("id", "=", params.cardId)
 		.execute();
 
+	let addedSignableAssignee: number | undefined;
 	if (target.is_signable && target.signable_assignee_id != null) {
-		await addCardAssignee(trx, params.cardId, target.signable_assignee_id);
+		const added = await addCardAssignee(
+			trx,
+			params.cardId,
+			target.signable_assignee_id,
+		);
+		if (added) {
+			addedSignableAssignee = target.signable_assignee_id;
+		}
 	}
 
 	await recordActivity(trx, params.actor, params.workspaceId, "move", {
@@ -191,5 +212,10 @@ export async function applyBoardCardStatusChange(
 		payload: { cardTitle: card.title },
 	});
 
-	return { kind: "ok", moved: true, cardTitle: card.title };
+	return {
+		kind: "ok",
+		moved: true,
+		cardTitle: card.title,
+		addedSignableAssignee,
+	};
 }

@@ -36,4 +36,19 @@ describe("resolveColumnForStatusChange", () => {
 		];
 		expect(resolveColumnForStatusChange(10, "in_progress", cols)).toBe(12);
 	});
+
+	it("moves done card to backlog when in_progress has no dedicated column", () => {
+		expect(resolveColumnForStatusChange(2, "in_progress", twoCol)).toBe(1);
+	});
+
+	it("rejects in_progress when no in_progress column and card is not in done", () => {
+		expect(resolveColumnForStatusChange(1, "in_progress", twoCol)).toBe(
+			"unmappable",
+		);
+	});
+
+	it("rejects done when board has no done column", () => {
+		const cols = [{ id: 1, position: 0, is_done: false }];
+		expect(resolveColumnForStatusChange(1, "done", cols)).toBe("unmappable");
+	});
 });

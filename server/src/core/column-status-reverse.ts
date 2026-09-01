@@ -21,49 +21,57 @@ function nonDoneColumns(columns: readonly ColumnStatusInput[]): ColumnStatusInpu
  * Resolve the destination column when a board card's status slot changes from Tracker.
  *
  * Returns null when the card should stay in its current column (canceled slot).
+ * Returns "unmappable" when the board geometry cannot represent the requested slot.
  */
 export function resolveColumnForStatusChange(
 	currentColumnId: number,
 	targetSlot: ColumnStatusSlot | "canceled",
 	columns: readonly ColumnStatusInput[],
-): number | null {
+): number | null | "unmappable" {
 	if (targetSlot === "canceled") {
 		return null;
 	}
 
 	const slotByColumn = mapColumnSlots(columns);
 	const currentSlot = slotByColumn.get(currentColumnId);
+	const currentColumn = columns.find((column) => column.id === currentColumnId);
+	const nonDone = nonDoneColumns(columns);
 
 	if (targetSlot === "in_progress") {
 		if (currentSlot === "in_progress") {
 			return currentColumnId;
 		}
-		const nonDone = nonDoneColumns(columns);
 		const inProgressColumn = nonDone.find(
 			(column) => slotByColumn.get(column.id) === "in_progress",
 		);
 		if (inProgressColumn) return inProgressColumn.id;
-		return currentColumnId;
+		if (currentColumn?.is_done && nonDone.length > 0) {
+			return nonDone[0]!.id;
+		}
+		return "unmappable";
 	}
 
 	if (targetSlot === "done") {
 		const doneColumn = [...columns]
 			.sort(compareColumns)
 			.find((column) => column.is_done);
-		if (!doneColumn) return currentColumnId;
+		if (!doneColumn) return "unmappable";
 		return doneColumn.id;
 	}
 
-	const nonDone = nonDoneColumns(columns);
-	if (nonDone.length === 0) return currentColumnId;
+	if (nonDone.length === 0) return "unmappable";
 
 	if (targetSlot === "backlog") {
 		return nonDone[0]!.id;
 	}
 
 	if (targetSlot === "todo") {
+		const todoColumn = nonDone.find(
+			(column) => slotByColumn.get(column.id) === "todo",
+		);
+		if (todoColumn) return todoColumn.id;
 		return (nonDone[1] ?? nonDone[0])!.id;
 	}
 
-	return currentColumnId;
+	return "unmappable";
 }

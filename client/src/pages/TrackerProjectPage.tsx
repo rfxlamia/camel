@@ -34,6 +34,11 @@ const RELOAD_EVENTS = new Set([
 	"tracker.created",
 	"tracker.updated",
 	"tracker.deleted",
+	"card.created",
+	"card.updated",
+	"card.moved",
+	"card.reordered",
+	"card.deleted",
 ]);
 
 function collapseStorageKey(projectId: number): string {
@@ -465,14 +470,15 @@ export default function TrackerProjectPage() {
 		const phaseItems = sortByPosition(
 			projectItems.filter((item) => (item.phaseId ?? null) === phaseId),
 		);
-		const movedItem = phaseItems[oldIndex];
-		if (!movedItem || movedItem.source === "board") return;
+		const trackerItems = phaseItems.filter((item) => item.source !== "board");
+		const movedItem = trackerItems[oldIndex];
+		if (!movedItem) return;
 
-		const reordered = arrayMove(phaseItems, oldIndex, newIndex);
+		const reordered = arrayMove(trackerItems, oldIndex, newIndex);
 		const neighbors = reorderNeighborBody(reordered, newIndex);
 		const seq = (reorderSeqMapRef.current.get(itemKey) ?? 0) + 1;
 		reorderSeqMapRef.current.set(itemKey, seq);
-		const priorPosition = phaseItems[oldIndex].position;
+		const priorPosition = movedItem.position;
 		const optimisticPosition = optimisticReorderPosition(reordered, newIndex);
 
 		setItems((prev) =>

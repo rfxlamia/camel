@@ -34,8 +34,8 @@ build: ## Build server and client
 test: ## Run server tests
 	@$(NPM) run test
 
-test-integration: ## Run integration tests (requires running DB + Redis, sets RUN_INTEGRATION=1)
-	@$(NPM) run test:integration:routes --workspace=server
+test-integration: ## Run integration tests (requires running DB + Redis, sets RUN_INTEGRATION=1 and RUN_LLM_IT=1)
+	@RUN_LLM_IT=1 $(NPM) run test:integration:routes --workspace=server
 
 test-watch: ## Run server tests in watch mode
 	@$(NPM) run test:watch --workspace=server
