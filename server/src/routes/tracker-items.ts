@@ -36,6 +36,7 @@ import {
 	hydrateTrackerWorkItems,
 	listMergedWorkItems,
 } from "./work-item-response.js";
+import { getWorkItemEvents } from "./work-item-events.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
 
@@ -191,6 +192,27 @@ async function hydrateItems(
 			labelsByItem.get(row.id) ?? [],
 		),
 	);
+}
+
+async function hydrateMutationItem(
+	dbExec: DBExecutor,
+	row: ItemRow,
+	prefix: string,
+	opts?: { canonicalWorkItem?: boolean; redirectFrom?: string },
+) {
+	if (opts?.canonicalWorkItem) {
+		const [item] = await hydrateTrackerWorkItems(dbExec, [row], prefix);
+		if (opts.redirectFrom) {
+			return { ...item, canonicalKey: item.key, redirectFrom: opts.redirectFrom };
+		}
+		return item;
+	}
+
+	const [item] = await hydrateItems(dbExec, [row], prefix);
+	if (opts?.redirectFrom) {
+		return { ...item, canonicalKey: item.key, redirectFrom: opts.redirectFrom };
+	}
+	return item;
 }
 
 const findItemByKeyNumber = findTrackerItemByKeyNumber;
@@ -530,7 +552,9 @@ trackerItemsRouter.post(
 			);
 			if (!row) return res.status(500).json({ error: "create failed" });
 
-			const [item] = await hydrateItems(db, [row], prefix);
+			const item = await hydrateMutationItem(db, row, prefix, {
+				canonicalWorkItem: req.canonicalWorkItemsRoute,
+			});
 			await publishEvent(workspaceId, {
 				type: "tracker.created",
 				actor,
@@ -709,16 +733,15 @@ trackerItemsRouter.patch(
 			parsed.prefix !== prefix
 				? formatKey(parsed.prefix, parsed.keyNumber)
 				: undefined;
-		const [item] = await hydrateItems(db, [row], prefix);
+		const item = await hydrateMutationItem(db, row, prefix, {
+			canonicalWorkItem: req.canonicalWorkItemsRoute,
+			redirectFrom,
+		});
 		await publishEvent(workspaceId, {
 			type: "tracker.updated",
 			actor,
 			trackerItemId: existing.id,
 		});
-		if (redirectFrom) {
-			res.json({ ...item, canonicalKey: item.key, redirectFrom });
-			return;
-		}
 		res.json(item);
 	},
 );
@@ -1085,16 +1108,15 @@ trackerItemsRouter.patch(
 			parsed.prefix !== prefix
 				? formatKey(parsed.prefix, parsed.keyNumber)
 				: undefined;
-		const [item] = await hydrateItems(db, [row], prefix);
+		const item = await hydrateMutationItem(db, row, prefix, {
+			canonicalWorkItem: req.canonicalWorkItemsRoute,
+			redirectFrom,
+		});
 		await publishEvent(workspaceId, {
 			type: "tracker.updated",
 			actor,
 			trackerItemId: existing.id,
 		});
-		if (redirectFrom) {
-			res.json({ ...item, canonicalKey: item.key, redirectFrom });
-			return;
-		}
 		res.json(item);
 	},
 );
@@ -1197,119 +1219,6 @@ trackerItemsRouter.delete(
 	},
 );
 
-function trackerEventSelect() {
-	return db
-		.selectFrom("tracker_events as e")
-		.leftJoin("users as u", "u.id", "e.actor_id")
-		.leftJoin("tracker_items as ti", (join) =>
-			join
-				.onRef("ti.id", "=", "e.tracker_item_id")
-				.on("ti.deleted_at", "is", null),
-		)
-		.select([
-			"e.id",
-			"e.event_type",
-			"e.payload",
-			"e.created_at",
-			"e.tracker_item_id",
-			"u.username",
-			"u.display_name",
-			"ti.title as current_item_title",
-		]);
-}
-
-function toTrackerEvent(e: {
-	id: number;
-	event_type: string;
-	payload: unknown;
-	created_at: Date;
-	tracker_item_id: number | null;
-	username: string | null;
-	display_name: string | null;
-	current_item_title: string | null;
-}) {
-	const payload = e.payload as
-		| { title?: string }
-		| Record<string, unknown>
-		| null;
-	return {
-		id: e.id,
-		eventType: e.event_type,
-		trackerItemId: e.tracker_item_id,
-		title: e.current_item_title ?? payload?.title ?? null,
-		payload: payload ?? null,
-		actor: e.username
-			? { username: e.username, displayName: e.display_name }
-			: null,
-		createdAt: e.created_at.toISOString(),
-	};
-}
-
-function toCardTrackerEvent(e: {
-	id: number;
-	event_type: string;
-	payload: unknown;
-	created_at: Date;
-	card_id: number | null;
-	username: string | null;
-	display_name: string | null;
-	current_card_title: string | null;
-	from_column_title: string | null;
-	to_column_title: string | null;
-}) {
-	const payload = e.payload as
-		| { title?: string; cardTitle?: string }
-		| Record<string, unknown>
-		| null;
-	const eventType =
-		e.event_type === "create"
-			? "tracker_item_created"
-			: e.event_type === "delete"
-				? "tracker_item_deleted"
-				: "tracker_item_updated";
-	return {
-		id: e.id,
-		eventType,
-		trackerItemId: null,
-		title: e.current_card_title ?? payload?.cardTitle ?? payload?.title ?? null,
-		payload:
-			e.event_type === "move"
-				? {
-						field: "status",
-						from: e.from_column_title,
-						to: e.to_column_title,
-					}
-				: (payload ?? null),
-		actor: e.username
-			? { username: e.username, displayName: e.display_name }
-			: null,
-		createdAt: e.created_at.toISOString(),
-	};
-}
-
-function cardEventSelect() {
-	return db
-		.selectFrom("card_events as e")
-		.leftJoin("users as u", "u.id", "e.actor_id")
-		.leftJoin("cards as c", (join) =>
-			join.onRef("c.id", "=", "e.card_id").on("c.deleted_at", "is", null),
-		)
-		.leftJoin("columns as fc", "fc.id", "e.from_column_id")
-		.leftJoin("columns as tc", "tc.id", "e.to_column_id")
-		.select([
-			"e.id",
-			"e.event_type",
-			"e.payload",
-			"e.created_at",
-			"e.card_id",
-			"u.username",
-			"u.display_name",
-			"c.title as current_card_title",
-			"fc.title as from_column_title",
-			"tc.title as to_column_title",
-		]);
-}
-
 trackerItemsRouter.get(
 	"/tracker/items/:key/events",
 	requireWorkspaceMember,
@@ -1320,32 +1229,15 @@ trackerItemsRouter.get(
 			return res.status(400).json({ error: "invalid tracker key" });
 		}
 
-		const existing = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
-		if (existing) {
-			const rows = await trackerEventSelect()
-				.where("e.tracker_item_id", "=", existing.id)
-				.where("e.workspace_id", "=", workspaceId)
-				.orderBy("e.created_at", "desc")
-				.orderBy("e.id", "desc")
-				.execute();
-			return res.json({ events: rows.map(toTrackerEvent) });
-		}
-
-		const boardCard = await findBoardCardByKeyNumber(
+		const events = await getWorkItemEvents(
 			db,
 			workspaceId,
 			parsed.keyNumber,
 		);
-		if (boardCard) {
-			const rows = await cardEventSelect()
-				.where("e.card_id", "=", boardCard.id)
-				.where("e.workspace_id", "=", workspaceId)
-				.orderBy("e.created_at", "desc")
-				.orderBy("e.id", "desc")
-				.execute();
-			return res.json({ events: rows.map(toCardTrackerEvent) });
+		if (!events) {
+			return res.status(404).json({ error: "Not found" });
 		}
 
-		return res.status(404).json({ error: "Not found" });
+		return res.json({ events });
 	},
 );

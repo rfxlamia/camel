@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { getUnifiedWorkspaceActivity } from "./work-item-events.js";
 
 function activitySelect() {
 	return db
@@ -68,6 +69,22 @@ activityRouter.get("/activity", requireWorkspaceMember, async (req, res) => {
 		.execute();
 	res.json({ events: rows.map(toActivityEvent) });
 });
+
+activityRouter.get(
+	"/activity/unified",
+	requireWorkspaceMember,
+	async (req, res) => {
+		const { workspaceId } = req.workspace!;
+
+		const rawLimit = Number(req.query.limit);
+		const limit =
+			Number.isInteger(rawLimit) && rawLimit > 0
+				? Math.min(rawLimit, 200)
+				: 50;
+		const events = await getUnifiedWorkspaceActivity(workspaceId, limit);
+		res.json({ events });
+	},
+);
 
 activityRouter.get(
 	"/cards/:id/activity",

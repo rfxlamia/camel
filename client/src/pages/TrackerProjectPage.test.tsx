@@ -14,6 +14,7 @@ import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
 
 const {
 	mockListTrackerProjects,
+	mockListWorkItems,
 	mockListTrackerItems,
 	mockListTrackerVocabularies,
 	mockUpdateTrackerProject,
@@ -21,8 +22,11 @@ const {
 	mockCreateTrackerPhase,
 	mockUpdateTrackerPhase,
 	mockDeleteTrackerPhase,
+	mockReorderWorkItem,
 	mockReorderTrackerItem,
+	mockUpdateWorkItem,
 	mockUpdateTrackerItem,
+	mockCreateWorkItem,
 	mockCreateTrackerItem,
 	mockGetWorkspaceMembers,
 	mockNavigate,
@@ -31,6 +35,7 @@ const {
 	mockShowToast,
 } = vi.hoisted(() => ({
 	mockListTrackerProjects: vi.fn(),
+	mockListWorkItems: vi.fn(),
 	mockListTrackerItems: vi.fn(),
 	mockListTrackerVocabularies: vi.fn(),
 	mockUpdateTrackerProject: vi.fn(),
@@ -38,8 +43,11 @@ const {
 	mockCreateTrackerPhase: vi.fn(),
 	mockUpdateTrackerPhase: vi.fn(),
 	mockDeleteTrackerPhase: vi.fn(),
+	mockReorderWorkItem: vi.fn(),
 	mockReorderTrackerItem: vi.fn(),
+	mockUpdateWorkItem: vi.fn(),
 	mockUpdateTrackerItem: vi.fn(),
+	mockCreateWorkItem: vi.fn(),
 	mockCreateTrackerItem: vi.fn(),
 	mockGetWorkspaceMembers: vi.fn(),
 	mockNavigate: vi.fn(),
@@ -51,6 +59,7 @@ const {
 vi.mock("../api", () => ({
 	api: {
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
+		listWorkItems: (...a: unknown[]) => mockListWorkItems(...a),
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
 		listTrackerVocabularies: (...a: unknown[]) =>
 			mockListTrackerVocabularies(...a),
@@ -59,8 +68,11 @@ vi.mock("../api", () => ({
 		createTrackerPhase: (...a: unknown[]) => mockCreateTrackerPhase(...a),
 		updateTrackerPhase: (...a: unknown[]) => mockUpdateTrackerPhase(...a),
 		deleteTrackerPhase: (...a: unknown[]) => mockDeleteTrackerPhase(...a),
+		reorderWorkItem: (...a: unknown[]) => mockReorderWorkItem(...a),
 		reorderTrackerItem: (...a: unknown[]) => mockReorderTrackerItem(...a),
+		updateWorkItem: (...a: unknown[]) => mockUpdateWorkItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
+		createWorkItem: (...a: unknown[]) => mockCreateWorkItem(...a),
 		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
 	},
@@ -177,7 +189,7 @@ function projectItem(
 beforeEach(() => {
 	mockUseParams.mockReturnValue({ projectId: "1" });
 	mockListTrackerProjects.mockResolvedValue([project]);
-	mockListTrackerItems.mockResolvedValue([
+	mockListWorkItems.mockResolvedValue([
 		projectItem({ id: 1, key: "CA-1", phaseId: 9, status: done }),
 		projectItem({ id: 2, key: "CA-2", phaseId: 9, status: inProgress }),
 	]);
@@ -195,7 +207,7 @@ beforeEach(() => {
 		showToast: mockShowToast,
 	});
 	mockGetWorkspaceMembers.mockResolvedValue({ members: [] });
-	mockCreateTrackerItem.mockResolvedValue({ id: 99, key: "CA-99" });
+	mockCreateWorkItem.mockResolvedValue({ id: 99, key: "CA-99" });
 });
 
 afterEach(() => {
@@ -208,7 +220,7 @@ describe("TrackerProjectPage", () => {
 	afterEach(() => vi.useRealTimers());
 
 	it("renders phases with a rollup percentage and a derived date range", async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({
 				id: 1,
 				key: "CA-1",
@@ -245,7 +257,7 @@ describe("TrackerProjectPage", () => {
 	});
 
 	it('shows a "No phase" section when phase-less tasks exist for this project', async () => {
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: null }),
 		]);
 		render(<TrackerProjectPage />);
@@ -272,7 +284,7 @@ describe("TrackerProjectPage", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		await waitFor(() =>
-			expect(mockCreateTrackerItem).toHaveBeenCalledWith(7, {
+			expect(mockCreateWorkItem).toHaveBeenCalledWith(7, {
 				title: "Gather requirements doc",
 				statusId: 1,
 				priorityId: null,
@@ -286,7 +298,7 @@ describe("TrackerProjectPage", () => {
 		mockListTrackerProjects.mockResolvedValueOnce([
 			{ ...project, id: 5, name: "Rilis v3", phases: [] },
 		]);
-		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockListWorkItems.mockResolvedValueOnce([]);
 		mockUseParams.mockReturnValue({ projectId: "5" });
 		render(<TrackerProjectPage />);
 		expect(
@@ -352,7 +364,7 @@ describe("TrackerProjectPage", () => {
 		expect(screen.queryByTestId("tracker-row-CA-1")).toBeNull();
 
 		sseHandler?.({ type: "tracker.updated" });
-		await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockListWorkItems).toHaveBeenCalledTimes(2));
 		expect(screen.queryByTestId("tracker-row-CA-1")).toBeNull();
 	});
 
@@ -398,9 +410,9 @@ describe("TrackerProjectPage", () => {
 			"tracker.deleted",
 		];
 		for (const type of eventTypes) {
-			mockListTrackerItems.mockClear();
+			mockListWorkItems.mockClear();
 			sseHandler?.({ type });
-			await waitFor(() => expect(mockListTrackerItems).toHaveBeenCalled());
+			await waitFor(() => expect(mockListWorkItems).toHaveBeenCalled());
 		}
 	});
 
@@ -417,7 +429,7 @@ describe("TrackerProjectPage", () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("50%"));
 
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, status: done }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, status: done }),
 		]);
@@ -438,7 +450,7 @@ describe("TrackerProjectPage", () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, status: done }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, status: inProgress }),
 			projectItem({ id: 3, key: "CA-3", phaseId: 9, title: "New task" }),
@@ -462,7 +474,7 @@ describe("TrackerProjectPage", () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("50%"));
 
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, status: done }),
 		]);
 		sseHandler?.({ type: "tracker.deleted" });
@@ -488,7 +500,7 @@ describe("TrackerProjectPage", () => {
 		mockListTrackerProjects.mockResolvedValueOnce([
 			{ ...project, phases: [pengembangan] },
 		]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: null, status: done }),
 			projectItem({ id: 2, key: "CA-2", phaseId: null, status: inProgress }),
 		]);
@@ -499,7 +511,7 @@ describe("TrackerProjectPage", () => {
 	});
 
 	it("changes status inline from the row glyph without navigating", async () => {
-		mockUpdateTrackerItem.mockResolvedValue(
+		mockUpdateWorkItem.mockResolvedValue(
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, status: backlog }),
 		);
 		render(<TrackerProjectPage />);
@@ -508,7 +520,7 @@ describe("TrackerProjectPage", () => {
 		fireEvent.click(screen.getByRole("option", { name: /Backlog/ }));
 
 		await waitFor(() =>
-			expect(mockUpdateTrackerItem).toHaveBeenCalledWith(7, "CA-2", {
+			expect(mockUpdateWorkItem).toHaveBeenCalledWith(7, "CA-2", {
 				statusId: 1,
 				version: 1,
 			}),
@@ -521,7 +533,7 @@ describe("TrackerProjectPage", () => {
 
 	it("carries the overdue marker on a near-complete phase with one live task past its end date", async () => {
 		vi.setSystemTime(new Date("2026-10-05T12:00:00"));
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, status: done }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, status: done }),
 			projectItem({
@@ -582,7 +594,7 @@ describe("TrackerProjectPage project and phase management", () => {
 	});
 
 	it("states the released task count in the delete confirmation", async () => {
-		mockListTrackerItems.mockResolvedValueOnce(
+		mockListWorkItems.mockResolvedValueOnce(
 			Array.from({ length: 18 }, (_, i) =>
 				projectItem({ id: i + 1, key: `CA-${i + 1}`, phaseId: 9 }),
 			),
@@ -616,7 +628,7 @@ describe("TrackerProjectPage project and phase management", () => {
 		mockListTrackerProjects.mockResolvedValueOnce([
 			{ ...project, id: 5, name: "Rilis v3", phases: [] },
 		]);
-		mockListTrackerItems.mockResolvedValueOnce([]);
+		mockListWorkItems.mockResolvedValueOnce([]);
 		mockUseParams.mockReturnValue({ projectId: "5" });
 		mockCreateTrackerPhase.mockResolvedValue(persiapan);
 		render(<TrackerProjectPage />);
@@ -708,7 +720,7 @@ describe("TrackerProjectPage project and phase management", () => {
 		mockListTrackerProjects.mockResolvedValueOnce([
 			{ ...project, phases: [pengembangan] },
 		]);
-		mockListTrackerItems.mockResolvedValueOnce([
+		mockListWorkItems.mockResolvedValueOnce([
 			projectItem({ id: 1, key: "CA-1", phaseId: null }),
 			projectItem({ id: 2, key: "CA-2", phaseId: null }),
 		]);
@@ -789,7 +801,7 @@ async function pressReorder(
 
 describe("TrackerProjectPage drag reorder", () => {
 	beforeEach(() => {
-		mockListTrackerItems.mockResolvedValue([
+		mockListWorkItems.mockResolvedValue([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
 			projectItem({ id: 3, key: "CB-1", phaseId: 10, position: 1024 }),
@@ -830,28 +842,28 @@ describe("TrackerProjectPage drag reorder", () => {
 	});
 
 	it("calls reorderTrackerItem with the drop target when a task moves within its phase", async () => {
-		mockReorderTrackerItem.mockResolvedValue(
+		mockReorderWorkItem.mockResolvedValue(
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 3072 }),
 		);
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledWith(7, "CA-1", {
+			expect(mockReorderWorkItem).toHaveBeenCalledWith(7, "CA-1", {
 				beforeId: 2,
 			}),
 		);
 	});
 
 	it("calls reorderTrackerItem with afterId when a task moves to the top of its phase", async () => {
-		mockReorderTrackerItem.mockResolvedValue(
+		mockReorderWorkItem.mockResolvedValue(
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 512 }),
 		);
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-2"));
 		await pressReorder(/reorder ca-2/i, "ArrowUp");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledWith(7, "CA-2", {
+			expect(mockReorderWorkItem).toHaveBeenCalledWith(7, "CA-2", {
 				afterId: 1,
 			}),
 		);
@@ -859,7 +871,7 @@ describe("TrackerProjectPage drag reorder", () => {
 
 	it("shows the new order optimistically before the request resolves", async () => {
 		let resolveReorder: (value: TrackerItem) => void = () => {};
-		mockReorderTrackerItem.mockImplementation(
+		mockReorderWorkItem.mockImplementation(
 			() =>
 				new Promise((resolve) => {
 					resolveReorder = resolve;
@@ -868,7 +880,7 @@ describe("TrackerProjectPage drag reorder", () => {
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
-		await waitFor(() => expect(mockReorderTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(mockReorderWorkItem).toHaveBeenCalled());
 		const order = screen
 			.getAllByTestId(/^tracker-row-CA-/)
 			.map((row) => row.dataset.testid);
@@ -877,7 +889,7 @@ describe("TrackerProjectPage drag reorder", () => {
 	});
 
 	it("restores the previous order and shows an error toast when the reorder fails", async () => {
-		mockReorderTrackerItem.mockRejectedValue(new Error("network down"));
+		mockReorderWorkItem.mockRejectedValue(new Error("network down"));
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
@@ -897,10 +909,10 @@ describe("TrackerProjectPage drag reorder", () => {
 			.map((row) => row.dataset.testid);
 
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
-		await waitFor(() => expect(mockReorderTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(mockReorderWorkItem).toHaveBeenCalled());
 
-		expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1);
-		expect(mockReorderTrackerItem.mock.calls[0]?.[1]).toBe("CA-1");
+		expect(mockReorderWorkItem).toHaveBeenCalledTimes(1);
+		expect(mockReorderWorkItem.mock.calls[0]?.[1]).toBe("CA-1");
 		const phaseBAfter = screen
 			.getAllByTestId(/^tracker-row-CB-/)
 			.map((row) => row.dataset.testid);
@@ -908,12 +920,12 @@ describe("TrackerProjectPage drag reorder", () => {
 	});
 
 	it("keeps sibling positions when reordering so two sequential drags sort correctly", async () => {
-		mockListTrackerItems.mockResolvedValue([
+		mockListWorkItems.mockResolvedValue([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
 			projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 3072 }),
 		]);
-		mockReorderTrackerItem.mockResolvedValueOnce(
+		mockReorderWorkItem.mockResolvedValueOnce(
 			projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 0 }),
 		);
 		render(<TrackerProjectPage />);
@@ -921,15 +933,15 @@ describe("TrackerProjectPage drag reorder", () => {
 		await pressReorder(/reorder ca-3/i, "ArrowUp");
 		await pressReorder(/reorder ca-3/i, "ArrowUp");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1),
+			expect(mockReorderWorkItem).toHaveBeenCalledTimes(1),
 		);
 
-		mockReorderTrackerItem.mockResolvedValueOnce(
+		mockReorderWorkItem.mockResolvedValueOnce(
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 512 }),
 		);
 		await pressReorder(/reorder ca-2/i, "ArrowUp");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(2),
+			expect(mockReorderWorkItem).toHaveBeenCalledTimes(2),
 		);
 
 		const order = screen
@@ -943,13 +955,13 @@ describe("TrackerProjectPage drag reorder", () => {
 	});
 
 	it("rolls back only the failed item when an earlier request fails after a later reorder succeeds", async () => {
-		mockListTrackerItems.mockResolvedValue([
+		mockListWorkItems.mockResolvedValue([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
 			projectItem({ id: 3, key: "CA-3", phaseId: 9, position: 3072 }),
 		]);
 		let rejectFirst: (reason?: unknown) => void = () => {};
-		mockReorderTrackerItem
+		mockReorderWorkItem
 			.mockImplementationOnce(
 				() =>
 					new Promise((_resolve, reject) => {
@@ -963,11 +975,11 @@ describe("TrackerProjectPage drag reorder", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1),
+			expect(mockReorderWorkItem).toHaveBeenCalledTimes(1),
 		);
 		await pressReorder(/reorder ca-3/i, "ArrowUp");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(2),
+			expect(mockReorderWorkItem).toHaveBeenCalledTimes(2),
 		);
 		await waitFor(() =>
 			expect(
@@ -994,12 +1006,12 @@ describe("TrackerProjectPage drag reorder", () => {
 	});
 
 	it("does not roll back a later drag when a superseded response for the same item fails", async () => {
-		mockListTrackerItems.mockResolvedValue([
+		mockListWorkItems.mockResolvedValue([
 			projectItem({ id: 1, key: "CA-1", phaseId: 9, position: 1024 }),
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 2048 }),
 		]);
 		let rejectFirst: (reason?: unknown) => void = () => {};
-		mockReorderTrackerItem
+		mockReorderWorkItem
 			.mockImplementationOnce(
 				() =>
 					new Promise((_resolve, reject) => {
@@ -1013,11 +1025,11 @@ describe("TrackerProjectPage drag reorder", () => {
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(1),
+			expect(mockReorderWorkItem).toHaveBeenCalledTimes(1),
 		);
 		await pressReorder(/reorder ca-1/i, "ArrowUp");
 		await waitFor(() =>
-			expect(mockReorderTrackerItem).toHaveBeenCalledTimes(2),
+			expect(mockReorderWorkItem).toHaveBeenCalledTimes(2),
 		);
 		await waitFor(() =>
 			expect(

@@ -243,7 +243,7 @@ export default function TrackerPage() {
 				await Promise.all([
 					api.listTrackerVocabularies(workspaceId, "status"),
 					api.listTrackerVocabularies(workspaceId, "priority"),
-					api.listTrackerItems(workspaceId),
+					api.listWorkItems(workspaceId),
 					api.listTrackerProjects(workspaceId),
 				]);
 			if (seq !== loadSeqRef.current) return false;

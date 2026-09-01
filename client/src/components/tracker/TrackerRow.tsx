@@ -177,7 +177,7 @@ export default function TrackerRow({
 			{isBoardItem ? (
 				<span
 					data-testid={`row-board-badge-${item.key}`}
-					className="pointer-events-none hidden max-w-24 shrink-0 truncate rounded bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs sm:block"
+					className="pointer-events-none max-w-24 shrink-0 truncate rounded bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800 text-xs"
 					title={boardBadgeLabel}
 				>
 					{boardBadgeLabel}
@@ -265,7 +265,7 @@ export default function TrackerRow({
 				}
 			/>
 			{isBoardItem ? (
-				<span className="pointer-events-none hidden min-w-[9rem] shrink-0 truncate text-right text-xs tabular-nums lg:block">
+				<span className="pointer-events-none hidden min-w-[9rem] shrink-0 truncate text-right text-xs tabular-nums md:block">
 					{item.dueDate ? (
 						<time
 							data-testid={`row-board-due-${item.key}`}

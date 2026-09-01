@@ -94,6 +94,22 @@ describe("tracker item API methods", () => {
 		);
 	});
 
+	it("listWorkItems GETs /work-items", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve([sampleItem]),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.listWorkItems(7);
+		expect(result).toEqual([sampleItem]);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/work-items",
+			expect.any(Object),
+		);
+	});
+
 	it("listTrackerItems passes optional q search param", async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
@@ -234,6 +250,30 @@ describe("tracker item API methods", () => {
 		expect(result).toEqual({ events: [event] });
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/tracker/items/CA-1/events",
+			expect.any(Object),
+		);
+	});
+
+	it("getWorkItemChangelog GETs /work-items/:key/events", async () => {
+		const event = {
+			id: 2,
+			eventType: "tracker_item_updated",
+			trackerItemId: 10,
+			title: "Board card",
+			actor: null,
+			createdAt: "2026-08-03T00:00:00.000Z",
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ events: [event] }),
+		});
+		const { api } = await import("./api");
+
+		const result = await api.getWorkItemChangelog(7, "TE-9");
+		expect(result).toEqual({ events: [event] });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/work-items/TE-9/events",
 			expect.any(Object),
 		);
 	});
