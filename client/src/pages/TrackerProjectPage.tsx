@@ -150,7 +150,7 @@ export default function TrackerProjectPage() {
 			const [projectList, itemList, statusList, priorityList] =
 				await Promise.all([
 					api.listTrackerProjects(activeWorkspaceId),
-					api.listTrackerItems(activeWorkspaceId),
+					api.listWorkItems(activeWorkspaceId),
 					api.listTrackerVocabularies(activeWorkspaceId, "status"),
 					api.listTrackerVocabularies(activeWorkspaceId, "priority"),
 				]);

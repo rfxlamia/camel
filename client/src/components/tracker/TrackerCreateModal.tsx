@@ -228,7 +228,7 @@ export default function TrackerCreateModal({
 				body.projectId = projectId;
 				if (phaseId !== null) body.phaseId = phaseId;
 			}
-			await api.createTrackerItem(workspaceId, body);
+			await api.createWorkItem(workspaceId, body);
 			onCreated();
 			if (createMore) resetDraft();
 			else onClose();

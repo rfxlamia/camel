@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const listTrackerVocabularies = vi.fn();
 const getWorkspaceMembers = vi.fn();
 const listTrackerProjects = vi.fn();
-const createTrackerItem = vi.fn();
+const createWorkItem = vi.fn();
 
 vi.mock("../../api", () => ({
 	api: {
@@ -20,7 +20,7 @@ vi.mock("../../api", () => ({
 			listTrackerVocabularies(...args),
 		getWorkspaceMembers: (...args: unknown[]) => getWorkspaceMembers(...args),
 		listTrackerProjects: (...args: unknown[]) => listTrackerProjects(...args),
-		createTrackerItem: (...args: unknown[]) => createTrackerItem(...args),
+		createWorkItem: (...args: unknown[]) => createWorkItem(...args),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -118,7 +118,7 @@ beforeEach(() => {
 		],
 	});
 	listTrackerProjects.mockResolvedValue([projectA, projectB]);
-	createTrackerItem.mockResolvedValue({ id: 99, key: "CAM-1" });
+	createWorkItem.mockResolvedValue({ id: 99, key: "CAM-1" });
 });
 
 afterEach(() => {
@@ -156,8 +156,8 @@ describe("TrackerCreateModal", () => {
 		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
-		expect(createTrackerItem).toHaveBeenCalledWith(7, {
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
+		expect(createWorkItem).toHaveBeenCalledWith(7, {
 			title: "Fix login redirect",
 			statusId: 1,
 			priorityId: 10,
@@ -175,15 +175,15 @@ describe("TrackerCreateModal", () => {
 		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
 		await waitFor(() => expect(title.value).toBe(""));
 		expect(screen.getByText("High")).toBeTruthy();
 		expect(onClose).not.toHaveBeenCalled();
 
 		fireEvent.change(title, { target: { value: "Third item" } });
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalledTimes(2));
-		expect(createTrackerItem).toHaveBeenLastCalledWith(7, {
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalledTimes(2));
+		expect(createWorkItem).toHaveBeenLastCalledWith(7, {
 			title: "Third item",
 			statusId: 1,
 			priorityId: 10,
@@ -191,7 +191,7 @@ describe("TrackerCreateModal", () => {
 	});
 
 	it("shows an error and stays open when create fails", async () => {
-		createTrackerItem.mockRejectedValueOnce(new Error("network"));
+		createWorkItem.mockRejectedValueOnce(new Error("network"));
 		renderModal();
 		fireEvent.change(screen.getByLabelText("Item title"), {
 			target: { value: "Broken create" },
@@ -214,7 +214,7 @@ describe("TrackerCreateModal", () => {
 		expect(screen.getByRole("listbox")).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
 		await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 	});
 
@@ -256,7 +256,7 @@ describe("TrackerCreateModal project assignment", () => {
 		fireEvent.click(await screen.findByRole("option", { name: /Persiapan/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		await waitFor(() =>
-			expect(createTrackerItem).toHaveBeenCalledWith(7, {
+			expect(createWorkItem).toHaveBeenCalledWith(7, {
 				title: "Ship the release",
 				statusId: 1,
 				priorityId: null,
@@ -272,8 +272,8 @@ describe("TrackerCreateModal project assignment", () => {
 			target: { value: "Unassigned task" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
-		const [, body] = createTrackerItem.mock.calls[0] as [
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
+		const [, body] = createWorkItem.mock.calls[0] as [
 			number,
 			Record<string, unknown>,
 		];
@@ -306,13 +306,13 @@ describe("TrackerCreateModal project assignment", () => {
 		fireEvent.click(await screen.findByRole("option", { name: /Persiapan/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalled());
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
 		await waitFor(() => expect(screen.queryByText("Persiapan")).toBeNull());
 		expect(screen.queryByText("Rilis v2")).toBeNull();
 	});
 
 	it("surfaces the server's 400 for an invalid project inline", async () => {
-		createTrackerItem.mockRejectedValueOnce(
+		createWorkItem.mockRejectedValueOnce(
 			new ApiError("Phase does not belong to this project.", 400),
 		);
 		renderModal();
@@ -369,7 +369,7 @@ describe("TrackerCreateModal locked project assignment", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		await waitFor(() =>
-			expect(createTrackerItem).toHaveBeenCalledWith(7, {
+			expect(createWorkItem).toHaveBeenCalledWith(7, {
 				title: "In-phase task",
 				statusId: 1,
 				priorityId: null,
@@ -386,14 +386,14 @@ describe("TrackerCreateModal locked project assignment", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
 		await waitFor(() =>
-			expect(createTrackerItem).toHaveBeenCalledWith(7, {
+			expect(createWorkItem).toHaveBeenCalledWith(7, {
 				title: "No-phase task",
 				statusId: 1,
 				priorityId: null,
 				projectId: 1,
 			}),
 		);
-		const [, body] = createTrackerItem.mock.calls[0] as [
+		const [, body] = createWorkItem.mock.calls[0] as [
 			number,
 			Record<string, unknown>,
 		];
@@ -407,14 +407,14 @@ describe("TrackerCreateModal locked project assignment", () => {
 			target: { value: "First" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalledTimes(1));
 
 		fireEvent.change(screen.getByLabelText("Item title"), {
 			target: { value: "Second" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
-		await waitFor(() => expect(createTrackerItem).toHaveBeenCalledTimes(2));
-		expect(createTrackerItem).toHaveBeenLastCalledWith(7, {
+		await waitFor(() => expect(createWorkItem).toHaveBeenCalledTimes(2));
+		expect(createWorkItem).toHaveBeenLastCalledWith(7, {
 			title: "Second",
 			statusId: 1,
 			priorityId: null,

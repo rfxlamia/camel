@@ -51,6 +51,7 @@ const {
 vi.mock("../api", () => ({
 	api: {
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
+		listWorkItems: (...a: unknown[]) => mockListTrackerItems(...a),
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
 		listTrackerVocabularies: (...a: unknown[]) =>
 			mockListTrackerVocabularies(...a),
@@ -59,8 +60,11 @@ vi.mock("../api", () => ({
 		createTrackerPhase: (...a: unknown[]) => mockCreateTrackerPhase(...a),
 		updateTrackerPhase: (...a: unknown[]) => mockUpdateTrackerPhase(...a),
 		deleteTrackerPhase: (...a: unknown[]) => mockDeleteTrackerPhase(...a),
+		reorderWorkItem: (...a: unknown[]) => mockReorderTrackerItem(...a),
 		reorderTrackerItem: (...a: unknown[]) => mockReorderTrackerItem(...a),
+		updateWorkItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
+		createWorkItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
 	},

@@ -6,8 +6,8 @@ import type { WorkItem } from "../types";
 vi.mock("../api", () => ({
 	api: {
 		updateCard: vi.fn(),
-		updateTrackerItem: vi.fn(),
-		reorderTrackerItem: vi.fn(),
+		updateWorkItem: vi.fn(),
+		reorderWorkItem: vi.fn(),
 	},
 }));
 
@@ -57,7 +57,7 @@ describe("workItemMutations", () => {
 	});
 
 	it("routes board status changes through tracker PATCH", async () => {
-		vi.mocked(api.updateTrackerItem).mockResolvedValue({
+		vi.mocked(api.updateWorkItem).mockResolvedValue({
 			...boardItem,
 			source: "board",
 			status: { ...boardItem.status, id: 4, name: "Done", slot: "done" },
@@ -66,7 +66,7 @@ describe("workItemMutations", () => {
 
 		await updateWorkItemStatus(1, boardItem, 4, 1);
 
-		expect(api.updateTrackerItem).toHaveBeenCalledWith(1, "TE-9", {
+		expect(api.updateWorkItem).toHaveBeenCalledWith(1, "TE-9", {
 			statusId: 4,
 			version: 1,
 		});
@@ -78,7 +78,7 @@ describe("workItemMutations", () => {
 			source: "tracker",
 			key: "CA-5",
 		};
-		vi.mocked(api.reorderTrackerItem).mockResolvedValue({
+		vi.mocked(api.reorderWorkItem).mockResolvedValue({
 			...trackerItem,
 			position: 2048,
 			version: 2,
@@ -88,7 +88,7 @@ describe("workItemMutations", () => {
 			afterId: 3,
 		});
 
-		expect(api.reorderTrackerItem).toHaveBeenCalledWith(1, "CA-5", {
+		expect(api.reorderWorkItem).toHaveBeenCalledWith(1, "CA-5", {
 			afterId: 3,
 		});
 		expect(updated.source).toBe("tracker");

@@ -134,8 +134,8 @@ export default function TrackerDetailPage() {
 		setLoading(true);
 		try {
 			const [loaded, changelog] = await Promise.all([
-				api.getTrackerItem(workspaceId, key),
-				api.getTrackerChangelog(workspaceId, key),
+				api.getWorkItem(workspaceId, key),
+				api.getWorkItemChangelog(workspaceId, key),
 			]);
 
 			if (seq !== loadSeqRef.current) return;
@@ -220,7 +220,7 @@ export default function TrackerDetailPage() {
 	const refreshChangelog = async (key: string) => {
 		if (activeWorkspaceId === null) return;
 		try {
-			const changelog = await api.getTrackerChangelog(activeWorkspaceId, key);
+			const changelog = await api.getWorkItemChangelog(activeWorkspaceId, key);
 			setEvents(changelog.events);
 		} catch {
 			// Feed catches up on the next load.

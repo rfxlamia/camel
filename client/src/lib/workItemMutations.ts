@@ -1,7 +1,7 @@
 import { api } from "../api";
 import type { TrackerItem, WorkItem } from "../types";
 
-type TrackerItemPatch = Parameters<typeof api.updateTrackerItem>[2];
+type TrackerItemPatch = Parameters<typeof api.updateWorkItem>[2];
 type CardPatch = Parameters<typeof api.updateCard>[2];
 
 export async function updateWorkItem(
@@ -40,7 +40,7 @@ export async function updateWorkItem(
 		};
 	}
 
-	const updated = await api.updateTrackerItem(workspaceId, item.key, patch);
+	const updated = await api.updateWorkItem(workspaceId, item.key, patch);
 	return { ...item, ...updated, source: "tracker" };
 }
 
@@ -51,28 +51,28 @@ export async function updateWorkItemStatus(
 	version: number,
 ): Promise<WorkItem> {
 	if (item.source === "board") {
-		const updated = await api.updateTrackerItem(workspaceId, item.key, {
+		const updated = await api.updateWorkItem(workspaceId, item.key, {
 			statusId,
 			version,
 		});
 		return { ...item, ...updated, source: "board" };
 	}
 
-	const updated = await api.updateTrackerItem(workspaceId, item.key, {
+	const updated = await api.updateWorkItem(workspaceId, item.key, {
 		statusId,
 		version,
 	});
 	return { ...item, ...updated, source: "tracker" };
 }
 
-type ReorderBody = Parameters<typeof api.reorderTrackerItem>[2];
+type ReorderBody = Parameters<typeof api.reorderWorkItem>[2];
 
 export async function reorderWorkItem(
 	workspaceId: number,
 	item: WorkItem,
 	body: ReorderBody,
 ): Promise<WorkItem> {
-	const updated = await api.reorderTrackerItem(workspaceId, item.key, body);
+	const updated = await api.reorderWorkItem(workspaceId, item.key, body);
 	return { ...item, ...updated, source: item.source };
 }
 

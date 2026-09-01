@@ -688,6 +688,7 @@ describe("TrackerRow", () => {
 			const badge = screen.getByTestId("row-board-badge-TE-9");
 			expect(badge.textContent).toBe("In Progress");
 			expect(badge.className).toContain("bg-primary-100");
+			expect(badge.className).not.toContain("hidden");
 		});
 
 		it("falls back to Board when columnName is missing", () => {
@@ -705,6 +706,8 @@ describe("TrackerRow", () => {
 			expect(dueEl.textContent).toBe("Aug 15");
 			expect(dueEl.tagName).toBe("TIME");
 			expect(dueEl.getAttribute("dateTime")).toBe("2026-08-15");
+			expect(dueEl.parentElement?.className).toContain("md:block");
+			expect(dueEl.parentElement?.className).not.toContain("lg:block");
 
 			const createdAt = new Date("2026-07-04T00:00:00Z").toLocaleDateString(
 				undefined,
@@ -744,6 +747,56 @@ describe("TrackerRow", () => {
 			renderRow({ item: makeRowItem({ source: "tracker" }) });
 
 			expect(screen.queryByTestId("row-board-badge-CA-1")).toBeNull();
+			expect(screen.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
+		});
+	});
+
+	describe("TrackerSection board wiring", () => {
+		function renderSection(items: WorkItem[]) {
+			const onDateChange = vi.fn();
+			const group: TrackerGroup = {
+				key: "status:1",
+				label: "Backlog",
+				items,
+				status: statuses[0],
+			};
+			render(
+				<TrackerSection
+					group={group}
+					statuses={statuses}
+					priorities={priorities}
+					collapsed={false}
+					onToggle={vi.fn()}
+					onStatusChange={vi.fn()}
+					onDateChange={onDateChange}
+					projects={[releaseProject]}
+					members={members}
+					labels={labels}
+					labelsLoadState="ready"
+					membersLoadState="ready"
+					onAssigneeToggle={vi.fn()}
+					onLabelToggle={vi.fn()}
+				/>,
+			);
+			return { onDateChange };
+		}
+
+		it("omits onDateChange for board items", () => {
+			renderSection([
+				makeRowItem({
+					key: "TE-9",
+					source: "board",
+					columnName: "In Progress",
+				}),
+			]);
+
+			expect(screen.queryByRole("button", { name: /Date:/ })).toBeNull();
+			expect(screen.getByTestId("row-board-badge-TE-9")).toBeTruthy();
+		});
+
+		it("passes onDateChange for tracker items", () => {
+			renderSection([makeRowItem({ source: "tracker" })]);
+
 			expect(screen.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
 		});
 	});

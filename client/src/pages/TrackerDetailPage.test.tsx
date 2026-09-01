@@ -32,8 +32,11 @@ const {
 
 vi.mock("../api", () => ({
 	api: {
+		getWorkItem: (...a: unknown[]) => mockGetTrackerItem(...a),
 		getTrackerItem: (...a: unknown[]) => mockGetTrackerItem(...a),
+		updateWorkItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
+		getWorkItemChangelog: (...a: unknown[]) => mockGetTrackerChangelog(...a),
 		getTrackerChangelog: (...a: unknown[]) => mockGetTrackerChangelog(...a),
 		listTrackerVocabularies: (...a: unknown[]) => mockListVocabularies(...a),
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),

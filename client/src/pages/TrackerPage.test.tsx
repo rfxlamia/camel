@@ -42,10 +42,13 @@ let locationKeySeq = 0;
 
 vi.mock("../api", () => ({
 	api: {
+		listWorkItems: (...a: unknown[]) => mockListTrackerItems(...a),
 		listTrackerItems: (...a: unknown[]) => mockListTrackerItems(...a),
+		createWorkItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		createTrackerItem: (...a: unknown[]) => mockCreateTrackerItem(...a),
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 		createTrackerProject: (...a: unknown[]) => mockCreateTrackerProject(...a),
+		updateWorkItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		updateTrackerItem: (...a: unknown[]) => mockUpdateTrackerItem(...a),
 		listTrackerVocabularies: (...a: unknown[]) =>
 			mockListTrackerVocabularies(...a),
