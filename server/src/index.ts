@@ -10,6 +10,10 @@ import {
 } from "./auth.js";
 import { config } from "./config.js";
 import { createOriginValidator } from "./core/cors.js";
+import {
+	getListLatencySnapshot,
+	startWorkItemLatencyReporter,
+} from "./core/work-item-latency.js";
 import { connectRedis } from "./db/redis.js";
 import {
 	csrfProtection,
@@ -90,7 +94,7 @@ app.use(
 
 app.get("/health", (_req, res) => {
 	if (isShuttingDown) return res.status(503).json({ status: "shutting_down" });
-	res.json({ ok: true });
+	res.json({ ok: true, workItemsListLatency: getListLatencySnapshot() });
 });
 
 // CSRF token endpoint for client to retrieve the token
@@ -122,6 +126,7 @@ app.use(createErrorHandler());
 // Module-scope flag so health endpoint and shutdown handler share state.
 let isShuttingDown = false;
 let cleanupInterval: ReturnType<typeof setInterval> | undefined;
+let latencyReporterInterval: ReturnType<typeof setInterval> | undefined;
 let server: ReturnType<typeof app.listen> | undefined;
 
 // Graceful shutdown: drain connections, close resources, then exit.
@@ -161,6 +166,7 @@ const shutdown = async () => {
 
 	server.close(async () => {
 		if (cleanupInterval) clearInterval(cleanupInterval);
+		if (latencyReporterInterval) clearInterval(latencyReporterInterval);
 		await pool.end();
 		clearTimeout(forceExit);
 		console.log("Shutdown complete — exiting cleanly");
@@ -188,6 +194,7 @@ server = app.listen(port, async () => {
 	await initRealtime();
 	initNotificationService();
 	startDueDateScheduler();
+	latencyReporterInterval = startWorkItemLatencyReporter();
 
 	// Cleanup expired sessions on startup, then every 24 hours.
 	await cleanupExpiredSessions();

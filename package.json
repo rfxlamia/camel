@@ -19,6 +19,7 @@
 		"lint:fix": "biome check --write .",
 		"typecheck": "npm run typecheck --workspace=server && npm run typecheck --workspace=client",
 		"build": "npm run build --workspace=server && npm run build --workspace=client",
+		"check:mutation-routing": "node scripts/check-work-item-mutation-routing.mjs",
 		"prepare": "husky"
 	},
 	"devDependencies": {

@@ -106,6 +106,6 @@ Option C is a reasonable intermediate step if list-query performance becomes an 
 
 ## Next steps
 
-1. Monitor p95 latency on `GET /work-items` in production.
-2. Add collision detection metric if `key_number` overlap is ever detected.
+1. Monitor p95 latency on `GET /work-items` in production (see [ADR detection gates](../adr/2026-09-board-tracker-dual-table.md#detection-gates)).
+2. Key collision check: `npm run check:key-collisions --workspace=server` (nightly CI).
 3. Re-run this spike when audit requirements change or unified write volume exceeds 10k items/workspace.
