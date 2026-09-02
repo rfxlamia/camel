@@ -1,3 +1,4 @@
+// Client mutation router for unified work items — see docs/pocket/adr/2026-09-board-tracker-dual-table.md (#103).
 import { api } from "../api";
 import type { TrackerItem, WorkItem } from "../types";
 

@@ -1,5 +1,9 @@
 import { Router } from "express";
 import { sql } from "kysely";
+import {
+	recordListDuration,
+	WORK_ITEMS_LIST_THRESHOLD_MS,
+} from "../core/work-item-latency.js";
 import { neighborsAt, positionBetween, rebalance } from "../core/position.js";
 import {
 	derivePrefix,
@@ -402,7 +406,20 @@ trackerItemsRouter.get(
 		if (!prefix) return res.status(404).json({ error: "Not found" });
 
 		const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-		res.json(await listMergedWorkItems(db, workspaceId, prefix, q));
+		const start = performance.now();
+		const items = await listMergedWorkItems(db, workspaceId, prefix, q);
+		const ms = performance.now() - start;
+		recordListDuration(ms);
+		if (ms > WORK_ITEMS_LIST_THRESHOLD_MS) {
+			console.warn(
+				JSON.stringify({
+					event: "work_items_list_slow",
+					ms,
+					workspaceId,
+				}),
+			);
+		}
+		res.json(items);
 	},
 );
 

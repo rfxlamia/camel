@@ -1,0 +1,47 @@
+name: ADR Revisit Reminder
+
+on:
+  schedule:
+    - cron: "0 9 1 9 *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  remind:
+    name: Open Phase E checklist issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Create Phase E re-evaluation issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Phase E: Re-evaluate board-tracker dual-table ADR (2027-09)"
+          EXISTING=$(gh issue list --search "in:title \"Phase E: Re-evaluate board-tracker dual-table ADR\"" --state all --limit 1 --json number --jq 'length')
+          if [ "$EXISTING" != "0" ]; then
+            echo "Phase E reminder issue already exists; skipping."
+            exit 0
+          fi
+          gh issue create \
+            --title "$TITLE" \
+            --label "tech-debt" \
+            --label "architecture" \
+            --body "$(cat <<'EOF'
+          Scheduled 12-month ADR revisit for the board-tracker dual-table shim ([#103](https://github.com/${{ github.repository }}/issues/103) Phase E).
+
+          ## Checklist
+
+          - [ ] Run data volume query from [work-items-migration-spike.md](docs/pocket/spec/work-items-migration-spike.md)
+          - [ ] Review detection gate signals (key collisions, list latency p95, mutation bypass incidents)
+          - [ ] Decision: continue shim vs `work_items` epic (Phase F)
+          - [ ] Update [ADR](docs/pocket/adr/2026-09-board-tracker-dual-table.md) with evidence
+
+          Parent: #103
+          EOF
+          )"

@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-01
 **Status:** accepted
-**Issue:** [#100](https://github.com/rfxlamia/camel/issues/100)
+**Issue:** [#100](https://github.com/rfxlamia/camel/issues/100) · Detection tracking: [#103](https://github.com/rfxlamia/camel/issues/103)
 **Spec:** [unified-view.md](../spec/2026-08-31-board-tracker-unified-view/unified-view.md)
 
 ## Context
@@ -59,6 +59,35 @@ Revisit `work_items` migration when **any** of:
 - >30% of workspaces have overlapping board+tracker items with frequent cross-surface edits
 
 See [work-items-migration-spike.md](../spec/work-items-migration-spike.md) for options analysis.
+
+## Detection gates
+
+Implemented in Phase D ([#103](https://github.com/rfxlamia/camel/issues/103)). Owner: repo maintainers / issue #103 assignee.
+
+| Gate | Mechanism | Threshold / action |
+|------|-----------|-------------------|
+| Key collision | `npm run check:key-collisions --workspace=server` (nightly CI smoke + production cron) | Any overlap between `cards.key_number` and `tracker_items.key_number` in the same workspace → fail + alert |
+| List latency | In-process p95 on `GET /work-items` / `GET /tracker/items` | p95 > 100ms → structured warn log; triggers Phase E review |
+| Mutation routing | `npm run check:mutation-routing` (CI on every PR) | No direct `api.updateWorkItem` / `api.updateTrackerItem` / `api.updateCard` outside `workItemMutations.ts` (board-native `BoardContext.tsx` exempt) |
+| ADR revisit | Scheduled workflow (2027-09-01) | Opens Phase E checklist issue |
+| Onboarding | CODEOWNERS + PR template + `AGENTS.md` | Required reading before seam changes |
+
+**Local verification:** `make check` (lint + mutation guard; key-collision check when `DATABASE_URL` is set).
+
+**Production collision monitor:** Nightly CI runs the script against a migrated empty DB (smoke test only). Production detection requires a host cron job — see [deploy/DEBT-CHECKS.md](../../../deploy/DEBT-CHECKS.md) (public-safe, no secrets). Owner: repo maintainers / issue #103 assignee.
+
+### Must resolve BEFORE
+
+| Upcoming work | Debt that must be addressed first |
+|---------------|-----------------------------------|
+| Agent auto-mutate work items | Split writes unified; routing integration tests for all agent tools |
+| Public / third-party API | Deprecate `/tracker/items`; enforce `/work-items` only; `source` in contract |
+| Compliance / audit export | Unified event trail (physical merge or guaranteed export adapter) |
+| Shared identity (board ↔ tracker link) | Key collision prevention at DB level OR `work_items` migration |
+| Cross-workspace search / reporting | `work_items` table or materialized view |
+| Bulk edit / bulk status change | Single write orchestration layer; no per-surface branching |
+
+Server-side agent routes that write directly to `cards` are **not** covered by the client mutation guard; add server integration tests before agent auto-mutate at scale.
 
 ## References
 

@@ -14,7 +14,9 @@
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit",
 		"db:migrate": "tsx src/db/migrate.ts",
-		"db:seed": "tsx src/db/seed.ts"
+		"db:seed": "tsx src/db/seed.ts",
+		"check:key-collisions": "tsx src/scripts/check-key-collisions.ts",
+		"check:key-collisions:prod": "node dist/scripts/check-key-collisions.js"
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.104.1",

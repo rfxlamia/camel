@@ -26,7 +26,7 @@ dev-client: ## Start client dev server only
 
 # ---- Build & Test ----------------------------------------------------------
 
-.PHONY: build test test-integration test-llm-integration test-watch start typecheck
+.PHONY: build test test-integration test-llm-integration test-watch start typecheck check
 
 build: ## Build server and client
 	@$(NPM) run build
@@ -52,6 +52,11 @@ typecheck: ## Type-check both workspaces (tsc --noEmit)
 	@echo "Checking client..."
 	@cd client && npx tsc --noEmit
 	@echo "✓ All types OK"
+
+check: ## Lint + mutation routing guard (+ key collision if DATABASE_URL set)
+	@$(NPM) run lint
+	@$(NPM) run check:mutation-routing
+	@if [ -n "$$DATABASE_URL" ]; then $(NPM) run check:key-collisions --workspace=server; fi
 
 # ---- Database & Services ---------------------------------------------------
 

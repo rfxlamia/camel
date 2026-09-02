@@ -1,0 +1,11 @@
+# Example crontab — board-tracker key collision monitor (issue #103)
+#
+# INSTALL (operator only, on production host):
+#   1. Replace __DEPLOY_DIR__ with your deploy directory (never commit the real path).
+#   2. Ensure .env.production exists beside docker-compose.prod.yml (gitignored).
+#   3. crontab -e — paste the line below (without leading #).
+#
+# DATABASE_URL is read from Compose env — do NOT embed credentials here.
+#
+# Suggested: daily 03:00 UTC
+0 3 * * * cd __DEPLOY_DIR__ && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm --no-deps --entrypoint node server /app/server/dist/scripts/check-key-collisions.js >> /var/log/camel-debt-check.log 2>&1 || { status=$$?; logger -t camel-debt "key collision check failed"; exit $$status; }

@@ -1,3 +1,4 @@
+// Dual-table shim merge layer — see docs/pocket/adr/2026-09-board-tracker-dual-table.md (#103).
 import { sql } from "kysely";
 import { formatKey } from "../core/tracker-key.js";
 import type { DBExecutor } from "../db/kysely.js";
