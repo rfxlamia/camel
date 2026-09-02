@@ -667,15 +667,21 @@ trackerItemsRouter.patch(
 			return res.status(404).json({ error: "Not found" });
 		}
 
-		const neighborKey = (beforeKey ?? afterKey) as string;
-		const neighborKeyNumber = resolveNeighborKeyNumber(neighborKey, prefix);
-		if (neighborKeyNumber === null) {
+		const beforeKeyNumber =
+			beforeKey === undefined
+				? undefined
+				: resolveNeighborKeyNumber(beforeKey, prefix);
+		const afterKeyNumber =
+			afterKey === undefined
+				? undefined
+				: resolveNeighborKeyNumber(afterKey, prefix);
+		if (beforeKeyNumber === null || afterKeyNumber === null) {
 			return res.status(400).json({ error: "invalid neighbor key" });
 		}
-		const placeBefore = beforeKey !== undefined;
 
 		type ReorderResult =
 			| { kind: "bad_neighbors" }
+			| { kind: "non_adjacent_neighbors" }
 			| { kind: "ok" };
 
 		const result: ReorderResult = await db.transaction().execute(async (trx) => {
@@ -687,12 +693,32 @@ trackerItemsRouter.patch(
 				existing.id,
 			);
 
+			const beforeIndex =
+				beforeKeyNumber === undefined
+					? undefined
+					: siblings.findIndex((s) => s.key_number === beforeKeyNumber);
+			const afterIndex =
+				afterKeyNumber === undefined
+					? undefined
+					: siblings.findIndex((s) => s.key_number === afterKeyNumber);
+			if (
+				(beforeIndex !== undefined && beforeIndex === -1) ||
+				(afterIndex !== undefined && afterIndex === -1)
+			) {
+				return { kind: "bad_neighbors" };
+			}
+
 			let index: number;
-			const idx = siblings.findIndex(
-				(s) => s.key_number === neighborKeyNumber,
-			);
-			if (idx === -1) return { kind: "bad_neighbors" };
-			index = placeBefore ? idx + 1 : idx;
+			if (beforeIndex !== undefined && afterIndex !== undefined) {
+				if (afterIndex !== beforeIndex + 1) {
+					return { kind: "non_adjacent_neighbors" };
+				}
+				index = beforeIndex + 1;
+			} else if (beforeIndex !== undefined) {
+				index = beforeIndex + 1;
+			} else {
+				index = afterIndex as number;
+			}
 
 			let position: number;
 			try {
@@ -737,6 +763,9 @@ trackerItemsRouter.patch(
 
 		if (result.kind === "bad_neighbors") {
 			return res.status(400).json({ error: "neighbor not in bucket" });
+		}
+		if (result.kind === "non_adjacent_neighbors") {
+			return res.status(400).json({ error: "neighbors must be adjacent" });
 		}
 
 		const row = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);

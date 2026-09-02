@@ -233,6 +233,43 @@ describe("PATCH /tracker/items/:key/position", () => {
 		expect(mockTransaction).not.toHaveBeenCalled();
 	});
 
+	it("rejects an invalid afterKey when beforeKey is valid", async () => {
+		const siblings = [
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 2, key_number: 2, position: 2048 },
+		];
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
+		}));
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CT-1", afterKey: "not-a-key" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid neighbor key");
+		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
+	it("rejects an afterKey outside the bucket when beforeKey is valid", async () => {
+		const siblings = [
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 2, key_number: 2, position: 2048 },
+		];
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
+		}));
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CT-1", afterKey: "CT-99" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("neighbor not in bucket");
+	});
+
 	it("rejects a valid neighbor key that is not in the bucket", async () => {
 		const siblings = [
 			{ id: 1, key_number: 1, position: 1024 },
@@ -249,6 +286,25 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 		expect(res.status).toBe(400);
 		expect(res.body.error).toBe("neighbor not in bucket");
+	});
+
+	it("rejects non-adjacent neighbors when both keys are supplied", async () => {
+		const siblings = [
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 2, key_number: 2, position: 2048 },
+			{ id: 4, key_number: 4, position: 4096 },
+		];
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
+		}));
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CT-1", afterKey: "CT-4" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("neighbors must be adjacent");
 	});
 
 	it("reorders via canonical /work-items path", async () => {
