@@ -22,8 +22,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          TITLE="Phase E: Re-evaluate board-tracker dual-table ADR (2027-09)"
+          EXISTING=$(gh issue list --search "in:title \"Phase E: Re-evaluate board-tracker dual-table ADR\"" --state all --limit 1 --json number --jq 'length')
+          if [ "$EXISTING" != "0" ]; then
+            echo "Phase E reminder issue already exists; skipping."
+            exit 0
+          fi
           gh issue create \
-            --title "Phase E: Re-evaluate board-tracker dual-table ADR (2027-09)" \
+            --title "$TITLE" \
             --label "tech-debt" \
             --label "architecture" \
             --body "$(cat <<'EOF'

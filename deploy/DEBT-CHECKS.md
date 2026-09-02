@@ -39,8 +39,8 @@ List latency is already instrumented in the running API (`GET /work-items`); wat
    ```bash
    cd "$DEPLOY_DIR"
    docker compose -f docker-compose.prod.yml --env-file .env.production \
-     run --rm --no-deps server \
-     node /app/server/dist/scripts/check-key-collisions.js
+     run --rm --no-deps --entrypoint node server \
+     /app/server/dist/scripts/check-key-collisions.js
    ```
 
 4. On non-zero exit, inspect the log file configured in the crontab example and investigate collisions per [ADR detection gates](../docs/pocket/adr/2026-09-board-tracker-dual-table.md#detection-gates).

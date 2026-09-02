@@ -8,7 +8,7 @@ const ALLOWLIST = new Set([
 	"client/src/api.ts",
 	"client/src/context/BoardContext.tsx",
 ]);
-const FORBIDDEN = /\bapi\.(updateTrackerItem|updateCard)\b/;
+const FORBIDDEN = /\bapi\.(updateWorkItem|updateTrackerItem|updateCard)\b/;
 
 function walk(dir, files = []) {
 	for (const name of readdirSync(dir)) {

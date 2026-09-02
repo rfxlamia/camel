@@ -68,13 +68,13 @@ Implemented in Phase D ([#103](https://github.com/rfxlamia/camel/issues/103)). O
 |------|-----------|-------------------|
 | Key collision | `npm run check:key-collisions --workspace=server` (nightly CI smoke + production cron) | Any overlap between `cards.key_number` and `tracker_items.key_number` in the same workspace → fail + alert |
 | List latency | In-process p95 on `GET /work-items` / `GET /tracker/items` | p95 > 100ms → structured warn log; triggers Phase E review |
-| Mutation routing | `npm run check:mutation-routing` (CI on every PR) | No direct `api.updateTrackerItem` / `api.updateCard` outside `workItemMutations.ts` (board-native `BoardContext.tsx` exempt) |
+| Mutation routing | `npm run check:mutation-routing` (CI on every PR) | No direct `api.updateWorkItem` / `api.updateTrackerItem` / `api.updateCard` outside `workItemMutations.ts` (board-native `BoardContext.tsx` exempt) |
 | ADR revisit | Scheduled workflow (2027-09-01) | Opens Phase E checklist issue |
 | Onboarding | CODEOWNERS + PR template + `AGENTS.md` | Required reading before seam changes |
 
 **Local verification:** `make check` (lint + mutation guard; key-collision check when `DATABASE_URL` is set).
 
-**Production collision monitor:** Nightly CI runs the script against a migrated empty DB (smoke test only). Production detection requires a host cron job — see [deploy/DEBT-CHECKS.md](../../deploy/DEBT-CHECKS.md) (public-safe, no secrets). Owner: repo maintainers / issue #103 assignee.
+**Production collision monitor:** Nightly CI runs the script against a migrated empty DB (smoke test only). Production detection requires a host cron job — see [deploy/DEBT-CHECKS.md](../../../deploy/DEBT-CHECKS.md) (public-safe, no secrets). Owner: repo maintainers / issue #103 assignee.
 
 ### Must resolve BEFORE
 

@@ -8,4 +8,4 @@
 # DATABASE_URL is read from Compose env — do NOT embed credentials here.
 #
 # Suggested: daily 03:00 UTC
-0 3 * * * cd __DEPLOY_DIR__ && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm --no-deps server node /app/server/dist/scripts/check-key-collisions.js >> /var/log/camel-debt-check.log 2>&1 || logger -t camel-debt "key collision check failed"
+0 3 * * * cd __DEPLOY_DIR__ && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm --no-deps --entrypoint node server /app/server/dist/scripts/check-key-collisions.js >> /var/log/camel-debt-check.log 2>&1 || { status=$$?; logger -t camel-debt "key collision check failed"; exit $$status; }
