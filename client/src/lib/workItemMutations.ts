@@ -36,7 +36,7 @@ export async function updateWorkItem(
 			assignees: updated.assignees,
 			version: updated.version,
 			dueDate: updated.dueDate,
-			updatedAt: item.updatedAt,
+			updatedAt: updated.updatedAt,
 		};
 	}
 

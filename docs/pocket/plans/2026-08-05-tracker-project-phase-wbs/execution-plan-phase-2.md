@@ -1628,7 +1628,7 @@ Steps:
 
        const res = await request(app)
          .patch("/workspaces/7/tracker/items/CAM-3/position")
-         .send({ beforeId: 1, afterId: 2 });
+         .send({ beforeKey: "CT-1", afterKey: "CT-2" });
 
        expect(res.status).toBe(200);
        const move = updateCalls.find((c) => c.id === 3);
@@ -1648,7 +1648,7 @@ Steps:
 
        await request(app)
          .patch("/workspaces/7/tracker/items/CAM-3/position")
-         .send({ beforeId: 1, afterId: 2 });
+         .send({ beforeKey: "CT-1", afterKey: "CT-2" });
 
        const move = updateCalls.find((c) => c.id === 3);
        expect(move?.values).not.toHaveProperty("version");
@@ -1668,7 +1668,7 @@ Steps:
 
        const res = await request(app)
          .patch("/workspaces/7/tracker/items/CAM-3/position")
-         .send({ beforeId: 1, afterId: 2 });
+         .send({ beforeKey: "CT-1", afterKey: "CT-2" });
 
        expect(res.status).toBe(200);
        expect(updateCalls.every((c) => !("version" in c.values))).toBe(true);
@@ -1680,7 +1680,7 @@ Steps:
        mockSelectFrom.mockReturnValue(chainable(undefined));
        const res = await request(app)
          .patch("/workspaces/7/tracker/items/CAM-999/position")
-         .send({ beforeId: 1, afterId: 2 });
+         .send({ beforeKey: "CT-1", afterKey: "CT-2" });
        expect([400, 404]).toContain(res.status);
      });
 
@@ -1976,13 +1976,13 @@ Steps:
        });
        const { api } = await import("./api");
 
-       await api.reorderTrackerItem(7, "CA-1", { beforeId: 10, afterId: 11 });
+       await api.reorderTrackerItem(7, "CA-1", { beforeKey: "CA-10", afterKey: "CA-11" });
        expect(mockFetch).toHaveBeenCalledWith(
          "/api/workspaces/7/tracker/items/CA-1/position",
          expect.objectContaining({ method: "PATCH" }),
        );
        const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-       expect(body).toEqual({ beforeId: 10, afterId: 11 });
+       expect(body).toEqual({ beforeKey: "CA-10", afterKey: "CA-11" });
      });
 
      it("updateTrackerItem forwards projectId, phaseId, startDate and endDate", async () => {

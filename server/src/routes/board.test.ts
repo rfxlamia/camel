@@ -144,6 +144,7 @@ describe("buildBoardResponse", () => {
 			position: 5,
 			version: 3,
 			createdAt: "2026-06-01T10:00:00Z",
+			updatedAt: "2026-06-03T16:00:00Z",
 			startedAt: "2026-06-02T08:00:00Z",
 			doneAt: "2026-06-03T16:00:00Z",
 			dueDate: "2026-06-10",

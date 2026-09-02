@@ -354,11 +354,12 @@ async function loadBucketSiblings(
 	projectId: number | null,
 	phaseId: number | null,
 	excludeId: number,
-): Promise<Array<{ id: number; position: number }>> {
+): Promise<Array<{ id: number; key_number: number; position: number }>> {
 	let query = dbExec
 		.selectFrom("tracker_items")
 		.select([
 			"id",
+			"key_number",
 			sql<number>`COALESCE(position, 1e15)`.as("position"),
 		])
 		.where("workspace_id", "=", workspaceId)
@@ -381,6 +382,15 @@ async function loadBucketSiblings(
 	}
 
 	return query.execute();
+}
+
+function resolveNeighborKeyNumber(
+	key: string,
+	workspacePrefix: string,
+): number | null {
+	const parsed = parseKeyFromUrl(key);
+	if (!parsed || parsed.prefix !== workspacePrefix) return null;
+	return parsed.keyNumber;
 }
 
 trackerItemsRouter.get(
@@ -618,20 +628,20 @@ trackerItemsRouter.patch(
 				.json({ error: "cross-bucket move not allowed on reorder" });
 		}
 
-		const { beforeId, afterId } = body as {
-			beforeId?: unknown;
-			afterId?: unknown;
+		const { beforeKey, afterKey } = body as {
+			beforeKey?: unknown;
+			afterKey?: unknown;
 		};
-		if (beforeId !== undefined && !Number.isInteger(beforeId)) {
-			return res.status(400).json({ error: "beforeId must be an integer" });
+		if (beforeKey !== undefined && typeof beforeKey !== "string") {
+			return res.status(400).json({ error: "beforeKey must be a string" });
 		}
-		if (afterId !== undefined && !Number.isInteger(afterId)) {
-			return res.status(400).json({ error: "afterId must be an integer" });
+		if (afterKey !== undefined && typeof afterKey !== "string") {
+			return res.status(400).json({ error: "afterKey must be a string" });
 		}
-		if (beforeId === undefined && afterId === undefined) {
+		if (beforeKey === undefined && afterKey === undefined) {
 			return res
 				.status(400)
-				.json({ error: "beforeId or afterId is required" });
+				.json({ error: "beforeKey or afterKey is required" });
 		}
 
 		const prefix = await getWorkspacePrefix(workspaceId);
@@ -657,6 +667,13 @@ trackerItemsRouter.patch(
 			return res.status(404).json({ error: "Not found" });
 		}
 
+		const neighborKey = (beforeKey ?? afterKey) as string;
+		const neighborKeyNumber = resolveNeighborKeyNumber(neighborKey, prefix);
+		if (neighborKeyNumber === null) {
+			return res.status(400).json({ error: "invalid neighbor key" });
+		}
+		const placeBefore = beforeKey !== undefined;
+
 		type ReorderResult =
 			| { kind: "bad_neighbors" }
 			| { kind: "ok" };
@@ -671,15 +688,11 @@ trackerItemsRouter.patch(
 			);
 
 			let index: number;
-			if (beforeId !== undefined) {
-				const idx = siblings.findIndex((s) => s.id === beforeId);
-				if (idx === -1) return { kind: "bad_neighbors" };
-				index = idx + 1;
-			} else {
-				const idx = siblings.findIndex((s) => s.id === afterId);
-				if (idx === -1) return { kind: "bad_neighbors" };
-				index = idx;
-			}
+			const idx = siblings.findIndex(
+				(s) => s.key_number === neighborKeyNumber,
+			);
+			if (idx === -1) return { kind: "bad_neighbors" };
+			index = placeBefore ? idx + 1 : idx;
 
 			let position: number;
 			try {

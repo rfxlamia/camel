@@ -27,7 +27,9 @@ function chainable(result: unknown) {
 
 const updateCalls: Array<{ id: number; values: any }> = [];
 
-function makeTrx(siblings: Array<{ id: number; position: number }>) {
+function makeTrx(
+	siblings: Array<{ id: number; key_number: number; position: number }>,
+) {
 	const trx: any = {};
 	trx.selectFrom = vi.fn(() => chainable(siblings));
 	trx.updateTable = vi.fn(() => ({
@@ -67,6 +69,7 @@ vi.mock("../realtime.js", () => ({
 vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
+import { workItemsRouter } from "./work-items.js";
 
 const app = express();
 app.use(express.json());
@@ -75,6 +78,14 @@ app.use((req, _res, next) => {
 	next();
 });
 app.use("/workspaces/:workspaceId", trackerItemsRouter);
+
+const workItemsApp = express();
+workItemsApp.use(express.json());
+workItemsApp.use((req, _res, next) => {
+	(req as any).user = { id: 1, displayName: "Bob" };
+	next();
+});
+workItemsApp.use("/workspaces/:workspaceId", workItemsRouter);
 
 const itemC = {
 	id: 3,
@@ -120,9 +131,9 @@ beforeEach(() => {
 describe("PATCH /tracker/items/:key/position", () => {
 	it("gives the moved item the midpoint position between its new neighbours", async () => {
 		const siblings = [
-			{ id: 1, position: 1024 }, // A
-			{ id: 2, position: 2048 }, // B
-			{ id: 3, position: 3072 }, // C
+			{ id: 1, key_number: 1, position: 1024 }, // A
+			{ id: 2, key_number: 2, position: 2048 }, // B
+			{ id: 3, key_number: 3, position: 3072 }, // C
 		];
 		mockTransaction.mockImplementation(() => ({
 			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
@@ -131,7 +142,7 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/7/tracker/items/CT-3/position")
-			.send({ beforeId: 1, afterId: 2 });
+			.send({ beforeKey: "CT-1", afterKey: "CT-2" });
 
 		expect(res.status).toBe(200);
 		const move = updateCalls.find((c) => c.id === 3);
@@ -140,9 +151,9 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 	it("leaves version and updated_at unchanged on a normal move", async () => {
 		const siblings = [
-			{ id: 1, position: 1024 },
-			{ id: 2, position: 2048 },
-			{ id: 3, position: 3072 },
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 2, key_number: 2, position: 2048 },
+			{ id: 3, key_number: 3, position: 3072 },
 		];
 		mockTransaction.mockImplementation(() => ({
 			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
@@ -151,7 +162,7 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 		await request(app)
 			.patch("/workspaces/7/tracker/items/CT-3/position")
-			.send({ beforeId: 1, afterId: 2 });
+			.send({ beforeKey: "CT-1", afterKey: "CT-2" });
 
 		const move = updateCalls.find((c) => c.id === 3);
 		expect(move?.values).not.toHaveProperty("version");
@@ -160,9 +171,9 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 	it("rebalances the bucket without bumping any sibling version when neighbours are too close", async () => {
 		const tight = [
-			{ id: 1, position: 1 },
-			{ id: 2, position: 1 + 1e-12 },
-			{ id: 3, position: 2048 },
+			{ id: 1, key_number: 1, position: 1 },
+			{ id: 2, key_number: 2, position: 1 + 1e-12 },
+			{ id: 3, key_number: 3, position: 2048 },
 		];
 		mockTransaction.mockImplementation(() => ({
 			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(tight)),
@@ -171,7 +182,7 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/7/tracker/items/CT-3/position")
-			.send({ beforeId: 1, afterId: 2 });
+			.send({ beforeKey: "CT-1", afterKey: "CT-2" });
 
 		expect(res.status).toBe(200);
 		expect(updateCalls.every((c) => !("version" in c.values))).toBe(true);
@@ -179,11 +190,92 @@ describe("PATCH /tracker/items/:key/position", () => {
 		expect(updateCalls.length).toBeGreaterThan(1);
 	});
 
+	it("rejects a malformed neighbor key", async () => {
+		const siblings = [
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 3, key_number: 3, position: 3072 },
+		];
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
+		}));
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "not-a-key" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid neighbor key");
+		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
+	it("rejects a neighbor key with the wrong workspace prefix", async () => {
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CA-1" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid neighbor key");
+		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
+	it("rejects afterKey with the wrong workspace prefix", async () => {
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ afterKey: "CA-2" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid neighbor key");
+		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
+	it("rejects a valid neighbor key that is not in the bucket", async () => {
+		const siblings = [
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 3, key_number: 3, position: 3072 },
+		];
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
+		}));
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CT-99" });
+
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("neighbor not in bucket");
+	});
+
+	it("reorders via canonical /work-items path", async () => {
+		const siblings = [
+			{ id: 1, key_number: 1, position: 1024 },
+			{ id: 2, key_number: 2, position: 2048 },
+			{ id: 3, key_number: 3, position: 3072 },
+		];
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) => cb(makeTrx(siblings)),
+		}));
+		mockDbSelect();
+
+		const res = await request(workItemsApp)
+			.patch("/workspaces/7/work-items/CT-3/position")
+			.send({ beforeKey: "CT-1" });
+
+		expect(res.status).toBe(200);
+		const move = updateCalls.find((c) => c.id === 3);
+		expect(move?.values.position).toBeDefined();
+	});
+
 	it("rejects a reorder targeting an item in another workspace without a 500", async () => {
 		mockSelectFrom.mockReturnValue(chainable(undefined));
 		const res = await request(app)
 			.patch("/workspaces/7/tracker/items/CT-999/position")
-			.send({ beforeId: 1, afterId: 2 });
+			.send({ beforeKey: "CT-1", afterKey: "CT-2" });
 		expect([400, 404]).toContain(res.status);
 	});
 

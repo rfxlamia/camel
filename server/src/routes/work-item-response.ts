@@ -5,7 +5,7 @@ import {
 	type CardAssignee,
 	loadCardAssigneesForCards,
 } from "./card-assignees.js";
-import { loadCardLabelsForCards } from "./card-response.js";
+import { computeCardUpdatedAt, loadCardLabelsForCards } from "./card-response.js";
 import {
 	loadTrackerAssigneesForItems,
 	type TrackerItemAssignee,
@@ -78,11 +78,6 @@ function formatDateOnly(value: Date | string | null): string | null {
 	if (value == null) return null;
 	if (typeof value === "string") return value.slice(0, 10);
 	return value.toISOString().slice(0, 10);
-}
-
-function toIso(value: Date | string | null): string {
-	if (value == null) return new Date(0).toISOString();
-	return typeof value === "string" ? value : value.toISOString();
 }
 
 export function selectTrackerItemRows(dbExec: DBExecutor) {
@@ -272,7 +267,6 @@ export function serializeBoardWorkItem(
 	opts?: { redirectFrom?: string },
 ) {
 	const key = formatKey(prefix, row.key_number);
-	const updatedAt = row.done_at ?? row.started_at ?? row.created_at;
 	const body: Record<string, unknown> = {
 		id: row.id,
 		key,
@@ -291,7 +285,7 @@ export function serializeBoardWorkItem(
 		assignees,
 		version: row.version,
 		createdAt: row.created_at.toISOString(),
-		updatedAt: toIso(updatedAt),
+		updatedAt: computeCardUpdatedAt(row),
 		columnId: row.column_id,
 		columnName: row.column_name,
 		dueDate: row.due_date,

@@ -52,6 +52,15 @@ function toIso(value: Date | string | null): string | null {
 	return typeof value === "string" ? value : value.toISOString();
 }
 
+export function computeCardUpdatedAt(row: {
+	done_at: Date | string | null;
+	started_at: Date | string | null;
+	created_at: Date | string;
+}): string {
+	const updatedAt = row.done_at ?? row.started_at ?? row.created_at;
+	return toIso(updatedAt) as string;
+}
+
 function vocabularyFromCard(
 	row: CardResponseRow,
 	kind: "status" | "priority",
@@ -92,6 +101,7 @@ export function buildCardResponse(
 		position: row.position,
 		version: row.version,
 		createdAt: toIso(row.created_at),
+		updatedAt: computeCardUpdatedAt(row),
 		startedAt: toIso(row.started_at),
 		doneAt: toIso(row.done_at),
 		dueDate: row.due_date,

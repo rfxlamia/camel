@@ -120,6 +120,7 @@ function makeCard(over: Partial<Card>): Card {
 		position: 1024,
 		version: 1,
 		createdAt: "2026-06-01T00:00:00Z",
+		updatedAt: "2026-06-01T00:00:00Z",
 		startedAt: null,
 		doneAt: null,
 		dueDate: null,
