@@ -41,6 +41,7 @@ describe("workItemMutations", () => {
 			...boardItem,
 			title: "updated",
 			version: 2,
+			updatedAt: "2026-09-01T00:00:00.000Z",
 		} as never);
 
 		const updated = await updateWorkItem(1, boardItem, {
@@ -54,6 +55,7 @@ describe("workItemMutations", () => {
 		});
 		expect(updated.title).toBe("updated");
 		expect(updated.source).toBe("board");
+		expect(updated.updatedAt).toBe("2026-09-01T00:00:00.000Z");
 	});
 
 	it("routes board status changes through tracker PATCH", async () => {
@@ -85,11 +87,11 @@ describe("workItemMutations", () => {
 		});
 
 		const updated = await reorderWorkItem(1, trackerItem, {
-			afterId: 3,
+			afterKey: "CA-3",
 		});
 
 		expect(api.reorderWorkItem).toHaveBeenCalledWith(1, "CA-5", {
-			afterId: 3,
+			afterKey: "CA-3",
 		});
 		expect(updated.source).toBe("tracker");
 		expect(updated.position).toBe(2048);

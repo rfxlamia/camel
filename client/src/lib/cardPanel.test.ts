@@ -16,6 +16,7 @@ function makeCard(id: number, columnId: number): Card {
 		position: id * 1000,
 		version: 1,
 		createdAt: "2026-06-01T00:00:00.000Z",
+		updatedAt: "2026-06-01T00:00:00.000Z",
 		startedAt: null,
 		doneAt: null,
 		dueDate: null,

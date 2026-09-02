@@ -11,6 +11,7 @@ describe("moveCardToColumn", () => {
 		position: 1,
 		version: 1,
 		createdAt: "2026-08-01T00:00:00.000Z",
+		updatedAt: "2026-08-01T00:00:00.000Z",
 		startedAt: null,
 		doneAt: null,
 		dueDate: null,

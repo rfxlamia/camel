@@ -70,6 +70,46 @@ describe("buildCardResponse", () => {
 		expect(result.phaseId).toBe(9);
 		expect(result.phaseName).toBe("Phase A");
 		expect(result.assignees[0].username).toBe("alice");
+		expect(result.updatedAt).toBe("2026-08-29T00:00:00.000Z");
+	});
+
+	it("prefers done_at over started_at and created_at for updatedAt", () => {
+		const result = buildCardResponse(
+			{
+				...row,
+				created_at: "2026-08-01T00:00:00.000Z",
+				started_at: "2026-08-15T00:00:00.000Z",
+				done_at: "2026-08-20T00:00:00.000Z",
+			},
+			{ assignees: [], labels: [] },
+		);
+		expect(result.updatedAt).toBe("2026-08-20T00:00:00.000Z");
+	});
+
+	it("falls back to started_at when done_at is null", () => {
+		const result = buildCardResponse(
+			{
+				...row,
+				created_at: "2026-08-01T00:00:00.000Z",
+				started_at: "2026-08-15T00:00:00.000Z",
+				done_at: null,
+			},
+			{ assignees: [], labels: [] },
+		);
+		expect(result.updatedAt).toBe("2026-08-15T00:00:00.000Z");
+	});
+
+	it("falls back to created_at when started_at and done_at are null", () => {
+		const result = buildCardResponse(
+			{
+				...row,
+				created_at: "2026-08-01T00:00:00.000Z",
+				started_at: null,
+				done_at: null,
+			},
+			{ assignees: [], labels: [] },
+		);
+		expect(result.updatedAt).toBe("2026-08-01T00:00:00.000Z");
 	});
 
 	it("keeps null key and taxonomy values explicit", () => {

@@ -13,6 +13,7 @@ export interface Card {
 	position: number;
 	version: number;
 	createdAt: string;
+	updatedAt: string;
 	startedAt: string | null;
 	doneAt: string | null;
 	// Calendar date "YYYY-MM-DD" (no time-of-day) or null when unset.

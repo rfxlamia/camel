@@ -850,12 +850,12 @@ describe("TrackerProjectPage drag reorder", () => {
 		await pressReorder(/reorder ca-1/i, "ArrowDown");
 		await waitFor(() =>
 			expect(mockReorderWorkItem).toHaveBeenCalledWith(7, "CA-1", {
-				beforeId: 2,
+				beforeKey: "CA-2",
 			}),
 		);
 	});
 
-	it("calls reorderTrackerItem with afterId when a task moves to the top of its phase", async () => {
+	it("calls reorderTrackerItem with afterKey when a task moves to the top of its phase", async () => {
 		mockReorderWorkItem.mockResolvedValue(
 			projectItem({ id: 2, key: "CA-2", phaseId: 9, position: 512 }),
 		);
@@ -864,7 +864,7 @@ describe("TrackerProjectPage drag reorder", () => {
 		await pressReorder(/reorder ca-2/i, "ArrowUp");
 		await waitFor(() =>
 			expect(mockReorderWorkItem).toHaveBeenCalledWith(7, "CA-2", {
-				afterId: 1,
+				afterKey: "CA-1",
 			}),
 		);
 	});

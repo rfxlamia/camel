@@ -19,6 +19,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
 		position: 1024,
 		version: 3,
 		createdAt: "2026-08-01T00:00:00.000Z",
+		updatedAt: "2026-08-01T00:00:00.000Z",
 		startedAt: null,
 		doneAt: null,
 		dueDate: "2026-08-15",

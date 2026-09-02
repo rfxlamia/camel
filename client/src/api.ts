@@ -510,7 +510,7 @@ export const api = {
 	reorderWorkItem: (
 		workspaceId: number,
 		key: string,
-		body: { beforeId?: number; afterId?: number },
+		body: { beforeKey?: string; afterKey?: string },
 	) =>
 		request<WorkItem>(
 			`/workspaces/${workspaceId}/work-items/${key}/position`,
@@ -587,7 +587,7 @@ export const api = {
 	reorderTrackerItem: (
 		workspaceId: number,
 		key: string,
-		body: { beforeId?: number; afterId?: number },
+		body: { beforeKey?: string; afterKey?: string },
 	) =>
 		request<WorkItem>(
 			`/workspaces/${workspaceId}/tracker/items/${key}/position`,

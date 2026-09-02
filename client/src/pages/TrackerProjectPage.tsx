@@ -84,11 +84,11 @@ function sortByPosition(items: WorkItem[]): WorkItem[] {
 function reorderNeighborBody(
 	reordered: WorkItem[],
 	newIndex: number,
-): { beforeId?: number; afterId?: number } {
+): { beforeKey?: string; afterKey?: string } {
 	if (newIndex === 0) {
-		return { afterId: reordered[1].id };
+		return { afterKey: reordered[1].key };
 	}
-	return { beforeId: reordered[newIndex - 1].id };
+	return { beforeKey: reordered[newIndex - 1].key };
 }
 
 function optimisticReorderPosition(

@@ -204,14 +204,14 @@ describe("tracker item API methods", () => {
 		});
 		const { api } = await import("./api");
 
-		const result = await api.reorderTrackerItem(7, "CA-1", { afterId: 9 });
+		const result = await api.reorderTrackerItem(7, "CA-1", { afterKey: "CA-9" });
 		expect(result.position).toBe(1536);
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/tracker/items/CA-1/position",
 			expect.objectContaining({ method: "PATCH" }),
 		);
 		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-		expect(body).toEqual({ afterId: 9 });
+		expect(body).toEqual({ afterKey: "CA-9" });
 	});
 
 	it("deleteTrackerItem DELETEs with version in body", async () => {
