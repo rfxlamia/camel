@@ -57,7 +57,7 @@ async function cleanup() {
 	]);
 }
 
-async function setup(): Promise<Fixtures> {
+async function insertBaseFixtures(): Promise<void> {
 	await cleanup();
 	await pool.query(
 		"INSERT INTO users (id, username, display_name, password_hash) VALUES ($1, 'metadata-actor', 'Metadata Actor', 'test'), ($2, 'rafi-metadata', 'Rafi', 'test')",
@@ -71,7 +71,14 @@ async function setup(): Promise<Fixtures> {
 		"INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $3, 'owner'), ($1, $4, 'member'), ($2, $3, 'owner')",
 		[WORKSPACE_ID, OTHER_WORKSPACE_ID, ACTOR_ID, RAFI_ID],
 	);
+}
 
+type VocabularyFixtures = Pick<
+	Fixtures,
+	"statusId" | "priorityId" | "labelId" | "otherPriorityId" | "otherLabelId"
+>;
+
+async function createVocabularyFixtures(): Promise<VocabularyFixtures> {
 	const statusId = await queryId(
 		"INSERT INTO tracker_vocabularies (workspace_id, kind, name, position, colour) VALUES ($1, 'status', 'Todo metadata', 1, 'blue') RETURNING id",
 		[WORKSPACE_ID],
@@ -92,6 +99,15 @@ async function setup(): Promise<Fixtures> {
 		"INSERT INTO tracker_vocabularies (workspace_id, kind, name, position, colour) VALUES ($1, 'label', 'Other label metadata', 2, 'blue') RETURNING id",
 		[OTHER_WORKSPACE_ID],
 	);
+	return { statusId, priorityId, labelId, otherPriorityId, otherLabelId };
+}
+
+type ProjectFixtures = Pick<
+	Fixtures,
+	"projectId" | "otherProjectId" | "phaseId" | "otherPhaseId"
+>;
+
+async function createProjectFixtures(): Promise<ProjectFixtures> {
 	const projectId = await queryId(
 		"INSERT INTO tracker_projects (workspace_id, name, position) VALUES ($1, 'Web', 1) RETURNING id",
 		[WORKSPACE_ID],
@@ -108,21 +124,20 @@ async function setup(): Promise<Fixtures> {
 		"INSERT INTO tracker_phases (project_id, name, position) VALUES ($1, 'Other phase', 1) RETURNING id",
 		[otherProjectId],
 	);
+	return { projectId, otherProjectId, phaseId, otherPhaseId };
+}
 
+async function setup(): Promise<Fixtures> {
+	await insertBaseFixtures();
+	const vocabularies = await createVocabularyFixtures();
+	const projects = await createProjectFixtures();
 	return {
 		workspaceId: WORKSPACE_ID,
 		otherWorkspaceId: OTHER_WORKSPACE_ID,
 		actorId: ACTOR_ID,
 		rafiId: RAFI_ID,
-		projectId,
-		otherProjectId,
-		phaseId,
-		otherPhaseId,
-		statusId,
-		priorityId,
-		labelId,
-		otherPriorityId,
-		otherLabelId,
+		...projects,
+		...vocabularies,
 	};
 }
 

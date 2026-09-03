@@ -71,6 +71,98 @@ function addProjectPhaseError(
 	addError(fieldErrors, "phaseId", error);
 }
 
+async function applyStatusMetadata(
+	body: TaskCreateMetadataInput,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	fieldErrors: TaskCreateFieldErrors,
+	metadata: NormalizedTaskCreateMetadata,
+): Promise<void> {
+	if (!("statusId" in body)) return;
+	const value = body.statusId;
+	if (!Number.isInteger(value)) {
+		addError(fieldErrors, "statusId", "statusId must be an integer");
+		return;
+	}
+	const row = await dbExec
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("id", "=", value as number)
+		.where("workspace_id", "=", workspaceId)
+		.where("kind", "=", "status")
+		.executeTakeFirst();
+	if (!row) {
+		addError(fieldErrors, "statusId", "status must belong to this workspace");
+	} else {
+		metadata.statusId = value as number;
+	}
+}
+
+async function applyPriorityMetadata(
+	body: TaskCreateMetadataInput,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	fieldErrors: TaskCreateFieldErrors,
+	metadata: NormalizedTaskCreateMetadata,
+): Promise<void> {
+	if (!("priorityId" in body)) return;
+	const parsed = await parsePriorityId(body, workspaceId, dbExec);
+	if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
+		addError(fieldErrors, "priorityId", parsed.error);
+	} else {
+		metadata.priorityId = parsed;
+	}
+}
+
+async function applyLabelMetadata(
+	body: TaskCreateMetadataInput,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	fieldErrors: TaskCreateFieldErrors,
+	metadata: NormalizedTaskCreateMetadata,
+): Promise<void> {
+	if (!("labelIds" in body)) return;
+	const parsed = await parseLabelIds(body, workspaceId, dbExec);
+	if ("error" in parsed) {
+		addError(fieldErrors, "labelIds", parsed.error);
+	} else {
+		metadata.labelIds = parsed;
+	}
+}
+
+async function applyAssigneeMetadata(
+	body: TaskCreateMetadataInput,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	fieldErrors: TaskCreateFieldErrors,
+	metadata: NormalizedTaskCreateMetadata,
+): Promise<void> {
+	if (!("assigneeIds" in body)) return;
+	const parsed = await parseAssigneeIds(body, workspaceId, dbExec);
+	if ("error" in parsed) {
+		addError(fieldErrors, "assigneeIds", parsed.error);
+	} else {
+		metadata.assigneeIds = parsed;
+	}
+}
+
+async function applyProjectPhaseMetadata(
+	body: TaskCreateMetadataInput,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	fieldErrors: TaskCreateFieldErrors,
+	metadata: NormalizedTaskCreateMetadata,
+): Promise<void> {
+	if (!("projectId" in body || "phaseId" in body)) return;
+	const parsed = await parseProjectPhase(body, workspaceId, dbExec);
+	if ("error" in parsed) {
+		addProjectPhaseError(fieldErrors, parsed.error);
+	} else {
+		if (parsed.projectId !== undefined) metadata.projectId = parsed.projectId;
+		if (parsed.phaseId !== undefined) metadata.phaseId = parsed.phaseId;
+	}
+}
+
 /**
  * Validate task metadata using the executor supplied by the caller.
  *
@@ -100,66 +192,17 @@ export async function validateTaskCreateMetadata(
 	const fieldErrors: TaskCreateFieldErrors = {};
 	const metadata: NormalizedTaskCreateMetadata = {};
 
-	if ("statusId" in body) {
-		const value = body.statusId;
-		if (!Number.isInteger(value)) {
-			addError(fieldErrors, "statusId", "statusId must be an integer");
-		} else {
-			const row = await dbExec
-				.selectFrom("tracker_vocabularies")
-				.select("id")
-				.where("id", "=", value as number)
-				.where("workspace_id", "=", workspaceId)
-				.where("kind", "=", "status")
-				.executeTakeFirst();
-			if (!row) {
-				addError(
-					fieldErrors,
-					"statusId",
-					"status must belong to this workspace",
-				);
-			} else {
-				metadata.statusId = value as number;
-			}
-		}
-	}
-
-	if ("priorityId" in body) {
-		const parsed = await parsePriorityId(body, workspaceId, dbExec);
-		if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
-			addError(fieldErrors, "priorityId", parsed.error);
-		} else {
-			metadata.priorityId = parsed;
-		}
-	}
-
-	if ("labelIds" in body) {
-		const parsed = await parseLabelIds(body, workspaceId, dbExec);
-		if ("error" in parsed) {
-			addError(fieldErrors, "labelIds", parsed.error);
-		} else {
-			metadata.labelIds = parsed;
-		}
-	}
-
-	if ("assigneeIds" in body) {
-		const parsed = await parseAssigneeIds(body, workspaceId, dbExec);
-		if ("error" in parsed) {
-			addError(fieldErrors, "assigneeIds", parsed.error);
-		} else {
-			metadata.assigneeIds = parsed;
-		}
-	}
-
-	if ("projectId" in body || "phaseId" in body) {
-		const parsed = await parseProjectPhase(body, workspaceId, dbExec);
-		if ("error" in parsed) {
-			addProjectPhaseError(fieldErrors, parsed.error);
-		} else {
-			if (parsed.projectId !== undefined) metadata.projectId = parsed.projectId;
-			if (parsed.phaseId !== undefined) metadata.phaseId = parsed.phaseId;
-		}
-	}
+	await applyStatusMetadata(body, workspaceId, dbExec, fieldErrors, metadata);
+	await applyPriorityMetadata(body, workspaceId, dbExec, fieldErrors, metadata);
+	await applyLabelMetadata(body, workspaceId, dbExec, fieldErrors, metadata);
+	await applyAssigneeMetadata(body, workspaceId, dbExec, fieldErrors, metadata);
+	await applyProjectPhaseMetadata(
+		body,
+		workspaceId,
+		dbExec,
+		fieldErrors,
+		metadata,
+	);
 
 	const valid = Object.keys(fieldErrors).length === 0;
 	return {

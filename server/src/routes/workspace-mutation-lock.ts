@@ -80,6 +80,89 @@ export async function lockWorkspaceMutation(
 		.executeTakeFirst();
 }
 
+async function lockMembers(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	userIds: number[],
+): Promise<void> {
+	if (userIds.length === 0) return;
+	await dbExec
+		.selectFrom("workspace_members")
+		.select("user_id")
+		.where("workspace_id", "=", workspaceId)
+		.where("user_id", "in", userIds)
+		.orderBy("user_id")
+		.forUpdate()
+		.execute();
+}
+
+async function lockVocabularies(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	vocabularyIds: number[],
+): Promise<void> {
+	if (vocabularyIds.length === 0) return;
+	await dbExec
+		.selectFrom("tracker_vocabularies")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("id", "in", vocabularyIds)
+		.orderBy("id")
+		.forUpdate()
+		.execute();
+}
+
+async function lockProjects(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	projectIds: number[],
+): Promise<void> {
+	if (projectIds.length === 0) return;
+	await dbExec
+		.selectFrom("tracker_projects")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("id", "in", projectIds)
+		.where("deleted_at", "is", null)
+		.orderBy("id")
+		.forUpdate()
+		.execute();
+}
+
+async function lockPhases(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	phaseIds: number[],
+): Promise<void> {
+	if (phaseIds.length === 0) return;
+	await dbExec
+		.selectFrom("tracker_phases as tp")
+		.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
+		.select("tp.id as id")
+		.where("tp.id", "in", phaseIds)
+		.where("tp.deleted_at", "is", null)
+		.where("tpr.workspace_id", "=", workspaceId)
+		.where("tpr.deleted_at", "is", null)
+		.orderBy("tp.id")
+		.forUpdate()
+		.execute();
+}
+
+async function lockDestinationColumn(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	destinationColumnId: number | null,
+): Promise<void> {
+	if (destinationColumnId === null) return;
+	await dbExec
+		.selectFrom("columns")
+		.select("id")
+		.where("workspace_id", "=", workspaceId)
+		.where("id", "=", destinationColumnId)
+		.forUpdate()
+		.executeTakeFirst();
+}
+
 export async function lockTaskCreateReferences(
 	dbExec: DBExecutor,
 	workspaceId: number,
@@ -87,64 +170,14 @@ export async function lockTaskCreateReferences(
 ): Promise<TaskCreateLockSequence> {
 	const sequence = buildTaskCreateLockSequence(workspaceId, references);
 	await lockWorkspaceMutation(dbExec, workspaceId);
-
-	if (sequence.userIds.length > 0) {
-		await dbExec
-			.selectFrom("workspace_members")
-			.select("user_id")
-			.where("workspace_id", "=", workspaceId)
-			.where("user_id", "in", sequence.userIds)
-			.orderBy("user_id")
-			.forUpdate()
-			.execute();
-	}
-
-	if (sequence.vocabularyIds.length > 0) {
-		await dbExec
-			.selectFrom("tracker_vocabularies")
-			.select("id")
-			.where("workspace_id", "=", workspaceId)
-			.where("id", "in", sequence.vocabularyIds)
-			.orderBy("id")
-			.forUpdate()
-			.execute();
-	}
-
-	if (sequence.projectIds.length > 0) {
-		await dbExec
-			.selectFrom("tracker_projects")
-			.select("id")
-			.where("workspace_id", "=", workspaceId)
-			.where("id", "in", sequence.projectIds)
-			.where("deleted_at", "is", null)
-			.orderBy("id")
-			.forUpdate()
-			.execute();
-	}
-
-	if (sequence.phaseIds.length > 0) {
-		await dbExec
-			.selectFrom("tracker_phases as tp")
-			.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
-			.select("tp.id as id")
-			.where("tp.id", "in", sequence.phaseIds)
-			.where("tp.deleted_at", "is", null)
-			.where("tpr.workspace_id", "=", workspaceId)
-			.where("tpr.deleted_at", "is", null)
-			.orderBy("tp.id")
-			.forUpdate()
-			.execute();
-	}
-
-	if (sequence.destinationColumnId !== null) {
-		await dbExec
-			.selectFrom("columns")
-			.select("id")
-			.where("workspace_id", "=", workspaceId)
-			.where("id", "=", sequence.destinationColumnId)
-			.forUpdate()
-			.executeTakeFirst();
-	}
-
+	await lockMembers(dbExec, workspaceId, sequence.userIds);
+	await lockVocabularies(dbExec, workspaceId, sequence.vocabularyIds);
+	await lockProjects(dbExec, workspaceId, sequence.projectIds);
+	await lockPhases(dbExec, workspaceId, sequence.phaseIds);
+	await lockDestinationColumn(
+		dbExec,
+		workspaceId,
+		sequence.destinationColumnId,
+	);
 	return sequence;
 }

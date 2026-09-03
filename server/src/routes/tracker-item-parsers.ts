@@ -127,96 +127,121 @@ export async function parseAssigneeIds(
  * Callers must invoke only when `'projectId' in body || 'phaseId' in body`.
  * A body with neither key is rejected.
  */
+type ProjectPhaseResult =
+	| { projectId?: number | null; phaseId?: number | null }
+	| { error: string };
+
+async function parseExplicitPhase(
+	body: Record<string, unknown>,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	hasProjectId: boolean,
+	hasPhaseId: boolean,
+): Promise<ProjectPhaseResult | undefined> {
+	const rawPhaseId = body.phaseId;
+	if (
+		!hasPhaseId ||
+		typeof rawPhaseId !== "number" ||
+		!Number.isInteger(rawPhaseId)
+	) {
+		return undefined;
+	}
+
+	const phase = await lookupPhase(workspaceId, rawPhaseId, dbExec);
+	if (!phase) return { error: "phase must belong to this workspace" };
+
+	const rawProjectId = body.projectId;
+	if (
+		hasProjectId &&
+		typeof rawProjectId === "number" &&
+		Number.isInteger(rawProjectId)
+	) {
+		if (phase.project_id !== rawProjectId) {
+			return { error: "phase must belong to the selected project" };
+		}
+		const project = await lookupProject(workspaceId, rawProjectId, dbExec);
+		return project
+			? { projectId: rawProjectId, phaseId: rawPhaseId }
+			: { error: "project must belong to this workspace" };
+	}
+
+	if (!hasProjectId || rawProjectId === undefined) {
+		const project = await lookupProject(workspaceId, phase.project_id, dbExec);
+		return project
+			? { projectId: phase.project_id, phaseId: rawPhaseId }
+			: { error: "project must belong to this workspace" };
+	}
+	return undefined;
+}
+
+async function parseProjectOnly(
+	body: Record<string, unknown>,
+	workspaceId: number,
+	dbExec: DBExecutor,
+	hasProjectId: boolean,
+	hasPhaseId: boolean,
+): Promise<ProjectPhaseResult | undefined> {
+	const rawProjectId = body.projectId;
+	if (
+		!hasProjectId ||
+		typeof rawProjectId !== "number" ||
+		!Number.isInteger(rawProjectId) ||
+		(hasPhaseId && body.phaseId !== null && body.phaseId !== undefined)
+	) {
+		return undefined;
+	}
+	const project = await lookupProject(workspaceId, rawProjectId, dbExec);
+	return project
+		? { projectId: rawProjectId, phaseId: null }
+		: { error: "project must belong to this workspace" };
+}
+
+function parseProjectPhaseBase(
+	body: Record<string, unknown>,
+	hasProjectId: boolean,
+	hasPhaseId: boolean,
+): ProjectPhaseResult | undefined {
+	const rawProjectId = body.projectId;
+	const rawPhaseId = body.phaseId;
+	if (!hasProjectId && !hasPhaseId) {
+		return { error: "projectId and phaseId must be integers or null" };
+	}
+	if (hasProjectId && rawProjectId === null) {
+		return !hasPhaseId || rawPhaseId === null || rawPhaseId === undefined
+			? { projectId: null, phaseId: null }
+			: { error: "phase cannot be set without a project" };
+	}
+	if (hasPhaseId && rawPhaseId === null && !hasProjectId) {
+		return { phaseId: null };
+	}
+	return undefined;
+}
+
 export async function parseProjectPhase(
 	body: Record<string, unknown>,
 	workspaceId: number,
 	dbExec: DBExecutor = db,
-): Promise<
-	{ projectId?: number | null; phaseId?: number | null } | { error: string }
-> {
+): Promise<ProjectPhaseResult> {
 	const hasProjectId = "projectId" in body;
 	const hasPhaseId = "phaseId" in body;
-	const rawProjectId = body.projectId;
-	const rawPhaseId = body.phaseId;
-
-	if (!hasProjectId && !hasPhaseId) {
-		return { error: "projectId and phaseId must be integers or null" };
-	}
-
-	if (
-		hasProjectId &&
-		rawProjectId === null &&
-		(!hasPhaseId || rawPhaseId === null || rawPhaseId === undefined)
-	) {
-		return { projectId: null, phaseId: null };
-	}
-
-	if (
-		hasProjectId &&
-		rawProjectId === null &&
-		hasPhaseId &&
-		rawPhaseId !== null &&
-		rawPhaseId !== undefined
-	) {
-		return { error: "phase cannot be set without a project" };
-	}
-
-	if (hasPhaseId && rawPhaseId === null && !hasProjectId) {
-		return { phaseId: null };
-	}
-
-	if (
-		hasPhaseId &&
-		typeof rawPhaseId === "number" &&
-		Number.isInteger(rawPhaseId)
-	) {
-		const phase = await lookupPhase(workspaceId, rawPhaseId, dbExec);
-		if (!phase) {
-			return { error: "phase must belong to this workspace" };
-		}
-
-		if (
-			hasProjectId &&
-			typeof rawProjectId === "number" &&
-			Number.isInteger(rawProjectId)
-		) {
-			if (phase.project_id !== rawProjectId) {
-				return { error: "phase must belong to the selected project" };
-			}
-			const project = await lookupProject(workspaceId, rawProjectId, dbExec);
-			if (!project) {
-				return { error: "project must belong to this workspace" };
-			}
-			return { projectId: rawProjectId, phaseId: rawPhaseId };
-		}
-
-		if (!hasProjectId || rawProjectId === undefined) {
-			const project = await lookupProject(
-				workspaceId,
-				phase.project_id,
-				dbExec,
-			);
-			if (!project) {
-				return { error: "project must belong to this workspace" };
-			}
-			return { projectId: phase.project_id, phaseId: rawPhaseId };
-		}
-	}
-
-	if (
-		hasProjectId &&
-		typeof rawProjectId === "number" &&
-		Number.isInteger(rawProjectId) &&
-		(!hasPhaseId || rawPhaseId === null || rawPhaseId === undefined)
-	) {
-		const project = await lookupProject(workspaceId, rawProjectId, dbExec);
-		if (!project) {
-			return { error: "project must belong to this workspace" };
-		}
-		return { projectId: rawProjectId, phaseId: null };
-	}
-
-	return { error: "projectId and phaseId must be integers or null" };
+	const base = parseProjectPhaseBase(body, hasProjectId, hasPhaseId);
+	if (base !== undefined) return base;
+	return (
+		(await parseExplicitPhase(
+			body,
+			workspaceId,
+			dbExec,
+			hasProjectId,
+			hasPhaseId,
+		)) ??
+		(await parseProjectOnly(
+			body,
+			workspaceId,
+			dbExec,
+			hasProjectId,
+			hasPhaseId,
+		)) ?? { error: "projectId and phaseId must be integers or null" }
+	);
 }
 
 /**
