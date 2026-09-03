@@ -24,7 +24,7 @@ export interface TaskFieldCommandPopoverProps {
 }
 
 export function TaskFieldCommandPopover({
-	stage,
+	stage: _stage,
 	listLabel,
 	options,
 	activeIndex,

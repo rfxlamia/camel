@@ -77,7 +77,7 @@ function conciseCatalogError(key: TaskMetadataCatalogKey, error: unknown): strin
 }
 
 function toCatalogEntry<K extends TaskMetadataCatalogKey>(
-	key: K,
+	_key: K,
 	items: CatalogItems[K],
 ): TaskMetadataCatalogEntry<K> {
 	if (items.length === 0) {

@@ -47,7 +47,20 @@ const projects: TrackerProject[] = [
 		endDate: null,
 		position: 1,
 		version: 1,
-		phases: [{ id: 9, name: "Build", projectId: 1, position: 1, version: 1 }],
+		phases: [
+			{
+				id: 9,
+				name: "Build",
+				projectId: 1,
+				position: 1,
+				version: 1,
+				subtitle: "",
+				startDate: null,
+				endDate: null,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+			},
+		],
 	},
 ];
 

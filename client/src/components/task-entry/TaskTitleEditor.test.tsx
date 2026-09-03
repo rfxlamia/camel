@@ -8,7 +8,6 @@ import {
 } from "@testing-library/react";
 import {
 	afterEach,
-	beforeEach,
 	describe,
 	expect,
 	it,
@@ -77,7 +76,7 @@ function EditorHarness({
 	fields?: TaskFieldCommandDefinition[];
 	initialDraft?: Partial<TaskMetadataDraft>;
 	onSubmit?: (title: string) => void;
-	editorRef?: React.RefObject<TaskTitleEditorHandle | null>;
+	editorRef?: React.RefObject<TaskTitleEditorHandle>;
 }) {
 	const [draft, dispatch] = useReducer(
 		taskMetadataReducer,

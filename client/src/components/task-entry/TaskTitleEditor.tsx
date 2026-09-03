@@ -172,7 +172,7 @@ export const TaskTitleEditor = forwardRef<
 	}, []);
 
 	const openCommandAt = useCallback(
-		(fullTitle: string, start: number, query: string, stage: CommandStage = "field", fieldId: string | null = null) => {
+		(_fullTitle: string, start: number, query: string, stage: CommandStage = "field", fieldId: string | null = null) => {
 			const filtered =
 				stage === "field"
 					? filterByQuery(availableFields, query)
