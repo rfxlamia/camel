@@ -316,17 +316,7 @@ export const api = {
 			}),
 		});
 		const data = await res.json();
-		if (typeof data.url === "string") {
-			const redirectUrl = new URL(data.url, window.location.origin);
-			const allowedHost =
-				provider === "google" ? "accounts.google.com" : "github.com";
-			if (
-				redirectUrl.protocol === "https:" &&
-				redirectUrl.hostname === allowedHost
-			) {
-				window.location.assign(redirectUrl.href);
-			}
-		}
+		if (data.url) window.location.href = data.url;
 	},
 
 	// ---- Collaboration ----
