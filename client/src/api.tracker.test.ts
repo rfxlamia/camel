@@ -60,6 +60,50 @@ const sampleProject = {
 describe("tracker item API methods", () => {
 	beforeEach(() => mockFetch.mockReset());
 
+	it("accepts additive Tracker dates in the public create contract", async () => {
+		const { api } = await import("./api");
+		const payload: Parameters<typeof api.createWorkItem>[1] = {
+			title: "Plan release",
+			description: "Release details",
+			statusId: 1,
+			priorityId: 2,
+			labelIds: [3],
+			assigneeIds: [4],
+			projectId: 5,
+			phaseId: 6,
+			startDate: "2026-09-01",
+			endDate: "2026-09-30",
+		};
+		void payload;
+	});
+
+	it("preserves Tracker structured field errors", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () =>
+				Promise.resolve({
+					error: "Some task fields are invalid",
+					fieldErrors: {
+						assigneeIds: "Assignee is no longer available",
+						phaseId: "Phase is no longer available",
+					},
+				}),
+		});
+		const { api } = await import("./api");
+
+		await expect(
+			api.createWorkItem(7, { title: "Plan release" }),
+		).rejects.toMatchObject({
+			message: "Some task fields are invalid",
+			status: 400,
+			fieldErrors: {
+				assigneeIds: "Assignee is no longer available",
+				phaseId: "Phase is no longer available",
+			},
+		});
+	});
+
 	it("createTrackerItem POSTs to /tracker/items", async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,

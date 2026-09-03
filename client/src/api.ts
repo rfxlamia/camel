@@ -1,6 +1,11 @@
 import type { TemplateColumn } from "./lib/templates";
 import { publishAutoError } from "./lib/ticketIntakeBus";
 import type {
+	BoardCreatePayload,
+	TaskCreateFieldErrors,
+	TrackerCreatePayload,
+} from "./lib/taskCreateContracts";
+import type {
 	ActivityEvent,
 	AgentArtifact,
 	AgentBoard,
@@ -34,6 +39,7 @@ class ApiError extends Error {
 		public status: number,
 		public code?: string,
 		public retryAfterMs?: number,
+		public fieldErrors?: TaskCreateFieldErrors,
 	) {
 		super(message);
 	}
@@ -100,6 +106,7 @@ async function request<T>(
 		let message = `Request failed (${res.status})`;
 		let code: string | undefined;
 		let retryAfterMs: number | undefined;
+		let fieldErrors: TaskCreateFieldErrors | undefined;
 		try {
 			const body = await res.json();
 			if (body.error) message = body.error;
@@ -108,6 +115,7 @@ async function request<T>(
 			if (typeof body.retryAfterMs === "number") {
 				retryAfterMs = body.retryAfterMs;
 			}
+			if (body.fieldErrors !== undefined) fieldErrors = body.fieldErrors;
 		} catch {
 			// non-JSON error body
 		}
@@ -120,7 +128,7 @@ async function request<T>(
 				userAction: options.userAction,
 			});
 		}
-		throw new ApiError(message, res.status, code, retryAfterMs);
+		throw new ApiError(message, res.status, code, retryAfterMs, fieldErrors);
 	}
 	if (res.status === 204) return undefined as T;
 	return res.json();
@@ -179,10 +187,7 @@ export const api = {
 		),
 	getCard: (workspaceId: number, id: number) =>
 		request<Card>(`/workspaces/${workspaceId}/cards/${id}`),
-	createCard: (
-		workspaceId: number,
-		body: { columnId: number; title: string; description?: string },
-	) =>
+	createCard: (workspaceId: number, body: BoardCreatePayload) =>
 		request<Card>(
 			`/workspaces/${workspaceId}/cards`,
 			{
@@ -191,6 +196,12 @@ export const api = {
 					columnId: body.columnId,
 					title: body.title,
 					description: body.description ?? "",
+					assigneeIds: body.assigneeIds,
+					priorityId: body.priorityId,
+					labelIds: body.labelIds,
+					projectId: body.projectId,
+					phaseId: body.phaseId,
+					dueDate: body.dueDate,
 				}),
 			},
 			{ userInitiated: true, userAction: "submit" },
@@ -305,7 +316,17 @@ export const api = {
 			}),
 		});
 		const data = await res.json();
-		if (data.url) window.location.href = data.url;
+		if (typeof data.url === "string") {
+			const redirectUrl = new URL(data.url, window.location.origin);
+			const allowedHost =
+				provider === "google" ? "accounts.google.com" : "github.com";
+			if (
+				redirectUrl.protocol === "https:" &&
+				redirectUrl.hostname === allowedHost
+			) {
+				window.location.assign(redirectUrl.href);
+			}
+		}
 	},
 
 	// ---- Collaboration ----
@@ -459,16 +480,7 @@ export const api = {
 	// ---- Work items (canonical) ----
 	createWorkItem: (
 		workspaceId: number,
-		body: {
-			title: string;
-			description?: string;
-			statusId?: number;
-			priorityId?: number | null;
-			labelIds?: number[];
-			assigneeIds?: number[];
-			projectId?: number | null;
-			phaseId?: number | null;
-		},
+		body: TrackerCreatePayload,
 	) =>
 		request<WorkItem>(`/workspaces/${workspaceId}/work-items`, {
 			method: "POST",

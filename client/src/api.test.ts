@@ -135,6 +135,69 @@ describe("scoped settings API", () => {
 });
 
 describe("scoped board API paths", () => {
+	it("serializes additive Board create metadata", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () => Promise.resolve({}),
+		});
+		const { api } = await import("./api");
+
+		await api.createCard(7, {
+			columnId: 1,
+			title: "Plan release",
+			assigneeIds: [2, 3],
+			priorityId: 4,
+			labelIds: [5, 6],
+			projectId: 8,
+			phaseId: 9,
+			dueDate: "2026-09-30",
+		});
+
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+		expect(body).toMatchObject({
+			columnId: 1,
+			title: "Plan release",
+			description: "",
+			assigneeIds: [2, 3],
+			priorityId: 4,
+			labelIds: [5, 6],
+			projectId: 8,
+			phaseId: 9,
+			dueDate: "2026-09-30",
+		});
+		expect(body).not.toHaveProperty("statusId");
+	});
+
+	it("preserves Board structured field errors", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () =>
+				Promise.resolve({
+					error: "Some task fields are invalid",
+					fieldErrors: {
+						assigneeIds: "Assignee is no longer available",
+						projectId: "Project is no longer available",
+					},
+				}),
+		});
+		const { api } = await import("./api");
+
+		await expect(
+			api.createCard(7, { columnId: 1, title: "Plan release" }),
+		).rejects.toMatchObject({
+			message: "Some task fields are invalid",
+			status: 400,
+			fieldErrors: {
+				assigneeIds: "Assignee is no longer available",
+				projectId: "Project is no longer available",
+			},
+		});
+	});
+
 	it("prefixes board, metrics, activity, presence, and card methods with workspace id", async () => {
 		mockFetch.mockClear();
 		mockFetch.mockResolvedValue({
