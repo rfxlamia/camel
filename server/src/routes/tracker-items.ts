@@ -41,6 +41,7 @@ import {
 	listMergedWorkItems,
 } from "./work-item-response.js";
 import { getWorkItemEvents } from "./work-item-events.js";
+import { createTrackerItemHandler } from "./tracker-item-create.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
 
@@ -292,23 +293,6 @@ async function syncTrackerItemLabels(
 	}
 }
 
-async function getBacklogStatusId(
-	dbExec: DBExecutor,
-	workspaceId: number,
-): Promise<number> {
-	const row = await dbExec
-		.selectFrom("tracker_vocabularies")
-		.select("id")
-		.where("workspace_id", "=", workspaceId)
-		.where("kind", "=", "status")
-		.where(sql`lower(name)`, "=", "backlog")
-		.executeTakeFirst();
-	if (!row) {
-		throw new Error("Backlog status not found for workspace");
-	}
-	return row.id;
-}
-
 async function getStatusCategory(
 	dbExec: DBExecutor,
 	workspaceId: number,
@@ -426,175 +410,7 @@ trackerItemsRouter.get(
 trackerItemsRouter.post(
 	"/tracker/items",
 	requireWorkspaceMember,
-	async (req, res) => {
-		const { workspaceId } = req.workspace!;
-		const actor = req.user!;
-		const body = req.body ?? {};
-
-		const trimmedTitle =
-			typeof body.title === "string" ? body.title.trim() : "";
-		if (!trimmedTitle) {
-			return res.status(400).json({ error: "title is required" });
-		}
-
-		const description =
-			typeof body.description === "string" ? body.description : "";
-
-		let assigneeIds: number[] = [];
-		if (body.assigneeIds !== undefined) {
-			const parsed = await parseAssigneeIds(body, workspaceId);
-			if ("error" in parsed) {
-				return res.status(400).json({ error: parsed.error });
-			}
-			assigneeIds = parsed;
-		}
-
-		let labelIds: number[] = [];
-		if (body.labelIds !== undefined) {
-			const parsed = await parseLabelIds(body, workspaceId);
-			if ("error" in parsed) {
-				return res.status(400).json({ error: parsed.error });
-			}
-			labelIds = parsed;
-		}
-
-		let projectId: number | null = null;
-		let phaseId: number | null = null;
-		if ("projectId" in body || "phaseId" in body) {
-			const parsed = await parseProjectPhase(body, workspaceId);
-			if ("error" in parsed) {
-				return res.status(400).json({ error: parsed.error });
-			}
-			if (parsed.projectId !== undefined) projectId = parsed.projectId;
-			if (parsed.phaseId !== undefined) phaseId = parsed.phaseId;
-		}
-
-		let startDate: string | null | undefined;
-		let endDate: string | null | undefined;
-		if ("startDate" in body || "endDate" in body) {
-			const parsed = parseDateRange(body);
-			if ("error" in parsed) {
-				return res.status(400).json({ error: parsed.error });
-			}
-			if ("startDate" in body) startDate = parsed.startDate;
-			if ("endDate" in body) endDate = parsed.endDate;
-		}
-
-		const prefix = await getWorkspacePrefix(workspaceId);
-		if (!prefix) return res.status(404).json({ error: "Not found" });
-
-		try {
-			const created = await db.transaction().execute(async (trx) => {
-				const counterRow = await trx
-					.updateTable("workspaces")
-					.set({
-						tracker_key_counter: sql`tracker_key_counter + 1`,
-					})
-					.where("id", "=", workspaceId)
-					.returning("tracker_key_counter")
-					.executeTakeFirstOrThrow();
-
-				const statusId =
-					typeof body.statusId === "number" && Number.isInteger(body.statusId)
-						? body.statusId
-						: await getBacklogStatusId(trx, workspaceId);
-
-				const priorityId =
-					body.priorityId === null || body.priorityId === undefined
-						? null
-						: Number.isInteger(body.priorityId)
-							? body.priorityId
-							: null;
-
-				const statusCategory = await getStatusCategory(
-					trx,
-					workspaceId,
-					statusId,
-				);
-				const position = await endOfBucketPosition(
-					trx,
-					workspaceId,
-					projectId,
-					phaseId,
-				);
-
-				const insertValues: Record<string, unknown> = {
-					workspace_id: workspaceId,
-					key_number: counterRow.tracker_key_counter,
-					title: trimmedTitle,
-					description,
-					status_id: statusId,
-					priority_id: priorityId,
-					project_id: projectId,
-					phase_id: phaseId,
-					position,
-				};
-				if (startDate !== undefined) insertValues.start_date = startDate;
-				if (endDate !== undefined) insertValues.end_date = endDate;
-				if (statusCategory === "completed") {
-					insertValues.completed_at = sql`now()`;
-				}
-
-				const inserted = await trx
-					.insertInto("tracker_items")
-					.values(insertValues as never)
-					.returning("id")
-					.executeTakeFirstOrThrow();
-
-				if (assigneeIds.length > 0) {
-					await syncTrackerItemAssignees(trx, inserted.id, assigneeIds);
-				}
-
-				if (labelIds.length > 0) {
-					await syncTrackerItemLabels(trx, inserted.id, labelIds);
-				}
-
-				await recordTrackerActivity(
-					trx,
-					actor,
-					workspaceId,
-					"tracker_item_created",
-					{
-						trackerItemId: inserted.id,
-						payload: {
-							title: trimmedTitle,
-							key: formatKey(prefix, counterRow.tracker_key_counter),
-						},
-					},
-				);
-
-				return inserted.id;
-			});
-
-			const row = await findItemByKeyNumber(
-				db,
-				workspaceId,
-				(
-					await db
-						.selectFrom("tracker_items")
-						.select("key_number")
-						.where("id", "=", created)
-						.executeTakeFirstOrThrow()
-				).key_number,
-			);
-			if (!row) return res.status(500).json({ error: "create failed" });
-
-			const item = await hydrateMutationItem(db, row, prefix, {
-				canonicalWorkItem: req.canonicalWorkItemsRoute,
-			});
-			await publishEvent(workspaceId, {
-				type: "tracker.created",
-				actor,
-				trackerItemId: created,
-			});
-			res.status(201).json(item);
-		} catch (err) {
-			if (err instanceof Error && err.message.includes("Backlog")) {
-				return res.status(500).json({ error: err.message });
-			}
-			throw err;
-		}
-	},
+	createTrackerItemHandler,
 );
 
 trackerItemsRouter.get(

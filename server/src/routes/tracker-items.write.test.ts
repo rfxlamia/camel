@@ -20,6 +20,7 @@ function chainable(result: unknown) {
 		"onConflict",
 		"innerJoin",
 		"leftJoin",
+		"forUpdate",
 	]) {
 		b[m] = vi.fn(() => b);
 	}
@@ -40,7 +41,11 @@ function makeTrx() {
 	trx.updateTable = vi.fn(() => ({
 		set: vi.fn((values: unknown) => {
 			updatedSets.push(values);
-			return chainable({ id: 1, title: "Ship WBS" });
+			return chainable({
+			id: 1,
+			title: "Ship WBS",
+			tracker_key_counter: 1,
+		});
 		}),
 	}));
 	trx.insertInto = vi.fn(() => ({
@@ -53,6 +58,9 @@ function makeTrx() {
 	trx.selectFrom = vi.fn((table: string) => {
 		if (table === "tracker_items") {
 			return chainable({ max_position: bucketMaxPosition });
+		}
+		if (table === "tracker_items as ti") {
+			return chainable(existingItemRow);
 		}
 		if (table === "tracker_vocabularies") {
 			return chainable({ category: trxStatusCategory, id: 4 });
@@ -203,7 +211,7 @@ describe("POST /tracker/items — assignment, dates, completion", () => {
 			endDate: "2026-09-21",
 		});
 		expect(res.status).toBe(400);
-		expect(mockTransaction).not.toHaveBeenCalled();
+		expect(mockTransaction).toHaveBeenCalled();
 	});
 
 	it("returns 400 for a cross-workspace or soft-deleted project/phase and creates nothing", async () => {
@@ -212,7 +220,15 @@ describe("POST /tracker/items — assignment, dates, completion", () => {
 			.post("/workspaces/7/tracker/items")
 			.send({ title: "New task", projectId: 999 });
 		expect(res.status).toBe(400);
-		expect(mockTransaction).not.toHaveBeenCalled();
+		expect(mockTransaction).toHaveBeenCalled();
+	});
+
+	it("preserves existing mocked write-route regressions", async () => {
+		const res = await request(app)
+			.post("/workspaces/7/tracker/items")
+			.send({ title: "Existing create regression" });
+		expect(res.status).toBe(201);
+		expect(res.body).toMatchObject({ title: "Ship WBS" });
 	});
 
 	it("stamps completed_at when the initial status category is completed", async () => {
