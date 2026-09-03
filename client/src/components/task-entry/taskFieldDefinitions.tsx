@@ -242,11 +242,10 @@ export function getBoardTaskFieldDefinitions(
 	];
 }
 
-export function getTrackerTaskFieldDefinitions(
+function buildTrackerTaskFields(
 	catalogs: TaskMetadataCatalogs,
-	lock?: TrackerFieldLockContext,
 ): TaskFieldCommandDefinition[] {
-	const fields: TaskFieldCommandDefinition[] = [
+	return [
 		catalogField(
 			"statusId",
 			"Status",
@@ -306,6 +305,13 @@ export function getTrackerTaskFieldDefinitions(
 		dateField("startDate", "Start date"),
 		dateField("endDate", "End date"),
 	];
+}
+
+export function getTrackerTaskFieldDefinitions(
+	catalogs: TaskMetadataCatalogs,
+	lock?: TrackerFieldLockContext,
+): TaskFieldCommandDefinition[] {
+	const fields = buildTrackerTaskFields(catalogs);
 
 	if (!isValidLock(lock)) {
 		return fields;

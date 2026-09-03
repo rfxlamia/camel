@@ -102,15 +102,22 @@ export function TaskMetadataCatalogProvider({
 	);
 
 	const loadCatalog = useCallback(
-		async (key: TaskMetadataCatalogKey, activeWorkspaceId: number) => {
+		async (
+			key: TaskMetadataCatalogKey,
+			activeWorkspaceId: number,
+			expectedSeq: number,
+		) => {
+			const isActive = () => expectedSeq === loadSeqRef.current;
 			const cacheKey = `${activeWorkspaceId}:${key}`;
 			const existing = inFlightRef.current.get(cacheKey);
 			if (existing) {
 				const entry = await existing;
+				if (!isActive()) return;
 				setCatalogs((prev) => ({ ...prev, [key]: entry }));
 				return;
 			}
 
+			if (!isActive()) return;
 			setCatalogs((prev) => ({ ...prev, [key]: { status: "loading" } }));
 
 			const request = LOADERS[key](activeWorkspaceId)
@@ -125,6 +132,7 @@ export function TaskMetadataCatalogProvider({
 
 			inFlightRef.current.set(cacheKey, request);
 			const entry = await request;
+			if (!isActive()) return;
 			setCatalogs((prev) => ({ ...prev, [key]: entry }));
 		},
 		[],
@@ -135,7 +143,7 @@ export function TaskMetadataCatalogProvider({
 			if (workspaceId === null) return;
 			const cacheKey = `${workspaceId}:${key}`;
 			inFlightRef.current.delete(cacheKey);
-			void loadCatalog(key, workspaceId);
+			void loadCatalog(key, workspaceId, loadSeqRef.current);
 		},
 		[loadCatalog, workspaceId],
 	);
@@ -150,9 +158,7 @@ export function TaskMetadataCatalogProvider({
 		setCatalogs(loadingCatalogs());
 		const keys = Object.keys(LOADERS) as TaskMetadataCatalogKey[];
 		for (const key of keys) {
-			void loadCatalog(key, workspaceId).then(() => {
-				if (seq !== loadSeqRef.current) return;
-			});
+			void loadCatalog(key, workspaceId, seq);
 		}
 	}, [loadCatalog, workspaceId]);
 

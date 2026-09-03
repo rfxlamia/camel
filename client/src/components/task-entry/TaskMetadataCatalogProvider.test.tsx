@@ -223,4 +223,56 @@ describe("TaskMetadataCatalogProvider", () => {
 		expect(mockListTrackerProjects).toHaveBeenNthCalledWith(1, 7);
 		expect(mockListTrackerProjects).toHaveBeenNthCalledWith(2, 9);
 	});
+
+	it("ignores stale workspace catalog responses after workspace switch", async () => {
+		const ws7Members: WorkspaceMember[] = [
+			{ userId: 1, username: "ws7", displayName: "Workspace 7", role: "member" },
+		];
+		const ws9Members: WorkspaceMember[] = [
+			{ userId: 2, username: "ws9", displayName: "Workspace 9", role: "member" },
+		];
+		let resolveWs7Members: (value: { members: WorkspaceMember[] }) => void = () => {};
+		const ws7MembersPending = new Promise<{ members: WorkspaceMember[] }>((resolve) => {
+			resolveWs7Members = resolve;
+		});
+
+		mockGetWorkspaceMembers.mockImplementation((workspaceId: number) => {
+			if (workspaceId === 7) return ws7MembersPending;
+			return Promise.resolve({ members: ws9Members });
+		});
+
+		function AssigneeProbe() {
+			const catalogs = useTaskMetadataCatalogs();
+			const assignee = catalogs.assignee;
+			if (assignee.status !== "ready") {
+				return <span data-testid="assignee-status">{assignee.status}</span>;
+			}
+			return (
+				<span data-testid="assignee-ids">
+					{assignee.items.map((member) => member.userId).join(",")}
+				</span>
+			);
+		}
+
+		const { rerender } = render(
+			<TaskMetadataCatalogProvider workspaceId={7}>
+				<AssigneeProbe />
+			</TaskMetadataCatalogProvider>,
+		);
+
+		rerender(
+			<TaskMetadataCatalogProvider workspaceId={9}>
+				<AssigneeProbe />
+			</TaskMetadataCatalogProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByTestId("assignee-ids").textContent).toBe("2");
+		});
+
+		resolveWs7Members({ members: ws7Members });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(screen.getByTestId("assignee-ids").textContent).toBe("2");
+	});
 });
