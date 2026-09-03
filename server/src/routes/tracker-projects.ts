@@ -7,6 +7,7 @@ import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import { recordActivity } from "./helpers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
+import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 const PROJECT_COLUMNS = [
 	"id",
@@ -321,12 +322,15 @@ trackerProjectsRouter.delete(
 		}
 
 		const released = await db.transaction().execute(async (trx) => {
+			await lockWorkspaceMutation(trx, workspaceId);
+
 			const project = await trx
 				.selectFrom("tracker_projects")
 				.select(["id"])
 				.where("id", "=", projectId)
 				.where("workspace_id", "=", workspaceId)
 				.where("deleted_at", "is", null)
+				.forUpdate()
 				.executeTakeFirst();
 
 			if (!project) {

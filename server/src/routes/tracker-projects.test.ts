@@ -358,6 +358,91 @@ describe("DELETE /tracker/projects/:id", () => {
 		const cardRelease = updatedSets.find((u) => u.table === "cards");
 		expect(cardRelease?.values).toHaveProperty("version");
 	});
+
+	it("locks project removal before dependent scans", async () => {
+		const orchestrationLog: string[] = [];
+
+		function makeDeleteOrchestrationTrx() {
+			const trx: any = {};
+			trx.selectFrom = vi.fn((table: string) => {
+				if (table === "workspaces") {
+					const b = chainable({ id: 7 });
+					b.forUpdate = vi.fn(() => {
+						orchestrationLog.push("workspace_lock");
+						return b;
+					});
+					return b;
+				}
+				if (table === "tracker_projects") {
+					const b = chainable({ id: 3 });
+					b.forUpdate = vi.fn(() => {
+						orchestrationLog.push("project_lock");
+						return b;
+					});
+					b.executeTakeFirst = vi.fn(async () => {
+						orchestrationLog.push("project_revalidate");
+						return { id: 3 };
+					});
+					return b;
+				}
+				if (table === "tracker_items") {
+					const b = chainable(itemRows);
+					b.execute = vi.fn(async () => {
+						orchestrationLog.push("scan_items");
+						return itemRows;
+					});
+					return b;
+				}
+				if (table === "cards") {
+					const b = chainable(cardRows);
+					b.execute = vi.fn(async () => {
+						orchestrationLog.push("scan_cards");
+						return cardRows;
+					});
+					return b;
+				}
+				return chainable([]);
+			});
+			trx.updateTable = vi.fn((table: string) => ({
+				set: vi.fn((values: unknown) => {
+					orchestrationLog.push(`update:${table}`);
+					updatedSets.push({ table, values });
+					const rows =
+						table === "tracker_items"
+							? itemRows
+							: table === "cards"
+								? cardRows.map((card) => ({ id: card.id }))
+								: undefined;
+					return chainable(rows);
+				}),
+			}));
+			return trx;
+		}
+
+		mockTransaction.mockImplementation(() => ({
+			execute: (cb: (trx: unknown) => unknown) =>
+				cb(makeDeleteOrchestrationTrx()),
+		}));
+
+		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
+
+		const workspaceLockIdx = orchestrationLog.indexOf("workspace_lock");
+		const projectLockIdx = orchestrationLog.indexOf("project_lock");
+		const scanItemsIdx = orchestrationLog.indexOf("scan_items");
+		const scanCardsIdx = orchestrationLog.indexOf("scan_cards");
+		const softDeleteProjectIdx = orchestrationLog.indexOf(
+			"update:tracker_projects",
+		);
+
+		expect(workspaceLockIdx).toBeGreaterThanOrEqual(0);
+		expect(projectLockIdx).toBeGreaterThan(workspaceLockIdx);
+		expect(scanItemsIdx).toBeGreaterThan(projectLockIdx);
+		expect(scanCardsIdx).toBeGreaterThan(projectLockIdx);
+		expect(softDeleteProjectIdx).toBeGreaterThan(scanItemsIdx);
+		expect(softDeleteProjectIdx).toBeGreaterThan(scanCardsIdx);
+		expect(recordTrackerActivity).toHaveBeenCalled();
+		expect(recordActivity).toHaveBeenCalled();
+	});
 });
 
 describe("GET /tracker/projects", () => {
