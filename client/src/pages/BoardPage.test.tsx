@@ -7,15 +7,29 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseBoard, applyTemplate, refresh, showToast, navigate, moveCard } =
-	vi.hoisted(() => ({
-		mockUseBoard: vi.fn(),
-		applyTemplate: vi.fn(),
-		refresh: vi.fn(),
-		showToast: vi.fn(),
-		navigate: vi.fn(),
-		moveCard: vi.fn(),
-	}));
+const {
+	mockUseBoard,
+	applyTemplate,
+	refresh,
+	showToast,
+	navigate,
+	moveCard,
+	createCard,
+	mockGetWorkspaceMembers,
+	mockListTrackerVocabularies,
+	mockListTrackerProjects,
+} = vi.hoisted(() => ({
+	mockUseBoard: vi.fn(),
+	applyTemplate: vi.fn(),
+	refresh: vi.fn(),
+	showToast: vi.fn(),
+	navigate: vi.fn(),
+	moveCard: vi.fn(),
+	createCard: vi.fn(),
+	mockGetWorkspaceMembers: vi.fn(),
+	mockListTrackerVocabularies: vi.fn(),
+	mockListTrackerProjects: vi.fn(),
+}));
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
@@ -30,18 +44,30 @@ vi.mock("../api", () => ({
 	ApiError: class ApiError extends Error {
 		status: number;
 		code?: string;
-		constructor(message: string, status: number, code?: string) {
+		fieldErrors?: Record<string, string>;
+		constructor(
+			message: string,
+			status: number,
+			code?: string,
+			_retryAfterMs?: number,
+			fieldErrors?: Record<string, string>,
+		) {
 			super(message);
 			this.status = status;
 			this.code = code;
+			this.fieldErrors = fieldErrors;
 		}
 	},
 	api: {
 		applyTemplate: (...a: unknown[]) => applyTemplate(...a),
 		createColumn: vi.fn(),
-		createCard: vi.fn(),
+		createCard: (...a: unknown[]) => createCard(...a),
 		moveCard: (...a: unknown[]) => moveCard(...a),
 		updateColumn: vi.fn(),
+		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
+		listTrackerVocabularies: (...a: unknown[]) =>
+			mockListTrackerVocabularies(...a),
+		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 	},
 }));
 
@@ -54,7 +80,7 @@ vi.mock("../components/SuccessAnimation", () => ({
 
 import { ApiError } from "../api";
 import BoardPage from "./BoardPage";
-import type { Column } from "../types";
+import type { Column, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 import type { SetStateAction } from "react";
 
 function makeListBoardValue(
@@ -111,6 +137,53 @@ beforeEach(() => {
 		dueDate: null,
 		assignees: [],
 	});
+	createCard.mockReset().mockResolvedValue({
+		id: 99,
+		columnId: 1,
+		title: "New card",
+		description: "",
+		position: 1,
+		version: 1,
+		createdAt: "2026-08-01T00:00:00.000Z",
+		updatedAt: "2026-08-01T00:00:00.000Z",
+		startedAt: null,
+		doneAt: null,
+		dueDate: null,
+		assignees: [],
+	});
+	mockGetWorkspaceMembers.mockReset().mockResolvedValue({
+		members: [
+			{ userId: 1, username: "rafi", displayName: "Rafi", role: "member" },
+		] satisfies WorkspaceMember[],
+	});
+	mockListTrackerVocabularies.mockReset().mockImplementation(
+		(_workspaceId: number, kind: string) => {
+			if (kind === "priority") {
+				return Promise.resolve([
+					{
+						id: 10,
+						kind: "priority",
+						name: "High",
+						position: 1,
+						colour: "#f00",
+					},
+				] satisfies TrackerVocabulary[]);
+			}
+			if (kind === "label") return Promise.resolve([]);
+			return Promise.resolve([]);
+		},
+	);
+	mockListTrackerProjects.mockReset().mockResolvedValue([
+		{
+			id: 1,
+			name: "Web",
+			startDate: null,
+			endDate: null,
+			position: 1,
+			version: 1,
+			phases: [],
+		},
+	] satisfies TrackerProject[]);
 	mockUseBoard.mockReturnValue({
 		columns: [],
 		setColumns: vi.fn(),
@@ -465,5 +538,223 @@ describe("BoardPage list view column change", () => {
 		await waitFor(() =>
 			expect(screen.getByLabelText("To Do, Ship feature")).toBeTruthy(),
 		);
+	});
+});
+
+const boardColumns: Column[] = [
+	{
+		id: 1,
+		title: "To do",
+		position: 0,
+		wipLimit: null,
+		policy: "",
+		isDone: false,
+		isSignable: false,
+		signableAssigneeId: null,
+		color: null,
+		cards: [],
+	},
+	{
+		id: 2,
+		title: "In Progress",
+		position: 1,
+		wipLimit: null,
+		policy: "",
+		isDone: false,
+		isSignable: false,
+		signableAssigneeId: null,
+		color: null,
+		cards: [],
+	},
+];
+
+function renderBoardView(
+	columns: Column[] = boardColumns,
+	workspaceId = 7,
+) {
+	mockUseBoard.mockReturnValue({
+		columns,
+		setColumns: vi.fn(),
+		loadError: false,
+		refresh,
+		cancelScheduledRefresh: vi.fn(),
+		showToast,
+		deleteCard: vi.fn(),
+		saveCard: vi.fn(),
+		activeWorkspaceId: workspaceId,
+		boardViewMode: "board",
+		setBoardViewMode: vi.fn(),
+	});
+	return render(<BoardPage />);
+}
+
+function openFirstAddCard() {
+	const addButtons = screen.getAllByRole("button", { name: /add card/i });
+	fireEvent.click(addButtons[0]!);
+}
+
+function getTitleTextarea() {
+	return screen.getAllByRole("combobox", {
+		name: "Task title",
+	})[0] as HTMLTextAreaElement;
+}
+
+async function pickFieldValue(fieldLabel: string, valueLabel: string) {
+	const textarea = getTitleTextarea();
+	const currentTitle = textarea.value.replace(/\s+$/, "");
+	fireEvent.change(textarea, { target: { value: `${currentTitle} ` } });
+	fireEvent.keyDown(textarea, { key: "@" });
+	await waitFor(() =>
+		expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+	);
+	const fieldOptions = screen.getAllByRole("option");
+	const fieldIndex = fieldOptions.findIndex((option) =>
+		option.textContent?.includes(fieldLabel),
+	);
+	for (let i = 0; i < fieldIndex; i++) {
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+	}
+	fireEvent.keyDown(textarea, { key: "Enter" });
+	await waitFor(() =>
+		expect(
+			screen.getByRole("listbox", { name: `${fieldLabel} options` }),
+		).toBeTruthy(),
+	);
+	const valueOptions = screen.getAllByRole("option");
+	const valueIndex = valueOptions.findIndex((option) =>
+		option.textContent?.includes(valueLabel),
+	);
+	for (let i = 0; i < valueIndex; i++) {
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+	}
+	fireEvent.keyDown(textarea, { key: "Enter" });
+}
+
+describe("BoardPage Add Card integration", () => {
+	it("Treat refresh failure as synchronization failure", async () => {
+		refresh
+			.mockRejectedValueOnce(new Error("refresh failed"))
+			.mockResolvedValueOnce(undefined);
+		renderBoardView();
+
+		openFirstAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Sync test" } });
+		fireEvent.click(screen.getAllByRole("button", { name: /add to board/i })[0]!);
+
+		await waitFor(() => expect(createCard).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+		expect(createCard).toHaveBeenCalledTimes(1);
+		expect(
+			showToast.mock.calls.some((call) => String(call[0]).includes("refresh")),
+		).toBe(true);
+		expect(
+			screen.queryByRole("combobox", { name: "Task title" }),
+		).toBeNull();
+	});
+
+	it("mounts one catalog provider per Board workspace", async () => {
+		const view = renderBoardView();
+		await waitFor(() => expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(1));
+		expect(mockListTrackerProjects).toHaveBeenCalledTimes(1);
+		expect(
+			mockListTrackerVocabularies.mock.calls.filter(([, kind]) => kind === "priority"),
+		).toHaveLength(1);
+
+		mockUseBoard.mockReturnValue({
+			columns: boardColumns,
+			setColumns: vi.fn(),
+			loadError: false,
+			refresh,
+			cancelScheduledRefresh: vi.fn(),
+			showToast,
+			deleteCard: vi.fn(),
+			saveCard: vi.fn(),
+			activeWorkspaceId: 9,
+			boardViewMode: "board",
+			setBoardViewMode: vi.fn(),
+		});
+		view.rerender(<BoardPage />);
+
+		await waitFor(() => expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(2));
+		expect(mockGetWorkspaceMembers).toHaveBeenNthCalledWith(1, 7);
+		expect(mockGetWorkspaceMembers).toHaveBeenNthCalledWith(2, 9);
+		expect(mockListTrackerProjects).toHaveBeenCalledTimes(2);
+	});
+
+	it("propagates Board create field errors into Add Card", async () => {
+		createCard.mockRejectedValueOnce(
+			new ApiError("invalid metadata", 400, undefined, undefined, {
+				projectId: "Project is no longer available.",
+				assigneeIds: "Assignee is no longer a workspace member.",
+			}),
+		);
+		renderBoardView();
+
+		openFirstAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+		await pickFieldValue("Assignee", "Rafi");
+		await pickFieldValue("Project", "Web");
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Keep draft" } });
+		fireEvent.click(screen.getAllByRole("button", { name: /add to board/i })[0]!);
+
+		await waitFor(() => expect(createCard).toHaveBeenCalledTimes(1));
+		expect(screen.getByRole("combobox", { name: "Task title" })).toBeTruthy();
+		expect(textarea.value).toBe("Keep draft");
+		const assigneeChip = screen.getAllByRole("button", {
+			name: /^Assignee:\s*Rafi$/i,
+		})[0];
+		const projectChip = screen.getAllByRole("button", {
+			name: /^Project:\s*Web$/i,
+		})[0];
+		expect(assigneeChip?.getAttribute("aria-invalid")).toBe("true");
+		expect(projectChip?.getAttribute("aria-invalid")).toBe("true");
+	});
+
+	it("preserves Board draft for WIP network and server failures", async () => {
+		const cases = [
+			{
+				name: "wip",
+				error: new ApiError("wip", 409),
+				toastKind: "warning",
+			},
+			{
+				name: "network",
+				error: new Error("network down"),
+				toastKind: "error",
+			},
+			{
+				name: "server",
+				error: new ApiError("server boom", 500),
+				toastKind: "error",
+			},
+		] as const;
+
+		for (const testCase of cases) {
+			createCard.mockReset().mockRejectedValueOnce(testCase.error);
+			cleanup();
+			renderBoardView();
+
+			openFirstAddCard();
+			await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+			await pickFieldValue("Assignee", "Rafi");
+
+			const textarea = getTitleTextarea();
+			fireEvent.change(textarea, { target: { value: "Draft stays" } });
+			fireEvent.click(
+				screen.getAllByRole("button", { name: /add to board/i })[0]!,
+			);
+
+			await waitFor(() => expect(createCard).toHaveBeenCalledTimes(1));
+			expect(screen.getByRole("combobox", { name: "Task title" })).toBeTruthy();
+			expect(textarea.value).toBe("Draft stays");
+			expect(screen.getByText(/Assignee:\s*Rafi/)).toBeTruthy();
+			expect(
+				showToast.mock.calls.some((call) => call[1] === testCase.toastKind),
+			).toBe(true);
+		}
 	});
 });

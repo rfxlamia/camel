@@ -22,9 +22,11 @@ import ListView from "../components/ListView";
 import TemplatePicker from "../components/TemplatePicker";
 import TrashZone from "../components/TrashZone";
 import ViewSwitcher from "../components/ViewSwitcher";
+import { TaskMetadataCatalogProvider } from "../components/task-entry/TaskMetadataCatalogProvider";
 import { useBoard } from "../context/BoardContext";
 import { moveCardToColumn, revertCardMove } from "../lib/boardColumnMoves";
 import { WORKSPACE_TEMPLATES } from "../lib/templates";
+import type { BoardCreatePayload } from "../lib/taskCreateContracts";
 import type { BoardViewMode } from "../lib/boardViewPrefs";
 import type { WorkspaceTemplate } from "../lib/templates";
 import type { Card, Column } from "../types";
@@ -499,12 +501,11 @@ export default function BoardPage() {
 	};
 
 	const onAddCard = useCallback(
-		async (columnId: number, title: string) => {
+		async (payload: BoardCreatePayload) => {
 			if (activeWorkspaceId === null) return;
 			try {
 				cancelScheduledRefresh();
-				await api.createCard(activeWorkspaceId, { columnId, title });
-				await refresh();
+				await api.createCard(activeWorkspaceId, payload);
 			} catch (err) {
 				if (err instanceof ApiError && err.status === 409) {
 					showToast("WIP limit reached — finish something first.", "warning");
@@ -514,6 +515,16 @@ export default function BoardPage() {
 						"error",
 					);
 				}
+				throw err;
+			}
+			try {
+				await refresh();
+			} catch {
+				showToast(
+					"Card created, but the board couldn't refresh — retrying in the background.",
+					"warning",
+				);
+				void refresh();
 			}
 		},
 		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
@@ -649,23 +660,25 @@ export default function BoardPage() {
 								)}
 							</div>
 						) : (
-							<div className="flex h-full items-start gap-5 pb-2">
-								{columns.map((column, i) => (
-									<div
-										key={column.id}
-										className="animate-rise-in shrink-0"
-										style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
-									>
-										<ColumnView
-											column={column}
-											onOpenCard={onOpenCard}
-											onAddCard={onAddCard}
-											onUpdateColumn={onUpdateColumn}
-										/>
-									</div>
-								))}
-								<AddColumn onAddColumn={onAddColumn} />
-							</div>
+							<TaskMetadataCatalogProvider workspaceId={activeWorkspaceId}>
+								<div className="flex h-full items-start gap-5 pb-2">
+									{columns.map((column, i) => (
+										<div
+											key={column.id}
+											className="animate-rise-in shrink-0"
+											style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+										>
+											<ColumnView
+												column={column}
+												onOpenCard={onOpenCard}
+												onAddCard={onAddCard}
+												onUpdateColumn={onUpdateColumn}
+											/>
+										</div>
+									))}
+									<AddColumn onAddColumn={onAddColumn} />
+								</div>
+							</TaskMetadataCatalogProvider>
 						)}
 						<DragOverlay>
 							{activeCard && (
