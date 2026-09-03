@@ -3,7 +3,7 @@ import {
 	SortableContext,
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus, Settings2, Shuffle, X } from "lucide-react";
+import { Settings2, Shuffle, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
@@ -13,14 +13,16 @@ import {
 	generateSwatchCandidates,
 } from "../lib/columnColorUtils";
 import { resolveColumnAppearance } from "../lib/columnStyleResolver";
+import type { BoardCreatePayload } from "../lib/taskCreateContracts";
 import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
+import AddCard from "./AddCard";
 import CardView from "./CardView";
 
 interface Props {
 	column: Column;
 	onOpenCard: (card: Card) => void;
-	onAddCard: (columnId: number, title: string) => Promise<void>;
+	onAddCard: (payload: BoardCreatePayload) => Promise<void>;
 	onUpdateColumn: (
 		id: number,
 		patch: {
@@ -311,74 +313,6 @@ function ColumnSettings({
 				<button
 					onClick={onClose}
 					className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-				>
-					Cancel
-				</button>
-			</div>
-		</div>
-	);
-}
-
-function AddCard({
-	column,
-	onAddCard,
-}: {
-	column: Column;
-	onAddCard: Props["onAddCard"];
-}) {
-	const [open, setOpen] = useState(false);
-	const [title, setTitle] = useState("");
-	const atLimit =
-		column.wipLimit !== null && column.cards.length >= column.wipLimit;
-
-	if (!open) {
-		return (
-			<button
-				onClick={() => setOpen(true)}
-				disabled={atLimit}
-				title={atLimit ? "WIP limit reached" : undefined}
-				className="mt-2 flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-sm font-medium text-primary-600 transition-colors hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent"
-			>
-				<Plus size={15} className="shrink-0" aria-hidden />
-				Add card
-			</button>
-		);
-	}
-
-	const submit = async () => {
-		if (title.trim() === "") return;
-		await onAddCard(column.id, title.trim());
-		setTitle("");
-		setOpen(false);
-	};
-
-	return (
-		<div className="mt-2 space-y-2">
-			<textarea
-				autoFocus
-				value={title}
-				onChange={(e) => setTitle(e.target.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" && !e.shiftKey) {
-						e.preventDefault();
-						void submit();
-					}
-					if (e.key === "Escape") setOpen(false);
-				}}
-				placeholder="What needs doing?"
-				rows={2}
-				className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none"
-			/>
-			<div className="flex gap-2">
-				<button
-					onClick={() => void submit()}
-					className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-				>
-					Add to board
-				</button>
-				<button
-					onClick={() => setOpen(false)}
-					className="rounded-md px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700"
 				>
 					Cancel
 				</button>
