@@ -137,4 +137,20 @@ describe("work-items route alias", () => {
 
 		expect(res.status).toBe(400);
 	});
+
+	it("preserves canonical and legacy route wiring parity", async () => {
+		const canonicalApp = createApp(workItemsRouter);
+		const legacyApp = createApp(trackerItemsRouter);
+		const [canonical, legacy] = await Promise.all([
+			request(canonicalApp)
+				.post("/workspaces/7/work-items")
+				.send({ title: "   " }),
+			request(legacyApp)
+				.post("/workspaces/7/tracker/items")
+				.send({ title: "   " }),
+		]);
+
+		expect(canonical.status).toBe(legacy.status);
+		expect(canonical.body).toEqual(legacy.body);
+	});
 });
