@@ -133,6 +133,28 @@ describe("membership removal events", () => {
 		expect(clearPresence).toHaveBeenCalledWith(8, 4);
 	});
 
+	it("returns 404 when workspace is missing at removal time", async () => {
+		const removeMember = vi.fn();
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
+			getWorkspace: vi.fn(async () => null),
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole: vi.fn(),
+			removeMember,
+			publishEvent: vi.fn(),
+			clearPresence: vi.fn(),
+		});
+
+		const result = await service.removeMember({
+			actorId: 1,
+			workspaceId: 8,
+			userId: 4,
+		});
+
+		expect(result).toEqual({ status: 404, error: "Not found" });
+		expect(removeMember).not.toHaveBeenCalled();
+	});
+
 	it("returns 404 (not a thrown error) when a concurrent request already removed the member", async () => {
 		const publishEvent = vi.fn(async () => undefined);
 		const clearPresence = vi.fn(async () => undefined);

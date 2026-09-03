@@ -1,6 +1,7 @@
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { clearPresence, publishEvent } from "../realtime.js";
+import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 // ---- Workspace list serialization -------------------------------------------
 
@@ -349,6 +350,7 @@ export const workspaceAccessService = createWorkspaceAccessService({
 	},
 	removeMember: async (workspaceId, userId) => {
 		return db.transaction().execute(async (trx) => {
+			await lockWorkspaceMutation(trx, workspaceId);
 			const deleted = await trx
 				.deleteFrom("workspace_members")
 				.where("workspace_id", "=", workspaceId)
