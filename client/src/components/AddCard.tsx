@@ -95,6 +95,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 		}
 	}, [column.id, draft, onAddCard, submitting]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-sync chip aria-invalid when chips mount or errors change
 	useLayoutEffect(() => {
 		const shell = editorShellRef.current;
 		if (!shell) return;
@@ -151,6 +152,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 						draft={draft}
 						dispatch={dispatch}
 						placeholder="What needs doing?"
+						ariaLabel="Task title"
 					/>
 				</div>
 				<div className="mt-2 flex gap-2">

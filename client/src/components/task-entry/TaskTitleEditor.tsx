@@ -52,6 +52,8 @@ interface TaskTitleEditorProps {
 	draft: TaskMetadataDraft;
 	dispatch: (action: TaskMetadataAction) => void;
 	placeholder?: string;
+	/** Accessible name for the combobox; defaults to placeholder. */
+	ariaLabel?: string;
 	titleMaxLength?: number;
 	fieldErrors?: Partial<Record<string, string>>;
 	onTitleChange?: (plainTitle: string) => void;
@@ -124,6 +126,7 @@ export const TaskTitleEditor = forwardRef<
 		draft,
 		dispatch,
 		placeholder = "Task title",
+		ariaLabel,
 		titleMaxLength = TASK_TITLE_MAX_LENGTH,
 		fieldErrors = {},
 		onTitleChange,
@@ -594,7 +597,7 @@ export const TaskTitleEditor = forwardRef<
 				ref={textareaRef}
 				value={title}
 				placeholder={placeholder}
-				aria-label={placeholder}
+				aria-label={ariaLabel ?? placeholder}
 				role="combobox"
 				aria-expanded={command.open}
 				aria-controls={command.open ? listboxId : undefined}
