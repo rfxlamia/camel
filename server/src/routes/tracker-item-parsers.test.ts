@@ -18,7 +18,12 @@ vi.mock("../db/kysely.js", () => ({
 	},
 }));
 
-import { parseDateRange, parseLabelIds, parsePriorityId, parseProjectPhase } from "./tracker-item-parsers.js";
+import {
+	parseDateRange,
+	parseLabelIds,
+	parsePriorityId,
+	parseProjectPhase,
+} from "./tracker-item-parsers.js";
 
 describe("parseProjectPhase", () => {
 	beforeEach(() => mockExecuteTakeFirst.mockReset());
@@ -45,10 +50,7 @@ describe("parseProjectPhase", () => {
 	});
 
 	it("returns an error for {projectId: null, phaseId: X}", async () => {
-		const result = await parseProjectPhase(
-			{ projectId: null, phaseId: 5 },
-			7,
-		);
+		const result = await parseProjectPhase({ projectId: null, phaseId: 5 }, 7);
 		expect(result).toEqual({ error: expect.any(String) });
 	});
 
@@ -166,11 +168,39 @@ describe("parseDateRange", () => {
 			startDate: "2026-09-30",
 			endDate: "2026-09-21",
 		});
-		expect(result).toEqual({ error: expect.any(String) });
+		expect(result).toMatchObject({ error: expect.any(String) });
+		expect(result).toHaveProperty("fieldErrors.endDate");
 	});
 
 	it("returns an error when a string is not a calendar date", () => {
 		const result = parseDateRange({ startDate: "not-a-date" });
-		expect(result).toEqual({ error: expect.any(String) });
+		expect(result).toMatchObject({ error: expect.any(String) });
+		expect(result).toHaveProperty("fieldErrors.startDate");
+	});
+
+	it("rejects malformed and reversed date-only inputs", () => {
+		const malformed = parseDateRange({
+			startDate: "2026-02-30",
+			endDate: "not-a-date",
+		});
+		expect(malformed).toMatchObject({
+			fieldErrors: {
+				startDate: expect.any(String),
+				endDate: expect.any(String),
+			},
+		});
+		expect(malformed).not.toHaveProperty("startDate");
+
+		const reversed = parseDateRange({
+			startDate: "2026-09-30",
+			endDate: "2026-09-21",
+		});
+		expect(reversed).toMatchObject({
+			error: "end date must not precede start date",
+			fieldErrors: {
+				startDate: "end date must not precede start date",
+				endDate: "end date must not precede start date",
+			},
+		});
 	});
 });

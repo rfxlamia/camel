@@ -1,12 +1,12 @@
-import { db } from "../db/kysely.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { validateDueDate } from "../validators/input-length.js";
-import { lookupMembership } from "./helpers.js";
 
 async function lookupProject(
 	workspaceId: number,
 	projectId: number,
+	dbExec: DBExecutor = db,
 ): Promise<{ id: number } | undefined> {
-	return db
+	return dbExec
 		.selectFrom("tracker_projects")
 		.select("id")
 		.where("id", "=", projectId)
@@ -18,8 +18,9 @@ async function lookupProject(
 async function lookupPhase(
 	workspaceId: number,
 	phaseId: number,
+	dbExec: DBExecutor = db,
 ): Promise<{ id: number; project_id: number } | undefined> {
-	return db
+	return dbExec
 		.selectFrom("tracker_phases as tp")
 		.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
 		.select(["tp.id as id", "tp.project_id as project_id"])
@@ -33,6 +34,7 @@ async function lookupPhase(
 export async function parsePriorityId(
 	body: Record<string, unknown>,
 	workspaceId: number,
+	dbExec: DBExecutor = db,
 ): Promise<number | null | { error: string }> {
 	if (!("priorityId" in body)) {
 		return { error: "priorityId must be an integer or null" };
@@ -44,7 +46,7 @@ export async function parsePriorityId(
 	if (!Number.isInteger(raw)) {
 		return { error: "priorityId must be an integer or null" };
 	}
-	const row = await db
+	const row = await dbExec
 		.selectFrom("tracker_vocabularies")
 		.select("id")
 		.where("id", "=", raw as number)
@@ -60,6 +62,7 @@ export async function parsePriorityId(
 export async function parseLabelIds(
 	body: Record<string, unknown>,
 	workspaceId: number,
+	dbExec: DBExecutor = db,
 ): Promise<number[] | { error: string }> {
 	const raw = body.labelIds;
 	if (!Array.isArray(raw)) {
@@ -73,7 +76,7 @@ export async function parseLabelIds(
 		ids.push(id as number);
 	}
 	for (const labelId of [...new Set(ids)]) {
-		const row = await db
+		const row = await dbExec
 			.selectFrom("tracker_vocabularies")
 			.select("id")
 			.where("id", "=", labelId)
@@ -90,6 +93,7 @@ export async function parseLabelIds(
 export async function parseAssigneeIds(
 	body: Record<string, unknown>,
 	workspaceId: number,
+	dbExec: DBExecutor = db,
 ): Promise<number[] | { error: string }> {
 	const raw = body.assigneeIds;
 	if (!Array.isArray(raw)) {
@@ -103,7 +107,13 @@ export async function parseAssigneeIds(
 		ids.push(id as number);
 	}
 	for (const userId of [...new Set(ids)]) {
-		const role = await lookupMembership(userId, workspaceId);
+		const member = await dbExec
+			.selectFrom("workspace_members")
+			.select("role")
+			.where("workspace_id", "=", workspaceId)
+			.where("user_id", "=", userId)
+			.executeTakeFirst();
+		const role = member?.role;
 		if (!role) {
 			return { error: "assignee must be a member of this workspace" };
 		}
@@ -120,6 +130,7 @@ export async function parseAssigneeIds(
 export async function parseProjectPhase(
 	body: Record<string, unknown>,
 	workspaceId: number,
+	dbExec: DBExecutor = db,
 ): Promise<
 	{ projectId?: number | null; phaseId?: number | null } | { error: string }
 > {
@@ -159,7 +170,7 @@ export async function parseProjectPhase(
 		typeof rawPhaseId === "number" &&
 		Number.isInteger(rawPhaseId)
 	) {
-		const phase = await lookupPhase(workspaceId, rawPhaseId);
+		const phase = await lookupPhase(workspaceId, rawPhaseId, dbExec);
 		if (!phase) {
 			return { error: "phase must belong to this workspace" };
 		}
@@ -172,7 +183,7 @@ export async function parseProjectPhase(
 			if (phase.project_id !== rawProjectId) {
 				return { error: "phase must belong to the selected project" };
 			}
-			const project = await lookupProject(workspaceId, rawProjectId);
+			const project = await lookupProject(workspaceId, rawProjectId, dbExec);
 			if (!project) {
 				return { error: "project must belong to this workspace" };
 			}
@@ -180,7 +191,11 @@ export async function parseProjectPhase(
 		}
 
 		if (!hasProjectId || rawProjectId === undefined) {
-			const project = await lookupProject(workspaceId, phase.project_id);
+			const project = await lookupProject(
+				workspaceId,
+				phase.project_id,
+				dbExec,
+			);
 			if (!project) {
 				return { error: "project must belong to this workspace" };
 			}
@@ -194,7 +209,7 @@ export async function parseProjectPhase(
 		Number.isInteger(rawProjectId) &&
 		(!hasPhaseId || rawPhaseId === null || rawPhaseId === undefined)
 	) {
-		const project = await lookupProject(workspaceId, rawProjectId);
+		const project = await lookupProject(workspaceId, rawProjectId, dbExec);
 		if (!project) {
 			return { error: "project must belong to this workspace" };
 		}
@@ -215,6 +230,7 @@ export async function parseCardProjectPhase(
 	body: Record<string, unknown>,
 	workspaceId: number,
 	cardProjectId: number | null,
+	dbExec: DBExecutor = db,
 ): Promise<
 	{ projectId?: number | null; phaseId?: number | null } | { error: string }
 > {
@@ -237,7 +253,11 @@ export async function parseCardProjectPhase(
 		if (!Number.isInteger(body.phaseId)) {
 			return { error: "projectId and phaseId must be integers or null" };
 		}
-		const phase = await lookupPhase(workspaceId, body.phaseId as number);
+		const phase = await lookupPhase(
+			workspaceId,
+			body.phaseId as number,
+			dbExec,
+		);
 		if (!phase) {
 			return { error: "phase must belong to this workspace" };
 		}
@@ -247,7 +267,7 @@ export async function parseCardProjectPhase(
 		return { phaseId: body.phaseId as number };
 	}
 
-	return parseProjectPhase(body, workspaceId);
+	return parseProjectPhase(body, workspaceId, dbExec);
 }
 
 function parseOptionalDate(
@@ -272,33 +292,56 @@ function parseOptionalDate(
 	return validated.trimmed!;
 }
 
+export type DateRangeFieldErrors = Partial<
+	Record<"startDate" | "endDate", string>
+>;
+
+export type DateRangeParseResult =
+	| { startDate: string | null; endDate: string | null }
+	| { error: string; fieldErrors?: DateRangeFieldErrors };
+
+function dateError(
+	error: string,
+	fieldErrors: DateRangeFieldErrors,
+): DateRangeParseResult {
+	return { error, fieldErrors };
+}
+
 export function parseDateRange(
 	body: Record<string, unknown>,
-): { startDate: string | null; endDate: string | null } | { error: string } {
+): DateRangeParseResult {
 	const hasStart = "startDate" in body;
 	const hasEnd = "endDate" in body;
 
 	let startDate: string | null = null;
 	let endDate: string | null = null;
+	const fieldErrors: DateRangeFieldErrors = {};
 
 	if (hasStart) {
 		const parsed = parseOptionalDate(body.startDate, "startDate");
 		if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
-			return parsed;
+			fieldErrors.startDate = parsed.error;
+		} else {
+			startDate = parsed;
 		}
-		startDate = parsed;
 	}
 
 	if (hasEnd) {
 		const parsed = parseOptionalDate(body.endDate, "endDate");
 		if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
-			return parsed;
+			fieldErrors.endDate = parsed.error;
+		} else {
+			endDate = parsed;
 		}
-		endDate = parsed;
+	}
+
+	if (Object.keys(fieldErrors).length > 0) {
+		return dateError(Object.values(fieldErrors)[0] as string, fieldErrors);
 	}
 
 	if (startDate !== null && endDate !== null && endDate < startDate) {
-		return { error: "end date must not precede start date" };
+		const error = "end date must not precede start date";
+		return dateError(error, { startDate: error, endDate: error });
 	}
 
 	return { startDate, endDate };
