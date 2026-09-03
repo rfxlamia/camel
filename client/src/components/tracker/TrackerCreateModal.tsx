@@ -1,24 +1,32 @@
-import { Folder, ListTodo, Signpost, Tag, UserRound, X } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ListTodo, X } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import { NO_PRIORITY, resolveToggle, sortStatusesByPosition } from "../../lib/trackerUtils";
+import type { TaskCreateFieldErrors } from "../../lib/taskCreateContracts";
+import { sortStatusesByPosition } from "../../lib/trackerUtils";
 import type {
 	TrackerProject,
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../../types";
 import {
-	Avatar,
-	LabelDot,
-	PriorityGlyph,
-	StatusGlyph,
-	priorityBars,
-	statusGlyphSpec,
-} from "./TrackerGlyphs";
+	getTrackerTaskFieldDefinitions,
+	type TrackerFieldLockContext,
+} from "../task-entry/taskFieldDefinitions";
+import type { TaskMetadataCatalogs } from "../task-entry/TaskMetadataCatalogProvider";
 import {
-	type PickerOption,
-	TrackerPropertyPicker,
-} from "./TrackerPropertyPicker";
+	TaskTitleEditor,
+	type TaskTitleEditorHandle,
+} from "../task-entry/TaskTitleEditor";
+import {
+	createInitialTaskMetadataDraft,
+	selectTaskMetadataPayload,
+	taskMetadataReducer,
+	type TaskMetadataProject,
+} from "../task-entry/taskMetadataDraft";
+import {
+	TrackerCreateMetadataFields,
+	type TrackerCreatePickerName,
+} from "./TrackerCreateMetadataFields";
 
 interface Props {
 	workspaceId: number;
@@ -34,7 +42,35 @@ interface Props {
 	defaultPhaseId?: number | null;
 }
 
-type PickerName = "status" | "priority" | "assignees" | "labels" | "project" | "phase";
+function toMetadataProjects(projects: TrackerProject[]): TaskMetadataProject[] {
+	return projects.map((project) => ({
+		id: project.id,
+		phases: project.phases.map((phase) => ({
+			id: phase.id,
+			projectId: project.id,
+		})),
+	}));
+}
+
+function resolveInitialStatusId(
+	statuses: TrackerVocabulary[],
+	defaultStatusId?: number,
+): number | null {
+	if (defaultStatusId !== undefined) return defaultStatusId;
+	const ordered = sortStatusesByPosition(statuses);
+	if (ordered.length === 0) return null;
+	const backlog = ordered.find((s) => s.name.toLowerCase() === "backlog");
+	return (backlog ?? ordered[0]).id;
+}
+
+function isValidLockContext(lock: TrackerFieldLockContext | undefined): boolean {
+	if (!lock?.lockedProjectId) return false;
+	const projects = lock.projects ?? [];
+	const project = projects.find((candidate) => candidate.id === lock.lockedProjectId);
+	if (!project) return false;
+	if (lock.lockedPhaseId == null) return true;
+	return project.phases.some((phase) => phase.id === lock.lockedPhaseId);
+}
 
 export default function TrackerCreateModal({
 	workspaceId,
@@ -46,46 +82,96 @@ export default function TrackerCreateModal({
 	defaultProjectId,
 	defaultPhaseId,
 }: Props) {
-	const lockProjectAssignment = defaultProjectId !== undefined;
-	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
-	const [statusId, setStatusId] = useState<number | undefined>(defaultStatusId);
-	const [priorityId, setPriorityId] = useState<number | null>(null);
-	const [labelIds, setLabelIds] = useState<number[]>([]);
-	const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
-	const [projectId, setProjectId] = useState<number | null>(
-		defaultProjectId ?? null,
-	);
-	const [phaseId, setPhaseId] = useState<number | null>(
-		defaultPhaseId !== undefined ? defaultPhaseId : null,
-	);
 	const [labels, setLabels] = useState<TrackerVocabulary[]>([]);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [fieldErrors, setFieldErrors] = useState<TaskCreateFieldErrors>({});
 	const [createMore, setCreateMore] = useState(false);
-	const [openPicker, setOpenPicker] = useState<PickerName | null>(null);
-	const titleRef = useRef<HTMLTextAreaElement>(null);
+	const [openPicker, setOpenPicker] = useState<TrackerCreatePickerName | null>(null);
+	const [lockReleased, setLockReleased] = useState(false);
+	const [titleEditorKey, setTitleEditorKey] = useState(0);
+	const [titleValid, setTitleValid] = useState(false);
+	const titleEditorRef = useRef<TaskTitleEditorHandle>(null);
 
 	const orderedStatuses = useMemo(
 		() => sortStatusesByPosition(statuses),
 		[statuses],
 	);
-	const orderedPriorities = useMemo(
-		() => sortStatusesByPosition(priorities),
-		[priorities],
+
+	const metadataProjects = useMemo(
+		() => toMetadataProjects(projects),
+		[projects],
 	);
 
-	// Mirrors the server default (Backlog), so the chip never lies about what
-	// will be created.
+	const lockContext = useMemo((): TrackerFieldLockContext | undefined => {
+		if (lockReleased || defaultProjectId === undefined) return undefined;
+		return {
+			lockedProjectId: defaultProjectId,
+			lockedPhaseId: defaultPhaseId,
+			projects: metadataProjects,
+		};
+	}, [defaultPhaseId, defaultProjectId, lockReleased, metadataProjects]);
+
+	const hideProjectPickers =
+		defaultProjectId !== undefined &&
+		!lockReleased &&
+		isValidLockContext(lockContext);
+
+	const [metadataDraft, dispatchMetadata] = useReducer(
+		taskMetadataReducer,
+		undefined,
+		() =>
+			createInitialTaskMetadataDraft({
+				statusId: resolveInitialStatusId(statuses, defaultStatusId),
+				projectId: defaultProjectId ?? null,
+				phaseId: defaultPhaseId !== undefined ? defaultPhaseId : null,
+			}),
+	);
+
+	const catalogs = useMemo((): TaskMetadataCatalogs => {
+		const noopRetry = () => {};
+		return {
+			assignee:
+				members.length > 0
+					? { status: "ready", items: members }
+					: { status: "empty" },
+			priority:
+				priorities.length > 0
+					? { status: "ready", items: priorities }
+					: { status: "empty" },
+			label:
+				labels.length > 0 ? { status: "ready", items: labels } : { status: "empty" },
+			status:
+				statuses.length > 0
+					? { status: "ready", items: statuses }
+					: { status: "empty" },
+			project:
+				projects.length > 0
+					? { status: "ready", items: projects }
+					: { status: "empty" },
+			retry: noopRetry,
+		};
+	}, [labels, members, priorities, projects, statuses]);
+
+	const commandFields = useMemo(
+		() => getTrackerTaskFieldDefinitions(catalogs, lockContext),
+		[catalogs, lockContext],
+	);
+
 	useEffect(() => {
-		if (statusId !== undefined || orderedStatuses.length === 0) return;
+		if (metadataDraft.statusId !== null || orderedStatuses.length === 0) return;
 		const backlog = orderedStatuses.find(
 			(s) => s.name.toLowerCase() === "backlog",
 		);
-		setStatusId((backlog ?? orderedStatuses[0]).id);
-	}, [orderedStatuses, statusId]);
+		dispatchMetadata({
+			type: "setField",
+			field: "statusId",
+			value: (backlog ?? orderedStatuses[0]).id,
+		});
+	}, [metadataDraft.statusId, orderedStatuses]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -105,9 +191,15 @@ export default function TrackerCreateModal({
 		};
 	}, [workspaceId]);
 
-	// Escape peels one layer at a time. A picker closing itself does not stop
-	// the event, so this guard — not event propagation — decides whether the
-	// modal is the layer that closes.
+	useEffect(() => {
+		if (projects.length === 0) return;
+		dispatchMetadata({
+			type: "setProject",
+			projectId: metadataDraft.projectId,
+			projects: metadataProjects,
+		});
+	}, [metadataProjects, metadataDraft.projectId, projects.length]);
+
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.key !== "Escape") return;
@@ -115,126 +207,64 @@ export default function TrackerCreateModal({
 				setOpenPicker(null);
 				return;
 			}
+			if (titleEditorRef.current?.peelEscapeLayer()) return;
 			onClose();
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [onClose, openPicker]);
 
-	const selectedStatus = orderedStatuses.find((s) => s.id === statusId);
-	const selectedPriority = orderedPriorities.find((p) => p.id === priorityId);
-	const selectedLabels = labels.filter((l) => labelIds.includes(l.id));
-	const selectedMembers = members.filter((m) => assigneeIds.includes(m.userId));
-	const selectedProject = projects.find((p) => p.id === projectId);
-	const selectedPhase = selectedProject?.phases.find((p) => p.id === phaseId);
-
-	const statusOptions: PickerOption[] = orderedStatuses.map((s) => ({
-		id: String(s.id),
-		label: s.name,
-		selected: s.id === statusId,
-		icon: <StatusGlyph spec={statusGlyphSpec(orderedStatuses, s.id)} />,
-	}));
-
-	const priorityOptions: PickerOption[] = [
-		{
-			id: NO_PRIORITY,
-			label: "No priority",
-			selected: priorityId === null,
-			icon: <PriorityGlyph bars={0} />,
-		},
-		...orderedPriorities.map((p) => ({
-			id: String(p.id),
-			label: p.name,
-			selected: p.id === priorityId,
-			icon: <PriorityGlyph bars={priorityBars(orderedPriorities, p.id)} />,
-		})),
-	];
-
-	const labelOptions: PickerOption[] = labels.map((l) => ({
-		id: String(l.id),
-		label: l.name,
-		selected: labelIds.includes(l.id),
-		icon: <LabelDot colour={l.colour} />,
-	}));
-
-	const assigneeOptions: PickerOption[] = members.map((m) => ({
-		id: String(m.userId),
-		label: m.displayName,
-		hint: `@${m.username}`,
-		selected: assigneeIds.includes(m.userId),
-		icon: <Avatar name={m.displayName} />,
-	}));
-
-	const projectOptions: PickerOption[] = projects.map((p) => ({
-		id: String(p.id),
-		label: p.name,
-		selected: p.id === projectId,
-	}));
-
-	const phaseOptions: PickerOption[] = (selectedProject?.phases ?? []).map(
-		(ph) => ({
-			id: String(ph.id),
-			label: ph.name,
-			selected: ph.id === phaseId,
-		}),
-	);
-
-	const summarise = (names: string[]) =>
-		names.length === 0
-			? undefined
-			: names.length === 1
-				? names[0]
-				: `${names[0]} +${names.length - 1}`;
-
 	const resetDraft = () => {
-		setTitle("");
+		dispatchMetadata({
+			type: "reset",
+			preserve: ["statusId", "projectId", "phaseId"],
+		});
 		setDescription("");
-		setLabelIds([]);
-		setAssigneeIds([]);
-		if (lockProjectAssignment) {
-			setProjectId(defaultProjectId ?? null);
-			setPhaseId(defaultPhaseId !== undefined ? defaultPhaseId : null);
-		} else {
-			setProjectId(null);
-			setPhaseId(null);
-		}
+		setFieldErrors({});
+		setError(null);
 		setOpenPicker(null);
-		titleRef.current?.focus();
+		setTitleEditorKey((key) => key + 1);
+		setTitleValid(false);
 	};
 
 	const handleSubmit = async (e?: FormEvent) => {
 		e?.preventDefault();
-		if (!title.trim() || submitting) return;
+		const candidate = titleEditorRef.current?.getSubmitCandidate();
+		if (!candidate?.valid || submitting) return;
 		setSubmitting(true);
 		setError(null);
+		setFieldErrors({});
 		try {
-			const body: {
-				title: string;
-				description?: string;
-				statusId?: number;
-				priorityId?: number | null;
-				labelIds?: number[];
-				assigneeIds?: number[];
-				projectId?: number;
-				phaseId?: number;
-			} = { title: title.trim() };
 			const trimmedDescription = description.trim();
+			const metadata = selectTaskMetadataPayload(metadataDraft);
+			const body: Parameters<typeof api.createWorkItem>[1] = {
+				title: candidate.title,
+				priorityId: metadataDraft.priorityId,
+				...metadata,
+			};
 			if (trimmedDescription) body.description = trimmedDescription;
-			if (statusId !== undefined) body.statusId = statusId;
-			body.priorityId = priorityId;
-			if (labelIds.length > 0) body.labelIds = labelIds;
-			if (assigneeIds.length > 0) body.assigneeIds = assigneeIds;
-			if (projectId !== null) {
-				body.projectId = projectId;
-				if (phaseId !== null) body.phaseId = phaseId;
-			}
 			await api.createWorkItem(workspaceId, body);
 			onCreated();
 			if (createMore) resetDraft();
 			else onClose();
 		} catch (err) {
-			if (err instanceof ApiError && err.status === 400) {
-				setError(err.message);
+			if (err instanceof ApiError) {
+				if (err.status === 400) {
+					setError(err.message);
+					if (err.fieldErrors) {
+						setFieldErrors(err.fieldErrors);
+						if (
+							defaultProjectId !== undefined &&
+							!lockReleased &&
+							(err.fieldErrors.projectId || err.fieldErrors.phaseId)
+						) {
+							setLockReleased(true);
+							dispatchMetadata({ type: "removeField", field: "projectId" });
+						}
+					}
+				} else {
+					setError("Could not create the item. Try again.");
+				}
 			} else {
 				setError("Could not create the item. Try again.");
 			}
@@ -243,11 +273,10 @@ export default function TrackerCreateModal({
 		}
 	};
 
+	const titleFilled = titleValid;
+
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-900/40 p-4 pt-[10vh] backdrop-blur-[2px]">
-			{/* mousedown, not click: an open picker also closes itself on a
-			    document mousedown, so a click handler would read a stale
-			    openPicker and dismiss the whole modal. */}
 			<div
 				className="absolute inset-0"
 				data-testid="tracker-create-backdrop"
@@ -296,24 +325,23 @@ export default function TrackerCreateModal({
 					}}
 				>
 					<div className="px-4 pt-2">
-						<label htmlFor="tracker-create-item-title" className="sr-only">
-							Item title
-						</label>
-						<textarea
-							id="tracker-create-item-title"
-							ref={titleRef}
-							value={title}
-							rows={1}
-							placeholder="Item title"
-							onChange={(e) => setTitle(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
-									e.preventDefault();
-								}
-							}}
-							autoFocus
-							className="w-full resize-none border-0 bg-transparent font-medium text-[20px] text-neutral-900 leading-tight placeholder:text-neutral-400 focus:outline-none"
-						/>
+						<div
+							className="w-full font-medium text-[20px] text-neutral-900 leading-tight"
+							data-field-error={fieldErrors.title ?? undefined}
+						>
+							<TaskTitleEditor
+								key={titleEditorKey}
+								ref={titleEditorRef}
+								fields={commandFields}
+								draft={metadataDraft}
+								dispatch={dispatchMetadata}
+								placeholder="Item title"
+								fieldErrors={fieldErrors}
+								suppressPlainEnter
+								layeredEscape
+								onTitleChange={(plain) => setTitleValid(plain.trim().length > 0)}
+							/>
+						</div>
 						<label
 							htmlFor="tracker-create-item-description"
 							className="sr-only"
@@ -326,155 +354,26 @@ export default function TrackerCreateModal({
 							onChange={(e) => setDescription(e.target.value)}
 							rows={4}
 							placeholder="Add description…"
+							data-field-error={fieldErrors.description ?? undefined}
+							aria-invalid={fieldErrors.description ? true : undefined}
 							className="mt-2 w-full resize-none border-0 bg-transparent text-neutral-700 text-sm placeholder:text-neutral-500 focus:outline-none"
 						/>
 					</div>
 
-					<div className="flex flex-wrap items-center gap-2 px-4 pb-3">
-						{orderedStatuses.length > 0 && (
-							<TrackerPropertyPicker
-								placeholder="Status"
-								value={selectedStatus?.name}
-								icon={
-									selectedStatus ? (
-										<StatusGlyph
-											spec={statusGlyphSpec(orderedStatuses, selectedStatus.id)}
-										/>
-									) : (
-										<StatusGlyph spec={{ shape: "pending", fraction: 0 }} />
-									)
-								}
-								searchPlaceholder="Change status…"
-								options={statusOptions}
-								open={openPicker === "status"}
-								onOpenChange={(open) => setOpenPicker(open ? "status" : null)}
-								onSelect={(id) => setStatusId(Number(id))}
-							/>
-						)}
-
-						{orderedPriorities.length > 0 && (
-							<TrackerPropertyPicker
-								placeholder="Priority"
-								value={selectedPriority?.name}
-								icon={
-									<PriorityGlyph
-										bars={
-											selectedPriority
-												? priorityBars(orderedPriorities, selectedPriority.id)
-												: 0
-										}
-									/>
-								}
-								searchPlaceholder="Set priority to…"
-								options={priorityOptions}
-								open={openPicker === "priority"}
-								onOpenChange={(open) => setOpenPicker(open ? "priority" : null)}
-								onSelect={(id) =>
-									setPriorityId(id === NO_PRIORITY ? null : Number(id))
-								}
-							/>
-						)}
-
-						{members.length > 0 && (
-							<TrackerPropertyPicker
-								placeholder="Assignee"
-								value={summarise(selectedMembers.map((m) => m.displayName))}
-								icon={
-									selectedMembers.length > 0 ? (
-										<Avatar name={selectedMembers[0].displayName} size={16} />
-									) : (
-										<UserRound
-											size={14}
-											className="shrink-0 text-neutral-500"
-											aria-hidden
-										/>
-									)
-								}
-								searchPlaceholder="Assign to…"
-								options={assigneeOptions}
-								open={openPicker === "assignees"}
-								onOpenChange={(open) =>
-									setOpenPicker(open ? "assignees" : null)
-								}
-								onSelect={(id) =>
-									setAssigneeIds((prev) => resolveToggle(prev, Number(id)))
-								}
-								multiple
-							/>
-						)}
-
-						{labels.length > 0 && (
-							<TrackerPropertyPicker
-								placeholder="Labels"
-								value={summarise(selectedLabels.map((l) => l.name))}
-								icon={
-									selectedLabels.length > 0 ? (
-										<LabelDot colour={selectedLabels[0].colour} />
-									) : (
-										<Tag
-											size={14}
-											className="shrink-0 text-neutral-500"
-											aria-hidden
-										/>
-									)
-								}
-								searchPlaceholder="Add label…"
-								options={labelOptions}
-								open={openPicker === "labels"}
-								onOpenChange={(open) => setOpenPicker(open ? "labels" : null)}
-								onSelect={(id) =>
-									setLabelIds((prev) => resolveToggle(prev, Number(id)))
-								}
-								multiple
-							/>
-						)}
-
-						{!lockProjectAssignment && projects.length > 0 && (
-							<>
-								<TrackerPropertyPicker
-									placeholder="Project"
-									value={selectedProject?.name}
-									icon={
-										<Folder
-											size={14}
-											className="shrink-0 text-neutral-500"
-											aria-hidden
-										/>
-									}
-									searchPlaceholder="Set project to…"
-									options={projectOptions}
-									open={openPicker === "project"}
-									onOpenChange={(open) =>
-										setOpenPicker(open ? "project" : null)
-									}
-									onSelect={(id) => {
-										setProjectId(Number(id));
-										setPhaseId(null);
-									}}
-								/>
-								<TrackerPropertyPicker
-									placeholder="Phase"
-									value={selectedPhase?.name}
-									icon={
-										<Signpost
-											size={14}
-											className="shrink-0 text-neutral-500"
-											aria-hidden
-										/>
-									}
-									searchPlaceholder="Set phase to…"
-									options={phaseOptions}
-									open={openPicker === "phase"}
-									onOpenChange={(open) =>
-										setOpenPicker(open ? "phase" : null)
-									}
-									onSelect={(id) => {
-										if (projectId === null) return;
-										setPhaseId(Number(id));
-									}}
-								/>
-							</>
-						)}
+					<div className="px-4 pb-3">
+						<TrackerCreateMetadataFields
+							draft={metadataDraft}
+							dispatch={dispatchMetadata}
+							openPicker={openPicker}
+							onOpenPickerChange={setOpenPicker}
+							statuses={statuses}
+							priorities={priorities}
+							labels={labels}
+							members={members}
+							projects={projects}
+							hideProjectPickers={hideProjectPickers}
+							fieldErrors={fieldErrors}
+						/>
 					</div>
 
 					<div className="flex items-center justify-end gap-3 border-neutral-200 border-t px-4 py-3">
@@ -516,7 +415,7 @@ export default function TrackerCreateModal({
 						</button>
 						<button
 							type="submit"
-							disabled={!title.trim() || submitting}
+							disabled={!titleFilled || submitting}
 							className="rounded-md bg-primary-600 px-3 py-1.5 font-medium text-sm text-white shadow-[0_1px_2px_rgba(0,0,0,0.1)] transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none"
 						>
 							Create item

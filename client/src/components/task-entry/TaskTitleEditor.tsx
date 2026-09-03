@@ -43,6 +43,8 @@ export interface TaskSubmitCandidate {
 
 export interface TaskTitleEditorHandle {
 	getSubmitCandidate: () => TaskSubmitCandidate;
+	isCommandOpen: () => boolean;
+	peelEscapeLayer: () => boolean;
 }
 
 interface TaskTitleEditorProps {
@@ -51,6 +53,11 @@ interface TaskTitleEditorProps {
 	dispatch: (action: TaskMetadataAction) => void;
 	placeholder?: string;
 	titleMaxLength?: number;
+	fieldErrors?: Partial<Record<string, string>>;
+	onTitleChange?: (plainTitle: string) => void;
+	suppressPlainEnter?: boolean;
+	/** When true, Escape in the value stage peels to the field menu instead of closing. */
+	layeredEscape?: boolean;
 }
 
 type CommandStage = "field" | "value" | null;
@@ -90,6 +97,10 @@ function findCommandAt(text: string): { start: number; query: string } | null {
 	return { start: atIndex, query };
 }
 
+function isDateFieldId(id: string | null): boolean {
+	return id === "dueDate" || id === "startDate" || id === "endDate";
+}
+
 function isValidCommandTrigger(text: string, atIndex: number): boolean {
 	if (isEmailLikeAt(text, atIndex)) return false;
 	if (atIndex === 0) return true;
@@ -114,6 +125,10 @@ export const TaskTitleEditor = forwardRef<
 		dispatch,
 		placeholder = "Task title",
 		titleMaxLength = TASK_TITLE_MAX_LENGTH,
+		fieldErrors = {},
+		onTitleChange,
+		suppressPlainEnter = false,
+		layeredEscape = false,
 	},
 	ref,
 ) {
@@ -166,6 +181,21 @@ export const TaskTitleEditor = forwardRef<
 		},
 		[command.commandStart, plainTitle, restoreFocus, title],
 	);
+
+	const peelValueToFieldLayer = useCallback(() => {
+		const nextPlain = plainTitle(title, command.commandStart);
+		setTitle(`${nextPlain}@`);
+		setCommand({
+			open: true,
+			stage: "field",
+			fieldId: null,
+			query: "",
+			activeIndex: 0,
+			commandStart: nextPlain.length,
+			editingFieldId: null,
+		});
+		restoreFocus(nextPlain.length + 1);
+	}, [command.commandStart, plainTitle, restoreFocus, title]);
 
 	const announce = useCallback((message: string) => {
 		setAnnouncement(message);
@@ -357,6 +387,7 @@ export const TaskTitleEditor = forwardRef<
 
 	const handleTitleChange = (nextTitle: string) => {
 		setTitle(nextTitle);
+		onTitleChange?.(plainTitle(nextTitle, command.commandStart));
 		setSelectedChipId(null);
 		if (suppressCommandRef.current) {
 			suppressCommandRef.current = false;
@@ -404,11 +435,16 @@ export const TaskTitleEditor = forwardRef<
 		if (event.key === "Escape") {
 			if (command.open) {
 				event.preventDefault();
-				closeCommand(
-					command.commandStart >= 0
-						? plainTitle(title, command.commandStart).length
-						: title.length,
-				);
+				event.stopPropagation();
+				if (layeredEscape && command.stage === "value") {
+					peelValueToFieldLayer();
+				} else {
+					closeCommand(
+						command.commandStart >= 0
+							? plainTitle(title, command.commandStart).length
+							: title.length,
+					);
+				}
 			} else if (selectedChipId) {
 				setSelectedChipId(null);
 			}
@@ -450,6 +486,15 @@ export const TaskTitleEditor = forwardRef<
 		}
 
 		if (event.key === "Enter") {
+			if (
+				suppressPlainEnter &&
+				!command.open &&
+				!event.metaKey &&
+				!event.ctrlKey
+			) {
+				event.preventDefault();
+				return;
+			}
 			event.preventDefault();
 			event.stopPropagation();
 
@@ -458,6 +503,20 @@ export const TaskTitleEditor = forwardRef<
 				if (!field) return;
 				enterFieldStage(field);
 				return;
+			}
+
+			if (command.stage === "value" && activeField) {
+				const typedDate = command.query.trim();
+				if (
+					isDateFieldId(activeField.id) &&
+					/^\d{4}-\d{2}-\d{2}$/.test(typedDate)
+				) {
+					selectValue(activeField, {
+						id: typedDate,
+						label: typedDate,
+					});
+					return;
+				}
 			}
 
 			if (pickerUnavailable) return;
@@ -507,6 +566,20 @@ export const TaskTitleEditor = forwardRef<
 			}
 			return { valid: true, title: trimmed };
 		},
+		isCommandOpen: () => command.open,
+		peelEscapeLayer: () => {
+			if (!command.open) return false;
+			if (command.stage === "value") {
+				peelValueToFieldLayer();
+				return true;
+			}
+			closeCommand(
+				command.commandStart >= 0
+					? plainTitle(title, command.commandStart).length
+					: title.length,
+			);
+			return true;
+		},
 	}));
 
 	const listLabel = command.stage === "field" ? "Task fields" : `${activeField?.label ?? "Value"} options`;
@@ -521,7 +594,7 @@ export const TaskTitleEditor = forwardRef<
 				ref={textareaRef}
 				value={title}
 				placeholder={placeholder}
-				aria-label="Task title"
+				aria-label={placeholder}
 				role="combobox"
 				aria-expanded={command.open}
 				aria-controls={command.open ? listboxId : undefined}
@@ -543,12 +616,16 @@ export const TaskTitleEditor = forwardRef<
 		}}
 				className="min-h-8 min-w-[8rem] flex-1 resize-none border-0 bg-transparent p-0 text-neutral-900 text-sm focus:outline-none"
 			/>
-			{chips.map(({ chipId, field, option, label }) => (
+			{chips.map(({ chipId, field, option, label }) => {
+				const chipError = fieldErrors[field.id];
+				return (
 				<span key={chipId} className="inline-flex items-center gap-1">
 					<button
 						type="button"
 						data-selected={selectedChipId === chipId ? "true" : "false"}
-						aria-label={label}
+						data-invalid={chipError ? "true" : undefined}
+						aria-invalid={chipError ? true : undefined}
+						aria-label={chipError ? `${label}. ${chipError}` : label}
 						onClick={() => openChipEditor(field)}
 						onKeyDown={(event) => {
 							if (event.key !== "Tab") return;
@@ -556,9 +633,11 @@ export const TaskTitleEditor = forwardRef<
 							focusAdjacentControl(event.currentTarget, event.shiftKey);
 						}}
 						className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
-							selectedChipId === chipId
-								? "border-primary-600 bg-primary-50"
-								: "border-neutral-200 bg-neutral-100"
+							chipError
+								? "border-error-900 bg-error-50"
+								: selectedChipId === chipId
+									? "border-primary-600 bg-primary-50"
+									: "border-neutral-200 bg-neutral-100"
 						}`}
 					>
 						{label}
@@ -573,7 +652,8 @@ export const TaskTitleEditor = forwardRef<
 						×
 					</button>
 				</span>
-			))}
+				);
+			})}
 			{command.open ? (
 				<TaskFieldCommandPopover
 					stage={command.stage ?? "field"}
