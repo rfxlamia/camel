@@ -4,14 +4,32 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POSITION_GAP } from "../core/position.js";
 
-function chainable(result: unknown) {
+const orchestrationLog: string[] = [];
+
+function chainable(result: unknown, table?: string) {
 	const b: any = {};
+	let locked = false;
 	for (const m of ["where", "returning", "orderBy", "select", "innerJoin", "$if"]) {
 		b[m] = vi.fn(() => b);
 	}
+	b.forUpdate = vi.fn(() => {
+		locked = true;
+		if (table) orchestrationLog.push(`lock:${table}`);
+		return b;
+	});
 	const isArray = Array.isArray(result);
-	b.execute = vi.fn().mockResolvedValue(isArray ? result : [result]);
-	b.executeTakeFirst = vi.fn().mockResolvedValue(isArray ? result[0] : result);
+	b.execute = vi.fn().mockImplementation(async () => {
+		if (table && !locked && (table === "tracker_items" || table === "cards")) {
+			orchestrationLog.push(`scan:${table}`);
+		}
+		return isArray ? result : [result];
+	});
+	b.executeTakeFirst = vi.fn().mockImplementation(async () => {
+		if (table && !locked && table === "tracker_phases as tp") {
+			orchestrationLog.push(`lookup:${table}`);
+		}
+		return isArray ? result[0] : result;
+	});
 	b.executeTakeFirstOrThrow = b.executeTakeFirst;
 	return b;
 }
@@ -29,33 +47,47 @@ let phaseItems: Array<{
 }> = [];
 let noPhaseMaxPosition: number | null = null;
 let projectExists = true;
+let cardRows: Array<{ id: number; title: string; project_id: number; phase_id: number }> =
+	[];
 
 function makeTrx() {
 	const trx: any = {};
 	trx.selectFrom = vi.fn((table: string) => {
-		if (table === "tracker_projects") {
-			return chainable(projectExists ? { id: 3 } : undefined);
+		if (table === "workspaces") {
+			return chainable({ id: 7 }, table);
+		}
+		if (table === "tracker_projects" || table === "tracker_projects as tpr") {
+			return chainable(projectExists ? { id: 3 } : undefined, table);
 		}
 		if (table === "tracker_phases as tp") {
-			return chainable({ id: 11, project_id: 3 });
+			return chainable({ id: 11, project_id: 3 }, table);
 		}
 		if (table === "tracker_phases") {
-			return chainable({ max_position: phaseMaxPosition });
+			return chainable({ max_position: phaseMaxPosition }, table);
+		}
+		if (table === "cards") {
+			return chainable(cardRows, table);
 		}
 		if (table === "tracker_items") {
-			const b = chainable({ max_position: noPhaseMaxPosition });
+			const b = chainable(phaseItems, table);
 			b.orderBy = vi.fn(() => {
-				const ordered = chainable(phaseItems);
-				ordered.execute = vi.fn().mockResolvedValue(phaseItems);
+				const ordered = chainable(phaseItems, table);
+				ordered.execute = vi.fn().mockImplementation(async () => {
+					orchestrationLog.push("scan:tracker_items");
+					return phaseItems;
+				});
 				return ordered;
 			});
-			b.execute = vi.fn().mockResolvedValue(phaseItems);
+			b.execute = vi.fn().mockImplementation(async () => {
+				orchestrationLog.push("scan:tracker_items");
+				return phaseItems;
+			});
 			b.executeTakeFirst = vi.fn().mockResolvedValue({
 				max_position: noPhaseMaxPosition,
 			});
 			return b;
 		}
-		return chainable([]);
+		return chainable([], table);
 	});
 	trx.insertInto = vi.fn((table: string) => ({
 		values: vi.fn((values: unknown) => {
@@ -113,8 +145,10 @@ vi.mock("../realtime.js", () => ({
 	clearPresence: vi.fn(),
 }));
 vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("./helpers.js", () => ({ recordActivity: vi.fn() }));
 
 import { publishEvent } from "../realtime.js";
+import { recordActivity } from "./helpers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import { trackerPhasesRouter } from "./tracker-phases.js";
 
@@ -139,11 +173,14 @@ beforeEach(() => {
 	phaseItems = [];
 	noPhaseMaxPosition = null;
 	projectExists = true;
+	cardRows = [];
+	orchestrationLog.length = 0;
 	mockSelectFrom.mockReset();
 	mockUpdateTable.mockReset();
 	mockTransaction.mockReset();
 	vi.mocked(publishEvent).mockReset();
 	vi.mocked(recordTrackerActivity).mockReset();
+	vi.mocked(recordActivity).mockReset();
 });
 
 describe("POST /tracker/projects/:projectId/phases", () => {
@@ -381,6 +418,33 @@ describe("DELETE /tracker/phases/:id", () => {
 			expect(update.values).not.toHaveProperty("version");
 			expect(update.values).not.toHaveProperty("updated_at");
 		}
+	});
+
+	it("locks phase removal before dependent scans", async () => {
+		cardRows = [
+			{ id: 201, title: "Board card", project_id: 3, phase_id: 11 },
+		];
+		await request(app).delete("/workspaces/7/tracker/phases/11");
+
+		const workspaceLock = orchestrationLog.indexOf("lock:workspaces");
+		const projectLock = Math.max(
+			orchestrationLog.indexOf("lock:tracker_projects"),
+			orchestrationLog.indexOf("lock:tracker_projects as tpr"),
+		);
+		const phaseLock = orchestrationLog.indexOf("lock:tracker_phases as tp");
+		const dependentScan = Math.min(
+			orchestrationLog.indexOf("scan:tracker_items") === -1
+				? Number.POSITIVE_INFINITY
+				: orchestrationLog.indexOf("scan:tracker_items"),
+			orchestrationLog.indexOf("scan:cards") === -1
+				? Number.POSITIVE_INFINITY
+				: orchestrationLog.indexOf("scan:cards"),
+		);
+
+		expect(workspaceLock).toBeGreaterThanOrEqual(0);
+		expect(projectLock).toBeGreaterThan(workspaceLock);
+		expect(phaseLock).toBeGreaterThan(projectLock);
+		expect(phaseLock).toBeLessThan(dependentScan);
 	});
 
 	it("assigns end-of-bucket positions after existing no-phase tasks in old-position order", async () => {
