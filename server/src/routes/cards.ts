@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import {
 	mapColumnSlots,
 	statusIdForSlot,
@@ -29,6 +28,7 @@ import {
 	loadCardAssigneesForCards,
 	syncCardAssignees,
 } from "./card-assignees.js";
+import { createCard } from "./card-create.js";
 import { syncCardLabels } from "./card-labels.js";
 import {
 	buildCardResponse,
@@ -58,7 +58,7 @@ function toCardDbRow(row: FullCardRow): CardDbRow {
 
 const mapCardResponse = buildCardResponse;
 
-function selectFullCard(dbExec: DBExecutor) {
+export function selectFullCard(dbExec: DBExecutor) {
 	return dbExec
 		.selectFrom("cards as c")
 		.innerJoin("workspaces as w", "w.id", "c.workspace_id")
@@ -294,127 +294,7 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 	res.json(result);
 });
 
-cardsRouter.post("/cards", requireWorkspaceMember, async (req, res) => {
-	const { workspaceId } = req.workspace!;
-
-	const { columnId, title, description, statusId } = req.body ?? {};
-	if (statusId !== undefined) {
-		return res
-			.status(400)
-			.json({ error: "statusId is not accepted for card creation" });
-	}
-	if (!Number.isInteger(columnId)) {
-		return res.status(400).json({ error: "columnId must be an integer" });
-	}
-	const titleValidation = validateCardTitle(title ?? "");
-	if (!titleValidation.valid) {
-		return res.status(400).json({ error: titleValidation.error });
-	}
-	const descValidation = validateCardDescription(description ?? "");
-	if (!descValidation.valid) {
-		return res.status(400).json({ error: descValidation.error });
-	}
-	type CreateResult =
-		| { kind: "not_found_column" }
-		| { kind: "wip" }
-		| { kind: "ok"; cardId: number; autoAssigneeId: number | null };
-
-	const result: CreateResult = await db.transaction().execute(async (trx) => {
-		// Lock the workspace before the column so card creation follows the
-		// workspace -> columns order used by is_done remapping.
-		await trx
-			.selectFrom("workspaces")
-			.select("id")
-			.where("id", "=", workspaceId)
-			.forUpdate()
-			.executeTakeFirstOrThrow();
-
-		const col = await trx
-			.selectFrom("columns")
-			.select(["id", "wip_limit", "is_signable", "signable_assignee_id"])
-			.where("id", "=", Number(columnId))
-			.where("workspace_id", "=", workspaceId)
-			.forUpdate()
-			.executeTakeFirst();
-		if (!col) {
-			return { kind: "not_found_column" };
-		}
-		const countRow = await trx
-			.selectFrom("cards")
-			.select(sql<number>`count(*)::int`.as("n"))
-			.where("column_id", "=", Number(columnId))
-			.where("workspace_id", "=", workspaceId)
-			.where("deleted_at", "is", null)
-			.executeTakeFirstOrThrow();
-		const wip = checkWipLimit({
-			currentCount: countRow.n,
-			wipLimit: col.wip_limit,
-			isSameColumn: false,
-		});
-		if (!wip.allowed) {
-			return { kind: "wip" };
-		}
-		const autoAssigneeId =
-			col.is_signable && col.signable_assignee_id
-				? col.signable_assignee_id
-				: null;
-		const identity = await allocateCardIdentity(trx, {
-			workspaceId,
-			columnId: Number(columnId),
-		});
-
-		const inserted = await trx
-			.insertInto("cards")
-			.values({
-				column_id: Number(columnId),
-				title: titleValidation.trimmed as string,
-				description: descValidation.trimmed ?? "",
-				position: sql<number>`COALESCE((SELECT MAX(position) FROM cards WHERE column_id = ${Number(columnId)}), 0) + ${POSITION_GAP}`,
-				workspace_id: workspaceId,
-				key_number: identity.keyNumber,
-				status_id: identity.statusId,
-			})
-			.returning("id")
-			.executeTakeFirstOrThrow();
-
-		if (autoAssigneeId !== null) {
-			await addCardAssignee(trx, inserted.id, autoAssigneeId);
-		}
-		await recordActivity(trx, req.user!, workspaceId, "create", {
-			cardId: inserted.id,
-			toColumnId: Number(columnId),
-			payload: { cardTitle: titleValidation.trimmed },
-		});
-		return { kind: "ok", cardId: inserted.id, autoAssigneeId };
-	});
-
-	if (result.kind === "not_found_column") {
-		return res.status(404).json({ error: "column not found" });
-	}
-	if (result.kind === "wip") {
-		return res.status(409).json({ error: "WIP limit reached for this column" });
-	}
-	const { cardId, autoAssigneeId } = result;
-
-	await publishCardWorkspaceEvent(workspaceId, {
-		type: "card.created",
-		actor: req.user!,
-		cardId,
-	});
-
-	const card = await hydrateCard(cardId, workspaceId);
-	if (autoAssigneeId !== null) {
-		emitCardAssigned(
-			workspaceId,
-			req.user!.id,
-			cardId,
-			card!.title,
-			req.user!.displayName,
-			autoAssigneeId,
-		);
-	}
-	res.status(201).json(card);
-});
+cardsRouter.post("/cards", requireWorkspaceMember, createCard);
 
 cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
