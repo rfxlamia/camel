@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { TaskCreateFieldErrors } from "./lib/taskCreateContracts";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -87,20 +88,23 @@ describe("tracker item API methods", () => {
 					fieldErrors: {
 						assigneeIds: "Assignee is no longer available",
 						phaseId: "Phase is no longer available",
+						statusId: "Status is no longer available",
 					},
 				}),
 		});
 		const { api } = await import("./api");
+		const expectedFieldErrors: TaskCreateFieldErrors = {
+			assigneeIds: "Assignee is no longer available",
+			phaseId: "Phase is no longer available",
+			statusId: "Status is no longer available",
+		};
 
 		await expect(
 			api.createWorkItem(7, { title: "Plan release" }),
 		).rejects.toMatchObject({
 			message: "Some task fields are invalid",
 			status: 400,
-			fieldErrors: {
-				assigneeIds: "Assignee is no longer available",
-				phaseId: "Phase is no longer available",
-			},
+			fieldErrors: expectedFieldErrors,
 		});
 	});
 

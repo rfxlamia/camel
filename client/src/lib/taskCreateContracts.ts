@@ -27,6 +27,7 @@ export type TaskCreateFieldErrors = Partial<
 	Record<
 		| "title"
 		| "description"
+		| "statusId"
 		| "assigneeIds"
 		| "priorityId"
 		| "labelIds"
