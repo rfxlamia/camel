@@ -108,7 +108,10 @@ function getTitleTextarea() {
 }
 
 function getActiveOption() {
-	return document.querySelector('[role="option"][aria-selected="true"]');
+	const textarea = getTitleTextarea();
+	const activeId = textarea.getAttribute("aria-activedescendant");
+	if (!activeId) return null;
+	return document.getElementById(activeId);
 }
 
 describe("TaskTitleEditor", () => {
@@ -249,6 +252,7 @@ describe("TaskTitleEditor", () => {
 			'[role="option"][aria-selected="true"]',
 		);
 		expect(selected?.textContent).toContain("High");
+		expect(getActiveOption()?.textContent).toContain("High");
 	});
 
 	it("Remove a chip by pointer or keyboard", () => {
@@ -397,6 +401,14 @@ describe("TaskTitleEditor", () => {
 
 		const liveRegion = container.querySelector('[aria-live="polite"]');
 		expect(liveRegion?.textContent).toMatch(/added/i);
+
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+
+		const rafiOption = screen.getByRole("option", { name: /Rafi/i });
+		const mayaOption = screen.getByRole("option", { name: /Maya/i });
+		expect(rafiOption.getAttribute("aria-selected")).toBe("true");
+		expect(mayaOption.getAttribute("aria-selected")).toBe("false");
+		expect(getActiveOption()).toBe(mayaOption);
 	});
 
 	it("preserves Tab and Shift+Tab navigation around the command editor", async () => {
@@ -445,7 +457,12 @@ describe("TaskTitleEditor", () => {
 		expect(document.activeElement).toBe(chip);
 		fireEvent.keyDown(chip, { key: "Tab", shiftKey: true });
 		expect(document.activeElement).toBe(textarea);
+
+		fireEvent.keyDown(textarea, { key: "@" });
+		expect(screen.getByRole("listbox")).toBeTruthy();
 		fireEvent.keyDown(textarea, { key: "Tab", shiftKey: true });
+		expect(screen.queryByRole("listbox")).toBeNull();
+		expect(textarea.value).toBe("Fix login");
 		expect(document.activeElement).toBe(before);
 	});
 });

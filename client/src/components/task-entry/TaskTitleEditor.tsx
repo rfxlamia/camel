@@ -530,6 +530,7 @@ export const TaskTitleEditor = forwardRef<
 				onChange={(event) => handleTitleChange(event.target.value)}
 				onKeyDown={(event) => {
 					if (event.key === "Tab" && event.shiftKey) {
+						handleKeyDown(event);
 						focusAdjacentControl(event.currentTarget, true);
 						return;
 					}

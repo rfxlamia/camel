@@ -112,7 +112,7 @@ export function TaskFieldCommandPopover({
 						<div
 							id={optionId(option.id)}
 							role="option"
-							aria-selected={index === activeIndex}
+							aria-selected={selected}
 							className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
 								index === activeIndex ? "bg-neutral-100" : ""
 							}`}
