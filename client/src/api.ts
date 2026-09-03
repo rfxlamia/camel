@@ -79,6 +79,39 @@ export type TicketHistoryEntry = {
 	createdAt: string;
 };
 
+async function throwRequestError(
+	res: Response,
+	endpoint: string,
+	options?: RequestOptions,
+): Promise<never> {
+	let message = `Request failed (${res.status})`;
+	let code: string | undefined;
+	let retryAfterMs: number | undefined;
+	let fieldErrors: TaskCreateFieldErrors | undefined;
+	try {
+		const body = await res.json();
+		if (body.error) message = body.error;
+		if (body.message) message = body.message;
+		if (body.code) code = body.code;
+		if (typeof body.retryAfterMs === "number") {
+			retryAfterMs = body.retryAfterMs;
+		}
+		if (body.fieldErrors !== undefined) fieldErrors = body.fieldErrors;
+	} catch {
+		// non-JSON error body
+	}
+	if (options?.userInitiated && res.status >= 500) {
+		publishAutoError({
+			endpoint,
+			status: res.status,
+			message,
+			timestamp: new Date().toISOString(),
+			userAction: options.userAction,
+		});
+	}
+	throw new ApiError(message, res.status, code, retryAfterMs, fieldErrors);
+}
+
 async function request<T>(
 	path: string,
 	init?: RequestInit,
@@ -102,34 +135,7 @@ async function request<T>(
 		...init,
 		headers,
 	});
-	if (!res.ok) {
-		let message = `Request failed (${res.status})`;
-		let code: string | undefined;
-		let retryAfterMs: number | undefined;
-		let fieldErrors: TaskCreateFieldErrors | undefined;
-		try {
-			const body = await res.json();
-			if (body.error) message = body.error;
-			if (body.message) message = body.message;
-			if (body.code) code = body.code;
-			if (typeof body.retryAfterMs === "number") {
-				retryAfterMs = body.retryAfterMs;
-			}
-			if (body.fieldErrors !== undefined) fieldErrors = body.fieldErrors;
-		} catch {
-			// non-JSON error body
-		}
-		if (options?.userInitiated && res.status >= 500) {
-			publishAutoError({
-				endpoint,
-				status: res.status,
-				message,
-				timestamp: new Date().toISOString(),
-				userAction: options.userAction,
-			});
-		}
-		throw new ApiError(message, res.status, code, retryAfterMs, fieldErrors);
-	}
+	if (!res.ok) await throwRequestError(res, endpoint, options);
 	if (res.status === 204) return undefined as T;
 	return res.json();
 }
@@ -468,10 +474,7 @@ export const api = {
 		request<void>(`/workspaces/${workspaceId}`, { method: "DELETE" }),
 
 	// ---- Work items (canonical) ----
-	createWorkItem: (
-		workspaceId: number,
-		body: TrackerCreatePayload,
-	) =>
+	createWorkItem: (workspaceId: number, body: TrackerCreatePayload) =>
 		request<WorkItem>(`/workspaces/${workspaceId}/work-items`, {
 			method: "POST",
 			body: JSON.stringify(body),
@@ -514,13 +517,10 @@ export const api = {
 		key: string,
 		body: { beforeKey?: string; afterKey?: string },
 	) =>
-		request<WorkItem>(
-			`/workspaces/${workspaceId}/work-items/${key}/position`,
-			{
-				method: "PATCH",
-				body: JSON.stringify(body),
-			},
-		),
+		request<WorkItem>(`/workspaces/${workspaceId}/work-items/${key}/position`, {
+			method: "PATCH",
+			body: JSON.stringify(body),
+		}),
 	deleteWorkItem: (
 		workspaceId: number,
 		key: string,
@@ -624,10 +624,13 @@ export const api = {
 			colour?: string;
 		},
 	) =>
-		request<TrackerVocabulary>(`/workspaces/${workspaceId}/tracker/vocabularies`, {
-			method: "POST",
-			body: JSON.stringify(body),
-		}),
+		request<TrackerVocabulary>(
+			`/workspaces/${workspaceId}/tracker/vocabularies`,
+			{
+				method: "POST",
+				body: JSON.stringify(body),
+			},
+		),
 	listTrackerProjects: (workspaceId: number) =>
 		request<TrackerProject[]>(`/workspaces/${workspaceId}/tracker/projects`),
 	createTrackerProject: (workspaceId: number, body: { name: string }) =>
@@ -640,10 +643,13 @@ export const api = {
 		id: number,
 		patch: { name: string; version: number },
 	) =>
-		request<TrackerProject>(`/workspaces/${workspaceId}/tracker/projects/${id}`, {
-			method: "PATCH",
-			body: JSON.stringify(patch),
-		}),
+		request<TrackerProject>(
+			`/workspaces/${workspaceId}/tracker/projects/${id}`,
+			{
+				method: "PATCH",
+				body: JSON.stringify(patch),
+			},
+		),
 	deleteTrackerProject: (workspaceId: number, id: number) =>
 		request<void>(`/workspaces/${workspaceId}/tracker/projects/${id}`, {
 			method: "DELETE",

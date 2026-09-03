@@ -280,7 +280,9 @@ describe("workspace create and invite API contracts", () => {
 			ok: false,
 			status: 409,
 			json: () =>
-				Promise.resolve({ error: "User is already a member of this workspace" }),
+				Promise.resolve({
+					error: "User is already a member of this workspace",
+				}),
 		});
 		const { api } = await import("./api");
 
