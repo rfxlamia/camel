@@ -5,8 +5,10 @@ import { positionBetween } from "../core/position.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
+import { recordActivity } from "./helpers.js";
 import { parseDateRange } from "./tracker-item-parsers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
+import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 const PHASE_COLUMNS = [
 	"id",
@@ -329,16 +331,83 @@ trackerPhasesRouter.delete(
 		}
 
 		const result = await db.transaction().execute(async (trx) => {
-			const phase = await lookupPhaseInWorkspace(trx, workspaceId, phaseId);
+			await lockWorkspaceMutation(trx, workspaceId);
+
+			const project = await trx
+				.selectFrom("tracker_projects as tpr")
+				.select("tpr.id as id")
+				.where("tpr.workspace_id", "=", workspaceId)
+				.where("tpr.deleted_at", "is", null)
+				.where("tpr.id", "in", (eb) =>
+					eb
+						.selectFrom("tracker_phases as tp")
+						.select("tp.project_id")
+						.where("tp.id", "=", phaseId)
+						.where("tp.deleted_at", "is", null),
+				)
+				.orderBy("tpr.id")
+				.forUpdate()
+				.executeTakeFirst();
+
+			if (!project) {
+				return { kind: "not_found" as const };
+			}
+
+			const phase = await trx
+				.selectFrom("tracker_phases as tp")
+				.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
+				.select(["tp.id as id", "tp.project_id as project_id"])
+				.where("tp.id", "=", phaseId)
+				.where("tp.deleted_at", "is", null)
+				.where("tpr.workspace_id", "=", workspaceId)
+				.where("tpr.deleted_at", "is", null)
+				.orderBy("tp.id")
+				.forUpdate()
+				.executeTakeFirst();
+
 			if (!phase) {
 				return { kind: "not_found" as const };
 			}
+
+			const cards = await trx
+				.selectFrom("cards")
+				.select(["id", "title", "project_id", "phase_id"])
+				.where("workspace_id", "=", workspaceId)
+				.where("phase_id", "=", phaseId)
+				.where("deleted_at", "is", null)
+				.execute();
 
 			const releasedTriples = await releasePhaseItemsToNoPhase(
 				trx,
 				phase.project_id,
 				phaseId,
 			);
+
+			const releasedCardIds: number[] = [];
+			if (cards.length > 0) {
+				const updatedCards = await trx
+					.updateTable("cards")
+					.set({
+						phase_id: null,
+						version: sql`version + 1`,
+					})
+					.where("workspace_id", "=", workspaceId)
+					.where("phase_id", "=", phaseId)
+					.where("deleted_at", "is", null)
+					.returning(["id"])
+					.execute();
+				releasedCardIds.push(...updatedCards.map((card) => card.id));
+			}
+
+			for (const card of cards) {
+				await recordActivity(trx, actor, workspaceId, "update", {
+					cardId: card.id,
+					payload: {
+						cardTitle: card.title,
+						changed: ["phase"],
+					},
+				});
+			}
 
 			await trx
 				.updateTable("tracker_phases")
@@ -355,11 +424,19 @@ trackerPhasesRouter.delete(
 				},
 			});
 
-			return { kind: "ok" as const };
+			return { kind: "ok" as const, releasedCardIds };
 		});
 
 		if (result.kind === "not_found") {
 			return res.status(404).json({ error: "Not found" });
+		}
+
+		for (const cardId of result.releasedCardIds) {
+			await publishEvent(workspaceId, {
+				type: "card.updated",
+				actor,
+				cardId,
+			});
 		}
 
 		await publishEvent(workspaceId, {
