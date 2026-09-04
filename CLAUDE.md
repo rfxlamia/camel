@@ -13,7 +13,9 @@ This file provides guidance to agents when working with code in this repository.
 **Integration tests**: Require `RUN_LLM_IT=1` env var AND running DB. Not run by default `make test`.
 
 **Running tests**: Always use `npm run test` from repo root. Do NOT use `npx vitest run` directly — it skips important setup.
-**Single test execution**: Run from repo root with full path: `npm run test -- server/src/core/position.test.ts`
+**Single test execution**: Must be workspace-scoped AND workspace-relative — `npm run test --workspace=server -- src/core/position.test.ts`, `npm run test --workspace=client -- src/context/BoardContext.viewMode.test.tsx`. `npm run test -- <path>` from the repo root does NOT filter: the root script is `A && B`, so npm appends the path to the *client* command only — the server suite runs unfiltered and the client run exits 1 with "No test files found".
+
+**Never filter with `-t "multi word"`**: npm strips the quotes, so vitest receives `-t first` plus a stray positional filter and can report `Tests N skipped (N)` at exit 0 — a green gate that ran nothing. Run the whole file, or use a regex dot for the space (`-t no.preference`).
 
 **Client typecheck**: `noUnusedLocals` and `noUnusedParameters` enabled — unused imports WILL fail typecheck.
 
