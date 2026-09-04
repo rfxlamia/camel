@@ -60,6 +60,44 @@ export type TrackerEventHandler = (event: {
 	trackerItemId?: number;
 }) => void;
 
+export type FocusEventHandler = (event: {
+	type: "focus_session.updated";
+	userId: number;
+	workspaceId: number;
+	payload: { session: unknown };
+}) => void;
+
+export type CardEventHandler = (event: {
+	type: string;
+	actor: User;
+	cardId: number;
+	payload?: unknown;
+}) => void;
+
+export type MembershipEventHandler = (event: {
+	type: "membership.removed";
+	userId: number;
+	workspaceId: number;
+	workspaceName: string;
+}) => void;
+
+function createSubscriberRegistry<T>() {
+	const subscribers = new Set<T>();
+	return {
+		subscribe(handler: T) {
+			subscribers.add(handler);
+			return () => {
+				subscribers.delete(handler);
+			};
+		},
+		dispatch(handler: (subscriber: T) => void) {
+			for (const subscriber of subscribers) {
+				handler(subscriber);
+			}
+		},
+	};
+}
+
 interface BoardContextValue {
 	user: User;
 	activeWorkspaceId: number | null;
@@ -125,6 +163,13 @@ interface BoardContextValue {
 	boardViewMode: BoardViewMode;
 	setBoardViewMode: (mode: BoardViewMode) => void;
 	subscribeTrackerEvents: (handler: TrackerEventHandler) => () => void;
+	subscribeFocusEvents: (handler: FocusEventHandler) => () => void;
+	subscribeCardEvents: (handler: CardEventHandler) => () => void;
+	subscribeMembershipEvents: (handler: MembershipEventHandler) => () => void;
+	hasActiveFocusSession: boolean;
+	setHasActiveFocusSession: (active: boolean) => void;
+	focusSessionHydrated: boolean;
+	setFocusSessionHydrated: (hydrated: boolean) => void;
 	/** Reload the tracker list page (registered by TrackerPage). */
 	refreshTrackerList: () => void;
 	registerRefreshTrackerList: (fn: (() => void) | null) => void;
@@ -182,12 +227,25 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	>([]);
 	const [ticketIntakeEnabled, setTicketIntakeEnabled] = useState(false);
 	const [focusModeEnabled, setFocusModeEnabled] = useState(false);
+	const [hasActiveFocusSession, setHasActiveFocusSession] = useState(false);
+	const [focusSessionHydrated, setFocusSessionHydrated] = useState(false);
 	const [boardViewMode, setBoardViewModeState] = useState<BoardViewMode>(() =>
 		readBoardViewMode(activeWorkspaceId ?? 0),
 	);
 	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const trackerEventSubscribers = useRef(new Set<TrackerEventHandler>());
+	const trackerEventRegistry = useRef(
+		createSubscriberRegistry<TrackerEventHandler>(),
+	);
+	const focusEventRegistry = useRef(
+		createSubscriberRegistry<FocusEventHandler>(),
+	);
+	const cardEventRegistry = useRef(
+		createSubscriberRegistry<CardEventHandler>(),
+	);
+	const membershipEventRegistry = useRef(
+		createSubscriberRegistry<MembershipEventHandler>(),
+	);
 	const trackerListRefreshRef = useRef<(() => void) | null>(null);
 	const prevWorkspaceIdRef = useRef<number | null>(null);
 	const workspacesRef = useRef(workspaces);
@@ -268,11 +326,23 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	}, []);
 
 	const subscribeTrackerEvents = useCallback((handler: TrackerEventHandler) => {
-		trackerEventSubscribers.current.add(handler);
-		return () => {
-			trackerEventSubscribers.current.delete(handler);
-		};
+		return trackerEventRegistry.current.subscribe(handler);
 	}, []);
+
+	const subscribeFocusEvents = useCallback((handler: FocusEventHandler) => {
+		return focusEventRegistry.current.subscribe(handler);
+	}, []);
+
+	const subscribeCardEvents = useCallback((handler: CardEventHandler) => {
+		return cardEventRegistry.current.subscribe(handler);
+	}, []);
+
+	const subscribeMembershipEvents = useCallback(
+		(handler: MembershipEventHandler) => {
+			return membershipEventRegistry.current.subscribe(handler);
+		},
+		[],
+	);
 
 	const registerRefreshTrackerList = useCallback(
 		(fn: (() => void) | null) => {
@@ -563,6 +633,15 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					data.workspaceId !== undefined &&
 					data.workspaceName
 				) {
+					const membershipEvent: Parameters<MembershipEventHandler>[0] = {
+						type: "membership.removed",
+						userId: data.userId,
+						workspaceId: data.workspaceId,
+						workspaceName: data.workspaceName,
+					};
+					membershipEventRegistry.current.dispatch((handler) => {
+						handler(membershipEvent);
+					});
 					const redirect = getRemovalRedirect({
 						activeWorkspaceId,
 						removedWorkspaceId: data.workspaceId,
@@ -589,15 +668,28 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					]);
 					return;
 				}
+				if (data.type === "focus_session.updated") {
+					const event = data as Parameters<FocusEventHandler>[0];
+					focusEventRegistry.current.dispatch((handler) => {
+						handler(event);
+					});
+					return;
+				}
+				if (typeof data.type === "string" && data.type.startsWith("card.")) {
+					const event = data as Parameters<CardEventHandler>[0];
+					cardEventRegistry.current.dispatch((handler) => {
+						handler(event);
+					});
+				}
 				if (typeof data.type === "string" && data.type.startsWith("tracker.")) {
 					const event = data as {
 						type: string;
 						payload?: unknown;
 						trackerItemId?: number;
 					};
-					for (const handler of trackerEventSubscribers.current) {
+					trackerEventRegistry.current.dispatch((handler) => {
 						handler(event);
-					}
+					});
 					return;
 				}
 			} catch {
@@ -751,6 +843,13 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				boardViewMode,
 				setBoardViewMode,
 				subscribeTrackerEvents,
+				subscribeFocusEvents,
+				subscribeCardEvents,
+				subscribeMembershipEvents,
+				hasActiveFocusSession,
+				setHasActiveFocusSession,
+				focusSessionHydrated,
+				setFocusSessionHydrated,
 				refreshTrackerList,
 				registerRefreshTrackerList,
 			}}
