@@ -13,11 +13,73 @@ describe("workspace switcher state", () => {
 				activeWorkspaceId: 1,
 				targetWorkspaceId: 2,
 				hasUnsavedCardEdits: true,
+				hasActiveFocusSession: false,
+				focusSessionHydrated: true,
 			}),
 		).toEqual({
 			status: "confirm-required",
 			pendingWorkspaceId: 2,
 		});
+	});
+
+	it("blocks switching while a focus session is active", () => {
+		expect(
+			getSwitchAttemptState({
+				activeWorkspaceId: 1,
+				targetWorkspaceId: 2,
+				hasUnsavedCardEdits: false,
+				hasActiveFocusSession: true,
+				focusSessionHydrated: true,
+			}),
+		).toEqual({ status: "focus-blocked" });
+	});
+
+	it("blocks switching while focus session is still hydrating", () => {
+		expect(
+			getSwitchAttemptState({
+				activeWorkspaceId: 1,
+				targetWorkspaceId: 2,
+				hasUnsavedCardEdits: false,
+				hasActiveFocusSession: false,
+				focusSessionHydrated: false,
+			}),
+		).toEqual({ status: "focus-loading" });
+	});
+
+	it("allows switching when focus is hydrated and no session is active", () => {
+		expect(
+			getSwitchAttemptState({
+				activeWorkspaceId: 1,
+				targetWorkspaceId: 2,
+				hasUnsavedCardEdits: false,
+				hasActiveFocusSession: false,
+				focusSessionHydrated: true,
+			}),
+		).toEqual({ status: "switch", workspaceId: 2 });
+	});
+
+	it("prefers focus block over unsaved card edits", () => {
+		expect(
+			getSwitchAttemptState({
+				activeWorkspaceId: 1,
+				targetWorkspaceId: 2,
+				hasUnsavedCardEdits: true,
+				hasActiveFocusSession: true,
+				focusSessionHydrated: true,
+			}),
+		).toEqual({ status: "focus-blocked" });
+	});
+
+	it("returns noop when switching to the active workspace with a session active", () => {
+		expect(
+			getSwitchAttemptState({
+				activeWorkspaceId: 1,
+				targetWorkspaceId: 1,
+				hasUnsavedCardEdits: false,
+				hasActiveFocusSession: true,
+				focusSessionHydrated: true,
+			}),
+		).toEqual({ status: "noop" });
 	});
 
 	it("shows invite popover after remind me later when switcher is closed", () => {

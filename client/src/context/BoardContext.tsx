@@ -26,6 +26,8 @@ import {
 } from "../lib/workspaceSelection";
 import {
 	applyCreatedWorkspaceSelection,
+	FOCUS_BLOCKED_TOAST,
+	FOCUS_LOADING_TOAST,
 	getSwitchAttemptState,
 	persistRemindedInviteIds,
 	readRemindedInviteIds,
@@ -252,6 +254,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	workspacesRef.current = workspaces;
 	const hasUnsavedRef = useRef(hasUnsavedCardEdits);
 	hasUnsavedRef.current = hasUnsavedCardEdits;
+	const hasActiveFocusRef = useRef(hasActiveFocusSession);
+	hasActiveFocusRef.current = hasActiveFocusSession;
+	const focusSessionHydratedRef = useRef(focusSessionHydrated);
+	focusSessionHydratedRef.current = focusSessionHydrated;
 
 	const activeWorkspace =
 		activeWorkspaceId === null
@@ -444,8 +450,18 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				activeWorkspaceId,
 				targetWorkspaceId: workspaceId,
 				hasUnsavedCardEdits: hasUnsavedRef.current,
+				hasActiveFocusSession: hasActiveFocusRef.current,
+				focusSessionHydrated: focusSessionHydratedRef.current,
 			});
 			if (state.status === "noop") return;
+			if (state.status === "focus-loading") {
+				showToast(FOCUS_LOADING_TOAST, "warning");
+				return;
+			}
+			if (state.status === "focus-blocked") {
+				showToast(FOCUS_BLOCKED_TOAST, "warning");
+				return;
+			}
 			if (state.status === "confirm-required") {
 				setSwitchConfirm({
 					open: true,
@@ -455,7 +471,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			}
 			switchWorkspace(state.workspaceId);
 		},
-		[activeWorkspaceId, switchWorkspace],
+		[activeWorkspaceId, showToast, switchWorkspace],
 	);
 
 	const confirmPendingSwitch = useCallback(() => {
