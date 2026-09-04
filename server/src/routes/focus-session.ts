@@ -6,17 +6,19 @@ import {
 	type FocusAction,
 	InvalidFocusTransitionError,
 } from "../core/focus-session.js";
-import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import { recordActivity } from "./helpers.js";
 import {
+	buildReadySessionInput,
+	targetsSameTask,
+} from "./focus-session-inputs.js";
+import {
 	createFocusSessionRepo,
 	type FocusSessionRepo,
 	type FocusSessionRow,
 	type FocusSessionUpdatePatch,
-	type ResolvedTask,
 } from "./focus-session-repo.js";
 
 export type FocusAuditAction =
@@ -81,36 +83,28 @@ export function serializeFocusSession(row: FocusSessionRow): FocusSessionDto {
 	};
 }
 
-function buildTaskKey(
-	source: "board" | "tracker",
-	task: ResolvedTask,
-): string | null {
-	if (task.keyNumber === null) return null;
-	return formatKey(derivePrefix(task.workspaceName), task.keyNumber);
-}
-
-function buildReturnPath(
-	source: "board" | "tracker",
-	task: ResolvedTask,
-	taskKey: string | null,
-): string {
-	if (source === "board") {
-		return `/board/card/${task.id}`;
-	}
-	return `/tracker/${taskKey}`;
-}
-
 function parseFocusPostBody(body: unknown): {
-	action: "focus";
+	action: "focus" | "switch";
 	source: "board" | "tracker";
 	taskId: number;
+	version?: number;
 } | null {
 	if (body == null || typeof body !== "object") return null;
-	const { action, source, taskId } = body as Record<string, unknown>;
-	if (action !== "focus") return null;
+	const { action, source, taskId, version } = body as Record<string, unknown>;
+	if (action !== "focus" && action !== "switch") return null;
 	if (source !== "board" && source !== "tracker") return null;
 	if (typeof taskId !== "number" || !Number.isInteger(taskId)) return null;
-	return { action: "focus", source, taskId };
+	const parsed: {
+		action: "focus" | "switch";
+		source: "board" | "tracker";
+		taskId: number;
+		version?: number;
+	} = { action, source, taskId };
+	if (version !== undefined) {
+		if (typeof version !== "number" || !Number.isInteger(version)) return null;
+		parsed.version = version;
+	}
+	return parsed;
 }
 
 const FOCUS_PATCH_ACTIONS = new Set<FocusAction>([
@@ -280,14 +274,118 @@ export function createFocusSessionRouter(deps: {
 			return res.status(400).json({ error: "Invalid request body" });
 		}
 
-		const { source, taskId } = parsed;
+		const { action, source, taskId } = parsed;
 
 		const active = await repo.findActive(actor.id, workspaceId);
-		if (
-			active &&
-			active.task_source === source &&
-			active.task_id === taskId
-		) {
+
+		if (action === "switch") {
+			if (active && targetsSameTask(active, { source, taskId })) {
+				return res.status(201).json({ session: serializeFocusSession(active) });
+			}
+
+			if (!active) {
+				const task = await repo.findTask(source, taskId, workspaceId);
+				if (!task) {
+					return res.status(404).json({ error: "Not found" });
+				}
+
+				const inserted = await repo.insert(
+					buildReadySessionInput({
+						userId: actor.id,
+						workspaceId,
+						source,
+						taskId,
+						task,
+					}),
+				);
+
+				const session = serializeFocusSession(inserted);
+
+				await publish(workspaceId, {
+					type: "focus_session.updated",
+					userId: actor.id,
+					workspaceId,
+					payload: { session },
+				});
+
+				await recordFocusActivity({
+					actor,
+					workspaceId,
+					sessionId: inserted.id,
+					action: "focus",
+				});
+
+				return res.status(201).json({ session });
+			}
+
+			if (parsed.version === undefined) {
+				return res.status(400).json({ error: "Invalid request body" });
+			}
+
+			const task = await repo.findTask(source, taskId, workspaceId);
+			if (!task) {
+				return res.status(404).json({ error: "Not found" });
+			}
+
+			const finishedSnapshot = applyAction(
+				{
+					state: active.state,
+					accumulatedSeconds: active.accumulated_seconds,
+					runningSince: active.running_since,
+				},
+				"finish",
+				now(),
+			);
+			const finishedAt = now();
+
+			const switched = await repo.switchSession(
+				{
+					id: active.id,
+					patch: {
+						state: "finished",
+						accumulated_seconds: finishedSnapshot.accumulatedSeconds,
+						running_since: null,
+						finished_at: finishedAt,
+					},
+					expectedVersion: parsed.version,
+				},
+				buildReadySessionInput({
+					userId: actor.id,
+					workspaceId,
+					source,
+					taskId,
+					task,
+				}),
+			);
+
+			if (!switched) {
+				const current = await repo.findActive(actor.id, workspaceId);
+				return res.status(409).json({
+					code: "version_conflict",
+					session: current ? serializeFocusSession(current) : null,
+				});
+			}
+
+			const session = serializeFocusSession(switched.created);
+
+			await publish(workspaceId, {
+				type: "focus_session.updated",
+				userId: actor.id,
+				workspaceId,
+				payload: { session },
+			});
+
+			await recordFocusActivity({
+				actor,
+				workspaceId,
+				sessionId: switched.created.id,
+				action: "switch",
+			});
+
+			return res.status(201).json({ session });
+		}
+
+		if (active && targetsSameTask(active, { source, taskId })) {
 			return res.status(201).json({ session: serializeFocusSession(active) });
 		}
 
@@ -303,20 +401,15 @@ export function createFocusSessionRouter(deps: {
 			return res.status(404).json({ error: "Not found" });
 		}
 
-		const taskKey = buildTaskKey(source, task);
-		const returnPath = buildReturnPath(source, task, taskKey);
-
-		const inserted = await repo.insert({
-			user_id: actor.id,
-			workspace_id: workspaceId,
-			task_source: source,
-			task_id: taskId,
-			task_key: taskKey,
-			return_path: returnPath,
-			state: "ready",
-			accumulated_seconds: 0,
-			running_since: null,
-		});
+		const inserted = await repo.insert(
+			buildReadySessionInput({
+				userId: actor.id,
+				workspaceId,
+				source,
+				taskId,
+				task,
+			}),
+		);
 
 		const session = serializeFocusSession(inserted);
 

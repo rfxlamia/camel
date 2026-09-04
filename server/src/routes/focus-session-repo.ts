@@ -45,6 +45,10 @@ export type ResolvedTask = {
 	workspaceName: string;
 };
 
+export type FocusSessionSwitchCreateInput = FocusSessionInsertInput & {
+	id?: number;
+};
+
 export type FocusSessionRepo = {
 	findActive(
 		userId: number,
@@ -56,6 +60,14 @@ export type FocusSessionRepo = {
 		patch: FocusSessionUpdatePatch,
 		expectedVersion: number,
 	): Promise<FocusSessionRow | null>;
+	switchSession(
+		finish: {
+			id: number;
+			patch: FocusSessionUpdatePatch;
+			expectedVersion: number;
+		},
+		create: FocusSessionSwitchCreateInput,
+	): Promise<{ finished: FocusSessionRow; created: FocusSessionRow } | null>;
 	findTask(
 		source: "board" | "tracker",
 		taskId: number,
@@ -144,6 +156,48 @@ export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
 				.returning(FOCUS_SESSION_COLUMNS)
 				.executeTakeFirst();
 			return row ? mapRow(row) : null;
+		},
+
+		async switchSession(finish, create) {
+			return db.transaction().execute(async (trx) => {
+				const finished = await trx
+					.updateTable("focus_sessions")
+					.set({
+						...finish.patch,
+						version: sql`version + 1`,
+						updated_at: sql`now()`,
+					})
+					.where("id", "=", finish.id)
+					.where("version", "=", finish.expectedVersion)
+					.returning(FOCUS_SESSION_COLUMNS)
+					.executeTakeFirst();
+
+				if (!finished) {
+					return null;
+				}
+
+				const created = await trx
+					.insertInto("focus_sessions")
+					.values({
+						...(create.id !== undefined ? { id: create.id } : {}),
+						user_id: create.user_id,
+						workspace_id: create.workspace_id,
+						task_source: create.task_source,
+						task_id: create.task_id,
+						task_key: create.task_key,
+						return_path: create.return_path,
+						state: create.state,
+						accumulated_seconds: create.accumulated_seconds,
+						running_since: create.running_since,
+					})
+					.returning(FOCUS_SESSION_COLUMNS)
+					.executeTakeFirstOrThrow();
+
+				return {
+					finished: mapRow(finished),
+					created: mapRow(created),
+				};
+			});
 		},
 
 		async findTask(source, taskId, workspaceId) {
