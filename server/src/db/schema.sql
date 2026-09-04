@@ -923,3 +923,29 @@ FROM (
 ) AS sub
 WHERE tracker_items.id = sub.id
   AND tracker_items.position IS NULL;
+
+-- Commit Focus: personal focus sessions
+CREATE TABLE IF NOT EXISTS focus_sessions (
+  id                  SERIAL PRIMARY KEY,
+  user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id        INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  task_source         TEXT NOT NULL CHECK (task_source IN ('board','tracker')),
+  task_id             INTEGER NOT NULL,
+  task_key            TEXT,
+  return_path         TEXT NOT NULL,
+  state               TEXT NOT NULL CHECK (state IN ('ready','running','paused','finished')),
+  accumulated_seconds INTEGER NOT NULL DEFAULT 0 CHECK (accumulated_seconds >= 0),
+  running_since       TIMESTAMPTZ,
+  version             INTEGER NOT NULL DEFAULT 1,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at         TIMESTAMPTZ,
+  CHECK ((state = 'running' AND running_since IS NOT NULL) OR (state <> 'running' AND running_since IS NULL))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_focus_sessions_active_unique
+  ON focus_sessions (user_id, workspace_id)
+  WHERE state <> 'finished';
+
+CREATE INDEX IF NOT EXISTS idx_focus_sessions_history
+  ON focus_sessions (user_id, workspace_id, finished_at);

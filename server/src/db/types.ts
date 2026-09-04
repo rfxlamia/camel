@@ -169,6 +169,23 @@ export interface CardLabels {
 	vocabulary_id: number;
 }
 
+export interface FocusSessions {
+	accumulated_seconds: Generated<number>;
+	created_at: Generated<Timestamp>;
+	finished_at: Timestamp | null;
+	id: Generated<number>;
+	return_path: string;
+	running_since: Timestamp | null;
+	state: string;
+	task_id: number;
+	task_key: string | null;
+	task_source: string;
+	updated_at: Generated<Timestamp>;
+	user_id: number;
+	version: Generated<number>;
+	workspace_id: number;
+}
+
 export interface Cards {
 	column_id: number;
 	created_at: Generated<Timestamp>;
@@ -378,6 +395,7 @@ export interface DB {
 	card_labels: CardLabels;
 	cards: Cards;
 	columns: Columns;
+	focus_sessions: FocusSessions;
 	notifications: Notifications;
 	sessions: Sessions;
 	settings: Settings;
