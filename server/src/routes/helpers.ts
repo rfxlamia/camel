@@ -506,7 +506,8 @@ export async function recordActivity(
 		| "move"
 		| "reorder"
 		| "delete"
-		| "linear_ticket_created",
+		| "linear_ticket_created"
+		| "focus_session",
 	opts: {
 		cardId?: number | null;
 		fromColumnId?: number | null;
