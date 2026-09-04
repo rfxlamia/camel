@@ -14,6 +14,29 @@ import { useBoard } from "./BoardContext";
 const TASK_MISSING_TOAST =
 	"Your focus session ended because the task is no longer available.";
 
+const ACCESS_REVOKED_TOAST =
+	"Your focus session ended because you no longer have access to this workspace.";
+
+function deletionEventTargetsFocusedTask(
+	current: FocusSession,
+	event: {
+		type: string;
+		cardId?: number;
+		trackerItemId?: number;
+	},
+): boolean {
+	if (event.type === "card.deleted") {
+		if (current.source !== "board") return false;
+		return event.cardId === current.taskId;
+	}
+	if (event.type === "tracker.deleted") {
+		if (current.source !== "tracker") return false;
+		if (event.trackerItemId === undefined) return false;
+		return event.trackerItemId === current.taskId;
+	}
+	return false;
+}
+
 interface FocusSessionContextValue {
 	session: FocusSession | null;
 	loading: boolean;
@@ -55,14 +78,25 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		user,
 		showToast,
 		subscribeFocusEvents,
+		subscribeCardEvents: subscribeCardEventsFromBoard,
+		subscribeTrackerEvents: subscribeTrackerEventsFromBoard,
+		subscribeMembershipEvents: subscribeMembershipEventsFromBoard,
 		setHasActiveFocusSession,
 		setFocusSessionHydrated,
 	} = useBoard();
+
+	const subscribeCardEvents =
+		subscribeCardEventsFromBoard ?? (() => () => undefined);
+	const subscribeTrackerEvents =
+		subscribeTrackerEventsFromBoard ?? (() => () => undefined);
+	const subscribeMembershipEvents =
+		subscribeMembershipEventsFromBoard ?? (() => () => undefined);
 
 	const [session, setSession] = useState<FocusSession | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [actionError, setActionError] = useState<string | null>(null);
 	const loadGeneration = useRef(0);
+	const sessionRef = useRef<FocusSession | null>(null);
 
 	const adoptSession = useCallback(
 		(next: FocusSession | null) => {
@@ -127,6 +161,10 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		setHasActiveFocusSession,
 		showToast,
 	]);
+
+	useEffect(() => {
+		sessionRef.current = session;
+	}, [session]);
 
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
@@ -244,6 +282,54 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		}
 		return finished;
 	}, [runPatchAction]);
+
+	const autoFinishFromGuard = useCallback(
+		async (message: string) => {
+			if (sessionRef.current === null) return;
+			try {
+				await finish();
+			} catch {
+				// Guard clears locally even when finish fails (404, 409, 5xx).
+			}
+			adoptSession(null);
+			showToast(message, "warning");
+		},
+		[adoptSession, finish, showToast],
+	);
+
+	useEffect(() => {
+		return subscribeCardEvents((event) => {
+			const current = sessionRef.current;
+			if (current === null) return;
+			if (!deletionEventTargetsFocusedTask(current, event)) return;
+			void autoFinishFromGuard(TASK_MISSING_TOAST);
+		});
+	}, [autoFinishFromGuard, subscribeCardEvents]);
+
+	useEffect(() => {
+		return subscribeTrackerEvents((event) => {
+			const current = sessionRef.current;
+			if (current === null) return;
+			if (!deletionEventTargetsFocusedTask(current, event)) return;
+			void autoFinishFromGuard(TASK_MISSING_TOAST);
+		});
+	}, [autoFinishFromGuard, subscribeTrackerEvents]);
+
+	useEffect(() => {
+		if (activeWorkspaceId === null) return;
+		return subscribeMembershipEvents((event) => {
+			const current = sessionRef.current;
+			if (current === null) return;
+			if (event.userId !== user.id) return;
+			if (event.workspaceId !== activeWorkspaceId) return;
+			void autoFinishFromGuard(ACCESS_REVOKED_TOAST);
+		});
+	}, [
+		activeWorkspaceId,
+		autoFinishFromGuard,
+		subscribeMembershipEvents,
+		user.id,
+	]);
 
 	return (
 		<FocusSessionContext.Provider
