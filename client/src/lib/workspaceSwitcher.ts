@@ -7,12 +7,21 @@ export interface SwitchAttemptInput {
 	activeWorkspaceId: number | null;
 	targetWorkspaceId: number;
 	hasUnsavedCardEdits: boolean;
+	hasActiveFocusSession: boolean;
+	focusSessionHydrated: boolean;
 }
 
 export type SwitchAttemptState =
 	| { status: "noop" }
+	| { status: "focus-loading" }
+	| { status: "focus-blocked" }
 	| { status: "confirm-required"; pendingWorkspaceId: number }
 	| { status: "switch"; workspaceId: number };
+
+export const FOCUS_LOADING_TOAST =
+	"Still loading your focus session. Try again in a moment.";
+export const FOCUS_BLOCKED_TOAST =
+	"Finish your focus session before switching workspaces.";
 
 export interface InvitePopoverInput {
 	switcherOpen: boolean;
@@ -29,8 +38,12 @@ export function getSwitchAttemptState({
 	activeWorkspaceId,
 	targetWorkspaceId,
 	hasUnsavedCardEdits,
+	hasActiveFocusSession,
+	focusSessionHydrated,
 }: SwitchAttemptInput): SwitchAttemptState {
 	if (activeWorkspaceId === targetWorkspaceId) return { status: "noop" };
+	if (!focusSessionHydrated) return { status: "focus-loading" };
+	if (hasActiveFocusSession) return { status: "focus-blocked" };
 	if (hasUnsavedCardEdits) {
 		return {
 			status: "confirm-required",

@@ -60,6 +60,8 @@ export function WorkspaceSwitcher({
 		pendingInvites,
 		remindedInviteIds,
 		hasUnsavedCardEdits,
+		hasActiveFocusSession,
+		focusSessionHydrated,
 		attemptSwitchWorkspace,
 		switchConfirm,
 		confirmPendingSwitch,
@@ -116,6 +118,8 @@ export function WorkspaceSwitcher({
 			activeWorkspaceId,
 			targetWorkspaceId: id,
 			hasUnsavedCardEdits,
+			hasActiveFocusSession,
+			focusSessionHydrated,
 		});
 		attemptSwitchWorkspace(id);
 		if (state.status !== "confirm-required") setOpen(false);
