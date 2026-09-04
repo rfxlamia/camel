@@ -8,34 +8,15 @@ import {
 	useState,
 } from "react";
 import { ApiError, api } from "../api";
+import {
+	ACCESS_REVOKED_TOAST,
+	deletionEventTargetsFocusedTask,
+	isActiveFocusSession,
+	membershipRemovalTargetsUser,
+	TASK_MISSING_TOAST,
+} from "../lib/focusGuards";
 import type { FocusSession, WorkItemSource } from "../types";
 import { useBoard } from "./BoardContext";
-
-const TASK_MISSING_TOAST =
-	"Your focus session ended because the task is no longer available.";
-
-const ACCESS_REVOKED_TOAST =
-	"Your focus session ended because you no longer have access to this workspace.";
-
-function deletionEventTargetsFocusedTask(
-	current: FocusSession,
-	event: {
-		type: string;
-		cardId?: number;
-		trackerItemId?: number;
-	},
-): boolean {
-	if (event.type === "card.deleted") {
-		if (current.source !== "board") return false;
-		return event.cardId === current.taskId;
-	}
-	if (event.type === "tracker.deleted") {
-		if (current.source !== "tracker") return false;
-		if (event.trackerItemId === undefined) return false;
-		return event.trackerItemId === current.taskId;
-	}
-	return false;
-}
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;
@@ -68,10 +49,6 @@ export function useFocusSession(): FocusSessionContextValue {
 	return ctx;
 }
 
-function isActiveSession(session: FocusSession | null): boolean {
-	return session !== null && session.state !== "finished";
-}
-
 export function FocusSessionProvider({ children }: { children: ReactNode }) {
 	const {
 		activeWorkspaceId,
@@ -101,7 +78,7 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 	const adoptSession = useCallback(
 		(next: FocusSession | null) => {
 			setSession(next);
-			setHasActiveFocusSession(isActiveSession(next));
+			setHasActiveFocusSession(isActiveFocusSession(next));
 		},
 		[setHasActiveFocusSession],
 	);
@@ -320,8 +297,11 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		return subscribeMembershipEvents((event) => {
 			const current = sessionRef.current;
 			if (current === null) return;
-			if (event.userId !== user.id) return;
-			if (event.workspaceId !== activeWorkspaceId) return;
+			if (
+				!membershipRemovalTargetsUser(event, user.id, activeWorkspaceId)
+			) {
+				return;
+			}
 			void autoFinishFromGuard(ACCESS_REVOKED_TOAST);
 		});
 	}, [
