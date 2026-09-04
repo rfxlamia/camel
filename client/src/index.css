@@ -193,6 +193,36 @@
       transform: translateY(0);
     }
   }
+
+  /* Command popover — grows from its anchor (transform-origin is set inline
+     from the caret position) rather than fading in place. Critically damped:
+     no overshoot, because nothing was thrown. */
+  --animate-popover-in: popover-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* Metadata chip — settles into the tray when a field is picked. */
+  --animate-chip-in: chip-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes chip-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
 body {

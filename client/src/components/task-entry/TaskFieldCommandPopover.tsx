@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import {
 	computePopoverPosition,
 	POPOVER_WIDTH,
+	type ViewportRect,
 } from "../../lib/popoverPlacement";
 
 export type TaskFieldCatalogState =
@@ -35,6 +36,12 @@ export interface TaskFieldCommandPopoverProps {
 	onRetry?: () => void;
 	listboxId: string;
 	anchorRef: RefObject<HTMLElement>;
+	/**
+	 * Preferred anchor, re-measured on every reposition. Lets the caller point
+	 * the popover at the caret instead of the whole field. Falls back to
+	 * `anchorRef` when it returns null.
+	 */
+	getAnchorRect?: () => ViewportRect | null;
 	popoverRef?: RefObject<HTMLDivElement>;
 }
 
@@ -52,22 +59,30 @@ export function TaskFieldCommandPopover({
 	onRetry,
 	listboxId,
 	anchorRef,
+	getAnchorRect,
 	popoverRef: popoverRefProp,
 }: TaskFieldCommandPopoverProps) {
 	const internalPopoverRef = useRef<HTMLDivElement>(null);
 	const popoverRef = popoverRefProp ?? internalPopoverRef;
-	const [coords, setCoords] = useState<{ top: number; left: number } | null>(
-		null,
-	);
+	const [coords, setCoords] = useState<{
+		top: number;
+		left: number;
+		/** Anchor offset inside the panel, so the panel grows from the caret. */
+		originX: number;
+		placement: "below" | "above";
+	} | null>(null);
 	const [positioned, setPositioned] = useState(false);
 	const optionId = (id: string) => `${listboxId}-${id}`;
+	const getAnchorRectRef = useRef(getAnchorRect);
+	getAnchorRectRef.current = getAnchorRect;
 
 	useLayoutEffect(() => {
 		const updatePosition = () => {
 			const anchor = anchorRef.current;
 			const popover = popoverRef.current;
 			if (!anchor) return;
-			const triggerRect = anchor.getBoundingClientRect();
+			const triggerRect =
+				getAnchorRectRef.current?.() ?? anchor.getBoundingClientRect();
 			const popoverHeight = popover?.offsetHeight ?? 280;
 			const popoverWidth = popover?.offsetWidth ?? POPOVER_WIDTH;
 			const position = computePopoverPosition({
@@ -77,7 +92,16 @@ export function TaskFieldCommandPopover({
 				viewportWidth: window.innerWidth,
 				viewportHeight: window.innerHeight,
 			});
-			setCoords({ top: position.top, left: position.left });
+			const ORIGIN_INSET = 8;
+			setCoords({
+				top: position.top,
+				left: position.left,
+				originX: Math.min(
+					Math.max(triggerRect.left - position.left, ORIGIN_INSET),
+					Math.max(popoverWidth - ORIGIN_INSET, ORIGIN_INSET),
+				),
+				placement: position.placement,
+			});
 			setPositioned(true);
 		};
 
@@ -195,12 +219,21 @@ export function TaskFieldCommandPopover({
 	return createPortal(
 		<div
 			ref={popoverRef}
+			// The materialize animation is attached only once `positioned` flips,
+			// so it never plays while the panel is still hidden for measurement.
+			className={
+				positioned ? "animate-popover-in motion-reduce:animate-none" : undefined
+			}
 			style={{
 				position: "fixed",
 				top: coords?.top ?? 0,
 				left: coords?.left ?? 0,
 				zIndex: 50,
 				visibility: positioned ? "visible" : "hidden",
+				transformOrigin: coords
+					? `${coords.originX}px ${coords.placement === "below" ? "top" : "bottom"}`
+					: undefined,
+				willChange: positioned ? "transform, opacity" : undefined,
 			}}
 		>
 			{panel}

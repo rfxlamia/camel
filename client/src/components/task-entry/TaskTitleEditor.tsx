@@ -8,6 +8,12 @@ import {
 	useState,
 	type KeyboardEvent,
 } from "react";
+import {
+	type CaretOffset,
+	caretOffsetToViewportRect,
+	getTextareaCaretOffset,
+} from "../../lib/caretRect";
+import type { ViewportRect } from "../../lib/popoverPlacement";
 import type {
 	TaskMetadataAction,
 	TaskMetadataDraft,
@@ -145,6 +151,10 @@ export const TaskTitleEditor = forwardRef<
 	const commandPopoverRef = useRef<HTMLDivElement>(null);
 	const restoreCaretRef = useRef<number | null>(null);
 	const suppressCommandRef = useRef(false);
+	const caretOffsetCacheRef = useRef<{
+		key: string;
+		offset: CaretOffset;
+	} | null>(null);
 	const listboxId = useId();
 
 	const availableFields = fields.filter((field) => field.catalogState !== "disabled");
@@ -284,6 +294,37 @@ export const TaskTitleEditor = forwardRef<
 		activeOption && command.open
 			? `${listboxId}-${activeOption.id}`
 			: undefined;
+
+	/**
+	 * Horizontal anchor follows the `@` caret so the menu reads as originating
+	 * from the trigger; vertical anchor stays on the field so the menu opens
+	 * below the chip tray instead of covering it.
+	 */
+	const getCommandAnchorRect = useCallback((): ViewportRect | null => {
+		const textarea = textareaRef.current;
+		const shell = shellRef.current;
+		if (!textarea || !shell) return null;
+		const shellRect = shell.getBoundingClientRect();
+		const index =
+			command.commandStart >= 0 ? command.commandStart : textarea.value.length;
+		// Repositioning runs on every scroll event, so only re-measure when the
+		// text before the caret (or the wrap width) actually changed.
+		const cacheKey = `${textarea.clientWidth}|${textarea.value.slice(0, index)}`;
+		let cached = caretOffsetCacheRef.current;
+		if (!cached || cached.key !== cacheKey) {
+			const offset = getTextareaCaretOffset(textarea, index);
+			cached = offset ? { key: cacheKey, offset } : null;
+			caretOffsetCacheRef.current = cached;
+		}
+		if (!cached) return shellRect;
+		const caret = caretOffsetToViewportRect(textarea, cached.offset);
+		return {
+			top: shellRect.top,
+			bottom: shellRect.bottom,
+			left: caret.left,
+			right: caret.right,
+		};
+	}, [command.commandStart]);
 
 	function focusAdjacentControl(
 		current: HTMLElement,
@@ -594,7 +635,7 @@ export const TaskTitleEditor = forwardRef<
 			: [];
 
 	return (
-		<div ref={shellRef} className="relative flex flex-wrap items-start gap-1">
+		<div ref={shellRef} className="relative flex w-full flex-col gap-1.5">
 			<textarea
 				ref={textareaRef}
 				value={title}
@@ -619,46 +660,53 @@ export const TaskTitleEditor = forwardRef<
 			setIsComposing(false);
 			suppressCommandRef.current = true;
 		}}
-				className="min-h-8 min-w-[8rem] flex-1 resize-none border-0 bg-transparent p-0 text-neutral-900 text-sm focus:outline-none"
+				className="min-h-8 w-full resize-none border-0 bg-transparent p-0 text-neutral-900 text-sm focus:outline-none"
 			/>
-			{chips.map(({ chipId, field, option, label }) => {
-				const chipError = fieldErrors[field.id];
-				return (
-				<span key={chipId} className="inline-flex items-center gap-1">
-					<button
-						type="button"
-						data-selected={selectedChipId === chipId ? "true" : "false"}
-						data-invalid={chipError ? "true" : undefined}
-						aria-invalid={chipError ? true : undefined}
-						aria-label={chipError ? `${label}. ${chipError}` : label}
-						onClick={() => openChipEditor(field)}
-						onKeyDown={(event) => {
-							if (event.key !== "Tab") return;
-							event.preventDefault();
-							focusAdjacentControl(event.currentTarget, event.shiftKey);
-						}}
-						className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
-							chipError
-								? "border-error-900 bg-error-50"
-								: selectedChipId === chipId
-									? "border-primary-600 bg-primary-50"
-									: "border-neutral-200 bg-neutral-100"
-						}`}
-					>
-						{label}
-					</button>
-					<button
-						type="button"
-						aria-label={`Remove ${label}`}
-						tabIndex={-1}
-						onClick={() => removeChip(field, option.label)}
-						className="text-neutral-500 text-xs hover:text-neutral-800"
-					>
-						×
-					</button>
-				</span>
-				);
-			})}
+			{chips.length > 0 ? (
+				<div className="flex flex-wrap items-center gap-1.5">
+					{chips.map(({ chipId, field, option, label }) => {
+						const chipError = fieldErrors[field.id];
+						const selected = selectedChipId === chipId;
+						const tone = chipError
+							? "bg-error-100 text-error-900"
+							: selected
+								? "bg-primary-200 text-primary-900 ring-2 ring-primary-600"
+								: "bg-primary-100 text-primary-800";
+						return (
+							<span
+								key={chipId}
+								className={`group inline-flex max-w-full animate-chip-in items-center gap-0.5 rounded-full py-0.5 pr-1 pl-2 transition-colors focus-within:ring-2 focus-within:ring-primary-600 focus-within:ring-offset-2 focus-within:ring-offset-white motion-reduce:animate-none ${tone}`}
+							>
+								<button
+									type="button"
+									data-selected={selected ? "true" : "false"}
+									data-invalid={chipError ? "true" : undefined}
+									aria-invalid={chipError ? true : undefined}
+									aria-label={chipError ? `${label}. ${chipError}` : label}
+									onClick={() => openChipEditor(field)}
+									onKeyDown={(event) => {
+										if (event.key !== "Tab") return;
+										event.preventDefault();
+										focusAdjacentControl(event.currentTarget, event.shiftKey);
+									}}
+									className="min-w-0 truncate text-xs focus:outline-none"
+								>
+									{label}
+								</button>
+								<button
+									type="button"
+									aria-label={`Remove ${label}`}
+									tabIndex={-1}
+									onClick={() => removeChip(field, option.label)}
+									className="shrink-0 rounded-full px-1 text-xs leading-none opacity-50 transition hover:bg-black/10 hover:opacity-100 focus:outline-none"
+								>
+									×
+								</button>
+							</span>
+						);
+					})}
+				</div>
+			) : null}
 			{command.open ? (
 				<TaskFieldCommandPopover
 					stage={command.stage ?? "field"}
@@ -670,7 +718,8 @@ export const TaskTitleEditor = forwardRef<
 					catalogState={command.stage === "value" ? catalogState : "ready"}
 					onRetry={activeField?.onRetry}
 					listboxId={listboxId}
-					anchorRef={shellRef}
+					anchorRef={textareaRef}
+					getAnchorRect={getCommandAnchorRect}
 					popoverRef={commandPopoverRef}
 				/>
 			) : null}

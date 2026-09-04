@@ -254,6 +254,29 @@ describe("TaskTitleEditor", () => {
 		expect(getActiveOption()?.textContent).toContain("High");
 	});
 
+	it("Renders chips in a tray after the textarea, with remove inside the pill", () => {
+		render(<EditorHarness initialDraft={{ priorityId: 10 }} />);
+		const textarea = getTitleTextarea();
+		const chip = screen.getByRole("button", { name: "Priority: High" });
+		const remove = screen.getByRole("button", {
+			name: /Remove Priority:\s*High/i,
+		});
+
+		// The tray is a sibling that follows the textarea, so Tab order stays
+		// textarea -> chips and a new chip never reflows the typed text.
+		const tray = chip.closest("div");
+		expect(tray?.previousElementSibling).toBe(textarea);
+		expect(
+			textarea.compareDocumentPosition(chip) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+
+		// Remove shares the pill with the label instead of floating beside it.
+		expect(remove.parentElement).toBe(chip.parentElement);
+		expect(chip.parentElement?.className).toContain("rounded-full");
+		expect(remove.getAttribute("tabindex")).toBe("-1");
+	});
+
 	it("Remove a chip by pointer or keyboard", () => {
 		render(
 			<EditorHarness
