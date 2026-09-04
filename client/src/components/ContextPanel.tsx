@@ -14,6 +14,7 @@ import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 import { AssigneePicker } from "./AssigneePicker";
 import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
+import FocusEntryButton from "./FocusEntryButton";
 import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
 
 const inputClass =
@@ -363,6 +364,12 @@ function DetailsSection({
 				<MetaRow label="Started" value={card.startedAt} />
 				<MetaRow label="Done" value={card.doneAt} />
 			</dl>
+
+			<FocusEntryButton
+				source="board"
+				taskId={card.id}
+				taskKey={card.key ?? null}
+			/>
 
 			{activeWorkspaceId !== null && ticketIntakeEnabled && (
 				<button
