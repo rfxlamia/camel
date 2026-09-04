@@ -1,6 +1,11 @@
 // client/src/components/ColumnView.test.tsx — jsdom; no jest-dom (see TemplatePicker.test.tsx)
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@dnd-kit/core", () => ({
 	useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
@@ -12,8 +17,25 @@ vi.mock("@dnd-kit/sortable", () => ({
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => ({ activeWorkspaceId: null }),
 }));
+const {
+	mockGetWorkspaceMembers,
+	mockListTrackerVocabularies,
+	mockListTrackerProjects,
+} = vi.hoisted(() => ({
+	mockGetWorkspaceMembers: vi.fn(),
+	mockListTrackerVocabularies: vi.fn(),
+	mockListTrackerProjects: vi.fn(),
+}));
+
 vi.mock("../api", () => ({
-	api: { getWorkspaceMembers: vi.fn().mockResolvedValue({ members: [] }) },
+	api: {
+		getWorkspaceMembers: (...args: unknown[]) =>
+			mockGetWorkspaceMembers(...args),
+		listTrackerVocabularies: (...args: unknown[]) =>
+			mockListTrackerVocabularies(...args),
+		listTrackerProjects: (...args: unknown[]) =>
+			mockListTrackerProjects(...args),
+	},
 }));
 vi.mock("./CardView", () => ({ default: () => null }));
 
@@ -37,8 +59,64 @@ vi.mock("../lib/columnColorUtils", async (importOriginal) => {
 });
 
 import { generateSwatchCandidates } from "../lib/columnColorUtils";
-import type { Column } from "../types";
+import type { Column, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 import ColumnView from "./ColumnView";
+import { TaskMetadataCatalogProvider } from "./task-entry/TaskMetadataCatalogProvider";
+
+const members: WorkspaceMember[] = [
+	{ userId: 1, username: "rafi", displayName: "Rafi", role: "member" },
+];
+const priorities: TrackerVocabulary[] = [
+	{ id: 10, kind: "priority", name: "High", position: 1, colour: "#f00" },
+];
+const labels: TrackerVocabulary[] = [
+	{ id: 20, kind: "label", name: "Bug", position: 1, colour: "#00f" },
+];
+const projects: TrackerProject[] = [
+	{
+		id: 1,
+		name: "Web",
+		startDate: null,
+		endDate: null,
+		position: 1,
+		version: 1,
+		phases: [],
+	},
+];
+
+function mockReadyCatalogs() {
+	mockGetWorkspaceMembers.mockResolvedValue({ members });
+	mockListTrackerVocabularies.mockImplementation(
+		(_workspaceId: number, kind: string) => {
+			if (kind === "priority") return Promise.resolve(priorities);
+			if (kind === "label") return Promise.resolve(labels);
+			return Promise.resolve([]);
+		},
+	);
+	mockListTrackerProjects.mockResolvedValue(projects);
+}
+
+function findOverflowHiddenAncestor(element: Element): Element | null {
+	let node: Element | null = element.parentElement;
+	while (node) {
+		if (node.classList.contains("overflow-hidden")) return node;
+		node = node.parentElement;
+	}
+	return null;
+}
+
+function renderColumn(column = makeColumn()) {
+	return render(
+		<TaskMetadataCatalogProvider workspaceId={7}>
+			<ColumnView
+				column={column}
+				onOpenCard={vi.fn()}
+				onAddCard={vi.fn().mockResolvedValue(undefined)}
+				onUpdateColumn={vi.fn().mockResolvedValue(undefined)}
+			/>
+		</TaskMetadataCatalogProvider>,
+	);
+}
 
 function makeColumn(overrides: Partial<Column> = {}): Column {
 	return {
@@ -61,18 +139,40 @@ function openSettings(
 	onUpdate = vi.fn().mockResolvedValue(undefined),
 ) {
 	render(
-		<ColumnView
-			column={column}
-			onOpenCard={vi.fn()}
-			onAddCard={vi.fn().mockResolvedValue(undefined)}
-			onUpdateColumn={onUpdate}
-		/>,
+		<TaskMetadataCatalogProvider workspaceId={7}>
+			<ColumnView
+				column={column}
+				onOpenCard={vi.fn()}
+				onAddCard={vi.fn().mockResolvedValue(undefined)}
+				onUpdateColumn={onUpdate}
+			/>
+		</TaskMetadataCatalogProvider>,
 	);
 	fireEvent.click(screen.getByRole("button", { name: /edit todo column/i }));
 	return { onUpdate };
 }
 
 afterEach(cleanup);
+
+beforeEach(() => {
+	mockReadyCatalogs();
+});
+
+describe("Add card @ command popover", () => {
+	it("renders the field menu outside the column overflow-hidden boundary", async () => {
+		renderColumn();
+
+		fireEvent.click(screen.getByRole("button", { name: /add card/i }));
+		const textarea = await screen.findByRole("combobox", { name: "Task title" });
+		fireEvent.change(textarea, { target: { value: "buat laporan " } });
+		fireEvent.keyDown(textarea, { key: "@" });
+
+		const listbox = await screen.findByRole("listbox", { name: "Task fields" });
+		expect(findOverflowHiddenAncestor(listbox)).toBeNull();
+		expect(screen.getByRole("option", { name: /Assignee/i })).toBeTruthy();
+		expect(screen.getByRole("option", { name: /Priority/i })).toBeTruthy();
+	});
+});
 
 describe("ColumnSettings color shuffle", () => {
 	it("shows 5 swatches with none selected when column has no color", () => {

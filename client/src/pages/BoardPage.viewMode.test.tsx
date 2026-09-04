@@ -1,15 +1,31 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseBoard } = vi.hoisted(() => ({
+const {
+	mockUseBoard,
+	mockGetWorkspaceMembers,
+	mockListTrackerVocabularies,
+	mockListTrackerProjects,
+} = vi.hoisted(() => ({
 	mockUseBoard: vi.fn(),
+	mockGetWorkspaceMembers: vi.fn(),
+	mockListTrackerVocabularies: vi.fn(),
+	mockListTrackerProjects: vi.fn(),
 }));
 
 vi.mock("react-router", () => ({
 	useNavigate: () => vi.fn(),
 	Outlet: () => null,
 }));
-vi.mock("../api", () => ({ ApiError: class extends Error {}, api: {} }));
+vi.mock("../api", () => ({
+	ApiError: class extends Error {},
+	api: {
+		getWorkspaceMembers: (...a: unknown[]) => mockGetWorkspaceMembers(...a),
+		listTrackerVocabularies: (...a: unknown[]) =>
+			mockListTrackerVocabularies(...a),
+		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
+	},
+}));
 vi.mock("../components/LoadingCamel", () => ({ default: () => null }));
 vi.mock("../components/SuccessAnimation", () => ({ default: () => null }));
 vi.mock("../components/ListView", () => ({
@@ -25,6 +41,12 @@ vi.mock("../context/BoardContext", () => ({
 import BoardPage from "./BoardPage";
 
 describe("BoardPage view mode routing", () => {
+	beforeEach(() => {
+		mockGetWorkspaceMembers.mockReset().mockResolvedValue({ members: [] });
+		mockListTrackerVocabularies.mockReset().mockResolvedValue([]);
+		mockListTrackerProjects.mockReset().mockResolvedValue([]);
+	});
+
 	afterEach(cleanup);
 
 	it("renders ListView when boardViewMode is list", () => {

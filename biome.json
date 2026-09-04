@@ -8,6 +8,7 @@
 			"!**/dist/**",
 			"!**/node_modules/**",
 			"!camel-lottie/**",
+			"!graphify-out/**",
 			"!client/vite.config.ts",
 			"!client/vitest.config.ts"
 		]
@@ -101,6 +102,7 @@
 			"!**/dist/**",
 			"!**/node_modules/**",
 			"!**/*.css",
+			"!graphify-out/**",
 			"!client/vite.config.ts",
 			"!client/vitest.config.ts"
 		]

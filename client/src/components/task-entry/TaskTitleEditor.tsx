@@ -142,6 +142,7 @@ export const TaskTitleEditor = forwardRef<
 	const [isComposing, setIsComposing] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
+	const commandPopoverRef = useRef<HTMLDivElement>(null);
 	const restoreCaretRef = useRef<number | null>(null);
 	const suppressCommandRef = useRef(false);
 	const listboxId = useId();
@@ -255,6 +256,7 @@ export const TaskTitleEditor = forwardRef<
 		const onPointerDown = (event: MouseEvent) => {
 			const target = event.target as Node;
 			if (shellRef.current?.contains(target)) return;
+			if (commandPopoverRef.current?.contains(target)) return;
 			closeCommand(command.commandStart >= 0 ? plainTitle(title, command.commandStart).length : title.length);
 		};
 		document.addEventListener("mousedown", onPointerDown);
@@ -668,6 +670,8 @@ export const TaskTitleEditor = forwardRef<
 					catalogState={command.stage === "value" ? catalogState : "ready"}
 					onRetry={activeField?.onRetry}
 					listboxId={listboxId}
+					anchorRef={shellRef}
+					popoverRef={commandPopoverRef}
 				/>
 			) : null}
 			<div aria-live="polite" className="sr-only">

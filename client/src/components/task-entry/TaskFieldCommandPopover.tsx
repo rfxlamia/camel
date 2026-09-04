@@ -1,3 +1,16 @@
+import {
+	type ReactNode,
+	type RefObject,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
+import { createPortal } from "react-dom";
+import {
+	computePopoverPosition,
+	POPOVER_WIDTH,
+} from "../../lib/popoverPlacement";
+
 export type TaskFieldCatalogState =
 	| "loading"
 	| "ready"
@@ -21,7 +34,12 @@ export interface TaskFieldCommandPopoverProps {
 	catalogState?: TaskFieldCatalogState;
 	onRetry?: () => void;
 	listboxId: string;
+	anchorRef: RefObject<HTMLElement>;
+	popoverRef?: RefObject<HTMLDivElement>;
 }
+
+const PANEL_CLASS =
+	"w-60 rounded-lg border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(23,42,62,0.12)]";
 
 export function TaskFieldCommandPopover({
 	stage: _stage,
@@ -33,29 +51,74 @@ export function TaskFieldCommandPopover({
 	catalogState = "ready",
 	onRetry,
 	listboxId,
+	anchorRef,
+	popoverRef: popoverRefProp,
 }: TaskFieldCommandPopoverProps) {
+	const internalPopoverRef = useRef<HTMLDivElement>(null);
+	const popoverRef = popoverRefProp ?? internalPopoverRef;
+	const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+		null,
+	);
+	const [positioned, setPositioned] = useState(false);
 	const optionId = (id: string) => `${listboxId}-${id}`;
 
+	useLayoutEffect(() => {
+		const updatePosition = () => {
+			const anchor = anchorRef.current;
+			const popover = popoverRef.current;
+			if (!anchor) return;
+			const triggerRect = anchor.getBoundingClientRect();
+			const popoverHeight = popover?.offsetHeight ?? 280;
+			const popoverWidth = popover?.offsetWidth ?? POPOVER_WIDTH;
+			const position = computePopoverPosition({
+				trigger: triggerRect,
+				popoverWidth,
+				popoverHeight,
+				viewportWidth: window.innerWidth,
+				viewportHeight: window.innerHeight,
+			});
+			setCoords({ top: position.top, left: position.left });
+			setPositioned(true);
+		};
+
+		updatePosition();
+		const raf = requestAnimationFrame(updatePosition);
+		window.addEventListener("resize", updatePosition);
+		document.addEventListener("scroll", updatePosition, true);
+		const popover = popoverRef.current;
+		const resizeObserver =
+			typeof ResizeObserver !== "undefined"
+				? new ResizeObserver(updatePosition)
+				: null;
+		if (popover && resizeObserver) resizeObserver.observe(popover);
+		return () => {
+			cancelAnimationFrame(raf);
+			window.removeEventListener("resize", updatePosition);
+			document.removeEventListener("scroll", updatePosition, true);
+			resizeObserver?.disconnect();
+		};
+	}, [anchorRef, popoverRef]);
+
+	let panel: ReactNode;
+
 	if (catalogState === "loading") {
-		return (
+		panel = (
 			<div
 				role="listbox"
 				aria-label={listLabel}
 				id={listboxId}
-				className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-neutral-200 bg-white p-2 text-neutral-500 text-sm shadow-[0_8px_24px_rgba(23,42,62,0.12)]"
+				className={`${PANEL_CLASS} p-2 text-neutral-500 text-sm`}
 			>
 				Loading…
 			</div>
 		);
-	}
-
-	if (catalogState === "failed") {
-		return (
+	} else if (catalogState === "failed") {
+		panel = (
 			<div
 				role="listbox"
 				aria-label={listLabel}
 				id={listboxId}
-				className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-neutral-200 bg-white p-2 text-sm shadow-[0_8px_24px_rgba(23,42,62,0.12)]"
+				className={`${PANEL_CLASS} p-2 text-sm`}
 			>
 				<p className="text-neutral-700">Could not load options.</p>
 				{onRetry ? (
@@ -69,68 +132,80 @@ export function TaskFieldCommandPopover({
 				) : null}
 			</div>
 		);
-	}
-
-	if (catalogState === "disabled") {
-		return (
+	} else if (catalogState === "disabled") {
+		panel = (
 			<div
 				role="listbox"
 				aria-label={listLabel}
 				id={listboxId}
-				className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-neutral-200 bg-white p-2 text-neutral-500 text-sm shadow-[0_8px_24px_rgba(23,42,62,0.12)]"
+				className={`${PANEL_CLASS} p-2 text-neutral-500 text-sm`}
 			>
 				Unavailable
 			</div>
 		);
-	}
-
-	if (catalogState === "empty" || options.length === 0) {
-		return (
+	} else if (catalogState === "empty" || options.length === 0) {
+		panel = (
 			<div
 				role="listbox"
 				aria-label={listLabel}
 				id={listboxId}
-				className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-neutral-200 bg-white p-2 text-neutral-500 text-sm shadow-[0_8px_24px_rgba(23,42,62,0.12)]"
+				className={`${PANEL_CLASS} p-2 text-neutral-500 text-sm`}
 			>
 				No options
 			</div>
 		);
+	} else {
+		panel = (
+			<ul
+				id={listboxId}
+				role="listbox"
+				aria-label={listLabel}
+				aria-multiselectable={multiple || undefined}
+				className={`${PANEL_CLASS} max-h-64 overflow-y-auto p-1`}
+			>
+				{options.map((option, index) => {
+					const selected = selectedIds.includes(option.id);
+					return (
+						<li key={option.id} role="presentation">
+							<div
+								id={optionId(option.id)}
+								role="option"
+								aria-selected={selected}
+								className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
+									index === activeIndex ? "bg-neutral-100" : ""
+								}`}
+							>
+								<span className="min-w-0 flex-1 truncate">{option.label}</span>
+								{option.hint ? (
+									<span className="shrink-0 text-neutral-500 text-xs">
+										{option.hint}
+									</span>
+								) : null}
+								{selected ? (
+									<span className="shrink-0 text-primary-600 text-xs">✓</span>
+								) : null}
+							</div>
+						</li>
+					);
+				})}
+			</ul>
+		);
 	}
 
-	return (
-		<ul
-			id={listboxId}
-			role="listbox"
-			aria-label={listLabel}
-			aria-multiselectable={multiple || undefined}
-			className="absolute top-full left-0 z-50 mt-1 max-h-64 w-60 overflow-y-auto rounded-lg border border-neutral-200 bg-white p-1 shadow-[0_8px_24px_rgba(23,42,62,0.12)]"
+	return createPortal(
+		<div
+			ref={popoverRef}
+			style={{
+				position: "fixed",
+				top: coords?.top ?? 0,
+				left: coords?.left ?? 0,
+				zIndex: 50,
+				visibility: positioned ? "visible" : "hidden",
+			}}
 		>
-			{options.map((option, index) => {
-				const selected = selectedIds.includes(option.id);
-				return (
-					<li key={option.id} role="presentation">
-						<div
-							id={optionId(option.id)}
-							role="option"
-							aria-selected={selected}
-							className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
-								index === activeIndex ? "bg-neutral-100" : ""
-							}`}
-						>
-							<span className="min-w-0 flex-1 truncate">{option.label}</span>
-							{option.hint ? (
-								<span className="shrink-0 text-neutral-500 text-xs">
-									{option.hint}
-								</span>
-							) : null}
-							{selected ? (
-								<span className="shrink-0 text-primary-600 text-xs">✓</span>
-							) : null}
-						</div>
-					</li>
-				);
-			})}
-		</ul>
+			{panel}
+		</div>,
+		document.body,
 	);
 }
 

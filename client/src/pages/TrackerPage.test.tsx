@@ -896,7 +896,7 @@ describe("TrackerPage", () => {
 		await waitFor(() => screen.getByText("Backlog"));
 		fireEvent.click(screen.getByRole("button", { name: /^New item$/ }));
 		const modal = within(screen.getByRole("dialog"));
-		await waitFor(() => modal.getByRole("button", { name: /Backlog/ }));
+		await waitFor(() => modal.getByRole("button", { name: /^Backlog$/ }));
 		fireEvent.change(screen.getByLabelText(/item title/i), {
 			target: { value: "Fix realtime" },
 		});
@@ -918,7 +918,7 @@ describe("TrackerPage", () => {
 		fireEvent.change(screen.getByLabelText(/item title/i), {
 			target: { value: "Full" },
 		});
-		fireEvent.click(modal.getByRole("button", { name: /Backlog/ }));
+		fireEvent.click(modal.getByRole("button", { name: /^Backlog$/ }));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
 		fireEvent.click(modal.getByRole("button", { name: /Priority/ }));
 		fireEvent.click(screen.getByRole("option", { name: /High/ }));
@@ -949,10 +949,14 @@ describe("TrackerPage", () => {
 		});
 		fireEvent.click(modal.getByRole("button", { name: /Labels/ }));
 		fireEvent.click(screen.getByRole("option", { name: /Feature/ }));
-		fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+		fireEvent.keyDown(modal.getByRole("combobox", { name: "Add label…" }), {
+			key: "Escape",
+		});
 		fireEvent.click(modal.getByRole("button", { name: /Assignee/ }));
 		fireEvent.click(screen.getByRole("option", { name: /Alice/ }));
-		fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+		fireEvent.keyDown(modal.getByRole("combobox", { name: "Assign to…" }), {
+			key: "Escape",
+		});
 		fireEvent.click(screen.getByRole("button", { name: /create item/i }));
 		await waitFor(() =>
 			expect(mockCreateWorkItem).toHaveBeenCalledWith(
