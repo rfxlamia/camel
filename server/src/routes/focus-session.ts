@@ -1,7 +1,11 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import type { AuthUser } from "../auth.js";
 import { config } from "../config.js";
-import { applyAction } from "../core/focus-session.js";
+import {
+	applyAction,
+	type FocusAction,
+	InvalidFocusTransitionError,
+} from "../core/focus-session.js";
 import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
@@ -11,6 +15,7 @@ import {
 	createFocusSessionRepo,
 	type FocusSessionRepo,
 	type FocusSessionRow,
+	type FocusSessionUpdatePatch,
 	type ResolvedTask,
 } from "./focus-session-repo.js";
 
@@ -106,6 +111,42 @@ function parseFocusPostBody(body: unknown): {
 	if (source !== "board" && source !== "tracker") return null;
 	if (typeof taskId !== "number" || !Number.isInteger(taskId)) return null;
 	return { action: "focus", source, taskId };
+}
+
+const FOCUS_PATCH_ACTIONS = new Set<FocusAction>([
+	"start",
+	"pause",
+	"resume",
+	"finish",
+]);
+
+function parseFocusPatchBody(body: unknown): {
+	action: FocusAction;
+	version: number;
+} | null {
+	if (body == null || typeof body !== "object") return null;
+	const { action, version } = body as Record<string, unknown>;
+	if (typeof action !== "string" || !FOCUS_PATCH_ACTIONS.has(action as FocusAction)) {
+		return null;
+	}
+	if (typeof version !== "number" || !Number.isInteger(version)) return null;
+	return { action: action as FocusAction, version };
+}
+
+function buildLifecyclePatch(
+	action: FocusAction,
+	result: ReturnType<typeof applyAction>,
+	now: Date,
+): FocusSessionUpdatePatch {
+	const patch: FocusSessionUpdatePatch = {
+		state: result.state,
+		accumulated_seconds: result.accumulatedSeconds,
+		running_since: result.runningSince,
+	};
+	if (action === "finish") {
+		patch.finished_at = now;
+	}
+	return patch;
 }
 
 async function autoFinishMissingTask(
@@ -294,6 +335,80 @@ export function createFocusSessionRouter(deps: {
 		});
 
 		return res.status(201).json({ session });
+	});
+
+	router.patch("/focus-session", async (req, res) => {
+		const actor = req.user!;
+		const workspaceId = req.workspace!.workspaceId;
+
+		const parsed = parseFocusPatchBody(req.body);
+		if (!parsed) {
+			return res.status(400).json({ error: "Invalid request body" });
+		}
+
+		const { action, version: expectedVersion } = parsed;
+
+		const active = await repo.findActive(actor.id, workspaceId);
+		if (!active) {
+			return res.status(404).json({ error: "Not found" });
+		}
+
+		const currentSession = serializeFocusSession(active);
+
+		let nextSnapshot: ReturnType<typeof applyAction>;
+		try {
+			nextSnapshot = applyAction(
+				{
+					state: active.state,
+					accumulatedSeconds: active.accumulated_seconds,
+					runningSince: active.running_since,
+				},
+				action,
+				now(),
+			);
+		} catch (error) {
+			if (error instanceof InvalidFocusTransitionError) {
+				return res.status(409).json({
+					code: "invalid_transition",
+					session: currentSession,
+				});
+			}
+			throw error;
+		}
+
+		const updated = await repo.update(
+			active.id,
+			buildLifecyclePatch(action, nextSnapshot, now()),
+			expectedVersion,
+		);
+
+		if (!updated) {
+			const current = await repo.findActive(actor.id, workspaceId);
+			return res.status(409).json({
+				code: "version_conflict",
+				session: current ? serializeFocusSession(current) : null,
+			});
+		}
+
+		const session = serializeFocusSession(updated);
+
+		await publish(workspaceId, {
+			type: "focus_session.updated",
+			userId: actor.id,
+			workspaceId,
+			payload: {
+				session: action === "finish" ? null : session,
+			},
+		});
+
+		await recordFocusActivity({
+			actor,
+			workspaceId,
+			sessionId: updated.id,
+			action,
+		});
+
+		return res.json({ session });
 	});
 
 	return router;
