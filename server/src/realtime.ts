@@ -66,7 +66,8 @@ export interface BoardEvent {
 		| "tracker.project.deleted"
 		| "tracker.phase.created"
 		| "tracker.phase.updated"
-		| "tracker.phase.deleted";
+		| "tracker.phase.deleted"
+		| "focus_session.updated";
 	actor?: AuthUser;
 	cardId?: number;
 	trackerItemId?: number;
