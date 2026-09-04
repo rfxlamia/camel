@@ -94,6 +94,7 @@ describe("DELETE /members/:userId", () => {
 		expect(res.body).toEqual({ error: "Cannot remove yourself" });
 		expect(mockRemoveMember).toHaveBeenCalledWith({
 			actorId: 5,
+			actor: { id: 5 },
 			workspaceId: 7,
 			userId: 5,
 		});
@@ -106,6 +107,7 @@ describe("DELETE /members/:userId", () => {
 		expect(res.status).toBe(204);
 		expect(mockRemoveMember).toHaveBeenCalledWith({
 			actorId: 1,
+			actor: { id: 1 },
 			workspaceId: 7,
 			userId: 3,
 		});

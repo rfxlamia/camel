@@ -1,6 +1,9 @@
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { clearPresence, publishEvent } from "../realtime.js";
+import { finishActiveFocusSessionForRemoval } from "./focus-session-membership.js";
+import { createFocusSessionRepo } from "./focus-session-repo.js";
+import type { RecordFocusActivity } from "./focus-session.js";
 import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 // ---- Workspace list serialization -------------------------------------------
@@ -181,7 +184,12 @@ export type WorkspaceAccessDeps = {
 	removeMember: (
 		workspaceId: number,
 		userId: number,
-	) => Promise<{ userId: number; username: string } | null>;
+		actor: AuthUser,
+	) => Promise<{
+		userId: number;
+		username: string;
+		focusSessionFinished: boolean;
+	} | null>;
 	updateMemberRole: (
 		workspaceId: number,
 		userId: number,
@@ -206,6 +214,12 @@ export type WorkspaceAccessDeps = {
 					userId: number;
 					workspaceId: number;
 					role: string;
+			  }
+			| {
+					type: "focus_session.updated";
+					userId: number;
+					workspaceId: number;
+					payload: { session: null };
 			  },
 	) => Promise<void>;
 	clearPresence: (workspaceId: number, userId: number) => Promise<void>;
@@ -215,10 +229,12 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 	return {
 		async removeMember({
 			actorId,
+			actor,
 			workspaceId,
 			userId,
 		}: {
 			actorId: number;
+			actor: AuthUser;
 			workspaceId: number;
 			userId: number;
 		}) {
@@ -252,11 +268,23 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 			const workspace = await deps.getWorkspace(workspaceId);
 			if (!workspace) return { status: 404 as const, error: "Not found" };
 
-			const removed = await deps.removeMember(workspaceId, userId);
+			const removed = await deps.removeMember(workspaceId, userId, actor);
 			if (!removed) return { status: 404 as const, error: "Not found" };
 			deps.clearPresence(workspaceId, userId).catch(() => {
 				// best-effort; member already removed
 			});
+			if (removed.focusSessionFinished) {
+				deps
+					.publishEvent(workspaceId, {
+						type: "focus_session.updated",
+						userId: removed.userId,
+						workspaceId,
+						payload: { session: null },
+					})
+					.catch(() => {
+						// best-effort; member already removed
+					});
+			}
 			deps
 				.publishEvent(workspaceId, {
 					type: "membership.removed",
@@ -331,38 +359,57 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 	};
 }
 
-export const workspaceAccessService = createWorkspaceAccessService({
-	getActorMembership: async (workspaceId, actorId) => {
-		const role = await lookupMembership(actorId, workspaceId);
-		return role ? { userId: actorId, role } : null;
-	},
-	getWorkspace: async (workspaceId) => {
-		const row = await db
-			.selectFrom("workspaces")
-			.select(["id", "name"])
-			.where("id", "=", workspaceId)
-			.executeTakeFirst();
-		return row ?? null;
-	},
-	getTargetMembership: async (workspaceId, userId) => {
-		const role = await lookupMembership(userId, workspaceId);
-		return role ? { userId, role } : null;
-	},
-	removeMember: async (workspaceId, userId) => {
+export type RemoveMemberDepOptions = {
+	now?: () => Date;
+	failAfterFocusFinalize?: () => void;
+};
+
+export function createRemoveMemberDep(
+	options: RemoveMemberDepOptions = {},
+): WorkspaceAccessDeps["removeMember"] {
+	const now = options.now ?? (() => new Date());
+	return async (workspaceId, userId, actor) => {
 		return db.transaction().execute(async (trx) => {
 			await lockWorkspaceMutation(trx, workspaceId);
+
+			const focusRepo = createFocusSessionRepo(trx);
+			const recordFocusActivity: RecordFocusActivity = async ({
+				actor: auditActor,
+				workspaceId: auditWorkspaceId,
+				sessionId,
+				action,
+			}) => {
+				await recordActivity(trx, auditActor, auditWorkspaceId, "focus_session", {
+					cardId: null,
+					payload: {
+						kind: "focus_session",
+						action,
+						sessionId,
+						workspaceId: auditWorkspaceId,
+						userId,
+					},
+				});
+			};
+
+			const focusSessionFinished = await finishActiveFocusSessionForRemoval({
+				repo: focusRepo,
+				actor,
+				userId,
+				workspaceId,
+				now: now(),
+				recordFocusActivity,
+			});
+
+			options.failAfterFocusFinalize?.();
+
 			const deleted = await trx
 				.deleteFrom("workspace_members")
 				.where("workspace_id", "=", workspaceId)
 				.where("user_id", "=", userId)
 				.returning("user_id")
 				.executeTakeFirst();
-			// Lost the race to a concurrent removal of the same member — the
-			// caller already checked membership existed, so treat this as a
-			// 404-style no-op rather than throwing.
 			if (!deleted) return null;
 
-			// Clear signable_assignee_id from columns that reference this member
 			await trx
 				.updateTable("columns")
 				.set({ signable_assignee_id: null })
@@ -396,10 +443,17 @@ export const workspaceAccessService = createWorkspaceAccessService({
 				.where("id", "=", deleted.user_id)
 				.executeTakeFirstOrThrow();
 
-			return { userId: deleted.user_id, username: user.username as string };
+			return {
+				userId: deleted.user_id,
+				username: user.username as string,
+				focusSessionFinished,
+			};
 		});
-	},
-	updateMemberRole: async (workspaceId, userId, role) => {
+	};
+}
+
+function createUpdateMemberRoleDep(): WorkspaceAccessDeps["updateMemberRole"] {
+	return async (workspaceId, userId, role) => {
 		return db.transaction().execute(async (trx) => {
 			const existing = await trx
 				.selectFrom("workspace_members as wm")
@@ -454,10 +508,39 @@ export const workspaceAccessService = createWorkspaceAccessService({
 				role: row.role as string,
 			};
 		});
-	},
-	publishEvent,
-	clearPresence,
-});
+	};
+}
+
+export function createDefaultWorkspaceAccessDeps(
+	removeMemberOptions?: RemoveMemberDepOptions,
+): WorkspaceAccessDeps {
+	return {
+		getActorMembership: async (workspaceId, actorId) => {
+			const role = await lookupMembership(actorId, workspaceId);
+			return role ? { userId: actorId, role } : null;
+		},
+		getWorkspace: async (workspaceId) => {
+			const row = await db
+				.selectFrom("workspaces")
+				.select(["id", "name"])
+				.where("id", "=", workspaceId)
+				.executeTakeFirst();
+			return row ?? null;
+		},
+		getTargetMembership: async (workspaceId, userId) => {
+			const role = await lookupMembership(userId, workspaceId);
+			return role ? { userId, role } : null;
+		},
+		removeMember: createRemoveMemberDep(removeMemberOptions),
+		updateMemberRole: createUpdateMemberRoleDep(),
+		publishEvent,
+		clearPresence,
+	};
+}
+
+export const workspaceAccessService = createWorkspaceAccessService(
+	createDefaultWorkspaceAccessDeps(),
+);
 
 // ---- Board helpers ----------------------------------------------------------
 

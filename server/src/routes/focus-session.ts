@@ -28,7 +28,8 @@ export type FocusAuditAction =
 	| "pause"
 	| "resume"
 	| "finish"
-	| "auto_finish";
+	| "auto_finish"
+	| "membership_removed";
 
 export type RecordFocusActivity = (input: {
 	actor: AuthUser;

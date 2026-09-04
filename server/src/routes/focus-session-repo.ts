@@ -1,6 +1,5 @@
-import type { Kysely } from "kysely";
 import { sql } from "kysely";
-import type { DB } from "../db/types.js";
+import { db } from "../db/kysely.js";
 
 export type FocusSessionRow = {
 	id: number;
@@ -111,10 +110,10 @@ function mapRow(row: Record<string, unknown>): FocusSessionRow {
 	};
 }
 
-export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
+export function createFocusSessionRepo(executor = db): FocusSessionRepo {
 	return {
 		async findActive(userId, workspaceId) {
-			const row = await db
+			const row = await executor
 				.selectFrom("focus_sessions")
 				.select(FOCUS_SESSION_COLUMNS)
 				.where("user_id", "=", userId)
@@ -125,7 +124,7 @@ export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
 		},
 
 		async insert(input) {
-			const row = await db
+			const row = await executor
 				.insertInto("focus_sessions")
 				.values({
 					user_id: input.user_id,
@@ -144,7 +143,7 @@ export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
 		},
 
 		async update(id, patch, expectedVersion) {
-			const row = await db
+			const row = await executor
 				.updateTable("focus_sessions")
 				.set({
 					...patch,
@@ -159,7 +158,7 @@ export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
 		},
 
 		async switchSession(finish, create) {
-			return db.transaction().execute(async (trx) => {
+			return executor.transaction().execute(async (trx) => {
 				const finished = await trx
 					.updateTable("focus_sessions")
 					.set({
@@ -202,7 +201,7 @@ export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
 
 		async findTask(source, taskId, workspaceId) {
 			if (source === "board") {
-				const row = await db
+				const row = await executor
 					.selectFrom("cards")
 					.innerJoin("workspaces", "workspaces.id", "cards.workspace_id")
 					.select([
@@ -224,7 +223,7 @@ export function createFocusSessionRepo(db: Kysely<DB>): FocusSessionRepo {
 				};
 			}
 
-			const row = await db
+			const row = await executor
 				.selectFrom("tracker_items")
 				.innerJoin("workspaces", "workspaces.id", "tracker_items.workspace_id")
 				.select([
