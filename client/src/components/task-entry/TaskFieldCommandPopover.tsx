@@ -51,6 +51,13 @@ export interface TaskFieldCommandPopoverProps {
 	 */
 	getAnchorRect?: () => ViewportRect | null;
 	popoverRef?: RefObject<HTMLDivElement>;
+	/** Commit the option at this index — the pointer equivalent of Enter. */
+	onSelect?: (index: number) => void;
+	/**
+	 * Move the active option under the pointer. Hover drives the same highlight
+	 * the keyboard does, so there is only ever one active row.
+	 */
+	onHoverIndex?: (index: number) => void;
 }
 
 const PANEL_CLASS =
@@ -70,6 +77,8 @@ export function TaskFieldCommandPopover({
 	anchorRef,
 	getAnchorRect,
 	popoverRef: popoverRefProp,
+	onSelect,
+	onHoverIndex,
 }: TaskFieldCommandPopoverProps) {
 	const internalPopoverRef = useRef<HTMLDivElement>(null);
 	const popoverRef = popoverRefProp ?? internalPopoverRef;
@@ -210,7 +219,12 @@ export function TaskFieldCommandPopover({
 									id={optionId(option.id)}
 									role="option"
 									aria-selected={selected}
-									className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
+									// Keyboard handling stays on the combobox that owns
+									// aria-activedescendant; these are pointer affordances.
+									onMouseDown={(event) => event.preventDefault()}
+									onClick={() => onSelect?.(index)}
+									onMouseEnter={() => onHoverIndex?.(index)}
+									className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
 										index === activeIndex ? "bg-primary-100" : ""
 									}`}
 								>

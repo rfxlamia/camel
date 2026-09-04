@@ -1,13 +1,13 @@
 import {
 	forwardRef,
+	type KeyboardEvent,
+	type ReactNode,
 	useCallback,
 	useEffect,
 	useId,
 	useImperativeHandle,
 	useRef,
 	useState,
-	type KeyboardEvent,
-	type ReactNode,
 } from "react";
 import {
 	type CaretOffset,
@@ -15,16 +15,16 @@ import {
 	getTextareaCaretOffset,
 } from "../../lib/caretRect";
 import type { ViewportRect } from "../../lib/popoverPlacement";
+import {
+	isPickerUnavailable,
+	type TaskFieldCatalogState,
+	type TaskFieldCommandOption,
+	TaskFieldCommandPopover,
+} from "./TaskFieldCommandPopover";
 import type {
 	TaskMetadataAction,
 	TaskMetadataDraft,
 } from "./taskMetadataDraft";
-import {
-	isPickerUnavailable,
-	TaskFieldCommandPopover,
-	type TaskFieldCatalogState,
-	type TaskFieldCommandOption,
-} from "./TaskFieldCommandPopover";
 
 export const TASK_TITLE_MAX_LENGTH = 255;
 
@@ -97,7 +97,9 @@ function isEmailLikeAt(text: string, atIndex: number): boolean {
 	const after = text.slice(atIndex + 1);
 	if (!after) return false;
 	const before = text[atIndex - 1];
-	return Boolean(before && /\S/.test(before) && /\S/.test(after.split(/\s/)[0] ?? ""));
+	return Boolean(
+		before && /\S/.test(before) && /\S/.test(after.split(/\s/)[0] ?? ""),
+	);
 }
 
 function findCommandAt(text: string): { start: number; query: string } | null {
@@ -160,20 +162,19 @@ export const TaskTitleEditor = forwardRef<
 	} | null>(null);
 	const listboxId = useId();
 
-	const availableFields = fields.filter((field) => field.catalogState !== "disabled");
+	const availableFields = fields.filter(
+		(field) => field.catalogState !== "disabled",
+	);
 
 	const getField = useCallback(
 		(fieldId: string | null) => fields.find((field) => field.id === fieldId),
 		[fields],
 	);
 
-	const plainTitle = useCallback(
-		(fullTitle: string, commandStart: number) => {
-			if (commandStart < 0) return fullTitle;
-			return fullTitle.slice(0, commandStart).replace(/\s+$/, "");
-		},
-		[],
-	);
+	const plainTitle = useCallback((fullTitle: string, commandStart: number) => {
+		if (commandStart < 0) return fullTitle;
+		return fullTitle.slice(0, commandStart).replace(/\s+$/, "");
+	}, []);
 
 	const restoreFocus = useCallback((caret: number) => {
 		restoreCaretRef.current = caret;
@@ -219,7 +220,13 @@ export const TaskTitleEditor = forwardRef<
 	}, []);
 
 	const openCommandAt = useCallback(
-		(_fullTitle: string, start: number, query: string, stage: CommandStage = "field", fieldId: string | null = null) => {
+		(
+			_fullTitle: string,
+			start: number,
+			query: string,
+			stage: CommandStage = "field",
+			fieldId: string | null = null,
+		) => {
 			const filtered =
 				stage === "field"
 					? filterByQuery(availableFields, query)
@@ -256,7 +263,10 @@ export const TaskTitleEditor = forwardRef<
 				stage: current.stage === "value" ? "value" : "field",
 				fieldId: current.stage === "value" ? current.fieldId : null,
 				query: match.query,
-				activeIndex: Math.min(current.activeIndex, Math.max(filtered.length - 1, 0)),
+				activeIndex: Math.min(
+					current.activeIndex,
+					Math.max(filtered.length - 1, 0),
+				),
 				commandStart: match.start,
 				editingFieldId: null,
 			}));
@@ -270,27 +280,35 @@ export const TaskTitleEditor = forwardRef<
 			const target = event.target as Node;
 			if (shellRef.current?.contains(target)) return;
 			if (commandPopoverRef.current?.contains(target)) return;
-			closeCommand(command.commandStart >= 0 ? plainTitle(title, command.commandStart).length : title.length);
+			closeCommand(
+				command.commandStart >= 0
+					? plainTitle(title, command.commandStart).length
+					: title.length,
+			);
 		};
 		document.addEventListener("mousedown", onPointerDown);
 		return () => document.removeEventListener("mousedown", onPointerDown);
 	}, [closeCommand, command.commandStart, command.open, plainTitle, title]);
 
 	const activeField = getField(command.fieldId);
-	const fieldOptions = filterByQuery(availableFields, command.stage === "field" ? command.query : "");
+	const fieldOptions = filterByQuery(
+		availableFields,
+		command.stage === "field" ? command.query : "",
+	);
 	const valueOptions =
 		command.stage === "value" && activeField
 			? filterByQuery(activeField.options, command.query)
 			: [];
-	const visibleOptions = command.stage === "field" ? fieldOptions : valueOptions;
+	const visibleOptions =
+		command.stage === "field" ? fieldOptions : valueOptions;
 	const activeOption = visibleOptions[command.activeIndex];
 	const catalogState =
 		command.stage === "field"
 			? "ready"
-			: activeField?.catalogState ?? "ready";
+			: (activeField?.catalogState ?? "ready");
 	const pickerUnavailable = isPickerUnavailable(
 		catalogState,
-		command.stage === "value" ? activeField?.options ?? [] : fieldOptions,
+		command.stage === "value" ? (activeField?.options ?? []) : fieldOptions,
 	);
 
 	const activeDescendant =
@@ -329,10 +347,7 @@ export const TaskTitleEditor = forwardRef<
 		};
 	}, [command.commandStart]);
 
-	function focusAdjacentControl(
-		current: HTMLElement,
-		backwards: boolean,
-	) {
+	function focusAdjacentControl(current: HTMLElement, backwards: boolean) {
 		const root = shellRef.current?.closest("form") ?? document.body;
 		const focusables = Array.from(
 			root.querySelectorAll<HTMLElement>(
@@ -348,7 +363,9 @@ export const TaskTitleEditor = forwardRef<
 	const chips = fields.flatMap((field) => {
 		const selectedIds = field.getSelectedOptionIds(draft);
 		return selectedIds.flatMap((optionId) => {
-			const option = field.options.find((candidate) => candidate.id === optionId);
+			const option = field.options.find(
+				(candidate) => candidate.id === optionId,
+			);
 			if (!option) return [];
 			const chipId = `${field.id}:${optionId}`;
 			return [
@@ -362,16 +379,27 @@ export const TaskTitleEditor = forwardRef<
 		});
 	});
 
-	const removeChip = (field: TaskFieldCommandDefinition, optionLabel: string) => {
+	const removeChip = (
+		field: TaskFieldCommandDefinition,
+		optionLabel: string,
+	) => {
 		dispatch(field.buildRemoveAction());
 		announce(`${field.label} ${optionLabel} removed`);
 		setSelectedChipId(null);
 	};
 
-	const selectValue = (field: TaskFieldCommandDefinition, option: TaskFieldCommandOption) => {
+	const selectValue = (
+		field: TaskFieldCommandDefinition,
+		option: TaskFieldCommandOption,
+	) => {
 		const value = field.mapOptionToValue(option.id);
+		// Multi-select actions toggle, so re-picking a chosen option removes it.
+		// The live region has to say which one actually happened.
+		const removes =
+			Boolean(field.multiple) &&
+			field.getSelectedOptionIds(draft).includes(option.id);
 		dispatch(field.buildSelectAction(value));
-		announce(`${field.label} ${option.label} added`);
+		announce(`${field.label} ${option.label} ${removes ? "removed" : "added"}`);
 		const nextPlainTitle = plainTitle(title, command.commandStart);
 		setTitle(nextPlainTitle);
 		if (field.multiple) {
@@ -434,6 +462,24 @@ export const TaskTitleEditor = forwardRef<
 		});
 	};
 
+	/**
+	 * Pointer commit. Unlike Enter, this takes the row the user actually
+	 * clicked — no "advance to the next unselected option" shortcut, which only
+	 * makes sense for repeated keypresses.
+	 */
+	const commitOptionAtIndex = (index: number) => {
+		if (command.stage === "field") {
+			const field = fieldOptions[index];
+			if (!field) return;
+			enterFieldStage(field);
+			return;
+		}
+		if (command.stage !== "value" || !activeField || pickerUnavailable) return;
+		const option = valueOptions[index];
+		if (!option) return;
+		selectValue(activeField, option);
+	};
+
 	const handleTitleChange = (nextTitle: string) => {
 		setTitle(nextTitle);
 		onTitleChange?.(plainTitle(nextTitle, command.commandStart));
@@ -470,14 +516,15 @@ export const TaskTitleEditor = forwardRef<
 			if (!textarea) return;
 			const atIndex = textarea.selectionStart;
 			const nextTitle =
-				title.slice(0, atIndex) +
-				"@" +
-				title.slice(textarea.selectionEnd);
-			if (!isEmailLikeAt(nextTitle, atIndex) && isValidCommandTrigger(nextTitle, atIndex)) {
-					event.preventDefault();
-					setTitle(nextTitle);
-					openCommandAt(nextTitle, atIndex, "");
-				}
+				title.slice(0, atIndex) + "@" + title.slice(textarea.selectionEnd);
+			if (
+				!isEmailLikeAt(nextTitle, atIndex) &&
+				isValidCommandTrigger(nextTitle, atIndex)
+			) {
+				event.preventDefault();
+				setTitle(nextTitle);
+				openCommandAt(nextTitle, atIndex, "");
+			}
 			return;
 		}
 
@@ -503,7 +550,9 @@ export const TaskTitleEditor = forwardRef<
 		if (event.key === "Backspace" && !command.open) {
 			const textarea = textareaRef.current;
 			if (!textarea) return;
-			const atEnd = textarea.selectionStart === textarea.selectionEnd && textarea.selectionEnd === title.length;
+			const atEnd =
+				textarea.selectionStart === textarea.selectionEnd &&
+				textarea.selectionEnd === title.length;
 			if (atEnd && chips.length > 0) {
 				const lastChip = chips[chips.length - 1];
 				if (selectedChipId === lastChip.chipId) {
@@ -631,7 +680,10 @@ export const TaskTitleEditor = forwardRef<
 		},
 	}));
 
-	const listLabel = command.stage === "field" ? "Task fields" : `${activeField?.label ?? "Value"} options`;
+	const listLabel =
+		command.stage === "field"
+			? "Task fields"
+			: `${activeField?.label ?? "Value"} options`;
 	const selectedIds =
 		command.stage === "value" && activeField
 			? activeField.getSelectedOptionIds(draft)
@@ -661,9 +713,9 @@ export const TaskTitleEditor = forwardRef<
 				}}
 				onCompositionStart={() => setIsComposing(true)}
 				onCompositionEnd={() => {
-			setIsComposing(false);
-			suppressCommandRef.current = true;
-		}}
+					setIsComposing(false);
+					suppressCommandRef.current = true;
+				}}
 				className="min-h-8 w-full resize-none border-0 bg-transparent p-0 text-neutral-900 text-sm focus:outline-none"
 			/>
 			{chips.length > 0 ? (
@@ -695,7 +747,7 @@ export const TaskTitleEditor = forwardRef<
 									}}
 									className="flex min-w-0 items-center gap-1 text-xs focus:outline-none"
 								>
-									{option.icon ?? field.icon ? (
+									{(option.icon ?? field.icon) ? (
 										<span className="flex shrink-0 items-center">
 											{option.icon ?? field.icon}
 										</span>
@@ -723,7 +775,9 @@ export const TaskTitleEditor = forwardRef<
 					stage={command.stage ?? "field"}
 					listLabel={listLabel}
 					heading={
-						command.stage === "value" ? (activeField?.label ?? "Options") : undefined
+						command.stage === "value"
+							? (activeField?.label ?? "Options")
+							: undefined
 					}
 					options={visibleOptions}
 					activeIndex={command.activeIndex}
@@ -735,6 +789,10 @@ export const TaskTitleEditor = forwardRef<
 					anchorRef={textareaRef}
 					getAnchorRect={getCommandAnchorRect}
 					popoverRef={commandPopoverRef}
+					onSelect={commitOptionAtIndex}
+					onHoverIndex={(index) =>
+						setCommand((current) => ({ ...current, activeIndex: index }))
+					}
 				/>
 			) : null}
 			<div aria-live="polite" className="sr-only">

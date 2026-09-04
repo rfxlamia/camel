@@ -6,25 +6,19 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import {
-	afterEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
 import { useReducer } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-	createInitialTaskMetadataDraft,
-	taskMetadataReducer,
-	type TaskMetadataAction,
-	type TaskMetadataDraft,
-} from "./taskMetadataDraft";
-import {
-	TaskTitleEditor,
 	type TaskFieldCommandDefinition,
+	TaskTitleEditor,
 	type TaskTitleEditorHandle,
 } from "./TaskTitleEditor";
+import {
+	createInitialTaskMetadataDraft,
+	type TaskMetadataAction,
+	type TaskMetadataDraft,
+	taskMetadataReducer,
+} from "./taskMetadataDraft";
 
 function boardFields(
 	overrides: Partial<TaskFieldCommandDefinition>[] = [],
@@ -40,7 +34,10 @@ function boardFields(
 				{ id: "2", label: "Maya" },
 			],
 			mapOptionToValue: (id) => Number(id),
-			buildSelectAction: (value) => ({ type: "toggleAssignee", id: value as number }),
+			buildSelectAction: (value) => ({
+				type: "toggleAssignee",
+				id: value as number,
+			}),
 			buildRemoveAction: () => ({ type: "removeField", field: "assigneeIds" }),
 			getSelectedOptionIds: (draft) =>
 				draft.assigneeIds.map((id) => String(id)),
@@ -103,7 +100,9 @@ function EditorHarness({
 }
 
 function getTitleTextarea() {
-	return screen.getByRole("combobox", { name: "Task title" }) as HTMLTextAreaElement;
+	return screen.getByRole("combobox", {
+		name: "Task title",
+	}) as HTMLTextAreaElement;
 }
 
 function getActiveOption() {
@@ -156,9 +155,7 @@ describe("TaskTitleEditor", () => {
 	it("Ignore IME composition keystrokes", () => {
 		const onSubmit = vi.fn();
 		const editorRef = { current: null as TaskTitleEditorHandle | null };
-		render(
-			<EditorHarness onSubmit={onSubmit} editorRef={editorRef} />,
-		);
+		render(<EditorHarness onSubmit={onSubmit} editorRef={editorRef} />);
 		const textarea = getTitleTextarea();
 
 		fireEvent.compositionStart(textarea);
@@ -242,9 +239,7 @@ describe("TaskTitleEditor", () => {
 	});
 
 	it("Edit a chip by clicking it", () => {
-		render(
-			<EditorHarness initialDraft={{ priorityId: 10 }} />,
-		);
+		render(<EditorHarness initialDraft={{ priorityId: 10 }} />);
 		fireEvent.click(screen.getByRole("button", { name: "Priority: High" }));
 
 		const selected = document.querySelector(
@@ -252,6 +247,58 @@ describe("TaskTitleEditor", () => {
 		);
 		expect(selected?.textContent).toContain("High");
 		expect(getActiveOption()?.textContent).toContain("High");
+	});
+
+	it("Pick a field and a value with the pointer", () => {
+		render(<EditorHarness />);
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+
+		fireEvent.click(screen.getByRole("option", { name: "Priority" }));
+		fireEvent.click(screen.getByRole("option", { name: "Low" }));
+
+		expect(screen.getByRole("button", { name: "Priority: Low" })).toBeTruthy();
+		expect(textarea.value).toBe("Fix login");
+	});
+
+	it("Announce a removal when clicking an already-picked multi-select option", () => {
+		render(<EditorHarness initialDraft={{ assigneeIds: [1] }} />);
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		fireEvent.click(screen.getByRole("option", { name: "Assignee" }));
+
+		expect(screen.getByRole("button", { name: "Assignee: Rafi" })).toBeTruthy();
+		fireEvent.click(screen.getByRole("option", { name: /Rafi/ }));
+
+		expect(screen.queryByRole("button", { name: "Assignee: Rafi" })).toBeNull();
+		expect(screen.getByText("Assignee Rafi removed")).toBeTruthy();
+	});
+
+	it("Hover moves the active option so one row is highlighted at a time", () => {
+		render(<EditorHarness />);
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+
+		expect(getActiveOption()?.textContent).toContain("Assignee");
+		fireEvent.mouseEnter(screen.getByRole("option", { name: "Priority" }));
+		expect(getActiveOption()?.textContent).toContain("Priority");
+	});
+
+	it("Keep the caret in the title while clicking an option", () => {
+		render(<EditorHarness />);
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+
+		const mouseDown = fireEvent.mouseDown(
+			screen.getByRole("option", { name: "Priority" }),
+		);
+		// Returns false when a handler called preventDefault — without it the
+		// pointer press would blur the textarea before the click lands.
+		expect(mouseDown).toBe(false);
 	});
 
 	it("Renders chips in a tray after the textarea, with remove inside the pill", () => {
@@ -267,8 +314,7 @@ describe("TaskTitleEditor", () => {
 		const tray = chip.closest("div");
 		expect(tray?.previousElementSibling).toBe(textarea);
 		expect(
-			textarea.compareDocumentPosition(chip) &
-				Node.DOCUMENT_POSITION_FOLLOWING,
+			textarea.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING,
 		).toBeTruthy();
 
 		// Remove shares the pill with the label instead of floating beside it.
@@ -278,38 +324,28 @@ describe("TaskTitleEditor", () => {
 	});
 
 	it("Remove a chip by pointer or keyboard", () => {
-		render(
-			<EditorHarness
-				initialDraft={{ priorityId: 10 }}
-			/>,
-		);
+		render(<EditorHarness initialDraft={{ priorityId: 10 }} />);
 		const textarea = getTitleTextarea();
 		fireEvent.change(textarea, { target: { value: "Ship it" } });
 
 		fireEvent.click(
 			screen.getByRole("button", { name: /Remove Priority:\s*High/i }),
 		);
-		expect(
-			screen.queryByRole("button", { name: "Priority: High" }),
-		).toBeNull();
+		expect(screen.queryByRole("button", { name: "Priority: High" })).toBeNull();
 
 		cleanup();
-		render(
-			<EditorHarness initialDraft={{ priorityId: 10 }} />,
-		);
+		render(<EditorHarness initialDraft={{ priorityId: 10 }} />);
 		const textarea2 = getTitleTextarea();
 		fireEvent.change(textarea2, { target: { value: "Ship it" } });
 		textarea2.setSelectionRange(7, 7);
 		fireEvent.keyDown(textarea2, { key: "Backspace" });
 		expect(
-			screen.getByRole("button", { name: "Priority: High" }).getAttribute(
-				"data-selected",
-			),
+			screen
+				.getByRole("button", { name: "Priority: High" })
+				.getAttribute("data-selected"),
 		).toBe("true");
 		fireEvent.keyDown(textarea2, { key: "Backspace" });
-		expect(
-			screen.queryByRole("button", { name: "Priority: High" }),
-		).toBeNull();
+		expect(screen.queryByRole("button", { name: "Priority: High" })).toBeNull();
 		expect(textarea2.value).toBe("Ship it");
 	});
 
@@ -396,10 +432,7 @@ describe("TaskTitleEditor", () => {
 		const editorRef = { current: null as TaskTitleEditorHandle | null };
 		const maxTitle = "a".repeat(255);
 		render(
-			<EditorHarness
-				editorRef={editorRef}
-				initialDraft={{ priorityId: 10 }}
-			/>,
+			<EditorHarness editorRef={editorRef} initialDraft={{ priorityId: 10 }} />,
 		);
 		const textarea = getTitleTextarea();
 		fireEvent.change(textarea, { target: { value: maxTitle } });
