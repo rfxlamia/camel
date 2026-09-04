@@ -1,13 +1,12 @@
+// @vitest-environment jsdom
 import {
 	act,
 	cleanup,
-	fireEvent,
 	render,
 	screen,
 	waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readBoardViewMode, writeBoardViewMode } from "../lib/boardViewPrefs";
 import type { User } from "../types";
 
 const mockGetBoard = vi.fn();
@@ -17,6 +16,7 @@ const mockGetActivity = vi.fn();
 const mockGetSettings = vi.fn();
 const mockHeartbeat = vi.fn();
 const mockGetPresence = vi.fn();
+const mockFocusGetConfig = vi.fn();
 
 vi.mock("../api", () => ({
 	api: {
@@ -31,7 +31,7 @@ vi.mock("../api", () => ({
 			getConfig: vi.fn().mockResolvedValue({ enabled: false }),
 		},
 		focus: {
-			getConfig: vi.fn().mockResolvedValue({ enabled: false }),
+			getConfig: (...a: unknown[]) => mockFocusGetConfig(...a),
 		},
 	},
 	ApiError: class ApiError extends Error {
@@ -96,8 +96,13 @@ const testUser: User = {
 function setupApiMocks() {
 	mockGetWorkspaces.mockResolvedValue({
 		workspaces: [
-			{ id: 7, name: "Workspace A", role: "member", isPersonal: false, memberCount: 2 },
-			{ id: 9, name: "Workspace B", role: "member", isPersonal: false, memberCount: 3 },
+			{
+				id: 7,
+				name: "Workspace A",
+				role: "member",
+				isPersonal: false,
+				memberCount: 2,
+			},
 		],
 		invites: [],
 	});
@@ -111,37 +116,27 @@ function setupApiMocks() {
 
 import { BoardProvider, useBoard } from "./BoardContext";
 
-function ViewModeProbe() {
-	const { boardViewMode, switchWorkspace, setBoardViewMode } = useBoard();
-	return (
-		<>
-			<span data-testid="view-mode">{boardViewMode}</span>
-			<button type="button" data-testid="switch-to-9" onClick={() => switchWorkspace(9)}>
-				Switch to B
-			</button>
-			<button type="button" data-testid="set-calendar" onClick={() => setBoardViewMode("calendar")}>
-				Set calendar
-			</button>
-		</>
-	);
+function FocusFlagProbe() {
+	const { focusModeEnabled } = useBoard();
+	return <span data-testid="focus-enabled">{String(focusModeEnabled)}</span>;
 }
 
 async function renderBoard() {
 	await act(async () => {
 		render(
 			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<ViewModeProbe />
+				<FocusFlagProbe />
 			</BoardProvider>,
 		);
 	});
-	await waitFor(() => expect(screen.getByTestId("view-mode")).toBeTruthy());
 }
 
-describe("BoardContext view mode", () => {
+describe("BoardContext focusModeEnabled", () => {
 	beforeEach(() => {
 		localStorage.clear();
 		MockEventSource.instances = [];
 		setupApiMocks();
+		mockFocusGetConfig.mockReset();
 	});
 
 	afterEach(() => {
@@ -150,52 +145,43 @@ describe("BoardContext view mode", () => {
 		vi.clearAllMocks();
 	});
 
-	it("defaults to board when no preference stored", async () => {
-		await renderBoard();
-		expect(screen.getByTestId("view-mode").textContent).toBe("board");
-	});
+	it("defaults to false while getConfig is pending", async () => {
+		let resolve!: (value: { enabled: boolean }) => void;
+		mockFocusGetConfig.mockReturnValue(
+			new Promise((resolveFn) => {
+				resolve = resolveFn;
+			}),
+		);
 
-	it("restores stored view mode for active workspace", async () => {
-		writeBoardViewMode(7, "list");
 		await renderBoard();
-		expect(screen.getByTestId("view-mode").textContent).toBe("list");
-	});
 
-	it("re-resolves view mode immediately on workspace switch", async () => {
-		writeBoardViewMode(7, "list");
-		writeBoardViewMode(9, "calendar");
-		await renderBoard();
-		expect(screen.getByTestId("view-mode").textContent).toBe("list");
+		expect(screen.getByTestId("focus-enabled").textContent).toBe("false");
+
 		await act(async () => {
-			fireEvent.click(screen.getByTestId("switch-to-9"));
+			resolve({ enabled: true });
 		});
+
 		await waitFor(() =>
-			expect(screen.getByTestId("view-mode").textContent).toBe("calendar"),
+			expect(screen.getByTestId("focus-enabled").textContent).toBe("true"),
 		);
 	});
 
-	it("persists view mode via setBoardViewMode per workspace", async () => {
+	it("sets true when getConfig resolves enabled:true", async () => {
+		mockFocusGetConfig.mockResolvedValue({ enabled: true });
+
 		await renderBoard();
-		await act(async () => {
-			fireEvent.click(screen.getByTestId("set-calendar"));
-		});
-		expect(screen.getByTestId("view-mode").textContent).toBe("calendar");
-		expect(readBoardViewMode(7)).toBe("calendar");
-		expect(readBoardViewMode(9)).toBe("board");
+
+		await waitFor(() =>
+			expect(screen.getByTestId("focus-enabled").textContent).toBe("true"),
+		);
 	});
 
-	it("falls back to board when localStorage read fails on workspace switch", async () => {
-		writeBoardViewMode(9, "calendar");
-		const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-			throw new Error("blocked");
-		});
+	it("stays false when getConfig rejects without surfacing an error", async () => {
+		mockFocusGetConfig.mockRejectedValue(new Error("network"));
+
 		await renderBoard();
-		await act(async () => {
-			fireEvent.click(screen.getByTestId("switch-to-9"));
-		});
-		await waitFor(() =>
-			expect(screen.getByTestId("view-mode").textContent).toBe("board"),
-		);
-		getItem.mockRestore();
+
+		await waitFor(() => expect(mockFocusGetConfig).toHaveBeenCalled());
+		expect(screen.getByTestId("focus-enabled").textContent).toBe("false");
 	});
 });

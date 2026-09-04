@@ -121,6 +121,7 @@ interface BoardContextValue {
 	clearFollowUpAgentEvents: () => void;
 	ticketIntakeEvents: TicketIntakeResultEvent[];
 	ticketIntakeEnabled: boolean;
+	focusModeEnabled: boolean;
 	boardViewMode: BoardViewMode;
 	setBoardViewMode: (mode: BoardViewMode) => void;
 	subscribeTrackerEvents: (handler: TrackerEventHandler) => () => void;
@@ -180,6 +181,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		TicketIntakeResultEvent[]
 	>([]);
 	const [ticketIntakeEnabled, setTicketIntakeEnabled] = useState(false);
+	const [focusModeEnabled, setFocusModeEnabled] = useState(false);
 	const [boardViewMode, setBoardViewModeState] = useState<BoardViewMode>(() =>
 		readBoardViewMode(activeWorkspaceId ?? 0),
 	);
@@ -208,6 +210,22 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			})
 			.catch(() => {
 				if (active) setTicketIntakeEnabled(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+
+	// Focus mode availability (FOCUS_MODE_ENABLED on server).
+	useEffect(() => {
+		let active = true;
+		api.focus
+			.getConfig()
+			.then(({ enabled }) => {
+				if (active) setFocusModeEnabled(enabled);
+			})
+			.catch(() => {
+				if (active) setFocusModeEnabled(false);
 			});
 		return () => {
 			active = false;
@@ -729,6 +747,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				clearFollowUpAgentEvents,
 				ticketIntakeEvents,
 				ticketIntakeEnabled,
+				focusModeEnabled,
 				boardViewMode,
 				setBoardViewMode,
 				subscribeTrackerEvents,

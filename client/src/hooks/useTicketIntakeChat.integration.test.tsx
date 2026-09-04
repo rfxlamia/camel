@@ -39,6 +39,9 @@ vi.mock("../api", async (importOriginal) => {
 				sendMessage: (...args: unknown[]) => mockSendMessage(...args),
 				submit: (...args: unknown[]) => mockSubmit(...args),
 			},
+			focus: {
+				getConfig: vi.fn().mockResolvedValue({ enabled: false }),
+			},
 		},
 	};
 });

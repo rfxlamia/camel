@@ -800,6 +800,11 @@ export const api = {
 		},
 	},
 
+	// ---- Focus mode ----
+	focus: {
+		getConfig: () => request<{ enabled: boolean }>("/focus/config"),
+	},
+
 	// ---- Ticket intake ----
 	ticketIntake: {
 		getConfig: () => request<{ enabled: boolean }>("/ticket-intake/config"),
