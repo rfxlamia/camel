@@ -36,10 +36,11 @@ describe("task metadata draft reducer", () => {
 			{ id: 3, phases: [{ id: 11, projectId: 3 }] },
 			{ id: 4, phases: [] },
 		];
-		const draft = taskMetadataReducer(
-			createInitialTaskMetadataDraft(),
-			{ type: "setPhase", phaseId: 11, projects },
-		);
+		const draft = taskMetadataReducer(createInitialTaskMetadataDraft(), {
+			type: "setPhase",
+			phaseId: 11,
+			projects,
+		});
 
 		expect(draft.projectId).toBe(3);
 		expect(draft.phaseId).toBe(11);

@@ -208,7 +208,11 @@ async function hydrateMutationItem(
 	if (opts?.canonicalWorkItem) {
 		const [item] = await hydrateTrackerWorkItems(dbExec, [row], prefix);
 		if (opts.redirectFrom) {
-			return { ...item, canonicalKey: item.key, redirectFrom: opts.redirectFrom };
+			return {
+				...item,
+				canonicalKey: item.key,
+				redirectFrom: opts.redirectFrom,
+			};
 		}
 		return item;
 	}
@@ -249,7 +253,11 @@ async function resolveWorkItemByKey(
 	);
 	if (!boardRow || boardRow.key_number == null) return null;
 
-	const [item] = await hydrateBoardWorkItems(dbExec, [boardRow as BoardWorkItemRow], prefix);
+	const [item] = await hydrateBoardWorkItems(
+		dbExec,
+		[boardRow as BoardWorkItemRow],
+		prefix,
+	);
 	if (redirectFrom) {
 		return { ...item, canonicalKey: item.key, redirectFrom };
 	}
@@ -517,82 +525,84 @@ trackerItemsRouter.patch(
 			| { kind: "non_adjacent_neighbors" }
 			| { kind: "ok" };
 
-		const result: ReorderResult = await db.transaction().execute(async (trx) => {
-			const siblings = await loadBucketSiblings(
-				trx,
-				workspaceId,
-				existing.project_id,
-				existing.phase_id,
-				existing.id,
-			);
+		const result: ReorderResult = await db
+			.transaction()
+			.execute(async (trx) => {
+				const siblings = await loadBucketSiblings(
+					trx,
+					workspaceId,
+					existing.project_id,
+					existing.phase_id,
+					existing.id,
+				);
 
-			const beforeIndex =
-				beforeKeyNumber === undefined
-					? undefined
-					: siblings.findIndex((s) => s.key_number === beforeKeyNumber);
-			const afterIndex =
-				afterKeyNumber === undefined
-					? undefined
-					: siblings.findIndex((s) => s.key_number === afterKeyNumber);
-			if (
-				(beforeIndex !== undefined && beforeIndex === -1) ||
-				(afterIndex !== undefined && afterIndex === -1)
-			) {
-				return { kind: "bad_neighbors" };
-			}
-
-			let index: number;
-			if (beforeIndex !== undefined && afterIndex !== undefined) {
-				if (afterIndex !== beforeIndex + 1) {
-					return { kind: "non_adjacent_neighbors" };
+				const beforeIndex =
+					beforeKeyNumber === undefined
+						? undefined
+						: siblings.findIndex((s) => s.key_number === beforeKeyNumber);
+				const afterIndex =
+					afterKeyNumber === undefined
+						? undefined
+						: siblings.findIndex((s) => s.key_number === afterKeyNumber);
+				if (
+					(beforeIndex !== undefined && beforeIndex === -1) ||
+					(afterIndex !== undefined && afterIndex === -1)
+				) {
+					return { kind: "bad_neighbors" };
 				}
-				index = beforeIndex + 1;
-			} else if (beforeIndex !== undefined) {
-				index = beforeIndex + 1;
-			} else {
-				index = afterIndex as number;
-			}
 
-			let position: number;
-			try {
-				const positions = siblings.map((s) => Number(s.position));
-				const { before, after } = neighborsAt(positions, index);
-				position = positionBetween(before, after);
-			} catch {
-				const fresh = rebalance(siblings.length);
-				for (let i = 0; i < siblings.length; i++) {
-					await trx
-						.updateTable("tracker_items")
-						.set({ position: fresh[i] })
-						.where("id", "=", siblings[i].id)
-						.execute();
+				let index: number;
+				if (beforeIndex !== undefined && afterIndex !== undefined) {
+					if (afterIndex !== beforeIndex + 1) {
+						return { kind: "non_adjacent_neighbors" };
+					}
+					index = beforeIndex + 1;
+				} else if (beforeIndex !== undefined) {
+					index = beforeIndex + 1;
+				} else {
+					index = afterIndex as number;
 				}
-				const { before, after } = neighborsAt(fresh, index);
-				position = positionBetween(before, after);
-			}
 
-			await trx
-				.updateTable("tracker_items")
-				.set({ position })
-				.where("id", "=", existing.id)
-				.execute();
+				let position: number;
+				try {
+					const positions = siblings.map((s) => Number(s.position));
+					const { before, after } = neighborsAt(positions, index);
+					position = positionBetween(before, after);
+				} catch {
+					const fresh = rebalance(siblings.length);
+					for (let i = 0; i < siblings.length; i++) {
+						await trx
+							.updateTable("tracker_items")
+							.set({ position: fresh[i] })
+							.where("id", "=", siblings[i].id)
+							.execute();
+					}
+					const { before, after } = neighborsAt(fresh, index);
+					position = positionBetween(before, after);
+				}
 
-			await recordTrackerActivity(
-				trx,
-				actor,
-				workspaceId,
-				"tracker_item_updated",
-				{
-					trackerItemId: existing.id,
-					payload: {
-						title: existing.title,
-						changed: ["position"],
+				await trx
+					.updateTable("tracker_items")
+					.set({ position })
+					.where("id", "=", existing.id)
+					.execute();
+
+				await recordTrackerActivity(
+					trx,
+					actor,
+					workspaceId,
+					"tracker_item_updated",
+					{
+						trackerItemId: existing.id,
+						payload: {
+							title: existing.title,
+							changed: ["position"],
+						},
 					},
-				},
-			);
+				);
 
-			return { kind: "ok" };
-		});
+				return { kind: "ok" };
+			});
 
 		if (result.kind === "bad_neighbors") {
 			return res.status(400).json({ error: "neighbor not in bucket" });
@@ -657,7 +667,9 @@ trackerItemsRouter.patch(
 			}
 
 			const allowedKeys = new Set(["version", "statusId"]);
-			const bodyKeys = Object.keys(body).filter((key) => body[key] !== undefined);
+			const bodyKeys = Object.keys(body).filter(
+				(key) => body[key] !== undefined,
+			);
 			const hasOnlyStatus =
 				bodyKeys.length > 0 &&
 				bodyKeys.every((key) => allowedKeys.has(key)) &&
@@ -1104,11 +1116,7 @@ trackerItemsRouter.get(
 			return res.status(400).json({ error: "invalid tracker key" });
 		}
 
-		const events = await getWorkItemEvents(
-			db,
-			workspaceId,
-			parsed.keyNumber,
-		);
+		const events = await getWorkItemEvents(db, workspaceId, parsed.keyNumber);
 		if (!events) {
 			return res.status(404).json({ error: "Not found" });
 		}

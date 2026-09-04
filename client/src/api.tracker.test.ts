@@ -252,7 +252,9 @@ describe("tracker item API methods", () => {
 		});
 		const { api } = await import("./api");
 
-		const result = await api.reorderTrackerItem(7, "CA-1", { afterKey: "CA-9" });
+		const result = await api.reorderTrackerItem(7, "CA-1", {
+			afterKey: "CA-9",
+		});
 		expect(result.position).toBe(1536);
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7/tracker/items/CA-1/position",

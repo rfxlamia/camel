@@ -255,7 +255,7 @@ async function assertNoBoardArtifacts(workspaceId: number): Promise<void> {
 	).toHaveLength(0);
 }
 
-async function assertNoTrackerArtifacts(workspaceId: number): Promise<void> {
+async function _assertNoTrackerArtifacts(workspaceId: number): Promise<void> {
 	expect(
 		await query("SELECT id FROM tracker_items WHERE workspace_id = $1", [
 			workspaceId,

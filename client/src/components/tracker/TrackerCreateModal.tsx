@@ -132,7 +132,7 @@ export default function TrackerCreateModal({
 	);
 
 	const catalogs = useMemo((): TaskMetadataCatalogs => {
-		const noopRetry = () => {};
+		const noopRetry = () => undefined;
 		return {
 			assignee:
 				members.length > 0
