@@ -7,6 +7,7 @@ import EmailGatePage from "./components/EmailGatePage";
 import LoadingCamel from "./components/LoadingCamel";
 import PickUsernamePage from "./components/PickUsernamePage";
 import { BoardProvider, useBoard } from "./context/BoardContext";
+import { FocusSessionProvider } from "./context/FocusSessionContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
@@ -172,7 +173,9 @@ export default function App() {
 
 	return (
 		<BoardProvider user={user} onSignedOut={() => setUser(null)}>
-			<AuthenticatedApp />
+			<FocusSessionProvider>
+				<AuthenticatedApp />
+			</FocusSessionProvider>
 		</BoardProvider>
 	);
 }
