@@ -8,6 +8,7 @@ import Toast from "../components/Toast";
 import { useBoard } from "../context/BoardContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
 import { formatTitle, getFaviconLink } from "../lib/title";
+import FocusIndicator from "./FocusIndicator";
 import Sidebar, { MobileNav, NAV_ITEMS, WorkspaceOverlays } from "./sidebar";
 import { useSidebarMode } from "./sidebar/useSidebarMode";
 
@@ -86,6 +87,7 @@ export default function AppLayout() {
 						</div>
 
 						<div className="flex items-center gap-3">
+							<FocusIndicator />
 							<PresenceBar users={presence} self={user} />
 						</div>
 					</header>
