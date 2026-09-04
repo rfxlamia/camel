@@ -7,6 +7,7 @@ import {
 	useRef,
 	useState,
 	type KeyboardEvent,
+	type ReactNode,
 } from "react";
 import {
 	type CaretOffset,
@@ -30,6 +31,8 @@ export const TASK_TITLE_MAX_LENGTH = 255;
 export interface TaskFieldCommandDefinition {
 	id: string;
 	label: string;
+	/** Leading glyph for this field's row in the command menu. */
+	icon?: ReactNode;
 	multiple?: boolean;
 	catalogState?: TaskFieldCatalogState;
 	options: TaskFieldCommandOption[];
@@ -638,6 +641,7 @@ export const TaskTitleEditor = forwardRef<
 		<div ref={shellRef} className="relative flex w-full flex-col gap-1.5">
 			<textarea
 				ref={textareaRef}
+				rows={1}
 				value={title}
 				placeholder={placeholder}
 				aria-label={ariaLabel ?? placeholder}
@@ -689,9 +693,16 @@ export const TaskTitleEditor = forwardRef<
 										event.preventDefault();
 										focusAdjacentControl(event.currentTarget, event.shiftKey);
 									}}
-									className="min-w-0 truncate text-xs focus:outline-none"
+									className="flex min-w-0 items-center gap-1 text-xs focus:outline-none"
 								>
-									{label}
+									{option.icon ?? field.icon ? (
+										<span className="flex shrink-0 items-center">
+											{option.icon ?? field.icon}
+										</span>
+									) : null}
+									{/* The field name lives in the accessible name only — the
+									    glyph carries it visually, so the chip stays compact. */}
+									<span className="max-w-40 truncate">{option.label}</span>
 								</button>
 								<button
 									type="button"
@@ -711,6 +722,9 @@ export const TaskTitleEditor = forwardRef<
 				<TaskFieldCommandPopover
 					stage={command.stage ?? "field"}
 					listLabel={listLabel}
+					heading={
+						command.stage === "value" ? (activeField?.label ?? "Options") : undefined
+					}
 					options={visibleOptions}
 					activeIndex={command.activeIndex}
 					selectedIds={selectedIds}

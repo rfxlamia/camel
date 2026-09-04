@@ -185,7 +185,7 @@ describe("TaskTitleEditor", () => {
 		fireEvent.keyDown(textarea, { key: "ArrowDown" });
 		fireEvent.keyDown(textarea, { key: "Enter" });
 
-		expect(screen.getByText(/Assignee:\s*Rafi/)).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Assignee: Rafi" })).toBeTruthy();
 		expect(textarea.value).toBe("Fix login");
 	});
 
@@ -206,7 +206,7 @@ describe("TaskTitleEditor", () => {
 		fireEvent.change(textarea, { target: { value: "Fix login @zzz" } });
 		fireEvent.keyDown(textarea, { key: "Enter" });
 
-		expect(screen.queryByText(/Assignee:/)).toBeNull();
+		expect(screen.queryByRole("button", { name: /^Assignee:/ })).toBeNull();
 		expect(screen.getByRole("listbox")).toBeTruthy();
 	});
 
@@ -289,7 +289,9 @@ describe("TaskTitleEditor", () => {
 		fireEvent.click(
 			screen.getByRole("button", { name: /Remove Priority:\s*High/i }),
 		);
-		expect(screen.queryByText(/Priority:\s*High/)).toBeNull();
+		expect(
+			screen.queryByRole("button", { name: "Priority: High" }),
+		).toBeNull();
 
 		cleanup();
 		render(
@@ -305,7 +307,9 @@ describe("TaskTitleEditor", () => {
 			),
 		).toBe("true");
 		fireEvent.keyDown(textarea2, { key: "Backspace" });
-		expect(screen.queryByText(/Priority:\s*High/)).toBeNull();
+		expect(
+			screen.queryByRole("button", { name: "Priority: High" }),
+		).toBeNull();
 		expect(textarea2.value).toBe("Ship it");
 	});
 
@@ -317,12 +321,12 @@ describe("TaskTitleEditor", () => {
 		fireEvent.keyDown(textarea, { key: "Enter" });
 
 		fireEvent.keyDown(textarea, { key: "Enter" });
-		expect(screen.getByText(/Assignee:\s*Rafi/)).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Assignee: Rafi" })).toBeTruthy();
 		expect(screen.getByRole("listbox")).toBeTruthy();
 
 		fireEvent.keyDown(textarea, { key: "ArrowDown" });
 		fireEvent.keyDown(textarea, { key: "Enter" });
-		expect(screen.getByText(/Assignee:\s*Maya/)).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Assignee: Maya" })).toBeTruthy();
 		expect(screen.getByRole("listbox")).toBeTruthy();
 
 		fireEvent.keyDown(textarea, { key: "Enter" });

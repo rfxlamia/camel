@@ -166,15 +166,17 @@ afterEach(() => {
 describe("TrackerCreateModal", () => {
 	it("defaults the status chip to Backlog", async () => {
 		renderModal();
-		expect(await screen.findByText("Backlog")).toBeTruthy();
+		expect(
+			await screen.findByRole("button", { name: "Status: Backlog" }),
+		).toBeTruthy();
 	});
 
 	it("picks a status from the popover and shows it on the chip", async () => {
 		renderModal();
-		fireEvent.click(await screen.findByText("Backlog"));
+		fireEvent.click(await screen.findByRole("button", { name: "Backlog" }));
 		fireEvent.click(await screen.findByRole("option", { name: /In Progress/ }));
 		await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
-		expect(screen.getByText("In Progress")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "In Progress" })).toBeTruthy();
 	});
 
 	it("keeps the popover open while toggling labels", async () => {
@@ -257,7 +259,7 @@ describe("TrackerCreateModal", () => {
 
 	it("closes the picker on a backdrop press before closing the modal", async () => {
 		const { onClose } = renderModal();
-		fireEvent.click(await screen.findByText("Backlog"));
+		fireEvent.click(await screen.findByRole("button", { name: "Backlog" }));
 		const backdrop = screen.getByTestId("tracker-create-backdrop");
 		fireEvent.mouseDown(backdrop);
 		fireEvent.click(backdrop);
@@ -270,7 +272,7 @@ describe("TrackerCreateModal", () => {
 
 	it("closes the picker on Escape before closing the modal", async () => {
 		const { onClose } = renderModal();
-		fireEvent.click(await screen.findByText("Backlog"));
+		fireEvent.click(await screen.findByRole("button", { name: "Backlog" }));
 		const search = screen.getByRole("combobox", { name: "Change status…" });
 		fireEvent.keyDown(search, { key: "Escape" });
 		expect(screen.queryByRole("listbox")).toBeNull();
@@ -324,11 +326,11 @@ describe("TrackerCreateModal project assignment", () => {
 		fireEvent.click(await screen.findByRole("option", { name: /Rilis v2/ }));
 		fireEvent.click(await screen.findByText("Phase"));
 		fireEvent.click(await screen.findByRole("option", { name: /Persiapan/ }));
-		expect(screen.getByText("Persiapan")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Persiapan" })).toBeTruthy();
 
-		fireEvent.click(screen.getByText("Rilis v2"));
+		fireEvent.click(screen.getByRole("button", { name: "Rilis v2" }));
 		fireEvent.click(await screen.findByRole("option", { name: /Rilis v3/ }));
-		expect(screen.queryByText("Persiapan")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Persiapan" })).toBeNull();
 	});
 
 	it("keeps project and phase on create more reset", async () => {
@@ -345,8 +347,8 @@ describe("TrackerCreateModal project assignment", () => {
 
 		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
 		await waitFor(() => expect(getTitleInput().value).toBe(""));
-		expect(screen.getByText("Persiapan")).toBeTruthy();
-		expect(screen.getByText("Rilis v2")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Persiapan" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Rilis v2" })).toBeTruthy();
 	});
 
 	it("surfaces the server's 400 for an invalid project inline", async () => {
@@ -369,7 +371,7 @@ describe("TrackerCreateModal project assignment", () => {
 	it("hides project pickers when the workspace has no projects", async () => {
 		listTrackerProjects.mockResolvedValueOnce([]);
 		renderModal();
-		await screen.findByText("Backlog");
+		await screen.findByRole("button", { name: "Backlog" });
 		expect(screen.queryByText("Project")).toBeNull();
 		expect(screen.queryByText("Phase")).toBeNull();
 	});
@@ -441,7 +443,7 @@ describe("TrackerCreateModal tag integration", () => {
 				onCreated={vi.fn()}
 			/>,
 		);
-		await screen.findByText("Backlog");
+		await screen.findByRole("button", { name: "Backlog" });
 		const title = getTitleInput();
 		fireEvent.change(title, { target: { value: "Stale lock task" } });
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
@@ -464,7 +466,7 @@ describe("TrackerCreateModal tag integration", () => {
 			target: { value: "Draft body" },
 		});
 
-		fireEvent.click(await screen.findByText("Backlog"));
+		fireEvent.click(await screen.findByRole("button", { name: "Backlog" }));
 		fireEvent.click(await screen.findByRole("option", { name: /In Progress/ }));
 
 		fireEvent.click(await screen.findByText("Project"));
@@ -496,9 +498,9 @@ describe("TrackerCreateModal tag integration", () => {
 		expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(
 			"",
 		);
-		expect(screen.getByText("In Progress")).toBeTruthy();
-		expect(screen.getByText("Web")).toBeTruthy();
-		expect(screen.getByText("Build")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "In Progress" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Web" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Build" })).toBeTruthy();
 		expect(screen.queryByText("High")).toBeNull();
 		expect(screen.queryByText(/Assignee:/)).toBeNull();
 		expect(screen.queryByText(/Labels:/)).toBeNull();
@@ -514,7 +516,7 @@ describe("TrackerCreateModal tag integration", () => {
 			target: { value: "Details" },
 		});
 
-		fireEvent.click(await screen.findByText("Backlog"));
+		fireEvent.click(await screen.findByRole("button", { name: "Backlog" }));
 		fireEvent.click(await screen.findByRole("option", { name: /In Progress/ }));
 		fireEvent.click(await screen.findByText("Priority"));
 		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
@@ -672,7 +674,7 @@ describe("TrackerCreateModal locked project assignment", () => {
 
 	it("hides project and phase pickers when defaultProjectId is set", async () => {
 		renderLockedModal();
-		await screen.findByText("Backlog");
+		await screen.findByRole("button", { name: "Backlog" });
 		expect(screen.queryByText("Project")).toBeNull();
 		expect(screen.queryByText("Phase")).toBeNull();
 	});

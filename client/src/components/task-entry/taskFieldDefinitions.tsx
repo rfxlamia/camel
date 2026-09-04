@@ -1,14 +1,28 @@
+import { CalendarDays, Folder, Signpost, Tag, UserRound } from "lucide-react";
+import type { ReactNode } from "react";
 import type {
-	TaskMetadataAction,
-	TaskMetadataDraft,
-	TaskMetadataProject,
-} from "./taskMetadataDraft";
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
+import {
+	Avatar,
+	LabelDot,
+	PriorityGlyph,
+	priorityBars,
+	StatusGlyph,
+	statusGlyphSpec,
+} from "../tracker/TrackerGlyphs";
 import type {
 	TaskMetadataCatalogEntry,
 	TaskMetadataCatalogKey,
 	TaskMetadataCatalogs,
 } from "./TaskMetadataCatalogProvider";
-import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../../types";
+import type {
+	TaskMetadataAction,
+	TaskMetadataDraft,
+	TaskMetadataProject,
+} from "./taskMetadataDraft";
 
 export type TaskFieldCatalogState =
 	| "loading"
@@ -20,11 +34,13 @@ export type TaskFieldCatalogState =
 export interface TaskFieldOption {
 	id: string;
 	label: string;
+	icon?: ReactNode;
 }
 
 export interface TaskFieldCommandDefinition {
 	id: string;
 	label: string;
+	icon?: ReactNode;
 	multiple?: boolean;
 	catalogState: TaskFieldCatalogState;
 	options: TaskFieldOption[];
@@ -70,10 +86,14 @@ function mapCatalogState<K extends TaskMetadataCatalogKey>(
 	}
 
 	if (key === "assignee") {
-		const options = (entry.items as WorkspaceMember[]).map((member) => ({
-			id: String(member.userId),
-			label: member.displayName || member.username,
-		}));
+		const options = (entry.items as WorkspaceMember[]).map((member) => {
+			const label = member.displayName || member.username;
+			return {
+				id: String(member.userId),
+				label,
+				icon: <Avatar name={label} size={14} />,
+			};
+		});
 		return { catalogState: "ready", options, allowsCreate: false };
 	}
 
@@ -81,16 +101,32 @@ function mapCatalogState<K extends TaskMetadataCatalogKey>(
 		const options = (entry.items as TrackerProject[]).map((project) => ({
 			id: String(project.id),
 			label: project.name,
+			icon: (
+				<Folder size={13} className="shrink-0 text-neutral-500" aria-hidden />
+			),
 		}));
 		return { catalogState: "ready", options, allowsCreate: false };
 	}
 
-	const options = (entry.items as TrackerVocabulary[]).map((item) => ({
+	// Vocabulary catalogs share a shape but not a glyph: priority reads as bars,
+	// status as a progress ring, labels as their own colour.
+	const vocabulary = entry.items as TrackerVocabulary[];
+	const options = vocabulary.map((item) => ({
 		id: String(item.id),
 		label: item.name,
+		icon:
+			key === "priority" ? (
+				<PriorityGlyph bars={priorityBars(vocabulary, item.id)} />
+			) : key === "status" ? (
+				<StatusGlyph spec={statusGlyphSpec(vocabulary, item.id)} />
+			) : (
+				<LabelDot colour={item.colour} />
+			),
 	}));
 	return { catalogState: "ready", options, allowsCreate: false };
 }
+
+const FIELD_ICON_CLASS = "shrink-0 text-neutral-500";
 
 function dateField(
 	id: "dueDate" | "startDate" | "endDate",
@@ -99,6 +135,7 @@ function dateField(
 	return {
 		id,
 		label,
+		icon: <CalendarDays size={14} className={FIELD_ICON_CLASS} aria-hidden />,
 		catalogState: "ready",
 		options: [],
 		allowsCreate: false,
@@ -109,6 +146,14 @@ function dateField(
 			draft[id] === null ? [] : [draft[id] as string],
 	};
 }
+
+const CATALOG_FIELD_ICON: Record<TaskMetadataCatalogKey, ReactNode> = {
+	assignee: <UserRound size={14} className={FIELD_ICON_CLASS} aria-hidden />,
+	priority: <PriorityGlyph bars={0} />,
+	label: <Tag size={14} className={FIELD_ICON_CLASS} aria-hidden />,
+	project: <Folder size={14} className={FIELD_ICON_CLASS} aria-hidden />,
+	status: <StatusGlyph spec={{ shape: "pending", fraction: 0 }} />,
+};
 
 function catalogField(
 	id: string,
@@ -124,6 +169,7 @@ function catalogField(
 	return {
 		id,
 		label,
+		icon: CATALOG_FIELD_ICON[key],
 		multiple,
 		...mapCatalogState(catalogs[key], catalogs.retry, key),
 		mapOptionToValue,
@@ -133,7 +179,9 @@ function catalogField(
 	};
 }
 
-function phaseField(catalogs: TaskMetadataCatalogs): TaskFieldCommandDefinition {
+function phaseField(
+	catalogs: TaskMetadataCatalogs,
+): TaskFieldCommandDefinition {
 	const projectEntry = catalogs.project;
 	const phaseOptions =
 		projectEntry.status === "ready"
@@ -154,9 +202,18 @@ function phaseField(catalogs: TaskMetadataCatalogs): TaskFieldCommandDefinition 
 	return {
 		id: "phaseId",
 		label: "Phase",
+		icon: <Signpost size={14} className={FIELD_ICON_CLASS} aria-hidden />,
 		...base,
 		catalogState,
-		options: catalogState === "ready" ? phaseOptions : [],
+		options:
+			catalogState === "ready"
+				? phaseOptions.map((option) => ({
+						...option,
+						icon: (
+							<Signpost size={13} className={FIELD_ICON_CLASS} aria-hidden />
+						),
+					}))
+				: [],
 		mapOptionToValue: (id) => Number(id),
 		buildSelectAction: (value) => ({
 			type: "setPhase",
@@ -183,7 +240,9 @@ function isValidLock(
 ): lock is TrackerFieldLockContext & { lockedProjectId: number } {
 	if (!lock?.lockedProjectId) return false;
 	const projects = lock.projects ?? [];
-	const project = projects.find((candidate) => candidate.id === lock.lockedProjectId);
+	const project = projects.find(
+		(candidate) => candidate.id === lock.lockedProjectId,
+	);
 	if (!project) return false;
 	if (lock.lockedPhaseId == null) return true;
 	return project.phases.some((phase) => phase.id === lock.lockedPhaseId);
@@ -211,7 +270,11 @@ export function getBoardTaskFieldDefinitions(
 			catalogs,
 			false,
 			(id) => Number(id),
-			(value) => ({ type: "setField", field: "priorityId", value: value as number }),
+			(value) => ({
+				type: "setField",
+				field: "priorityId",
+				value: value as number,
+			}),
 			() => ({ type: "removeField", field: "priorityId" }),
 			(draft) => (draft.priorityId === null ? [] : [String(draft.priorityId)]),
 		),
@@ -253,7 +316,11 @@ function buildTrackerTaskFields(
 			catalogs,
 			false,
 			(id) => Number(id),
-			(value) => ({ type: "setField", field: "statusId", value: value as number }),
+			(value) => ({
+				type: "setField",
+				field: "statusId",
+				value: value as number,
+			}),
 			() => ({ type: "removeField", field: "statusId" }),
 			(draft) => (draft.statusId === null ? [] : [String(draft.statusId)]),
 		),
@@ -264,7 +331,11 @@ function buildTrackerTaskFields(
 			catalogs,
 			false,
 			(id) => Number(id),
-			(value) => ({ type: "setField", field: "priorityId", value: value as number }),
+			(value) => ({
+				type: "setField",
+				field: "priorityId",
+				value: value as number,
+			}),
 			() => ({ type: "removeField", field: "priorityId" }),
 			(draft) => (draft.priorityId === null ? [] : [String(draft.priorityId)]),
 		),
@@ -317,5 +388,7 @@ export function getTrackerTaskFieldDefinitions(
 		return fields;
 	}
 
-	return fields.filter((field) => field.id !== "projectId" && field.id !== "phaseId");
+	return fields.filter(
+		(field) => field.id !== "projectId" && field.id !== "phaseId",
+	);
 }

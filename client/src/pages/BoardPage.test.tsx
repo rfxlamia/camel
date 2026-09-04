@@ -751,7 +751,9 @@ describe("BoardPage Add Card integration", () => {
 			await waitFor(() => expect(createCard).toHaveBeenCalledTimes(1));
 			expect(screen.getByRole("combobox", { name: "Task title" })).toBeTruthy();
 			expect(textarea.value).toBe("Draft stays");
-			expect(screen.getByText(/Assignee:\s*Rafi/)).toBeTruthy();
+			expect(
+				screen.getByRole("button", { name: "Assignee: Rafi" }),
+			).toBeTruthy();
 			expect(
 				showToast.mock.calls.some((call) => call[1] === testCase.toastKind),
 			).toBe(true);

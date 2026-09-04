@@ -139,7 +139,11 @@ describe("TrackerCreateMetadataFields", () => {
 		fireEvent.keyDown(textarea, { key: "Enter" });
 		fireEvent.keyDown(textarea, { key: "Enter" });
 
-		await waitFor(() => expect(screen.getByText("High")).toBeTruthy());
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Priority: High" }),
+			).toBeTruthy(),
+		);
 	});
 
 	it("Reflect an existing picker selection in the chip list", async () => {
@@ -147,7 +151,9 @@ describe("TrackerCreateMetadataFields", () => {
 		fireEvent.click(await screen.findByText("Priority"));
 		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
 		await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
-		expect(screen.getByText(/Priority:\s*High/)).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Priority: High" }),
+		).toBeTruthy();
 	});
 
 	it("Honor a valid project context lock", async () => {

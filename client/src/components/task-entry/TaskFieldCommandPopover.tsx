@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import {
 	type ReactNode,
 	type RefObject,
@@ -23,11 +24,18 @@ export interface TaskFieldCommandOption {
 	id: string;
 	label: string;
 	hint?: string;
+	/** Leading glyph, using the same vocabulary as the tracker pickers. */
+	icon?: ReactNode;
 }
 
 export interface TaskFieldCommandPopoverProps {
 	stage: "field" | "value";
 	listLabel: string;
+	/**
+	 * Visible section title. Shown in the value stage so the second layer says
+	 * which field is being filled; the field stage needs no title.
+	 */
+	heading?: string;
 	options: TaskFieldCommandOption[];
 	activeIndex: number;
 	selectedIds: string[];
@@ -51,6 +59,7 @@ const PANEL_CLASS =
 export function TaskFieldCommandPopover({
 	stage: _stage,
 	listLabel,
+	heading,
 	options,
 	activeIndex,
 	selectedIds,
@@ -180,39 +189,57 @@ export function TaskFieldCommandPopover({
 		);
 	} else {
 		panel = (
-			<ul
-				id={listboxId}
-				role="listbox"
-				aria-label={listLabel}
-				aria-multiselectable={multiple || undefined}
-				className={`${PANEL_CLASS} max-h-64 overflow-y-auto p-1`}
-			>
-				{options.map((option, index) => {
-					const selected = selectedIds.includes(option.id);
-					return (
-						<li key={option.id} role="presentation">
-							<div
-								id={optionId(option.id)}
-								role="option"
-								aria-selected={selected}
-								className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
-									index === activeIndex ? "bg-neutral-100" : ""
-								}`}
-							>
-								<span className="min-w-0 flex-1 truncate">{option.label}</span>
-								{option.hint ? (
-									<span className="shrink-0 text-neutral-500 text-xs">
-										{option.hint}
+			<div className={PANEL_CLASS}>
+				{heading ? (
+					<p className="px-3 pt-2 pb-1 font-medium text-[10px] text-neutral-500 uppercase tracking-wide">
+						{heading}
+					</p>
+				) : null}
+				<ul
+					id={listboxId}
+					role="listbox"
+					aria-label={listLabel}
+					aria-multiselectable={multiple || undefined}
+					className="max-h-64 overflow-y-auto p-1"
+				>
+					{options.map((option, index) => {
+						const selected = selectedIds.includes(option.id);
+						return (
+							<li key={option.id} role="presentation">
+								<div
+									id={optionId(option.id)}
+									role="option"
+									aria-selected={selected}
+									className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-neutral-900 text-sm ${
+										index === activeIndex ? "bg-primary-100" : ""
+									}`}
+								>
+									{option.icon ? (
+										<span className="flex w-4 shrink-0 justify-center">
+											{option.icon}
+										</span>
+									) : null}
+									<span className="min-w-0 flex-1 truncate">
+										{option.label}
 									</span>
-								) : null}
-								{selected ? (
-									<span className="shrink-0 text-primary-600 text-xs">✓</span>
-								) : null}
-							</div>
-						</li>
-					);
-				})}
-			</ul>
+									{option.hint ? (
+										<span className="shrink-0 text-neutral-500 text-xs">
+											{option.hint}
+										</span>
+									) : null}
+									{selected ? (
+										<Check
+											size={13}
+											className="shrink-0 text-primary-600"
+											aria-hidden
+										/>
+									) : null}
+								</div>
+							</li>
+						);
+					})}
+				</ul>
+			</div>
 		);
 	}
 

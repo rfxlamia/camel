@@ -225,8 +225,12 @@ describe("AddCard", () => {
 		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
 		expect(screen.getByRole("combobox", { name: "Task title" })).toBeTruthy();
 		expect(textarea.value).toBe("Keep me");
-		expect(screen.getByText(/Assignee:\s*Rafi/)).toBeTruthy();
-		expect(screen.getByText(/Priority:\s*High/)).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Assignee: Rafi" }),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Priority: High" }),
+		).toBeTruthy();
 	});
 
 	it("Prevent an in-flight duplicate submit", async () => {
