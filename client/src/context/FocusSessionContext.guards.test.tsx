@@ -26,11 +26,7 @@ const {
 		}) => void
 	>(),
 	trackerEventHandlers: new Set<
-		(event: {
-			type: string;
-			payload?: unknown;
-			trackerItemId?: number;
-		}) => void
+		(event: { type: string; payload?: unknown; trackerItemId?: number }) => void
 	>(),
 	membershipEventHandlers: new Set<
 		(event: {
@@ -90,9 +86,7 @@ const testActor: User = {
 	needsUsername: false,
 };
 
-function makeBoardSession(
-	overrides: Partial<FocusSession> = {},
-): FocusSession {
+function makeBoardSession(overrides: Partial<FocusSession> = {}): FocusSession {
 	return {
 		id: 1,
 		state: "running",
@@ -274,6 +268,7 @@ describe("FocusSessionProvider live auto-finish guards", () => {
 		expect(mockFocusPatch).toHaveBeenCalledWith(3, {
 			action: "finish",
 			version: 2,
+			sessionId: 1,
 		});
 		expect(result.current.session).toBeNull();
 		expect(mockShowToast).toHaveBeenCalledWith(
@@ -318,6 +313,7 @@ describe("FocusSessionProvider live auto-finish guards", () => {
 		expect(mockFocusPatch).toHaveBeenCalledWith(3, {
 			action: "finish",
 			version: 1,
+			sessionId: 2,
 		});
 		expect(result.current.session).toBeNull();
 		expect(mockShowToast).toHaveBeenCalledWith(

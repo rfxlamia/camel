@@ -212,6 +212,21 @@ describe("FocusPage", () => {
 		expect(mockNavigate).not.toHaveBeenCalled();
 	});
 
+	it("Given an initial focus GET failure, When hydration is still false, Then the error is shown instead of Loading", () => {
+		setupBoardMocks({ focusSessionHydrated: false });
+		setupSessionMocks({
+			session: null,
+			loading: false,
+			actionError: "Couldn't load your focus session.",
+		});
+
+		render(<FocusPage />);
+
+		expect(screen.getByText("Couldn't load your focus session.")).toBeTruthy();
+		expect(screen.queryByText("Loading…")).toBeNull();
+		expect(mockNavigate).not.toHaveBeenCalled();
+	});
+
 	it("Given a board-sourced focus session, When the surface loads, Then the card title and description are visible", async () => {
 		mockGetCard.mockResolvedValue({
 			id: 481,

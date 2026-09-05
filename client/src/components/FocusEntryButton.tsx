@@ -17,9 +17,7 @@ function isSameTask(
 	taskId: number,
 ): boolean {
 	return (
-		session !== null &&
-		session.source === source &&
-		session.taskId === taskId
+		session !== null && session.source === source && session.taskId === taskId
 	);
 }
 
@@ -121,10 +119,7 @@ export default function FocusEntryButton(props: FocusEntryButtonProps) {
 	return <FocusEntryButtonInner {...props} />;
 }
 
-function FocusEntryButtonInner({
-	source,
-	taskId,
-}: FocusEntryButtonProps) {
+function FocusEntryButtonInner({ source, taskId }: FocusEntryButtonProps) {
 	const navigate = useNavigate();
 	const { showToast } = useBoard();
 	const { session, focus, switchTo } = useFocusSession();
@@ -139,11 +134,11 @@ function FocusEntryButtonInner({
 				source,
 				taskId,
 				version: session.version,
+				sessionId: session.id,
 			});
 			setSwitchDialogOpen(false);
 			navigate("/focus");
-		} catch (err) {
-			if (!(err instanceof ApiError)) throw err;
+		} catch {
 			showToast("Couldn't switch focus. Try again.", "error");
 		} finally {
 			setPending(false);
@@ -171,11 +166,7 @@ function FocusEntryButtonInner({
 				setSwitchDialogOpen(true);
 				return;
 			}
-			if (err instanceof ApiError) {
-				showToast("Couldn't start focus. Try again.", "error");
-				return;
-			}
-			throw err;
+			showToast("Couldn't start focus. Try again.", "error");
 		} finally {
 			setPending(false);
 		}

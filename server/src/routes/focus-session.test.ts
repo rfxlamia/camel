@@ -136,7 +136,10 @@ describe("GET /focus-session", () => {
 
 	it("returns 404 for non-members", async () => {
 		mockRequireWorkspaceMember.mockImplementation(
-			(_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => {
+			(
+				_req: unknown,
+				res: { status: (n: number) => { json: (b: unknown) => void } },
+			) => {
 				res.status(404).json({ error: "Not found" });
 			},
 		);
@@ -149,15 +152,38 @@ describe("GET /focus-session", () => {
 		expect(res.body).toEqual({ error: "Not found" });
 	});
 
-	it("returns 404 when FOCUS_MODE_ENABLED=false", async () => {
+	it("returns the active session when FOCUS_MODE_ENABLED=false", async () => {
 		mockConfig.FOCUS_MODE_ENABLED = "false";
+		const session = makeRunningSession();
 		const repo = createFakeRepo();
+		repo.findActive.mockResolvedValue(session);
+		repo.findTask.mockResolvedValue({
+			id: 481,
+			keyNumber: 42,
+			title: "Board card",
+			workspaceName: "Camel Alpha",
+		});
 		const { app } = createApp({ repo });
 
 		const res = await request(app).get("/workspaces/3/focus-session");
 
+		expect(res.status).toBe(200);
+		expect(res.body.session).toMatchObject({ id: 1, state: "running" });
+	});
+
+	it("rejects POST when FOCUS_MODE_ENABLED=false", async () => {
+		mockConfig.FOCUS_MODE_ENABLED = "false";
+		const repo = createFakeRepo();
+		const { app } = createApp({ repo });
+
+		const res = await request(app)
+			.post("/workspaces/3/focus-session")
+			.send({ action: "focus", source: "board", taskId: 481 });
+
 		expect(res.status).toBe(404);
 		expect(res.body).toEqual({ error: "Not found" });
+		expect(repo.findActive).not.toHaveBeenCalled();
+		expect(repo.insert).not.toHaveBeenCalled();
 	});
 
 	it("returns running session DTO with stored accumulatedSeconds and runningSince", async () => {
@@ -394,7 +420,11 @@ describe("POST /focus-session", () => {
 	});
 
 	it("returns existing session unchanged on idempotent re-focus", async () => {
-		const existing = makeReadySession({ id: 5, version: 2, accumulated_seconds: 0 });
+		const existing = makeReadySession({
+			id: 5,
+			version: 2,
+			accumulated_seconds: 0,
+		});
 		const repo = createFakeRepo();
 		repo.findActive.mockResolvedValue(existing);
 		const publish = vi.fn();

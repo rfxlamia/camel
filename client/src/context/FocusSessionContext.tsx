@@ -22,14 +22,12 @@ interface FocusSessionContextValue {
 	session: FocusSession | null;
 	loading: boolean;
 	actionError: string | null;
-	focus: (params: {
-		source: WorkItemSource;
-		taskId: number;
-	}) => Promise<void>;
+	focus: (params: { source: WorkItemSource; taskId: number }) => Promise<void>;
 	switchTo: (params: {
 		source: WorkItemSource;
 		taskId: number;
 		version: number;
+		sessionId: number;
 	}) => Promise<void>;
 	start: () => Promise<void>;
 	pause: () => Promise<void>;
@@ -168,15 +166,18 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		[adoptSession],
 	);
 
-	const handleMutationError = useCallback((err: unknown): void => {
-		if (!(err instanceof ApiError)) throw err;
-		if (reconcileVersionConflict(err)) return;
-		if (err.status >= 500 || err.status === 409) {
-			setActionError(err.message);
-			return;
-		}
-		throw err;
-	}, [reconcileVersionConflict]);
+	const handleMutationError = useCallback(
+		(err: unknown): void => {
+			if (!(err instanceof ApiError)) throw err;
+			if (reconcileVersionConflict(err)) return;
+			if (err.status >= 500 || err.status === 409) {
+				setActionError(err.message);
+				return;
+			}
+			throw err;
+		},
+		[reconcileVersionConflict],
+	);
 
 	const runPost = useCallback(
 		async (body: {
@@ -184,6 +185,7 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 			source: WorkItemSource;
 			taskId: number;
 			version?: number;
+			sessionId?: number;
 		}) => {
 			if (activeWorkspaceId === null) return;
 			setActionError(null);
@@ -229,6 +231,7 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 				const { session: next } = await api.focus.patch(activeWorkspaceId, {
 					action,
 					version: session.version,
+					sessionId: session.id,
 				});
 				setActionError(null);
 				if (action === "finish") {
@@ -256,6 +259,7 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 			source: WorkItemSource;
 			taskId: number;
 			version: number;
+			sessionId: number;
 		}) => runPost({ action: "switch", ...params }),
 		[runPost],
 	);
@@ -320,9 +324,7 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		return subscribeMembershipEvents((event) => {
 			const current = sessionRef.current;
 			if (current === null) return;
-			if (
-				!membershipRemovalTargetsUser(event, user.id, activeWorkspaceId)
-			) {
+			if (!membershipRemovalTargetsUser(event, user.id, activeWorkspaceId)) {
 				return;
 			}
 			void autoFinishFromGuard(ACCESS_REVOKED_TOAST);

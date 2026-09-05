@@ -178,7 +178,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "start", version: 1 });
+			.send({ action: "start", version: 1, sessionId: 2 });
 
 		expect(res.status).toBe(200);
 		expect(res.body.session).toMatchObject({
@@ -231,7 +231,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "pause", version: 2 });
+			.send({ action: "pause", version: 2, sessionId: 1 });
 
 		expect(res.status).toBe(200);
 		expect(res.body.session).toMatchObject({
@@ -267,7 +267,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const resumeRes = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "resume", version: 3 });
+			.send({ action: "resume", version: 3, sessionId: 3 });
 
 		expect(resumeRes.status).toBe(200);
 		expect(resumeRes.body.session).toMatchObject({
@@ -286,7 +286,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const pauseRes = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "pause", version: 4 });
+			.send({ action: "pause", version: 4, sessionId: 3 });
 
 		expect(pauseRes.status).toBe(200);
 		expect(pauseRes.body.session).toMatchObject({
@@ -330,7 +330,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "finish", version: 5 });
+			.send({ action: "finish", version: 5, sessionId: 1 });
 
 		expect(res.status).toBe(200);
 		expect(res.body.session).toMatchObject({
@@ -377,7 +377,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "resume", version: 3 });
+			.send({ action: "resume", version: 3, sessionId: 3 });
 
 		expect(res.status).toBe(409);
 		expect(res.body).toEqual({
@@ -407,7 +407,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "start", version: 2 });
+			.send({ action: "start", version: 2, sessionId: 1 });
 
 		expect(res.status).toBe(409);
 		expect(res.body.code).toBe("invalid_transition");
@@ -428,7 +428,7 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "switch", version: 1 });
+			.send({ action: "switch", version: 1, sessionId: 2 });
 
 		expect(res.status).toBe(400);
 		expect(res.body).toEqual({ error: "Invalid request body" });
@@ -443,11 +443,84 @@ describe("PATCH /focus-session lifecycle", () => {
 
 		const res = await request(app)
 			.patch("/workspaces/3/focus-session")
-			.send({ action: "start", version: 1 });
+			.send({ action: "start", version: 1, sessionId: 1 });
 
 		expect(res.status).toBe(404);
 		expect(res.body).toEqual({ error: "Not found" });
 		expect(repo.update).not.toHaveBeenCalled();
 		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("returns 400 when PATCH omits sessionId", async () => {
+		const ready = makeReadySession();
+		const repo = createFakeRepo();
+		repo.findActive.mockResolvedValue(ready);
+		const publish = vi.fn();
+		const { app } = createApp({ repo, publish });
+
+		const res = await request(app)
+			.patch("/workspaces/3/focus-session")
+			.send({ action: "start", version: 1 });
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "Invalid request body" });
+		expect(repo.update).not.toHaveBeenCalled();
+		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("returns 409 when PATCH sessionId does not match the active row", async () => {
+		const replacement = makeReadySession({ id: 10, version: 1 });
+		const repo = createFakeRepo();
+		repo.findActive.mockResolvedValue(replacement);
+		const publish = vi.fn();
+		const { app } = createApp({ repo, publish });
+
+		const res = await request(app)
+			.patch("/workspaces/3/focus-session")
+			.send({ action: "start", version: 1, sessionId: 1 });
+
+		expect(res.status).toBe(409);
+		expect(res.body).toEqual({
+			code: "version_conflict",
+			session: {
+				id: 10,
+				state: "ready",
+				accumulatedSeconds: 0,
+				runningSince: null,
+				version: 1,
+				source: "board",
+				taskId: 481,
+				taskKey: "CA-42",
+				returnPath: "/board/card/481",
+				finishedAt: null,
+			},
+		});
+		expect(repo.update).not.toHaveBeenCalled();
+		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("allows PATCH finish when FOCUS_MODE_ENABLED=false", async () => {
+		mockConfig.FOCUS_MODE_ENABLED = "false";
+		const T0_PLUS_120S = new Date("2026-09-04T10:02:00.000Z");
+		const running = makeRunningSession({ version: 5 });
+		const finished = makeRunningSession({
+			state: "finished",
+			accumulated_seconds: 120,
+			running_since: null,
+			version: 6,
+			finished_at: T0_PLUS_120S,
+		});
+		const repo = createFakeRepo();
+		repo.findActive.mockResolvedValue(running);
+		repo.update.mockResolvedValue(finished);
+		const { app } = createApp({ repo, now: () => T0_PLUS_120S });
+
+		const res = await request(app)
+			.patch("/workspaces/3/focus-session")
+			.send({ action: "finish", version: 5, sessionId: 1 });
+
+		expect(res.status).toBe(200);
+		expect(res.body.session.state).toBe("finished");
+		expect(repo.update).toHaveBeenCalledOnce();
 	});
 });

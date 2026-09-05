@@ -1,4 +1,9 @@
-import { Router, type NextFunction, type Request, type Response } from "express";
+import {
+	type NextFunction,
+	type Request,
+	type Response,
+	Router,
+} from "express";
 import type { AuthUser } from "../auth.js";
 import { config } from "../config.js";
 import {
@@ -9,7 +14,6 @@ import {
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
-import { recordActivity } from "./helpers.js";
 import {
 	buildReadySessionInput,
 	targetsSameTask,
@@ -20,6 +24,7 @@ import {
 	type FocusSessionRow,
 	type FocusSessionUpdatePatch,
 } from "./focus-session-repo.js";
+import { recordActivity } from "./helpers.js";
 
 export type FocusAuditAction =
 	| "focus"
@@ -84,28 +89,44 @@ export function serializeFocusSession(row: FocusSessionRow): FocusSessionDto {
 	};
 }
 
+function parseOptionalSessionIdentity(
+	body: Record<string, unknown>,
+): { version?: number; sessionId?: number } | null {
+	const parsed: { version?: number; sessionId?: number } = {};
+	if (body.version !== undefined) {
+		if (typeof body.version !== "number" || !Number.isInteger(body.version)) {
+			return null;
+		}
+		parsed.version = body.version;
+	}
+	if (body.sessionId !== undefined) {
+		if (
+			typeof body.sessionId !== "number" ||
+			!Number.isInteger(body.sessionId)
+		) {
+			return null;
+		}
+		parsed.sessionId = body.sessionId;
+	}
+	return parsed;
+}
+
 function parseFocusPostBody(body: unknown): {
 	action: "focus" | "switch";
 	source: "board" | "tracker";
 	taskId: number;
 	version?: number;
+	sessionId?: number;
 } | null {
 	if (body == null || typeof body !== "object") return null;
-	const { action, source, taskId, version } = body as Record<string, unknown>;
+	const record = body as Record<string, unknown>;
+	const { action, source, taskId } = record;
 	if (action !== "focus" && action !== "switch") return null;
 	if (source !== "board" && source !== "tracker") return null;
 	if (typeof taskId !== "number" || !Number.isInteger(taskId)) return null;
-	const parsed: {
-		action: "focus" | "switch";
-		source: "board" | "tracker";
-		taskId: number;
-		version?: number;
-	} = { action, source, taskId };
-	if (version !== undefined) {
-		if (typeof version !== "number" || !Number.isInteger(version)) return null;
-		parsed.version = version;
-	}
-	return parsed;
+	const identity = parseOptionalSessionIdentity(record);
+	if (!identity) return null;
+	return { action, source, taskId, ...identity };
 }
 
 const FOCUS_PATCH_ACTIONS = new Set<FocusAction>([
@@ -118,14 +139,30 @@ const FOCUS_PATCH_ACTIONS = new Set<FocusAction>([
 function parseFocusPatchBody(body: unknown): {
 	action: FocusAction;
 	version: number;
+	sessionId: number;
 } | null {
 	if (body == null || typeof body !== "object") return null;
-	const { action, version } = body as Record<string, unknown>;
-	if (typeof action !== "string" || !FOCUS_PATCH_ACTIONS.has(action as FocusAction)) {
+	const record = body as Record<string, unknown>;
+	const { action } = record;
+	if (
+		typeof action !== "string" ||
+		!FOCUS_PATCH_ACTIONS.has(action as FocusAction)
+	) {
 		return null;
 	}
-	if (typeof version !== "number" || !Number.isInteger(version)) return null;
-	return { action: action as FocusAction, version };
+	const identity = parseOptionalSessionIdentity(record);
+	if (
+		!identity ||
+		identity.version === undefined ||
+		identity.sessionId === undefined
+	) {
+		return null;
+	}
+	return {
+		action: action as FocusAction,
+		version: identity.version,
+		sessionId: identity.sessionId,
+	};
 }
 
 function buildLifecyclePatch(
@@ -173,7 +210,9 @@ async function autoFinishMissingTask(
 	now: Date,
 	publish: typeof publishEvent,
 	recordFocusActivity: RecordFocusActivity,
-): Promise<{ autoFinished: { reason: "task_missing"; taskKey: string | null } } | null> {
+): Promise<{
+	autoFinished: { reason: "task_missing"; taskKey: string | null };
+} | null> {
 	const finished = applyAction(
 		{
 			state: session.state,
@@ -251,7 +290,6 @@ export function createFocusSessionRouter(deps: {
 		deps.recordFocusActivity ?? defaultRecordFocusActivity;
 
 	const router = Router({ mergeParams: true });
-	router.use(requireFocusModeEnabled);
 	router.use(requireWorkspaceMember);
 
 	router.get("/focus-session", async (req, res) => {
@@ -287,7 +325,7 @@ export function createFocusSessionRouter(deps: {
 		return res.json({ session: serializeFocusSession(session) });
 	});
 
-	router.post("/focus-session", async (req, res) => {
+	router.post("/focus-session", requireFocusModeEnabled, async (req, res) => {
 		const actor = req.user!;
 		const workspaceId = req.workspace!.workspaceId;
 
@@ -361,8 +399,15 @@ export function createFocusSessionRouter(deps: {
 				return res.status(201).json({ session });
 			}
 
-			if (parsed.version === undefined) {
+			if (parsed.version === undefined || parsed.sessionId === undefined) {
 				return res.status(400).json({ error: "Invalid request body" });
+			}
+
+			if (active.id !== parsed.sessionId) {
+				return res.status(409).json({
+					code: "version_conflict",
+					session: serializeFocusSession(active),
+				});
 			}
 
 			const task = await repo.findTask(source, taskId, workspaceId);
@@ -383,7 +428,7 @@ export function createFocusSessionRouter(deps: {
 
 			const switched = await repo.switchSession(
 				{
-					id: active.id,
+					id: parsed.sessionId,
 					patch: {
 						state: "finished",
 						accumulated_seconds: finishedSnapshot.accumulatedSeconds,
@@ -498,11 +543,18 @@ export function createFocusSessionRouter(deps: {
 			return res.status(400).json({ error: "Invalid request body" });
 		}
 
-		const { action, version: expectedVersion } = parsed;
+		const { action, version: expectedVersion, sessionId } = parsed;
 
 		const active = await repo.findActive(actor.id, workspaceId);
 		if (!active) {
 			return res.status(404).json({ error: "Not found" });
+		}
+
+		if (active.id !== sessionId) {
+			return res.status(409).json({
+				code: "version_conflict",
+				session: serializeFocusSession(active),
+			});
 		}
 
 		const currentSession = serializeFocusSession(active);
@@ -530,7 +582,7 @@ export function createFocusSessionRouter(deps: {
 		}
 
 		const updated = await repo.update(
-			active.id,
+			sessionId,
 			buildLifecyclePatch(action, nextSnapshot, actionAt),
 			expectedVersion,
 		);
@@ -568,4 +620,6 @@ export function createFocusSessionRouter(deps: {
 }
 
 const defaultRepo = createFocusSessionRepo(db);
-export const focusSessionRouter = createFocusSessionRouter({ repo: defaultRepo });
+export const focusSessionRouter = createFocusSessionRouter({
+	repo: defaultRepo,
+});

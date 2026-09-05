@@ -169,6 +169,24 @@ export default function FocusPage() {
 
 	// The app chrome that used to signal "still loading" is gone on this
 	// surface, so an empty return would read as a broken white window.
+	if (actionError && !focusSessionHydrated) {
+		return (
+			<div className="focus-field flex min-h-full flex-col items-center justify-center gap-5 px-6">
+				<p className="max-w-[46ch] rounded-md border border-error-500 bg-error-100 px-4 py-3 text-center text-sm text-error-900">
+					{actionError}
+				</p>
+				<button
+					type="button"
+					onClick={() => navigate("/board")}
+					className={exitButtonClass}
+				>
+					<ArrowLeft size={15} aria-hidden />
+					Back to board
+				</button>
+			</div>
+		);
+	}
+
 	if (loading || !focusSessionHydrated) {
 		return focusLoadingScreen;
 	}

@@ -152,9 +152,13 @@ describe("POST /focus-session switch", () => {
 			recordFocusActivity,
 		});
 
-		const res = await request(app)
-			.post("/workspaces/3/focus-session")
-			.send({ action: "switch", source: "board", taskId: 999, version: 2 });
+		const res = await request(app).post("/workspaces/3/focus-session").send({
+			action: "switch",
+			source: "board",
+			taskId: 999,
+			version: 2,
+			sessionId: 1,
+		});
 
 		expect(res.status).toBe(201);
 		expect(res.body.session).toMatchObject({
@@ -205,7 +209,13 @@ describe("POST /focus-session switch", () => {
 	});
 
 	it("falls back to plain focus when no active session exists", async () => {
-		const inserted = makeReadySession({ id: 11, version: 1, task_id: 77, task_source: "tracker", return_path: "/tracker/CA-42" });
+		const inserted = makeReadySession({
+			id: 11,
+			version: 1,
+			task_id: 77,
+			task_source: "tracker",
+			return_path: "/tracker/CA-42",
+		});
 		const repo = createFakeRepo();
 		repo.findActive.mockResolvedValue(null);
 		repo.findTask.mockResolvedValue({
@@ -235,9 +245,7 @@ describe("POST /focus-session switch", () => {
 	it("returns 409 version_conflict on stale version without side effects", async () => {
 		const active = makeRunningSession({ version: 4 });
 		const repo = createFakeRepo();
-		repo.findActive
-			.mockResolvedValueOnce(active)
-			.mockResolvedValueOnce(active);
+		repo.findActive.mockResolvedValueOnce(active).mockResolvedValueOnce(active);
 		repo.findTask.mockResolvedValue({
 			id: 999,
 			keyNumber: 99,
@@ -249,9 +257,13 @@ describe("POST /focus-session switch", () => {
 		const recordFocusActivity = vi.fn();
 		const { app } = createApp({ repo, publish, recordFocusActivity });
 
-		const res = await request(app)
-			.post("/workspaces/3/focus-session")
-			.send({ action: "switch", source: "board", taskId: 999, version: 2 });
+		const res = await request(app).post("/workspaces/3/focus-session").send({
+			action: "switch",
+			source: "board",
+			taskId: 999,
+			version: 2,
+			sessionId: 1,
+		});
 
 		expect(res.status).toBe(409);
 		expect(res.body.code).toBe("version_conflict");
@@ -284,6 +296,61 @@ describe("POST /focus-session switch", () => {
 		expect(recordFocusActivity).not.toHaveBeenCalled();
 	});
 
+	it("returns 400 when switch omits sessionId while an active session exists", async () => {
+		const active = makeRunningSession();
+		const repo = createFakeRepo();
+		repo.findActive.mockResolvedValue(active);
+		repo.findTask.mockResolvedValue({
+			id: 999,
+			keyNumber: 99,
+			title: "Target card",
+			workspaceName: "Camel Alpha",
+		});
+		const publish = vi.fn();
+		const { app } = createApp({ repo, publish });
+
+		const res = await request(app)
+			.post("/workspaces/3/focus-session")
+			.send({ action: "switch", source: "board", taskId: 999, version: 2 });
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "Invalid request body" });
+		expect(repo.switchSession).not.toHaveBeenCalled();
+		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("returns 409 when switch sessionId does not match the active row", async () => {
+		const replacement = makeReadySession({ id: 10, version: 1, task_id: 999 });
+		const repo = createFakeRepo();
+		repo.findActive
+			.mockResolvedValueOnce(replacement)
+			.mockResolvedValueOnce(replacement);
+		repo.findTask.mockResolvedValue({
+			id: 888,
+			keyNumber: 88,
+			title: "Other card",
+			workspaceName: "Camel Alpha",
+		});
+		const publish = vi.fn();
+		const recordFocusActivity = vi.fn();
+		const { app } = createApp({ repo, publish, recordFocusActivity });
+
+		const res = await request(app).post("/workspaces/3/focus-session").send({
+			action: "switch",
+			source: "board",
+			taskId: 888,
+			version: 1,
+			sessionId: 1,
+		});
+
+		expect(res.status).toBe(409);
+		expect(res.body.code).toBe("version_conflict");
+		expect(res.body.session.id).toBe(10);
+		expect(repo.switchSession).not.toHaveBeenCalled();
+		expect(publish).not.toHaveBeenCalled();
+		expect(recordFocusActivity).not.toHaveBeenCalled();
+	});
+
 	it("returns 404 when target task does not resolve without calling switchSession", async () => {
 		const active = makeRunningSession();
 		const repo = createFakeRepo();
@@ -292,9 +359,13 @@ describe("POST /focus-session switch", () => {
 		const publish = vi.fn();
 		const { app } = createApp({ repo, publish });
 
-		const res = await request(app)
-			.post("/workspaces/3/focus-session")
-			.send({ action: "switch", source: "board", taskId: 999, version: 2 });
+		const res = await request(app).post("/workspaces/3/focus-session").send({
+			action: "switch",
+			source: "board",
+			taskId: 999,
+			version: 2,
+			sessionId: 1,
+		});
 
 		expect(res.status).toBe(404);
 		expect(res.body).toEqual({ error: "Not found" });

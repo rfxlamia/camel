@@ -59,9 +59,7 @@ const testUser: User = {
 	needsUsername: false,
 };
 
-function makeReadySession(
-	overrides: Partial<FocusSession> = {},
-): FocusSession {
+function makeReadySession(overrides: Partial<FocusSession> = {}): FocusSession {
 	return {
 		id: 2,
 		state: "ready",
@@ -215,9 +213,7 @@ describe("FocusSessionProvider", () => {
 	});
 
 	it("treats GET 404 as an empty session without surfacing an error", async () => {
-		mockFocusGet.mockRejectedValue(
-			new ApiError("Not found", 404, "not_found"),
-		);
+		mockFocusGet.mockRejectedValue(new ApiError("Not found", 404, "not_found"));
 
 		const { result } = renderHook(() => useFocusSession(), {
 			wrapper: createWrapper(),
@@ -345,6 +341,7 @@ describe("FocusSessionProvider", () => {
 				source: "tracker",
 				taskId: 77,
 				version: 2,
+				sessionId: 2,
 			});
 		});
 
@@ -353,6 +350,7 @@ describe("FocusSessionProvider", () => {
 			source: "tracker",
 			taskId: 77,
 			version: 2,
+			sessionId: 2,
 		});
 		expect(result.current.session).toEqual(switched);
 	});
@@ -375,6 +373,7 @@ describe("FocusSessionProvider", () => {
 		expect(mockFocusPatch).toHaveBeenCalledWith(3, {
 			action: "start",
 			version: 1,
+			sessionId: 2,
 		});
 		expect(result.current.session).toEqual(running);
 	});
@@ -397,6 +396,7 @@ describe("FocusSessionProvider", () => {
 		expect(mockFocusPatch).toHaveBeenCalledWith(3, {
 			action: "pause",
 			version: 2,
+			sessionId: 1,
 		});
 		expect(result.current.session).toEqual(paused);
 	});
@@ -419,6 +419,7 @@ describe("FocusSessionProvider", () => {
 		expect(mockFocusPatch).toHaveBeenCalledWith(3, {
 			action: "resume",
 			version: 3,
+			sessionId: 1,
 		});
 		expect(result.current.session).toEqual(running);
 	});
@@ -448,6 +449,7 @@ describe("FocusSessionProvider", () => {
 		expect(mockFocusPatch).toHaveBeenCalledWith(3, {
 			action: "finish",
 			version: 2,
+			sessionId: 1,
 		});
 		expect(returned).toEqual(finished);
 		expect(result.current.session).toBeNull();
@@ -489,7 +491,14 @@ describe("FocusSessionProvider", () => {
 		mockFocusGet.mockResolvedValue({ session: paused });
 		mockFocusPatch
 			.mockRejectedValueOnce(
-				new ApiError("Conflict", 409, "version_conflict", undefined, undefined, reconciled),
+				new ApiError(
+					"Conflict",
+					409,
+					"version_conflict",
+					undefined,
+					undefined,
+					reconciled,
+				),
 			)
 			.mockResolvedValueOnce({ session: running });
 
@@ -513,6 +522,7 @@ describe("FocusSessionProvider", () => {
 		expect(mockFocusPatch).toHaveBeenLastCalledWith(3, {
 			action: "resume",
 			version: 4,
+			sessionId: 1,
 		});
 	});
 
@@ -520,7 +530,14 @@ describe("FocusSessionProvider", () => {
 		const paused = makePausedSession({ version: 3 });
 		mockFocusGet.mockResolvedValue({ session: paused });
 		mockFocusPatch.mockRejectedValue(
-			new ApiError("Conflict", 409, "version_conflict", undefined, undefined, null),
+			new ApiError(
+				"Conflict",
+				409,
+				"version_conflict",
+				undefined,
+				undefined,
+				null,
+			),
 		);
 
 		const { result } = renderHook(() => useFocusSession(), {
@@ -541,7 +558,14 @@ describe("FocusSessionProvider", () => {
 		mockFocusGet.mockResolvedValue({ session: null });
 		const active = makeReadySession({ taskId: 10, version: 2 });
 		mockFocusPost.mockRejectedValue(
-			new ApiError("Conflict", 409, "session_active", undefined, undefined, active),
+			new ApiError(
+				"Conflict",
+				409,
+				"session_active",
+				undefined,
+				undefined,
+				active,
+			),
 		);
 
 		const { result } = renderHook(() => useFocusSession(), {
@@ -565,7 +589,11 @@ describe("FocusSessionProvider", () => {
 
 	it("switchTo version_conflict adopts the body session silently", async () => {
 		const active = makeReadySession({ version: 2 });
-		const reconciled = makeReadySession({ version: 4, taskId: 77, source: "tracker" });
+		const reconciled = makeReadySession({
+			version: 4,
+			taskId: 77,
+			source: "tracker",
+		});
 		mockFocusGet.mockResolvedValue({ session: active });
 		mockFocusPost.mockRejectedValue(
 			new ApiError(
@@ -588,6 +616,7 @@ describe("FocusSessionProvider", () => {
 				source: "tracker",
 				taskId: 77,
 				version: 2,
+				sessionId: 2,
 			});
 		});
 
@@ -599,7 +628,14 @@ describe("FocusSessionProvider", () => {
 		const ready = makeReadySession();
 		mockFocusGet.mockResolvedValue({ session: ready });
 		mockFocusPatch.mockRejectedValue(
-			new ApiError("Conflict", 409, "invalid_transition", undefined, undefined, ready),
+			new ApiError(
+				"Conflict",
+				409,
+				"invalid_transition",
+				undefined,
+				undefined,
+				ready,
+			),
 		);
 
 		const { result } = renderHook(() => useFocusSession(), {

@@ -823,6 +823,7 @@ export const api = {
 				source: WorkItemSource;
 				taskId: number;
 				version?: number;
+				sessionId?: number;
 			},
 		) =>
 			request<{ session: FocusSession }>(
@@ -837,6 +838,7 @@ export const api = {
 			body: {
 				action: "start" | "pause" | "resume" | "finish";
 				version: number;
+				sessionId: number;
 			},
 		) =>
 			request<{ session: FocusSession }>(

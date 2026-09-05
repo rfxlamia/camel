@@ -1,13 +1,11 @@
 import { useNavigate } from "react-router";
-import { useBoard } from "../context/BoardContext";
 import { useFocusSession } from "../context/FocusSessionContext";
 
 export default function FocusIndicator() {
 	const { session, loading } = useFocusSession();
-	const { focusModeEnabled } = useBoard();
 	const navigate = useNavigate();
 
-	if (loading || !focusModeEnabled || session === null) {
+	if (loading || session === null) {
 		return null;
 	}
 
