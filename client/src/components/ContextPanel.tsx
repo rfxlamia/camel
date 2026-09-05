@@ -350,22 +350,9 @@ function CardEditor({
 
 			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
 				<section aria-label="Details" className="space-y-3 px-4 py-4">
-					<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
+					<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
 						Details
 					</h3>
-					<label className="block sm:max-w-44">
-						<span className="text-sm font-medium text-neutral-700">
-							Due date
-						</span>
-						<input
-							type="date"
-							className={inputClass}
-							value={dueDate ?? ""}
-							onChange={(e) =>
-								setDueDate(e.target.value === "" ? null : e.target.value)
-							}
-						/>
-					</label>
 					<label className="block">
 						<span className="text-sm font-medium text-neutral-700">Title</span>
 						<input
@@ -409,6 +396,8 @@ function CardEditor({
 							phaseName={card.phaseName}
 							priority={card.priority}
 							labels={card.labels}
+							dueDate={dueDate}
+							onDueDateChange={setDueDate}
 							onPriorityChange={setPriorityId}
 							onLabelIdsChange={setLabelIds}
 							onProjectChange={(nextProjectId, nextPhaseId) => {
@@ -500,7 +489,7 @@ function TicketHistorySection({ cardId }: { cardId: number }) {
 			aria-label="Ticket history"
 			className="border-t border-neutral-200 px-4 py-4"
 		>
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
+			<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
 				Ticket history
 			</h3>
 			{tickets === null && (
@@ -572,7 +561,7 @@ function ActivitySection({ cardId }: { cardId: number }) {
 			aria-label="Activity"
 			className="border-t border-neutral-200 px-4 py-4"
 		>
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
+			<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
 				Activity
 			</h3>
 			{events === null && (
@@ -673,6 +662,9 @@ export default function ContextPanel() {
 
 	if (!card) return null;
 
+	const columnTitle =
+		columns?.find((c) => c.id === card.columnId)?.title ?? null;
+
 	return (
 		<>
 			{/* Transparent click-capture layer: a click on the board area closes
@@ -688,8 +680,21 @@ export default function ContextPanel() {
 				className="fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-neutral-200 bg-white shadow-lg animate-panel-in motion-reduce:animate-none md:w-104"
 			>
 				<header className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
-					<h2 className="min-w-0 truncate text-md font-semibold text-neutral-900">
-						{card.title}
+					{/* Wayfinding, not identity: the title lives in the Title field a
+					    few rows down, so repeating it here said nothing twice. The
+					    dialog's accessible name still carries the title. */}
+					<h2 className="min-w-0 truncate text-sm font-medium text-neutral-600">
+						{card.key && (
+							<span className="font-mono tabular-nums text-neutral-900">
+								{card.key}
+							</span>
+						)}
+						{card.key && columnTitle && (
+							<span className="px-1.5 text-neutral-300" aria-hidden>
+								·
+							</span>
+						)}
+						{columnTitle ?? (card.key ? null : "Card details")}
 					</h2>
 					<button
 						onClick={close}
