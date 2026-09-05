@@ -223,6 +223,7 @@ membersRouter.delete("/members/:userId", async (req, res) => {
 
 	const result = await workspaceAccessService.removeMember({
 		actorId: req.user!.id,
+		actor: req.user!,
 		workspaceId,
 		userId: targetUserId,
 	});

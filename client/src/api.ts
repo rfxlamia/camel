@@ -31,17 +31,24 @@ import type {
 	Workspace,
 	WorkspaceListResponse,
 	WorkspaceMember,
+	FocusSession,
+	FocusSessionGetResponse,
+	WorkItemSource,
 } from "./types";
 
 class ApiError extends Error {
+	session?: FocusSession | null;
+
 	constructor(
 		message: string,
 		public status: number,
 		public code?: string,
 		public retryAfterMs?: number,
 		public fieldErrors?: TaskCreateFieldErrors,
+		session?: FocusSession | null,
 	) {
 		super(message);
+		this.session = session;
 	}
 }
 
@@ -88,6 +95,7 @@ async function throwRequestError(
 	let code: string | undefined;
 	let retryAfterMs: number | undefined;
 	let fieldErrors: TaskCreateFieldErrors | undefined;
+	let session: FocusSession | null | undefined;
 	try {
 		const body = await res.json();
 		if (body.error) message = body.error;
@@ -97,6 +105,7 @@ async function throwRequestError(
 			retryAfterMs = body.retryAfterMs;
 		}
 		if (body.fieldErrors !== undefined) fieldErrors = body.fieldErrors;
+		if ("session" in body) session = body.session as FocusSession | null;
 	} catch {
 		// non-JSON error body
 	}
@@ -109,7 +118,7 @@ async function throwRequestError(
 			userAction: options.userAction,
 		});
 	}
-	throw new ApiError(message, res.status, code, retryAfterMs, fieldErrors);
+	throw new ApiError(message, res.status, code, retryAfterMs, fieldErrors, session);
 }
 
 async function request<T>(
@@ -798,6 +807,47 @@ export const api = {
 			}
 			return res.blob();
 		},
+	},
+
+	// ---- Focus mode ----
+	focus: {
+		getConfig: () => request<{ enabled: boolean }>("/focus/config"),
+		get: (workspaceId: number) =>
+			request<FocusSessionGetResponse>(
+				`/workspaces/${workspaceId}/focus-session`,
+			),
+		post: (
+			workspaceId: number,
+			body: {
+				action: "focus" | "switch";
+				source: WorkItemSource;
+				taskId: number;
+				version?: number;
+				sessionId?: number;
+			},
+		) =>
+			request<{ session: FocusSession }>(
+				`/workspaces/${workspaceId}/focus-session`,
+				{
+					method: "POST",
+					body: JSON.stringify(body),
+				},
+			),
+		patch: (
+			workspaceId: number,
+			body: {
+				action: "start" | "pause" | "resume" | "finish";
+				version: number;
+				sessionId: number;
+			},
+		) =>
+			request<{ session: FocusSession }>(
+				`/workspaces/${workspaceId}/focus-session`,
+				{
+					method: "PATCH",
+					body: JSON.stringify(body),
+				},
+			),
 	},
 
 	// ---- Ticket intake ----

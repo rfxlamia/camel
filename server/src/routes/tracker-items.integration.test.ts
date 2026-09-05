@@ -382,6 +382,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 
 		await workspaceAccessService.removeMember({
 			actorId: mockCurrentUser.id,
+			actor: mockCurrentUser,
 			workspaceId: WORKSPACE_ID,
 			userId: 2,
 		});

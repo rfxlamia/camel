@@ -1,7 +1,11 @@
 import { Folder, Plus, Signpost, Tag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import { NO_PRIORITY, resolveToggle, sortStatusesByPosition } from "../lib/trackerUtils";
+import {
+	NO_PRIORITY,
+	resolveToggle,
+	sortStatusesByPosition,
+} from "../lib/trackerUtils";
 import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../types";
 import { LabelDot, PriorityGlyph, priorityBars } from "./tracker/TrackerGlyphs";
 import {
@@ -26,6 +30,13 @@ export interface BoardCardTaxonomyFieldsProps {
 	labels?: TrackerVocabulary[];
 	projectName?: string | null;
 	phaseName?: string | null;
+	/**
+	 * Draft due date ("YYYY-MM-DD"). Rendered here so the date sits with the
+	 * other card properties instead of floating above the title field.
+	 * Omit `onDueDateChange` to leave the row out entirely.
+	 */
+	dueDate?: string | null;
+	onDueDateChange?: (dueDate: string | null) => void;
 	onPriorityChange: (priorityId: number | null) => void;
 	onLabelIdsChange: (labelIds: number[]) => void;
 	onProjectChange: (projectId: number | null, phaseId: number | null) => void;
@@ -67,6 +78,8 @@ export default function BoardCardTaxonomyFields({
 	labels: selectedLabels = [],
 	projectName,
 	phaseName,
+	dueDate,
+	onDueDateChange,
 	onPriorityChange,
 	onLabelIdsChange,
 	onProjectChange,
@@ -220,7 +233,9 @@ export default function BoardCardTaxonomyFields({
 	const showPriorityPicker =
 		orderedPriorities.length > 0 || priorityId !== null || priority != null;
 	const showLabelPicker =
-		orderedLabels.length > 0 || labelIds.length > 0 || selectedLabels.length > 0;
+		orderedLabels.length > 0 ||
+		labelIds.length > 0 ||
+		selectedLabels.length > 0;
 	const showProjectPicker =
 		projects.length > 0 || projectId != null || projectName != null;
 	const showPhasePicker =
@@ -238,14 +253,32 @@ export default function BoardCardTaxonomyFields({
 
 	return (
 		<div
-			aria-label="Card taxonomy"
-			className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-3"
+			aria-label="Properties"
+			className="space-y-3 rounded-md bg-neutral-100 px-3 py-3"
 		>
-			<h4 className="text-sm font-medium text-neutral-700">Properties</h4>
+			{/* Eyebrow: smaller and lighter than the field labels it governs, so
+			    the group header reads as structure rather than as content. */}
+			<h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+				Properties
+			</h4>
 			{listHint && (
 				<p className="text-xs text-neutral-500" role="status">
 					{listHint}
 				</p>
+			)}
+
+			{onDueDateChange && (
+				<label className="flex flex-wrap items-center gap-2">
+					<span className="text-sm font-medium text-neutral-700">Due date</span>
+					<input
+						type="date"
+						className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none"
+						value={dueDate ?? ""}
+						onChange={(e) =>
+							onDueDateChange(e.target.value === "" ? null : e.target.value)
+						}
+					/>
+				</label>
 			)}
 
 			<div className="flex flex-wrap items-center gap-1.5">
@@ -288,10 +321,7 @@ export default function BoardCardTaxonomyFields({
 						open={openPicker === "project"}
 						onOpenChange={(open) => setOpenPicker(open ? "project" : null)}
 						onSelect={(id) =>
-							onProjectChange(
-								id === NO_PROJECT ? null : Number(id),
-								null,
-							)
+							onProjectChange(id === NO_PROJECT ? null : Number(id), null)
 						}
 					/>
 				)}

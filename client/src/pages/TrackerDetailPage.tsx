@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ApiError, api } from "../api";
+import FocusEntryButton from "../components/FocusEntryButton";
 import TrackerChangelog from "../components/tracker/TrackerChangelog";
 import TrackerDateFields from "../components/tracker/TrackerDateFields";
 import {
@@ -459,6 +460,13 @@ export default function TrackerDetailPage() {
 				<span className="px-1.5 font-mono text-neutral-900 text-sm tabular-nums">
 					{item.key}
 				</span>
+				<div className="ml-auto">
+					<FocusEntryButton
+						source={item.source}
+						taskId={item.id}
+						taskKey={item.key}
+					/>
+				</div>
 			</div>
 
 			<div className="flex flex-col lg:flex-row lg:items-stretch">

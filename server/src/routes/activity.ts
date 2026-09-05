@@ -63,6 +63,7 @@ activityRouter.get("/activity", requireWorkspaceMember, async (req, res) => {
 		Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
 	const rows = await activitySelect()
 		.where("e.workspace_id", "=", workspaceId)
+		.where("e.event_type", "<>", "focus_session")
 		.orderBy("e.created_at", "desc")
 		.orderBy("e.id", "desc")
 		.limit(limit)

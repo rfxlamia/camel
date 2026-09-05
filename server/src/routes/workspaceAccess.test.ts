@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AuthUser } from "../auth.js";
 import {
 	checkActorCanChangeRole,
 	checkActorCanManage,
@@ -9,6 +10,15 @@ import {
 	legacyWorkspaceRouteMatrix,
 	type WorkspaceAccessDeps,
 } from "../routes.js";
+
+const ADMIN_ACTOR: AuthUser = {
+	id: 1,
+	username: "admin",
+	displayName: "Admin",
+	email: null,
+	emailVerified: true,
+	needsUsername: false,
+};
 
 describe("workspace authorization rules", () => {
 	it("blocks member from managing — returns 404", () => {
@@ -116,12 +126,21 @@ describe("membership removal events", () => {
 			getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
 			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
 			updateMemberRole: vi.fn(),
-			removeMember: vi.fn(async () => ({ userId: 4, username: "nina" })),
+			removeMember: vi.fn(async () => ({
+				userId: 4,
+				username: "nina",
+				focusSessionFinished: false,
+			})),
 			publishEvent,
 			clearPresence,
 		});
 
-		await service.removeMember({ actorId: 1, workspaceId: 8, userId: 4 });
+		await service.removeMember({
+			actorId: 1,
+			actor: ADMIN_ACTOR,
+			workspaceId: 8,
+			userId: 4,
+		});
 
 		expect(publishEvent).toHaveBeenCalledWith(8, {
 			type: "membership.removed",
@@ -147,6 +166,7 @@ describe("membership removal events", () => {
 
 		const result = await service.removeMember({
 			actorId: 1,
+			actor: ADMIN_ACTOR,
 			workspaceId: 8,
 			userId: 4,
 		});
@@ -155,16 +175,91 @@ describe("membership removal events", () => {
 		expect(removeMember).not.toHaveBeenCalled();
 	});
 
+	it("publishes focus_session.updated before membership.removed when focus session was finished", async () => {
+		const publishEvent = vi.fn(async () => undefined);
+		const clearPresence = vi.fn(async () => undefined);
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
+			getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole: vi.fn(),
+			removeMember: vi.fn(async () => ({
+				userId: 4,
+				username: "nina",
+				focusSessionFinished: true,
+			})),
+			publishEvent,
+			clearPresence,
+		});
+
+		await service.removeMember({
+			actorId: 1,
+			actor: ADMIN_ACTOR,
+			workspaceId: 8,
+			userId: 4,
+		});
+
+		expect(publishEvent).toHaveBeenCalledTimes(2);
+		expect(publishEvent.mock.calls[0]).toEqual([
+			8,
+			{
+				type: "focus_session.updated",
+				userId: 4,
+				workspaceId: 8,
+				payload: { session: null },
+			},
+		]);
+		expect(publishEvent.mock.calls[1]).toEqual([
+			8,
+			{
+				type: "membership.removed",
+				userId: 4,
+				workspaceId: 8,
+				workspaceName: "WS-R",
+			},
+		]);
+	});
+
+	it("publishes only membership.removed when no focus session was finished", async () => {
+		const publishEvent = vi.fn(async () => undefined);
+		const clearPresence = vi.fn(async () => undefined);
+		const service = createWorkspaceAccessService({
+			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
+			getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
+			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
+			updateMemberRole: vi.fn(),
+			removeMember: vi.fn(async () => ({
+				userId: 4,
+				username: "nina",
+				focusSessionFinished: false,
+			})),
+			publishEvent,
+			clearPresence,
+		});
+
+		await service.removeMember({
+			actorId: 1,
+			actor: ADMIN_ACTOR,
+			workspaceId: 8,
+			userId: 4,
+		});
+
+		expect(publishEvent).toHaveBeenCalledTimes(1);
+		expect(publishEvent).toHaveBeenCalledWith(8, {
+			type: "membership.removed",
+			userId: 4,
+			workspaceId: 8,
+			workspaceName: "WS-R",
+		});
+	});
+
 	it("returns 404 (not a thrown error) when a concurrent request already removed the member", async () => {
 		const publishEvent = vi.fn(async () => undefined);
 		const clearPresence = vi.fn(async () => undefined);
 		const service = createWorkspaceAccessService({
 			getActorMembership: vi.fn(async () => ({ userId: 1, role: "admin" })),
 			getWorkspace: vi.fn(async () => ({ id: 8, name: "WS-R" })),
-			// Target membership still existed when checked...
 			getTargetMembership: vi.fn(async () => ({ userId: 4, role: "member" })),
-			// ...but a concurrent request already deleted the row by the time
-			// the actual DELETE runs.
 			updateMemberRole: vi.fn(),
 			removeMember: vi.fn(async () => null),
 			publishEvent,
@@ -173,6 +268,7 @@ describe("membership removal events", () => {
 
 		const result = await service.removeMember({
 			actorId: 1,
+			actor: ADMIN_ACTOR,
 			workspaceId: 8,
 			userId: 4,
 		});
@@ -195,6 +291,7 @@ describe("membership removal events", () => {
 		});
 		const result = await service.removeMember({
 			actorId: 5,
+			actor: { ...ADMIN_ACTOR, id: 5 },
 			workspaceId: 8,
 			userId: 5,
 		});

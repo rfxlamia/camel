@@ -320,7 +320,7 @@ describe("ContextPanel — taxonomy fields", () => {
 
 		await waitFor(() => {
 			expect(
-				within(screen.getByLabelText("Card taxonomy")).getByText("Bug"),
+				within(screen.getByLabelText("Properties")).getByText("Bug"),
 			).toBeTruthy();
 		});
 		await waitFor(() => {
@@ -358,12 +358,12 @@ describe("ContextPanel — taxonomy fields", () => {
 
 		await waitFor(() => expect(getCardActivity).toHaveBeenCalled());
 		expect(
-			within(screen.getByLabelText("Card taxonomy")).getByRole("button", {
+			within(screen.getByLabelText("Properties")).getByRole("button", {
 				name: /high/i,
 			}),
 		).toBeTruthy();
 		expect(
-			within(screen.getByLabelText("Card taxonomy")).queryByText("Bug"),
+			within(screen.getByLabelText("Properties")).queryByText("Bug"),
 		).toBeNull();
 	});
 
@@ -384,13 +384,13 @@ describe("ContextPanel — taxonomy fields", () => {
 
 		await waitFor(() =>
 			expect(
-				within(screen.getByLabelText("Card taxonomy")).getByRole("button", {
+				within(screen.getByLabelText("Properties")).getByRole("button", {
 					name: /high/i,
 				}),
 			).toBeTruthy(),
 		);
 		expect(
-			within(screen.getByLabelText("Card taxonomy")).getByText("Bug"),
+			within(screen.getByLabelText("Properties")).getByText("Bug"),
 		).toBeTruthy();
 	});
 

@@ -1,5 +1,11 @@
 import { X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, type TicketHistoryEntry } from "../api";
 import { type SaveCardResult, useBoard } from "../context/BoardContext";
@@ -14,6 +20,7 @@ import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 import { AssigneePicker } from "./AssigneePicker";
 import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
+import FocusEntryButton from "./FocusEntryButton";
 import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
 
 const inputClass =
@@ -62,11 +69,18 @@ function MetaRow({ label, value }: { label: string; value: string | null }) {
 	);
 }
 
-function DetailsSection({
+/**
+ * Owns the card draft plus the panel's scroll region and its docked action bar.
+ * The commit row is a flex sibling of the scroll area (not `sticky` inside it),
+ * so `Save changes` stays reachable no matter how long the description or the
+ * activity list below it grows. Read-only sections are passed as `children` so
+ * they scroll with the form while the action bar stays pinned.
+ */
+function CardEditor({
 	card,
 	saveCard,
-	onDelete,
 	onClose,
+	children,
 }: {
 	card: Card;
 	saveCard: (
@@ -83,11 +97,16 @@ function DetailsSection({
 			version?: number;
 		},
 	) => Promise<SaveCardResult>;
-	onDelete: () => Promise<void>;
 	onClose: () => void;
+	children?: ReactNode;
 }) {
-	const { setHasUnsavedCardEdits, activeWorkspaceId, ticketIntakeEnabled, ticketIntakeEvents } =
-		useBoard();
+	const {
+		setHasUnsavedCardEdits,
+		activeWorkspaceId,
+		ticketIntakeEnabled,
+		ticketIntakeEvents,
+		focusModeEnabled,
+	} = useBoard();
 	const [title, setTitle] = useState(card.title);
 	const [description, setDescription] = useState(card.description);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>(
@@ -102,7 +121,9 @@ function DetailsSection({
 	const [projectId, setProjectId] = useState<number | null>(
 		initialTaxonomy.projectId,
 	);
-	const [phaseId, setPhaseId] = useState<number | null>(initialTaxonomy.phaseId);
+	const [phaseId, setPhaseId] = useState<number | null>(
+		initialTaxonomy.phaseId,
+	);
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	// Card snapshot the draft is based on — "dirty" means the draft differs
 	// from it, and a dirty draft is never overwritten by a teammate's refresh.
@@ -291,98 +312,112 @@ function DetailsSection({
 		}
 	}
 
+	// Focus and Report issue act on the task itself, not on the draft, so they
+	// live in their own strip above the form rather than beside Save/Cancel.
+	const showTaskActions =
+		focusModeEnabled || (activeWorkspaceId !== null && ticketIntakeEnabled);
+
 	return (
-		<section aria-label="Details" className="space-y-3 px-4 py-4">
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
-				Details
-			</h3>
-			<label className="block sm:max-w-44">
-				<span className="text-sm font-medium text-neutral-700">Due date</span>
-				<input
-					type="date"
-					className={inputClass}
-					value={dueDate ?? ""}
-					onChange={(e) =>
-						setDueDate(e.target.value === "" ? null : e.target.value)
-					}
-				/>
-			</label>
-			<label className="block">
-				<span className="text-sm font-medium text-neutral-700">Title</span>
-				<input
-					className={inputClass}
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					placeholder="Card title"
-				/>
-			</label>
-			<label className="block">
-				<span className="text-sm font-medium text-neutral-700">
-					Description
-				</span>
-				<textarea
-					className={inputClass}
-					value={description}
-					onChange={(e) => setDescription(e.target.value)}
-					rows={4}
-					placeholder="Add details..."
-				/>
-			</label>
-			<div className="min-w-0">
-				<span className="text-sm font-medium text-neutral-700">Assignees</span>
-				<AssigneePicker
-					members={assigneeOptions}
-					value={assigneeIds}
-					onChange={setAssigneeIds}
-				/>
+		<>
+			{showTaskActions && (
+				<div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-neutral-200 px-4 py-2">
+					<FocusEntryButton
+						source="board"
+						taskId={card.id}
+						taskKey={card.key ?? null}
+					/>
+					{activeWorkspaceId !== null && ticketIntakeEnabled && (
+						<button
+							type="button"
+							onClick={() =>
+								openTicketIntake({
+									variant: "card",
+									prefill: {
+										title: card.title,
+										description: card.description,
+										cardId: card.id,
+										cardLink: `/board/card/${card.id}`,
+									},
+								})
+							}
+							className="rounded-md px-2.5 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							Report issue
+						</button>
+					)}
+				</div>
+			)}
+
+			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+				<section aria-label="Details" className="space-y-3 px-4 py-4">
+					<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+						Details
+					</h3>
+					<label className="block">
+						<span className="text-sm font-medium text-neutral-700">Title</span>
+						<input
+							className={inputClass}
+							value={title}
+							onChange={(e) => setTitle(e.target.value)}
+							placeholder="Card title"
+						/>
+					</label>
+					<label className="block">
+						<span className="text-sm font-medium text-neutral-700">
+							Description
+						</span>
+						<textarea
+							className={inputClass}
+							value={description}
+							onChange={(e) => setDescription(e.target.value)}
+							rows={4}
+							placeholder="Add details..."
+						/>
+					</label>
+					<div className="min-w-0">
+						<span className="text-sm font-medium text-neutral-700">
+							Assignees
+						</span>
+						<AssigneePicker
+							members={assigneeOptions}
+							value={assigneeIds}
+							onChange={setAssigneeIds}
+						/>
+					</div>
+
+					{activeWorkspaceId !== null && (
+						<BoardCardTaxonomyFields
+							workspaceId={activeWorkspaceId}
+							priorityId={priorityId}
+							labelIds={labelIds}
+							projectId={projectId}
+							phaseId={phaseId}
+							projectName={card.projectName}
+							phaseName={card.phaseName}
+							priority={card.priority}
+							labels={card.labels}
+							dueDate={dueDate}
+							onDueDateChange={setDueDate}
+							onPriorityChange={setPriorityId}
+							onLabelIdsChange={setLabelIds}
+							onProjectChange={(nextProjectId, nextPhaseId) => {
+								setProjectId(nextProjectId);
+								setPhaseId(nextPhaseId);
+							}}
+							onPhaseChange={setPhaseId}
+						/>
+					)}
+
+					{/* Passive timestamps — no surface of their own, so the Properties
+			    block stays the only filled container in the form. */}
+					<dl className="space-y-1 border-t border-neutral-200 pt-3">
+						<MetaRow label="Created" value={card.createdAt} />
+						<MetaRow label="Started" value={card.startedAt} />
+						<MetaRow label="Done" value={card.doneAt} />
+					</dl>
+				</section>
+				{children}
 			</div>
-
-			{activeWorkspaceId !== null && (
-				<BoardCardTaxonomyFields
-					workspaceId={activeWorkspaceId}
-					priorityId={priorityId}
-					labelIds={labelIds}
-					projectId={projectId}
-					phaseId={phaseId}
-					projectName={card.projectName}
-					phaseName={card.phaseName}
-					priority={card.priority}
-					labels={card.labels}
-					onPriorityChange={setPriorityId}
-					onLabelIdsChange={setLabelIds}
-					onProjectChange={(nextProjectId, nextPhaseId) => {
-						setProjectId(nextProjectId);
-						setPhaseId(nextPhaseId);
-					}}
-					onPhaseChange={setPhaseId}
-				/>
-			)}
-
-			<dl className="space-y-1 rounded-md border border-neutral-200 bg-neutral-100 px-3 py-2">
-				<MetaRow label="Created" value={card.createdAt} />
-				<MetaRow label="Started" value={card.startedAt} />
-				<MetaRow label="Done" value={card.doneAt} />
-			</dl>
-
-			{activeWorkspaceId !== null && ticketIntakeEnabled && (
-				<button
-					type="button"
-					onClick={() =>
-						openTicketIntake({
-							variant: "card",
-							prefill: {
-								title: card.title,
-								description: card.description,
-								cardId: card.id,
-								cardLink: `/board/card/${card.id}`,
-							},
-						})
-					}
-					className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-				>
-					Report issue
-				</button>
-			)}
 
 			{ticketIntakeEnabled && (
 				<TicketIntakeChatOverlay
@@ -392,28 +427,41 @@ function DetailsSection({
 				/>
 			)}
 
-			<div className="flex items-center justify-between pt-1">
+			<div className="flex shrink-0 items-center justify-end gap-2 border-t border-neutral-200 bg-white px-4 py-3">
 				<button
-					onClick={() => void onDelete()}
-					className="rounded-md px-3 py-1.5 text-sm font-medium text-error-500 hover:bg-error-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					onClick={onClose}
+					className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
 				>
-					Delete card
+					Cancel
 				</button>
-				<div className="flex gap-2">
-					<button
-						onClick={onClose}
-						className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-					>
-						Cancel
-					</button>
-					<button
-						onClick={() => void save()}
-						className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-					>
-						Save changes
-					</button>
-				</div>
+				<button
+					onClick={() => void save()}
+					className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				>
+					Save changes
+				</button>
 			</div>
+		</>
+	);
+}
+
+/**
+ * Destructive action, deliberately parked at the end of the panel so it is
+ * nowhere near Save (§16.2 — irreversible actions earn friction).
+ */
+function DangerZone({ onDelete }: { onDelete: () => Promise<void> }) {
+	return (
+		<section
+			aria-label="Danger zone"
+			className="border-t border-neutral-200 px-4 py-4"
+		>
+			<button
+				type="button"
+				onClick={() => void onDelete()}
+				className="rounded-md px-3 py-1.5 text-sm font-medium text-error-500 hover:bg-error-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+			>
+				Delete card
+			</button>
 		</section>
 	);
 }
@@ -441,14 +489,18 @@ function TicketHistorySection({ cardId }: { cardId: number }) {
 			aria-label="Ticket history"
 			className="border-t border-neutral-200 px-4 py-4"
 		>
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
+			<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
 				Ticket history
 			</h3>
 			{tickets === null && (
-				<p className="mt-3 text-sm text-neutral-500">Loading ticket history...</p>
+				<p className="mt-3 text-sm text-neutral-500">
+					Loading ticket history...
+				</p>
 			)}
 			{tickets !== null && tickets.length === 0 && (
-				<p className="mt-3 text-sm text-neutral-500">No tickets reported yet.</p>
+				<p className="mt-3 text-sm text-neutral-500">
+					No tickets reported yet.
+				</p>
 			)}
 			{tickets !== null && tickets.length > 0 && (
 				<ol className="mt-3 divide-y divide-neutral-100">
@@ -509,7 +561,7 @@ function ActivitySection({ cardId }: { cardId: number }) {
 			aria-label="Activity"
 			className="border-t border-neutral-200 px-4 py-4"
 		>
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">
+			<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
 				Activity
 			</h3>
 			{events === null && (
@@ -610,6 +662,9 @@ export default function ContextPanel() {
 
 	if (!card) return null;
 
+	const columnTitle =
+		columns?.find((c) => c.id === card.columnId)?.title ?? null;
+
 	return (
 		<>
 			{/* Transparent click-capture layer: a click on the board area closes
@@ -625,8 +680,21 @@ export default function ContextPanel() {
 				className="fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-neutral-200 bg-white shadow-lg animate-panel-in motion-reduce:animate-none md:w-104"
 			>
 				<header className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
-					<h2 className="min-w-0 truncate text-md font-semibold text-neutral-900">
-						{card.title}
+					{/* Wayfinding, not identity: the title lives in the Title field a
+					    few rows down, so repeating it here said nothing twice. The
+					    dialog's accessible name still carries the title. */}
+					<h2 className="min-w-0 truncate text-sm font-medium text-neutral-600">
+						{card.key && (
+							<span className="font-mono tabular-nums text-neutral-900">
+								{card.key}
+							</span>
+						)}
+						{card.key && columnTitle && (
+							<span className="px-1.5 text-neutral-300" aria-hidden>
+								·
+							</span>
+						)}
+						{columnTitle ?? (card.key ? null : "Card details")}
 					</h2>
 					<button
 						onClick={close}
@@ -636,17 +704,16 @@ export default function ContextPanel() {
 						<X size={18} aria-hidden />
 					</button>
 				</header>
-				<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-					<DetailsSection
-						key={card.id}
-						card={card}
-						saveCard={saveCard}
-						onDelete={onDelete}
-						onClose={close}
-					/>
+				<CardEditor
+					key={card.id}
+					card={card}
+					saveCard={saveCard}
+					onClose={close}
+				>
 					<ActivitySection cardId={card.id} />
 					<TicketHistorySection cardId={card.id} />
-				</div>
+					<DangerZone onDelete={onDelete} />
+				</CardEditor>
 			</aside>
 		</>
 	);
