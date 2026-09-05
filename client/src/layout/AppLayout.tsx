@@ -25,6 +25,7 @@ export default function AppLayout() {
 
 	const onSettings = location.pathname.startsWith("/settings");
 	const onChat = location.pathname.startsWith("/chat");
+	const onFocus = location.pathname.startsWith("/focus");
 
 	useEffect(() => {
 		localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
@@ -52,6 +53,24 @@ export default function AppLayout() {
 	);
 	const PageIcon = activeItem?.icon ?? SquareKanban;
 	const pageTitle = activeItem?.label ?? "Board";
+
+	// Focus mode takes the whole window: no sidebar, header, or chat button.
+	// A screen whose job is to hold attention on one task cannot also show the
+	// rest of the app. FocusPage carries its own exit (button + Escape).
+	if (onFocus) {
+		return (
+			<NotificationsProvider>
+				<div className="h-screen overflow-auto">
+					{/* Kept: without it a user with no workspace selected gets a
+					    blank screen and no picker, since the sidebar is gone. */}
+					<WorkspaceOverlays />
+					<Outlet />
+					{toast && <Toast message={toast.message} type={toast.type} />}
+					<AutoErrorListener />
+				</div>
+			</NotificationsProvider>
+		);
+	}
 
 	return (
 		<NotificationsProvider>

@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { computeDisplaySeconds, formatDuration } from "../lib/focusDuration";
+import {
+	computeDisplaySeconds,
+	formatDurationParts,
+} from "../lib/focusDuration";
 import type { FocusSession } from "../types";
 
 export type FocusTimerProps = {
@@ -11,11 +14,29 @@ export type FocusTimerProps = {
 	pending?: boolean;
 };
 
-const primaryButtonClass =
-	"rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400";
+// Disabled buttons never match :active, so the press scale needs no guard.
+const buttonBase =
+	"inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed";
 
-const secondaryButtonClass =
-	"rounded-md border border-neutral-300 bg-neutral-100 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400";
+const primaryButtonClass = `${buttonBase} bg-primary-600 text-white shadow-sm hover:bg-primary-700 hover:shadow disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none`;
+
+const secondaryButtonClass = `${buttonBase} border border-neutral-300 bg-neutral-100 text-primary-700 hover:bg-neutral-200 disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400`;
+
+const STATE_LABEL: Record<FocusSession["state"], string> = {
+	ready: "Ready when you are",
+	running: "Focusing",
+	paused: "Paused",
+	finished: "Done",
+};
+
+// The dot carries the state before the words do: warm and pulsing while the
+// clock runs, flat while it doesn't.
+const DOT_CLASS: Record<FocusSession["state"], string> = {
+	ready: "bg-neutral-300",
+	running: "bg-accent-500 pulse-dot",
+	paused: "bg-neutral-400",
+	finished: "bg-neutral-300",
+};
 
 export default function FocusTimer({
 	session,
@@ -42,15 +63,34 @@ export default function FocusTimer({
 		session.state,
 		session.runningSince,
 	);
+	const { major, seconds } = formatDurationParts(displaySeconds);
+	const paused = session.state === "paused";
 
 	return (
-		<div className="flex flex-col items-center gap-6">
+		<div className="flex flex-col items-center gap-7">
+			{/* Minutes large, seconds small — a session counts up with no target,
+			    so the seconds are precision rather than pressure. */}
 			<p
-				className="font-sans text-xl leading-[1.2] text-neutral-900 tabular-nums"
+				role="timer"
 				data-testid="focus-duration"
+				className={`flex items-baseline font-sans leading-none tabular-nums transition-colors duration-300 ease-out ${paused ? "text-neutral-500" : "text-primary-900"}`}
 			>
-				{formatDuration(displaySeconds)}
+				<span className="text-[clamp(3.8rem,11vw,7.5rem)] tracking-[-0.035em]">
+					{major}
+				</span>
+				<span className="text-[clamp(1.3rem,3.7vw,2.55rem)] tracking-[-0.01em] text-neutral-500">
+					{seconds}
+				</span>
 			</p>
+
+			<p className="flex items-center gap-2 text-sm text-neutral-600">
+				<span
+					aria-hidden
+					className={`relative inline-block h-1.5 w-1.5 rounded-full ${DOT_CLASS[session.state]}`}
+				/>
+				{STATE_LABEL[session.state]}
+			</p>
+
 			<div className="flex flex-wrap items-center justify-center gap-3">
 				{session.state === "ready" ? (
 					<button
@@ -62,6 +102,8 @@ export default function FocusTimer({
 						Start
 					</button>
 				) : null}
+				{/* Running has no primary button on purpose: the intended action is
+				    to keep working, not to press anything. */}
 				{session.state === "running" ? (
 					<>
 						<button

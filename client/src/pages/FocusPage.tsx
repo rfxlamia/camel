@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../api";
@@ -9,6 +10,15 @@ import type { FocusSession } from "../types";
 const TASK_LOAD_ERROR =
 	"Couldn't load this task. Check your connection and try again.";
 
+const exitButtonClass =
+	"inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-neutral-600 transition-colors duration-150 ease-out hover:bg-neutral-200 hover:text-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600";
+
+const focusLoadingScreen = (
+	<div className="focus-field flex min-h-full items-center justify-center px-6">
+		<p className="text-sm text-neutral-500">Loading…</p>
+	</div>
+);
+
 type TaskContent = {
 	title: string;
 	description: string;
@@ -16,8 +26,12 @@ type TaskContent = {
 
 export default function FocusPage() {
 	const navigate = useNavigate();
-	const { activeWorkspaceId, subscribeCardEvents, subscribeTrackerEvents } =
-		useBoard();
+	const {
+		activeWorkspaceId,
+		focusSessionHydrated,
+		subscribeCardEvents,
+		subscribeTrackerEvents,
+	} = useBoard();
 	const { session, loading, actionError, start, pause, resume, finish } =
 		useFocusSession();
 
@@ -27,11 +41,40 @@ export default function FocusPage() {
 	const [taskLoading, setTaskLoading] = useState(false);
 	const [taskError, setTaskError] = useState<string | null>(null);
 
+	// Redirect only once the session fetch has actually settled. `loading`
+	// alone is not enough: workspace selection and workspacesReady commit
+	// together, so this page can mount while the provider still reports the
+	// loading=false it set on its no-workspace branch. Child effects run
+	// before parent effects, so the guard would fire before the fetch began
+	// and a reload on /focus would bounce to /board with a live session.
 	useEffect(() => {
-		if (!loading && session === null && !finishingRef.current) {
+		if (
+			!loading &&
+			focusSessionHydrated &&
+			session === null &&
+			!finishingRef.current
+		) {
 			navigate("/board", { replace: true });
 		}
-	}, [loading, session, navigate]);
+	}, [loading, focusSessionHydrated, session, navigate]);
+
+	// This surface hides the app chrome, so it needs its own way out. Leaving
+	// does not finish the session — it stays live and the header indicator
+	// brings the user back.
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Escape" || event.defaultPrevented) return;
+			// An open modal owns Escape — the workspace picker and blocking
+			// invite render on this surface too, and dismissing one must not
+			// also route the user off the page.
+			if (document.querySelector('[role="dialog"]')) return;
+			navigate("/board");
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [navigate]);
 
 	const loadTask = useCallback(
 		async (sess: FocusSession) => {
@@ -77,7 +120,11 @@ export default function FocusPage() {
 	}, [session, activeWorkspaceId, subscribeCardEvents, loadTask]);
 
 	useEffect(() => {
-		if (!session || session.source !== "tracker" || activeWorkspaceId === null) {
+		if (
+			!session ||
+			session.source !== "tracker" ||
+			activeWorkspaceId === null
+		) {
 			return;
 		}
 		const taskId = session.taskId;
@@ -112,29 +159,32 @@ export default function FocusPage() {
 		}
 	}, [finish, navigate]);
 
-	if (loading || session === null) {
+	// The app chrome that used to signal "still loading" is gone on this
+	// surface, so an empty return would read as a broken white window.
+	if (loading || !focusSessionHydrated) {
+		return focusLoadingScreen;
+	}
+
+	if (session === null) {
 		return null;
 	}
 
 	if (taskLoading && task === null && taskError === null) {
-		return (
-			<p className="px-4 py-16 text-center text-sm text-neutral-500">
-				Loading…
-			</p>
-		);
+		return focusLoadingScreen;
 	}
 
 	if (taskError) {
 		return (
-			<div className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center gap-4 px-4 py-16 md:px-6">
-				<div className="w-full rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
+			<div className="focus-field flex min-h-full flex-col items-center justify-center gap-5 px-6">
+				<p className="max-w-[46ch] rounded-md border border-error-500 bg-error-100 px-4 py-3 text-center text-sm text-error-900">
 					{taskError}
-				</div>
+				</p>
 				<button
 					type="button"
 					onClick={() => navigate("/board")}
-					className="inline-flex items-center rounded-md border border-neutral-300 bg-neutral-100 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					className={exitButtonClass}
 				>
+					<ArrowLeft size={15} aria-hidden />
 					Back to board
 				</button>
 			</div>
@@ -142,30 +192,51 @@ export default function FocusPage() {
 	}
 
 	return (
-		<div className="mx-auto flex min-h-full max-w-2xl flex-col gap-8 bg-neutral-100 px-4 py-10 md:px-6">
-			<div className="flex flex-col gap-3">
-				<h1 className="font-sans text-xl leading-[1.2] text-neutral-900">
+		<div className="focus-field flex min-h-full flex-col">
+			<div className="flex shrink-0 items-center px-4 py-4 md:px-6">
+				<button
+					type="button"
+					onClick={() => navigate("/board")}
+					className={`-ml-2.5 ${exitButtonClass}`}
+				>
+					<ArrowLeft size={15} aria-hidden />
+					Back to board
+				</button>
+			</div>
+
+			<div className="flex flex-1 flex-col items-center justify-center px-6 pb-20">
+				<h1 className="focus-enter max-w-[22ch] text-balance text-center font-sans text-lg font-medium leading-[1.3] tracking-[-0.01em] text-neutral-900 md:text-xl">
 					{task?.title}
 				</h1>
-				{task?.description ? (
-					<p className="font-sans text-base leading-normal text-neutral-700 whitespace-pre-wrap">
-						{task.description}
+
+				{actionError ? (
+					<p className="mt-5 max-w-[46ch] rounded-md border border-error-500 bg-error-100 px-4 py-3 text-center text-sm text-error-900">
+						{actionError}
 					</p>
 				) : null}
-			</div>
-			{actionError ? (
-				<div className="rounded-md border border-error-500 bg-error-100 px-4 py-3 text-sm text-error-900">
-					{actionError}
+
+				<div className="focus-enter mt-12" style={{ animationDelay: "70ms" }}>
+					<FocusTimer
+						session={session}
+						pending={pending}
+						onStart={() => runAction(start)}
+						onPause={() => runAction(pause)}
+						onResume={() => runAction(resume)}
+						onFinish={handleFinish}
+					/>
 				</div>
-			) : null}
-			<FocusTimer
-				session={session}
-				pending={pending}
-				onStart={() => runAction(start)}
-				onPause={() => runAction(pause)}
-				onResume={() => runAction(resume)}
-				onFinish={handleFinish}
-			/>
+
+				{task?.description ? (
+					<div
+						className="focus-enter mt-16 w-full max-w-[58ch] border-t border-neutral-300/70 pt-5"
+						style={{ animationDelay: "150ms" }}
+					>
+						<p className="whitespace-pre-wrap font-sans text-sm leading-[1.65] text-neutral-600">
+							{task.description}
+						</p>
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }

@@ -108,9 +108,10 @@ function makePopulatedCard() {
 	};
 }
 
-function setupBoardMocks() {
+function setupBoardMocks(overrides: Record<string, unknown> = {}) {
 	mockUseBoard.mockReturnValue({
 		activeWorkspaceId: WORKSPACE_ID,
+		focusSessionHydrated: true,
 		subscribeCardEvents: (handler: (event: unknown) => void) => {
 			cardEventHandlers.push(handler);
 			return () => {
@@ -125,6 +126,7 @@ function setupBoardMocks() {
 				if (index >= 0) trackerEventHandlers.splice(index, 1);
 			};
 		},
+		...overrides,
 	});
 }
 
@@ -185,6 +187,21 @@ describe("FocusPage", () => {
 
 	it("Given session is still loading, When the page renders, Then no redirect while hydrating", () => {
 		setupSessionMocks({ session: null, loading: true });
+
+		render(<FocusPage />);
+
+		expect(mockNavigate).not.toHaveBeenCalled();
+	});
+
+	// Regression: workspace selection and workspacesReady land in one batched
+	// commit, so FocusPage can mount while the provider still reports the
+	// stale loading=false from its no-workspace branch. Child effects run
+	// before parent effects, so the redirect fired before the session fetch
+	// had even started — a reload on /focus bounced to /board with a live
+	// session. focusSessionHydrated is the signal that the fetch settled.
+	it("Given the session fetch has not settled, When the page renders with a stale loading flag, Then no redirect", () => {
+		setupBoardMocks({ focusSessionHydrated: false });
+		setupSessionMocks({ session: null, loading: false });
 
 		render(<FocusPage />);
 
