@@ -29,4 +29,11 @@ describe("computeDisplaySeconds", () => {
 		expect(computeDisplaySeconds(900, "paused", null, nowMs)).toBe(900);
 		expect(computeDisplaySeconds(0, "ready", null, nowMs)).toBe(0);
 	});
+
+	it("clamps to zero when the client clock lags behind runningSince", () => {
+		const laggingNowMs = Date.parse("2026-09-04T09:59:00.000Z");
+		expect(computeDisplaySeconds(0, "running", runningSince, laggingNowMs)).toBe(
+			0,
+		);
+	});
 });

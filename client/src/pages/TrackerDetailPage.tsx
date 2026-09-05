@@ -462,7 +462,7 @@ export default function TrackerDetailPage() {
 				</span>
 				<div className="ml-auto">
 					<FocusEntryButton
-						source="tracker"
+						source={item.source}
 						taskId={item.id}
 						taskKey={item.key}
 					/>

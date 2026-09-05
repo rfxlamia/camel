@@ -42,9 +42,13 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("react-router", () => ({
-	useNavigate: () => mockNavigate,
-}));
+vi.mock("react-router", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("react-router")>();
+	return {
+		...actual,
+		useNavigate: () => mockNavigate,
+	};
+});
 
 import FocusPage from "./FocusPage";
 
@@ -430,6 +434,69 @@ describe("FocusPage", () => {
 		});
 		expect(mockNavigate).not.toHaveBeenCalled();
 		expect(screen.getByTestId("focus-duration")).toBe(timerBefore);
+	});
+
+	it("Given a task switch, When the previous task's request resolves after the new one, Then the stale response does not overwrite the current task", async () => {
+		let resolveOld!: (value: {
+			id: number;
+			title: string;
+			description: string;
+		}) => void;
+		let resolveNew!: (value: {
+			id: number;
+			title: string;
+			description: string;
+		}) => void;
+
+		mockGetCard.mockImplementation((_workspaceId: number, taskId: number) => {
+			if (taskId === 481) {
+				return new Promise((resolve) => {
+					resolveOld = resolve;
+				});
+			}
+			return new Promise((resolve) => {
+				resolveNew = resolve;
+			});
+		});
+
+		const { rerender } = render(<FocusPage />);
+
+		await waitFor(() =>
+			expect(mockGetCard).toHaveBeenCalledWith(WORKSPACE_ID, 481),
+		);
+
+		setupSessionMocks({ session: makeSession({ taskId: 999 }) });
+		rerender(<FocusPage />);
+
+		await waitFor(() =>
+			expect(mockGetCard).toHaveBeenCalledWith(WORKSPACE_ID, 999),
+		);
+
+		await act(async () => {
+			resolveNew({
+				id: 999,
+				title: "New task title",
+				description: "New task description",
+			});
+		});
+
+		await waitFor(() => {
+			expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+				"New task title",
+			);
+		});
+
+		await act(async () => {
+			resolveOld({
+				id: 481,
+				title: "Old task title",
+				description: "Old task description",
+			});
+		});
+
+		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+			"New task title",
+		);
 	});
 
 	it("Given Ready, When Start fails 5xx, Then the page surfaces a retryable error without inventing timer state", async () => {

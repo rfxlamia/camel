@@ -59,6 +59,15 @@ export type FocusSessionRepo = {
 		patch: FocusSessionUpdatePatch,
 		expectedVersion: number,
 	): Promise<FocusSessionRow | null>;
+	forceFinish(
+		id: number,
+		patch: {
+			state: FocusSessionRow["state"];
+			accumulated_seconds: number;
+			running_since: Date | null;
+			finished_at: Date;
+		},
+	): Promise<FocusSessionRow | null>;
 	switchSession(
 		finish: {
 			id: number;
@@ -152,6 +161,21 @@ export function createFocusSessionRepo(executor = db): FocusSessionRepo {
 				})
 				.where("id", "=", id)
 				.where("version", "=", expectedVersion)
+				.returning(FOCUS_SESSION_COLUMNS)
+				.executeTakeFirst();
+			return row ? mapRow(row) : null;
+		},
+
+		async forceFinish(id, patch) {
+			const row = await executor
+				.updateTable("focus_sessions")
+				.set({
+					...patch,
+					version: sql`version + 1`,
+					updated_at: sql`now()`,
+				})
+				.where("id", "=", id)
+				.where("state", "<>", "finished")
 				.returning(FOCUS_SESSION_COLUMNS)
 				.executeTakeFirst();
 			return row ? mapRow(row) : null;

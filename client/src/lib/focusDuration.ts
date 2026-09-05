@@ -19,7 +19,7 @@ export function computeDisplaySeconds(
 ): number {
 	if (state === "running" && runningSince !== null) {
 		const elapsed = (nowMs - Date.parse(runningSince)) / 1000;
-		return accumulatedSeconds + elapsed;
+		return Math.max(0, accumulatedSeconds + elapsed);
 	}
 	return accumulatedSeconds;
 }

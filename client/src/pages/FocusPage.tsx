@@ -40,6 +40,7 @@ export default function FocusPage() {
 	const [task, setTask] = useState<TaskContent | null>(null);
 	const [taskLoading, setTaskLoading] = useState(false);
 	const [taskError, setTaskError] = useState<string | null>(null);
+	const taskLoadGeneration = useRef(0);
 
 	// Redirect only once the session fetch has actually settled. `loading`
 	// alone is not enough: workspace selection and workspacesReady commit
@@ -79,24 +80,31 @@ export default function FocusPage() {
 	const loadTask = useCallback(
 		async (sess: FocusSession) => {
 			if (activeWorkspaceId === null) return;
+			const generation = ++taskLoadGeneration.current;
 			setTaskLoading(true);
 			setTaskError(null);
 			try {
 				if (sess.source === "board") {
 					const card = await api.getCard(activeWorkspaceId, sess.taskId);
+					if (generation !== taskLoadGeneration.current) return;
 					setTask({ title: card.title, description: card.description });
 				} else if (!sess.taskKey) {
+					if (generation !== taskLoadGeneration.current) return;
 					setTask(null);
 					setTaskError(TASK_LOAD_ERROR);
 				} else {
 					const item = await api.getWorkItem(activeWorkspaceId, sess.taskKey);
+					if (generation !== taskLoadGeneration.current) return;
 					setTask({ title: item.title, description: item.description });
 				}
 			} catch {
+				if (generation !== taskLoadGeneration.current) return;
 				setTask(null);
 				setTaskError(TASK_LOAD_ERROR);
 			} finally {
-				setTaskLoading(false);
+				if (generation === taskLoadGeneration.current) {
+					setTaskLoading(false);
+				}
 			}
 		},
 		[activeWorkspaceId],

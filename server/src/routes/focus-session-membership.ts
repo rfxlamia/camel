@@ -33,19 +33,15 @@ export async function finishActiveFocusSessionForRemoval({
 		now,
 	);
 
-	const updated = await repo.update(
-		session.id,
-		{
-			state: finished.state,
-			accumulated_seconds: finished.accumulatedSeconds,
-			running_since: finished.runningSince,
-			finished_at: now,
-		},
-		session.version,
-	);
+	const updated = await repo.forceFinish(session.id, {
+		state: finished.state,
+		accumulated_seconds: finished.accumulatedSeconds,
+		running_since: finished.runningSince,
+		finished_at: now,
+	});
 
 	if (!updated) {
-		throw new Error("Focus session update conflict during membership removal");
+		return false;
 	}
 
 	await recordFocusActivity({

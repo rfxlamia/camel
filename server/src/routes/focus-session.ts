@@ -144,6 +144,27 @@ function buildLifecyclePatch(
 	return patch;
 }
 
+async function insertFocusSession(
+	repo: FocusSessionRepo,
+	actorId: number,
+	workspaceId: number,
+	input: ReturnType<typeof buildReadySessionInput>,
+): Promise<
+	| { status: "inserted"; session: FocusSessionRow }
+	| { status: "conflict"; active: FocusSessionRow | null }
+> {
+	try {
+		const inserted = await repo.insert(input);
+		return { status: "inserted", session: inserted };
+	} catch (err) {
+		if ((err as { code?: string }).code === "23505") {
+			const active = await repo.findActive(actorId, workspaceId);
+			return { status: "conflict", active };
+		}
+		throw err;
+	}
+}
+
 async function autoFinishMissingTask(
 	repo: FocusSessionRepo,
 	session: FocusSessionRow,
@@ -290,7 +311,10 @@ export function createFocusSessionRouter(deps: {
 					return res.status(404).json({ error: "Not found" });
 				}
 
-				const inserted = await repo.insert(
+				const result = await insertFocusSession(
+					repo,
+					actor.id,
+					workspaceId,
 					buildReadySessionInput({
 						userId: actor.id,
 						workspaceId,
@@ -300,6 +324,24 @@ export function createFocusSessionRouter(deps: {
 					}),
 				);
 
+				if (result.status === "conflict") {
+					if (
+						result.active &&
+						targetsSameTask(result.active, { source, taskId })
+					) {
+						return res
+							.status(201)
+							.json({ session: serializeFocusSession(result.active) });
+					}
+					return res.status(409).json({
+						code: "session_active",
+						session: result.active
+							? serializeFocusSession(result.active)
+							: null,
+					});
+				}
+
+				const inserted = result.session;
 				const session = serializeFocusSession(inserted);
 
 				await publish(workspaceId, {
@@ -328,6 +370,7 @@ export function createFocusSessionRouter(deps: {
 				return res.status(404).json({ error: "Not found" });
 			}
 
+			const finishedAt = now();
 			const finishedSnapshot = applyAction(
 				{
 					state: active.state,
@@ -335,9 +378,8 @@ export function createFocusSessionRouter(deps: {
 					runningSince: active.running_since,
 				},
 				"finish",
-				now(),
+				finishedAt,
 			);
-			const finishedAt = now();
 
 			const switched = await repo.switchSession(
 				{
@@ -402,7 +444,10 @@ export function createFocusSessionRouter(deps: {
 			return res.status(404).json({ error: "Not found" });
 		}
 
-		const inserted = await repo.insert(
+		const result = await insertFocusSession(
+			repo,
+			actor.id,
+			workspaceId,
 			buildReadySessionInput({
 				userId: actor.id,
 				workspaceId,
@@ -412,6 +457,19 @@ export function createFocusSessionRouter(deps: {
 			}),
 		);
 
+		if (result.status === "conflict") {
+			if (result.active && targetsSameTask(result.active, { source, taskId })) {
+				return res
+					.status(201)
+					.json({ session: serializeFocusSession(result.active) });
+			}
+			return res.status(409).json({
+				code: "session_active",
+				session: result.active ? serializeFocusSession(result.active) : null,
+			});
+		}
+
+		const inserted = result.session;
 		const session = serializeFocusSession(inserted);
 
 		await publish(workspaceId, {
@@ -448,6 +506,7 @@ export function createFocusSessionRouter(deps: {
 		}
 
 		const currentSession = serializeFocusSession(active);
+		const actionAt = now();
 
 		let nextSnapshot: ReturnType<typeof applyAction>;
 		try {
@@ -458,7 +517,7 @@ export function createFocusSessionRouter(deps: {
 					runningSince: active.running_since,
 				},
 				action,
-				now(),
+				actionAt,
 			);
 		} catch (error) {
 			if (error instanceof InvalidFocusTransitionError) {
@@ -472,7 +531,7 @@ export function createFocusSessionRouter(deps: {
 
 		const updated = await repo.update(
 			active.id,
-			buildLifecyclePatch(action, nextSnapshot, now()),
+			buildLifecyclePatch(action, nextSnapshot, actionAt),
 			expectedVersion,
 		);
 

@@ -8,6 +8,7 @@ import {
 type MockRequest = {
 	params: Record<string, string>;
 	on: ReturnType<typeof vi.fn>;
+	user?: { id: number };
 };
 type MockResponse = {
 	writeHead: ReturnType<typeof vi.fn>;
@@ -17,10 +18,11 @@ type MockResponse = {
 	json: ReturnType<typeof vi.fn>;
 };
 
-function mockSseRequest(workspaceId: number): MockRequest {
+function mockSseRequest(workspaceId: number, userId?: number): MockRequest {
 	return {
 		params: { workspaceId: String(workspaceId) },
 		on: vi.fn(),
+		user: userId !== undefined ? { id: userId } : undefined,
 	};
 }
 
@@ -93,6 +95,39 @@ describe("SSE client workspace isolation", () => {
 		);
 		expect(resB.write).not.toHaveBeenCalledWith(
 			expect.stringContaining("card.created"),
+		);
+	});
+
+	it("delivers focus_session.updated only to the owning user's connections", () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+
+		const reqOwner = mockSseRequest(1, 7);
+		const resOwner = mockSseResponse();
+		hub.sseHandler(reqOwner as never, resOwner as never);
+
+		const reqOwnerSecondTab = mockSseRequest(1, 7);
+		const resOwnerSecondTab = mockSseResponse();
+		hub.sseHandler(reqOwnerSecondTab as never, resOwnerSecondTab as never);
+
+		const reqTeammate = mockSseRequest(1, 8);
+		const resTeammate = mockSseResponse();
+		hub.sseHandler(reqTeammate as never, resTeammate as never);
+
+		hub.publishEvent(1, {
+			type: "focus_session.updated",
+			userId: 7,
+			workspaceId: 1,
+			payload: { session: null },
+		});
+
+		expect(resOwner.write).toHaveBeenCalledWith(
+			expect.stringContaining("focus_session.updated"),
+		);
+		expect(resOwnerSecondTab.write).toHaveBeenCalledWith(
+			expect.stringContaining("focus_session.updated"),
+		);
+		expect(resTeammate.write).not.toHaveBeenCalledWith(
+			expect.stringContaining("focus_session.updated"),
 		);
 	});
 

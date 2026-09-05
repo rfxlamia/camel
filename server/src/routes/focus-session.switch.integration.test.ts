@@ -85,9 +85,9 @@ async function setupFixtures(): Promise<Fixtures> {
 		`INSERT INTO focus_sessions (
 			user_id, workspace_id, task_source, task_id, task_key, return_path,
 			state, accumulated_seconds, running_since, version
-		) VALUES ($1, $2, 'board', $3, 'T6-10', '/board/card/$3', 'running', 360, $4, 1)
+		) VALUES ($1, $2, 'board', $3, 'T6-10', $4, 'running', 360, $5, 1)
 		RETURNING id`,
-		[USER_ID, WORKSPACE_ID, taskAId, T0],
+		[USER_ID, WORKSPACE_ID, taskAId, `/board/card/${taskAId}`, T0],
 	);
 	return { taskAId, taskBId, sessionAId };
 }

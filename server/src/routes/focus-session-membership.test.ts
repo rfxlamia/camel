@@ -37,7 +37,7 @@ function makeRunningRow(): FocusSessionRow {
 describe("finishActiveFocusSessionForRemoval", () => {
 	it("finishes running session with accrued time and audits membership_removed", async () => {
 		const row = makeRunningRow();
-		const update = vi.fn(async () => ({
+		const forceFinish = vi.fn(async () => ({
 			...row,
 			state: "finished" as const,
 			accumulated_seconds: 420,
@@ -46,7 +46,7 @@ describe("finishActiveFocusSessionForRemoval", () => {
 			version: 5,
 		}));
 		const findActive = vi.fn(async () => row);
-		const repo = { findActive, update } as unknown as FocusSessionRepo;
+		const repo = { findActive, forceFinish } as unknown as FocusSessionRepo;
 		const recordFocusActivity = vi.fn(async () => undefined);
 
 		const result = await finishActiveFocusSessionForRemoval({
@@ -60,16 +60,12 @@ describe("finishActiveFocusSessionForRemoval", () => {
 
 		expect(result).toBe(true);
 		expect(findActive).toHaveBeenCalledWith(7, 3);
-		expect(update).toHaveBeenCalledWith(
-			99,
-			{
-				state: "finished",
-				accumulated_seconds: 420,
-				running_since: null,
-				finished_at: NOW,
-			},
-			4,
-		);
+		expect(forceFinish).toHaveBeenCalledWith(99, {
+			state: "finished",
+			accumulated_seconds: 420,
+			running_since: null,
+			finished_at: NOW,
+		});
 		expect(recordFocusActivity).toHaveBeenCalledWith({
 			actor: ADMIN,
 			workspaceId: 3,
@@ -80,8 +76,8 @@ describe("finishActiveFocusSessionForRemoval", () => {
 
 	it("returns false when no active session exists", async () => {
 		const findActive = vi.fn(async () => null);
-		const update = vi.fn();
-		const repo = { findActive, update } as unknown as FocusSessionRepo;
+		const forceFinish = vi.fn();
+		const repo = { findActive, forceFinish } as unknown as FocusSessionRepo;
 		const recordFocusActivity = vi.fn(async () => undefined);
 
 		const result = await finishActiveFocusSessionForRemoval({
@@ -94,7 +90,27 @@ describe("finishActiveFocusSessionForRemoval", () => {
 		});
 
 		expect(result).toBe(false);
-		expect(update).not.toHaveBeenCalled();
+		expect(forceFinish).not.toHaveBeenCalled();
+		expect(recordFocusActivity).not.toHaveBeenCalled();
+	});
+
+	it("returns false without throwing when the session was already finished concurrently", async () => {
+		const row = makeRunningRow();
+		const forceFinish = vi.fn(async () => null);
+		const findActive = vi.fn(async () => row);
+		const repo = { findActive, forceFinish } as unknown as FocusSessionRepo;
+		const recordFocusActivity = vi.fn(async () => undefined);
+
+		const result = await finishActiveFocusSessionForRemoval({
+			repo,
+			actor: ADMIN,
+			userId: 7,
+			workspaceId: 3,
+			now: NOW,
+			recordFocusActivity,
+		});
+
+		expect(result).toBe(false);
 		expect(recordFocusActivity).not.toHaveBeenCalled();
 	});
 });

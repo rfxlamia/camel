@@ -274,7 +274,7 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 				// best-effort; member already removed
 			});
 			if (removed.focusSessionFinished) {
-				deps
+				await deps
 					.publishEvent(workspaceId, {
 						type: "focus_session.updated",
 						userId: removed.userId,

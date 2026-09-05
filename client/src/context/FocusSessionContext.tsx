@@ -108,22 +108,28 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 				if (response.autoFinished?.reason === "task_missing") {
 					showToast(TASK_MISSING_TOAST, "warning");
 					adoptSession(null);
-					return;
+				} else {
+					adoptSession(response.session);
 				}
-				adoptSession(response.session);
+				setLoading(false);
+				setFocusSessionHydrated(true);
 			})
 			.catch((err) => {
 				if (generation !== loadGeneration.current) return;
 				if (err instanceof ApiError && err.status === 404) {
 					adoptSession(null);
+					setLoading(false);
+					setFocusSessionHydrated(true);
 					return;
 				}
-				throw err;
-			})
-			.finally(() => {
-				if (generation !== loadGeneration.current) return;
+				// Unknown server state: stay unhydrated so the workspace-switch
+				// guard keeps blocking rather than assuming no session exists.
 				setLoading(false);
-				setFocusSessionHydrated(true);
+				setActionError(
+					err instanceof ApiError
+						? err.message
+						: "Couldn't load your focus session.",
+				);
 			});
 
 		return () => {
@@ -186,14 +192,31 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 				adoptSession(next);
 				setActionError(null);
 			} catch (err) {
-				if (err instanceof ApiError && err.code === "session_active") {
+				if (!(err instanceof ApiError)) throw err;
+				if (err.code === "session_active") {
 					adoptSession(err.session ?? null);
 					throw err;
 				}
-				handleMutationError(err);
+				if (err.status === 409 && err.code === "version_conflict") {
+					const adopted = err.session ?? null;
+					adoptSession(adopted);
+					const landedOnTarget =
+						adopted !== null &&
+						adopted.source === body.source &&
+						adopted.taskId === body.taskId;
+					if (landedOnTarget) {
+						setActionError(null);
+						return;
+					}
+					throw err;
+				}
+				if (err.status >= 500 || err.status === 409) {
+					setActionError(err.message);
+				}
+				throw err;
 			}
 		},
-		[activeWorkspaceId, adoptSession, handleMutationError],
+		[activeWorkspaceId, adoptSession],
 	);
 
 	const runPatchAction = useCallback(

@@ -136,6 +136,8 @@ function FocusGuardProbe() {
 		attemptSwitchWorkspace,
 		setHasActiveFocusSession,
 		setFocusSessionHydrated,
+		setHasUnsavedCardEdits,
+		confirmPendingSwitch,
 		toast,
 	} = useBoard();
 	return (
@@ -161,10 +163,34 @@ function FocusGuardProbe() {
 			</button>
 			<button
 				type="button"
+				data-testid="mark-unsaved"
+				onClick={() => {
+					setFocusSessionHydrated(true);
+					setHasUnsavedCardEdits(true);
+				}}
+			>
+				Mark unsaved edits
+			</button>
+			<button
+				type="button"
 				data-testid="switch-to-2"
 				onClick={() => attemptSwitchWorkspace(2)}
 			>
 				Switch to B
+			</button>
+			<button
+				type="button"
+				data-testid="activate-focus-inline"
+				onClick={() => setHasActiveFocusSession(true)}
+			>
+				Focus session starts mid-dialog
+			</button>
+			<button
+				type="button"
+				data-testid="confirm-pending-switch"
+				onClick={() => confirmPendingSwitch()}
+			>
+				Confirm pending switch
 			</button>
 		</>
 	);
@@ -239,5 +265,31 @@ describe("BoardContext focus workspace switch guard", () => {
 		expect(screen.getByTestId("active-workspace").textContent).toBe("1");
 		expect(mockPersistWorkspaceId).not.toHaveBeenCalled();
 		expect(screen.getByTestId("toast").textContent).toBe(FOCUS_LOADING_TOAST);
+	});
+
+	it("re-checks the focus guard before confirming a pending switch", async () => {
+		await renderBoard();
+
+		// Opens the unsaved-edits confirmation dialog.
+		await act(async () => {
+			fireEvent.click(screen.getByTestId("mark-unsaved"));
+		});
+		await act(async () => {
+			fireEvent.click(screen.getByTestId("switch-to-2"));
+		});
+		expect(screen.getByTestId("active-workspace").textContent).toBe("1");
+
+		// A focus session becomes active while the dialog is still open.
+		await act(async () => {
+			fireEvent.click(screen.getByTestId("activate-focus-inline"));
+		});
+
+		await act(async () => {
+			fireEvent.click(screen.getByTestId("confirm-pending-switch"));
+		});
+
+		expect(screen.getByTestId("active-workspace").textContent).toBe("1");
+		expect(mockPersistWorkspaceId).not.toHaveBeenCalled();
+		expect(screen.getByTestId("toast").textContent).toBe(FOCUS_BLOCKED_TOAST);
 	});
 });

@@ -133,6 +133,7 @@ export interface RealtimeHubDeps {
 
 interface SseClient {
 	workspaceId: number;
+	userId?: number;
 	res: Response;
 	keepAlive: ReturnType<typeof setInterval>;
 }
@@ -174,6 +175,12 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 		const set = clientsByWorkspace.get(workspaceId);
 		if (set) {
 			for (const client of set) {
+				if (
+					event.type === "focus_session.updated" &&
+					client.userId !== event.userId
+				) {
+					continue;
+				}
 				client.res.write(`data: ${message}\n\n`);
 			}
 		}
@@ -276,7 +283,12 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 			res.write(": connected\n\n");
 
 			const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
-			const client: SseClient = { workspaceId, res, keepAlive };
+			const client: SseClient = {
+				workspaceId,
+				userId: req.user?.id,
+				res,
+				keepAlive,
+			};
 			addSseClient(client);
 
 			req.on("close", () => {

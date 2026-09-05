@@ -444,6 +444,18 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		setLoadError(false);
 	}, []);
 
+	const guardFocusBeforeSwitch = useCallback((): boolean => {
+		if (!focusSessionHydratedRef.current) {
+			showToast(FOCUS_LOADING_TOAST, "warning");
+			return false;
+		}
+		if (hasActiveFocusRef.current) {
+			showToast(FOCUS_BLOCKED_TOAST, "warning");
+			return false;
+		}
+		return true;
+	}, [showToast]);
+
 	const attemptSwitchWorkspace = useCallback(
 		(workspaceId: number) => {
 			const state = getSwitchAttemptState({
@@ -476,8 +488,11 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 
 	const confirmPendingSwitch = useCallback(() => {
 		if (!switchConfirm.open) return;
-		switchWorkspace(switchConfirm.pendingWorkspaceId);
-	}, [switchConfirm, switchWorkspace]);
+		const pendingWorkspaceId = switchConfirm.pendingWorkspaceId;
+		setSwitchConfirm({ open: false });
+		if (!guardFocusBeforeSwitch()) return;
+		switchWorkspace(pendingWorkspaceId);
+	}, [switchConfirm, switchWorkspace, guardFocusBeforeSwitch]);
 
 	const cancelPendingSwitch = useCallback(() => {
 		setSwitchConfirm({ open: false });
@@ -488,6 +503,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			try {
 				await api.acceptInvite(invite.workspaceId, invite.id);
 				const list = await reloadWorkspaces();
+				if (!guardFocusBeforeSwitch()) return;
 				switchWorkspace(
 					list.find((w) => w.id === invite.workspaceId)?.id ??
 						invite.workspaceId,
@@ -503,7 +519,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				showToast("Couldn't accept the invite. Try again.", "error");
 			}
 		},
-		[reloadWorkspaces, showToast, switchWorkspace],
+		[reloadWorkspaces, showToast, switchWorkspace, guardFocusBeforeSwitch],
 	);
 
 	const declineWorkspaceInvite = useCallback(
@@ -548,14 +564,15 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					currentWorkspaceIds: prevIds,
 					createdWorkspace: created,
 				});
-				switchWorkspace(selection.activeWorkspaceId);
 				setCreateWorkspaceOpen(false);
+				if (!guardFocusBeforeSwitch()) return;
+				switchWorkspace(selection.activeWorkspaceId);
 				showToast(selection.toast, "success");
 			} catch {
 				showToast("Couldn't create the workspace. Try again.", "error");
 			}
 		},
-		[reloadWorkspaces, showToast, switchWorkspace],
+		[reloadWorkspaces, showToast, switchWorkspace, guardFocusBeforeSwitch],
 	);
 
 	// Load workspace list and restore last-active workspace from localStorage.
