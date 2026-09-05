@@ -1,7 +1,11 @@
 import { Folder, Plus, Signpost, Tag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import { NO_PRIORITY, resolveToggle, sortStatusesByPosition } from "../lib/trackerUtils";
+import {
+	NO_PRIORITY,
+	resolveToggle,
+	sortStatusesByPosition,
+} from "../lib/trackerUtils";
 import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../types";
 import { LabelDot, PriorityGlyph, priorityBars } from "./tracker/TrackerGlyphs";
 import {
@@ -220,7 +224,9 @@ export default function BoardCardTaxonomyFields({
 	const showPriorityPicker =
 		orderedPriorities.length > 0 || priorityId !== null || priority != null;
 	const showLabelPicker =
-		orderedLabels.length > 0 || labelIds.length > 0 || selectedLabels.length > 0;
+		orderedLabels.length > 0 ||
+		labelIds.length > 0 ||
+		selectedLabels.length > 0;
 	const showProjectPicker =
 		projects.length > 0 || projectId != null || projectName != null;
 	const showPhasePicker =
@@ -239,7 +245,7 @@ export default function BoardCardTaxonomyFields({
 	return (
 		<div
 			aria-label="Card taxonomy"
-			className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-3"
+			className="space-y-3 rounded-md bg-neutral-100 px-3 py-3"
 		>
 			<h4 className="text-sm font-medium text-neutral-700">Properties</h4>
 			{listHint && (
@@ -288,10 +294,7 @@ export default function BoardCardTaxonomyFields({
 						open={openPicker === "project"}
 						onOpenChange={(open) => setOpenPicker(open ? "project" : null)}
 						onSelect={(id) =>
-							onProjectChange(
-								id === NO_PROJECT ? null : Number(id),
-								null,
-							)
+							onProjectChange(id === NO_PROJECT ? null : Number(id), null)
 						}
 					/>
 				)}
