@@ -30,64 +30,99 @@ function parsePositiveInteger(value: string | undefined): number | null {
 }
 
 /**
- * Checks membership and the complete workspace -> card -> attachment ownership
- * chain before a delivery handler can resolve or read a provider path.
+ * Checks workspace membership and active-card ownership before a route handler
+ * can operate on a card or read a provider path. Attachment routes opt into the
+ * additional attachment-on-card check.
  */
-export function createAttachmentOwnershipGuard(): RequestHandler {
+export type AttachmentOwnershipGuardOptions = {
+	requireAttachment?: boolean;
+};
+
+export function createAttachmentOwnershipGuard({
+	requireAttachment = true,
+}: AttachmentOwnershipGuardOptions = {}): RequestHandler {
 	return (req: Request, res: Response, next: NextFunction) => {
 		void requireWorkspaceMember(req, res, () => {
-			void loadOwnedAttachment(req, res, next);
+			void loadOwnedCard(req, res, next, requireAttachment);
 		});
 	};
 }
 
-async function loadOwnedAttachment(
+async function loadOwnedCard(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	requireAttachment: boolean,
 ): Promise<void> {
 	try {
 		const workspaceId = req.workspace?.workspaceId;
 		const cardId = parsePositiveInteger(
 			typeof req.params.cardId === "string" ? req.params.cardId : undefined,
 		);
-		const attachmentId = parsePositiveInteger(
-			typeof req.params.attachmentId === "string"
-				? req.params.attachmentId
-				: undefined,
-		);
-		if (workspaceId === undefined || cardId === null || attachmentId === null) {
+		if (workspaceId === undefined || cardId === null) {
 			res.status(404).json({ error: "Not found" });
 			return;
 		}
 
-		const attachment = await db
-			.selectFrom("attachments as a")
-			.innerJoin("cards as c", "c.id", "a.card_id")
-			.select([
-				"a.id",
-				"a.card_id",
-				"a.mime_type",
-				"a.thumbnail_path",
-				"a.original_path",
-			])
-			.where("a.id", "=", attachmentId)
-			.where("a.card_id", "=", cardId)
+		const card = await db
+			.selectFrom("cards as c")
+			.select("c.id")
 			.where("c.id", "=", cardId)
 			.where("c.workspace_id", "=", workspaceId)
 			.where("c.deleted_at", "is", null)
 			.executeTakeFirst();
-
-		if (!attachment) {
+		if (!card) {
 			res.status(404).json({ error: "Not found" });
 			return;
 		}
 
-		req.attachmentDelivery = attachment;
-		next();
+		if (!requireAttachment) {
+			next();
+			return;
+		}
+
+		await loadOwnedAttachment(req, res, next, card.id);
 	} catch (error) {
 		next(error);
 	}
+}
+
+async function loadOwnedAttachment(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+	cardId: number,
+): Promise<void> {
+	const attachmentId = parsePositiveInteger(
+		typeof req.params.attachmentId === "string"
+			? req.params.attachmentId
+			: undefined,
+	);
+	if (attachmentId === null) {
+		res.status(404).json({ error: "Not found" });
+		return;
+	}
+
+	const attachment = await db
+		.selectFrom("attachments as a")
+		.select([
+			"a.id",
+			"a.card_id",
+			"a.mime_type",
+			"a.thumbnail_path",
+			"a.original_path",
+		])
+		.where("a.id", "=", attachmentId)
+		.where("a.card_id", "=", cardId)
+		.executeTakeFirst();
+
+	if (!attachment) {
+		res.status(404).json({ error: "Not found" });
+		return;
+	}
+
+	req.attachmentDelivery = attachment;
+	next();
 }
 
 export const attachmentOwnershipGuard = createAttachmentOwnershipGuard();
