@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
+import { IMAGE_VALIDATION_MESSAGES } from "../lib/imageAttachments";
 import { TaskMetadataCatalogProvider } from "./task-entry/TaskMetadataCatalogProvider";
 import AddCard from "./AddCard";
 import type { Column } from "../types";
@@ -242,6 +243,49 @@ describe("AddCard image staging", () => {
 		expect(screen.getByText("Max 3 images per card")).toBeTruthy();
 		expect(mockPrepareImageAttachment).toHaveBeenCalledTimes(3);
 		expect(onAddCard).not.toHaveBeenCalled();
+	});
+
+	it("blocks submit when a staged image fails validation", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		const oversized = new File([new Uint8Array(15 * 1024 * 1024)], "big.png", {
+			type: "image/png",
+		});
+		mockPrepareImageAttachment.mockResolvedValueOnce({
+			kind: "invalid",
+			file: oversized,
+			original: oversized,
+			error: IMAGE_VALIDATION_MESSAGES.tooLarge,
+		});
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Keep title" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+		fireEvent.change(textarea, { target: { value: "Keep title @image" } });
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+		const input = document.querySelector(
+			'input[type="file"]',
+		) as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [oversized] } });
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", {
+					name: `Image: big.png. ${IMAGE_VALIDATION_MESSAGES.tooLarge}`,
+				}),
+			).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		expect(onAddCard).not.toHaveBeenCalled();
+		expect(textarea.value).toBe("Keep title");
+		expect(textarea.disabled).toBe(false);
 	});
 });
 
