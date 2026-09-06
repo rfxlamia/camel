@@ -102,6 +102,15 @@ function resolveProviderPath(providerPath: string): string | null {
 	return resolved;
 }
 
+function matchesIfNoneMatch(req: Request, etag: string): boolean {
+	const value = req.headers["if-none-match"];
+	if (typeof value !== "string") return false;
+	return value
+		.split(",")
+		.map((candidate) => candidate.trim())
+		.some((candidate) => candidate === etag || candidate === `W/${etag}`);
+}
+
 async function deliverAttachment(
 	req: Request,
 	res: Response,
@@ -129,7 +138,15 @@ async function deliverAttachment(
 			return;
 		}
 
+		const etag = `"${metadata.size.toString(16)}-${Math.floor(metadata.mtimeMs).toString(16)}"`;
+		res.setHeader("Cache-Control", "private, max-age=300");
+		res.setHeader("ETag", etag);
 		res.setHeader("Content-Type", attachment.mime_type);
+		res.setHeader("X-Content-Type-Options", "nosniff");
+		if (matchesIfNoneMatch(req, etag)) {
+			res.status(304).end();
+			return;
+		}
 
 		res.sendFile(filePath, (error) => {
 			if (error && !res.headersSent) next(error);

@@ -222,5 +222,21 @@ describe.skipIf(!runIntegration)(
 			);
 			expect([403, 404]).toContain(crossWorkspace.status);
 		});
+
+		it("uses private caching and returns 304 for a matching ETag", async () => {
+			testUser.id = 1;
+			const first = await request(app).get(
+				deliveryUrl(workspaceId, cardId, attachmentId, "original"),
+			);
+			expect(first.status).toBe(200);
+			expect(first.headers["cache-control"]).toBe("private, max-age=300");
+			expect(first.headers.etag).toBeTruthy();
+
+			const revalidated = await request(app)
+				.get(deliveryUrl(workspaceId, cardId, attachmentId, "original"))
+				.set("If-None-Match", first.headers.etag);
+			expect(revalidated.status).toBe(304);
+			expect(revalidated.body).toEqual({});
+		});
 	},
 );
