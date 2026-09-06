@@ -6,7 +6,10 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "./pool.js";
 
-const schemaSql = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
+const schemaSql = readFileSync(
+	new URL("./schema.sql", import.meta.url),
+	"utf8",
+);
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
 const maxImageBytes = 10 * 1024 * 1024;
 

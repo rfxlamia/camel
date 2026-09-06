@@ -111,11 +111,11 @@ export type BoardEvent =
 	| (BoardEventFields & {
 			type: "attachment.added" | "attachment.removed";
 			payload: AttachmentEventPayload;
-		})
+	  })
 	| (BoardEventFields & {
 			type: Exclude<BoardEventType, "attachment.added" | "attachment.removed">;
 			payload?: Record<string, unknown>;
-		});
+	  });
 
 type WithoutAt<T> = T extends unknown ? Omit<T, "at"> : never;
 type PublishableEvent = WithoutAt<BoardEvent>;

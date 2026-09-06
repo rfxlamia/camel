@@ -22,13 +22,17 @@ const temporaryRoots: string[] = [];
 
 afterEach(async () => {
 	await Promise.all(
-		temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+		temporaryRoots
+			.splice(0)
+			.map((root) => rm(root, { recursive: true, force: true })),
 	);
 });
 
 describe("LocalAttachmentStorage", () => {
 	it("writes and removes an opaque thumbnail/original pair below the configured private root", async () => {
-		const root = await mkdtemp(path.join(process.cwd(), "attachment-storage-test-"));
+		const root = await mkdtemp(
+			path.join(process.cwd(), "attachment-storage-test-"),
+		);
 		temporaryRoots.push(root);
 		const configured = resolveConfig({
 			...REQUIRED_ENV,
@@ -53,17 +57,28 @@ describe("LocalAttachmentStorage", () => {
 		const originalPath = path.join(root, pair.originalPath);
 		expect(await readFile(thumbnailPath)).toEqual(thumbnail);
 		expect(await readFile(originalPath)).toEqual(original);
-		expect(path.resolve(thumbnailPath).startsWith(path.resolve(root) + path.sep)).toBe(true);
-		expect(path.resolve(originalPath).startsWith(path.resolve(root) + path.sep)).toBe(true);
+		expect(
+			path.resolve(thumbnailPath).startsWith(path.resolve(root) + path.sep),
+		).toBe(true);
+		expect(
+			path.resolve(originalPath).startsWith(path.resolve(root) + path.sep),
+		).toBe(true);
 
 		await storage.removePair(pair);
-		await expect(readFile(thumbnailPath)).rejects.toMatchObject({ code: "ENOENT" });
-		await expect(readFile(originalPath)).rejects.toMatchObject({ code: "ENOENT" });
+		await expect(readFile(thumbnailPath)).rejects.toMatchObject({
+			code: "ENOENT",
+		});
+		await expect(readFile(originalPath)).rejects.toMatchObject({
+			code: "ENOENT",
+		});
 		await expect(storage.removePair(pair)).resolves.toBeUndefined();
 	});
 
 	it("defaults to private roots outside public uploads in development and container production", () => {
-		const development = resolveConfig({ ...REQUIRED_ENV, NODE_ENV: "development" });
+		const development = resolveConfig({
+			...REQUIRED_ENV,
+			NODE_ENV: "development",
+		});
 		const containerProduction = resolveConfig({
 			...REQUIRED_ENV,
 			NODE_ENV: "production",
@@ -78,11 +93,15 @@ describe("LocalAttachmentStorage", () => {
 		expect(containerProduction.ATTACHMENTS_DIR).toBe(
 			"/app/server/private-uploads",
 		);
-		expect(path.resolve(development.ATTACHMENTS_DIR).startsWith(publicRoot + path.sep)).toBe(
-			false,
-		);
 		expect(
-			path.resolve(containerProduction.ATTACHMENTS_DIR).startsWith(publicRoot + path.sep),
+			path
+				.resolve(development.ATTACHMENTS_DIR)
+				.startsWith(publicRoot + path.sep),
+		).toBe(false);
+		expect(
+			path
+				.resolve(containerProduction.ATTACHMENTS_DIR)
+				.startsWith(publicRoot + path.sep),
 		).toBe(false);
 		expect(development.ATTACHMENTS_DIR).not.toContain("UPLOADS_DIR");
 		expect(containerProduction.ATTACHMENTS_DIR).not.toContain("UPLOADS_DIR");
@@ -96,13 +115,22 @@ describe("LocalAttachmentStorage", () => {
 	});
 
 	it("supports best-effort bulk cleanup without failing the caller", async () => {
-		const root = await mkdtemp(path.join(process.cwd(), "attachment-storage-test-"));
+		const root = await mkdtemp(
+			path.join(process.cwd(), "attachment-storage-test-"),
+		);
 		temporaryRoots.push(root);
 		const storage = new LocalAttachmentStorage(root);
-		const pair = await storage.writePair(Buffer.from("thumbnail"), Buffer.from("original"));
+		const pair = await storage.writePair(
+			Buffer.from("thumbnail"),
+			Buffer.from("original"),
+		);
 
 		await expect(
-			storage.removePairs([pair, pair, { thumbnailPath: "missing", originalPath: "missing" }]),
+			storage.removePairs([
+				pair,
+				pair,
+				{ thumbnailPath: "missing", originalPath: "missing" },
+			]),
 		).resolves.toBeUndefined();
 	});
 });
@@ -123,14 +151,23 @@ async function createUploadApp(maxPairs: number) {
 			count: Object.values(files ?? {}).flat().length,
 			memoryBacked: Object.values(files ?? {})
 				.flat()
-				.every((file) => Buffer.isBuffer(file.buffer) && file.path === undefined),
+				.every(
+					(file) => Buffer.isBuffer(file.buffer) && file.path === undefined,
+				),
 			...(typeof metadata === "string" ? { metadata } : {}),
 		});
 	});
-	app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-		const normalized = normalizeAttachmentUploadError(error);
-		res.status(normalized.status).json(normalized);
-	});
+	app.use(
+		(
+			error: unknown,
+			_req: express.Request,
+			res: express.Response,
+			_next: express.NextFunction,
+		) => {
+			const normalized = normalizeAttachmentUploadError(error);
+			res.status(normalized.status).json(normalized);
+		},
+	);
 	return { app, providerInvocation };
 }
 
@@ -150,7 +187,10 @@ describe("createAttachmentUpload", () => {
 	it("accepts one card-create metadata JSON part while keeping files in memory", async () => {
 		const { app, providerInvocation } = await createUploadApp(3);
 		const acceptedResponse = request(app).post("/");
-		acceptedResponse.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "Metadata" }));
+		acceptedResponse.field(
+			CARD_CREATE_METADATA_FIELD,
+			JSON.stringify({ title: "Metadata" }),
+		);
 		addPairs(acceptedResponse, 3);
 		const response = await acceptedResponse;
 
@@ -182,8 +222,14 @@ describe("createAttachmentUpload", () => {
 			ATTACHMENT_UPLOAD_PROFILES.cardCreate.maxPairs,
 		);
 		const requestWithDuplicateMetadata = addPairs(request(app).post("/"), 3);
-		requestWithDuplicateMetadata.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "one" }));
-		requestWithDuplicateMetadata.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "two" }));
+		requestWithDuplicateMetadata.field(
+			CARD_CREATE_METADATA_FIELD,
+			JSON.stringify({ title: "one" }),
+		);
+		requestWithDuplicateMetadata.field(
+			CARD_CREATE_METADATA_FIELD,
+			JSON.stringify({ title: "two" }),
+		);
 
 		const response = await requestWithDuplicateMetadata;
 		expect(response.status).toBe(413);
@@ -205,17 +251,35 @@ describe("createAttachmentUpload", () => {
 
 		const tooManyFiles = request(app).post("/");
 		for (let index = 0; index < 10; index += 1) {
-			tooManyFiles.attach("thumbnail", Buffer.from("thumbnail"), `thumbnail-${index}.png`);
-			tooManyFiles.attach("original", Buffer.from("original"), `original-${index}.png`);
+			tooManyFiles.attach(
+				"thumbnail",
+				Buffer.from("thumbnail"),
+				`thumbnail-${index}.png`,
+			);
+			tooManyFiles.attach(
+				"original",
+				Buffer.from("original"),
+				`original-${index}.png`,
+			);
 		}
-		tooManyFiles.attach("original", Buffer.from("original"), "original-overflow.png");
+		tooManyFiles.attach(
+			"original",
+			Buffer.from("original"),
+			"original-overflow.png",
+		);
 		const tooManyFilesResponse = await tooManyFiles;
 		expect(tooManyFilesResponse.status).toBe(413);
 		expect(tooManyFilesResponse.body.code).toBe("LIMIT_FILE_COUNT");
 
 		const tooManyParts = addPairs(request(app).post("/"), 10);
-		tooManyParts.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "one" }));
-		tooManyParts.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "two" }));
+		tooManyParts.field(
+			CARD_CREATE_METADATA_FIELD,
+			JSON.stringify({ title: "one" }),
+		);
+		tooManyParts.field(
+			CARD_CREATE_METADATA_FIELD,
+			JSON.stringify({ title: "two" }),
+		);
 		const tooManyPartsResponse = await tooManyParts;
 		expect(tooManyPartsResponse.status).toBe(413);
 		expect(tooManyPartsResponse.body.code).toBe("LIMIT_PART_COUNT");

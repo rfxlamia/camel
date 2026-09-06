@@ -99,10 +99,7 @@ async function createFixtures(): Promise<{
 
 async function cleanupFixtures(): Promise<void> {
 	if (workspaceId !== undefined) {
-		await db
-			.deleteFrom("workspaces")
-			.where("id", "=", workspaceId)
-			.execute();
+		await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 		workspaceId = undefined;
 	}
 	if (actorId !== undefined) {
@@ -130,10 +127,16 @@ integration("cards-side attachment activity events", () => {
 			createdAt: "2026-09-05T10:00:00.000Z",
 		};
 
-		await recordActivity(db, fixtures.actor, fixtures.workspaceId, "attachment_added", {
-			cardId: fixtures.cardId,
-			payload: addedPayload,
-		});
+		await recordActivity(
+			db,
+			fixtures.actor,
+			fixtures.workspaceId,
+			"attachment_added",
+			{
+				cardId: fixtures.cardId,
+				payload: addedPayload,
+			},
+		);
 		await recordActivity(
 			db,
 			fixtures.actor,

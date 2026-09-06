@@ -48,10 +48,11 @@ const INVALID_PNG_DIMENSIONS =
 	"invalid image dimensions: PNG IHDR is missing or malformed";
 const INVALID_JPEG_DIMENSIONS =
 	"invalid image dimensions: JPEG SOF marker is missing or malformed";
-const OVERSIZED_DIMENSIONS =
-	"image dimensions exceed maximum of 4096 pixels";
+const OVERSIZED_DIMENSIONS = "image dimensions exceed maximum of 4096 pixels";
 
-function validateDimensions(dimensions: ImageDimensions): DimensionValidationResult {
+function validateDimensions(
+	dimensions: ImageDimensions,
+): DimensionValidationResult {
 	if (
 		dimensions.width < 1 ||
 		dimensions.height < 1 ||
@@ -130,7 +131,9 @@ function readJpegSegmentLength(
 }
 
 function isJpegStandaloneMarker(marker: number): boolean {
-	return marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7);
+	return (
+		marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)
+	);
 }
 
 function parseJpegSofDimensions(

@@ -379,16 +379,22 @@ export function createRemoveMemberDep(
 				sessionId,
 				action,
 			}) => {
-				await recordActivity(trx, auditActor, auditWorkspaceId, "focus_session", {
-					cardId: null,
-					payload: {
-						kind: "focus_session",
-						action,
-						sessionId,
-						workspaceId: auditWorkspaceId,
-						userId,
+				await recordActivity(
+					trx,
+					auditActor,
+					auditWorkspaceId,
+					"focus_session",
+					{
+						cardId: null,
+						payload: {
+							kind: "focus_session",
+							action,
+							sessionId,
+							workspaceId: auditWorkspaceId,
+							userId,
+						},
 					},
-				});
+				);
 			};
 
 			const focusSessionFinished = await finishActiveFocusSessionForRemoval({

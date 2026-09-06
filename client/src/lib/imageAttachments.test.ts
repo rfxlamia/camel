@@ -85,11 +85,7 @@ describe("image attachment preparation", () => {
 	});
 
 	it("rejects decoded dimensions over the shared ceiling", async () => {
-		installImageAndCanvas(
-			MAX_IMAGE_DIMENSION + 1,
-			1024,
-			vi.fn(),
-		);
+		installImageAndCanvas(MAX_IMAGE_DIMENSION + 1, 1024, vi.fn());
 		const file = new File(["png"], "wide.png", { type: "image/png" });
 
 		const result = await prepareImageAttachment(file);
