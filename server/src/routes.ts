@@ -2,23 +2,24 @@ import { Router } from "express";
 import { requireAuth } from "./auth.js";
 import { config } from "./config.js";
 import { requireEmailVerified } from "./middleware/email-gate.js";
+import { notificationsRouter } from "./notifications/router.js";
 import { activityRouter } from "./routes/activity.js";
 import { boardRouter } from "./routes/board.js";
+import { cardAttachmentsRouter } from "./routes/card-attachments.js";
 import { cardsRouter } from "./routes/cards.js";
 import { columnsRouter } from "./routes/columns.js";
+import { focusConfigRouter } from "./routes/focus-config.js";
+import { focusSessionRouter } from "./routes/focus-session.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { metricsRouter } from "./routes/metrics.js";
-import { notificationsRouter } from "./notifications/router.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
 import { trackerItemsRouter } from "./routes/tracker-items.js";
-import { workItemsRouter } from "./routes/work-items.js";
 import { trackerPhasesRouter } from "./routes/tracker-phases.js";
 import { trackerProjectsRouter } from "./routes/tracker-projects.js";
 import { trackerVocabulariesRouter } from "./routes/tracker-vocabularies.js";
-import { focusConfigRouter } from "./routes/focus-config.js";
-import { focusSessionRouter } from "./routes/focus-session.js";
+import { workItemsRouter } from "./routes/work-items.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility
@@ -53,6 +54,7 @@ api.use("/workspaces", workspacesRouter);
 api.use("/workspaces/:workspaceId", activityRouter);
 api.use("/workspaces/:workspaceId", boardRouter);
 api.use("/workspaces/:workspaceId", cardsRouter);
+api.use("/workspaces/:workspaceId", cardAttachmentsRouter);
 api.use("/workspaces/:workspaceId", columnsRouter);
 api.use("/workspaces/:workspaceId", invitesRouter);
 api.use("/workspaces/:workspaceId", membersRouter);
@@ -84,6 +86,7 @@ type RouteLayer = {
 
 function listTopLevelApiRoutes(router: Router): Set<string> {
 	const keys = new Set<string>();
+	// SAFETY: Express exposes its internal stack at runtime; RouteLayer captures the inspected shape.
 	for (const layer of (router as unknown as { stack: RouteLayer[] }).stack ??
 		[]) {
 		if (!layer.route) continue;
