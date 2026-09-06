@@ -18,8 +18,29 @@ interface Props {
 export function CardBody({ card }: { card: Card }) {
 	const done = isCardDone(card);
 	const overdue = isDueOverdue(card);
+	const attachments = card.attachments ?? [];
+	const cover = attachments[0];
+	const extraCount = attachments.length - 1;
 	return (
 		<>
+			{cover && (
+				<div className="relative mb-2 overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+					<img
+						src={cover.thumbnailUrl}
+						alt={`Attachment preview for ${card.title}`}
+						title="Card attachment"
+						className="h-24 w-full object-cover"
+					/>
+					{extraCount > 0 && (
+						<span
+							className="absolute top-1.5 right-1.5 rounded bg-neutral-900/75 px-1.5 py-0.5 text-[10px] font-semibold text-white tabular-nums"
+							aria-label={`${extraCount} more attachments`}
+						>
+							+{extraCount}
+						</span>
+					)}
+				</div>
+			)}
 			{card.key && (
 				<span className="mb-1 block break-all font-mono text-[11px] leading-tight text-neutral-500 tabular-nums">
 					{card.key}
