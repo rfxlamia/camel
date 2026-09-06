@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import * as path from "node:path";
 import express from "express";
 import request from "supertest";
@@ -59,7 +59,10 @@ vi.mock("../auth.js", async (importOriginal) => {
 	};
 });
 
-import { LocalAttachmentStorage } from "../lib/attachment-storage.js";
+import {
+	type AttachmentPairInput,
+	LocalAttachmentStorage,
+} from "../lib/attachment-storage.js";
 import { api } from "../routes.js";
 
 const integration = describe.skipIf(!process.env.RUN_INTEGRATION);
@@ -132,6 +135,45 @@ function multipartCreate(columnId: number, title: string) {
 	return request(app)
 		.post(`/api/workspaces/${fixtures!.workspaceId}/cards`)
 		.field("metadata", JSON.stringify({ columnId, title }));
+}
+
+class FailingOnSecondPairStorage extends LocalAttachmentStorage {
+	private writes = 0;
+
+	override async writePair(
+		inputOrThumbnail: AttachmentPairInput | Buffer,
+		original?: Buffer,
+	) {
+		this.writes += 1;
+		if (this.writes === 2) throw new Error("synthetic provider failure");
+		return super.writePair(inputOrThumbnail, original);
+	}
+}
+
+function oversizedPng(): Buffer {
+	const image = Buffer.from(PNG_1X1);
+	image.writeUInt32BE(4097, 16);
+	return image;
+}
+
+async function expectNoCardSideEffects(): Promise<void> {
+	expect(
+		await query("SELECT id FROM cards WHERE workspace_id = $1", [
+			fixtures!.workspaceId,
+		]),
+	).toHaveLength(0);
+	expect(
+		await query(
+			"SELECT id FROM attachments WHERE card_id IN (SELECT id FROM cards WHERE workspace_id = $1)",
+			[fixtures!.workspaceId],
+		),
+	).toHaveLength(0);
+	expect(
+		await query("SELECT id FROM card_events WHERE workspace_id = $1", [
+			fixtures!.workspaceId,
+		]),
+	).toHaveLength(0);
+	expect(mockPublishEvent).not.toHaveBeenCalled();
 }
 
 function addPair(
@@ -240,5 +282,81 @@ integration("POST /cards — atomic staged attachment create", () => {
 				fixtures!.workspaceId,
 			]),
 		).toHaveLength(0);
+	});
+
+	it("rejects malformed or oversized images before writing any pair", async () => {
+		const writePair = vi.fn();
+		const storage = new LocalAttachmentStorage(storageRoot!);
+		setAttachmentStorageForTests({
+			...storage,
+			writePair,
+		});
+
+		for (const [title, image] of [
+			["Invalid signature", Buffer.from("not an image")],
+			["Oversized dimensions", oversizedPng()],
+		]) {
+			const response = await addPair(
+				multipartCreate(fixtures!.columnId, title),
+				image,
+				PNG_1X1,
+				0,
+			);
+			expect(response.status).toBe(400);
+		}
+		expect(writePair).not.toHaveBeenCalled();
+		await expectNoCardSideEffects();
+	});
+
+	it("removes earlier pairs when a later provider write fails", async () => {
+		setAttachmentStorageForTests(new FailingOnSecondPairStorage(storageRoot!));
+		const response = await addPair(
+			addPair(
+				multipartCreate(fixtures!.columnId, "Provider failure"),
+				PNG_1X1,
+				PNG_1X1,
+				0,
+			),
+			PNG_1X1,
+			PNG_1X1,
+			1,
+		);
+		expect(response.status).toBe(500);
+		await expectNoCardSideEffects();
+		expect(await readdir(storageRoot!)).toEqual([]);
+	});
+
+	it("rolls back the card and unlinks files when the route-bound attachment insert fails", async () => {
+		await pool.query(`
+			CREATE OR REPLACE FUNCTION card_create_attachment_test_failure()
+			RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN
+				RAISE EXCEPTION 'controlled card-create attachment failure';
+			END;
+			$$;
+		`);
+		await pool.query(`
+			CREATE TRIGGER card_create_attachment_test_failure_trigger
+			BEFORE INSERT ON attachments
+			FOR EACH ROW EXECUTE FUNCTION card_create_attachment_test_failure();
+		`);
+		try {
+			const response = await addPair(
+				multipartCreate(fixtures!.columnId, "Database failure"),
+				PNG_1X1,
+				PNG_1X1,
+				0,
+			);
+			expect(response.status).toBe(500);
+			await expectNoCardSideEffects();
+			expect(await readdir(storageRoot!)).toEqual([]);
+		} finally {
+			await pool.query(
+				"DROP TRIGGER IF EXISTS card_create_attachment_test_failure_trigger ON attachments",
+			);
+			await pool.query(
+				"DROP FUNCTION IF EXISTS card_create_attachment_test_failure()",
+			);
+		}
 	});
 });
