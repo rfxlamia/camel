@@ -47,13 +47,19 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 
 		await mkdir(pairDirectory, { recursive: true });
 		try {
-			await writeFile(path.join(this.root, pair.thumbnailPath), input.thumbnail);
+			await writeFile(
+				path.join(this.root, pair.thumbnailPath),
+				input.thumbnail,
+			);
 			await writeFile(path.join(this.root, pair.originalPath), input.original);
 		} catch (error) {
 			try {
 				await this.removePair(pair);
 			} catch (cleanupError) {
-				console.error("Failed to clean up an incomplete attachment pair", cleanupError);
+				console.error(
+					"Failed to clean up an incomplete attachment pair",
+					cleanupError,
+				);
 			}
 			throw error;
 		}
@@ -99,7 +105,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 			throw new Error("Attachment paths must be provider-relative");
 		}
 		const resolved = path.resolve(this.root, relativePath);
-		if (resolved !== this.root && !resolved.startsWith(`${this.root}${path.sep}`)) {
+		if (
+			resolved !== this.root &&
+			!resolved.startsWith(`${this.root}${path.sep}`)
+		) {
 			throw new Error("Attachment path escapes the private storage root");
 		}
 		return resolved;

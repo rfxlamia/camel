@@ -96,7 +96,8 @@ function readImageDimensions(file: File): Promise<DecodedImage> {
 			}
 			finish(() => reject(new Error("missing image dimensions")));
 		};
-		image.onerror = () => finish(() => reject(new Error("image decode failed")));
+		image.onerror = () =>
+			finish(() => reject(new Error("image decode failed")));
 		image.src = objectUrl;
 
 		if (typeof image.decode === "function") {

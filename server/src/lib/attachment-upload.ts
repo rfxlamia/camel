@@ -12,7 +12,9 @@ export interface AttachmentUploadProfile {
 	readonly fileSize: number;
 }
 
-function createAttachmentUploadProfile(maxPairs: number): AttachmentUploadProfile {
+function createAttachmentUploadProfile(
+	maxPairs: number,
+): AttachmentUploadProfile {
 	const files = maxPairs * 2;
 	return {
 		maxPairs,
@@ -124,4 +126,5 @@ export function normalizeAttachmentUploadError(
 	return { status: 400, code, error: message };
 }
 
-export const normalizeAttachmentUploadErrorResponse = normalizeAttachmentUploadError;
+export const normalizeAttachmentUploadErrorResponse =
+	normalizeAttachmentUploadError;
