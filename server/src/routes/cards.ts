@@ -22,6 +22,7 @@ import {
 	syncCardAssignees,
 } from "./card-assignees.js";
 import { createCard } from "./card-create.js";
+import { cardCreateMultipartMiddleware } from "./card-create-multipart.js";
 import { syncCardLabels } from "./card-labels.js";
 import {
 	buildCardResponse,
@@ -290,7 +291,12 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 	res.json(result);
 });
 
-cardsRouter.post("/cards", requireWorkspaceMember, createCard);
+cardsRouter.post(
+	"/cards",
+	requireWorkspaceMember,
+	cardCreateMultipartMiddleware,
+	createCard,
+);
 
 cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;

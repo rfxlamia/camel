@@ -6,6 +6,11 @@ import { POSITION_GAP } from "../core/position.js";
 import { checkWipLimit } from "../core/wip.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
+import {
+	type AttachmentPair,
+	getAttachmentStorage,
+} from "../lib/attachment-storage.js";
+import { validateFileContent } from "../lib/file-validator.js";
 import { publishEvent } from "../realtime.js";
 import {
 	validateCardDescription,
@@ -23,6 +28,12 @@ import {
 import { lockTaskCreateReferences } from "./workspace-mutation-lock.js";
 
 type CreateBody = Record<string, unknown>;
+type UploadedFile = Express.Multer.File;
+type PreparedAttachment = {
+	thumbnail: UploadedFile;
+	original: UploadedFile;
+	mimeType: string;
+};
 type Column = {
 	id: number;
 	wip_limit: number | null;
@@ -34,7 +45,12 @@ type CreateResult =
 	| { kind: "not_found_column" }
 	| { kind: "wip" }
 	| { kind: "bad_request"; fieldErrors: Record<string, string> }
-	| { kind: "ok"; card: HydratedCard; assignmentIds: number[] };
+	| {
+			kind: "ok";
+			card: HydratedCard;
+			assignmentIds: number[];
+			attachments: Array<{ id: number; mimeType: string; createdAt: string }>;
+	  };
 type PreparedCreate =
 	| { kind: "not_found_column" }
 	| { kind: "wip" }
@@ -212,11 +228,24 @@ async function hydrateCreatedCard(
 	return card;
 }
 
-async function persistCreatedCard(
+type WrittenAttachment = {
+	pair: AttachmentPair;
+	mimeType: string;
+	thumbnailSize: number;
+	originalSize: number;
+};
+
+type CreatedAttachmentRow = {
+	id: number;
+	mime_type: string;
+	created_at: Date;
+};
+
+async function insertCreatedCard(
 	trx: DBExecutor,
 	input: CreateInput,
 	prepared: Extract<PreparedCreate, { kind: "ready" }>,
-): Promise<Extract<CreateResult, { kind: "ok" }>> {
+): Promise<number> {
 	const identity = await allocateCardIdentity(trx, {
 		workspaceId: input.workspaceId,
 		columnId: input.columnId,
@@ -238,22 +267,94 @@ async function persistCreatedCard(
 		})
 		.returning("id")
 		.executeTakeFirstOrThrow();
-	const assignmentIds = await insertCardRelations(
-		trx,
-		inserted.id,
-		prepared.column,
-		prepared.metadata,
-	);
+	return inserted.id;
+}
+
+async function insertCreatedAttachments(
+	trx: DBExecutor,
+	cardId: number,
+	attachments: WrittenAttachment[],
+): Promise<CreatedAttachmentRow[]> {
+	if (attachments.length === 0) return [];
+	return trx
+		.insertInto("attachments")
+		.values(
+			attachments.map(({ pair, mimeType, thumbnailSize, originalSize }) => ({
+				card_id: cardId,
+				mime_type: mimeType,
+				thumbnail_path: pair.thumbnailPath,
+				original_path: pair.originalPath,
+				thumbnail_size_bytes: thumbnailSize,
+				original_size_bytes: originalSize,
+			})),
+		)
+		.returning(["id", "mime_type", "created_at"])
+		.execute();
+}
+
+async function recordCreatedCardActivity(
+	trx: DBExecutor,
+	input: CreateInput,
+	prepared: Extract<PreparedCreate, { kind: "ready" }>,
+	cardId: number,
+	attachments: CreatedAttachmentRow[],
+): Promise<void> {
 	await recordActivity(trx, input.actor, input.workspaceId, "create", {
-		cardId: inserted.id,
+		cardId,
 		toColumnId: input.columnId,
 		payload: {
 			cardTitle: input.title,
 			...(prepared.dueDate === null ? {} : { dueDate: prepared.dueDate }),
 		},
 	});
-	const card = await hydrateCreatedCard(trx, inserted.id, input.workspaceId);
-	return { kind: "ok", card, assignmentIds };
+	for (const attachment of attachments) {
+		await recordActivity(
+			trx,
+			input.actor,
+			input.workspaceId,
+			"attachment_added",
+			{
+				cardId,
+				payload: {
+					attachmentId: attachment.id,
+					mimeType: attachment.mime_type,
+					createdAt: attachment.created_at.toISOString(),
+				},
+			},
+		);
+	}
+}
+
+async function persistCreatedCard(
+	trx: DBExecutor,
+	input: CreateInput,
+	prepared: Extract<PreparedCreate, { kind: "ready" }>,
+	attachments: WrittenAttachment[],
+): Promise<Extract<CreateResult, { kind: "ok" }>> {
+	const cardId = await insertCreatedCard(trx, input, prepared);
+	const assignmentIds = await insertCardRelations(
+		trx,
+		cardId,
+		prepared.column,
+		prepared.metadata,
+	);
+	const attachmentRows = await insertCreatedAttachments(
+		trx,
+		cardId,
+		attachments,
+	);
+	await recordCreatedCardActivity(trx, input, prepared, cardId, attachmentRows);
+	const card = await hydrateCreatedCard(trx, cardId, input.workspaceId);
+	return {
+		kind: "ok",
+		card,
+		assignmentIds,
+		attachments: attachmentRows.map((attachment) => ({
+			id: attachment.id,
+			mimeType: attachment.mime_type,
+			createdAt: attachment.created_at.toISOString(),
+		})),
+	};
 }
 
 function publisherError(kind: string, error: unknown): void {
@@ -274,6 +375,28 @@ async function publishCreatedCard(
 		});
 	} catch (error) {
 		publisherError("workspace", error);
+	}
+}
+
+async function publishCreatedAttachment(
+	workspaceId: number,
+	actor: AuthUser,
+	cardId: number,
+	attachment: { id: number; mimeType: string; createdAt: string },
+): Promise<void> {
+	try {
+		await publishEvent(workspaceId, {
+			type: "attachment.added",
+			actor,
+			cardId,
+			payload: {
+				attachmentId: attachment.id,
+				mimeType: attachment.mimeType,
+				createdAt: attachment.createdAt,
+			},
+		});
+	} catch (error) {
+		publisherError("attachment", error);
 	}
 }
 
@@ -300,55 +423,220 @@ function publishAssignment(
 	}
 }
 
-export async function createCard(req: Request, res: Response) {
-	const { workspaceId } = req.workspace!;
-	const body = (req.body ?? {}) as CreateBody;
+function parseRequestBody(req: Request): CreateBody {
+	if (!req.is("multipart/form-data")) return (req.body ?? {}) as CreateBody;
+	const metadata = (req.body as Record<string, unknown> | undefined)?.metadata;
+	if (typeof metadata !== "string") {
+		throw new Error("metadata must be a JSON object");
+	}
+	const parsed: unknown = JSON.parse(metadata);
+	if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error("metadata must be a JSON object");
+	}
+	return parsed as CreateBody;
+}
+
+function uploadedAttachments(req: Request): {
+	attachments?: PreparedAttachment[];
+	error?: string;
+} {
+	if (!req.is("multipart/form-data")) return { attachments: [] };
+	const files = (req.files ?? {}) as Record<string, UploadedFile[]>;
+	const thumbnails = files.thumbnail ?? [];
+	const originals = files.original ?? [];
+	if (thumbnails.length !== originals.length) {
+		return { error: "thumbnail and original attachment counts must match" };
+	}
+	return {
+		attachments: thumbnails.map((thumbnail, index) => ({
+			thumbnail,
+			original: originals[index]!,
+			mimeType: originals[index]!.mimetype,
+		})),
+	};
+}
+
+async function validateUploadedAttachments(
+	attachments: PreparedAttachment[],
+): Promise<string | null> {
+	for (const attachment of attachments) {
+		for (const [role, file] of [
+			["thumbnail", attachment.thumbnail],
+			["original", attachment.original],
+		] as const) {
+			const validation = await validateFileContent(file.buffer, file.mimetype);
+			if (!validation.valid) return `${role}: ${validation.error}`;
+		}
+	}
+	return null;
+}
+
+async function writeUploadedAttachments(
+	storage: ReturnType<typeof getAttachmentStorage>,
+	attachments: PreparedAttachment[],
+): Promise<WrittenAttachment[]> {
+	const written: WrittenAttachment[] = [];
+	try {
+		for (const attachment of attachments) {
+			const pair = await storage.writePair({
+				thumbnail: attachment.thumbnail.buffer,
+				original: attachment.original.buffer,
+			});
+			written.push({
+				pair,
+				mimeType: attachment.mimeType,
+				thumbnailSize: attachment.thumbnail.size,
+				originalSize: attachment.original.size,
+			});
+		}
+		return written;
+	} catch (error) {
+		await storage.removePairs(written.map(({ pair }) => pair));
+		throw error;
+	}
+}
+
+type PreparedRequest =
+	| { kind: "bad_request"; error: string }
+	| { kind: "ready"; input: CreateInput; attachments: PreparedAttachment[] };
+
+async function prepareCreateRequest(
+	req: Request,
+	workspaceId: number,
+): Promise<PreparedRequest> {
+	let body: CreateBody;
+	try {
+		body = parseRequestBody(req);
+	} catch (error) {
+		return { kind: "bad_request", error: (error as Error).message };
+	}
+	const uploaded = uploadedAttachments(req);
+	if (uploaded.error) return { kind: "bad_request", error: uploaded.error };
+	const attachments = uploaded.attachments ?? [];
+	const attachmentValidationError =
+		await validateUploadedAttachments(attachments);
+	if (attachmentValidationError) {
+		return { kind: "bad_request", error: attachmentValidationError };
+	}
 	const { columnId } = body;
 	if (body.statusId !== undefined) {
-		return res
-			.status(400)
-			.json({ error: "statusId is not accepted for card creation" });
+		return {
+			kind: "bad_request",
+			error: "statusId is not accepted for card creation",
+		};
 	}
 	if (!Number.isInteger(columnId)) {
-		return res.status(400).json({ error: "columnId must be an integer" });
+		return { kind: "bad_request", error: "columnId must be an integer" };
 	}
 	const title = validateCardTitle((body.title ?? "") as string);
 	const description = validateCardDescription(
 		(body.description ?? "") as string,
 	);
-	if (!title.valid) return res.status(400).json({ error: title.error });
-	if (!description.valid)
-		return res.status(400).json({ error: description.error });
-
-	const input: CreateInput = {
-		workspaceId,
-		columnId: columnId as number,
-		body,
-		actor: req.user!,
-		title: title.trimmed as string,
-		description: description.trimmed ?? "",
+	if (!title.valid) {
+		return {
+			kind: "bad_request",
+			error: title.error ?? "invalid title",
+		};
+	}
+	if (!description.valid) {
+		return {
+			kind: "bad_request",
+			error: description.error ?? "invalid description",
+		};
+	}
+	return {
+		kind: "ready",
+		input: {
+			workspaceId,
+			columnId: columnId as number,
+			body,
+			actor: req.user!,
+			title: title.trimmed as string,
+			description: description.trimmed ?? "",
+		},
+		attachments,
 	};
-	const result: CreateResult = await db.transaction().execute(async (trx) => {
-		const prepared = await prepareCreate(trx, input);
-		if (prepared.kind !== "ready") return prepared;
-		return persistCreatedCard(trx, input, prepared);
-	});
+}
+
+async function removeWrittenAttachments(
+	storage: ReturnType<typeof getAttachmentStorage>,
+	attachments: WrittenAttachment[],
+): Promise<void> {
+	await storage.removePairs(attachments.map(({ pair }) => pair));
+}
+
+function respondToCreateFailure(
+	res: Response,
+	result: Exclude<CreateResult, { kind: "ok" }>,
+): Response {
 	if (result.kind === "not_found_column") {
 		return res.status(404).json({ error: "column not found" });
 	}
 	if (result.kind === "wip") {
 		return res.status(409).json({ error: "WIP limit reached for this column" });
 	}
-	if (result.kind === "bad_request") {
-		return res.status(400).json({
-			error: "Some card fields are invalid",
-			fieldErrors: result.fieldErrors,
-		});
+	return res.status(400).json({
+		error: "Some card fields are invalid",
+		fieldErrors: result.fieldErrors,
+	});
+}
+
+async function publishCreatedResult(
+	workspaceId: number,
+	actor: AuthUser,
+	result: Extract<CreateResult, { kind: "ok" }>,
+): Promise<void> {
+	await publishCreatedCard(workspaceId, actor, result.card);
+	for (const attachment of result.attachments) {
+		await publishCreatedAttachment(
+			workspaceId,
+			actor,
+			result.card.id,
+			attachment,
+		);
+	}
+	for (const assigneeId of result.assignmentIds) {
+		publishAssignment(workspaceId, actor, result.card, assigneeId);
+	}
+}
+
+export async function createCard(req: Request, res: Response) {
+	const { workspaceId } = req.workspace!;
+	const preparedRequest = await prepareCreateRequest(req, workspaceId);
+	if (preparedRequest.kind === "bad_request") {
+		return res.status(400).json({ error: preparedRequest.error });
 	}
 
-	await publishCreatedCard(workspaceId, input.actor, result.card);
-	for (const assigneeId of result.assignmentIds) {
-		publishAssignment(workspaceId, input.actor, result.card, assigneeId);
+	const { input, attachments } = preparedRequest;
+	const attachmentStorage = getAttachmentStorage();
+	let writtenAttachments: WrittenAttachment[];
+	try {
+		writtenAttachments = await writeUploadedAttachments(
+			attachmentStorage,
+			attachments,
+		);
+	} catch (error) {
+		console.error("Failed to write card attachments", error);
+		return res.status(500).json({ error: "Unable to store card attachments" });
 	}
+
+	let result: CreateResult;
+	try {
+		result = await db.transaction().execute(async (trx) => {
+			const prepared = await prepareCreate(trx, input);
+			if (prepared.kind !== "ready") return prepared;
+			return persistCreatedCard(trx, input, prepared, writtenAttachments);
+		});
+	} catch (error) {
+		await removeWrittenAttachments(attachmentStorage, writtenAttachments);
+		console.error("Failed to create card with attachments", error);
+		return res.status(500).json({ error: "Unable to create card" });
+	}
+	if (result.kind !== "ok") {
+		await removeWrittenAttachments(attachmentStorage, writtenAttachments);
+		return respondToCreateFailure(res, result);
+	}
+
+	await publishCreatedResult(workspaceId, input.actor, result);
 	return res.status(201).json(result.card);
 }
