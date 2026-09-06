@@ -167,6 +167,22 @@ function CardEditor({
 		[activeWorkspaceId, cancelScheduledRefresh, card.id, refresh],
 	);
 
+	const deleteAttachment = useCallback(
+		async (attachmentId: number) => {
+			if (activeWorkspaceId === null) {
+				throw new Error("Workspace not available");
+			}
+			cancelScheduledRefresh();
+			await api.deleteCardAttachment(
+				activeWorkspaceId,
+				card.id,
+				attachmentId,
+			);
+			await refresh();
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, card.id, refresh],
+	);
+
 	// Workspace members populate the assignee picker.
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
@@ -442,6 +458,7 @@ function CardEditor({
 						card={card}
 						workspaceId={activeWorkspaceId}
 						onUpload={uploadAttachments}
+						onDelete={deleteAttachment}
 					/>
 				)}
 				{children}

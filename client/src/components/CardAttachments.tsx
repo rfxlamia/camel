@@ -1,5 +1,7 @@
+import { Download, Trash2, X } from "lucide-react";
 import {
 	useCallback,
+	useEffect,
 	useId,
 	useRef,
 	useState,
@@ -12,7 +14,7 @@ import {
 	prepareImageAttachment,
 	type PreparedImagePair,
 } from "../lib/imageAttachments";
-import type { Card } from "../types";
+import type { Card, CardAttachment } from "../types";
 
 export interface CardAttachmentsProps {
 	card: Card;
@@ -27,18 +29,51 @@ function attachmentCount(card: Card): number {
 	return card.attachments?.length ?? 0;
 }
 
+function orderedAttachments(card: Card): CardAttachment[] {
+	return [...(card.attachments ?? [])].sort((a, b) => a.id - b.id);
+}
+
 export default function CardAttachments({
 	card,
 	workspaceId: _workspaceId,
 	onUpload,
+	onDelete,
 }: CardAttachmentsProps) {
 	const inputId = useId();
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [batchMessage, setBatchMessage] = useState<string | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [uploading, setUploading] = useState(false);
+	const [previewAttachment, setPreviewAttachment] =
+		useState<CardAttachment | null>(null);
+	const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+	const [deletingId, setDeletingId] = useState<number | null>(null);
 
 	const total = attachmentCount(card);
+	const attachments = orderedAttachments(card);
+
+	useEffect(() => {
+		if (
+			previewAttachment &&
+			!attachments.some((attachment) => attachment.id === previewAttachment.id)
+		) {
+			setPreviewAttachment(null);
+		}
+	}, [attachments, previewAttachment]);
+
+	useEffect(() => {
+		if (previewAttachment === null && pendingDeleteId === null) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			if (pendingDeleteId !== null) {
+				setPendingDeleteId(null);
+				return;
+			}
+			setPreviewAttachment(null);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [pendingDeleteId, previewAttachment]);
 
 	const processFiles = useCallback(
 		async (files: File[]) => {
@@ -101,65 +136,194 @@ export default function CardAttachments({
 		[processFiles],
 	);
 
+	const confirmDelete = useCallback(async () => {
+		if (pendingDeleteId === null || !onDelete) return;
+		setDeletingId(pendingDeleteId);
+		setErrorMessage(null);
+		try {
+			await onDelete(pendingDeleteId);
+			setPendingDeleteId(null);
+		} catch (err) {
+			setErrorMessage(
+				err instanceof Error ? err.message : "Couldn't delete the image.",
+			);
+		} finally {
+			setDeletingId(null);
+		}
+	}, [onDelete, pendingDeleteId]);
+
 	return (
-		<section
-			aria-label="Images"
-			tabIndex={0}
-			onPaste={onPaste}
-			className="border-t border-neutral-200 px-4 py-4 outline-none focus-visible:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)]"
-		>
-			<div className="flex items-center justify-between gap-3">
-				<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
-					Images
-				</h3>
-				<span
-					className="text-xs tabular-nums text-neutral-500"
-					aria-live="polite"
-				>
-					{total}/{MAX_ATTACHMENT_COUNT}
-				</span>
-			</div>
+		<>
+			<section
+				aria-label="Images"
+				tabIndex={0}
+				onPaste={onPaste}
+				className="border-t border-neutral-200 px-4 py-4 outline-none focus-visible:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)]"
+			>
+				<div className="flex items-center justify-between gap-3">
+					<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+						Images
+					</h3>
+					<span
+						className="text-xs tabular-nums text-neutral-500"
+						aria-live="polite"
+					>
+						{total}/{MAX_ATTACHMENT_COUNT}
+					</span>
+				</div>
 
-			<div className="mt-3 flex flex-wrap items-center gap-2">
-				<input
-					ref={fileInputRef}
-					id={inputId}
-					type="file"
-					accept="image/png,image/jpeg"
-					multiple
-					className="sr-only"
-					onChange={onFileInputChange}
-					disabled={uploading}
-					aria-label="Add images"
-				/>
-				<button
-					type="button"
-					onClick={() => fileInputRef.current?.click()}
-					disabled={uploading || total >= MAX_ATTACHMENT_COUNT}
-					className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
-				>
-					{uploading ? "Uploading…" : "Add images"}
-				</button>
-			</div>
+				{attachments.length > 0 && (
+					<ul
+						className="mt-3 grid grid-cols-3 gap-2"
+						aria-label="Attached images"
+					>
+						{attachments.map((attachment) => (
+							<li key={attachment.id} className="group relative">
+								<button
+									type="button"
+									onClick={() => setPreviewAttachment(attachment)}
+									className="block w-full overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+									aria-label={`View attachment ${attachment.id}`}
+								>
+									<img
+										src={attachment.thumbnailUrl}
+										alt={`Attachment ${attachment.id}`}
+										className="aspect-square w-full object-cover"
+									/>
+								</button>
+								{onDelete && (
+									<button
+										type="button"
+										onClick={() => setPendingDeleteId(attachment.id)}
+										disabled={deletingId === attachment.id}
+										className="absolute right-1 top-1 rounded-md bg-white/90 p-1 text-neutral-600 shadow-sm hover:bg-white hover:text-error-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50 motion-reduce:transition-none"
+										aria-label={`Delete attachment ${attachment.id}`}
+									>
+										<Trash2 size={14} aria-hidden />
+									</button>
+								)}
+							</li>
+						))}
+					</ul>
+				)}
 
-			{batchMessage && (
-				<p
-					className="mt-2 text-sm text-neutral-700"
-					role="status"
-					aria-live="polite"
+				<div className="mt-3 flex flex-wrap items-center gap-2">
+					<input
+						ref={fileInputRef}
+						id={inputId}
+						type="file"
+						accept="image/png,image/jpeg"
+						multiple
+						className="sr-only"
+						onChange={onFileInputChange}
+						disabled={uploading}
+						aria-label="Add images"
+					/>
+					<button
+						type="button"
+						onClick={() => fileInputRef.current?.click()}
+						disabled={uploading || total >= MAX_ATTACHMENT_COUNT}
+						className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{uploading ? "Uploading…" : "Add images"}
+					</button>
+				</div>
+
+				{batchMessage && (
+					<p
+						className="mt-2 text-sm text-neutral-700"
+						role="status"
+						aria-live="polite"
+					>
+						{batchMessage}
+					</p>
+				)}
+				{errorMessage && (
+					<p className="mt-2 text-sm text-error-500" role="alert">
+						{errorMessage}
+					</p>
+				)}
+
+				{total === 0 && !uploading && (
+					<p className="mt-3 text-sm text-neutral-500">
+						No images attached yet.
+					</p>
+				)}
+			</section>
+
+			{previewAttachment && (
+				<div
+					role="dialog"
+					aria-modal="true"
+					aria-label="Image preview"
+					className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/80 p-4 motion-reduce:animate-none"
+					onClick={() => setPreviewAttachment(null)}
 				>
-					{batchMessage}
-				</p>
-			)}
-			{errorMessage && (
-				<p className="mt-2 text-sm text-error-500" role="alert">
-					{errorMessage}
-				</p>
+					<div
+						className="relative max-h-[90vh] max-w-4xl rounded-lg bg-white p-3 shadow-lg"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<button
+							type="button"
+							onClick={() => setPreviewAttachment(null)}
+							className="absolute right-2 top-2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							aria-label="Close image preview"
+						>
+							<X size={18} aria-hidden />
+						</button>
+						<img
+							src={previewAttachment.originalUrl}
+							alt={`Attachment ${previewAttachment.id}`}
+							className="max-h-[75vh] w-full object-contain"
+						/>
+						<div className="mt-3 flex justify-end">
+							<a
+								href={previewAttachment.downloadUrl}
+								className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+								aria-label="Download original"
+							>
+								<Download size={14} aria-hidden />
+								Download original
+							</a>
+						</div>
+					</div>
+				</div>
 			)}
 
-			{total === 0 && !uploading && (
-				<p className="mt-3 text-sm text-neutral-500">No images attached yet.</p>
+			{pendingDeleteId !== null && (
+				<div
+					role="dialog"
+					aria-modal="true"
+					aria-label="Confirm attachment delete"
+					className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/50 p-4 motion-reduce:animate-none"
+				>
+					<div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-4 shadow-lg">
+						<h4 className="text-sm font-medium text-neutral-900">
+							Delete this image?
+						</h4>
+						<p className="mt-1 text-sm text-neutral-600">
+							This cannot be undone.
+						</p>
+						<div className="mt-4 flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => setPendingDeleteId(null)}
+								className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => void confirmDelete()}
+								disabled={deletingId !== null}
+								className="rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50"
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				</div>
 			)}
-		</section>
+		</>
 	);
 }
