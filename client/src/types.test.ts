@@ -102,3 +102,84 @@ describe("AgentEvent live-thinking shape", () => {
 		expect(started.boardId).toBe(7);
 	});
 });
+
+import type {
+	ActivityEvent,
+	BoardEvent,
+	Card,
+	CardAttachment,
+	User,
+} from "./types";
+
+const actor: User = {
+	id: 7,
+	username: "sinta",
+	displayName: "Sinta",
+	emailVerified: true,
+	needsUsername: false,
+};
+const activityActor = { username: "sinta", displayName: actor.displayName };
+
+const attachment: CardAttachment = {
+	id: 9,
+	thumbnailUrl: "/api/workspaces/7/cards/42/attachments/9/thumbnail",
+	originalUrl: "/api/workspaces/7/cards/42/attachments/9/original",
+	downloadUrl: "/api/workspaces/7/cards/42/attachments/9/original/download",
+	mimeType: "image/png",
+	createdAt: "2026-09-05T10:00:00.000Z",
+};
+
+describe("attachment response and realtime types", () => {
+	it("accepts safe attachment metadata on cards and activity", () => {
+		const card: Card = {
+			id: 42,
+			columnId: 3,
+			title: "Card with image",
+			description: "",
+			position: 1,
+			version: 1,
+			createdAt: attachment.createdAt,
+			updatedAt: attachment.createdAt,
+			startedAt: null,
+			doneAt: null,
+			dueDate: null,
+			assignees: [],
+			attachments: [attachment],
+		};
+		const activity: ActivityEvent = {
+			id: 11,
+			type: "attachment_added",
+			cardId: card.id,
+			cardTitle: card.title,
+			fromColumn: null,
+			toColumn: null,
+			actor: activityActor,
+			createdAt: attachment.createdAt,
+			payload: {
+				attachmentId: attachment.id,
+				mimeType: attachment.mimeType,
+				createdAt: attachment.createdAt,
+			},
+		};
+
+		expect(card.attachments?.[0].thumbnailUrl).toContain("/thumbnail");
+		expect(activity.payload?.attachmentId).toBe(attachment.id);
+		expect(activity.payload).not.toHaveProperty("thumbnailBytes");
+	});
+
+	it("accepts metadata-only attachment realtime events", () => {
+		const event: BoardEvent = {
+			type: "attachment.added",
+			actor,
+			cardId: 42,
+			at: attachment.createdAt,
+			payload: {
+				attachmentId: attachment.id,
+				mimeType: attachment.mimeType,
+				createdAt: attachment.createdAt,
+			},
+		};
+		expect(event.type).toBe("attachment.added");
+		expect(event.payload?.attachmentId).toBe(attachment.id);
+	});
+});

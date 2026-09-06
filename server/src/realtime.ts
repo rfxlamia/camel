@@ -37,6 +37,8 @@ export interface BoardEvent {
 		| "card.moved"
 		| "card.reordered"
 		| "card.deleted"
+		| "attachment.added"
+		| "attachment.removed"
 		| "column.created"
 		| "column.updated"
 		| "column.deleted"
@@ -70,6 +72,12 @@ export interface BoardEvent {
 		| "focus_session.updated";
 	actor?: AuthUser;
 	cardId?: number;
+	attachmentId?: number;
+	attachment?: {
+		id: number;
+		mimeType: string;
+		createdAt: string;
+	};
 	trackerItemId?: number;
 	userId?: number;
 	workspaceId?: number;
