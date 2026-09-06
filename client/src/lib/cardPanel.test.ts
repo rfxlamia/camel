@@ -130,6 +130,34 @@ describe("describeCardEvent", () => {
 			"updated this card",
 		);
 	});
+
+	it("describes attachment added events as plain text", () => {
+		const event = makeEvent({
+			type: "attachment_added",
+			payload: {
+				attachmentId: 9,
+				mimeType: "image/png",
+				createdAt: "2026-09-05T10:00:00.000Z",
+			},
+		});
+		const description = describeCardEvent(event);
+		expect(description).toBe("added an image to this card");
+		expect(description).not.toMatch(/<img|thumbnail|\.png/i);
+	});
+
+	it("describes attachment removed events as plain text", () => {
+		const event = makeEvent({
+			type: "attachment_removed",
+			payload: {
+				attachmentId: 9,
+				mimeType: "image/png",
+				createdAt: "2026-09-05T10:00:00.000Z",
+			},
+		});
+		const description = describeCardEvent(event);
+		expect(description).toBe("removed an image from this card");
+		expect(description).not.toMatch(/<img|thumbnail|\.png/i);
+	});
 });
 
 describe("workspace-aware card panel redirects", () => {
