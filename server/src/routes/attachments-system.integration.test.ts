@@ -15,7 +15,9 @@ import {
 	parseSseDataEvents,
 	pngFixture,
 	setAuthenticatedViewer,
+	submitStagedClientCreate,
 	uploadUrl,
+	withCreateFixture,
 	withSystemFixture,
 } from "./attachments-system.support.js";
 
@@ -69,6 +71,31 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				});
 
 				viewerB.close();
+			});
+		}, 15_000);
+
+		it("creates a card atomically when the client FormData serializer hits card-create", async () => {
+			await withCreateFixture(async (fixture) => {
+				const image = pngFixture();
+				const created = await submitStagedClientCreate(fixture, {
+					title: "Staged board card",
+					thumbnail: image,
+					original: image,
+				});
+
+				expect(created.title).toBe("Staged board card");
+				expect(created.attachments).toHaveLength(1);
+				expect(created.attachments[0]).toMatchObject({
+					mimeType: "image/png",
+				});
+
+				const cards = await fixture.countCards();
+				expect(cards).toBe(1);
+				const attachments = await fixture.listAttachments(created.id);
+				expect(attachments).toHaveLength(1);
+				expect(attachments[0]).toMatchObject({
+					mime_type: "image/png",
+				});
 			});
 		}, 15_000);
 	},

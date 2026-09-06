@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import { createServer, type Server } from "node:http";
 import { mkdir, readdir, rm } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
 import * as path from "node:path";
 import cookieParser from "cookie-parser";
 import express from "express";
@@ -16,12 +18,17 @@ import {
 	LocalAttachmentStorage,
 	setAttachmentStorageForTests,
 } from "../lib/attachment-storage.js";
+import { createErrorHandler } from "../middleware/error-handler.js";
 import {
 	createRealtimeHub,
 	setRealtimeHubForTests,
 	type RealtimeHubDeps,
 } from "../realtime.js";
 import { api } from "../routes.js";
+import {
+	invokeClientCreateCard,
+	resetClientRequestBoundary,
+} from "./attachments-system.client-bridge.js";
 
 const { authenticatedViewer, viewerUsers } = vi.hoisted(() => {
 	const viewerA: AuthUser = {
@@ -65,6 +72,7 @@ export const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use("/api", api);
+app.use(createErrorHandler());
 
 export function pngFixture(size = 1024, width = 1, height = 1): Buffer {
 	const bytes = Buffer.alloc(Math.max(size, 33), 0x61);
@@ -325,4 +333,138 @@ export async function withSystemFixture<T>(
 		setRealtimeHubForTests(null);
 		await removeTestStorage(fixtureStorage);
 	}
+}
+
+export type CreateFixture = {
+	workspaceId: number;
+	columnId: number;
+	storage: AttachmentStorage;
+	viewerA: AuthUser;
+	baseUrl: string;
+	countCards: () => Promise<number>;
+	listAttachments: (
+		cardId: number,
+	) => Promise<Array<{ id: number; mime_type: string }>>;
+};
+
+async function startAppServer(): Promise<{ server: Server; baseUrl: string }> {
+	const server = createServer(app);
+	await new Promise<void>((resolve, reject) => {
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", () => resolve());
+	});
+	const address = server.address();
+	if (!address || typeof address === "string") {
+		throw new Error("Failed to bind attachment system test server");
+	}
+	return {
+		server,
+		baseUrl: `http://127.0.0.1:${(address as AddressInfo).port}`,
+	};
+}
+
+async function stopAppServer(server: Server): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		server.close((error) => {
+			if (error) reject(error);
+			else resolve();
+		});
+	});
+}
+
+async function createCreateFixture(
+	fixtureStorage: AttachmentStorage,
+): Promise<Omit<CreateFixture, "baseUrl">> {
+	await ensureViewerUsers();
+	const workspaceId = await createOwnedWorkspace(
+		viewerUsers.viewerA.id,
+		`Attachment create system ${randomUUID()}`,
+	);
+	const columnId = await createWorkspaceColumn(workspaceId);
+	return {
+		workspaceId,
+		columnId,
+		storage: fixtureStorage,
+		viewerA: viewerUsers.viewerA,
+		countCards: async () => {
+			const rows = await db
+				.selectFrom("cards")
+				.select("id")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			return rows.length;
+		},
+		listAttachments: async (cardId: number) =>
+			db
+				.selectFrom("attachments")
+				.select(["id", "mime_type"])
+				.where("card_id", "=", cardId)
+				.orderBy("id")
+				.execute(),
+	};
+}
+
+async function createWorkspaceColumn(workspaceId: number): Promise<number> {
+	const column = await db
+		.insertInto("columns")
+		.values({
+			workspace_id: workspaceId,
+			title: "Todo",
+			position: 1024,
+			policy: "manual",
+		})
+		.returning("id")
+		.executeTakeFirstOrThrow();
+	return column.id;
+}
+
+async function cleanupCreateFixture(
+	fixture: Omit<CreateFixture, "baseUrl">,
+): Promise<void> {
+	await db.deleteFrom("workspaces").where("id", "=", fixture.workspaceId).execute();
+}
+
+export async function withCreateFixture<T>(
+	callback: (fixture: CreateFixture) => Promise<T>,
+): Promise<T> {
+	const fixtureStorage = await createTestStorage();
+	const hub = createRealtimeHub({ publisher: null, subscriber: null });
+	setAttachmentStorageForTests(fixtureStorage);
+	setRealtimeHubForTests(hub);
+	const baseFixture = await createCreateFixture(fixtureStorage);
+	const { server, baseUrl } = await startAppServer();
+	const fixture: CreateFixture = { ...baseFixture, baseUrl };
+	try {
+		return await callback(fixture);
+	} finally {
+		await resetClientRequestBoundary();
+		await stopAppServer(server);
+		await cleanupCreateFixture(baseFixture);
+		setAttachmentStorageForTests(null);
+		setRealtimeHubForTests(null);
+		await removeTestStorage(fixtureStorage);
+	}
+}
+
+export async function submitStagedClientCreate(
+	fixture: CreateFixture,
+	{
+		title,
+		thumbnail,
+		original,
+	}: {
+		title: string;
+		thumbnail: Buffer;
+		original: Buffer;
+	},
+) {
+	setAuthenticatedViewer(fixture.viewerA);
+	return invokeClientCreateCard({
+		baseUrl: fixture.baseUrl,
+		workspaceId: fixture.workspaceId,
+		columnId: fixture.columnId,
+		title,
+		thumbnail,
+		original,
+	});
 }

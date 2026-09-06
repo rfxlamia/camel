@@ -68,6 +68,28 @@ interface RequestOptions {
 	userAction?: string;
 }
 
+let requestBaseUrl = "";
+let requestFetch: typeof fetch | null = null;
+
+export function configureRequestBoundaryForTests(
+	options: {
+		baseUrl?: string;
+		fetchImpl?: typeof fetch | null;
+	} = {},
+): void {
+	if (options.baseUrl !== undefined) {
+		requestBaseUrl = options.baseUrl;
+	}
+	if (options.fetchImpl !== undefined) {
+		requestFetch = options.fetchImpl;
+	}
+}
+
+export function resetRequestBoundaryForTests(): void {
+	requestBaseUrl = "";
+	requestFetch = null;
+}
+
 export type TicketIntakeDraft = {
 	title: string | null;
 	description: string | null;
@@ -129,7 +151,7 @@ async function request<T>(
 ): Promise<T> {
 	const method = (init?.method ?? "GET").toUpperCase();
 	const headers = new Headers(init?.headers);
-	const endpoint = `/api${path}`;
+	const endpoint = `${requestBaseUrl}/api${path}`;
 	const body = init?.body;
 
 	if (!(body instanceof FormData) && !headers.has("Content-Type")) {
@@ -142,7 +164,7 @@ async function request<T>(
 		if (csrf) headers.set("X-CSRF-Token", csrf);
 	}
 
-	const res = await fetch(endpoint, {
+	const res = await (requestFetch ?? fetch)(endpoint, {
 		...init,
 		headers,
 		credentials: "include",
