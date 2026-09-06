@@ -47,6 +47,7 @@ const CHIP_FIELD_PREFIXES: Partial<Record<keyof TaskCreateFieldErrors, string>> 
 	};
 
 const STAGE_CAP_MESSAGE = "Max 3 images per card";
+const UPLOAD_RETRY_MESSAGE = "Upload failed. Try again.";
 
 type StagedImage =
 	| {
@@ -92,8 +93,12 @@ function buildBoardPayload(
 		metadata;
 	const attachments = stagedImages
 		.filter(
-			(entry): entry is Extract<StagedImage, { kind: "valid" }> =>
-				entry.kind === "valid",
+			(
+				entry,
+			): entry is Extract<
+				StagedImage,
+				{ kind: "valid" | "network-error" }
+			> => entry.kind === "valid" || entry.kind === "network-error",
 		)
 		.map((entry) => entry.prepared);
 	return {
@@ -106,6 +111,22 @@ function buildBoardPayload(
 
 function countStagedSlots(entries: StagedImage[]): number {
 	return entries.filter((entry) => entry.kind !== "loading").length;
+}
+
+function markStagedUploadFailure(
+	entries: StagedImage[],
+	error: string,
+): StagedImage[] {
+	return entries.map((entry) => {
+		if (entry.kind !== "valid") return entry;
+		return { ...entry, kind: "network-error", error };
+	});
+}
+
+function uploadFailureMessage(err: unknown): string {
+	if (err instanceof ApiError) return err.message;
+	if (err instanceof Error && err.message) return err.message;
+	return UPLOAD_RETRY_MESSAGE;
 }
 
 export default function AddCard({ column, onAddCard }: Props) {
@@ -257,6 +278,10 @@ export default function AddCard({ column, onAddCard }: Props) {
 		} catch (err) {
 			if (err instanceof ApiError && err.fieldErrors) {
 				setFieldErrors(err.fieldErrors);
+			} else if (stagedImages.some((entry) => entry.kind === "valid")) {
+				setStagedImages((current) =>
+					markStagedUploadFailure(current, uploadFailureMessage(err)),
+				);
 			}
 		} finally {
 			setSubmitting(false);

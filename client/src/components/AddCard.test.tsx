@@ -316,6 +316,36 @@ describe("AddCard image staging", () => {
 		);
 		expect(screen.queryByRole("button", { name: /^Image:/ })).toBeNull();
 	});
+
+	it("restores editable state with retryable chip after upload failure", async () => {
+		const onAddCard = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("network down"))
+			.mockResolvedValueOnce(undefined);
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png");
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Retry upload" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: /Retry Image: one.png/i }),
+			).toBeTruthy(),
+		);
+		expect(textarea.value).toBe("Retry upload");
+		expect(screen.getByRole("button", { name: /add to board/i })).toBeTruthy();
+
+		fireEvent.click(screen.getByRole("button", { name: /Retry Image: one.png/i }));
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy(),
+		);
+	});
 });
 
 describe("AddCard", () => {
