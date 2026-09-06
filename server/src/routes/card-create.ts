@@ -315,6 +315,7 @@ async function recordCreatedCardActivity(
 			"attachment_added",
 			{
 				cardId,
+				toColumnId: prepared.column.id,
 				payload: {
 					attachmentId: attachment.id,
 					mimeType: attachment.mime_type,

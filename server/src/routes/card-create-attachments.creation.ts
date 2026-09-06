@@ -45,16 +45,30 @@ export function registerCreationScenarios(publishEventMock: unknown): void {
 				original_size_bytes: PNG_1X1.length + Buffer.from("pair-two").length,
 			}),
 		]);
-		expect(
-			await query(
-				"SELECT event_type FROM card_events WHERE card_id = $1 ORDER BY id",
-				[response.body.id],
-			),
-		).toEqual([
-			{ event_type: "create" },
-			{ event_type: "attachment_added" },
-			{ event_type: "attachment_added" },
-		]);
+		const activities = await query<{
+			event_type: string;
+			to_column_id: number | null;
+			payload: Record<string, unknown>;
+		}>(
+			"SELECT event_type, to_column_id, payload FROM card_events WHERE card_id = $1 ORDER BY id",
+			[response.body.id],
+		);
+		expect(activities).toHaveLength(3);
+		expect(activities[0]).toMatchObject({
+			event_type: "create",
+			to_column_id: fixtures!.columnId,
+		});
+		for (const activity of activities.slice(1)) {
+			expect(activity).toMatchObject({
+				event_type: "attachment_added",
+				to_column_id: fixtures!.columnId,
+			});
+			expect(Object.keys(activity.payload).sort()).toEqual([
+				"attachmentId",
+				"createdAt",
+				"mimeType",
+			]);
+		}
 		expect(publishEventMock).toHaveBeenCalledTimes(3);
 		expect(
 			(publishEventMock as { mock: { calls: unknown[][] } }).mock.calls.map(
