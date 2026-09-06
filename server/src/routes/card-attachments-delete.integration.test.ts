@@ -26,6 +26,23 @@ function deleteUrl(workspaceId: number, cardId: number, attachmentId: number) {
 	return `/api/workspaces/${workspaceId}/cards/${cardId}/attachments/${attachmentId}`;
 }
 
+async function cardColumnId(cardId: number): Promise<number> {
+	const card = await db
+		.selectFrom("cards")
+		.select("column_id")
+		.where("id", "=", cardId)
+		.executeTakeFirstOrThrow();
+	return card.column_id;
+}
+
+function expectMetadataOnlyPayload(payload: Record<string, unknown>): void {
+	expect(Object.keys(payload).sort()).toEqual([
+		"attachmentId",
+		"createdAt",
+		"mimeType",
+	]);
+}
+
 integration("card attachment deletion", () => {
 	it("deletes non-cover and cover attachments with activity, realtime, and stable version", async () => {
 		await withUploadFixture(2, async (fixture) => {
@@ -104,20 +121,24 @@ integration("card attachment deletion", () => {
 				.orderBy("id")
 				.execute();
 			expect(activities).toHaveLength(2);
+			const columnId = await cardColumnId(fixture.cardId);
 			expect(activities).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({
 						event_type: "attachment_removed",
-						to_column_id: expect.any(Number),
+						to_column_id: columnId,
 						payload: expect.objectContaining({ attachmentId: nextCover!.id }),
 					}),
 					expect.objectContaining({
 						event_type: "attachment_removed",
-						to_column_id: expect.any(Number),
+						to_column_id: columnId,
 						payload: expect.objectContaining({ attachmentId: cover!.id }),
 					}),
 				]),
 			);
+			for (const activity of activities) {
+				expectMetadataOnlyPayload(activity.payload as Record<string, unknown>);
+			}
 			expect(await countFiles(fixture.storage.root)).toBe(0);
 		});
 	}, 15_000);
@@ -199,20 +220,24 @@ integration("card attachment deletion", () => {
 				.orderBy("id")
 				.execute();
 			expect(activities).toHaveLength(2);
+			const columnId = await cardColumnId(fixture.cardId);
 			expect(activities).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({
 						event_type: "attachment_removed",
-						to_column_id: expect.any(Number),
+						to_column_id: columnId,
 						payload: expect.objectContaining({ attachmentId: cover!.id }),
 					}),
 					expect.objectContaining({
 						event_type: "attachment_removed",
-						to_column_id: expect.any(Number),
+						to_column_id: columnId,
 						payload: expect.objectContaining({ attachmentId: nextCover!.id }),
 					}),
 				]),
 			);
+			for (const activity of activities) {
+				expectMetadataOnlyPayload(activity.payload as Record<string, unknown>);
+			}
 			expect(await countFiles(fixture.storage.root)).toBe(0);
 		});
 	}, 15_000);

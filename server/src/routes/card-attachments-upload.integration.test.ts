@@ -65,6 +65,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					event_type: "attachment_added",
 					to_column_id: card.column_id,
 				});
+				expect(Object.keys(activities[0]!.payload).sort()).toEqual([
+					"attachmentId",
+					"createdAt",
+					"mimeType",
+				]);
 				expect(await countFiles(fixture.storage.root)).toBe(4);
 				const published = events.drain();
 				expect(published).toHaveLength(1);
