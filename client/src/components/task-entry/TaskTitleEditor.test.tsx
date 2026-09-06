@@ -10,6 +10,7 @@ import { useReducer } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type TaskFieldCommandDefinition,
+	type TaskFileCommandDefinition,
 	TaskTitleEditor,
 	type TaskTitleEditorHandle,
 } from "./TaskTitleEditor";
@@ -66,11 +67,13 @@ function boardFields(
 
 function EditorHarness({
 	fields = boardFields(),
+	fileCommands,
 	initialDraft,
 	onSubmit,
 	editorRef,
 }: {
 	fields?: TaskFieldCommandDefinition[];
+	fileCommands?: TaskFileCommandDefinition[];
 	initialDraft?: Partial<TaskMetadataDraft>;
 	onSubmit?: (title: string) => void;
 	editorRef?: React.RefObject<TaskTitleEditorHandle>;
@@ -91,6 +94,7 @@ function EditorHarness({
 			<TaskTitleEditor
 				ref={editorRef}
 				fields={fields}
+				fileCommands={fileCommands}
 				draft={draft}
 				dispatch={(action: TaskMetadataAction) => dispatch(action)}
 			/>
@@ -468,6 +472,52 @@ describe("TaskTitleEditor", () => {
 		expect(rafiOption.getAttribute("aria-selected")).toBe("true");
 		expect(mayaOption.getAttribute("aria-selected")).toBe("false");
 		expect(getActiveOption()).toBe(mayaOption);
+	});
+
+	it("selects image files without dispatching metadata or changing the title", () => {
+		const onFilesSelected = vi.fn();
+		const dispatch = vi.fn();
+		const imageCommand: TaskFileCommandDefinition = {
+			kind: "file",
+			id: "image",
+			label: "Image",
+			accept: "image/png,image/jpeg",
+			multiple: true,
+			onFilesSelected,
+		};
+		render(
+			<TaskTitleEditor
+				fields={boardFields()}
+				fileCommands={[imageCommand]}
+				draft={createInitialTaskMetadataDraft()}
+				dispatch={dispatch}
+			/>,
+		);
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		expect(screen.getByRole("option", { name: "Assignee" })).toBeTruthy();
+		expect(screen.getByRole("option", { name: "Priority" })).toBeTruthy();
+		fireEvent.change(textarea, { target: { value: "Fix login @image" } });
+		expect(screen.getByRole("option", { name: "Image" })).toBeTruthy();
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+		const input = document.querySelector(
+			'input[type="file"]',
+		) as HTMLInputElement;
+		expect(input.multiple).toBe(true);
+		expect(input.accept).toBe("image/png,image/jpeg");
+		const files = [
+			new File(["png"], "one.png", { type: "image/png" }),
+			new File(["jpeg"], "two.jpg", { type: "image/jpeg" }),
+		];
+		fireEvent.change(input, { target: { files } });
+
+		expect(onFilesSelected).toHaveBeenCalledWith(files);
+		expect(dispatch).not.toHaveBeenCalled();
+		expect(textarea.value).toBe("Fix login");
+		expect(screen.queryByRole("listbox")).toBeNull();
 	});
 
 	it("preserves Tab and Shift+Tab navigation around the command editor", async () => {

@@ -1,4 +1,5 @@
 import {
+	type ChangeEvent,
 	forwardRef,
 	type KeyboardEvent,
 	type ReactNode,
@@ -6,6 +7,7 @@ import {
 	useEffect,
 	useId,
 	useImperativeHandle,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -43,6 +45,30 @@ export interface TaskFieldCommandDefinition {
 	getSelectedOptionIds: (draft: TaskMetadataDraft) => string[];
 }
 
+export interface TaskFileCommandDefinition {
+	kind: "file";
+	id: string;
+	label: string;
+	/** Leading glyph for this file trigger's row in the command menu. */
+	icon?: ReactNode;
+	accept: string;
+	/** File triggers always open a multi-file picker; this is retained for callers that need to opt out. */
+	multiple?: boolean;
+	onFilesSelected: (files: File[]) => void;
+}
+
+type TaskCommandDefinition =
+	| TaskFieldCommandDefinition
+	| TaskFileCommandDefinition;
+
+function isTaskFileCommand(
+	command: TaskCommandDefinition,
+): command is TaskFileCommandDefinition {
+	return "kind" in command && command.kind === "file";
+}
+
+const EMPTY_FILE_COMMANDS: TaskFileCommandDefinition[] = [];
+
 export interface TaskSubmitCandidate {
 	valid: boolean;
 	title: string;
@@ -58,6 +84,7 @@ export interface TaskTitleEditorHandle {
 
 interface TaskTitleEditorProps {
 	fields: TaskFieldCommandDefinition[];
+	fileCommands?: TaskFileCommandDefinition[];
 	draft: TaskMetadataDraft;
 	dispatch: (action: TaskMetadataAction) => void;
 	placeholder?: string;
@@ -134,6 +161,7 @@ export const TaskTitleEditor = forwardRef<
 >(function TaskTitleEditor(
 	{
 		fields,
+		fileCommands = EMPTY_FILE_COMMANDS,
 		draft,
 		dispatch,
 		placeholder = "Task title",
@@ -151,7 +179,10 @@ export const TaskTitleEditor = forwardRef<
 	const [selectedChipId, setSelectedChipId] = useState<string | null>(null);
 	const [announcement, setAnnouncement] = useState("");
 	const [isComposing, setIsComposing] = useState(false);
+	const [filePickerCommand, setFilePickerCommand] =
+		useState<TaskFileCommandDefinition | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
 	const commandPopoverRef = useRef<HTMLDivElement>(null);
 	const restoreCaretRef = useRef<number | null>(null);
@@ -162,8 +193,13 @@ export const TaskTitleEditor = forwardRef<
 	} | null>(null);
 	const listboxId = useId();
 
-	const availableFields = fields.filter(
-		(field) => field.catalogState !== "disabled",
+	const availableFields = useMemo(
+		() => fields.filter((field) => field.catalogState !== "disabled"),
+		[fields],
+	);
+	const fieldCommands = useMemo<TaskCommandDefinition[]>(
+		() => [...availableFields, ...fileCommands],
+		[availableFields, fileCommands],
 	);
 
 	const getField = useCallback(
@@ -186,6 +222,11 @@ export const TaskTitleEditor = forwardRef<
 			textarea.setSelectionRange(position, position);
 		});
 	}, []);
+
+	useEffect(() => {
+		if (!filePickerCommand) return;
+		fileInputRef.current?.click();
+	}, [filePickerCommand]);
 
 	const closeCommand = useCallback(
 		(caret?: number) => {
@@ -229,7 +270,7 @@ export const TaskTitleEditor = forwardRef<
 		) => {
 			const filtered =
 				stage === "field"
-					? filterByQuery(availableFields, query)
+					? filterByQuery(fieldCommands, query)
 					: filterByQuery(getField(fieldId)?.options ?? [], query);
 			setCommand({
 				open: true,
@@ -244,7 +285,7 @@ export const TaskTitleEditor = forwardRef<
 				setCommand((current) => ({ ...current, activeIndex: 0 }));
 			}
 		},
-		[availableFields, getField],
+		[fieldCommands, getField],
 	);
 
 	const syncCommandFromTitle = useCallback(
@@ -257,7 +298,7 @@ export const TaskTitleEditor = forwardRef<
 				return;
 			}
 			if (command.editingFieldId) return;
-			const filtered = filterByQuery(availableFields, match.query);
+			const filtered = filterByQuery(fieldCommands, match.query);
 			setCommand((current) => ({
 				open: true,
 				stage: current.stage === "value" ? "value" : "field",
@@ -271,7 +312,7 @@ export const TaskTitleEditor = forwardRef<
 				editingFieldId: null,
 			}));
 		},
-		[availableFields, command.editingFieldId, command.open],
+		[fieldCommands, command.editingFieldId, command.open],
 	);
 
 	useEffect(() => {
@@ -292,7 +333,7 @@ export const TaskTitleEditor = forwardRef<
 
 	const activeField = getField(command.fieldId);
 	const fieldOptions = filterByQuery(
-		availableFields,
+		fieldCommands,
 		command.stage === "field" ? command.query : "",
 	);
 	const valueOptions =
@@ -444,6 +485,23 @@ export const TaskTitleEditor = forwardRef<
 		});
 	};
 
+	const enterFileStage = (fileCommand: TaskFileCommandDefinition) => {
+		const nextPlainTitle = plainTitle(title, command.commandStart);
+		setTitle(nextPlainTitle);
+		setCommand(initialCommandState());
+		setFilePickerCommand(fileCommand);
+	};
+
+	const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+		const selectedCommand = filePickerCommand;
+		const files = Array.from(event.currentTarget.files ?? []);
+		setFilePickerCommand(null);
+		if (selectedCommand && files.length > 0) {
+			selectedCommand.onFilesSelected(files);
+		}
+		restoreFocus(title.length);
+	};
+
 	const openChipEditor = (field: TaskFieldCommandDefinition) => {
 		setSelectedChipId(null);
 		setCommand({
@@ -469,9 +527,13 @@ export const TaskTitleEditor = forwardRef<
 	 */
 	const commitOptionAtIndex = (index: number) => {
 		if (command.stage === "field") {
-			const field = fieldOptions[index];
-			if (!field) return;
-			enterFieldStage(field);
+			const selectedCommand = fieldOptions[index];
+			if (!selectedCommand) return;
+			if (isTaskFileCommand(selectedCommand)) {
+				enterFileStage(selectedCommand);
+			} else {
+				enterFieldStage(selectedCommand);
+			}
 			return;
 		}
 		if (command.stage !== "value" || !activeField || pickerUnavailable) return;
@@ -597,9 +659,14 @@ export const TaskTitleEditor = forwardRef<
 			event.stopPropagation();
 
 			if (command.stage === "field") {
-				const field = fieldOptions[command.activeIndex] ?? fieldOptions[0];
-				if (!field) return;
-				enterFieldStage(field);
+				const selectedCommand =
+					fieldOptions[command.activeIndex] ?? fieldOptions[0];
+				if (!selectedCommand) return;
+				if (isTaskFileCommand(selectedCommand)) {
+					enterFileStage(selectedCommand);
+				} else {
+					enterFieldStage(selectedCommand);
+				}
 				return;
 			}
 
@@ -691,6 +758,17 @@ export const TaskTitleEditor = forwardRef<
 
 	return (
 		<div ref={shellRef} className="relative flex w-full flex-col gap-1.5">
+			{filePickerCommand ? (
+				<input
+					ref={fileInputRef}
+					type="file"
+					accept={filePickerCommand.accept}
+					multiple={filePickerCommand.multiple ?? true}
+					onChange={handleFileInputChange}
+					className="sr-only"
+					tabIndex={-1}
+				/>
+			) : null}
 			<textarea
 				ref={textareaRef}
 				rows={1}
