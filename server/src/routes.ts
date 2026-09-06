@@ -87,7 +87,7 @@ type RouteLayer = {
 function listTopLevelApiRoutes(router: Router): Set<string> {
 	const keys = new Set<string>();
 	// SAFETY: Express exposes its internal stack at runtime; RouteLayer captures the inspected shape.
-	for (const layer of (router as unknown as { stack: RouteLayer[] }).stack ??
+	for (const layer of (router as Router & { stack: RouteLayer[] }).stack ??
 		[]) {
 		if (!layer.route) continue;
 		for (const [method, enabled] of Object.entries(layer.route.methods)) {
