@@ -41,6 +41,9 @@ export default function CardAttachments({
 }: CardAttachmentsProps) {
 	const inputId = useId();
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const lightboxCloseRef = useRef<HTMLButtonElement>(null);
+	const deleteCancelRef = useRef<HTMLButtonElement>(null);
+	const returnFocusRef = useRef<HTMLElement | null>(null);
 	const [batchMessage, setBatchMessage] = useState<string | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [uploading, setUploading] = useState(false);
@@ -65,15 +68,35 @@ export default function CardAttachments({
 		if (previewAttachment === null && pendingDeleteId === null) return;
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
 			if (pendingDeleteId !== null) {
 				setPendingDeleteId(null);
 				return;
 			}
 			setPreviewAttachment(null);
 		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
+		window.addEventListener("keydown", onKeyDown, { capture: true });
+		return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
 	}, [pendingDeleteId, previewAttachment]);
+
+	useEffect(() => {
+		if (!previewAttachment) return;
+		returnFocusRef.current = document.activeElement as HTMLElement | null;
+		lightboxCloseRef.current?.focus();
+		return () => {
+			returnFocusRef.current?.focus();
+		};
+	}, [previewAttachment]);
+
+	useEffect(() => {
+		if (pendingDeleteId === null) return;
+		returnFocusRef.current = document.activeElement as HTMLElement | null;
+		deleteCancelRef.current?.focus();
+		return () => {
+			returnFocusRef.current?.focus();
+		};
+	}, [pendingDeleteId]);
 
 	const processFiles = useCallback(
 		async (files: File[]) => {
@@ -264,6 +287,7 @@ export default function CardAttachments({
 						onClick={(event) => event.stopPropagation()}
 					>
 						<button
+							ref={lightboxCloseRef}
 							type="button"
 							onClick={() => setPreviewAttachment(null)}
 							className="absolute right-2 top-2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
@@ -306,6 +330,7 @@ export default function CardAttachments({
 						</p>
 						<div className="mt-4 flex justify-end gap-2">
 							<button
+								ref={deleteCancelRef}
 								type="button"
 								onClick={() => setPendingDeleteId(null)}
 								className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"

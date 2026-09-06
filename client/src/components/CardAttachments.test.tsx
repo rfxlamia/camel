@@ -228,6 +228,71 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 		);
 	});
 
+	it("dismisses lightbox on Escape without unmounting the attachment section", () => {
+		const attachments = [makeAttachment(1)];
+		const parentEscape = vi.fn();
+		const onParentKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") parentEscape();
+		};
+		window.addEventListener("keydown", onParentKeyDown);
+
+		render(
+			<CardAttachments
+				card={makeCard(attachments)}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "View attachment 1" }),
+		);
+		expect(screen.getByRole("dialog", { name: "Image preview" })).toBeTruthy();
+
+		fireEvent.keyDown(window, { key: "Escape" });
+
+		expect(screen.queryByRole("dialog", { name: "Image preview" })).toBeNull();
+		expect(screen.getByRole("region", { name: "Images" })).toBeTruthy();
+		expect(parentEscape).not.toHaveBeenCalled();
+
+		window.removeEventListener("keydown", onParentKeyDown);
+	});
+
+	it("dismisses delete confirmation on Escape without bubbling to parent handlers", () => {
+		const attachments = [makeAttachment(1)];
+		const parentEscape = vi.fn();
+		const onParentKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") parentEscape();
+		};
+		window.addEventListener("keydown", onParentKeyDown);
+
+		render(
+			<CardAttachments
+				card={makeCard(attachments)}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Delete attachment 1" }),
+		);
+		expect(
+			screen.getByRole("dialog", { name: "Confirm attachment delete" }),
+		).toBeTruthy();
+
+		fireEvent.keyDown(window, { key: "Escape" });
+
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(screen.getByRole("region", { name: "Images" })).toBeTruthy();
+		expect(onDelete).not.toHaveBeenCalled();
+		expect(parentEscape).not.toHaveBeenCalled();
+
+		window.removeEventListener("keydown", onParentKeyDown);
+	});
+
 	it("calls delete after confirmation and no-ops on cancel", async () => {
 		onDelete.mockResolvedValue(undefined);
 		const attachments = [makeAttachment(1), makeAttachment(2)];
