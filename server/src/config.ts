@@ -10,6 +10,8 @@
  */
 
 import "dotenv/config";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -49,7 +51,47 @@ const envSchema = z.object({
 	OAUTH_ENABLED: z.enum(["true", "false"]).default("false"),
 	EMAIL_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
 	FOCUS_MODE_ENABLED: z.enum(["true", "false"]).default("false"),
+
+	// Private attachment bytes must not share the public uploads directory.
+	ATTACHMENTS_DIR: z.string().min(1).optional(),
 });
+
+export const DEVELOPMENT_ATTACHMENTS_DIR = fileURLToPath(
+	new URL("../private-uploads", import.meta.url),
+);
+export const CONTAINER_ATTACHMENTS_DIR = "/app/server/private-uploads";
+const PUBLIC_CLIENT_ROOT = fileURLToPath(
+	new URL("../../client/public", import.meta.url),
+);
+
+type Environment = z.input<typeof envSchema>;
+export type AppConfig = z.infer<typeof envSchema>;
+
+export function resolveAttachmentDirectory(
+	env: Pick<Environment, "ATTACHMENTS_DIR" | "NODE_ENV">,
+): string {
+	const configured = env.ATTACHMENTS_DIR
+		? path.resolve(env.ATTACHMENTS_DIR)
+		: env.NODE_ENV === "production" || env.NODE_ENV === "container-production"
+			? CONTAINER_ATTACHMENTS_DIR
+			: DEVELOPMENT_ATTACHMENTS_DIR;
+	const resolvedPublicRoot = path.resolve(PUBLIC_CLIENT_ROOT);
+	if (
+		configured === resolvedPublicRoot ||
+		configured.startsWith(`${resolvedPublicRoot}${path.sep}`)
+	) {
+		throw new Error("ATTACHMENTS_DIR must be outside client/public");
+	}
+	return configured;
+}
+
+export function resolveConfig(env?: Environment): AppConfig {
+	const result = envSchema.parse(env ?? process.env);
+	return Object.freeze({
+		...result,
+		ATTACHMENTS_DIR: resolveAttachmentDirectory(result),
+	});
+}
 
 const parsed = envSchema.safeParse(process.env);
 
@@ -59,7 +101,10 @@ if (!parsed.success) {
 	process.exit(1);
 }
 
-export const config = Object.freeze(parsed.data);
+export const config = Object.freeze({
+	...parsed.data,
+	ATTACHMENTS_DIR: resolveAttachmentDirectory(parsed.data),
+});
 
 if (
 	process.env.NODE_ENV === "production" &&
