@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, rmdir, unlink, writeFile } from "node:fs/promises";
 import * as path from "node:path";
-import { randomUUID } from "node:crypto";
+import { config } from "../config.js";
 
 export interface AttachmentPair {
 	thumbnailPath: string;
@@ -18,6 +19,19 @@ export interface AttachmentStorage {
 	writePair(thumbnail: Buffer, original: Buffer): Promise<AttachmentPair>;
 	removePair(pair: AttachmentPair): Promise<void>;
 	removePairs(pairs: Iterable<AttachmentPair>): Promise<void>;
+}
+
+let testStorage: AttachmentStorage | undefined;
+
+/** Returns the production provider, with a narrow seam for route integration tests. */
+export function getAttachmentStorage(): AttachmentStorage {
+	return testStorage ?? new LocalAttachmentStorage(config.ATTACHMENTS_DIR);
+}
+
+export function setAttachmentStorageForTests(
+	storage: AttachmentStorage | null,
+): void {
+	testStorage = storage ?? undefined;
 }
 
 export class LocalAttachmentStorage implements AttachmentStorage {
