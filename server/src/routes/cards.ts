@@ -7,6 +7,10 @@ import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import { checkWipLimit } from "../core/wip.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
+import {
+	type AttachmentPair,
+	getAttachmentStorage,
+} from "../lib/attachment-storage.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import {
@@ -21,6 +25,7 @@ import {
 	loadCardAssigneesForCards,
 	syncCardAssignees,
 } from "./card-assignees.js";
+import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 import { createCard } from "./card-create.js";
 import { cardCreateMultipartMiddleware } from "./card-create-multipart.js";
 import { syncCardLabels } from "./card-labels.js";
@@ -635,35 +640,56 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	type DeleteResult =
 		| { kind: "not_found" }
 		| { kind: "conflict" }
-		| { kind: "ok"; title: string; column_id: number };
+		| {
+				kind: "ok";
+				title: string;
+				column_id: number;
+				attachmentPairs: AttachmentPair[];
+		  };
 
 	const result: DeleteResult = await db.transaction().execute(async (trx) => {
+		const lockedCard = await trx
+			.selectFrom("cards")
+			.select(["id", "title", "column_id", "version"])
+			.where("id", "=", id)
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.forUpdate()
+			.executeTakeFirst();
+		if (!lockedCard) return { kind: "not_found" };
+		if (version !== undefined && lockedCard.version !== version) {
+			return { kind: "conflict" };
+		}
+
+		const attachments = await trx
+			.selectFrom("attachments")
+			.select(["thumbnail_path", "original_path"])
+			.where("card_id", "=", id)
+			.execute();
+		await trx.deleteFrom("attachments").where("card_id", "=", id).execute();
 		const row = await trx
 			.updateTable("cards")
 			.set({ deleted_at: sql`now()` })
 			.where("id", "=", id)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
-			.$if(version !== undefined, (qb) =>
-				qb.where("version", "=", version as number),
-			)
 			.returning(["title", "column_id"])
 			.executeTakeFirst();
-		if (!row) {
-			const current = await trx
-				.selectFrom("cards")
-				.select("id")
-				.where("id", "=", id)
-				.where("workspace_id", "=", workspaceId)
-				.where("deleted_at", "is", null)
-				.executeTakeFirst();
-			return current ? { kind: "conflict" } : { kind: "not_found" };
-		}
+		if (!row) return { kind: "not_found" };
+
 		await recordActivity(trx, req.user!, workspaceId, "delete", {
 			fromColumnId: row.column_id,
 			payload: { cardTitle: row.title },
 		});
-		return { kind: "ok", title: row.title, column_id: row.column_id };
+		return {
+			kind: "ok",
+			title: row.title,
+			column_id: row.column_id,
+			attachmentPairs: attachments.map(({ thumbnail_path, original_path }) => ({
+				thumbnailPath: thumbnail_path,
+				originalPath: original_path,
+			})),
+		};
 	});
 
 	if (result.kind === "not_found") {
@@ -687,6 +713,10 @@ cardsRouter.delete("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		actorId: req.user!.id,
 		payload: { cardId: id },
 	});
+	void removeAttachmentPairsBestEffort(
+		getAttachmentStorage(),
+		result.attachmentPairs,
+	);
 	res.status(204).end();
 });
 
