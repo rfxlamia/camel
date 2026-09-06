@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import * as path from "node:path";
+import { mkdir } from "node:fs/promises";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
@@ -45,7 +44,10 @@ import { config } from "../config.js";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
-import { LocalAttachmentStorage } from "../lib/attachment-storage.js";
+import {
+	type AttachmentPair,
+	LocalAttachmentStorage,
+} from "../lib/attachment-storage.js";
 import { api } from "../routes.js";
 
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
@@ -56,8 +58,8 @@ app.use("/api", api);
 
 const thumbnailBytes = Buffer.from("thumbnail-bytes");
 const originalBytes = Buffer.from("original-bytes");
-let storageRoot: string;
 let storage: LocalAttachmentStorage;
+let attachmentPair: AttachmentPair;
 let workspaceId: number;
 let cardId: number;
 let attachmentId: number;
@@ -125,11 +127,8 @@ describe.skipIf(!runIntegration)(
 	() => {
 		beforeAll(async () => {
 			await mkdir(config.ATTACHMENTS_DIR, { recursive: true });
-			storageRoot = await mkdtemp(
-				path.join(config.ATTACHMENTS_DIR, "delivery-test-"),
-			);
-			storage = new LocalAttachmentStorage(storageRoot);
-			const pair = await storage.writePair(thumbnailBytes, originalBytes);
+			storage = new LocalAttachmentStorage(config.ATTACHMENTS_DIR);
+			attachmentPair = await storage.writePair(thumbnailBytes, originalBytes);
 
 			await db
 				.insertInto("users")
@@ -150,8 +149,8 @@ describe.skipIf(!runIntegration)(
 				.values({
 					card_id: cardId,
 					mime_type: "image/png",
-					thumbnail_path: pair.thumbnailPath,
-					original_path: pair.originalPath,
+					thumbnail_path: attachmentPair.thumbnailPath,
+					original_path: attachmentPair.originalPath,
 					thumbnail_size_bytes: thumbnailBytes.length,
 					original_size_bytes: originalBytes.length,
 				})
@@ -168,8 +167,8 @@ describe.skipIf(!runIntegration)(
 				.values({
 					card_id: otherCardId,
 					mime_type: "image/png",
-					thumbnail_path: pair.thumbnailPath,
-					original_path: pair.originalPath,
+					thumbnail_path: attachmentPair.thumbnailPath,
+					original_path: attachmentPair.originalPath,
 					thumbnail_size_bytes: thumbnailBytes.length,
 					original_size_bytes: originalBytes.length,
 				})
@@ -191,8 +190,8 @@ describe.skipIf(!runIntegration)(
 					.where("id", "=", otherWorkspaceId)
 					.execute();
 			}
-			if (storageRoot !== undefined)
-				await rm(storageRoot, { recursive: true, force: true });
+			if (attachmentPair !== undefined)
+				await storage.removePair(attachmentPair);
 			await pool.end();
 		});
 
