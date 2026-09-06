@@ -335,7 +335,7 @@ async function validateExistingAttachments(
 ): Promise<string | null> {
 	for (const attachment of attachments) {
 		for (const file of [attachment.thumbnail, attachment.original]) {
-			if (file.size >= MAX_ATTACHMENT_FILE_SIZE_BYTES) {
+			if (file.size > MAX_ATTACHMENT_FILE_SIZE_BYTES) {
 				return "File size must be under 10MB";
 			}
 			const validation = await validateFileContent(file.buffer, file.mimetype);
