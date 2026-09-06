@@ -2,9 +2,24 @@ import { stat } from "node:fs/promises";
 import * as path from "node:path";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { Router } from "express";
+import { sql } from "kysely";
+import type { AuthUser } from "../auth.js";
 import { config } from "../config.js";
-import { db } from "../db/kysely.js";
+import { type DBExecutor, db } from "../db/kysely.js";
+import {
+	type AttachmentPair,
+	getAttachmentStorage,
+} from "../lib/attachment-storage.js";
+import {
+	ATTACHMENT_UPLOAD_PROFILES,
+	createAttachmentUpload,
+	MAX_ATTACHMENT_FILE_SIZE_BYTES,
+	normalizeAttachmentUploadError,
+} from "../lib/attachment-upload.js";
+import { validateFileContent } from "../lib/file-validator.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { publishEvent } from "../realtime.js";
+import { recordActivity } from "./helpers.js";
 
 interface AttachmentDeliveryRow {
 	id: number;
@@ -214,7 +229,328 @@ async function deliverAttachment(
 	}
 }
 
+type UploadedFile = Express.Multer.File;
+type PreparedAttachment = {
+	thumbnail: UploadedFile;
+	original: UploadedFile;
+	mimeType: string;
+};
+type WrittenAttachment = {
+	pair: AttachmentPair;
+	mimeType: string;
+	thumbnailSize: number;
+	originalSize: number;
+};
+type StoredAttachment = {
+	id: number;
+	mimeType: string;
+	createdAt: string;
+};
+
+type ExistingCardAttachmentCapacityHook = (input: {
+	cardId: number;
+	existingCount: number;
+	availableSlots: number;
+	requestedCount: number;
+}) => void | Promise<void>;
+
+let existingCardAttachmentCapacityHook:
+	| ExistingCardAttachmentCapacityHook
+	| undefined;
+
+/** Narrow synchronization seam used by the PostgreSQL contention integration test. */
+export function setExistingCardAttachmentCapacityHookForTests(
+	hook: ExistingCardAttachmentCapacityHook | null,
+): void {
+	existingCardAttachmentCapacityHook = hook ?? undefined;
+}
+
+export const setAttachmentCapacityHookForTests =
+	setExistingCardAttachmentCapacityHookForTests;
+
+const existingCardUpload = createAttachmentUpload({
+	maxPairs: ATTACHMENT_UPLOAD_PROFILES.existingCard.maxPairs,
+});
+
+export const existingCardMultipartMiddleware: RequestHandler = async (
+	req,
+	res,
+	next,
+) => {
+	if (!req.is("multipart/form-data")) {
+		next();
+		return;
+	}
+	try {
+		(await existingCardUpload)(req, res, (error) => {
+			if (!error) {
+				next();
+				return;
+			}
+			const normalized = normalizeAttachmentUploadError(error);
+			const message =
+				normalized.code === "LIMIT_FILE_SIZE"
+					? "File size must be under 10MB"
+					: normalized.error;
+			res.status(normalized.status).json({
+				error: message,
+				code: normalized.code,
+			});
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+function uploadedExistingAttachments(req: Request): {
+	attachments?: PreparedAttachment[];
+	error?: string;
+} {
+	const files = (req.files ?? {}) as Record<string, UploadedFile[]>;
+	const thumbnails = files.thumbnail ?? [];
+	const originals = files.original ?? [];
+	if (thumbnails.length !== originals.length) {
+		return { error: "thumbnail and original attachment counts must match" };
+	}
+	if (thumbnails.length === 0)
+		return { error: "At least one image is required" };
+	return {
+		attachments: thumbnails.map((thumbnail, index) => ({
+			thumbnail,
+			original: originals[index]!,
+			mimeType: originals[index]!.mimetype,
+		})),
+	};
+}
+
+function mapAttachmentValidationError(error: string | undefined): string {
+	if (error?.includes("dimensions exceed") || error?.includes("dimensions")) {
+		return "Image dimensions must be 4096px or smaller";
+	}
+	return "Only PNG and JPEG accepted";
+}
+
+async function validateExistingAttachments(
+	attachments: PreparedAttachment[],
+): Promise<string | null> {
+	for (const attachment of attachments) {
+		for (const file of [attachment.thumbnail, attachment.original]) {
+			if (file.size >= MAX_ATTACHMENT_FILE_SIZE_BYTES) {
+				return "File size must be under 10MB";
+			}
+			const validation = await validateFileContent(file.buffer, file.mimetype);
+			if (!validation.valid) {
+				return mapAttachmentValidationError(validation.error);
+			}
+		}
+		if (attachment.thumbnail.mimetype !== attachment.original.mimetype) {
+			return "Only PNG and JPEG accepted";
+		}
+	}
+	return null;
+}
+
+async function removeWrittenExistingAttachments(
+	storage: ReturnType<typeof getAttachmentStorage>,
+	attachments: WrittenAttachment[],
+): Promise<void> {
+	await storage.removePairs(attachments.map(({ pair }) => pair));
+}
+
+function toIso(value: Date | string): string {
+	return value instanceof Date
+		? value.toISOString()
+		: new Date(value).toISOString();
+}
+
+async function persistExistingCardAttachments(
+	trx: DBExecutor,
+	input: {
+		workspaceId: number;
+		cardId: number;
+		actor: AuthUser;
+		attachments: PreparedAttachment[];
+		storage: ReturnType<typeof getAttachmentStorage>;
+		written: WrittenAttachment[];
+	},
+): Promise<{
+	accepted: StoredAttachment[];
+	existingCount: number;
+}> {
+	const card = await trx
+		.selectFrom("cards")
+		.select(["id", "column_id"])
+		.where("id", "=", input.cardId)
+		.where("workspace_id", "=", input.workspaceId)
+		.where("deleted_at", "is", null)
+		.forUpdate()
+		.executeTakeFirst();
+	if (!card) throw Object.assign(new Error("Not found"), { statusCode: 404 });
+
+	const countRow = await trx
+		.selectFrom("attachments")
+		.select(sql<number>`count(*)::int`.as("count"))
+		.where("card_id", "=", card.id)
+		.executeTakeFirstOrThrow();
+	const existingCount = countRow.count;
+	const availableSlots = Math.max(0, 3 - existingCount);
+	await existingCardAttachmentCapacityHook?.({
+		cardId: card.id,
+		existingCount,
+		availableSlots,
+		requestedCount: input.attachments.length,
+	});
+	if (availableSlots === 0) {
+		throw Object.assign(new Error("Max 3 images per card"), {
+			statusCode: 409,
+			capacity: true,
+		});
+	}
+
+	const accepted: StoredAttachment[] = [];
+	for (const attachment of input.attachments.slice(0, availableSlots)) {
+		const pair = await input.storage.writePair({
+			thumbnail: attachment.thumbnail.buffer,
+			original: attachment.original.buffer,
+		});
+		input.written.push({
+			pair,
+			mimeType: attachment.mimeType,
+			thumbnailSize: attachment.thumbnail.size,
+			originalSize: attachment.original.size,
+		});
+		const row = await trx
+			.insertInto("attachments")
+			.values({
+				card_id: card.id,
+				mime_type: attachment.mimeType,
+				thumbnail_path: pair.thumbnailPath,
+				original_path: pair.originalPath,
+				thumbnail_size_bytes: attachment.thumbnail.size,
+				original_size_bytes: attachment.original.size,
+			})
+			.returning(["id", "mime_type", "created_at"])
+			.executeTakeFirstOrThrow();
+		await recordActivity(
+			trx,
+			input.actor,
+			input.workspaceId,
+			"attachment_added",
+			{
+				cardId: card.id,
+				toColumnId: card.column_id,
+				payload: {
+					attachmentId: row.id,
+					mimeType: row.mime_type,
+					createdAt: toIso(row.created_at),
+				},
+			},
+		);
+		accepted.push({
+			id: row.id,
+			mimeType: row.mime_type,
+			createdAt: toIso(row.created_at),
+		});
+	}
+	return { accepted, existingCount };
+}
+
+async function publishExistingAttachment(
+	workspaceId: number,
+	actor: AuthUser,
+	cardId: number,
+	attachment: StoredAttachment,
+): Promise<void> {
+	try {
+		await publishEvent(workspaceId, {
+			type: "attachment.added",
+			actor,
+			cardId,
+			workspaceId,
+			payload: {
+				attachmentId: attachment.id,
+				mimeType: attachment.mimeType,
+				createdAt: attachment.createdAt,
+			},
+		});
+	} catch (error) {
+		console.error("Failed to publish attachment event:", error);
+	}
+}
+
+async function uploadExistingCardAttachments(req: Request, res: Response) {
+	const workspaceId = req.workspace?.workspaceId;
+	const cardId = parsePositiveInteger(
+		typeof req.params.cardId === "string" ? req.params.cardId : undefined,
+	);
+	if (workspaceId === undefined || cardId === null) {
+		return res.status(404).json({ error: "Not found" });
+	}
+
+	const uploaded = uploadedExistingAttachments(req);
+	if (uploaded.error) return res.status(400).json({ error: uploaded.error });
+	const attachments = uploaded.attachments ?? [];
+	const validationError = await validateExistingAttachments(attachments);
+	if (validationError) return res.status(400).json({ error: validationError });
+
+	const storage = getAttachmentStorage();
+	const written: WrittenAttachment[] = [];
+	let result: { accepted: StoredAttachment[]; existingCount: number };
+	try {
+		result = await db.transaction().execute((trx) =>
+			persistExistingCardAttachments(trx, {
+				workspaceId,
+				cardId,
+				actor: req.user!,
+				attachments,
+				storage,
+				written,
+			}),
+		);
+	} catch (error) {
+		await removeWrittenExistingAttachments(storage, written);
+		if ((error as { capacity?: boolean }).capacity) {
+			return res.status(409).json({ error: "Max 3 images per card" });
+		}
+		if ((error as { statusCode?: number }).statusCode === 404) {
+			return res.status(404).json({ error: "Not found" });
+		}
+		console.error("Failed to add card attachments", error);
+		return res.status(500).json({ error: "Unable to add card attachments" });
+	}
+
+	const total = result.existingCount + result.accepted.length;
+	for (const attachment of result.accepted) {
+		await publishExistingAttachment(workspaceId, req.user!, cardId, attachment);
+	}
+	const rejectedCount = attachments.length - result.accepted.length;
+	return res.status(201).json({
+		attachments: result.accepted,
+		acceptedCount: result.accepted.length,
+		addedCount: result.accepted.length,
+		rejectedCount,
+		requestedCount: attachments.length,
+		total,
+		totalCount: total,
+		limit: 3,
+		...(rejectedCount > 0
+			? {
+					message: `${result.accepted.length} of ${attachments.length} images added — card limit is 3 images`,
+				}
+			: {}),
+	});
+}
+
 export const cardAttachmentsRouter = Router({ mergeParams: true });
+
+cardAttachmentsRouter.post(
+	"/cards/:cardId/attachments",
+	createAttachmentOwnershipGuard({ requireAttachment: false }),
+	existingCardMultipartMiddleware,
+	(req, res, next) => {
+		void uploadExistingCardAttachments(req, res).catch(next);
+	},
+);
 
 cardAttachmentsRouter.get(
 	"/cards/:cardId/attachments/:attachmentId/thumbnail",
