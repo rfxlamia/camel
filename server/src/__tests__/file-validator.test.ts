@@ -1,6 +1,39 @@
 import { describe, expect, it } from "vitest";
 import { getFileSignature, validateFileContent } from "../lib/file-validator";
 
+function createPngHeader(width: number, height: number): Buffer {
+	const buffer = Buffer.alloc(33);
+	Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer);
+	buffer.writeUInt32BE(13, 8);
+	buffer.write("IHDR", 12, "ascii");
+	buffer.writeUInt32BE(width, 16);
+	buffer.writeUInt32BE(height, 20);
+	return buffer;
+}
+
+function createJpegHeader(width: number, height: number): Buffer {
+	return Buffer.from([
+		0xff,
+		0xd8,
+		0xff,
+		0xe0,
+		0x00,
+		0x04,
+		0x00,
+		0x00,
+		0xff,
+		0xc0,
+		0x00,
+		0x07,
+		0x08,
+		(height >> 8) & 0xff,
+		height & 0xff,
+		(width >> 8) & 0xff,
+		width & 0xff,
+		0x01,
+	]);
+}
+
 describe("File Content Validation", () => {
 	describe("getFileSignature", () => {
 		it("should detect PNG files", () => {
@@ -33,16 +66,14 @@ describe("File Content Validation", () => {
 
 	describe("validateFileContent", () => {
 		it("should validate PNG file content", async () => {
-			const pngBuffer = Buffer.from([
-				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-			]);
+			const pngBuffer = createPngHeader(1024, 768);
 			const result = await validateFileContent(pngBuffer, "image/png");
 			expect(result.valid).toBe(true);
 			expect(result.detectedType).toBe("png");
 		});
 
 		it("should validate JPEG file content", async () => {
-			const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+			const jpegBuffer = createJpegHeader(1024, 768);
 			const result = await validateFileContent(jpegBuffer, "image/jpeg");
 			expect(result.valid).toBe(true);
 			expect(result.detectedType).toBe("jpeg");
@@ -62,6 +93,65 @@ describe("File Content Validation", () => {
 			const result = await validateFileContent(exeBuffer, "image/png");
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("content does not match");
+		});
+
+		it("rejects PNG dimensions over 4096 pixels", async () => {
+			const widthResult = await validateFileContent(
+				createPngHeader(4097, 1024),
+				"image/png",
+			);
+			const heightResult = await validateFileContent(
+				createPngHeader(1024, 4097),
+				"image/png",
+			);
+			const validResult = await validateFileContent(
+				createPngHeader(4096, 4096),
+				"image/png",
+			);
+
+			expect(widthResult.valid).toBe(false);
+			expect(widthResult.error).toContain("dimensions");
+			expect(heightResult.valid).toBe(false);
+			expect(heightResult.error).toContain("dimensions");
+			expect(validResult.valid).toBe(true);
+		});
+
+		it("rejects JPEG dimensions over 4096 pixels", async () => {
+			const widthResult = await validateFileContent(
+				createJpegHeader(4097, 1024),
+				"image/jpeg",
+			);
+			const heightResult = await validateFileContent(
+				createJpegHeader(1024, 4097),
+				"image/jpeg",
+			);
+			const validResult = await validateFileContent(
+				createJpegHeader(4096, 4096),
+				"image/jpeg",
+			);
+
+			expect(widthResult.valid).toBe(false);
+			expect(widthResult.error).toContain("dimensions");
+			expect(heightResult.valid).toBe(false);
+			expect(heightResult.error).toContain("dimensions");
+			expect(validResult.valid).toBe(true);
+		});
+
+		it("rejects malformed image dimension headers without throwing", async () => {
+			const malformedPng = Buffer.from([
+				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+			]);
+			const malformedJpeg = Buffer.from([
+				0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0,
+				0x00, 0x03,
+			]);
+
+			await expect(
+				validateFileContent(malformedPng, "image/png"),
+			).resolves.toMatchObject({ valid: false });
+			await expect(
+				validateFileContent(malformedJpeg, "image/jpeg"),
+			).resolves.toMatchObject({ valid: false });
 		});
 
 		it("should handle null/undefined buffers", async () => {
