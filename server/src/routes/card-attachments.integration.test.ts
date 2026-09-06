@@ -49,12 +49,24 @@ import {
 	LocalAttachmentStorage,
 } from "../lib/attachment-storage.js";
 import { api } from "../routes.js";
+import { createAttachmentOwnershipGuard } from "./card-attachments.js";
 
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use("/api", api);
+
+const cardOnlyGuardApp = express();
+cardOnlyGuardApp.use((req, _res, next) => {
+	req.user = testUser;
+	next();
+});
+cardOnlyGuardApp.get(
+	"/workspaces/:workspaceId/cards/:cardId",
+	createAttachmentOwnershipGuard({ requireAttachment: false }),
+	(_req, res) => res.sendStatus(204),
+);
 
 const thumbnailBytes = Buffer.from("thumbnail-bytes");
 const originalBytes = Buffer.from("original-bytes");
@@ -193,6 +205,25 @@ describe.skipIf(!runIntegration)(
 			if (attachmentPair !== undefined)
 				await storage.removePair(attachmentPair);
 			await pool.end();
+		});
+
+		it("supports card-only authorization without an attachment id", async () => {
+			testUser.id = 1;
+			const authorized = await request(cardOnlyGuardApp).get(
+				`/workspaces/${workspaceId}/cards/${cardId}`,
+			);
+			expect(authorized.status).toBe(204);
+
+			const wrongCardWorkspace = await request(cardOnlyGuardApp).get(
+				`/workspaces/${workspaceId}/cards/${otherCardId}`,
+			);
+			expect(wrongCardWorkspace.status).toBe(404);
+
+			testUser.id = 2;
+			const nonMember = await request(cardOnlyGuardApp).get(
+				`/workspaces/${workspaceId}/cards/${cardId}`,
+			);
+			expect(nonMember.status).toBe(404);
 		});
 
 		it("serves bytes only when the member, card, and attachment share the workspace", async () => {
