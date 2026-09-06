@@ -162,11 +162,12 @@ async function deliverAttachment(
 				: "inline",
 		);
 		if (matchesIfNoneMatch(req, etag)) {
+			res.removeHeader("Content-Type");
 			res.status(304).end();
 			return;
 		}
 
-		res.sendFile(filePath, (error) => {
+		res.sendFile(providerPath, { root: config.ATTACHMENTS_DIR }, (error) => {
 			if (error && !res.headersSent) next(error);
 		});
 	} catch (error) {
