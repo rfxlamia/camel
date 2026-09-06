@@ -22,10 +22,14 @@ export interface AttachmentStorage {
 }
 
 let testStorage: AttachmentStorage | undefined;
+let productionStorage: AttachmentStorage | undefined;
 
 /** Returns the production provider, with a narrow seam for route integration tests. */
 export function getAttachmentStorage(): AttachmentStorage {
-	return testStorage ?? new LocalAttachmentStorage(config.ATTACHMENTS_DIR);
+	return (
+		testStorage ??
+		(productionStorage ??= new LocalAttachmentStorage(config.ATTACHMENTS_DIR))
+	);
 }
 
 export function setAttachmentStorageForTests(
