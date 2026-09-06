@@ -223,10 +223,20 @@ export const TaskTitleEditor = forwardRef<
 		});
 	}, []);
 
+	const handleFileInputCancel = useCallback(() => {
+		setFilePickerCommand(null);
+		restoreFocus(title.length);
+	}, [restoreFocus, title.length]);
+
 	useEffect(() => {
 		if (!filePickerCommand) return;
-		fileInputRef.current?.click();
-	}, [filePickerCommand]);
+		const input = fileInputRef.current;
+		if (!input) return;
+		const handleCancel = () => handleFileInputCancel();
+		input.addEventListener("cancel", handleCancel);
+		input.click();
+		return () => input.removeEventListener("cancel", handleCancel);
+	}, [filePickerCommand, handleFileInputCancel]);
 
 	const closeCommand = useCallback(
 		(caret?: number) => {

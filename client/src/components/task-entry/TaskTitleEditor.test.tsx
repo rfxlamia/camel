@@ -520,6 +520,57 @@ describe("TaskTitleEditor", () => {
 		expect(screen.queryByRole("listbox")).toBeNull();
 	});
 
+	it("resets the image picker when native selection is cancelled", async () => {
+		const onFilesSelected = vi.fn();
+		const dispatch = vi.fn();
+		const imageCommand: TaskFileCommandDefinition = {
+			kind: "file",
+			id: "image",
+			label: "Image",
+			accept: "image/png,image/jpeg",
+			multiple: true,
+			onFilesSelected,
+		};
+		render(
+			<TaskTitleEditor
+				fields={boardFields()}
+				fileCommands={[imageCommand]}
+				draft={createInitialTaskMetadataDraft()}
+				dispatch={dispatch}
+			/>,
+		);
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		fireEvent.change(textarea, { target: { value: "Fix login @image" } });
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+		const input = document.querySelector(
+			'input[type="file"]',
+		) as HTMLInputElement;
+		expect(input).toBeTruthy();
+		fireEvent(input, new Event("cancel"));
+
+		await waitFor(() => expect(document.activeElement).toBe(textarea));
+		expect(onFilesSelected).not.toHaveBeenCalled();
+		expect(dispatch).not.toHaveBeenCalled();
+		expect(textarea.value).toBe("Fix login");
+		expect(document.querySelector('input[type="file"]')).toBeNull();
+
+		fireEvent.keyDown(textarea, { key: "@" });
+		fireEvent.change(textarea, { target: { value: "Fix login @image" } });
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+		const reopenedInput = document.querySelector(
+			'input[type="file"]',
+		) as HTMLInputElement;
+		expect(reopenedInput).toBeTruthy();
+		expect(reopenedInput).not.toBe(input);
+		expect(reopenedInput.accept).toBe("image/png,image/jpeg");
+		expect(reopenedInput.multiple).toBe(true);
+	});
+
 	it("preserves Tab and Shift+Tab navigation around the command editor", async () => {
 		function TabHarness() {
 			const [draft, dispatch] = useReducer(
