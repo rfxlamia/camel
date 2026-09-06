@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveConfig } from "../config.js";
 import {
 	ATTACHMENT_UPLOAD_PROFILES,
+	CARD_CREATE_METADATA_FIELD,
 	createAttachmentUpload,
 	normalizeAttachmentUploadError,
 } from "./attachment-upload.js";
@@ -115,11 +116,15 @@ async function createUploadApp(maxPairs: number) {
 	app.post("/", upload, (req, res) => {
 		providerInvocation();
 		const files = req.files as Record<string, UploadedFile[]>;
+		const metadata = (req.body as Record<string, unknown> | undefined)?.[
+			CARD_CREATE_METADATA_FIELD
+		];
 		res.json({
 			count: Object.values(files ?? {}).flat().length,
 			memoryBacked: Object.values(files ?? {})
 				.flat()
 				.every((file) => Buffer.isBuffer(file.buffer) && file.path === undefined),
+			...(typeof metadata === "string" ? { metadata } : {}),
 		});
 	});
 	app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -142,6 +147,22 @@ function addPairs(
 }
 
 describe("createAttachmentUpload", () => {
+	it("accepts one card-create metadata JSON part while keeping files in memory", async () => {
+		const { app, providerInvocation } = await createUploadApp(3);
+		const acceptedResponse = request(app).post("/");
+		acceptedResponse.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "Metadata" }));
+		addPairs(acceptedResponse, 3);
+		const response = await acceptedResponse;
+
+		expect(response.status).toBe(200);
+		expect(response.body).toEqual({
+			count: 6,
+			memoryBacked: true,
+			metadata: JSON.stringify({ title: "Metadata" }),
+		});
+		expect(providerInvocation).toHaveBeenCalledTimes(1);
+	});
+
 	it("rejects a fourth card-create pair while keeping accepted files in memory", async () => {
 		const { app, providerInvocation } = await createUploadApp(3);
 		const acceptedResponse = await addPairs(request(app).post("/"), 3);
@@ -154,6 +175,20 @@ describe("createAttachmentUpload", () => {
 		expect(rejected.status).toBe(413);
 		expect(rejected.body.code).toBe("LIMIT_FILE_COUNT");
 		expect(providerInvocation).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects a second card-create metadata part at the parts ceiling", async () => {
+		const { app, providerInvocation } = await createUploadApp(
+			ATTACHMENT_UPLOAD_PROFILES.cardCreate.maxPairs,
+		);
+		const requestWithDuplicateMetadata = addPairs(request(app).post("/"), 3);
+		requestWithDuplicateMetadata.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "one" }));
+		requestWithDuplicateMetadata.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "two" }));
+
+		const response = await requestWithDuplicateMetadata;
+		expect(response.status).toBe(413);
+		expect(response.body.code).toBe("LIMIT_PART_COUNT");
+		expect(providerInvocation).not.toHaveBeenCalled();
 	});
 
 	it("accepts four existing-card pairs but enforces pair, file, and parts ceilings", async () => {
@@ -179,13 +214,8 @@ describe("createAttachmentUpload", () => {
 		expect(tooManyFilesResponse.body.code).toBe("LIMIT_FILE_COUNT");
 
 		const tooManyParts = addPairs(request(app).post("/"), 10);
-		for (
-			let index = 0;
-			index <= ATTACHMENT_UPLOAD_PROFILES.existingCard.parts - 20;
-			index += 1
-		) {
-			tooManyParts.field(`metadata-${index}`, "x");
-		}
+		tooManyParts.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "one" }));
+		tooManyParts.field(CARD_CREATE_METADATA_FIELD, JSON.stringify({ title: "two" }));
 		const tooManyPartsResponse = await tooManyParts;
 		expect(tooManyPartsResponse.status).toBe(413);
 		expect(tooManyPartsResponse.body.code).toBe("LIMIT_PART_COUNT");
