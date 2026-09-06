@@ -156,6 +156,8 @@ function setBoard(card: Card, saveCard = vi.fn().mockResolvedValue("saved")) {
 		deleteCard: vi.fn(),
 		showToast: vi.fn(),
 		setHasUnsavedCardEdits: vi.fn(),
+		refresh: vi.fn().mockResolvedValue(undefined),
+		cancelScheduledRefresh: vi.fn(),
 	});
 }
 
@@ -404,6 +406,49 @@ describe("ContextPanel — taxonomy fields", () => {
 		);
 		expect(screen.queryByRole("button", { name: /^status$/i })).toBeNull();
 		expect(screen.queryByRole("combobox", { name: /change status/i })).toBeNull();
+	});
+});
+
+describe("ContextPanel — attachment gallery composition", () => {
+	it("renders attachment thumbnails and lightbox controls for existing images", () => {
+		setBoard(
+			makeCard({
+				id: 1,
+				attachments: [
+					{
+						id: 1,
+						thumbnailUrl:
+							"/api/workspaces/1/cards/1/attachments/1/thumbnail",
+						originalUrl:
+							"/api/workspaces/1/cards/1/attachments/1/original",
+						downloadUrl:
+							"/api/workspaces/1/cards/1/attachments/1/original/download",
+						mimeType: "image/png",
+						createdAt: "2026-09-05T10:00:00.000Z",
+					},
+					{
+						id: 2,
+						thumbnailUrl:
+							"/api/workspaces/1/cards/1/attachments/2/thumbnail",
+						originalUrl:
+							"/api/workspaces/1/cards/1/attachments/2/original",
+						downloadUrl:
+							"/api/workspaces/1/cards/1/attachments/2/original/download",
+						mimeType: "image/jpeg",
+						createdAt: "2026-09-05T10:01:00.000Z",
+					},
+				],
+			}),
+		);
+		render(<ContextPanel />);
+
+		expect(
+			screen.getByRole("button", { name: "View attachment 1" }),
+		).toBeTruthy();
+		fireEvent.click(
+			screen.getByRole("button", { name: "View attachment 1" }),
+		);
+		expect(screen.getByRole("dialog", { name: "Image preview" })).toBeTruthy();
 	});
 });
 
