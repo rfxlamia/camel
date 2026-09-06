@@ -4,6 +4,15 @@ export interface CardAssignee {
 	displayName: string;
 }
 
+export interface CardAttachment {
+	id: number;
+	thumbnailUrl: string;
+	originalUrl: string;
+	downloadUrl: string;
+	mimeType: string;
+	createdAt: string;
+}
+
 export interface Card {
 	id: number;
 	key?: string | null;
@@ -26,6 +35,7 @@ export interface Card {
 	phaseId?: number | null;
 	phaseName?: string | null;
 	assignees: CardAssignee[];
+	attachments?: CardAttachment[];
 	workspaceId?: number;
 }
 
@@ -41,22 +51,75 @@ export interface PresenceUser extends User {
 	lastSeen: string;
 }
 
+export interface AttachmentActivityPayload {
+	attachmentId: number;
+	mimeType: string;
+	createdAt: string;
+}
+
 export interface ActivityEvent {
 	id: number;
-	type: "create" | "update" | "move" | "delete";
+	type:
+		| "create"
+		| "update"
+		| "move"
+		| "delete"
+		| "attachment_added"
+		| "attachment_removed";
 	cardId: number | null;
 	cardTitle: string | null;
 	fromColumn: string | null;
 	toColumn: string | null;
 	actor: { username: string; displayName: string } | null;
 	createdAt: string;
+	payload?: AttachmentActivityPayload | null;
 }
 
+export type BoardEventType =
+	| "card.created"
+	| "card.updated"
+	| "card.moved"
+	| "card.reordered"
+	| "card.deleted"
+	| "attachment.added"
+	| "attachment.removed"
+	| "column.created"
+	| "column.updated"
+	| "column.deleted"
+	| "presence.changed"
+	| "settings.updated"
+	| "membership.removed"
+	| "membership.role_changed"
+	| "agent.board.generating"
+	| "agent.board.ready"
+	| "agent.board.failed"
+	| "agent.card.started"
+	| "agent.card.token"
+	| "agent.card.done"
+	| "agent.card.failed"
+	| "agent.card.thinking"
+	| "agent.tool.started"
+	| "agent.tool.result"
+	| "agent.tool.failed"
+	| "ticket_intake.submit_result"
+	| "tracker.created"
+	| "tracker.updated"
+	| "tracker.deleted"
+	| "tracker.vocabulary.created"
+	| "tracker.project.created"
+	| "tracker.project.updated"
+	| "tracker.project.deleted"
+	| "tracker.phase.created"
+	| "tracker.phase.updated"
+	| "tracker.phase.deleted"
+	| "focus_session.updated";
+
 export interface BoardEvent {
-	type: string;
+	type: BoardEventType;
 	actor: User;
 	cardId?: number;
 	at: string;
+	payload?: AttachmentActivityPayload;
 }
 
 // ---- Agent Template Names (shared across components) ----

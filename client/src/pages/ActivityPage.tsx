@@ -48,6 +48,16 @@ const TYPE_META: Record<
 		badge: "bg-error-100 text-error-900",
 		dot: "bg-error-500",
 	},
+	attachment_added: {
+		label: "Attachment added",
+		badge: "bg-success-100 text-success-900",
+		dot: "bg-success-500",
+	},
+	attachment_removed: {
+		label: "Attachment removed",
+		badge: "bg-error-100 text-error-900",
+		dot: "bg-error-500",
+	},
 };
 
 export default function ActivityPage() {
