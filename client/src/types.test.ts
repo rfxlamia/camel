@@ -181,5 +181,21 @@ describe("attachment response and realtime types", () => {
 		};
 		expect(event.type).toBe("attachment.added");
 		expect(event.payload?.attachmentId).toBe(attachment.id);
+
+		const removedEvent: BoardEvent = {
+			type: "attachment.removed",
+			actor,
+			cardId: 42,
+			at: attachment.createdAt,
+			payload: {
+				attachmentId: attachment.id,
+				mimeType: attachment.mimeType,
+				createdAt: attachment.createdAt,
+			},
+		};
+		expect(removedEvent.type).toBe("attachment.removed");
+		expect(removedEvent.payload?.attachmentId).toBe(attachment.id);
+		expect(removedEvent.payload?.mimeType).toBe(attachment.mimeType);
+		expect(removedEvent.payload?.createdAt).toBe(attachment.createdAt);
 	});
 });
