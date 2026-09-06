@@ -5,6 +5,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card, CardAttachment } from "../types";
@@ -182,5 +183,99 @@ describe("CardAttachments — picker/paste/counter", () => {
 			/>,
 		);
 		expect(screen.getByText("2/3")).toBeTruthy();
+	});
+});
+
+describe("CardAttachments — gallery/lightbox/delete", () => {
+	const onUpload = vi.fn();
+	const onDelete = vi.fn();
+
+	beforeEach(() => {
+		onUpload.mockReset();
+		onDelete.mockReset();
+		mockPrepareImageAttachment.mockReset();
+	});
+
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it("opens a lightbox with the original image and download action", () => {
+		const attachments = [makeAttachment(1), makeAttachment(2)];
+		render(
+			<CardAttachments
+				card={makeCard(attachments)}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "View attachment 1" }),
+		);
+
+		const lightbox = screen.getByRole("dialog", { name: "Image preview" });
+		const image = within(lightbox).getByRole("img", { name: "Attachment 1" });
+		expect(image.getAttribute("src")).toContain("/attachments/1/original");
+
+		const download = within(lightbox).getByRole("link", {
+			name: "Download original",
+		});
+		expect(download.getAttribute("href")).toContain(
+			"/attachments/1/original/download",
+		);
+	});
+
+	it("calls delete after confirmation and no-ops on cancel", async () => {
+		onDelete.mockResolvedValue(undefined);
+		const attachments = [makeAttachment(1), makeAttachment(2)];
+		const { rerender } = render(
+			<CardAttachments
+				card={makeCard(attachments)}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Delete attachment 1" }),
+		);
+		const dialog = screen.getByRole("dialog", {
+			name: "Confirm attachment delete",
+		});
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "Cancel" }),
+		);
+		expect(onDelete).not.toHaveBeenCalled();
+		expect(screen.queryByRole("dialog")).toBeNull();
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Delete attachment 1" }),
+		);
+		fireEvent.click(
+			within(screen.getByRole("dialog", { name: "Confirm attachment delete" })).getByRole(
+				"button",
+				{ name: "Delete" },
+			),
+		);
+		await waitFor(() =>
+			expect(onDelete).toHaveBeenCalledWith(attachments[0]!.id),
+		);
+
+		rerender(
+			<CardAttachments
+				card={makeCard([])}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+		expect(screen.getByText("No images attached yet.")).toBeTruthy();
+		expect(
+			screen.queryByRole("button", { name: /view attachment/i }),
+		).toBeNull();
 	});
 });
