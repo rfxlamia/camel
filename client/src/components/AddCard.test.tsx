@@ -16,11 +16,22 @@ const {
 	mockGetWorkspaceMembers,
 	mockListTrackerVocabularies,
 	mockListTrackerProjects,
+	mockPrepareImageAttachment,
 } = vi.hoisted(() => ({
 	mockGetWorkspaceMembers: vi.fn(),
 	mockListTrackerVocabularies: vi.fn(),
 	mockListTrackerProjects: vi.fn(),
+	mockPrepareImageAttachment: vi.fn(),
 }));
+
+vi.mock("../lib/imageAttachments", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../lib/imageAttachments")>();
+	return {
+		...actual,
+		prepareImageAttachment: (...args: Parameters<typeof actual.prepareImageAttachment>) =>
+			mockPrepareImageAttachment(...args),
+	};
+});
 
 vi.mock("../api", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../api")>();
@@ -119,6 +130,55 @@ function getTitleTextarea() {
 	return screen.getByRole("combobox", { name: "Task title" }) as HTMLTextAreaElement;
 }
 
+function mockValidImagePreparation() {
+	mockPrepareImageAttachment.mockImplementation(async (input: Blob) => {
+		const file =
+			input instanceof File
+				? input
+				: new File([input], "pasted.png", { type: input.type });
+		return {
+			kind: "valid" as const,
+			file,
+			original: file,
+			thumbnail: file,
+			prepared: { thumbnail: file, original: file },
+		};
+	});
+}
+
+async function selectImageThroughCommand(
+	filename: string,
+	{ expectChip = true }: { expectChip?: boolean } = {},
+) {
+	const textarea = getTitleTextarea();
+	const baseTitle = textarea.value.replace(/\s+$/, "");
+	fireEvent.change(textarea, {
+		target: { value: baseTitle ? `${baseTitle} ` : "" },
+	});
+	fireEvent.keyDown(textarea, { key: "@" });
+	await waitFor(() =>
+		expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+	);
+	fireEvent.change(textarea, {
+		target: { value: `${baseTitle ? `${baseTitle} ` : ""}@image` },
+	});
+	fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+	const input = document.querySelector(
+		'input[type="file"]',
+	) as HTMLInputElement;
+	expect(input).toBeTruthy();
+	const file = new File(["png"], filename, { type: "image/png" });
+	fireEvent.change(input, { target: { files: [file] } });
+	if (expectChip) {
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: new RegExp(`Image: ${filename}`) }),
+			).toBeTruthy(),
+		);
+	}
+}
+
 async function pickFieldValue(fieldLabel: string, valueLabel: string) {
 	const textarea = getTitleTextarea();
 	const currentTitle = textarea.value.replace(/\s+$/, "");
@@ -154,6 +214,36 @@ async function pickFieldValue(fieldLabel: string, valueLabel: string) {
 	}
 	fireEvent.keyDown(textarea, { key: "Enter" });
 }
+
+describe("AddCard image staging", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockReadyCatalogs();
+		mockValidImagePreparation();
+	});
+
+	afterEach(() => cleanup());
+
+	it("refuses a fourth image with Max 3 images per card", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png");
+		await selectImageThroughCommand("two.png");
+		await selectImageThroughCommand("three.png");
+		expect(screen.getAllByRole("button", { name: /^Image:/ })).toHaveLength(3);
+
+		await selectImageThroughCommand("four.png", { expectChip: false });
+
+		expect(screen.getAllByRole("button", { name: /^Image:/ })).toHaveLength(3);
+		expect(screen.getByText("Max 3 images per card")).toBeTruthy();
+		expect(mockPrepareImageAttachment).toHaveBeenCalledTimes(3);
+		expect(onAddCard).not.toHaveBeenCalled();
+	});
+});
 
 describe("AddCard", () => {
 	beforeEach(() => {
