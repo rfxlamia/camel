@@ -56,8 +56,10 @@ services:
       FOCUS_MODE_ENABLED: ${FOCUS_MODE_ENABLED:-false}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-}
+      ATTACHMENTS_DIR: ${ATTACHMENTS_DIR:-/app/server/private-uploads}
     volumes:
       - camel_uploads:/app/client/public/uploads
+      - camel_private_uploads:/app/server/private-uploads
     depends_on:
       db:
         condition: service_healthy
@@ -67,3 +69,4 @@ services:
 volumes:
   camel_pgdata:
   camel_uploads:
+  camel_private_uploads:
