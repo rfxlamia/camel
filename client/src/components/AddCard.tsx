@@ -110,7 +110,7 @@ function buildBoardPayload(
 }
 
 function countStagedSlots(entries: StagedImage[]): number {
-	return entries.filter((entry) => entry.kind !== "loading").length;
+	return entries.length;
 }
 
 function markStagedUploadFailure(
