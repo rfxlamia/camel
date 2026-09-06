@@ -38,6 +38,11 @@ export function pngFixture(size = 1024, width = 1, height = 1): Buffer {
 	return bytes;
 }
 
+export const JPEG_1X1 = Buffer.from([
+	0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x07, 0x08,
+	0x00, 0x01, 0x00, 0x01, 0x01,
+]);
+
 export async function countFiles(root: string): Promise<number> {
 	let entries: Array<import("node:fs").Dirent>;
 	try {
@@ -156,6 +161,22 @@ export function attachPair(
 		.attach("original", original, {
 			filename: `original-${index}.png`,
 			contentType: "image/png",
+		});
+}
+
+export function attachMixedMimePair(
+	req: Test,
+	thumbnail: Buffer,
+	original: Buffer,
+): Test {
+	return req
+		.attach("thumbnail", thumbnail, {
+			filename: "thumbnail.png",
+			contentType: "image/png",
+		})
+		.attach("original", original, {
+			filename: "original.jpg",
+			contentType: "image/jpeg",
 		});
 }
 

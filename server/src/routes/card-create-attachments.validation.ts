@@ -3,6 +3,7 @@ import {
 	addPair,
 	expectNoCardSideEffects,
 	fixtures,
+	JPEG_1X1,
 	LocalAttachmentStorage,
 	multipartCreate,
 	oversizedPng,
@@ -47,19 +48,50 @@ export function registerValidationScenarios(publishEventMock: unknown): void {
 			removePairs: storage.removePairs.bind(storage),
 		});
 
-		const invalidImages: Array<[string, Buffer]> = [
-			["Invalid signature", Buffer.from("not an image")],
-			["Oversized dimensions", oversizedPng()],
+		const oversizedFile = Buffer.concat([
+			PNG_1X1,
+			Buffer.alloc(10 * 1024 * 1024 + 1 - PNG_1X1.length),
+		]);
+		const invalidImages: Array<[string, Buffer, string, number]> = [
+			[
+				"Invalid signature",
+				Buffer.from("not an image"),
+				"Only PNG and JPEG accepted",
+				400,
+			],
+			[
+				"Oversized dimensions",
+				oversizedPng(),
+				"Image dimensions must be 4096px or smaller",
+				400,
+			],
+			["Oversized file", oversizedFile, "File size must be under 10MB", 413],
 		];
-		for (const [title, image] of invalidImages) {
-			const response = await addPair(
-				multipartCreate(fixtures!.columnId, title),
-				image,
-				PNG_1X1,
-				0,
-			);
-			expect(response.status).toBe(400);
+		for (const [title, image, message, status] of invalidImages) {
+			for (const invalidField of ["thumbnail", "original"] as const) {
+				const response = await addPair(
+					multipartCreate(fixtures!.columnId, `${title} ${invalidField}`),
+					invalidField === "thumbnail" ? image : PNG_1X1,
+					invalidField === "original" ? image : PNG_1X1,
+					0,
+				);
+				expect(response.status).toBe(status);
+				expect(response.body.error).toBe(message);
+			}
 		}
+
+		const mixed = multipartCreate(fixtures!.columnId, "Mixed MIME");
+		mixed.attach("thumbnail", PNG_1X1, {
+			filename: "thumbnail.png",
+			contentType: "image/png",
+		});
+		mixed.attach("original", JPEG_1X1, {
+			filename: "original.jpg",
+			contentType: "image/jpeg",
+		});
+		const mixedResponse = await mixed;
+		expect(mixedResponse.status).toBe(400);
+		expect(mixedResponse.body.error).toBe("Only PNG and JPEG accepted");
 		expect(writePair).not.toHaveBeenCalled();
 		await expectNoCardSideEffects(publishEventMock);
 	});
