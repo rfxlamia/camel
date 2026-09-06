@@ -102,6 +102,17 @@ function resolveProviderPath(providerPath: string): string | null {
 	return resolved;
 }
 
+function safeDownloadFilename(
+	providerPath: string,
+	attachmentId: number,
+): string {
+	const basename = path
+		.basename(providerPath)
+		.replace(/[^a-zA-Z0-9._-]/g, "_")
+		.replace(/^\.+$/, "");
+	return basename || `attachment-${attachmentId}`;
+}
+
 function matchesIfNoneMatch(req: Request, etag: string): boolean {
 	const value = req.headers["if-none-match"];
 	if (typeof value !== "string") return false;
@@ -116,6 +127,7 @@ async function deliverAttachment(
 	res: Response,
 	next: NextFunction,
 	kind: "thumbnail" | "original",
+	download: boolean,
 ): Promise<void> {
 	const attachment = req.attachmentDelivery;
 	if (!attachment) {
@@ -143,6 +155,12 @@ async function deliverAttachment(
 		res.setHeader("ETag", etag);
 		res.setHeader("Content-Type", attachment.mime_type);
 		res.setHeader("X-Content-Type-Options", "nosniff");
+		res.setHeader(
+			"Content-Disposition",
+			download
+				? `attachment; filename="${safeDownloadFilename(providerPath, attachment.id)}"`
+				: "inline",
+		);
 		if (matchesIfNoneMatch(req, etag)) {
 			res.status(304).end();
 			return;
@@ -166,13 +184,20 @@ cardAttachmentsRouter.get(
 	"/cards/:cardId/attachments/:attachmentId/thumbnail",
 	attachmentOwnershipGuard,
 	(req, res, next) => {
-		void deliverAttachment(req, res, next, "thumbnail");
+		void deliverAttachment(req, res, next, "thumbnail", false);
+	},
+);
+cardAttachmentsRouter.get(
+	"/cards/:cardId/attachments/:attachmentId/original/download",
+	attachmentOwnershipGuard,
+	(req, res, next) => {
+		void deliverAttachment(req, res, next, "original", true);
 	},
 );
 cardAttachmentsRouter.get(
 	"/cards/:cardId/attachments/:attachmentId/original",
 	attachmentOwnershipGuard,
 	(req, res, next) => {
-		void deliverAttachment(req, res, next, "original");
+		void deliverAttachment(req, res, next, "original", false);
 	},
 );

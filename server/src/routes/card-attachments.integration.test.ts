@@ -238,5 +238,23 @@ describe.skipIf(!runIntegration)(
 			expect(revalidated.status).toBe(304);
 			expect(revalidated.body).toEqual({});
 		});
+
+		it("keeps inline originals separate from forced downloads", async () => {
+			testUser.id = 1;
+			const inline = await request(app).get(
+				deliveryUrl(workspaceId, cardId, attachmentId, "original"),
+			);
+			expect(inline.status).toBe(200);
+			expect(inline.headers["content-disposition"]).toBe("inline");
+			expect(inline.headers["cache-control"]).toBe("private, max-age=300");
+
+			const download = await request(app).get(
+				`${deliveryUrl(workspaceId, cardId, attachmentId, "original")}/download`,
+			);
+			expect(download.status).toBe(200);
+			expect(download.headers["content-disposition"]).toMatch(
+				/^attachment; filename="[a-zA-Z0-9._-]+"$/,
+			);
+		});
 	},
 );
