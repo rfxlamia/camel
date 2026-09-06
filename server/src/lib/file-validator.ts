@@ -88,6 +88,66 @@ function isJpegSofMarker(marker: number): boolean {
 	);
 }
 
+interface JpegMarker {
+	marker: number;
+	offset: number;
+}
+
+function readJpegMarker(
+	buffer: Buffer,
+	offset: number,
+	limit: number,
+): JpegMarker | null {
+	if (buffer[offset] !== 0xff) {
+		return null;
+	}
+
+	while (offset < limit && buffer[offset] === 0xff) {
+		offset += 1;
+	}
+	if (offset >= limit) {
+		return null;
+	}
+
+	return { marker: buffer[offset], offset: offset + 1 };
+}
+
+function readJpegSegmentLength(
+	buffer: Buffer,
+	offset: number,
+	limit: number,
+): number | null {
+	if (offset + 2 > limit) {
+		return null;
+	}
+
+	const segmentLength = buffer.readUInt16BE(offset);
+	if (segmentLength < 2 || offset + segmentLength > limit) {
+		return null;
+	}
+
+	return segmentLength;
+}
+
+function isJpegStandaloneMarker(marker: number): boolean {
+	return marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7);
+}
+
+function parseJpegSofDimensions(
+	buffer: Buffer,
+	offset: number,
+	segmentLength: number,
+): DimensionValidationResult {
+	if (segmentLength < 7) {
+		return { error: INVALID_JPEG_DIMENSIONS };
+	}
+
+	return validateDimensions({
+		height: buffer.readUInt16BE(offset + 3),
+		width: buffer.readUInt16BE(offset + 5),
+	});
+}
+
 function parseJpegDimensions(buffer: Buffer): DimensionValidationResult {
 	if (
 		buffer.length < 4 ||
@@ -102,43 +162,26 @@ function parseJpegDimensions(buffer: Buffer): DimensionValidationResult {
 	let offset = 2;
 
 	while (offset < limit) {
-		if (buffer[offset] !== 0xff) {
+		const markerInfo = readJpegMarker(buffer, offset, limit);
+		if (!markerInfo) {
 			return { error: INVALID_JPEG_DIMENSIONS };
 		}
+		offset = markerInfo.offset;
 
-		while (offset < limit && buffer[offset] === 0xff) {
-			offset += 1;
-		}
-		if (offset >= limit) {
-			return { error: INVALID_JPEG_DIMENSIONS };
-		}
-
-		const marker = buffer[offset];
-		offset += 1;
-		if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+		if (isJpegStandaloneMarker(markerInfo.marker)) {
 			continue;
 		}
-		if (marker === 0xda || offset + 2 > limit) {
+		if (markerInfo.marker === 0xda) {
 			return { error: INVALID_JPEG_DIMENSIONS };
 		}
 
-		const segmentLength = buffer.readUInt16BE(offset);
-		if (
-			segmentLength < 2 ||
-			offset + segmentLength > limit
-		) {
+		const segmentLength = readJpegSegmentLength(buffer, offset, limit);
+		if (segmentLength === null) {
 			return { error: INVALID_JPEG_DIMENSIONS };
 		}
 
-		if (isJpegSofMarker(marker)) {
-			if (segmentLength < 7) {
-				return { error: INVALID_JPEG_DIMENSIONS };
-			}
-
-			return validateDimensions({
-				height: buffer.readUInt16BE(offset + 3),
-				width: buffer.readUInt16BE(offset + 5),
-			});
+		if (isJpegSofMarker(markerInfo.marker)) {
+			return parseJpegSofDimensions(buffer, offset, segmentLength);
 		}
 
 		offset += segmentLength;
