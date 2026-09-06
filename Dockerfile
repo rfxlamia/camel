@@ -31,7 +31,7 @@ COPY server/src/db/agent-schema.sql ./server/dist/db/agent-schema.sql
 COPY server/src/db/chat-schema.sql ./server/dist/db/chat-schema.sql
 
 # UPLOADS_DIR resolves to client/public/uploads relative to server/dist
-RUN mkdir -p ./client/public/uploads
+RUN mkdir -p ./client/public/uploads ./server/private-uploads
 
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
