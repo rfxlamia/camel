@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, type TicketHistoryEntry } from "../api";
+import type { PreparedImagePair } from "../lib/imageAttachments";
 import { type SaveCardResult, useBoard } from "../context/BoardContext";
 import { useTicketIntakeChat } from "../hooks/useTicketIntakeChat";
 import {
@@ -19,6 +20,7 @@ import {
 import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 import { AssigneePicker } from "./AssigneePicker";
+import CardAttachments from "./CardAttachments";
 import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
 import FocusEntryButton from "./FocusEntryButton";
 import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
@@ -106,6 +108,8 @@ function CardEditor({
 		ticketIntakeEnabled,
 		ticketIntakeEvents,
 		focusModeEnabled,
+		refresh,
+		cancelScheduledRefresh,
 	} = useBoard();
 	const [title, setTitle] = useState(card.title);
 	const [description, setDescription] = useState(card.description);
@@ -145,6 +149,23 @@ function CardEditor({
 		ticketIntakeEvents,
 	});
 	const { open: openTicketIntake } = ticketIntakeChat;
+
+	const uploadAttachments = useCallback(
+		async (pairs: PreparedImagePair[]) => {
+			if (activeWorkspaceId === null) {
+				throw new Error("Workspace not available");
+			}
+			cancelScheduledRefresh();
+			const response = await api.uploadCardAttachments(
+				activeWorkspaceId,
+				card.id,
+				pairs,
+			);
+			await refresh();
+			return response;
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, card.id, refresh],
+	);
 
 	// Workspace members populate the assignee picker.
 	useEffect(() => {
@@ -416,6 +437,13 @@ function CardEditor({
 						<MetaRow label="Done" value={card.doneAt} />
 					</dl>
 				</section>
+				{activeWorkspaceId !== null && (
+					<CardAttachments
+						card={card}
+						workspaceId={activeWorkspaceId}
+						onUpload={uploadAttachments}
+					/>
+				)}
 				{children}
 			</div>
 
