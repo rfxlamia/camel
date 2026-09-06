@@ -306,7 +306,17 @@ export default function AddCard({ column, onAddCard }: Props) {
 
 	return (
 		<div className="mt-2 space-y-2">
+			{submitting ? (
+				<div
+					className="rounded-md border border-neutral-300 bg-white px-3 py-4 text-neutral-700 text-sm"
+					aria-busy="true"
+				>
+					Adding card…
+				</div>
+			) : null}
 			<form
+				className={submitting ? "hidden" : undefined}
+				aria-hidden={submitting ? true : undefined}
 				onSubmit={(event) => {
 					event.preventDefault();
 					void submit();
@@ -371,6 +381,18 @@ export default function AddCard({ column, onAddCard }: Props) {
 											×
 										</button>
 									) : null}
+									{entry.kind === "network-error" ? (
+										<button
+											type="button"
+											aria-label={`Retry Image: ${entry.name}`}
+											onClick={() => {
+												void submit();
+											}}
+											className="shrink-0 rounded-full px-1 leading-none underline opacity-80 hover:opacity-100"
+										>
+											Retry
+										</button>
+									) : null}
 								</span>
 							);
 						})}
@@ -382,7 +404,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 				<div className="mt-2 flex gap-2">
 					<button
 						type="submit"
-						disabled={submitting || hasInvalidStaged}
+						disabled={hasInvalidStaged}
 						className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-60"
 					>
 						Add to board

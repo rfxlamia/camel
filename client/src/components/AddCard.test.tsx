@@ -287,6 +287,35 @@ describe("AddCard image staging", () => {
 		expect(textarea.value).toBe("Keep title");
 		expect(textarea.disabled).toBe(false);
 	});
+
+	it("shows loading while create is pending and closes only after success", async () => {
+		let resolveCreate: (() => void) | undefined;
+		const onAddCard = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveCreate = resolve;
+				}),
+		);
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png");
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Ship with image" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(screen.queryByRole("combobox", { name: "Task title" })).toBeNull();
+		expect(screen.getByText("Adding card…")).toBeTruthy();
+		expect(screen.queryByRole("button", { name: /add to board/i })).toBeNull();
+
+		resolveCreate?.();
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy(),
+		);
+		expect(screen.queryByRole("button", { name: /^Image:/ })).toBeNull();
+	});
 });
 
 describe("AddCard", () => {
@@ -383,10 +412,10 @@ describe("AddCard", () => {
 		const textarea = getTitleTextarea();
 		fireEvent.change(textarea, { target: { value: "One shot" } });
 		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
-		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
-		fireEvent.keyDown(textarea, { key: "Enter" });
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(screen.queryByRole("button", { name: /add to board/i })).toBeNull();
+		expect(screen.getByText("Adding card…")).toBeTruthy();
 
-		expect(onAddCard).toHaveBeenCalledTimes(1);
 		resolveCreate?.();
 		await waitFor(() =>
 			expect(
@@ -409,6 +438,9 @@ describe("AddCard", () => {
 		fireEvent.change(textarea, { target: { value: "Retry me" } });
 		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
 		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add to board/i })).toBeTruthy(),
+		);
 		expect(textarea.value).toBe("Retry me");
 
 		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
