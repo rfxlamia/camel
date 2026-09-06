@@ -8,6 +8,7 @@ export type BoardCreatePayload = {
 	projectId?: number | null;
 	phaseId?: number | null;
 	dueDate?: string | null;
+	attachments?: Array<{ thumbnail: File; original: File }>;
 };
 
 export type TrackerCreatePayload = {

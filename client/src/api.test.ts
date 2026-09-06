@@ -941,3 +941,155 @@ describe("ticketIntake API methods", () => {
 		);
 	});
 });
+
+describe("card attachment API methods", () => {
+	beforeEach(() => {
+		document.cookie = "csrf_token=test-csrf-token";
+		mockFetch.mockReset();
+	});
+
+	it("uploadCardAttachments POSTs FormData to the scoped attachment route", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () =>
+				Promise.resolve({
+					attachments: [
+						{
+							id: 9,
+							thumbnailUrl:
+								"/api/workspaces/7/cards/42/attachments/9/thumbnail",
+							originalUrl:
+								"/api/workspaces/7/cards/42/attachments/9/original",
+							downloadUrl:
+								"/api/workspaces/7/cards/42/attachments/9/original/download",
+							mimeType: "image/png",
+							createdAt: "2026-09-05T10:00:00.000Z",
+						},
+					],
+					acceptedCount: 1,
+					addedCount: 1,
+					rejectedCount: 0,
+					requestedCount: 1,
+					total: 1,
+					totalCount: 1,
+					limit: 3,
+				}),
+		});
+
+		const { api } = await import("./api");
+		const thumbnail = new File(["thumb"], "thumb.png", { type: "image/png" });
+		const original = new File(["orig"], "orig.png", { type: "image/png" });
+
+		await api.uploadCardAttachments(7, 42, [{ thumbnail, original }]);
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/cards/42/attachments",
+			expect.objectContaining({
+				method: "POST",
+				body: expect.any(FormData),
+			}),
+		);
+		const init = mockFetch.mock.calls[0]![1] as RequestInit;
+		const headers = init.headers as Headers;
+		expect(headers.get("Content-Type")).toBeNull();
+		expect(headers.get("X-CSRF-Token")).toBe("test-csrf-token");
+		const formData = init.body as FormData;
+		expect(formData.getAll("thumbnail")).toHaveLength(1);
+		expect(formData.getAll("original")).toHaveLength(1);
+	});
+
+	it("deleteCardAttachment DELETEs the scoped attachment route with CSRF", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 204,
+			json: () => Promise.resolve(undefined),
+		});
+
+		const { api } = await import("./api");
+		await api.deleteCardAttachment(7, 42, 9);
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/cards/42/attachments/9",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		const init = mockFetch.mock.calls[0]![1] as RequestInit;
+		const headers = init.headers as Headers;
+		expect(headers.get("X-CSRF-Token")).toBe("test-csrf-token");
+	});
+
+	it("createCard with staged pairs sends multipart FormData and metadata", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () =>
+				Promise.resolve({
+					id: 55,
+					columnId: 1,
+					title: "With image",
+					description: "",
+					position: 1,
+					version: 1,
+					createdAt: "2026-09-05T10:00:00.000Z",
+					updatedAt: "2026-09-05T10:00:00.000Z",
+					startedAt: null,
+					doneAt: null,
+					dueDate: null,
+					assignees: [],
+				}),
+		});
+
+		const { api } = await import("./api");
+		const thumbnail = new File(["thumb"], "thumb.png", { type: "image/png" });
+		const original = new File(["orig"], "orig.png", { type: "image/png" });
+
+		await api.createCard(7, {
+			columnId: 1,
+			title: "With image",
+			assigneeIds: [2],
+			attachments: [{ thumbnail, original }],
+		});
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/cards",
+			expect.objectContaining({
+				method: "POST",
+				body: expect.any(FormData),
+			}),
+		);
+		const init = mockFetch.mock.calls[0]![1] as RequestInit;
+		const headers = init.headers as Headers;
+		expect(headers.get("Content-Type")).toBeNull();
+		expect(headers.get("X-CSRF-Token")).toBe("test-csrf-token");
+		const formData = init.body as FormData;
+		const metadata = JSON.parse(formData.get("metadata") as string);
+		expect(metadata).toMatchObject({
+			columnId: 1,
+			title: "With image",
+			description: "",
+			assigneeIds: [2],
+		});
+		expect(formData.getAll("thumbnail")).toHaveLength(1);
+		expect(formData.getAll("original")).toHaveLength(1);
+	});
+
+	it("createCard without attachments keeps JSON serialization", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 201,
+			json: () => Promise.resolve({ id: 1 }),
+		});
+
+		const { api } = await import("./api");
+		await api.createCard(7, { columnId: 1, title: "Plain card" });
+
+		const init = mockFetch.mock.calls[0]![1] as RequestInit;
+		expect(init.body).not.toBeInstanceOf(FormData);
+		expect(JSON.parse(init.body as string)).toMatchObject({
+			columnId: 1,
+			title: "Plain card",
+		});
+		const headers = init.headers as Headers;
+		expect(headers.get("Content-Type")).toBe("application/json");
+	});
+});

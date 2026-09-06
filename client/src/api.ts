@@ -12,6 +12,7 @@ import type {
 	AgentCardOutput,
 	Board,
 	Card,
+	CardAttachment,
 	ChatMessage,
 	ChatThread,
 	Column,
@@ -129,8 +130,9 @@ async function request<T>(
 	const method = (init?.method ?? "GET").toUpperCase();
 	const headers = new Headers(init?.headers);
 	const endpoint = `/api${path}`;
+	const body = init?.body;
 
-	if (!headers.has("Content-Type")) {
+	if (!(body instanceof FormData) && !headers.has("Content-Type")) {
 		headers.set("Content-Type", "application/json");
 	}
 
@@ -143,10 +145,80 @@ async function request<T>(
 	const res = await fetch(endpoint, {
 		...init,
 		headers,
+		credentials: "include",
 	});
 	if (!res.ok) await throwRequestError(res, endpoint, options);
 	if (res.status === 204) return undefined as T;
 	return res.json();
+}
+
+export type CardAttachmentUploadResponse = {
+	attachments: CardAttachment[];
+	acceptedCount: number;
+	addedCount: number;
+	rejectedCount: number;
+	requestedCount: number;
+	total: number;
+	totalCount: number;
+	limit: number;
+	message?: string;
+};
+
+function cardAttachmentBasePath(
+	workspaceId: number,
+	cardId: number,
+	attachmentId: number,
+): string {
+	return `/api/workspaces/${workspaceId}/cards/${cardId}/attachments/${attachmentId}`;
+}
+
+export function cardAttachmentThumbnailUrl(
+	workspaceId: number,
+	cardId: number,
+	attachmentId: number,
+): string {
+	return `${cardAttachmentBasePath(workspaceId, cardId, attachmentId)}/thumbnail`;
+}
+
+export function cardAttachmentOriginalUrl(
+	workspaceId: number,
+	cardId: number,
+	attachmentId: number,
+): string {
+	return `${cardAttachmentBasePath(workspaceId, cardId, attachmentId)}/original`;
+}
+
+export function cardAttachmentDownloadUrl(
+	workspaceId: number,
+	cardId: number,
+	attachmentId: number,
+): string {
+	return `${cardAttachmentBasePath(workspaceId, cardId, attachmentId)}/original/download`;
+}
+
+function serializeBoardCreateMetadata(body: BoardCreatePayload): string {
+	return JSON.stringify({
+		columnId: body.columnId,
+		title: body.title,
+		description: body.description ?? "",
+		assigneeIds: body.assigneeIds,
+		priorityId: body.priorityId,
+		labelIds: body.labelIds,
+		projectId: body.projectId,
+		phaseId: body.phaseId,
+		dueDate: body.dueDate,
+	});
+}
+
+function buildAttachmentFormData(
+	pairs: Array<{ thumbnail: File; original: File }>,
+): FormData {
+	const formData = new FormData();
+	for (const pair of pairs) {
+		formData.append("thumbnail", pair.thumbnail);
+		formData.append("original", pair.original);
+	}
+	return formData;
 }
 
 async function chatStream(
@@ -202,8 +274,20 @@ export const api = {
 		),
 	getCard: (workspaceId: number, id: number) =>
 		request<Card>(`/workspaces/${workspaceId}/cards/${id}`),
-	createCard: (workspaceId: number, body: BoardCreatePayload) =>
-		request<Card>(
+	createCard: (workspaceId: number, body: BoardCreatePayload) => {
+		if (body.attachments && body.attachments.length > 0) {
+			const formData = buildAttachmentFormData(body.attachments);
+			formData.set("metadata", serializeBoardCreateMetadata(body));
+			return request<Card>(
+				`/workspaces/${workspaceId}/cards`,
+				{
+					method: "POST",
+					body: formData,
+				},
+				{ userInitiated: true, userAction: "submit" },
+			);
+		}
+		return request<Card>(
 			`/workspaces/${workspaceId}/cards`,
 			{
 				method: "POST",
@@ -220,6 +304,32 @@ export const api = {
 				}),
 			},
 			{ userInitiated: true, userAction: "submit" },
+		);
+	},
+	uploadCardAttachments: (
+		workspaceId: number,
+		cardId: number,
+		pairs: Array<{ thumbnail: File; original: File }>,
+	) => {
+		const formData = buildAttachmentFormData(pairs);
+		return request<CardAttachmentUploadResponse>(
+			`/workspaces/${workspaceId}/cards/${cardId}/attachments`,
+			{
+				method: "POST",
+				body: formData,
+			},
+			{ userInitiated: true, userAction: "upload-attachment" },
+		);
+	},
+	deleteCardAttachment: (
+		workspaceId: number,
+		cardId: number,
+		attachmentId: number,
+	) =>
+		request<void>(
+			`/workspaces/${workspaceId}/cards/${cardId}/attachments/${attachmentId}`,
+			{ method: "DELETE" },
+			{ userInitiated: true, userAction: "delete-attachment" },
 		),
 	updateCard: (
 		workspaceId: number,
