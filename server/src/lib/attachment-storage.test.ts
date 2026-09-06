@@ -1,8 +1,15 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import express from "express";
+import request from "supertest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveConfig } from "../config.js";
+import {
+	ATTACHMENT_UPLOAD_PROFILES,
+	createAttachmentUpload,
+	normalizeAttachmentUploadError,
+} from "./attachment-upload.js";
 import { LocalAttachmentStorage } from "./attachment-storage.js";
 
 const REQUIRED_ENV = {
@@ -78,6 +85,13 @@ describe("LocalAttachmentStorage", () => {
 		).toBe(false);
 		expect(development.ATTACHMENTS_DIR).not.toContain("UPLOADS_DIR");
 		expect(containerProduction.ATTACHMENTS_DIR).not.toContain("UPLOADS_DIR");
+		expect(() =>
+			resolveConfig({
+				...REQUIRED_ENV,
+				NODE_ENV: "development",
+				ATTACHMENTS_DIR: path.join(publicRoot, "attachments"),
+			}),
+		).toThrow("ATTACHMENTS_DIR must be outside client/public");
 	});
 
 	it("supports best-effort bulk cleanup without failing the caller", async () => {
@@ -89,5 +103,109 @@ describe("LocalAttachmentStorage", () => {
 		await expect(
 			storage.removePairs([pair, pair, { thumbnailPath: "missing", originalPath: "missing" }]),
 		).resolves.toBeUndefined();
+	});
+});
+
+type UploadedFile = { buffer?: Buffer; path?: string };
+
+async function createUploadApp(maxPairs: number) {
+	const upload = await createAttachmentUpload({ maxPairs });
+	const providerInvocation = vi.fn();
+	const app = express();
+	app.post("/", upload, (req, res) => {
+		providerInvocation();
+		const files = req.files as Record<string, UploadedFile[]>;
+		res.json({
+			count: Object.values(files ?? {}).flat().length,
+			memoryBacked: Object.values(files ?? {})
+				.flat()
+				.every((file) => Buffer.isBuffer(file.buffer) && file.path === undefined),
+		});
+	});
+	app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+		const normalized = normalizeAttachmentUploadError(error);
+		res.status(normalized.status).json(normalized);
+	});
+	return { app, providerInvocation };
+}
+
+function addPairs(
+	req: request.Test,
+	count: number,
+	buffer = Buffer.from("synthetic image bytes"),
+) {
+	for (let index = 0; index < count; index += 1) {
+		req.attach("thumbnail", buffer, `thumbnail-${index}.png`);
+		req.attach("original", buffer, `original-${index}.png`);
+	}
+	return req;
+}
+
+describe("createAttachmentUpload", () => {
+	it("rejects a fourth card-create pair while keeping accepted files in memory", async () => {
+		const { app, providerInvocation } = await createUploadApp(3);
+		const acceptedResponse = await addPairs(request(app).post("/"), 3);
+
+		expect(acceptedResponse.status).toBe(200);
+		expect(acceptedResponse.body).toEqual({ count: 6, memoryBacked: true });
+		expect(providerInvocation).toHaveBeenCalledTimes(1);
+
+		const rejected = await addPairs(request(app).post("/"), 4);
+		expect(rejected.status).toBe(413);
+		expect(rejected.body.code).toBe("LIMIT_FILE_COUNT");
+		expect(providerInvocation).toHaveBeenCalledTimes(1);
+	});
+
+	it("accepts four existing-card pairs but enforces pair, file, and parts ceilings", async () => {
+		const { app, providerInvocation } = await createUploadApp(
+			ATTACHMENT_UPLOAD_PROFILES.existingCard.maxPairs,
+		);
+		const acceptedResponse = await addPairs(request(app).post("/"), 4);
+		expect(acceptedResponse.status).toBe(200);
+		expect(acceptedResponse.body).toEqual({ count: 8, memoryBacked: true });
+
+		const tooManyPairs = await addPairs(request(app).post("/"), 11);
+		expect(tooManyPairs.status).toBe(413);
+		expect(tooManyPairs.body.code).toBe("LIMIT_FILE_COUNT");
+
+		const tooManyFiles = request(app).post("/");
+		for (let index = 0; index < 10; index += 1) {
+			tooManyFiles.attach("thumbnail", Buffer.from("thumbnail"), `thumbnail-${index}.png`);
+			tooManyFiles.attach("original", Buffer.from("original"), `original-${index}.png`);
+		}
+		tooManyFiles.attach("original", Buffer.from("original"), "original-overflow.png");
+		const tooManyFilesResponse = await tooManyFiles;
+		expect(tooManyFilesResponse.status).toBe(413);
+		expect(tooManyFilesResponse.body.code).toBe("LIMIT_FILE_COUNT");
+
+		const tooManyParts = addPairs(request(app).post("/"), 10);
+		for (
+			let index = 0;
+			index <= ATTACHMENT_UPLOAD_PROFILES.existingCard.parts - 20;
+			index += 1
+		) {
+			tooManyParts.field(`metadata-${index}`, "x");
+		}
+		const tooManyPartsResponse = await tooManyParts;
+		expect(tooManyPartsResponse.status).toBe(413);
+		expect(tooManyPartsResponse.body.code).toBe("LIMIT_PART_COUNT");
+		expect(providerInvocation).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects files over 10MB before provider invocation for both profiles", async () => {
+		for (const maxPairs of [
+			ATTACHMENT_UPLOAD_PROFILES.cardCreate.maxPairs,
+			ATTACHMENT_UPLOAD_PROFILES.existingCard.maxPairs,
+		]) {
+			const { app, providerInvocation } = await createUploadApp(maxPairs);
+			const oversized = await addPairs(
+				request(app).post("/"),
+				1,
+				Buffer.alloc(ATTACHMENT_UPLOAD_PROFILES.cardCreate.fileSize + 1),
+			);
+			expect(oversized.status).toBe(413);
+			expect(oversized.body.code).toBe("LIMIT_FILE_SIZE");
+			expect(providerInvocation).not.toHaveBeenCalled();
+		}
 	});
 });
