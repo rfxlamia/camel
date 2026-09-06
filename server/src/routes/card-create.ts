@@ -228,17 +228,24 @@ async function hydrateCreatedCard(
 	return card;
 }
 
-async function persistCreatedCard(
+type WrittenAttachment = {
+	pair: AttachmentPair;
+	mimeType: string;
+	thumbnailSize: number;
+	originalSize: number;
+};
+
+type CreatedAttachmentRow = {
+	id: number;
+	mime_type: string;
+	created_at: Date;
+};
+
+async function insertCreatedCard(
 	trx: DBExecutor,
 	input: CreateInput,
 	prepared: Extract<PreparedCreate, { kind: "ready" }>,
-	attachments: Array<{
-		pair: AttachmentPair;
-		mimeType: string;
-		thumbnailSize: number;
-		originalSize: number;
-	}>,
-): Promise<Extract<CreateResult, { kind: "ok" }>> {
+): Promise<number> {
 	const identity = await allocateCardIdentity(trx, {
 		workspaceId: input.workspaceId,
 		columnId: input.columnId,
@@ -260,46 +267,54 @@ async function persistCreatedCard(
 		})
 		.returning("id")
 		.executeTakeFirstOrThrow();
-	const assignmentIds = await insertCardRelations(
-		trx,
-		inserted.id,
-		prepared.column,
-		prepared.metadata,
-	);
-	const attachmentRows = attachments.length
-		? await trx
-				.insertInto("attachments")
-				.values(
-					attachments.map(
-						({ pair, mimeType, thumbnailSize, originalSize }) => ({
-							card_id: inserted.id,
-							mime_type: mimeType,
-							thumbnail_path: pair.thumbnailPath,
-							original_path: pair.originalPath,
-							thumbnail_size_bytes: thumbnailSize,
-							original_size_bytes: originalSize,
-						}),
-					),
-				)
-				.returning(["id", "mime_type", "created_at"])
-				.execute()
-		: [];
+	return inserted.id;
+}
+
+async function insertCreatedAttachments(
+	trx: DBExecutor,
+	cardId: number,
+	attachments: WrittenAttachment[],
+): Promise<CreatedAttachmentRow[]> {
+	if (attachments.length === 0) return [];
+	return trx
+		.insertInto("attachments")
+		.values(
+			attachments.map(({ pair, mimeType, thumbnailSize, originalSize }) => ({
+				card_id: cardId,
+				mime_type: mimeType,
+				thumbnail_path: pair.thumbnailPath,
+				original_path: pair.originalPath,
+				thumbnail_size_bytes: thumbnailSize,
+				original_size_bytes: originalSize,
+			})),
+		)
+		.returning(["id", "mime_type", "created_at"])
+		.execute();
+}
+
+async function recordCreatedCardActivity(
+	trx: DBExecutor,
+	input: CreateInput,
+	prepared: Extract<PreparedCreate, { kind: "ready" }>,
+	cardId: number,
+	attachments: CreatedAttachmentRow[],
+): Promise<void> {
 	await recordActivity(trx, input.actor, input.workspaceId, "create", {
-		cardId: inserted.id,
+		cardId,
 		toColumnId: input.columnId,
 		payload: {
 			cardTitle: input.title,
 			...(prepared.dueDate === null ? {} : { dueDate: prepared.dueDate }),
 		},
 	});
-	for (const attachment of attachmentRows) {
+	for (const attachment of attachments) {
 		await recordActivity(
 			trx,
 			input.actor,
 			input.workspaceId,
 			"attachment_added",
 			{
-				cardId: inserted.id,
+				cardId,
 				payload: {
 					attachmentId: attachment.id,
 					mimeType: attachment.mime_type,
@@ -308,7 +323,28 @@ async function persistCreatedCard(
 			},
 		);
 	}
-	const card = await hydrateCreatedCard(trx, inserted.id, input.workspaceId);
+}
+
+async function persistCreatedCard(
+	trx: DBExecutor,
+	input: CreateInput,
+	prepared: Extract<PreparedCreate, { kind: "ready" }>,
+	attachments: WrittenAttachment[],
+): Promise<Extract<CreateResult, { kind: "ok" }>> {
+	const cardId = await insertCreatedCard(trx, input, prepared);
+	const assignmentIds = await insertCardRelations(
+		trx,
+		cardId,
+		prepared.column,
+		prepared.metadata,
+	);
+	const attachmentRows = await insertCreatedAttachments(
+		trx,
+		cardId,
+		attachments,
+	);
+	await recordCreatedCardActivity(trx, input, prepared, cardId, attachmentRows);
+	const card = await hydrateCreatedCard(trx, cardId, input.workspaceId);
 	return {
 		kind: "ok",
 		card,
@@ -438,20 +474,8 @@ async function validateUploadedAttachments(
 async function writeUploadedAttachments(
 	storage: ReturnType<typeof getAttachmentStorage>,
 	attachments: PreparedAttachment[],
-): Promise<
-	Array<{
-		pair: AttachmentPair;
-		mimeType: string;
-		thumbnailSize: number;
-		originalSize: number;
-	}>
-> {
-	const written: Array<{
-		pair: AttachmentPair;
-		mimeType: string;
-		thumbnailSize: number;
-		originalSize: number;
-	}> = [];
+): Promise<WrittenAttachment[]> {
+	const written: WrittenAttachment[] = [];
 	try {
 		for (const attachment of attachments) {
 			const pair = await storage.writePair({
@@ -472,54 +496,120 @@ async function writeUploadedAttachments(
 	}
 }
 
-export async function createCard(req: Request, res: Response) {
-	const { workspaceId } = req.workspace!;
+type PreparedRequest =
+	| { kind: "bad_request"; error: string }
+	| { kind: "ready"; input: CreateInput; attachments: PreparedAttachment[] };
+
+async function prepareCreateRequest(
+	req: Request,
+	workspaceId: number,
+): Promise<PreparedRequest> {
 	let body: CreateBody;
 	try {
 		body = parseRequestBody(req);
 	} catch (error) {
-		return res.status(400).json({ error: (error as Error).message });
+		return { kind: "bad_request", error: (error as Error).message };
 	}
 	const uploaded = uploadedAttachments(req);
-	if (uploaded.error) return res.status(400).json({ error: uploaded.error });
+	if (uploaded.error) return { kind: "bad_request", error: uploaded.error };
 	const attachments = uploaded.attachments ?? [];
 	const attachmentValidationError =
 		await validateUploadedAttachments(attachments);
 	if (attachmentValidationError) {
-		return res.status(400).json({ error: attachmentValidationError });
+		return { kind: "bad_request", error: attachmentValidationError };
 	}
 	const { columnId } = body;
 	if (body.statusId !== undefined) {
-		return res
-			.status(400)
-			.json({ error: "statusId is not accepted for card creation" });
+		return {
+			kind: "bad_request",
+			error: "statusId is not accepted for card creation",
+		};
 	}
 	if (!Number.isInteger(columnId)) {
-		return res.status(400).json({ error: "columnId must be an integer" });
+		return { kind: "bad_request", error: "columnId must be an integer" };
 	}
 	const title = validateCardTitle((body.title ?? "") as string);
 	const description = validateCardDescription(
 		(body.description ?? "") as string,
 	);
-	if (!title.valid) return res.status(400).json({ error: title.error });
-	if (!description.valid)
-		return res.status(400).json({ error: description.error });
-
-	const input: CreateInput = {
-		workspaceId,
-		columnId: columnId as number,
-		body,
-		actor: req.user!,
-		title: title.trimmed as string,
-		description: description.trimmed ?? "",
+	if (!title.valid) {
+		return {
+			kind: "bad_request",
+			error: title.error ?? "invalid title",
+		};
+	}
+	if (!description.valid) {
+		return {
+			kind: "bad_request",
+			error: description.error ?? "invalid description",
+		};
+	}
+	return {
+		kind: "ready",
+		input: {
+			workspaceId,
+			columnId: columnId as number,
+			body,
+			actor: req.user!,
+			title: title.trimmed as string,
+			description: description.trimmed ?? "",
+		},
+		attachments,
 	};
+}
+
+async function removeWrittenAttachments(
+	storage: ReturnType<typeof getAttachmentStorage>,
+	attachments: WrittenAttachment[],
+): Promise<void> {
+	await storage.removePairs(attachments.map(({ pair }) => pair));
+}
+
+function respondToCreateFailure(
+	res: Response,
+	result: Exclude<CreateResult, { kind: "ok" }>,
+): Response {
+	if (result.kind === "not_found_column") {
+		return res.status(404).json({ error: "column not found" });
+	}
+	if (result.kind === "wip") {
+		return res.status(409).json({ error: "WIP limit reached for this column" });
+	}
+	return res.status(400).json({
+		error: "Some card fields are invalid",
+		fieldErrors: result.fieldErrors,
+	});
+}
+
+async function publishCreatedResult(
+	workspaceId: number,
+	actor: AuthUser,
+	result: Extract<CreateResult, { kind: "ok" }>,
+): Promise<void> {
+	await publishCreatedCard(workspaceId, actor, result.card);
+	for (const attachment of result.attachments) {
+		await publishCreatedAttachment(
+			workspaceId,
+			actor,
+			result.card.id,
+			attachment,
+		);
+	}
+	for (const assigneeId of result.assignmentIds) {
+		publishAssignment(workspaceId, actor, result.card, assigneeId);
+	}
+}
+
+export async function createCard(req: Request, res: Response) {
+	const { workspaceId } = req.workspace!;
+	const preparedRequest = await prepareCreateRequest(req, workspaceId);
+	if (preparedRequest.kind === "bad_request") {
+		return res.status(400).json({ error: preparedRequest.error });
+	}
+
+	const { input, attachments } = preparedRequest;
 	const attachmentStorage = getAttachmentStorage();
-	let writtenAttachments: Array<{
-		pair: AttachmentPair;
-		mimeType: string;
-		thumbnailSize: number;
-		originalSize: number;
-	}> = [];
+	let writtenAttachments: WrittenAttachment[];
 	try {
 		writtenAttachments = await writeUploadedAttachments(
 			attachmentStorage,
@@ -538,41 +628,15 @@ export async function createCard(req: Request, res: Response) {
 			return persistCreatedCard(trx, input, prepared, writtenAttachments);
 		});
 	} catch (error) {
-		await attachmentStorage.removePairs(
-			writtenAttachments.map(({ pair }) => pair),
-		);
+		await removeWrittenAttachments(attachmentStorage, writtenAttachments);
 		console.error("Failed to create card with attachments", error);
 		return res.status(500).json({ error: "Unable to create card" });
 	}
 	if (result.kind !== "ok") {
-		await attachmentStorage.removePairs(
-			writtenAttachments.map(({ pair }) => pair),
-		);
-	}
-	if (result.kind === "not_found_column") {
-		return res.status(404).json({ error: "column not found" });
-	}
-	if (result.kind === "wip") {
-		return res.status(409).json({ error: "WIP limit reached for this column" });
-	}
-	if (result.kind === "bad_request") {
-		return res.status(400).json({
-			error: "Some card fields are invalid",
-			fieldErrors: result.fieldErrors,
-		});
+		await removeWrittenAttachments(attachmentStorage, writtenAttachments);
+		return respondToCreateFailure(res, result);
 	}
 
-	await publishCreatedCard(workspaceId, input.actor, result.card);
-	for (const attachment of result.attachments) {
-		await publishCreatedAttachment(
-			workspaceId,
-			input.actor,
-			result.card.id,
-			attachment,
-		);
-	}
-	for (const assigneeId of result.assignmentIds) {
-		publishAssignment(workspaceId, input.actor, result.card, assigneeId);
-	}
+	await publishCreatedResult(workspaceId, input.actor, result);
 	return res.status(201).json(result.card);
 }

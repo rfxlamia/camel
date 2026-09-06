@@ -1,4 +1,4 @@
-import { type RequestHandler, Router } from "express";
+import { Router } from "express";
 import { sql } from "kysely";
 import type { AuthUser } from "../auth.js";
 import { mapColumnSlots, statusIdForSlot } from "../core/column-status-map.js";
@@ -7,11 +7,6 @@ import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import { checkWipLimit } from "../core/wip.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
-import {
-	ATTACHMENT_UPLOAD_PROFILES,
-	createAttachmentUpload,
-	normalizeAttachmentUploadError,
-} from "../lib/attachment-upload.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import {
@@ -27,6 +22,7 @@ import {
 	syncCardAssignees,
 } from "./card-assignees.js";
 import { createCard } from "./card-create.js";
+import { cardCreateMultipartMiddleware } from "./card-create-multipart.js";
 import { syncCardLabels } from "./card-labels.js";
 import {
 	buildCardResponse,
@@ -46,33 +42,6 @@ import {
 } from "./tracker-item-parsers.js";
 
 export const cardsRouter = Router({ mergeParams: true });
-
-const cardCreateUpload = createAttachmentUpload({
-	maxPairs: ATTACHMENT_UPLOAD_PROFILES.cardCreate.maxPairs,
-});
-const cardCreateMultipartMiddleware: RequestHandler = async (
-	req,
-	res,
-	next,
-) => {
-	if (!req.is("multipart/form-data")) {
-		next();
-		return;
-	}
-	try {
-		const upload = await cardCreateUpload;
-		upload(req, res, (error) => {
-			if (!error) {
-				next();
-				return;
-			}
-			const normalized = normalizeAttachmentUploadError(error);
-			res.status(normalized.status).json(normalized);
-		});
-	} catch (error) {
-		next(error);
-	}
-};
 
 type FullCardRow = CardResponseRow & { workspace_id: number };
 type CardDbRow = CardResponseRow;
