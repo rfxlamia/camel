@@ -4,6 +4,7 @@ import {
 	workspaceEventChannel,
 	workspacePresencePattern,
 } from "./realtime.js";
+import type { AttachmentEventPayload, BoardEvent } from "./realtime.js";
 
 type MockRequest = {
 	params: Record<string, string>;
@@ -151,6 +152,58 @@ describe("SSE client workspace isolation", () => {
 		expect(res.write).not.toHaveBeenCalledWith(
 			expect.stringContaining("card.created"),
 		);
+	});
+});
+
+describe("attachment event round-trip", () => {
+	it("delivers metadata-only payloads through local fan-out", async () => {
+		const hub = createRealtimeHub({ publisher: null, subscriber: null });
+		const client = hub.connectLocalClient({ workspaceId: 1 });
+		const payload: AttachmentEventPayload = {
+			attachmentId: 17,
+			mimeType: "image/png",
+			createdAt: "2026-09-05T10:00:00.000Z",
+		};
+
+		await hub.publishEvent(1, {
+			type: "attachment.added",
+			cardId: 42,
+			payload,
+		});
+
+		expect(client.drain()).toEqual([
+			{
+				type: "attachment.added",
+				cardId: 42,
+				payload: {
+					attachmentId: 17,
+					mimeType: "image/png",
+					createdAt: "2026-09-05T10:00:00.000Z",
+				},
+			},
+		]);
+	});
+
+	it("rejects legacy top-level attachment metadata", () => {
+		const legacyEvent: BoardEvent = {
+			type: "attachment.added",
+			at: "2026-09-05T10:00:00.000Z",
+			payload: {
+				attachmentId: 17,
+				mimeType: "image/png",
+				createdAt: "2026-09-05T10:00:00.000Z",
+			},
+			// @ts-expect-error Legacy attachment metadata belongs under payload.
+			attachmentId: 17,
+			// @ts-expect-error Legacy attachment metadata belongs under payload.
+			attachment: {
+				id: 17,
+				mimeType: "image/png",
+				createdAt: "2026-09-05T10:00:00.000Z",
+			},
+		};
+
+		expect(legacyEvent.payload).toMatchObject({ attachmentId: 17 });
 	});
 });
 
