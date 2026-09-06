@@ -385,12 +385,25 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 
 // ---- Production singleton ----------------------------------------------------
 
-let activeHub = createRealtimeHub({
+type RealtimeHub = ReturnType<typeof createRealtimeHub>;
+
+let activeHub: RealtimeHub = createRealtimeHub({
 	publisher: null,
 	subscriber: null,
 	presence: null,
 });
 let activeSubscriber: RedisClientType | null = null;
+
+/** Replace the singleton only in integration tests that exercise the real hub. */
+export function setRealtimeHubForTests(hub: RealtimeHub | null): void {
+	activeHub =
+		hub ??
+		createRealtimeHub({
+			publisher: null,
+			subscriber: null,
+			presence: null,
+		});
+}
 
 export { connectRedis } from "./db/redis.js";
 

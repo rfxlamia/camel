@@ -1,9 +1,9 @@
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { clearPresence, publishEvent } from "../realtime.js";
+import type { RecordFocusActivity } from "./focus-session.js";
 import { finishActiveFocusSessionForRemoval } from "./focus-session-membership.js";
 import { createFocusSessionRepo } from "./focus-session-repo.js";
-import type { RecordFocusActivity } from "./focus-session.js";
 import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 // ---- Workspace list serialization -------------------------------------------
