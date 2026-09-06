@@ -84,6 +84,17 @@ export interface AuthAudit {
 	payload: Generated<Json>;
 }
 
+export interface Attachments {
+	card_id: number;
+	created_at: Generated<Timestamp>;
+	id: Generated<number>;
+	mime_type: string;
+	original_path: string;
+	original_size_bytes: number;
+	thumbnail_path: string;
+	thumbnail_size_bytes: number;
+}
+
 export interface BaAccounts {
 	access_token: string | null;
 	access_token_expires_at: Timestamp | null;
@@ -383,6 +394,7 @@ export interface DB {
 	agent_card_outputs: AgentCardOutputs;
 	agent_conversations: AgentConversations;
 	agent_tool_calls: AgentToolCalls;
+	attachments: Attachments;
 	auth_audit: AuthAudit;
 	ba_accounts: BaAccounts;
 	ba_sessions: BaSessions;
