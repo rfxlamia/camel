@@ -4,10 +4,9 @@ import { getAttachmentStorage } from "../lib/attachment-storage.js";
 import {
 	ATTACHMENT_UPLOAD_PROFILES,
 	createAttachmentUpload,
-	MAX_ATTACHMENT_FILE_SIZE_BYTES,
 	normalizeAttachmentUploadError,
 } from "../lib/attachment-upload.js";
-import { validateFileContent } from "../lib/file-validator.js";
+import { validateAttachmentPairs } from "../lib/attachment-validation.js";
 import { publishEvent } from "../realtime.js";
 import {
 	EXISTING_CARD_ATTACHMENT_CAPACITY_MESSAGE,
@@ -43,12 +42,8 @@ export const existingCardMultipartMiddleware: RequestHandler = async (
 				return;
 			}
 			const normalized = normalizeAttachmentUploadError(error);
-			const message =
-				normalized.code === "LIMIT_FILE_SIZE"
-					? "File size must be under 10MB"
-					: normalized.error;
 			res.status(normalized.status).json({
-				error: message,
+				error: normalized.error,
 				code: normalized.code,
 			});
 		});
@@ -87,32 +82,6 @@ function parseUploadedAttachments(req: Request): {
 			mimeType: originals[index]!.mimetype,
 		})),
 	};
-}
-
-function mapAttachmentValidationError(error: string | undefined): string {
-	if (error?.includes("dimensions exceed") || error?.includes("dimensions")) {
-		return "Image dimensions must be 4096px or smaller";
-	}
-	return "Only PNG and JPEG accepted";
-}
-
-async function validateExistingAttachments(
-	attachments: PreparedAttachment[],
-): Promise<string | null> {
-	for (const attachment of attachments) {
-		for (const file of [attachment.thumbnail, attachment.original]) {
-			if (file.size > MAX_ATTACHMENT_FILE_SIZE_BYTES) {
-				return "File size must be under 10MB";
-			}
-			const validation = await validateFileContent(file.buffer, file.mimetype);
-			if (!validation.valid)
-				return mapAttachmentValidationError(validation.error);
-		}
-		if (attachment.thumbnail.mimetype !== attachment.original.mimetype) {
-			return "Only PNG and JPEG accepted";
-		}
-	}
-	return null;
 }
 
 function isCapacityError(error: unknown): boolean {
@@ -213,7 +182,7 @@ export async function uploadExistingCardAttachments(
 	const uploaded = parseUploadedAttachments(req);
 	if (uploaded.error) return res.status(400).json({ error: uploaded.error });
 	const attachments = uploaded.attachments ?? [];
-	const validationError = await validateExistingAttachments(attachments);
+	const validationError = await validateAttachmentPairs(attachments);
 	if (validationError) return res.status(400).json({ error: validationError });
 
 	const storage = getAttachmentStorage();

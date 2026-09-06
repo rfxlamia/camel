@@ -10,7 +10,7 @@ import {
 	type AttachmentPair,
 	getAttachmentStorage,
 } from "../lib/attachment-storage.js";
-import { validateFileContent } from "../lib/file-validator.js";
+import { validateAttachmentPairs } from "../lib/attachment-validation.js";
 import { publishEvent } from "../realtime.js";
 import {
 	validateCardDescription,
@@ -429,7 +429,12 @@ function parseRequestBody(req: Request): CreateBody {
 	if (typeof metadata !== "string") {
 		throw new Error("metadata must be a JSON object");
 	}
-	const parsed: unknown = JSON.parse(metadata);
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(metadata);
+	} catch (error) {
+		throw new Error("metadata must be a JSON object", { cause: error });
+	}
 	if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
 		throw new Error("metadata must be a JSON object");
 	}
@@ -454,21 +459,6 @@ function uploadedAttachments(req: Request): {
 			mimeType: originals[index]!.mimetype,
 		})),
 	};
-}
-
-async function validateUploadedAttachments(
-	attachments: PreparedAttachment[],
-): Promise<string | null> {
-	for (const attachment of attachments) {
-		for (const [role, file] of [
-			["thumbnail", attachment.thumbnail],
-			["original", attachment.original],
-		] as const) {
-			const validation = await validateFileContent(file.buffer, file.mimetype);
-			if (!validation.valid) return `${role}: ${validation.error}`;
-		}
-	}
-	return null;
 }
 
 async function writeUploadedAttachments(
@@ -513,8 +503,7 @@ async function prepareCreateRequest(
 	const uploaded = uploadedAttachments(req);
 	if (uploaded.error) return { kind: "bad_request", error: uploaded.error };
 	const attachments = uploaded.attachments ?? [];
-	const attachmentValidationError =
-		await validateUploadedAttachments(attachments);
+	const attachmentValidationError = await validateAttachmentPairs(attachments);
 	if (attachmentValidationError) {
 		return { kind: "bad_request", error: attachmentValidationError };
 	}

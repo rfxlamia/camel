@@ -7,10 +7,12 @@ import { createRealtimeHub, setRealtimeHubForTests } from "../realtime.js";
 import { setExistingCardAttachmentCapacityHookForTests } from "./card-attachments.js";
 import {
 	app,
+	attachMixedMimePair,
 	attachmentRows,
 	attachPair,
 	cardVersion,
 	countFiles,
+	JPEG_1X1,
 	pngFixture,
 	uploadUrl,
 	waitBriefly,
@@ -184,6 +186,34 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				).toBe(true);
 				expect(events.drain()).toHaveLength(2);
 				expect(await countFiles(fixture.storage.root)).toBe(6);
+			});
+		}, 15_000);
+
+		it("rejects mixed MIME pairs before writing storage", async () => {
+			await withUploadFixture(1, async (fixture) => {
+				const hub = createRealtimeHub({ publisher: null, subscriber: null });
+				const events = hub.connectLocalClient({
+					workspaceId: fixture.workspaceId,
+				});
+				setRealtimeHubForTests(hub);
+				const beforeFiles = await countFiles(fixture.storage.root);
+				const response = await attachMixedMimePair(
+					request(app).post(uploadUrl(fixture.workspaceId, fixture.cardId)),
+					pngFixture(),
+					JPEG_1X1,
+				);
+				expect(response.status).toBe(400);
+				expect(response.body.error).toBe("Only PNG and JPEG accepted");
+				expect(await attachmentRows(fixture.cardId)).toHaveLength(1);
+				expect(await countFiles(fixture.storage.root)).toBe(beforeFiles);
+				expect(
+					await db
+						.selectFrom("card_events")
+						.select("id")
+						.where("card_id", "=", fixture.cardId)
+						.execute(),
+				).toHaveLength(0);
+				expect(events.drain()).toEqual([]);
 			});
 		}, 15_000);
 

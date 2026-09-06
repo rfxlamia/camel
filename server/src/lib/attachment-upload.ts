@@ -1,6 +1,11 @@
 import type { RequestHandler } from "express";
 
 export const MAX_ATTACHMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const ATTACHMENT_VALIDATION_MESSAGES = Object.freeze({
+	mime: "Only PNG and JPEG accepted",
+	size: "File size must be under 10MB",
+	dimensions: "Image dimensions must be 4096px or smaller",
+});
 export const CARD_CREATE_METADATA_FIELD = "metadata";
 export const ATTACHMENT_METADATA_PARTS = 1;
 const MULTER_PARTS_LIMIT_SENTINEL = 1;
@@ -103,7 +108,7 @@ export function normalizeAttachmentUploadError(
 		return {
 			status: 413,
 			code,
-			error: "Attachment file size must be under 10MB",
+			error: ATTACHMENT_VALIDATION_MESSAGES.size,
 		};
 	}
 
