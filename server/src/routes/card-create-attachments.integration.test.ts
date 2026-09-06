@@ -240,7 +240,7 @@ integration("POST /cards — atomic staged attachment create", () => {
 			expect.objectContaining({
 				mime_type: "image/png",
 				thumbnail_size_bytes: PNG_1X1.length,
-				original_size_bytes: PNG_1X1.length + 7,
+				original_size_bytes: PNG_1X1.length + Buffer.from("pair-two").length,
 			}),
 		]);
 		expect(
@@ -254,7 +254,7 @@ integration("POST /cards — atomic staged attachment create", () => {
 			{ event_type: "attachment_added" },
 		]);
 		expect(mockPublishEvent).toHaveBeenCalledTimes(3);
-		expect(mockPublishEvent.mock.calls.map(([event]) => event.type)).toEqual([
+		expect(mockPublishEvent.mock.calls.map(([, event]) => event.type)).toEqual([
 			"card.created",
 			"attachment.added",
 			"attachment.added",
