@@ -1,58 +1,24 @@
 import { Plus } from "lucide-react";
-import {
-	useCallback,
-	useLayoutEffect,
-	useMemo,
-	useReducer,
-	useRef,
-	useState,
-} from "react";
-import { ApiError } from "../api";
-import type {
-	BoardCreatePayload,
-	TaskCreateFieldErrors,
-} from "../lib/taskCreateContracts";
+import { useCallback, useMemo, useReducer, useRef, useState } from "react";
+import type { BoardCreatePayload } from "../lib/taskCreateContracts";
 import type { Column } from "../types";
+import { AddCardForm } from "./AddCardForm";
+import { useTaskMetadataCatalogs } from "./task-entry/TaskMetadataCatalogProvider";
+import {
+	type TaskFileCommandDefinition,
+	type TaskTitleEditorHandle,
+} from "./task-entry/TaskTitleEditor";
 import { getBoardTaskFieldDefinitions } from "./task-entry/taskFieldDefinitions";
 import {
 	createInitialTaskMetadataDraft,
-	selectTaskMetadataPayload,
 	taskMetadataReducer,
 } from "./task-entry/taskMetadataDraft";
-import { useTaskMetadataCatalogs } from "./task-entry/TaskMetadataCatalogProvider";
-import {
-	TaskTitleEditor,
-	type TaskTitleEditorHandle,
-} from "./task-entry/TaskTitleEditor";
+import { useAddCardImageStaging } from "./useAddCardImageStaging";
+import { useAddCardSubmit } from "./useAddCardSubmit";
 
 interface Props {
 	column: Column;
 	onAddCard: (payload: BoardCreatePayload) => Promise<void>;
-}
-
-const CHIP_FIELD_PREFIXES: Partial<Record<keyof TaskCreateFieldErrors, string>> =
-	{
-		assigneeIds: "Assignee",
-		priorityId: "Priority",
-		labelIds: "Labels",
-		projectId: "Project",
-		phaseId: "Phase",
-		dueDate: "Due date",
-	};
-
-function buildBoardPayload(
-	columnId: number,
-	title: string,
-	draft: ReturnType<typeof createInitialTaskMetadataDraft>,
-): BoardCreatePayload {
-	const metadata = selectTaskMetadataPayload(draft);
-	const { statusId: _statusId, startDate: _startDate, endDate: _endDate, ...boardMetadata } =
-		metadata;
-	return {
-		columnId,
-		title,
-		...boardMetadata,
-	};
 }
 
 export default function AddCard({ column, onAddCard }: Props) {
@@ -67,52 +33,55 @@ export default function AddCard({ column, onAddCard }: Props) {
 		undefined,
 		createInitialTaskMetadataDraft,
 	);
-	const [submitting, setSubmitting] = useState(false);
-	const [fieldErrors, setFieldErrors] = useState<TaskCreateFieldErrors>({});
+	const {
+		stagedImages,
+		setStagedImages,
+		stageCapMessage,
+		hasInvalidStaged,
+		stageFiles,
+		removeStagedImage,
+		resetStagedImages,
+	} = useAddCardImageStaging();
 	const editorRef = useRef<TaskTitleEditorHandle>(null);
 	const editorShellRef = useRef<HTMLDivElement>(null);
 	const atLimit =
 		column.wipLimit !== null && column.cards.length >= column.wipLimit;
 
-	const submit = useCallback(async () => {
-		if (submitting) return;
-		const candidate = editorRef.current?.getSubmitCandidate();
-		if (!candidate?.valid) return;
+	const imageFileCommand = useMemo<TaskFileCommandDefinition>(
+		() => ({
+			kind: "file",
+			id: "image",
+			label: "Image",
+			accept: "image/png,image/jpeg",
+			multiple: true,
+			onFilesSelected: (files) => {
+				void stageFiles(files);
+			},
+		}),
+		[stageFiles],
+	);
 
-		setSubmitting(true);
-		setFieldErrors({});
-		try {
-			const payload = buildBoardPayload(column.id, candidate.title, draft);
-			await onAddCard(payload);
+	const close = useCallback(() => {
+		resetStagedImages();
+		setOpen(false);
+	}, [resetStagedImages]);
+
+	const { submitting, submit } = useAddCardSubmit({
+		columnId: column.id,
+		draft,
+		stagedImages,
+		hasInvalidStaged,
+		setStagedImages,
+		resetStagedImages,
+		onAddCard,
+		onSuccess: () => {
 			dispatch({ type: "reset" });
 			setOpen(false);
-		} catch (err) {
-			if (err instanceof ApiError && err.fieldErrors) {
-				setFieldErrors(err.fieldErrors);
-			}
-		} finally {
-			setSubmitting(false);
-		}
-	}, [column.id, draft, onAddCard, submitting]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: re-sync chip aria-invalid when chips mount or errors change
-	useLayoutEffect(() => {
-		const shell = editorShellRef.current;
-		if (!shell) return;
-		for (const [field, prefix] of Object.entries(CHIP_FIELD_PREFIXES)) {
-			const chip = shell.querySelector<HTMLElement>(
-				`button[aria-label^="${prefix}:"]`,
-			);
-			if (!chip) continue;
-			if (fieldErrors[field as keyof TaskCreateFieldErrors]) {
-				chip.setAttribute("aria-invalid", "true");
-				chip.setAttribute("data-invalid", "true");
-			} else {
-				chip.removeAttribute("aria-invalid");
-				chip.removeAttribute("data-invalid");
-			}
-		}
-	}, [draft, fieldErrors, fields, open]);
+		},
+		editorRef,
+		editorShellRef,
+		syncDeps: [draft, fields, open],
+	});
 
 	if (!open) {
 		return (
@@ -129,49 +98,25 @@ export default function AddCard({ column, onAddCard }: Props) {
 	}
 
 	return (
-		<div className="mt-2 space-y-2">
-			<form
-				onSubmit={(event) => {
-					event.preventDefault();
-					void submit();
-				}}
-				onKeyDown={(event) => {
-					if (event.key !== "Enter" || event.shiftKey) return;
-					if (event.currentTarget.querySelector('[role="listbox"]')) return;
-					event.preventDefault();
-					void submit();
-				}}
-			>
-				<div
-					ref={editorShellRef}
-					className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 focus-within:border-primary-600 focus-within:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)]"
-				>
-					<TaskTitleEditor
-						ref={editorRef}
-						fields={fields}
-						draft={draft}
-						dispatch={dispatch}
-						placeholder="What needs doing?"
-						ariaLabel="Task title"
-					/>
-				</div>
-				<div className="mt-2 flex gap-2">
-					<button
-						type="submit"
-						disabled={submitting}
-						className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-60"
-					>
-						Add to board
-					</button>
-					<button
-						type="button"
-						onClick={() => setOpen(false)}
-						className="rounded-md px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100 hover:text-primary-700"
-					>
-						Cancel
-					</button>
-				</div>
-			</form>
-		</div>
+		<AddCardForm
+			submitting={submitting}
+			hasInvalidStaged={hasInvalidStaged}
+			stagedImages={stagedImages}
+			stageCapMessage={stageCapMessage}
+			fields={fields}
+			fileCommand={imageFileCommand}
+			draft={draft}
+			dispatch={dispatch}
+			editorRef={editorRef}
+			editorShellRef={editorShellRef}
+			onSubmit={() => {
+				void submit();
+			}}
+			onCancel={close}
+			onRemoveImage={removeStagedImage}
+			onRetryUpload={() => {
+				void submit();
+			}}
+		/>
 	);
 }
