@@ -69,6 +69,10 @@ export function describeCardEvent(event: ActivityEvent): string {
 			return "updated this card";
 		case "delete":
 			return "deleted this card";
+		case "attachment_added":
+			return "added an image to this card";
+		case "attachment_removed":
+			return "removed an image from this card";
 		default:
 			return "changed this card";
 	}

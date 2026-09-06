@@ -19,6 +19,10 @@ export function describeEvent(e: ActivityEvent): string {
 			return `updated ${card}`;
 		case "delete":
 			return `deleted ${card}`;
+		case "attachment_added":
+			return `added an image to ${card}`;
+		case "attachment_removed":
+			return `removed an image from ${card}`;
 		default:
 			return `changed ${card}`;
 	}
