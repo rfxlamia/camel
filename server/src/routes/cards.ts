@@ -1,19 +1,11 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import {
-	mapColumnSlots,
-	statusIdForSlot,
-} from "../core/column-status-map.js";
-import {
-	neighborsAt,
-	POSITION_GAP,
-	positionBetween,
-	rebalance,
-} from "../core/position.js";
-import { checkWipLimit } from "../core/wip.js";
-import { derivePrefix, formatKey } from "../core/tracker-key.js";
-import { type DBExecutor, db } from "../db/kysely.js";
 import type { AuthUser } from "../auth.js";
+import { mapColumnSlots, statusIdForSlot } from "../core/column-status-map.js";
+import { neighborsAt, positionBetween, rebalance } from "../core/position.js";
+import { derivePrefix, formatKey } from "../core/tracker-key.js";
+import { checkWipLimit } from "../core/wip.js";
+import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
@@ -22,6 +14,7 @@ import {
 	validateCardTitle,
 	validateDueDate,
 } from "../validators/input-length.js";
+import { loadCardAttachmentsForCards } from "./attachment-response.js";
 import {
 	addCardAssignee,
 	getCardAssigneeIds,
@@ -74,9 +67,7 @@ export function selectFullCard(dbExec: DBExecutor) {
 				.on("tpr.deleted_at", "is", null),
 		)
 		.leftJoin("tracker_phases as tph", (join) =>
-			join
-				.onRef("tph.id", "=", "c.phase_id")
-				.on("tph.deleted_at", "is", null),
+			join.onRef("tph.id", "=", "c.phase_id").on("tph.deleted_at", "is", null),
 		)
 		.select([
 			"c.id",
@@ -154,13 +145,15 @@ async function hydrateCard(cardId: number, workspaceId: number) {
 		.where("c.deleted_at", "is", null)
 		.executeTakeFirst();
 	if (!row) return null;
-	const [assigneesByCard, labelsByCard] = await Promise.all([
+	const [assigneesByCard, labelsByCard, attachmentsByCard] = await Promise.all([
 		loadCardAssigneesForCards(db, [cardId]),
 		loadCardLabelsForCards(db, [cardId]),
+		loadCardAttachmentsForCards(db, workspaceId, [cardId]),
 	]);
 	return buildCardResponse(row, {
 		assignees: assigneesByCard.get(cardId) ?? [],
 		labels: labelsByCard.get(cardId) ?? [],
+		attachments: attachmentsByCard.get(cardId) ?? [],
 	});
 }
 
@@ -270,14 +263,17 @@ cardsRouter.get("/cards/:id", async (req, res) => {
 				.where("c.deleted_at", "is", null)
 				.executeTakeFirst();
 			if (!row) return null;
-			const [assigneesByCard, labelsByCard] = await Promise.all([
-				loadCardAssigneesForCards(db, [cId]),
-				loadCardLabelsForCards(db, [cId]),
-			]);
+			const [assigneesByCard, labelsByCard, attachmentsByCard] =
+				await Promise.all([
+					loadCardAssigneesForCards(db, [cId]),
+					loadCardLabelsForCards(db, [cId]),
+					loadCardAttachmentsForCards(db, wsId, [cId]),
+				]);
 			return {
 				...buildCardResponse(row, {
 					assignees: assigneesByCard.get(cId) ?? [],
 					labels: labelsByCard.get(cId) ?? [],
+					attachments: attachmentsByCard.get(cId) ?? [],
 				}),
 				workspaceId: row.workspace_id,
 			};
@@ -400,10 +396,7 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 	const result: TxResult = await db.transaction().execute(async (trx) => {
 		const lockedRow = await trx
 			.selectFrom("cards")
-			.select([
-				sql<string | null>`due_date::text`.as("due_date"),
-				"project_id",
-			])
+			.select([sql<string | null>`due_date::text`.as("due_date"), "project_id"])
 			.where("id", "=", id)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
@@ -465,15 +458,18 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 					.where("c.deleted_at", "is", null)
 					.executeTakeFirst();
 				if (!current) return { kind: "not_found" };
-				const [assigneesByCard, labelsByCard] = await Promise.all([
-					loadCardAssigneesForCards(trx, [id]),
-					loadCardLabelsForCards(trx, [id]),
-				]);
+				const [assigneesByCard, labelsByCard, attachmentsByCard] =
+					await Promise.all([
+						loadCardAssigneesForCards(trx, [id]),
+						loadCardLabelsForCards(trx, [id]),
+						loadCardAttachmentsForCards(trx, workspaceId, [id]),
+					]);
 				return {
 					kind: "conflict",
 					card: mapCardResponse(toCardDbRow(current), {
 						assignees: assigneesByCard.get(id) ?? [],
 						labels: labelsByCard.get(id) ?? [],
+						attachments: attachmentsByCard.get(id) ?? [],
 					}),
 				};
 			}
@@ -605,11 +601,15 @@ cardsRouter.patch("/cards/:id", requireWorkspaceMember, async (req, res) => {
 		.where("c.deleted_at", "is", null)
 		.executeTakeFirst();
 	if (!responseRow) return res.status(404).json({ error: "card not found" });
-	const labelsByCard = await loadCardLabelsForCards(db, [id]);
+	const [labelsByCard, attachmentsByCard] = await Promise.all([
+		loadCardLabelsForCards(db, [id]),
+		loadCardAttachmentsForCards(db, workspaceId, [id]),
+	]);
 	res.json(
 		mapCardResponse(responseRow, {
 			assignees: assigneesByCard.get(id) ?? [],
 			labels: labelsByCard.get(id) ?? [],
+			attachments: attachmentsByCard.get(id) ?? [],
 		}),
 	);
 });
@@ -776,9 +776,7 @@ cardsRouter.post(
 					.selectFrom("columns")
 					.select(["id", "position", "is_done"])
 					.where("workspace_id", "=", workspaceId)
-					.where(
-						sql<boolean>`board_id IS NOT DISTINCT FROM ${target.board_id}`,
-					)
+					.where(sql<boolean>`board_id IS NOT DISTINCT FROM ${target.board_id}`)
 					.orderBy("position")
 					.orderBy("id")
 					.execute();

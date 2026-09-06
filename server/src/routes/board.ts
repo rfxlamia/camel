@@ -2,6 +2,8 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
+import type { CardAttachmentResponse } from "./attachment-response.js";
+import { loadCardAttachmentsForCards } from "./attachment-response.js";
 import { loadCardAssigneesForCards } from "./card-assignees.js";
 import {
 	buildCardResponse,
@@ -21,6 +23,7 @@ export function buildBoardResponse(
 		{ id: number; username: string; displayName: string }[]
 	>,
 	labelsByCard: Map<number, VocabularyRow[]> = new Map(),
+	attachmentsByCard: Map<number, CardAttachmentResponse[]> = new Map(),
 ) {
 	const cardsByColumn = new Map<number, CardRow[]>();
 	for (const c of cards) {
@@ -44,6 +47,7 @@ export function buildBoardResponse(
 				buildCardResponse(c, {
 					assignees: assigneesByCard.get(c.id) ?? [],
 					labels: labelsByCard.get(c.id) ?? [],
+					attachments: attachmentsByCard.get(c.id) ?? [],
 				}),
 			),
 		})),
@@ -71,12 +75,11 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 				.on("tpr.deleted_at", "is", null),
 		)
 		.leftJoin("tracker_phases as tph", (join) =>
-			join
-				.onRef("tph.id", "=", "c.phase_id")
-				.on("tph.deleted_at", "is", null),
+			join.onRef("tph.id", "=", "c.phase_id").on("tph.deleted_at", "is", null),
 		)
 		.select([
 			"c.id",
+			"c.workspace_id",
 			"c.column_id",
 			"c.title",
 			"c.description",
@@ -116,9 +119,18 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 		done_at: c.done_at?.toISOString() ?? null,
 	}));
 	const cardIds = cards.map((c) => c.id);
-	const [assigneesByCard, labelsByCard] = await Promise.all([
+	const [assigneesByCard, labelsByCard, attachmentsByCard] = await Promise.all([
 		loadCardAssigneesForCards(db, cardIds),
 		loadCardLabelsForCards(db, cardIds),
+		loadCardAttachmentsForCards(db, workspaceId, cardIds),
 	]);
-	res.json(buildBoardResponse(columns, cards, assigneesByCard, labelsByCard));
+	res.json(
+		buildBoardResponse(
+			columns,
+			cards,
+			assigneesByCard,
+			labelsByCard,
+			attachmentsByCard,
+		),
+	);
 });

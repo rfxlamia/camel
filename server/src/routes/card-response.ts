@@ -1,6 +1,10 @@
 import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import type { DBExecutor } from "../db/kysely.js";
 import {
+	type CardAttachmentResponse,
+	loadCardAttachmentsForCards,
+} from "./attachment-response.js";
+import {
 	type CardAssignee,
 	loadCardAssigneesForCards,
 } from "./card-assignees.js";
@@ -22,6 +26,7 @@ export type CardResponseRow = {
 	started_at: Date | string | null;
 	done_at: Date | string | null;
 	due_date: string | null;
+	workspace_id?: number;
 	workspace_name?: string;
 	key_number?: number | null;
 	status_id?: number | null;
@@ -45,6 +50,7 @@ export type CardResponseRow = {
 export type CardResponseHydration = {
 	assignees: CardAssignee[];
 	labels: VocabularyRow[];
+	attachments?: CardAttachmentResponse[];
 };
 
 function toIso(value: Date | string | null): string | null {
@@ -113,6 +119,9 @@ export function buildCardResponse(
 		phaseId: row.phase_id ?? null,
 		phaseName: row.phase_name ?? null,
 		assignees: hydration.assignees,
+		...(row.workspace_id == null
+			? {}
+			: { attachments: hydration.attachments ?? [] }),
 	};
 }
 
@@ -161,14 +170,21 @@ export async function hydrateCardResponses(
 	rows: CardResponseRow[],
 ) {
 	const ids = rows.map((row) => row.id);
-	const [assigneesByCard, labelsByCard] = await Promise.all([
+	const workspaceId = rows.find(
+		(row) => row.workspace_id != null,
+	)?.workspace_id;
+	const [assigneesByCard, labelsByCard, attachmentsByCard] = await Promise.all([
 		loadCardAssigneesForCards(dbExec, ids),
 		loadCardLabelsForCards(dbExec, ids),
+		workspaceId == null
+			? Promise.resolve(new Map<number, CardAttachmentResponse[]>())
+			: loadCardAttachmentsForCards(dbExec, workspaceId, ids),
 	]);
 	return rows.map((row) =>
 		buildCardResponse(row, {
 			assignees: assigneesByCard.get(row.id) ?? [],
 			labels: labelsByCard.get(row.id) ?? [],
+			attachments: attachmentsByCard.get(row.id) ?? [],
 		}),
 	);
 }
