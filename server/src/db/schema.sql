@@ -31,6 +31,24 @@ CREATE TABLE IF NOT EXISTS card_events (
 CREATE INDEX IF NOT EXISTS idx_cards_column ON cards(column_id);
 CREATE INDEX IF NOT EXISTS idx_events_card ON card_events(card_id);
 
+-- Private image attachments for board cards. Paths point to storage managed by
+-- the attachment provider; image bytes are never stored in PostgreSQL.
+CREATE TABLE IF NOT EXISTS attachments (
+  id                    SERIAL PRIMARY KEY,
+  card_id               INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  mime_type             TEXT NOT NULL CHECK (mime_type IN ('image/png', 'image/jpeg')),
+  thumbnail_path        TEXT NOT NULL,
+  original_path         TEXT NOT NULL,
+  thumbnail_size_bytes  INTEGER NOT NULL
+                        CHECK (thumbnail_size_bytes > 0 AND thumbnail_size_bytes <= 10485760),
+  original_size_bytes   INTEGER NOT NULL
+                        CHECK (original_size_bytes > 0 AND original_size_bytes <= 10485760),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_card_created
+  ON attachments(card_id, created_at, id);
+
 -- Team collaboration (2026-06: auth, optimistic locking, activity feed)
 
 CREATE TABLE IF NOT EXISTS users (
