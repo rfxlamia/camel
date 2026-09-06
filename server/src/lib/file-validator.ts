@@ -1,6 +1,7 @@
 const FILE_SIGNATURES: Record<string, Buffer[]> = {
 	png: [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
 	jpeg: [
+		Buffer.from([0xff, 0xd8, 0xff]),
 		Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
 		Buffer.from([0xff, 0xd8, 0xff, 0xe1]),
 		Buffer.from([0xff, 0xd8, 0xff, 0xe8]),
@@ -21,14 +22,142 @@ const FILE_SIGNATURES: Record<string, Buffer[]> = {
 const MIME_TO_SIGNATURE: Record<string, string[]> = {
 	"image/png": ["png"],
 	"image/jpeg": ["jpeg"],
-	"image/gif": ["gif"],
-	"image/webp": ["webp"],
 };
+
+export const MAX_IMAGE_DIMENSION = 4096;
+const MAX_JPEG_HEADER_BYTES = 64 * 1024;
+
+interface ImageDimensions {
+	width: number;
+	height: number;
+}
+
+interface DimensionValidationResult {
+	dimensions?: ImageDimensions;
+	error?: string;
+}
 
 export interface FileValidationResult {
 	valid: boolean;
 	detectedType?: string;
+	dimensions?: ImageDimensions;
 	error?: string;
+}
+
+const INVALID_PNG_DIMENSIONS =
+	"invalid image dimensions: PNG IHDR is missing or malformed";
+const INVALID_JPEG_DIMENSIONS =
+	"invalid image dimensions: JPEG SOF marker is missing or malformed";
+const OVERSIZED_DIMENSIONS =
+	"image dimensions exceed maximum of 4096 pixels";
+
+function validateDimensions(dimensions: ImageDimensions): DimensionValidationResult {
+	if (
+		dimensions.width < 1 ||
+		dimensions.height < 1 ||
+		dimensions.width > MAX_IMAGE_DIMENSION ||
+		dimensions.height > MAX_IMAGE_DIMENSION
+	) {
+		return { dimensions, error: OVERSIZED_DIMENSIONS };
+	}
+
+	return { dimensions };
+}
+
+function parsePngDimensions(buffer: Buffer): DimensionValidationResult {
+	if (
+		buffer.length < 24 ||
+		buffer.readUInt32BE(8) !== 13 ||
+		buffer.toString("ascii", 12, 16) !== "IHDR"
+	) {
+		return { error: INVALID_PNG_DIMENSIONS };
+	}
+
+	return validateDimensions({
+		width: buffer.readUInt32BE(16),
+		height: buffer.readUInt32BE(20),
+	});
+}
+
+function isJpegSofMarker(marker: number): boolean {
+	return (
+		(marker >= 0xc0 && marker <= 0xc3) ||
+		(marker >= 0xc5 && marker <= 0xc7) ||
+		(marker >= 0xc9 && marker <= 0xcb) ||
+		(marker >= 0xcd && marker <= 0xcf)
+	);
+}
+
+function parseJpegDimensions(buffer: Buffer): DimensionValidationResult {
+	if (
+		buffer.length < 4 ||
+		buffer[0] !== 0xff ||
+		buffer[1] !== 0xd8 ||
+		buffer[2] !== 0xff
+	) {
+		return { error: INVALID_JPEG_DIMENSIONS };
+	}
+
+	const limit = Math.min(buffer.length, MAX_JPEG_HEADER_BYTES);
+	let offset = 2;
+
+	while (offset < limit) {
+		if (buffer[offset] !== 0xff) {
+			return { error: INVALID_JPEG_DIMENSIONS };
+		}
+
+		while (offset < limit && buffer[offset] === 0xff) {
+			offset += 1;
+		}
+		if (offset >= limit) {
+			return { error: INVALID_JPEG_DIMENSIONS };
+		}
+
+		const marker = buffer[offset];
+		offset += 1;
+		if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+			continue;
+		}
+		if (marker === 0xda || offset + 2 > limit) {
+			return { error: INVALID_JPEG_DIMENSIONS };
+		}
+
+		const segmentLength = buffer.readUInt16BE(offset);
+		if (
+			segmentLength < 2 ||
+			offset + segmentLength > limit
+		) {
+			return { error: INVALID_JPEG_DIMENSIONS };
+		}
+
+		if (isJpegSofMarker(marker)) {
+			if (segmentLength < 7) {
+				return { error: INVALID_JPEG_DIMENSIONS };
+			}
+
+			return validateDimensions({
+				height: buffer.readUInt16BE(offset + 3),
+				width: buffer.readUInt16BE(offset + 5),
+			});
+		}
+
+		offset += segmentLength;
+	}
+
+	return { error: INVALID_JPEG_DIMENSIONS };
+}
+
+function validateImageDimensions(
+	buffer: Buffer,
+	detectedType: string,
+): DimensionValidationResult {
+	if (detectedType === "png") {
+		return parsePngDimensions(buffer);
+	}
+	if (detectedType === "jpeg") {
+		return parseJpegDimensions(buffer);
+	}
+	return {};
 }
 
 export function getFileSignature(buffer: Buffer): string | null {
@@ -98,8 +227,19 @@ export async function validateFileContent(
 		};
 	}
 
+	const dimensions = validateImageDimensions(buffer, detectedType);
+	if (dimensions.error) {
+		return {
+			valid: false,
+			detectedType,
+			dimensions: dimensions.dimensions,
+			error: dimensions.error,
+		};
+	}
+
 	return {
 		valid: true,
 		detectedType,
+		dimensions: dimensions.dimensions,
 	};
 }
