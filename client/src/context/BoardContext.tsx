@@ -708,7 +708,10 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 					});
 					return;
 				}
-				if (typeof data.type === "string" && data.type.startsWith("card.")) {
+				if (
+					typeof data.type === "string" &&
+					(data.type.startsWith("card.") || data.type.startsWith("attachment."))
+				) {
 					const event = data as Parameters<CardEventHandler>[0];
 					cardEventRegistry.current.dispatch((handler) => {
 						handler(event);
