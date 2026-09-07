@@ -46,6 +46,7 @@ docs/**
 !docs/pocket/spec/
 !docs/pocket/spec/2026-09-work-items-api-addendum.md
 !docs/pocket/spec/work-items-migration-spike.md
+/server/private-uploads/
 
 # Vite/Vitest config compilation cache
 *.timestamp-*.mjs

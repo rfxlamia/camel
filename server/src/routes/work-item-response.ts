@@ -148,7 +148,8 @@ export function selectBoardWorkItemRows(dbExec: DBExecutor) {
 			"pr.colour as priority_colour",
 			"c.project_id",
 			"c.phase_id",
-		]);
+		])
+		.where("col.board_id", "is", null);
 }
 
 async function loadTrackerLabelsForItems(

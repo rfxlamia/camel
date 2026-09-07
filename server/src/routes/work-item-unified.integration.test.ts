@@ -266,6 +266,46 @@ async function createBoardCard(columnId: number, title: string) {
 	};
 }
 
+async function createAgentExecutionCard(title: string) {
+	const agentBoard = await pool.query<{ id: number }>(
+		`INSERT INTO agent_boards
+		 (workspace_id, user_id, template_id, original_intent, status)
+		 VALUES ($1, $2, 'status-report', 'test agent output', 'approved')
+		 RETURNING id`,
+		[WORKSPACE_ID, mockCurrentUser.id],
+	);
+	const agentColumn = await pool.query<{ id: number }>(
+		`INSERT INTO columns (workspace_id, board_id, title, position, slug)
+		 VALUES ($1, $2, 'Analyst', 3072, 'analyst')
+		 RETURNING id`,
+		[WORKSPACE_ID, agentBoard.rows[0]!.id],
+	);
+	const backlog = await pool.query<{ id: number }>(
+		`SELECT id FROM tracker_vocabularies
+		 WHERE workspace_id = $1 AND kind = 'status' AND slot = 'backlog'`,
+		[WORKSPACE_ID],
+	);
+	const card = await pool.query<{ id: number }>(
+		`INSERT INTO cards
+		 (workspace_id, column_id, title, position, key_number, status_id)
+		 VALUES ($1, $2, $3, 1, 9001, $4)
+		 RETURNING id`,
+		[
+			WORKSPACE_ID,
+			agentColumn.rows[0]!.id,
+			title,
+			backlog.rows[0]!.id,
+		],
+	);
+
+	return {
+		cardId: card.rows[0]!.id,
+		columnId: agentColumn.rows[0]!.id,
+		statusId: backlog.rows[0]!.id,
+		key: "TE-9001",
+	};
+}
+
 async function patchBoardStatus(
 	key: string,
 	statusId: number,
@@ -310,6 +350,62 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				source: "board",
 				title: "ppo",
 			});
+		});
+
+		it("does not list agent execution cards in Tracker", async () => {
+			await createAgentExecutionCard("Agent output must stay private");
+
+			const listRes = await request(app).get(
+				`/api/workspaces/${WORKSPACE_ID}/tracker/items`,
+			);
+
+			expect(listRes.status).toBe(200);
+			expect(listRes.body).not.toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ title: "Agent output must stay private" }),
+				]),
+			);
+		});
+
+		it("does not resolve agent execution cards from Tracker detail", async () => {
+			const { key } = await createAgentExecutionCard(
+				"Agent detail must stay private",
+			);
+
+			const getRes = await request(app).get(
+				`/api/workspaces/${WORKSPACE_ID}/tracker/items/${key}`,
+			);
+
+			expect(getRes.status).toBe(404);
+		});
+
+		it("does not expose agent execution card events from Tracker", async () => {
+			const { key } = await createAgentExecutionCard(
+				"Agent events must stay private",
+			);
+
+			const eventsRes = await request(app).get(
+				`/api/workspaces/${WORKSPACE_ID}/tracker/items/${key}/events`,
+			);
+
+			expect(eventsRes.status).toBe(404);
+		});
+
+		it("does not mutate agent execution cards through Tracker status updates", async () => {
+			const { cardId, columnId, key, statusId } =
+				await createAgentExecutionCard("Agent status must stay private");
+
+			const patchRes = await request(app)
+				.patch(`/api/workspaces/${WORKSPACE_ID}/tracker/items/${key}`)
+				.send({ statusId, version: 1 });
+
+			expect(patchRes.status).toBe(404);
+
+			const card = await pool.query<{ column_id: number; status_id: number }>(
+				`SELECT column_id, status_id FROM cards WHERE id = $1`,
+				[cardId],
+			);
+			expect(card.rows[0]).toEqual({ column_id: columnId, status_id: statusId });
 		});
 
 		it("lists board cards in GET /work-items with source=board", async () => {
