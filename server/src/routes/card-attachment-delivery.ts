@@ -5,6 +5,11 @@ import { config } from "../config.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 
+const MIME_TO_DOWNLOAD_EXTENSION = {
+	"image/png": "png",
+	"image/jpeg": "jpg",
+} as const;
+
 export interface AttachmentDeliveryRow {
 	id: number;
 	card_id: number;
@@ -60,9 +65,12 @@ async function loadOwnedCard(
 
 		const card = await db
 			.selectFrom("cards as c")
+			.innerJoin("columns as col", "col.id", "c.column_id")
 			.select("c.id")
 			.where("c.id", "=", cardId)
 			.where("c.workspace_id", "=", workspaceId)
+			.where("col.workspace_id", "=", workspaceId)
+			.where("col.board_id", "is", null)
 			.where("c.deleted_at", "is", null)
 			.executeTakeFirst();
 		if (!card) {
@@ -130,12 +138,19 @@ function resolveProviderPath(providerPath: string): string | null {
 function safeDownloadFilename(
 	providerPath: string,
 	attachmentId: number,
+	mimeType: string,
 ): string {
 	const basename = path
 		.basename(providerPath)
 		.replace(/[^a-zA-Z0-9._-]/g, "_")
 		.replace(/^\.+$/, "");
-	return basename || `attachment-${attachmentId}`;
+	const safeBasename = basename || `attachment-${attachmentId}`;
+	if (/\.[a-zA-Z0-9]+$/.test(safeBasename)) return safeBasename;
+	const extension =
+		MIME_TO_DOWNLOAD_EXTENSION[
+			mimeType as keyof typeof MIME_TO_DOWNLOAD_EXTENSION
+		];
+	return extension ? `${safeBasename}.${extension}` : safeBasename;
 }
 
 function matchesIfNoneMatch(req: Request, etag: string): boolean {
@@ -182,7 +197,7 @@ export async function deliverAttachment(
 		res.setHeader(
 			"Content-Disposition",
 			download
-				? `attachment; filename="${safeDownloadFilename(providerPath, attachment.id)}"`
+				? `attachment; filename="${safeDownloadFilename(providerPath, attachment.id, attachment.mime_type)}"`
 				: "inline",
 		);
 		if (matchesIfNoneMatch(req, etag)) {

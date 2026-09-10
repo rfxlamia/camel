@@ -14,7 +14,7 @@ import type {
 
 interface AddCardFormProps {
 	submitting: boolean;
-	hasInvalidStaged: boolean;
+	hasUnreadyStaged: boolean;
 	stagedImages: StagedImage[];
 	stageCapMessage: string | null;
 	fields: TaskFieldCommandDefinition[];
@@ -31,7 +31,7 @@ interface AddCardFormProps {
 
 export function AddCardForm({
 	submitting,
-	hasInvalidStaged,
+	hasUnreadyStaged,
 	stagedImages,
 	stageCapMessage,
 	fields,
@@ -94,7 +94,7 @@ export function AddCardForm({
 				<div className="mt-2 flex gap-2">
 					<button
 						type="submit"
-						disabled={hasInvalidStaged}
+						disabled={hasUnreadyStaged}
 						className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-60"
 					>
 						Add to board

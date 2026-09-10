@@ -92,8 +92,10 @@ export function markStagedUploadFailure(
 	});
 }
 
-export function hasInvalidStagedImages(entries: StagedImage[]): boolean {
-	return entries.some((entry) => entry.kind === "invalid");
+export function hasUnreadyStagedImages(entries: StagedImage[]): boolean {
+	return entries.some(
+		(entry) => entry.kind === "invalid" || entry.kind === "loading",
+	);
 }
 
 export function uploadFailureMessage(err: unknown): string {

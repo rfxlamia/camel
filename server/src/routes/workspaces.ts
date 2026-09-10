@@ -2,8 +2,14 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
+import { getAttachmentStorage } from "../lib/attachment-storage.js";
 import { validateWorkspaceName } from "../validators/input-length.js";
+import {
+	loadAttachmentPairsForWorkspace,
+	removeAttachmentPairsBestEffort,
+} from "./card-attachment-cleanup.js";
 import { lookupMembership, serializeWorkspaceList } from "./helpers.js";
+import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 import { checkCanEditSettings } from "./settings.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
@@ -33,12 +39,7 @@ workspacesRouter.get("/", async (req, res) => {
 	const invRows = await db
 		.selectFrom("workspace_invites as wi")
 		.innerJoin("workspaces as w", "w.id", "wi.workspace_id")
-		.select([
-			"wi.id",
-			"wi.workspace_id",
-			"w.name as workspace_name",
-			"wi.role",
-		])
+		.select(["wi.id", "wi.workspace_id", "w.name as workspace_name", "wi.role"])
 		.where("wi.username", "=", username as string)
 		.orderBy("wi.created_at")
 		.execute();
@@ -179,7 +180,16 @@ workspacesRouter.delete("/:workspaceId", async (req, res) => {
 		});
 	}
 
-	await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+	const attachmentPairs = await db.transaction().execute(async (trx) => {
+		if (!(await lockWorkspaceMutation(trx, workspaceId))) return [];
+		const pairs = await loadAttachmentPairsForWorkspace(trx, workspaceId);
+		await trx.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
+		return pairs;
+	});
+	await removeAttachmentPairsBestEffort(
+		getAttachmentStorage(),
+		attachmentPairs,
+	);
 	res.status(204).end();
 });
 

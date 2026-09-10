@@ -3,6 +3,11 @@ import type { AuthUser } from "../auth.js";
 import { firstNonDoneColumnId } from "../core/column-status-map.js";
 import { buildRemapPlan } from "../core/remap-card-statuses.js";
 import { type DBExecutor, db } from "../db/kysely.js";
+import { getAttachmentStorage } from "../lib/attachment-storage.js";
+import {
+	loadAttachmentPairsForColumn,
+	removeAttachmentPairsBestEffort,
+} from "./card-attachment-cleanup.js";
 import { getHumanColumns, recordActivity } from "./helpers.js";
 
 const RETURNING_COLUMNS = [
@@ -101,12 +106,12 @@ export function updateColumnWithIsDoneRemap(input: {
 	});
 }
 
-export function deleteColumnWithStatusRemap(input: {
+export async function deleteColumnWithStatusRemap(input: {
 	workspaceId: number;
 	columnId: number;
 	actor: AuthUser;
 }): Promise<DeleteColumnRemapResult> {
-	return db.transaction().execute(async (trx) => {
+	const result = await db.transaction().execute(async (trx) => {
 		await trx
 			.selectFrom("workspaces")
 			.select("id")
@@ -116,9 +121,14 @@ export function deleteColumnWithStatusRemap(input: {
 
 		const beforeColumns = await getHumanColumns(trx, input.workspaceId);
 		if (!beforeColumns.some((column) => column.id === input.columnId)) {
-			return { kind: "not_found" };
+			return { kind: "not_found" as const };
 		}
 
+		const attachmentPairs = await loadAttachmentPairsForColumn(
+			trx,
+			input.workspaceId,
+			input.columnId,
+		);
 		const deleted = await trx
 			.deleteFrom("columns")
 			.where("id", "=", input.columnId)
@@ -138,8 +148,21 @@ export function deleteColumnWithStatusRemap(input: {
 			payload: { columnTitle: deleted.title },
 		});
 
-		return { kind: "ok", deletedTitle: deleted.title, cardEvents };
+		return {
+			kind: "ok" as const,
+			deletedTitle: deleted.title,
+			cardEvents,
+			attachmentPairs,
+		};
 	});
+
+	if (result.kind !== "ok") return result;
+	await removeAttachmentPairsBestEffort(
+		getAttachmentStorage(),
+		result.attachmentPairs,
+	);
+	const { attachmentPairs: _attachmentPairs, ...publicResult } = result;
+	return publicResult;
 }
 
 async function clearPreviousDoneColumn(

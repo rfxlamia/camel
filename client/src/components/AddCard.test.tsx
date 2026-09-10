@@ -287,6 +287,93 @@ describe("AddCard image staging", () => {
 		expect(onAddCard).not.toHaveBeenCalled();
 	});
 
+	it("blocks submit while an image is still preparing", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		let resolvePreparation!: (
+			value: Awaited<ReturnType<typeof mockPrepareImageAttachment>>,
+		) => void;
+		mockPrepareImageAttachment.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePreparation = resolve;
+				}),
+		);
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Wait for image" } });
+		await selectImageWithoutWaiting("pending.png");
+		await waitFor(() => expect(screen.getByText("Preparing…")).toBeTruthy());
+
+		const submit = screen.getByRole("button", { name: /add to board/i });
+		expect((submit as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(submit);
+		expect(onAddCard).not.toHaveBeenCalled();
+
+		const file = new File(["png"], "pending.png", { type: "image/png" });
+		resolvePreparation({
+			kind: "valid",
+			file,
+			original: file,
+			thumbnail: file,
+			prepared: { thumbnail: file, original: file },
+		});
+		await waitFor(() =>
+			expect(
+				(
+					screen.getByRole("button", {
+						name: /add to board/i,
+					}) as HTMLButtonElement
+				).disabled,
+			).toBe(false),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+	});
+
+	it("does not resurrect an image after cancelling while it is preparing", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		let resolvePreparation!: (
+			value: Awaited<ReturnType<typeof mockPrepareImageAttachment>>,
+		) => void;
+		mockPrepareImageAttachment.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePreparation = resolve;
+				}),
+		);
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+		await selectImageWithoutWaiting("cancelled.png");
+		await waitFor(() => expect(screen.getByText("Preparing…")).toBeTruthy());
+
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy();
+
+		const file = new File(["png"], "cancelled.png", { type: "image/png" });
+		resolvePreparation({
+			kind: "valid",
+			file,
+			original: file,
+			thumbnail: file,
+			prepared: { thumbnail: file, original: file },
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /add card/i }));
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+		expect(
+			screen.queryByRole("button", { name: /Image: cancelled\.png/ }),
+		).toBeNull();
+	});
+
 	it("refuses a fourth image with Max 3 images per card", async () => {
 		const onAddCard = vi.fn().mockResolvedValue(undefined);
 		renderAddCard(onAddCard);

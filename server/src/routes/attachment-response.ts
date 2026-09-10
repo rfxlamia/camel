@@ -23,6 +23,11 @@ export interface AttachmentResponseContext {
 	cardId: number;
 }
 
+export type AttachmentResponseMetadata = Pick<
+	AttachmentResponseRow,
+	"id" | "mime_type" | "created_at"
+>;
+
 function toIso(value: Date | string): string {
 	return typeof value === "string" ? value : value.toISOString();
 }
@@ -40,7 +45,7 @@ function attachmentBasePath({
 }
 
 export function mapAttachmentResponse(
-	row: AttachmentResponseRow,
+	row: AttachmentResponseMetadata,
 	context: AttachmentResponseContext,
 ): CardAttachmentResponse {
 	const basePath = attachmentBasePath({
@@ -59,7 +64,7 @@ export function mapAttachmentResponse(
 }
 
 export function mapAttachmentResponses(
-	rows: AttachmentResponseRow[],
+	rows: AttachmentResponseMetadata[],
 	context: AttachmentResponseContext,
 ): CardAttachmentResponse[] {
 	return [...rows]

@@ -137,8 +137,8 @@ describe("LocalAttachmentStorage", () => {
 
 type UploadedFile = { buffer?: Buffer; path?: string };
 
-async function createUploadApp(maxPairs: number) {
-	const upload = await createAttachmentUpload({ maxPairs });
+async function createUploadApp(maxPairs: number, maxTotalBytes?: number) {
+	const upload = await createAttachmentUpload({ maxPairs, maxTotalBytes });
 	const providerInvocation = vi.fn();
 	const app = express();
 	app.post("/", upload, (req, res) => {
@@ -301,5 +301,14 @@ describe("createAttachmentUpload", () => {
 			expect(oversized.body.code).toBe("LIMIT_FILE_SIZE");
 			expect(providerInvocation).not.toHaveBeenCalled();
 		}
+	});
+
+	it("rejects aggregate file bytes before provider invocation", async () => {
+		const { app, providerInvocation } = await createUploadApp(3, 10);
+		const response = await addPairs(request(app).post("/"), 1, Buffer.alloc(6));
+
+		expect(response.status).toBe(413);
+		expect(response.body.code).toBe("LIMIT_FILE_TOTAL_SIZE");
+		expect(providerInvocation).not.toHaveBeenCalled();
 	});
 });

@@ -241,4 +241,45 @@ integration("card attachment deletion", () => {
 			expect(await countFiles(fixture.storage.root)).toBe(0);
 		});
 	}, 15_000);
+
+	it("removes stored pairs when their owning column is deleted", async () => {
+		await withUploadFixture(1, async (fixture) => {
+			const card = await db
+				.selectFrom("cards")
+				.select("column_id")
+				.where("id", "=", fixture.cardId)
+				.executeTakeFirstOrThrow();
+			const pair = fixture.pairs[0]!;
+
+			const response = await request(app).delete(
+				`/api/workspaces/${fixture.workspaceId}/columns/${card.column_id}`,
+			);
+
+			expect(response.status).toBe(204);
+			expect(await attachmentRows(fixture.cardId)).toEqual([]);
+			await expectMissing(
+				storagePath(fixture.storage.root, pair.thumbnailPath),
+			);
+			await expectMissing(storagePath(fixture.storage.root, pair.originalPath));
+			expect(await countFiles(fixture.storage.root)).toBe(0);
+		});
+	}, 15_000);
+
+	it("removes stored pairs when their owning workspace is deleted", async () => {
+		await withUploadFixture(1, async (fixture) => {
+			const pair = fixture.pairs[0]!;
+
+			const response = await request(app).delete(
+				`/api/workspaces/${fixture.workspaceId}`,
+			);
+
+			expect(response.status).toBe(204);
+			expect(await attachmentRows(fixture.cardId)).toEqual([]);
+			await expectMissing(
+				storagePath(fixture.storage.root, pair.thumbnailPath),
+			);
+			await expectMissing(storagePath(fixture.storage.root, pair.originalPath));
+			expect(await countFiles(fixture.storage.root)).toBe(0);
+		});
+	}, 15_000);
 });
