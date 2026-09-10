@@ -256,6 +256,38 @@ describe("AddCard image staging", () => {
 
 	afterEach(() => cleanup());
 
+	it("stages an image pasted into the image upload popover", async () => {
+		renderAddCard();
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Paste this" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+		fireEvent.change(textarea, { target: { value: "Paste this @image" } });
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+		const dialog = screen.getByRole("dialog", { name: "Upload images" });
+		const clipboardBlob = new Blob(["png"], { type: "image/png" });
+		fireEvent.paste(dialog, {
+			clipboardData: {
+				items: [{ kind: "file", type: "image/png", getAsFile: () => clipboardBlob }],
+				files: [],
+			},
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Image: pasted.png" }),
+			).toBeTruthy(),
+		);
+		expect(mockPrepareImageAttachment).toHaveBeenCalledWith(clipboardBlob);
+		expect(textarea.value).toBe("Paste this");
+	});
+
 	it("refuses a fourth image while earlier files are still preparing", async () => {
 		const onAddCard = vi.fn().mockResolvedValue(undefined);
 		const pendingResolves: Array<

@@ -113,7 +113,9 @@ describe("CardAttachments — picker/paste/counter", () => {
 
 		expect(screen.getByText("1/3")).toBeTruthy();
 
-		const picker = screen.getByLabelText(/add images/i) as HTMLInputElement;
+		fireEvent.click(screen.getByRole("button", { name: "Add images" }));
+		const picker = screen.getByLabelText("Select images") as HTMLInputElement;
+		fireEvent.click(screen.getByRole("button", { name: "Select images" }));
 		const files = ["a", "b", "c", "d"].map(
 			(label) => new File([label], `${label}.png`, { type: "image/png" }),
 		);
@@ -140,7 +142,7 @@ describe("CardAttachments — picker/paste/counter", () => {
 		expect(screen.getByText("3/3")).toBeTruthy();
 	});
 
-	it("uploads a clipboard image when the attachment panel is focused", async () => {
+	it("opens the picker popover before uploading a clipboard image", async () => {
 		const existing = makeAttachment(1);
 		onUpload.mockResolvedValue({
 			attachments: [makeAttachment(2)],
@@ -161,11 +163,17 @@ describe("CardAttachments — picker/paste/counter", () => {
 			/>,
 		);
 
-		const panel = screen.getByRole("region", { name: "Images" });
-		panel.focus();
+		const inputClick = vi
+			.spyOn(HTMLInputElement.prototype, "click")
+			.mockImplementation(() => {});
+		fireEvent.click(screen.getByRole("button", { name: "Add images" }));
+		expect(screen.getByRole("dialog", { name: "Upload images" })).toBeTruthy();
+		expect(inputClick).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: "Select images" }));
+		expect(inputClick).toHaveBeenCalledTimes(1);
 
 		const clipboardBlob = new Blob(["jpeg"], { type: "image/jpeg" });
-		fireEvent.paste(panel, {
+		fireEvent.paste(screen.getByRole("dialog", { name: "Upload images" }), {
 			clipboardData: {
 				items: [{ kind: "file", type: "image/jpeg", getAsFile: () => clipboardBlob }],
 				files: [],
@@ -183,6 +191,26 @@ describe("CardAttachments — picker/paste/counter", () => {
 			/>,
 		);
 		expect(screen.getByText("2/3")).toBeTruthy();
+	});
+
+	it("does not upload a clipboard without image items", () => {
+		render(
+			<CardAttachments
+				card={makeCard()}
+				workspaceId={7}
+				onUpload={onUpload}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Add images" }));
+		fireEvent.paste(screen.getByRole("dialog", { name: "Upload images" }), {
+			clipboardData: {
+				items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+				files: [],
+			},
+		});
+
+		expect(onUpload).not.toHaveBeenCalled();
 	});
 });
 

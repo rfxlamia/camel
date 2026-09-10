@@ -2,11 +2,8 @@ import { Download, Trash2, X } from "lucide-react";
 import {
 	useCallback,
 	useEffect,
-	useId,
 	useRef,
 	useState,
-	type ClipboardEvent,
-	type ChangeEvent,
 } from "react";
 import type { CardAttachmentUploadResponse } from "../api";
 import {
@@ -15,6 +12,7 @@ import {
 	type PreparedImagePair,
 } from "../lib/imageAttachments";
 import type { Card, CardAttachment } from "../types";
+import ImageUploadPopover from "./ImageUploadPopover";
 
 export interface CardAttachmentsProps {
 	card: Card;
@@ -39,14 +37,14 @@ export default function CardAttachments({
 	onUpload,
 	onDelete,
 }: CardAttachmentsProps) {
-	const inputId = useId();
-	const fileInputRef = useRef<HTMLInputElement>(null);
+	const uploadTriggerRef = useRef<HTMLButtonElement>(null);
 	const lightboxCloseRef = useRef<HTMLButtonElement>(null);
 	const deleteCancelRef = useRef<HTMLButtonElement>(null);
 	const returnFocusRef = useRef<HTMLElement | null>(null);
 	const [batchMessage, setBatchMessage] = useState<string | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [uploading, setUploading] = useState(false);
+	const [uploadPopoverOpen, setUploadPopoverOpen] = useState(false);
 	const [previewAttachment, setPreviewAttachment] =
 		useState<CardAttachment | null>(null);
 	const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -131,32 +129,17 @@ export default function CardAttachments({
 		[onUpload],
 	);
 
-	const onFileInputChange = useCallback(
-		(event: ChangeEvent<HTMLInputElement>) => {
-			const selected = event.target.files
-				? Array.from(event.target.files)
-				: [];
-			event.target.value = "";
-			void processFiles(selected);
-		},
-		[processFiles],
-	);
+	const closeUploadPopover = useCallback(() => {
+		setUploadPopoverOpen(false);
+		uploadTriggerRef.current?.focus();
+	}, []);
 
-	const onPaste = useCallback(
-		(event: ClipboardEvent<HTMLElement>) => {
-			const items = event.clipboardData?.items;
-			if (!items) return;
-			const imageFiles: File[] = [];
-			for (const item of items) {
-				if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
-				const file = item.getAsFile();
-				if (file) imageFiles.push(file);
-			}
-			if (imageFiles.length === 0) return;
-			event.preventDefault();
-			void processFiles(imageFiles);
+	const onUploadFiles = useCallback(
+		(files: File[]) => {
+			closeUploadPopover();
+			void processFiles(files);
 		},
-		[processFiles],
+		[closeUploadPopover, processFiles],
 	);
 
 	const confirmDelete = useCallback(async () => {
@@ -179,9 +162,7 @@ export default function CardAttachments({
 		<>
 			<section
 				aria-label="Images"
-				tabIndex={0}
-				onPaste={onPaste}
-				className="border-t border-neutral-200 px-4 py-4 outline-none focus-visible:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)]"
+				className="border-t border-neutral-200 px-4 py-4"
 			>
 				<div className="flex items-center justify-between gap-3">
 					<h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
@@ -231,20 +212,10 @@ export default function CardAttachments({
 				)}
 
 				<div className="mt-3 flex flex-wrap items-center gap-2">
-					<input
-						ref={fileInputRef}
-						id={inputId}
-						type="file"
-						accept="image/png,image/jpeg"
-						multiple
-						className="sr-only"
-						onChange={onFileInputChange}
-						disabled={uploading}
-						aria-label="Add images"
-					/>
 					<button
+						ref={uploadTriggerRef}
 						type="button"
-						onClick={() => fileInputRef.current?.click()}
+						onClick={() => setUploadPopoverOpen(true)}
 						disabled={uploading || total >= MAX_ATTACHMENT_COUNT}
 						className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
 					>
@@ -273,6 +244,13 @@ export default function CardAttachments({
 					</p>
 				)}
 			</section>
+
+			<ImageUploadPopover
+				open={uploadPopoverOpen}
+				anchorRef={uploadTriggerRef}
+				onFilesSelected={onUploadFiles}
+				onClose={closeUploadPopover}
+			/>
 
 			{previewAttachment && (
 				<div

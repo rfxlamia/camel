@@ -1,5 +1,4 @@
 import {
-	type ChangeEvent,
 	forwardRef,
 	type KeyboardEvent,
 	type ReactNode,
@@ -11,6 +10,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import ImageUploadPopover from "../ImageUploadPopover";
 import {
 	type CaretOffset,
 	caretOffsetToViewportRect,
@@ -182,7 +182,6 @@ export const TaskTitleEditor = forwardRef<
 	const [filePickerCommand, setFilePickerCommand] =
 		useState<TaskFileCommandDefinition | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const fileInputRef = useRef<HTMLInputElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
 	const commandPopoverRef = useRef<HTMLDivElement>(null);
 	const restoreCaretRef = useRef<number | null>(null);
@@ -223,20 +222,10 @@ export const TaskTitleEditor = forwardRef<
 		});
 	}, []);
 
-	const handleFileInputCancel = useCallback(() => {
+	const closeFilePicker = useCallback(() => {
 		setFilePickerCommand(null);
 		restoreFocus(title.length);
 	}, [restoreFocus, title.length]);
-
-	useEffect(() => {
-		if (!filePickerCommand) return;
-		const input = fileInputRef.current;
-		if (!input) return;
-		const handleCancel = () => handleFileInputCancel();
-		input.addEventListener("cancel", handleCancel);
-		input.click();
-		return () => input.removeEventListener("cancel", handleCancel);
-	}, [filePickerCommand, handleFileInputCancel]);
 
 	const closeCommand = useCallback(
 		(caret?: number) => {
@@ -502,14 +491,12 @@ export const TaskTitleEditor = forwardRef<
 		setFilePickerCommand(fileCommand);
 	};
 
-	const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+	const handleFilesSelected = (files: File[]) => {
 		const selectedCommand = filePickerCommand;
-		const files = Array.from(event.currentTarget.files ?? []);
-		setFilePickerCommand(null);
 		if (selectedCommand && files.length > 0) {
 			selectedCommand.onFilesSelected(files);
 		}
-		restoreFocus(title.length);
+		closeFilePicker();
 	};
 
 	const openChipEditor = (field: TaskFieldCommandDefinition) => {
@@ -768,17 +755,14 @@ export const TaskTitleEditor = forwardRef<
 
 	return (
 		<div ref={shellRef} className="relative flex w-full flex-col gap-1.5">
-			{filePickerCommand ? (
-				<input
-					ref={fileInputRef}
-					type="file"
-					accept={filePickerCommand.accept}
-					multiple={filePickerCommand.multiple ?? true}
-					onChange={handleFileInputChange}
-					className="sr-only"
-					tabIndex={-1}
-				/>
-			) : null}
+			<ImageUploadPopover
+				open={filePickerCommand !== null}
+				anchorRef={shellRef}
+				accept={filePickerCommand?.accept}
+				multiple={filePickerCommand?.multiple ?? true}
+				onFilesSelected={handleFilesSelected}
+				onClose={closeFilePicker}
+			/>
 			<textarea
 				ref={textareaRef}
 				rows={1}
