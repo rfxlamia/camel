@@ -49,6 +49,16 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				const rows = await attachmentRows(fixture.cardId);
 				expect(rows).toHaveLength(2);
 				const added = rows[1]!;
+				expect(response.body.attachments).toEqual([
+					{
+						id: added.id,
+						thumbnailUrl: `/api/workspaces/${fixture.workspaceId}/cards/${fixture.cardId}/attachments/${added.id}/thumbnail`,
+						originalUrl: `/api/workspaces/${fixture.workspaceId}/cards/${fixture.cardId}/attachments/${added.id}/original`,
+						downloadUrl: `/api/workspaces/${fixture.workspaceId}/cards/${fixture.cardId}/attachments/${added.id}/original/download`,
+						mimeType: "image/png",
+						createdAt: expect.any(String),
+					},
+				]);
 				expect(
 					await readFile(path.join(fixture.storage.root, added.thumbnail_path)),
 				).toEqual(image);
@@ -219,6 +229,87 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 						.execute(),
 				).toHaveLength(0);
 				expect(events.drain()).toEqual([]);
+			});
+		}, 15_000);
+
+		it("rejects attachment access for agent-board cards", async () => {
+			await withUploadFixture(0, async (fixture) => {
+				const sourceCard = await db
+					.selectFrom("cards")
+					.select("status_id")
+					.where("id", "=", fixture.cardId)
+					.executeTakeFirstOrThrow();
+				const board = await db
+					.insertInto("agent_boards")
+					.values({
+						workspace_id: fixture.workspaceId,
+						user_id: 1,
+						original_intent: "agent attachment guard",
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const column = await db
+					.insertInto("columns")
+					.values({
+						workspace_id: fixture.workspaceId,
+						board_id: board.id,
+						title: "Agent column",
+						position: 2048,
+						policy: "manual",
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const agentCard = await db
+					.insertInto("cards")
+					.values({
+						workspace_id: fixture.workspaceId,
+						column_id: column.id,
+						status_id: sourceCard.status_id,
+						title: "Agent card",
+						description: "",
+						position: 2048,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const pair = await fixture.storage.writePair(
+					pngFixture(),
+					pngFixture(),
+				);
+				const attachment = await db
+					.insertInto("attachments")
+					.values({
+						card_id: agentCard.id,
+						mime_type: "image/png",
+						thumbnail_path: pair.thumbnailPath,
+						original_path: pair.originalPath,
+						thumbnail_size_bytes: 1024,
+						original_size_bytes: 1024,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const baseUrl = `/api/workspaces/${fixture.workspaceId}/cards/${agentCard.id}/attachments/${attachment.id}`;
+
+				try {
+					const post = await attachPair(
+						request(app).post(uploadUrl(fixture.workspaceId, agentCard.id)),
+						pngFixture(),
+						pngFixture(),
+					);
+					expect(post.status).toBe(404);
+
+					const get = await request(app).get(`${baseUrl}/thumbnail`);
+					expect(get.status).toBe(404);
+
+					const remove = await request(app).delete(baseUrl);
+					expect(remove.status).toBe(404);
+					expect(await attachmentRows(agentCard.id)).toHaveLength(1);
+				} finally {
+					await fixture.storage.removePair(pair);
+					await db
+						.deleteFrom("agent_boards")
+						.where("id", "=", board.id)
+						.execute();
+				}
 			});
 		}, 15_000);
 

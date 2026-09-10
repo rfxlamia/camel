@@ -1,7 +1,16 @@
 import "dotenv/config";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
+import { setAttachmentStorageForTests } from "../lib/attachment-storage.js";
 import {
 	buildArtifactDownload,
 	defaultToolRegistry,
@@ -424,6 +433,66 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				expect(rows).toHaveLength(0);
 
 				await db.deleteFrom("columns").where("id", "=", column.id).execute();
+			});
+
+			it("removes attachment files when deleting agent board cards", async () => {
+				const column = await db
+					.insertInto("columns")
+					.values({
+						title: "Attachment Backlog",
+						position: 2000,
+						workspace_id: workspaceId,
+						board_id: boardId,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const card = await db
+					.insertInto("cards")
+					.values({
+						title: "Card with attachment",
+						column_id: column.id,
+						position: 2000,
+						workspace_id: workspaceId,
+						status_id: backlogStatusId,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				await db
+					.insertInto("attachments")
+					.values({
+						card_id: card.id,
+						mime_type: "image/png",
+						thumbnail_path: "agent/thumbnail",
+						original_path: "agent/original",
+						thumbnail_size_bytes: 1,
+						original_size_bytes: 1,
+					})
+					.execute();
+				const removePair = vi.fn().mockResolvedValue(undefined);
+				setAttachmentStorageForTests({
+					root: "test-storage",
+					writePair: vi.fn(),
+					removePair,
+					removePairs: vi.fn(),
+				});
+
+				try {
+					await deleteCardsForBoard(db, boardId);
+					expect(removePair).toHaveBeenCalledWith({
+						thumbnailPath: "agent/thumbnail",
+						originalPath: "agent/original",
+					});
+					expect(
+						await db
+							.selectFrom("attachments")
+							.select("id")
+							.where("card_id", "=", card.id)
+							.execute(),
+					).toHaveLength(0);
+				} finally {
+					setAttachmentStorageForTests(null);
+					await db.deleteFrom("columns").where("id", "=", column.id).execute();
+				}
 			});
 		});
 	},

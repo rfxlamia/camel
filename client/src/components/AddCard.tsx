@@ -37,7 +37,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 		stagedImages,
 		setStagedImages,
 		stageCapMessage,
-		hasInvalidStaged,
+		hasUnreadyStaged,
 		stageFiles,
 		removeStagedImage,
 		resetStagedImages,
@@ -70,7 +70,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 		columnId: column.id,
 		draft,
 		stagedImages,
-		hasInvalidStaged,
+		hasUnreadyStaged,
 		setStagedImages,
 		resetStagedImages,
 		onAddCard,
@@ -100,7 +100,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 	return (
 		<AddCardForm
 			submitting={submitting}
-			hasInvalidStaged={hasInvalidStaged}
+			hasUnreadyStaged={hasUnreadyStaged}
 			stagedImages={stagedImages}
 			stageCapMessage={stageCapMessage}
 			fields={fields}

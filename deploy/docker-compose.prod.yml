@@ -32,7 +32,7 @@ services:
     container_name: camel-server
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://camel:${DB_PASSWORD}@db:5432/camel_kanban

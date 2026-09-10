@@ -1,5 +1,6 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { db } from "../db/kysely.js";
 import {
 	app,
 	attachmentId,
@@ -9,6 +10,7 @@ import {
 	originalBytes,
 	otherAttachmentId,
 	otherCardId,
+	otherWorkspaceId,
 	testUser,
 	thumbnailBytes,
 	workspaceId,
@@ -92,8 +94,21 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				`${deliveryUrl(workspaceId, cardId, attachmentId, "original")}/download`,
 			);
 			expect(download.status).toBe(200);
-			expect(download.headers["content-disposition"]).toMatch(
-				/^attachment; filename="[a-zA-Z0-9._-]+"$/,
+			expect(download.headers["content-disposition"]).toBe(
+				'attachment; filename="original.png"',
+			);
+
+			await db
+				.updateTable("attachments")
+				.set({ mime_type: "image/jpeg" })
+				.where("id", "=", otherAttachmentId)
+				.execute();
+			const jpegDownload = await request(app).get(
+				`${deliveryUrl(otherWorkspaceId, otherCardId, otherAttachmentId, "original")}/download`,
+			);
+			expect(jpegDownload.status).toBe(200);
+			expect(jpegDownload.headers["content-disposition"]).toBe(
+				'attachment; filename="original.jpg"',
 			);
 		});
 	},

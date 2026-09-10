@@ -24,8 +24,14 @@ import { sql } from "kysely";
 import { requireAuth } from "../auth.js";
 import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import { type DBExecutor, db } from "../db/kysely.js";
+import { getAttachmentStorage } from "../lib/attachment-storage.js";
 import { llmTimeout } from "../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../realtime.js";
+import {
+	loadAttachmentPairsForAgentBoard,
+	removeAttachmentPairsBestEffort,
+} from "../routes/card-attachment-cleanup.js";
+import { lockWorkspaceMutation } from "../routes/workspace-mutation-lock.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,
@@ -245,15 +251,31 @@ export async function deleteOutputsForBoard(
 }
 
 export async function deleteCardsForBoard(
-	dbExec: DBExecutor,
+	dbExec: typeof db,
 	boardId: number,
 ): Promise<void> {
-	await dbExec
-		.deleteFrom("cards")
-		.where("column_id", "in", (eb) =>
-			eb.selectFrom("columns").select("id").where("board_id", "=", boardId),
-		)
-		.execute();
+	const attachmentPairs = await dbExec.transaction().execute(async (trx) => {
+		const board = await trx
+			.selectFrom("agent_boards")
+			.select("workspace_id")
+			.where("id", "=", boardId)
+			.executeTakeFirst();
+		if (!board) return [];
+
+		await lockWorkspaceMutation(trx, board.workspace_id);
+		const pairs = await loadAttachmentPairsForAgentBoard(trx, boardId);
+		await trx
+			.deleteFrom("cards")
+			.where("column_id", "in", (eb) =>
+				eb.selectFrom("columns").select("id").where("board_id", "=", boardId),
+			)
+			.execute();
+		return pairs;
+	});
+	await removeAttachmentPairsBestEffort(
+		getAttachmentStorage(),
+		attachmentPairs,
+	);
 }
 
 // ---------------------------------------------------------------------------

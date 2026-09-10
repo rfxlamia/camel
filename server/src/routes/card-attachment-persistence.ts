@@ -6,6 +6,7 @@ import {
 	getAttachmentStorage,
 } from "../lib/attachment-storage.js";
 import { recordActivity } from "./helpers.js";
+import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 type UploadedFile = Express.Multer.File;
 export type PreparedAttachment = {
@@ -188,6 +189,7 @@ async function persistExistingCardAttachments(
 		written: WrittenAttachment[];
 	},
 ): Promise<{ accepted: StoredAttachment[]; existingCount: number }> {
+	await lockWorkspaceMutation(trx, input.workspaceId);
 	const card = await lockExistingCard(trx, input.workspaceId, input.cardId);
 	const capacity = await availableAttachmentSlots(
 		trx,

@@ -35,7 +35,7 @@ interface UseAddCardSubmitOptions {
 	columnId: number;
 	draft: TaskMetadataDraft;
 	stagedImages: StagedImage[];
-	hasInvalidStaged: boolean;
+	hasUnreadyStaged: boolean;
 	setStagedImages: Dispatch<SetStateAction<StagedImage[]>>;
 	resetStagedImages: () => void;
 	onAddCard: (payload: BoardCreatePayload) => Promise<void>;
@@ -49,7 +49,7 @@ export function useAddCardSubmit({
 	columnId,
 	draft,
 	stagedImages,
-	hasInvalidStaged,
+	hasUnreadyStaged,
 	setStagedImages,
 	resetStagedImages,
 	onAddCard,
@@ -62,7 +62,7 @@ export function useAddCardSubmit({
 	const [fieldErrors, setFieldErrors] = useState<TaskCreateFieldErrors>({});
 
 	const submit = useCallback(async () => {
-		if (submitting || hasInvalidStaged) return;
+		if (submitting || hasUnreadyStaged) return;
 		const candidate = editorRef.current?.getSubmitCandidate();
 		if (!candidate?.valid) return;
 
@@ -89,7 +89,7 @@ export function useAddCardSubmit({
 		columnId,
 		draft,
 		editorRef,
-		hasInvalidStaged,
+		hasUnreadyStaged,
 		onAddCard,
 		onSuccess,
 		resetStagedImages,

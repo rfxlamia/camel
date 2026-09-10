@@ -8,6 +8,7 @@ import {
 } from "../lib/attachment-upload.js";
 import { validateAttachmentPairs } from "../lib/attachment-validation.js";
 import { publishEvent } from "../realtime.js";
+import { mapAttachmentResponse } from "./attachment-response.js";
 import {
 	EXISTING_CARD_ATTACHMENT_CAPACITY_MESSAGE,
 	EXISTING_CARD_ATTACHMENT_LIMIT,
@@ -142,13 +143,24 @@ async function publishExistingAttachments(
 
 function sendExistingCardUploadResponse(
 	res: Response,
+	workspaceId: number,
+	cardId: number,
 	attachments: PreparedAttachment[],
 	result: { accepted: StoredAttachment[]; existingCount: number },
 ): Response {
 	const rejectedCount = attachments.length - result.accepted.length;
 	const total = result.existingCount + result.accepted.length;
 	return res.status(201).json({
-		attachments: result.accepted,
+		attachments: result.accepted.map((attachment) =>
+			mapAttachmentResponse(
+				{
+					id: attachment.id,
+					mime_type: attachment.mimeType,
+					created_at: attachment.createdAt,
+				},
+				{ workspaceId, cardId },
+			),
+		),
 		acceptedCount: result.accepted.length,
 		addedCount: result.accepted.length,
 		rejectedCount,
@@ -206,5 +218,11 @@ export async function uploadExistingCardAttachments(
 		cardId,
 		result.accepted,
 	);
-	return sendExistingCardUploadResponse(res, attachments, result);
+	return sendExistingCardUploadResponse(
+		res,
+		workspaceId,
+		cardId,
+		attachments,
+		result,
+	);
 }
