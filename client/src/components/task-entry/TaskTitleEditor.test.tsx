@@ -502,6 +502,7 @@ describe("TaskTitleEditor", () => {
 		fireEvent.change(textarea, { target: { value: "Fix login @image" } });
 		expect(screen.getByRole("option", { name: "Image" })).toBeTruthy();
 		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+		expect(screen.getByRole("dialog", { name: "Upload images" })).toBeTruthy();
 
 		const input = document.querySelector(
 			'input[type="file"]',
@@ -512,6 +513,7 @@ describe("TaskTitleEditor", () => {
 			new File(["png"], "one.png", { type: "image/png" }),
 			new File(["jpeg"], "two.jpg", { type: "image/jpeg" }),
 		];
+		fireEvent.click(screen.getByRole("button", { name: "Select images" }));
 		fireEvent.change(input, { target: { files } });
 
 		expect(onFilesSelected).toHaveBeenCalledWith(files);
@@ -545,11 +547,13 @@ describe("TaskTitleEditor", () => {
 		fireEvent.keyDown(textarea, { key: "@" });
 		fireEvent.change(textarea, { target: { value: "Fix login @image" } });
 		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+		expect(screen.getByRole("dialog", { name: "Upload images" })).toBeTruthy();
 
 		const input = document.querySelector(
 			'input[type="file"]',
 		) as HTMLInputElement;
 		expect(input).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Select images" }));
 		fireEvent(input, new Event("cancel"));
 
 		await waitFor(() => expect(document.activeElement).toBe(textarea));
