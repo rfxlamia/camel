@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Image, Plus } from "lucide-react";
 import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import type { BoardCreatePayload } from "../lib/taskCreateContracts";
 import type { Column } from "../types";
@@ -52,6 +52,7 @@ export default function AddCard({ column, onAddCard }: Props) {
 			kind: "file",
 			id: "image",
 			label: "Image",
+			icon: <Image size={14} className="shrink-0 text-neutral-500" aria-hidden />,
 			accept: "image/png,image/jpeg",
 			multiple: true,
 			onFilesSelected: (files) => {

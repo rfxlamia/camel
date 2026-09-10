@@ -517,6 +517,29 @@ describe("AddCard", () => {
 
 	afterEach(() => cleanup());
 
+	it("renders the Image command with a decorative image icon", async () => {
+		renderAddCard();
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Attach " } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+
+		const imageOption = screen.getByRole("option", { name: "Image" });
+		const icon = imageOption.querySelector("svg");
+		expect(icon).toBeTruthy();
+		expect(icon?.getAttribute("aria-hidden")).toBe("true");
+		expect(icon?.getAttribute("width")).toBe("14");
+		expect(icon?.getAttribute("height")).toBe("14");
+		expect(icon?.classList.contains("shrink-0")).toBe(true);
+		expect(icon?.classList.contains("text-neutral-500")).toBe(true);
+	});
+
 	it("Preserve the originating Board column", async () => {
 		const onAddCard = vi.fn().mockResolvedValue(undefined);
 		renderAddCard(onAddCard);
