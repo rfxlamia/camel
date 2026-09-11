@@ -12,7 +12,7 @@
 ### Recommended Order
 
 ```text
-T1 → T2, T4, T5 (parallel) → T3 → T6 → T7 → T8 → T9, T10, T11 (parallel)
+T1 → T2, T4, T5 (parallel) → T3, T6 (as dependencies complete) → T7 → T8 → T9, T10, T11 (as dependencies complete)
 ```
 
 > Dependency order above is recommended — pocket skill enforces actual parallelism and sequencing based on its routing logic.
@@ -41,7 +41,7 @@ T1 → T2, T4, T5 (parallel) → T3 → T6 → T7 → T8 → T9, T10, T11 (paral
 
 **Assumptions at risk:** All-scope fuzzy ranking is candidate-window based; global detail route shape is additive; Tracker done target uses deterministic `slot="done"` position/id selection; existing edit permission checks are reused; visibility/manual refresh is the V1 freshness contract.
 
-**Sequencing:** Dependency order shown is recommended — pocket-development enforces actual blocking rules. T9–T11 are intentionally independent verification tasks after the product surfaces are complete.
+**Sequencing:** Dependency order shown is recommended — pocket-development enforces actual blocking rules. T9, T10, and T11 start as soon as their declared dependencies complete; T11 waits for the T6 client page because it owns the client readiness test.
 
 ### File Structure Map
 
@@ -376,41 +376,71 @@ Steps:
     `npm run test -- server/src/routes/my-work.test.ts`
     Expected failure: stale detail returns content or the wrong status/code.
 
-11. Write failing test for: All-scope search, workspace/source filters, and cursor pagination.
+11. Write failing test for: All-scope search across terminal/Other statuses.
     Test file: `server/src/routes/my-work.test.ts`
     Level: unit
     Test intent:
     Given active/completed/canceled/Other items across Atlas and Orbit
-    When an All request includes q, workspace/source filters, cursor, and page size
-    Then all-status candidates are searched, filters apply server-side, deterministic rows are returned, and next cursor is emitted.
+    When an All request includes q
+    Then all-status candidates are searched and matching rows are returned.
     Exercise through: personal list handler/service boundary.
-    Test doubles: fake DB executor with captured predicates/result pages; do not mock query construction.
-    Expected RED: All/search/filter/cursor behavior is absent.
+    Test doubles: fake DB executor/result rows; do not mock query construction.
+    Expected RED: All-scope search behavior is absent.
 
 12. Run test — verify FAIL:
     `npm run test -- server/src/routes/my-work.test.ts`
-    Expected failure: All/search/filter/cursor assertions fail.
+    Expected failure: All search assertion fails.
 
-13. Write failing test for: transient list failure returns retryable error rather than empty/partial success.
+13. Write failing test for: workspace/source filters.
+    Test file: `server/src/routes/my-work.test.ts`
+    Level: unit
+    Test intent:
+    Given matching rows in Atlas/Orbit and Board/Tracker
+    When workspace/source filters are provided
+    Then only matching authorized rows are returned.
+    Exercise through: personal list handler/service boundary.
+    Test doubles: fake DB executor with captured predicates; do not mock filter logic.
+    Expected RED: filter predicates are absent.
+
+14. Run test — verify FAIL:
+    `npm run test -- server/src/routes/my-work.test.ts`
+    Expected failure: workspace/source filter assertion fails.
+
+15. Write failing test for: cursor pagination.
+    Test file: `server/src/routes/my-work.test.ts`
+    Level: unit
+    Test intent:
+    Given a deterministic ordered result set and page size
+    When cursor/page requests are made
+    Then each page is stable, has no duplicates/gaps, and emits the correct next cursor.
+    Exercise through: personal list handler/service boundary.
+    Test doubles: fake DB executor with captured order/limit predicates and result pages; do not mock pagination logic.
+    Expected RED: cursor behavior is absent.
+
+16. Run test — verify FAIL:
+    `npm run test -- server/src/routes/my-work.test.ts`
+    Expected failure: cursor assertion fails.
+
+17. Write failing test for: transient list failure returns retryable error rather than empty/partial success.
     Test file: `server/src/routes/my-work.test.ts`
     Level: unit
     Test intent:
     Given the injected personal query dependency throws a transient error
     When the list handler runs
-    Then it returns the route's retryable error classification with no partial result payload.
+    Then it returns the retryable error classification and no partial result payload.
     Exercise through: route factory with injected failing query dependency.
     Test doubles: injected query dependency that throws; do not mock error mapping.
     Expected RED: no explicit failure seam/classification exists.
 
-14. Run test — verify FAIL:
+18. Run test — verify FAIL:
     `npm run test -- server/src/routes/my-work.test.ts`
     Expected failure: transient error is unclassified or becomes empty success.
 
-15. Implement the query/merge/serialization route and response modules, route factory failure seam, authorization/detail logic, status scopes, filters, and cursor behavior required by all RED cycles. Keep production wiring on the real Kysely executor.
+19. Implement All search, workspace/source filters, cursor behavior, route dependency injection/error mapping, and keep production wiring on the real Kysely executor.
 
-16. Run test — verify PASS:
+20. Run test — verify PASS:
     `npm run test -- server/src/routes/my-work.test.ts`
-    Expected: all seven independent read/detail/error cycles pass.
+    Expected: all independent search/filter/cursor/transient plus earlier read/detail cycles pass.
 
 17. Refactor while green (bounded):
     - Keep global query/serialization logic in `my-work-response.ts`; do not grow `work-item-response.ts` or `tracker-items.ts` with cross-workspace branches.
@@ -518,7 +548,7 @@ Steps:
 3. Write failing test for: Board Mark done success and activity.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent: Given an authorized Board item and valid `is_done` mapping, when Mark done runs, then the Board source changes and exactly one card activity is recorded.
+   Test intent: Given an authorized Board item and valid `is_done` mapping, when Mark done runs, then the command returns the existing success response, the Board source changes, and exactly one card activity is recorded.
    Exercise through: command service with Board status primitive.
    Test doubles: fake transaction/Board service/activity recorder; do not mock command decision logic.
    Expected RED: command service does not exist.
@@ -530,7 +560,7 @@ Steps:
 5. Write failing test for: Tracker Mark done success and activity.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent: Given an authorized Tracker item and `slot="done"`, when Mark done runs, then only the Tracker source changes and exactly one tracker activity is recorded.
+   Test intent: Given an authorized Tracker item and `slot="done"`, when Mark done runs, then the command returns the existing success response, only the Tracker source changes, and exactly one tracker activity is recorded.
    Exercise through: command service with extracted Tracker primitive.
    Test doubles: fake transaction/Tracker service/activity recorder; do not mock source selection.
    Expected RED: Tracker command behavior is absent.
@@ -542,7 +572,7 @@ Steps:
 7. Write failing test for: permission denial.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent: Given an assignee without existing edit permission, when Mark done runs, then the command returns the existing authorization failure and performs no source/activity write.
+   Test intent: Given an assignee without existing edit permission, when Mark done runs, then the command returns the existing mutation authorization status/code and performs no source/activity write. Revoked membership/assignment uses HTTP 404 with the existing `not_found`/`Not found` contract.
    Exercise through: command authorization boundary.
    Test doubles: permission dependency returning unauthorized and fake transaction; do not mock failure mapping.
    Expected RED: permission behavior is not covered.
@@ -554,7 +584,7 @@ Steps:
 9. Write failing test for: missing canonical mapping.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent: Given no valid Board done column or Tracker `slot="done"` status, when Mark done runs, then it returns mapping failure and performs no source/activity write.
+   Test intent: Given no valid Board done column or Tracker `slot="done"` status, when Mark done runs, then it returns HTTP 409 with existing `status_column_unmappable` semantics and performs no source/activity write.
    Exercise through: command mapping boundary.
    Test doubles: fake transaction with missing mapping; do not mock mapping decision.
    Expected RED: missing-mapping behavior is not covered.
@@ -566,7 +596,7 @@ Steps:
 11. Write failing test for: Board stale version conflict.
     Test file: `server/src/core/my-work-mark-done.test.ts`
     Level: unit
-    Test intent: Given a stale Board version, when Mark done runs, then conflict is returned with no activity.
+    Test intent: Given a stale Board version, when Mark done runs, then HTTP 409 with existing `version_conflict` semantics is returned with no activity.
     Exercise through: Board command primitive.
     Test doubles: fake Board service returning conflict; do not mock command handling.
     Expected RED: Board conflict handling is not covered.
@@ -578,7 +608,7 @@ Steps:
 13. Write failing test for: Tracker stale version conflict.
     Test file: `server/src/core/my-work-mark-done.test.ts`
     Level: unit
-    Test intent: Given a stale Tracker version, when Mark done runs, then conflict is returned with no activity and no card write.
+    Test intent: Given a stale Tracker version, when Mark done runs, then HTTP 409 with existing `version_conflict` semantics is returned with no activity and no card write.
     Exercise through: Tracker command primitive.
     Test doubles: fake Tracker service returning conflict; do not mock source handling.
     Expected RED: Tracker conflict assertion fails.
@@ -590,7 +620,7 @@ Steps:
 15. Write failing test for: idempotent retry of an already-done item.
     Test file: `server/src/core/my-work-mark-done.test.ts`
     Level: unit
-    Test intent: Given the source is already at the canonical done target, when Mark done is retried, then success is returned without a duplicate activity.
+    Test intent: Given the source is already at the canonical done target, when Mark done is retried, then the existing success response is returned without a duplicate activity.
     Exercise through: command service.
     Test doubles: fake transaction showing canonical target; do not mock idempotency decision.
     Expected RED: idempotent behavior is not covered.
@@ -614,7 +644,7 @@ Steps:
 19. Write failing test for: canonical target removal after page load causes no partial write.
     Test file: `server/src/core/my-work-mark-done.test.ts`
     Level: unit
-    Test intent: Given a valid mapping was read earlier, when it is removed before the transaction resolves, then no source row/activity is written and mapping failure is returned.
+    Test intent: Given a valid mapping was read earlier, when it is removed before the transaction resolves, then HTTP 409 with `status_column_unmappable` semantics is returned, no source row/activity is written, and no partial write escapes.
     Exercise through: command transaction boundary.
     Test doubles: fake transaction whose mapping changes between reads; do not mock rollback logic.
     Expected RED: mapping-race behavior is absent.
@@ -623,7 +653,7 @@ Steps:
     `npm run test -- server/src/core/my-work-mark-done.test.ts`
     Expected failure: mapping-race assertion fails or observes partial write.
 
-21. Implement the extracted Tracker primitive, command service, route action, authorization/mapping/version/idempotency handling, and atomic mapping recheck required by all RED cycles.
+21. Implement the extracted Tracker primitive, command service, route action, and exact existing HTTP mappings: revoked access 404/not_found, permission denial through the existing authorization status/code, stale versions 409/version_conflict, and unmappable done targets 409/status_column_unmappable. Preserve idempotency, activity, and atomic mapping recheck required by all RED cycles.
 
 22. Run test — verify PASS:
     `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
