@@ -552,6 +552,8 @@ export function paginateMyWorkItems(
 		limit?: number;
 		cursor?: string | null;
 		now?: Date;
+		/** True when a bounded source query returned a sentinel row. */
+		hasMore?: boolean;
 	} = {},
 ): { items: MyWorkSerializedItem[]; nextCursor: string | null } {
 	const limit = Math.max(1, Math.min(50, Math.trunc(options.limit ?? 50)));
@@ -568,7 +570,7 @@ export function paginateMyWorkItems(
 		}
 	}
 	const page = ordered.slice(start, start + limit);
-	const hasMore = start + limit < ordered.length;
+	const hasMore = options.hasMore === true || start + limit < ordered.length;
 	return {
 		items: page,
 		nextCursor:
