@@ -594,14 +594,14 @@ Steps:
    Expected RED: extracted service does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test -- server/src/core/tracker-item-status-change.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Extract the Tracker status mutation primitive and deterministic target selection.
 
 4. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test -- server/src/core/tracker-item-status-change.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: Board Mark done success and HTTP success mapping.
@@ -1229,14 +1229,14 @@ Steps:
    Expected RED: route/page/components do not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement route/page/toolbar/list loading.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: transient whole-page error and retry.
@@ -1248,14 +1248,14 @@ Steps:
    Expected RED: error/retry behavior is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement fail-whole-page error and retry.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: actionable Active empty state.
@@ -1267,14 +1267,14 @@ Steps:
    Expected RED: empty state is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement Active empty state.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: visibility refresh newest-request behavior.
@@ -1286,14 +1286,14 @@ Steps:
    Expected RED: visibility refresh is absent.
 
 14. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Implement visibility refresh and sequence guard.
 
 16. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: expired session is not empty state.
@@ -1305,14 +1305,14 @@ Steps:
    Expected RED: auth distinction is absent.
 
 18. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Map auth/session errors explicitly.
 
 20. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: manual Refresh keeps view state.
@@ -1324,14 +1324,14 @@ Steps:
    Expected RED: manual Refresh is absent.
 
 22. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Implement explicit Refresh action.
 
 24. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Write failing test for: page-level ordering integration.
@@ -1343,14 +1343,14 @@ Steps:
    Expected RED: page does not integrate ordering.
 
 26. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
    Wire real ordering/group helpers.
 
 28. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 29. Write failing test for: page-level 50/23 pagination.
@@ -1362,14 +1362,14 @@ Steps:
    Expected RED: page pagination is absent.
 
 30. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 31. Implement minimal behavior:
    Wire rendered pagination and URL page state.
 
 32. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 33. Write failing test for: responsive row content.
@@ -1381,14 +1381,14 @@ Steps:
    Expected RED: row component does not exist.
 
 34. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/components/my-work/MyWorkRow.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 35. Implement minimal behavior:
    Implement responsive row/list/toolbar components.
 
 36. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test -- client/src/components/my-work/MyWorkRow.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 37. Refactor while green (bounded):
@@ -1518,7 +1518,7 @@ Steps:
    Level: component/integration
    Test intent: Given non-active source item, when Open in Board/Tracker is selected with allowed/blocked/canceled guard, then only allowed transition navigates and blocked state is preserved.
    Exercise through: detail action/BoardContext guard.
-   Test doubles: fake guard/history; do not mock navigation decision.
+   Test doubles: fake API/session inputs only; mount the real BoardContext focus/unsaved guard and router transition boundary.
    Expected RED: source guard behavior is absent.
 
 10. Run test — verify FAIL:
@@ -1625,14 +1625,14 @@ Steps:
    Expected RED: helper does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test -- client/src/lib/workItemMutations.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement mutation router.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test -- client/src/lib/workItemMutations.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: mapping/terminal/pending disabled action.
@@ -1692,7 +1692,26 @@ Steps:
    `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-17. Write failing test for: Mark done race and direct-API must-not.
+17. Write failing test for: membership/assignment 404 recovery.
+   Test file: `client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   Level: component/integration
+   Test intent: Given Mark done returns 404/not_found because membership or assignment was revoked, when the action resolves, then the stale item is removed/refresh is requested and no stale detail/action content remains.
+   Exercise through: action/page refresh and unavailable-state collaboration.
+   Test doubles: fake 404 mutation response and refresh callback; do not mock recovery logic.
+   Expected RED: revoked-action recovery is absent.
+
+18. Run test — verify FAIL:
+   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   Expected failure: the named behavior is absent or its assertion fails.
+
+19. Implement minimal behavior:
+   Map 404/not_found to refresh/removal and unavailable state without treating it as success.
+
+20. Run test — verify PASS:
+   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   Expected: the 404 recovery cycle passes without weakening adjacent behavior.
+
+21. Write failing test for: Mark done race and direct-API must-not.
    Test file: `client/src/components/my-work/MyWorkDoneAction.test.tsx`
    Level: component/integration
    Test intent: Given Mark done succeeds while an older refresh is in flight, when the old snapshot arrives, then item is not reinserted and components never call updateCard/updateTrackerItem directly.
@@ -1700,23 +1719,23 @@ Steps:
    Test doubles: fake mutation/refresh responses and forbidden-call spies; do not mock reconciliation.
    Expected RED: race/must-not behavior is absent.
 
-18. Run test — verify FAIL:
+22. Run test — verify FAIL:
    `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
-19. Implement minimal behavior:
+23. Implement minimal behavior:
    Implement newest mutation precedence and keep all writes in workItemMutations.ts.
 
-20. Run test — verify PASS:
+24. Run test — verify PASS:
    `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-21. Refactor while green (bounded):
+25. Refactor while green (bounded):
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
-22. Commit:
+26. Commit:
    git add client/src/components/my-work/MyWorkDoneAction.tsx client/src/lib/workItemMutations.ts client/src/components/my-work/MyWorkRow.tsx client/src/components/my-work/MyWorkDetailSheet.tsx client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx
-    git commit -m "feat(my-work): add mark done action"
+   git commit -m "feat(my-work): add mark done action"
 
 ## REFERENCES LOADED
 
@@ -2064,7 +2083,7 @@ Steps:
    Level: component integration
    Test intent: Given a non-active source item, when Open in Board/Tracker is allowed, blocked, or canceled, then only allowed transition navigates and blocked state remains.
    Exercise through: source action/BoardContext guard collaboration.
-   Test doubles: fake guard/history; do not mock navigation decision.
+   Test doubles: fake API/session inputs only; mount the real BoardContext focus/unsaved guard and router transition boundary.
    Expected RED: guard collaboration is absent.
 
 6. Run test — verify FAIL:
