@@ -1,3 +1,4 @@
+import { createMyWorkApi } from "./api/myWork";
 import type { TemplateColumn } from "./lib/templates";
 import { publishAutoError } from "./lib/ticketIntakeBus";
 import type {
@@ -284,6 +285,7 @@ async function chatStream(
 }
 
 export const api = {
+	...createMyWorkApi(request),
 	getBoard: (workspaceId: number) =>
 		request<Board>(`/workspaces/${workspaceId}/board`),
 	getMetrics: (workspaceId: number) =>

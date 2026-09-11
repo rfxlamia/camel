@@ -530,3 +530,5 @@ export interface AgentEvent {
 	errorCode?: string;
 	attempt?: number;
 }
+
+export type * from "./types/myWork";
