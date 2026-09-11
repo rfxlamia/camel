@@ -13,6 +13,7 @@ import {
 	isTerminalMyWorkStatus,
 	type MyWorkBoardRow,
 	type MyWorkCandidate,
+	type MyWorkCursor,
 	type MyWorkSerializedItem,
 	type MyWorkSource,
 	type MyWorkTrackerRow,
@@ -52,6 +53,14 @@ export type MyWorkSourceQueryInput = {
 	workspaceId?: number;
 	q: string;
 	scope: MyWorkScope;
+	/** Cursor and page size are applied by each set-based source query. */
+	cursor?: MyWorkCursor | null;
+	limit?: number;
+	now?: Date;
+	/** Used to keep canonical workspace keys inside the SQL search boundary. */
+	workspacePrefixes?: ReadonlyMap<number, string>;
+	/** Local calendar dates used by the overdue ordering expression. */
+	workspaceLocalDates?: ReadonlyMap<number, string>;
 };
 
 export type MyWorkDetailQueryInput = {
@@ -120,9 +129,238 @@ function buildSearchPattern(q: string): string {
 	return `%${q}%`;
 }
 
+/** Extracts the numeric suffix from either `17` or a canonical `AT-17` key. */
 function keyNumberInSearch(q: string): string | null {
-	const match = /(?:^|[-\\s])(\\d+)$/.exec(q.trim());
+	const match = /(?:^|[-\s])(\d+)$/.exec(q.trim());
 	return match?.[1] ?? null;
+}
+
+function canonicalKeyInSearch(
+	q: string,
+): { prefix: string; keyNumber: number } | null {
+	return parseKeyFromUrl(q.trim().toUpperCase());
+}
+
+function boundedPageLimit(value: number | undefined): number {
+	return Math.max(1, Math.min(50, Math.trunc(value ?? 50)));
+}
+
+function sourceQueryLimit(input: MyWorkSourceQueryInput): number {
+	// Fetch one sentinel row per source. The service uses it to preserve a
+	// next cursor without hydrating an unbounded history set.
+	return Math.min(51, boundedPageLimit(input.limit) + 1);
+}
+
+function localDateForTimezone(now: Date, timezone: string | null): string {
+	const resolvedTimezone = timezone || "UTC";
+	try {
+		const parts = new Intl.DateTimeFormat("en-US", {
+			timeZone: resolvedTimezone,
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+		}).formatToParts(now);
+		const year = parts.find((part) => part.type === "year")?.value ?? "1970";
+		const month = parts.find((part) => part.type === "month")?.value ?? "01";
+		const day = parts.find((part) => part.type === "day")?.value ?? "01";
+		return `${year}-${month}-${day}`;
+	} catch {
+		return now.toISOString().slice(0, 10);
+	}
+}
+
+function sourceAlias(source: MyWorkSource): "ti" | "c" {
+	return source === "tracker" ? "ti" : "c";
+}
+
+function statusGroupExpression() {
+	// Keep this CASE in lockstep with normalizeMyWorkStatusCategory. A
+	// recognized category wins over a slot; unknown values then fall back to
+	// the existing slot vocabulary and finally to Other (4).
+	return sql<number>`CASE
+		WHEN st.category = 'backlog' THEN 0
+		WHEN st.category = 'started' THEN 1
+		WHEN st.category = 'completed' THEN 2
+		WHEN st.category = 'canceled' THEN 3
+		WHEN st.slot IN ('backlog', 'todo') THEN 0
+		WHEN st.slot = 'in_progress' THEN 1
+		WHEN st.slot = 'done' THEN 2
+		WHEN st.slot = 'canceled' THEN 3
+		ELSE 4
+	END`;
+}
+
+function localDateExpression(
+	source: MyWorkSource,
+	input: MyWorkSourceQueryInput,
+) {
+	const alias = sourceAlias(source);
+	const dates = [...(input.workspaceLocalDates ?? new Map())].filter(([id]) =>
+		input.workspaceIds.includes(id),
+	);
+	if (dates.length === 0) return sql<string>`CURRENT_DATE`;
+
+	const branches = dates.map(
+		([workspaceId, date]) =>
+			sql`WHEN ${sql.ref(`${alias}.workspace_id`)} = ${workspaceId} THEN ${sql.val(date)}::date`,
+	);
+	return sql<string>`CASE ${sql.join(branches, sql` `)} ELSE CURRENT_DATE END`;
+}
+
+function sourceOrderExpressions(
+	source: MyWorkSource,
+	input: MyWorkSourceQueryInput,
+) {
+	const alias = sourceAlias(source);
+	const group = statusGroupExpression();
+	const dueDate =
+		source === "tracker"
+			? sql<string | null>`ti.end_date::date`
+			: sql<string | null>`c.due_date::date`;
+	const updatedAt =
+		source === "tracker"
+			? sql<Date>`ti.updated_at`
+			: sql<Date>`coalesce(c.done_at, c.started_at, c.created_at)`;
+	const overdueRank = sql<number>`CASE
+		WHEN ${group} < 2
+			AND ${dueDate} IS NOT NULL
+			AND ${dueDate} < ${localDateExpression(source, input)}
+		THEN 0
+		ELSE 1
+	END`;
+	const dueNullRank = sql<number>`CASE WHEN ${dueDate} IS NULL THEN 1 ELSE 0 END`;
+
+	return {
+		group,
+		overdueRank,
+		dueDate,
+		dueNullRank,
+		updatedAt,
+		workspaceId: sql<number>`${sql.ref(`${alias}.workspace_id`)}`,
+		keyNumber: sql<number>`${sql.ref(`${alias}.key_number`)}`,
+		id: sql<number>`${sql.ref(`${alias}.id`)}`,
+	};
+}
+
+function andSql(parts: readonly import("kysely").RawBuilder<unknown>[]) {
+	return sql<boolean>`(${sql.join(parts, sql` AND `)})`;
+}
+
+function sourceCursorPredicate(
+	source: MyWorkSource,
+	cursor: MyWorkCursor | null | undefined,
+	expressions: ReturnType<typeof sourceOrderExpressions>,
+): import("kysely").RawBuilder<boolean> | null {
+	if (!cursor) return null;
+	const keyNumber = Number(cursor.key.slice(cursor.key.lastIndexOf("-") + 1));
+	if (!Number.isSafeInteger(keyNumber)) return null;
+
+	const sourceRank = source === "board" ? 0 : 1;
+	const cursorSourceRank = cursor.source === "board" ? 0 : 1;
+	const cursorOverdueRank = cursor.overdue ? 0 : 1;
+	const cursorDueNullRank = cursor.dueDate === null ? 1 : 0;
+	const prefix: import("kysely").RawBuilder<unknown>[] = [];
+	const terms: import("kysely").RawBuilder<unknown>[] = [];
+
+	terms.push(andSql([...prefix, sql`${expressions.group} > ${cursor.group}`]));
+	prefix.push(sql`${expressions.group} = ${cursor.group}`);
+
+	terms.push(
+		andSql([...prefix, sql`${expressions.overdueRank} > ${cursorOverdueRank}`]),
+	);
+	prefix.push(sql`${expressions.overdueRank} = ${cursorOverdueRank}`);
+
+	terms.push(
+		andSql([...prefix, sql`${expressions.dueNullRank} > ${cursorDueNullRank}`]),
+	);
+	prefix.push(sql`${expressions.dueNullRank} = ${cursorDueNullRank}`);
+
+	if (cursor.dueDate === null) {
+		prefix.push(sql`${expressions.dueDate} IS NULL`);
+	} else {
+		terms.push(
+			andSql([...prefix, sql`${expressions.dueDate} > ${cursor.dueDate}`]),
+		);
+		prefix.push(sql`${expressions.dueDate} = ${cursor.dueDate}`);
+	}
+
+	terms.push(
+		andSql([...prefix, sql`${expressions.updatedAt} < ${cursor.updatedAt}`]),
+	);
+	prefix.push(sql`${expressions.updatedAt} = ${cursor.updatedAt}`);
+
+	terms.push(
+		andSql([
+			...prefix,
+			sql`${expressions.workspaceId} > ${cursor.workspaceId}`,
+		]),
+	);
+	prefix.push(sql`${expressions.workspaceId} = ${cursor.workspaceId}`);
+
+	if (sourceRank > cursorSourceRank) {
+		terms.push(andSql([...prefix, sql`true`]));
+	} else if (sourceRank === cursorSourceRank) {
+		terms.push(
+			andSql([...prefix, sql`${expressions.keyNumber} > ${keyNumber}`]),
+		);
+		prefix.push(sql`${expressions.keyNumber} = ${keyNumber}`);
+		terms.push(andSql([...prefix, sql`${expressions.id} > ${cursor.id}`]));
+	}
+
+	return sql<boolean>`(${sql.join(terms, sql` OR `)})`;
+}
+
+function canonicalWorkspaceIds(
+	input: MyWorkSourceQueryInput,
+	canonicalKey: { prefix: string; keyNumber: number },
+): number[] {
+	return [...(input.workspacePrefixes ?? new Map())]
+		.filter(
+			([workspaceId, prefix]) =>
+				input.workspaceIds.includes(workspaceId) &&
+				prefix.toUpperCase() === canonicalKey.prefix,
+		)
+		.map(([workspaceId]) => workspaceId);
+}
+
+function sourceSearchPredicate(
+	source: MyWorkSource,
+	input: MyWorkSourceQueryInput,
+	pattern: string,
+	keyNumber: string | null,
+) {
+	const alias = sourceAlias(source);
+	const canonicalKey = canonicalKeyInSearch(input.q);
+	const textPredicates = [
+		sql<boolean>`${sql.ref(`${alias}.title`)} ILIKE ${pattern}`,
+		sql<boolean>`${sql.ref(`${alias}.description`)} ILIKE ${pattern}`,
+	];
+
+	if (canonicalKey) {
+		const workspaceIds = canonicalWorkspaceIds(input, canonicalKey);
+		const keyPredicate =
+			workspaceIds.length > 0
+				? sql<boolean>`${sql.ref(`${alias}.key_number`)} = ${canonicalKey.keyNumber}
+					AND ${sql.ref(`${alias}.workspace_id`)} IN (${sql.join(
+						workspaceIds.map((id) => sql.val(id)),
+						sql`, `,
+					)})`
+				: input.workspacePrefixes !== undefined
+					? sql<boolean>`false`
+					: sql<boolean>`${sql.ref(`${alias}.key_number`)} = ${canonicalKey.keyNumber}`;
+		return sql<boolean>`(${sql.join([...textPredicates, keyPredicate], sql` OR `)})`;
+	}
+
+	const keyPredicates: import("kysely").RawBuilder<unknown>[] = [
+		...textPredicates,
+		sql<boolean>`${sql.ref(`${alias}.key_number`)}::text ILIKE ${pattern}`,
+	];
+	if (keyNumber) {
+		keyPredicates.push(
+			sql<boolean>`${sql.ref(`${alias}.key_number`)}::text = ${keyNumber}`,
+		);
+	}
+	return sql<boolean>`(${sql.join(keyPredicates, sql` OR `)})`;
 }
 
 /** Default set-based source queries. Membership and assignee predicates are
@@ -148,6 +386,7 @@ export function createMyWorkDataSource(
 		},
 
 		async listTrackerRows(input) {
+			const order = sourceOrderExpressions("tracker", input);
 			let query = selectTrackerItemRows(executor)
 				.select("ti.workspace_id")
 				.where("ti.workspace_id", "in", [...input.workspaceIds])
@@ -169,40 +408,47 @@ export function createMyWorkDataSource(
 							.whereRef("me_tia.tracker_item_id", "=", "ti.id")
 							.where("me_tia.user_id", "=", input.userId),
 					),
-				)
-				.orderBy("ti.updated_at", "desc")
-				.orderBy("ti.id", "asc");
+				);
 
 			if (input.workspaceId !== undefined) {
 				query = query.where("ti.workspace_id", "=", input.workspaceId);
 			}
 			if (input.scope === "active") {
-				query = query.where((eb) =>
-					eb.or([
-						eb("st.category", "is", null),
-						eb("st.category", "not in", ["completed", "canceled"]),
-					]),
-				);
+				query = query.where(sql<boolean>`${order.group} NOT IN (2, 3)`);
 			}
 			if (input.q) {
-				const pattern = buildSearchPattern(input.q);
-				const keyNumber = keyNumberInSearch(input.q);
-				query = query.where((eb) =>
-					eb.or([
-						eb("ti.title", "ilike", pattern),
-						eb("ti.description", "ilike", pattern),
-						eb(sql`ti.key_number::text`, "ilike", pattern),
-						...(keyNumber
-							? [eb(sql`ti.key_number::text`, "=", keyNumber)]
-							: []),
-					]),
+				query = query.where(
+					sourceSearchPredicate(
+						"tracker",
+						input,
+						buildSearchPattern(input.q),
+						keyNumberInSearch(input.q),
+					),
 				);
 			}
-			const rows = await query.execute();
+			const cursorPredicate = sourceCursorPredicate(
+				"tracker",
+				input.cursor,
+				order,
+			);
+			if (cursorPredicate) query = query.where(cursorPredicate);
+
+			const rows = await query
+				.orderBy(order.group, "asc")
+				.orderBy(order.overdueRank, "asc")
+				.orderBy(order.dueNullRank, "asc")
+				.orderBy(order.dueDate, "asc")
+				.orderBy(order.updatedAt, "desc")
+				.orderBy(order.workspaceId, "asc")
+				.orderBy(order.keyNumber, "asc")
+				.orderBy(order.id, "asc")
+				.limit(sourceQueryLimit(input))
+				.execute();
 			return rows as MyWorkTrackerRow[];
 		},
 
 		async listBoardRows(input) {
+			const order = sourceOrderExpressions("board", input);
 			let query = selectBoardWorkItemRows(executor)
 				.select("c.workspace_id")
 				.where("c.workspace_id", "in", [...input.workspaceIds])
@@ -225,34 +471,42 @@ export function createMyWorkDataSource(
 							.whereRef("me_ca.card_id", "=", "c.id")
 							.where("me_ca.user_id", "=", input.userId),
 					),
-				)
-				.orderBy("c.created_at", "desc")
-				.orderBy("c.id", "asc");
+				);
 
 			if (input.workspaceId !== undefined) {
 				query = query.where("c.workspace_id", "=", input.workspaceId);
 			}
 			if (input.scope === "active") {
-				query = query.where((eb) =>
-					eb.or([
-						eb("st.category", "is", null),
-						eb("st.category", "not in", ["completed", "canceled"]),
-					]),
-				);
+				query = query.where(sql<boolean>`${order.group} NOT IN (2, 3)`);
 			}
 			if (input.q) {
-				const pattern = buildSearchPattern(input.q);
-				const keyNumber = keyNumberInSearch(input.q);
-				query = query.where((eb) =>
-					eb.or([
-						eb("c.title", "ilike", pattern),
-						eb("c.description", "ilike", pattern),
-						eb(sql`c.key_number::text`, "ilike", pattern),
-						...(keyNumber ? [eb(sql`c.key_number::text`, "=", keyNumber)] : []),
-					]),
+				query = query.where(
+					sourceSearchPredicate(
+						"board",
+						input,
+						buildSearchPattern(input.q),
+						keyNumberInSearch(input.q),
+					),
 				);
 			}
-			const rows = await query.execute();
+			const cursorPredicate = sourceCursorPredicate(
+				"board",
+				input.cursor,
+				order,
+			);
+			if (cursorPredicate) query = query.where(cursorPredicate);
+
+			const rows = await query
+				.orderBy(order.group, "asc")
+				.orderBy(order.overdueRank, "asc")
+				.orderBy(order.dueNullRank, "asc")
+				.orderBy(order.dueDate, "asc")
+				.orderBy(order.updatedAt, "desc")
+				.orderBy(order.workspaceId, "asc")
+				.orderBy(order.keyNumber, "asc")
+				.orderBy(order.id, "asc")
+				.limit(sourceQueryLimit(input))
+				.execute();
 			return rows as MyWorkBoardRow[];
 		},
 
@@ -350,6 +604,10 @@ export function createMyWorkService(
 		...createMyWorkDataSource(executor),
 		...overrides,
 	};
+	const usesBoundedSourceQueries =
+		!isDbExecutor(options) &&
+		options.listTrackerRows === undefined &&
+		options.listBoardRows === undefined;
 	const customHydrate = !isDbExecutor(options)
 		? options.hydrateRows
 		: undefined;
@@ -375,12 +633,29 @@ export function createMyWorkService(
 			const workspaceMap = new Map(
 				workspaces.map((workspace) => [workspace.id, workspace]),
 			);
+			const pageLimit = boundedPageLimit(input.limit);
+			const now = input.now ?? new Date();
 			const queryInput: MyWorkSourceQueryInput = {
 				userId: input.userId,
 				workspaceIds: requestedWorkspaceIds,
 				workspaceId: input.workspaceId,
 				q: input.q?.trim() ?? "",
 				scope: input.scope === "all" ? "all" : "active",
+				cursor: input.cursor ? decodeMyWorkCursor(input.cursor) : null,
+				limit: pageLimit,
+				now,
+				workspacePrefixes: new Map(
+					workspaces.map((workspace) => [
+						workspace.id,
+						derivePrefix(workspace.name),
+					]),
+				),
+				workspaceLocalDates: new Map(
+					workspaces.map((workspace) => [
+						workspace.id,
+						localDateForTimezone(now, workspace.timezone),
+					]),
+				),
 			};
 
 			const [trackerRows, boardRows] = await Promise.all([
@@ -391,6 +666,9 @@ export function createMyWorkService(
 					? Promise.resolve([] as MyWorkBoardRow[])
 					: source.listBoardRows(queryInput),
 			]);
+			const sourceHasMore =
+				usesBoundedSourceQueries &&
+				(trackerRows.length > pageLimit || boardRows.length > pageLimit);
 			let candidates = mergeMyWorkRows(trackerRows, boardRows).filter(
 				(candidate) =>
 					workspaceMap.has(candidate.row.workspace_id) &&
@@ -413,9 +691,10 @@ export function createMyWorkService(
 			}
 			const items = await hydrate(candidates, workspaceMap);
 			return paginateMyWorkItems(items, {
-				limit: input.limit,
+				limit: pageLimit,
 				cursor: input.cursor,
-				now: input.now,
+				now,
+				hasMore: sourceHasMore,
 			});
 		} catch (error) {
 			throw asUnavailable(error);
@@ -461,10 +740,29 @@ export function createMyWorkService(
 			);
 			if (!currentWorkspace) return null;
 
+			// Assignment is a separate authorization boundary from membership.
+			// Re-read the source row after the membership check and immediately
+			// before hydration/serialization. The default source query includes an
+			// EXISTS assignee predicate, so a revoked assignment becomes null;
+			// injected sources get the same fail-closed contract.
+			const currentRow =
+				input.source === "tracker"
+					? await source.getTrackerRow(detailInput)
+					: await source.getBoardRow(detailInput);
+			if (!currentRow || currentRow.workspace_id !== currentWorkspace.id) {
+				return null;
+			}
+			if (
+				currentRow.assignees !== undefined &&
+				!currentRow.assignees.some((assignee) => assignee.id === input.userId)
+			) {
+				return null;
+			}
+
 			const candidate: MyWorkCandidate =
 				input.source === "tracker"
-					? { source: "tracker", row: row as MyWorkTrackerRow }
-					: { source: "board", row: row as MyWorkBoardRow };
+					? { source: "tracker", row: currentRow as MyWorkTrackerRow }
+					: { source: "board", row: currentRow as MyWorkBoardRow };
 			const hydrated = await hydrate(
 				[candidate],
 				new Map([[currentWorkspace.id, currentWorkspace]]),

@@ -1,8 +1,11 @@
 import express from "express";
+import { Kysely, PostgresDialect } from "kysely";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "../auth.js";
+import type { DB } from "../db/types.js";
 import {
+	createMyWorkDataSource,
 	createMyWorkRouter,
 	createMyWorkService,
 	type MyWorkDataSource,
@@ -164,6 +167,37 @@ function testApp(router: ReturnType<typeof createMyWorkRouter>) {
 	});
 	app.use("/my-work", router);
 	return app;
+}
+
+type CapturedQuery = {
+	sql: string;
+	parameters: readonly unknown[];
+};
+
+type FakePostgresPool = ConstructorParameters<
+	typeof PostgresDialect
+>[0]["pool"];
+
+function capturedDb() {
+	const queries: CapturedQuery[] = [];
+	const client = {
+		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
+			queries.push({ sql: sqlText, parameters });
+			return { rows: [] as R[] };
+		},
+		release() {},
+	};
+	const pool = {
+		options: {},
+		async connect() {
+			return client;
+		},
+		async end() {},
+	} as unknown as FakePostgresPool;
+	const executor = new Kysely<DB>({
+		dialect: new PostgresDialect({ pool }),
+	});
+	return { executor, queries };
 }
 
 describe("My Work personal read boundary", () => {
@@ -346,6 +380,27 @@ describe("My Work personal read boundary", () => {
 		expect(JSON.stringify(after.body)).not.toContain("Board card");
 	});
 
+	it("RED 5b: assignment revocation after source read returns 404 without cached content", async () => {
+		const row = boardRow({ id: 211, workspace_id: ATLAS.id, key_number: 17 });
+		const deps = sourceDeps({ tracker: [], board: [row] }, [ATLAS]);
+		let sourceReads = 0;
+		deps.getBoardRow = vi.fn(async () => {
+			sourceReads += 1;
+			// The first source read represents the row that was visible in the
+			// list. The assignment is revoked before the final reauthorization.
+			return sourceReads === 1 ? row : null;
+		});
+
+		const response = await request(testApp(createMyWorkRouter({ deps }))).get(
+			"/my-work/7/board/AT-17",
+		);
+
+		expect(response.status).toBe(404);
+		expect(response.body).toEqual({ error: "Not found" });
+		expect(JSON.stringify(response.body)).not.toContain("Board card");
+		expect(deps.getBoardRow).toHaveBeenCalledTimes(2);
+	});
+
 	it("RED 6: searches All candidates across active, terminal, and Other categories", async () => {
 		const deps = sourceDeps({
 			tracker: [
@@ -379,6 +434,37 @@ describe("My Work personal read boundary", () => {
 		});
 
 		expect(result.items.map((item) => item.id)).toEqual([111, 112, 113]);
+	});
+
+	it("RED 6b: All-scope canonical key search finds AT-17", async () => {
+		const result = await createMyWorkService(
+			sourceDeps({
+				tracker: [],
+				board: [
+					boardRow({
+						id: 215,
+						workspace_id: ATLAS.id,
+						key_number: 17,
+						title: "Canonical key match",
+					}),
+					boardRow({
+						id: 216,
+						workspace_id: ORBIT.id,
+						key_number: 17,
+						title: "Same number, different workspace",
+					}),
+				],
+			}),
+		).list({
+			userId: ALICE.id,
+			scope: "all",
+			q: "AT-17",
+			now: NOW,
+		});
+
+		expect(result.items.map((item) => item.identity)).toEqual([
+			{ workspaceId: ATLAS.id, source: "board", key: "AT-17" },
+		]);
 	});
 
 	it("RED 7: applies workspace and source filters before returning rows", async () => {
@@ -471,6 +557,104 @@ describe("My Work personal read boundary", () => {
 				})
 			).nextCursor,
 		);
+	});
+
+	it("RED 6 query: captures canonical All-scope key predicates", async () => {
+		const { executor, queries } = capturedDb();
+		const source = createMyWorkDataSource(executor);
+		await source.listTrackerRows({
+			userId: ALICE.id,
+			workspaceIds: [ATLAS.id, ORBIT.id],
+			q: "AT-17",
+			scope: "all",
+			limit: 2,
+			workspacePrefixes: new Map([
+				[ATLAS.id, "AT"],
+				[ORBIT.id, "OR"],
+			]),
+			workspaceLocalDates: new Map([
+				[ATLAS.id, "2026-09-11"],
+				[ORBIT.id, "2026-09-11"],
+			]),
+		});
+
+		const query = queries.find((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(query).toBeDefined();
+		expect(query?.sql).toContain('"ti"."key_number"');
+		expect(query?.sql).toContain('"ti"."workspace_id"');
+		expect(query?.parameters).toContain("%AT-17%");
+		expect(query?.parameters).toContain(17);
+		expect(query?.parameters).toContain(7);
+		await executor.destroy();
+	});
+
+	it("RED 7 query: captures workspace/source filters at the DB boundary", async () => {
+		const { executor, queries } = capturedDb();
+		const service = createMyWorkService({
+			executor,
+			listAuthorizedWorkspaces: vi.fn(async () => [ATLAS, ORBIT]),
+		});
+
+		await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			workspaceId: ATLAS.id,
+			source: "board",
+			limit: 3,
+			now: NOW,
+		});
+
+		const boardQuery = queries.find((entry) =>
+			entry.sql.includes('from "cards"'),
+		);
+		expect(boardQuery).toBeDefined();
+		expect(boardQuery?.sql).toContain('"c"."workspace_id" in');
+		expect(boardQuery?.sql).toContain('"c"."workspace_id" =');
+		expect(boardQuery?.sql).toContain('"c"."deleted_at" is null');
+		expect(boardQuery?.sql).toContain('"card_assignees"');
+		expect(boardQuery?.parameters).toContain(ATLAS.id);
+		expect(boardQuery?.parameters).toContain(4);
+		expect(
+			queries.some((entry) => entry.sql.includes('from "tracker_items"')),
+		).toBe(false);
+		await executor.destroy();
+	});
+
+	it("RED 8 query: captures deterministic cursor predicates and bounded limits", async () => {
+		const { executor, queries } = capturedDb();
+		const source = createMyWorkDataSource(executor);
+		await source.listTrackerRows({
+			userId: ALICE.id,
+			workspaceIds: [ORBIT.id],
+			scope: "all",
+			q: "",
+			limit: 2,
+			cursor: {
+				group: 1,
+				overdue: false,
+				dueDate: null,
+				updatedAt: "2026-09-10T00:00:00.000Z",
+				workspaceId: ORBIT.id,
+				source: "tracker",
+				key: "OR-4",
+				id: 100,
+			},
+			workspaceLocalDates: new Map([[ORBIT.id, "2026-09-11"]]),
+		});
+
+		const query = queries.find((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(query).toBeDefined();
+		expect(query?.sql).toContain('"ti"."updated_at"');
+		expect(query?.sql).toContain('"ti"."id" asc');
+		expect(query?.sql).toMatch(/limit \$\d+/i);
+		expect(query?.parameters).toContain(3);
+		expect(query?.parameters).toContain("2026-09-10T00:00:00.000Z");
+		expect(query?.parameters).toContain(100);
+		await executor.destroy();
 	});
 
 	it("RED 9: maps an injected transient query failure to a retryable response without partial data", async () => {
