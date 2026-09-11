@@ -6,6 +6,7 @@ import {
 	useState,
 } from "react";
 import type { CardAttachmentUploadResponse } from "../api";
+import { orderCardAttachments } from "../lib/cardAttachments";
 import {
 	MAX_ATTACHMENT_COUNT,
 	prepareImageAttachment,
@@ -25,10 +26,6 @@ export interface CardAttachmentsProps {
 
 function attachmentCount(card: Card): number {
 	return card.attachments?.length ?? 0;
-}
-
-function orderedAttachments(card: Card): CardAttachment[] {
-	return [...(card.attachments ?? [])].sort((a, b) => a.id - b.id);
 }
 
 export default function CardAttachments({
@@ -51,7 +48,7 @@ export default function CardAttachments({
 	const [deletingId, setDeletingId] = useState<number | null>(null);
 
 	const total = attachmentCount(card);
-	const attachments = orderedAttachments(card);
+	const attachments = orderCardAttachments(card.attachments ?? []);
 
 	useEffect(() => {
 		if (

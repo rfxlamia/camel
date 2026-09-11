@@ -3,14 +3,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Card, CardAttachment } from "../types";
 import { CardBody } from "./CardView";
 
-function makeAttachment(id: number, label: "A" | "B" | "C"): CardAttachment {
+function makeAttachment(
+	id: number,
+	label: "A" | "B" | "C",
+	createdAt = `2026-09-05T10:0${id}:00.000Z`,
+): CardAttachment {
 	return {
 		id,
 		thumbnailUrl: `/api/workspaces/7/cards/41/attachments/${id}/thumbnail-${label}`,
 		originalUrl: `/api/workspaces/7/cards/41/attachments/${id}/original-${label}`,
 		downloadUrl: `/api/workspaces/7/cards/41/attachments/${id}/original/download-${label}`,
 		mimeType: "image/png",
-		createdAt: `2026-09-05T10:0${id}:00.000Z`,
+		createdAt,
 	};
 }
 
@@ -73,6 +77,19 @@ describe("CardBody", () => {
 		expect(screen.getByText("+2")).toBeTruthy();
 		expect(screen.getByLabelText("2 more attachments")).toBeTruthy();
 		expect(screen.getByText("Keep the title visible")).toBeTruthy();
+	});
+
+	it("derives the cover from the earliest server-ordered attachment", () => {
+		const attachments = [
+			makeAttachment(1, "A", "2026-09-05T10:11:00.000Z"),
+			makeAttachment(2, "B", "2026-09-05T10:10:00.000Z"),
+		];
+		render(<CardBody card={card({ attachments })} />);
+
+		const cover = screen.getByRole("img", {
+			name: "Attachment preview for Keep the title visible",
+		});
+		expect(cover.getAttribute("src")).toBe(attachments[1]!.thumbnailUrl);
 	});
 
 	it("shows a single cover without a badge when only one attachment exists", () => {

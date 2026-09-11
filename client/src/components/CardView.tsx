@@ -8,6 +8,7 @@ import {
 	isCardDone,
 	isDueOverdue,
 } from "../lib/boardViewUtils";
+import { orderCardAttachments } from "../lib/cardAttachments";
 import type { Card } from "../types";
 
 interface Props {
@@ -18,7 +19,7 @@ interface Props {
 export function CardBody({ card }: { card: Card }) {
 	const done = isCardDone(card);
 	const overdue = isDueOverdue(card);
-	const attachments = card.attachments ?? [];
+	const attachments = orderCardAttachments(card.attachments ?? []);
 	const cover = attachments[0];
 	const extraCount = attachments.length - 1;
 	return (
