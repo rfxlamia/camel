@@ -642,26 +642,45 @@ Steps:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-13. Write failing test for: membership or assignment revocation returns 404/not_found.
+13. Write failing test for: membership revocation returns 404/not_found.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent: Given membership or assignment is revoked before Mark done, when the command runs, then HTTP 404 with existing `not_found`/`Not found` behavior returns and no source/activity write occurs.
+   Test intent: Given membership is revoked before Mark done, when the command runs, then HTTP 404 with existing `not_found`/`Not found` behavior returns and no source/activity write occurs.
    Exercise through: command authorization boundary.
-   Test doubles: membership/assignment dependency returning revoked and fake transaction; do not mock mapping.
-   Expected RED: revoked mutation behavior is not covered.
+   Test doubles: membership dependency returning revoked and fake transaction; do not mock mapping.
+   Expected RED: membership-revocation behavior is not covered.
 
 14. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
-   Recheck membership and assignment using the existing route authorization contract; revoked state returns 404/not_found without introducing a role policy.
+   Recheck membership using the existing route authorization contract; revoked state returns 404/not_found.
 
 16. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
-   Expected: the named cycle passes without weakening adjacent behavior.
+   Expected: the membership-revocation cycle passes without weakening adjacent behavior.
 
-17. Write failing test for: missing mapping returns 409 status_column_unmappable.
+17. Write failing test for: assignment removal returns 404/not_found.
+   Test file: `server/src/core/my-work-mark-done.test.ts`
+   Level: unit
+   Test intent: Given Alice is removed from the item before Mark done, when the command runs, then HTTP 404 with existing `not_found`/`Not found` behavior returns and no source/activity write occurs.
+   Exercise through: command authorization boundary.
+   Test doubles: assignment dependency returning removed and fake transaction; do not mock mapping.
+   Expected RED: assignment-removal behavior is not covered.
+
+18. Run test — verify FAIL:
+   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   Expected failure: the named behavior is absent or its assertion fails.
+
+19. Implement minimal behavior:
+   Recheck assignment using the existing route authorization contract; removed assignment returns 404/not_found.
+
+20. Run test — verify PASS:
+   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   Expected: the assignment-removal cycle passes without weakening adjacent behavior.
+
+21. Write failing test for: missing mapping returns 409 status_column_unmappable.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
    Test intent: Given no valid Board/Tracker done mapping, when Mark done runs, then HTTP 409/status_column_unmappable semantics return with no source/activity write.
@@ -669,18 +688,18 @@ Steps:
    Test doubles: fake transaction with missing mapping; do not mock mapping decision.
    Expected RED: mapping contract is not covered.
 
-18. Run test — verify FAIL:
+22. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
-19. Implement minimal behavior:
+23. Implement minimal behavior:
    Map missing done targets to existing status_column_unmappable behavior.
 
-20. Run test — verify PASS:
+24. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-21. Write failing test for: Board stale version returns 409 version_conflict.
+25. Write failing test for: Board stale version returns 409 version_conflict.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
    Test intent: Given stale Board version, when Mark done runs, then HTTP 409/version_conflict returns with no activity.
@@ -688,18 +707,18 @@ Steps:
    Test doubles: fake Board service returning conflict; do not mock command handling.
    Expected RED: Board conflict handling is not covered.
 
-22. Run test — verify FAIL:
+26. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
-23. Implement minimal behavior:
+27. Implement minimal behavior:
    Preserve Board conflict response mapping.
 
-24. Run test — verify PASS:
+28. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-25. Write failing test for: Tracker stale version returns 409 version_conflict and no card write.
+29. Write failing test for: Tracker stale version returns 409 version_conflict and no card write.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
    Test intent: Given stale Tracker version, when Mark done runs, then HTTP 409/version_conflict returns with no activity and no cards access.
@@ -707,18 +726,18 @@ Steps:
    Test doubles: fake Tracker service returning conflict; do not mock source handling.
    Expected RED: Tracker conflict handling is not covered.
 
-26. Run test — verify FAIL:
+30. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
-27. Implement minimal behavior:
+31. Implement minimal behavior:
    Preserve Tracker conflict response and source boundary.
 
-28. Run test — verify PASS:
+32. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-29. Write failing test for: idempotent retry has one activity.
+33. Write failing test for: idempotent retry has one activity.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
    Test intent: Given source already at canonical done target, when Mark done retries, then existing success returns without duplicate activity.
@@ -726,18 +745,18 @@ Steps:
    Test doubles: fake transaction showing canonical target; do not mock idempotency decision.
    Expected RED: idempotency behavior is not covered.
 
-30. Run test — verify FAIL:
+34. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
-31. Implement minimal behavior:
+35. Implement minimal behavior:
    Implement already-done short-circuit.
 
-32. Run test — verify PASS:
+36. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-33. Write failing test for: Tracker command never writes cards.
+37. Write failing test for: Tracker command never writes cards.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
    Test intent: Given Tracker item, when Mark done runs, then no cards query/update is made.
@@ -745,18 +764,18 @@ Steps:
    Test doubles: fake transaction recording table access; do not mock source selection.
    Expected RED: source-table invariant is not explicit.
 
-34. Run test — verify FAIL:
+38. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
-35. Implement minimal behavior:
+39. Implement minimal behavior:
    Keep Tracker command source-specific.
 
-36. Run test — verify PASS:
+40. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-37. Write failing test for: mapping removal race returns 409 status_column_unmappable without partial write.
+41. Write failing test for: mapping removal race returns 409 status_column_unmappable without partial write.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
    Test intent: Given mapping existed at page load but is removed before transaction resolves, when Mark done runs, then HTTP 409/status_column_unmappable returns with no source/activity write.
@@ -764,21 +783,21 @@ Steps:
    Test doubles: fake transaction whose mapping changes; do not mock rollback logic.
    Expected RED: mapping-race behavior is absent.
 
-38. Run test — verify FAIL:
+42. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
-39. Implement minimal behavior:
+43. Implement minimal behavior:
    Recheck mappings atomically before any source write.
 
-40. Run test — verify PASS:
+44. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-41. Refactor while green (bounded):
+45. Refactor while green (bounded):
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
-42. Commit:
+46. Commit:
    git add server/src/core/tracker-item-status-change.ts server/src/core/my-work-mark-done.ts server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts server/src/routes/tracker-items.ts server/src/routes/my-work.ts
     git commit -m "feat(my-work): add source-aware mark done"
 
@@ -822,7 +841,7 @@ Must-have:
 
 - Existing Tracker write behavior remains green after extraction.
 - Board and Tracker use their correct source tables and activity streams.
-- Permission, mapping, version, idempotency, and no-partial-write behavior are tested.
+- Membership/assignment reauthorization, mapping, version, idempotency, and no-partial-write behavior are tested.
 - Route tests use the existing membership/assignment reauthorization boundary rather than trusting UI flags.
 
 Must-not-have:
@@ -1890,7 +1909,7 @@ Steps:
    Level: integration
    Test intent: Given membership is revoked before Mark done, when the HTTP command runs, then HTTP 404/not_found returns and neither source/activity changes.
    Exercise through: authenticated HTTP API.
-   Test doubles: real DB membership state; do not invent a role policy or mock route.
+   Test doubles: real DB membership state; use the existing membership/assignment authorization contract and do not mock route.
    Expected RED: revoked mutation integration is absent.
 
 26. Run test — verify FAIL:
@@ -1909,7 +1928,7 @@ Steps:
    Level: integration
    Test intent: Given Alice is removed from the item before Mark done, when the HTTP command runs, then HTTP 404/not_found returns and neither source/activity changes.
    Exercise through: authenticated HTTP API.
-   Test doubles: real DB assignment state; do not invent a role policy or mock route.
+   Test doubles: real DB assignment state; use the existing membership/assignment authorization contract and do not mock route.
    Expected RED: assignment-removal mutation integration is absent.
 
 30. Run test — verify FAIL:
@@ -1923,10 +1942,29 @@ Steps:
    `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
    Expected: both reauthorization cycles and all prior server cycles pass.
 
-33. Refactor while green (bounded):
+33. Write failing test for: missing done mapping returns 409/status_column_unmappable with no write/activity.
+   Test file: `server/src/routes/my-work.integration.test.ts`
+   Level: integration
+   Test intent: Given an authorized item whose Board/Tracker done mapping is missing, when Mark done runs, then HTTP 409/status_column_unmappable returns and neither source/activity changes.
+   Exercise through: authenticated Mark done HTTP API.
+   Test doubles: real DB vocabulary/column mapping state; do not mock command.
+   Expected RED: real-DB unmappable-target contract is absent.
+
+34. Run test — verify FAIL:
+   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   Expected failure: the named behavior is absent or its assertion fails.
+
+35. Implement minimal behavior:
+   Add real-DB mapping removal/absence fixture and exact status/code/no-write assertions.
+
+36. Run test — verify PASS:
+   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   Expected: the mapping-race/unmappable integration cycle passes.
+
+37. Refactor while green (bounded):
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
-34. Commit:
+38. Commit:
    git add server/src/routes/my-work.integration.test.ts
    git commit -m "test(my-work): verify server acceptance boundary"
 
@@ -2237,7 +2275,7 @@ Steps:
 5. Write failing test for: server p95 workload target.
    Test file: `server/src/routes/my-work.performance.integration.test.ts`
    Level: integration/performance
-   Test intent: Given 10 workspaces/1,000 active items, when warm rollup repeats, then p95 is below 100ms and telemetry is safe.
+   Test intent: Given 10 workspaces/1,000 active items, when 5 warm-up requests and 30 measured requests run, then nearest-rank p95 is below 100ms and telemetry is safe; the test records Node version, PostgreSQL version, and CI runner details.
    Exercise through: authenticated HTTP API/real migrated DB.
    Test doubles: real DB; no mocked query path.
    Expected RED: performance fixture/instrumentation absent.
@@ -2247,7 +2285,7 @@ Steps:
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
-   Implement warm-up/fixture/p95/telemetry assertion and document DATABASE_URL/migration/Node/CI environment.
+   Implement deterministic 5-request warm-up, 30-request measurement, nearest-rank p95 calculation, telemetry assertion, and documentation of DATABASE_URL/migration/Node/PostgreSQL/CI runner environment.
 
 8. Run test — verify PASS:
    `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.performance.integration.test.ts`
