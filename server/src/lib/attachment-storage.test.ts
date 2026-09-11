@@ -257,17 +257,17 @@ describe("createAttachmentUpload", () => {
 		expect(providerInvocation).not.toHaveBeenCalled();
 	});
 
-	it("rejects a fourth existing-card pair while enforcing file and parts ceilings", async () => {
+	it("accepts four existing-card pairs but enforces pair, file, and parts ceilings", async () => {
 		const maxPairs = ATTACHMENT_UPLOAD_PROFILES.existingCard.maxPairs;
-		expect(maxPairs).toBe(3);
+		expect(maxPairs).toBe(10);
 		const { app, providerInvocation } = await createUploadApp(maxPairs);
-		const acceptedResponse = await addPairs(request(app).post("/"), maxPairs);
+		const acceptedResponse = await addPairs(request(app).post("/"), 4);
 		expect(acceptedResponse.status).toBe(200);
-		expect(acceptedResponse.body).toEqual({ count: 6, memoryBacked: true });
+		expect(acceptedResponse.body).toEqual({ count: 8, memoryBacked: true });
 
-		const rejectedPairBatch = await addPairs(request(app).post("/"), 4);
-		expect(rejectedPairBatch.status).toBe(413);
-		expect(rejectedPairBatch.body.code).toBe("LIMIT_FILE_COUNT");
+		const tooManyPairs = await addPairs(request(app).post("/"), maxPairs + 1);
+		expect(tooManyPairs.status).toBe(413);
+		expect(tooManyPairs.body.code).toBe("LIMIT_FILE_COUNT");
 
 		const tooManyFiles = request(app).post("/");
 		for (let index = 0; index < maxPairs; index += 1) {

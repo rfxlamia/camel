@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "../db/kysely.js";
 import { createChatService } from "./service.js";
 
@@ -37,7 +37,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat service", () => {
 	});
 
 	afterAll(async () => {
-		await db.deleteFrom("users").where("id", "in", [userAId, userBId]).execute();
+		await db
+			.deleteFrom("users")
+			.where("id", "in", [userAId, userBId])
+			.execute();
 	});
 
 	it("createThread returns thread titled Untitled", async () => {
@@ -62,6 +65,21 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat service", () => {
 		expect(list[0].id).toBe(newer.id);
 		await service.deleteThread(userAId, older.id);
 		await service.deleteThread(userAId, newer.id);
+	});
+
+	it("uses database time when updating thread recency", async () => {
+		const older = await service.createThread(userAId);
+		const newer = await service.createThread(userAId);
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2000-01-01T00:00:00.000Z"));
+		try {
+			await service.renameThread(userAId, newer.id, "Newer");
+			expect((await service.listThreads(userAId))[0]?.id).toBe(newer.id);
+		} finally {
+			vi.useRealTimers();
+			await service.deleteThread(userAId, older.id);
+			await service.deleteThread(userAId, newer.id);
+		}
 	});
 
 	it("getThread returns null for wrong user (IDOR)", async () => {
