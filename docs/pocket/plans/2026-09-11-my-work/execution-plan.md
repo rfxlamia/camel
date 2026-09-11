@@ -168,20 +168,20 @@ Steps:
 1. Write failing test for: list request serializes supplied filters.
    Test file: `client/src/api.my-work.test.ts`
    Level: unit
-   Test intent: Given fake fetch, when listMyWork receives scope/query/workspace/source/cursor/page size, then exact URL/query and typed response are observed.
+   Test intent: Given fake fetch and an authorized server envelope, when listMyWork receives scope/query/workspace/source/cursor/page size, then exact URL/query and typed response are observed, the envelope is forwarded unchanged, and no membership/assignment request is made.
    Exercise through: public api.listMyWork.
-   Test doubles: fake fetch via configureRequestBoundaryForTests; do not mock API methods.
+   Test doubles: fake fetch via configureRequestBoundaryForTests; do not mock API methods or authorization discovery.
    Expected RED: listMyWork and its contract do not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/api.my-work.test.ts`
+   `npm run test --workspace=client -- src/api.my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
-   Add the list request type/method and response contract.
+   Add the list request type/method and response contract. Preserve the authorized envelope and do not perform membership/assignment discovery.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/api.my-work.test.ts`
+   `npm run test --workspace=client -- src/api.my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: omitted optional filters are not serialized as invalid values.
@@ -193,14 +193,14 @@ Steps:
    Expected RED: omission behavior is not implemented.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/api.my-work.test.ts`
+   `npm run test --workspace=client -- src/api.my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement optional query serialization and safe defaults.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/api.my-work.test.ts`
+   `npm run test --workspace=client -- src/api.my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: detail and Mark done use composite identity/version.
@@ -212,39 +212,20 @@ Steps:
    Expected RED: detail/Mark done methods do not exist.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/api.my-work.test.ts`
+   `npm run test --workspace=client -- src/api.my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement detail and Mark done contract methods.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/api.my-work.test.ts`
+   `npm run test --workspace=client -- src/api.my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-13. Write failing test for: API pass-through performs no authorization.
-   Test file: `client/src/api.my-work.test.ts`
-   Level: unit
-   Test intent: Given an authorized server envelope, when the API resolves, then it forwards the response and makes no membership/assignment request.
-   Exercise through: public API method and fetch call count.
-   Test doubles: fake fetch only; do not mock API boundary.
-   Expected RED: pass-through/no-discovery behavior is not explicit.
-
-14. Run test — verify FAIL:
-   `npm run test -- client/src/api.my-work.test.ts`
-   Expected failure: the named behavior is absent or its assertion fails.
-
-15. Implement minimal behavior:
-   Preserve the server envelope and keep authorization out of the client contract layer.
-
-16. Run test — verify PASS:
-   `npm run test -- client/src/api.my-work.test.ts`
-   Expected: the named cycle passes without weakening adjacent behavior.
-
-17. Refactor while green (bounded):
+13. Refactor while green (bounded):
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
-18. Commit:
+14. Commit:
    git add client/src/types/myWork.ts client/src/api/myWork.ts client/src/api.my-work.test.ts client/src/types.ts client/src/api.ts client/package.json package-lock.json
     git commit -m "feat(my-work): define client contract and search dependency"
 
@@ -334,14 +315,14 @@ Steps:
    Expected RED: personal route/response module does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement membership-scoped source query skeleton, workspace metadata, and response serialization.
 
 4. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: per-workspace dedup/composite identity.
@@ -353,14 +334,14 @@ Steps:
    Expected RED: dedup/composite behavior is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement per-workspace dedup and batched hydration.
 
 8. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: unauthorized workspace exclusion.
@@ -372,14 +353,14 @@ Steps:
    Expected RED: unauthorized leakage is possible.
 
 10. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement membership predicate and fail-closed exclusion.
 
 12. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: Active/All status normalization and Other fallback.
@@ -391,14 +372,14 @@ Steps:
    Expected RED: scope/category behavior is absent.
 
 14. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Implement status category/slot normalization inputs and Active/All filtering.
 
 16. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: detail reauthorization and existing 404 contract.
@@ -410,14 +391,14 @@ Steps:
    Expected RED: stale detail returns content or wrong status/code.
 
 18. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Implement detail reauthorization and exact existing 404/not_found mapping.
 
 20. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: All-scope search across terminal/Other statuses.
@@ -429,14 +410,14 @@ Steps:
    Expected RED: All search is absent.
 
 22. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Implement All query search predicates and candidate response.
 
 24. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Write failing test for: workspace/source filters.
@@ -448,14 +429,14 @@ Steps:
    Expected RED: filter predicates are absent.
 
 26. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
    Implement server-side workspace/source filters.
 
 28. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 29. Write failing test for: cursor pagination.
@@ -467,14 +448,14 @@ Steps:
    Expected RED: cursor behavior is absent.
 
 30. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 31. Implement minimal behavior:
    Implement cursor encoding/decoding and deterministic ordering.
 
 32. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 33. Write failing test for: transient list failure classification.
@@ -486,14 +467,14 @@ Steps:
    Expected RED: failure seam/classification is absent.
 
 34. Run test — verify FAIL:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 35. Implement minimal behavior:
    Implement route dependency injection and exact transient error mapping.
 
 36. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
+   `npm run test --workspace=server -- src/routes/my-work.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 37. Refactor while green (bounded):
@@ -594,14 +575,14 @@ Steps:
    Expected RED: extracted service does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Extract the Tracker status mutation primitive and deterministic target selection.
 
 4. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: Board Mark done success and HTTP success mapping.
@@ -613,14 +594,14 @@ Steps:
    Expected RED: command service does not exist.
 
 6. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement Board command delegation and success result mapping.
 
 8. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: Tracker Mark done success and HTTP success mapping.
@@ -632,14 +613,14 @@ Steps:
    Expected RED: Tracker command behavior is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement Tracker command delegation and success result mapping.
 
 12. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: membership revocation returns 404/not_found.
@@ -651,14 +632,14 @@ Steps:
    Expected RED: membership-revocation behavior is not covered.
 
 14. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Recheck membership using the existing route authorization contract; revoked state returns 404/not_found.
 
 16. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the membership-revocation cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: assignment removal returns 404/not_found.
@@ -670,14 +651,14 @@ Steps:
    Expected RED: assignment-removal behavior is not covered.
 
 18. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Recheck assignment using the existing route authorization contract; removed assignment returns 404/not_found.
 
 20. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the assignment-removal cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: missing mapping returns 409 status_column_unmappable.
@@ -689,14 +670,14 @@ Steps:
    Expected RED: mapping contract is not covered.
 
 22. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Map missing done targets to existing status_column_unmappable behavior.
 
 24. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Write failing test for: Board stale version returns 409 version_conflict.
@@ -708,14 +689,14 @@ Steps:
    Expected RED: Board conflict handling is not covered.
 
 26. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
    Preserve Board conflict response mapping.
 
 28. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 29. Write failing test for: Tracker stale version returns 409 version_conflict and no card write.
@@ -727,14 +708,14 @@ Steps:
    Expected RED: Tracker conflict handling is not covered.
 
 30. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 31. Implement minimal behavior:
    Preserve Tracker conflict response and source boundary.
 
 32. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 33. Write failing test for: idempotent retry has one activity.
@@ -746,14 +727,14 @@ Steps:
    Expected RED: idempotency behavior is not covered.
 
 34. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 35. Implement minimal behavior:
    Implement already-done short-circuit.
 
 36. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 37. Write failing test for: Tracker command never writes cards.
@@ -765,14 +746,14 @@ Steps:
    Expected RED: source-table invariant is not explicit.
 
 38. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 39. Implement minimal behavior:
    Keep Tracker command source-specific.
 
 40. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 41. Write failing test for: mapping removal race returns 409 status_column_unmappable without partial write.
@@ -784,14 +765,14 @@ Steps:
    Expected RED: mapping-race behavior is absent.
 
 42. Run test — verify FAIL:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 43. Implement minimal behavior:
    Recheck mappings atomically before any source write.
 
 44. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+   `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 45. Refactor while green (bounded):
@@ -890,14 +871,14 @@ Steps:
    Expected RED: helper module does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement status normalization/filtering.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: workspace-timezone overdue ordering and ties.
@@ -909,14 +890,14 @@ Steps:
    Expected RED: timezone/tie behavior is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement timezone-aware overdue and stable tie-breaker.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: 50-item pagination and URL state.
@@ -928,33 +909,33 @@ Steps:
    Expected RED: pagination/view-state helpers are absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement pagination and URL-state helpers.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-13. Write failing test for: Fuse keys and typo ranking.
+13. Write failing test for: Fuse keys, typo ranking, and no authorization discovery.
    Test file: `client/src/lib/myWorkSearch.test.ts`
    Level: unit
-   Test intent: Given key/title/description values, when “imgae uplod” is searched, then Image upload retry ranks.
-   Exercise through: Fuse search helper with real Fuse.js.
-   Test doubles: plain fixtures; do not mock Fuse.js.
+   Test intent: Given key/title/description values and only server-provided items, when “imgae uplod” is searched, then Image upload retry ranks and no fetch/membership/authorization discovery occurs.
+   Exercise through: Fuse search helper with real Fuse.js and its pure input boundary.
+   Test doubles: plain fixtures and a fetch spy; do not mock Fuse.js, search logic, or authorization.
    Expected RED: search helper/configuration does not exist.
 
 14. Run test — verify FAIL:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
-   Implement explicit Fuse keys/threshold.
+   Implement explicit Fuse keys/threshold and keep the helper pure and response-bounded.
 
 16. Run test — verify PASS:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: Fuse result limit and All candidate window.
@@ -966,39 +947,20 @@ Steps:
    Expected RED: limit/candidate behavior is absent.
 
 18. Run test — verify FAIL:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Implement bounded result limit and candidate-window path.
 
 20. Run test — verify PASS:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
+   `npm run test --workspace=client -- src/lib/myWorkUtils.test.ts src/lib/myWorkSearch.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-21. Write failing test for: search/filter must not discover unauthorized data.
-   Test file: `client/src/lib/myWorkSearch.test.ts`
-   Level: unit
-   Test intent: Given only server-provided items, when search/filter runs, then no fetch/membership discovery/authorization decision occurs.
-   Exercise through: pure search helper.
-   Test doubles: plain input list and fetch spy; do not mock search logic.
-   Expected RED: no-discovery invariant is absent.
-
-22. Run test — verify FAIL:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
-   Expected failure: the named behavior is absent or its assertion fails.
-
-23. Implement minimal behavior:
-   Keep helpers pure and response-bounded.
-
-24. Run test — verify PASS:
-   `npm run test -- client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts`
-   Expected: the named cycle passes without weakening adjacent behavior.
-
-25. Refactor while green (bounded):
+21. Refactor while green (bounded):
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
-26. Commit:
+22. Commit:
    git add client/src/lib/myWorkUtils.ts client/src/lib/myWorkSearch.ts client/src/lib/myWorkUtils.test.ts client/src/lib/myWorkSearch.test.ts
     git commit -m "feat(my-work): add list derivation and fuzzy search"
 
@@ -1087,14 +1049,14 @@ Steps:
    Expected RED: global link does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/layout/sidebar/myWorkNavigation.test.tsx`
+   `npm run test --workspace=client -- src/layout/sidebar/myWorkNavigation.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Add global nav definition/rendering.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/layout/sidebar/myWorkNavigation.test.tsx`
+   `npm run test --workspace=client -- src/layout/sidebar/myWorkNavigation.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: collapsed desktop accessible navigation.
@@ -1106,14 +1068,14 @@ Steps:
    Expected RED: collapsed behavior is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/layout/sidebar/myWorkNavigation.test.tsx`
+   `npm run test --workspace=client -- src/layout/sidebar/myWorkNavigation.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Preserve collapsed global item accessibility.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/layout/sidebar/myWorkNavigation.test.tsx`
+   `npm run test --workspace=client -- src/layout/sidebar/myWorkNavigation.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: mobile navigation placement/close.
@@ -1125,14 +1087,14 @@ Steps:
    Expected RED: mobile behavior is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/layout/sidebar/myWorkNavigation.test.tsx`
+   `npm run test --workspace=client -- src/layout/sidebar/myWorkNavigation.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Add mobile global item and close behavior.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/layout/sidebar/myWorkNavigation.test.tsx`
+   `npm run test --workspace=client -- src/layout/sidebar/myWorkNavigation.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Refactor while green (bounded):
@@ -1229,14 +1191,14 @@ Steps:
    Expected RED: route/page/components do not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement route/page/toolbar/list loading.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: transient whole-page error and retry.
@@ -1248,14 +1210,14 @@ Steps:
    Expected RED: error/retry behavior is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement fail-whole-page error and retry.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: actionable Active empty state.
@@ -1267,14 +1229,14 @@ Steps:
    Expected RED: empty state is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement Active empty state.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: visibility refresh newest-request behavior.
@@ -1286,14 +1248,14 @@ Steps:
    Expected RED: visibility refresh is absent.
 
 14. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Implement visibility refresh and sequence guard.
 
 16. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: expired session is not empty state.
@@ -1305,14 +1267,14 @@ Steps:
    Expected RED: auth distinction is absent.
 
 18. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Map auth/session errors explicitly.
 
 20. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: manual Refresh keeps view state.
@@ -1324,14 +1286,14 @@ Steps:
    Expected RED: manual Refresh is absent.
 
 22. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Implement explicit Refresh action.
 
 24. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Write failing test for: page-level ordering integration.
@@ -1343,14 +1305,14 @@ Steps:
    Expected RED: page does not integrate ordering.
 
 26. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
    Wire real ordering/group helpers.
 
 28. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 29. Write failing test for: page-level 50/23 pagination.
@@ -1362,14 +1324,14 @@ Steps:
    Expected RED: page pagination is absent.
 
 30. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 31. Implement minimal behavior:
    Wire rendered pagination and URL page state.
 
 32. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 33. Write failing test for: responsive row content.
@@ -1381,14 +1343,14 @@ Steps:
    Expected RED: row component does not exist.
 
 34. Run test — verify FAIL:
-   `npm run test -- client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkRow.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 35. Implement minimal behavior:
    Implement responsive row/list/toolbar components.
 
 36. Run test — verify PASS:
-   `npm run test -- client/src/components/my-work/MyWorkRow.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkRow.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 37. Refactor while green (bounded):
@@ -1484,14 +1446,14 @@ Steps:
    Expected RED: detail sheet does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/components/my-work/MyWorkDetailSheet.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement detail sheet and route-state helper.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/components/my-work/MyWorkDetailSheet.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: stale detail reauthorization hides cached content.
@@ -1503,14 +1465,14 @@ Steps:
    Expected RED: reauthorization behavior is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/components/my-work/MyWorkDetailSheet.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement unavailable/error mapping.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/components/my-work/MyWorkDetailSheet.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: explicit source navigation uses existing guard.
@@ -1522,14 +1484,14 @@ Steps:
    Expected RED: source guard behavior is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/components/my-work/MyWorkDetailSheet.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement explicit source transition and page wiring.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/components/my-work/MyWorkDetailSheet.test.tsx`
+   `npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Refactor while green (bounded):
@@ -1625,14 +1587,14 @@ Steps:
    Expected RED: helper does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement mutation router.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: mapping/terminal/pending disabled action.
@@ -1644,14 +1606,14 @@ Steps:
    Expected RED: action component does not exist.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement disabled action state.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: successful Mark done removes Active item.
@@ -1663,14 +1625,14 @@ Steps:
    Expected RED: success wiring is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement success reconciliation and row/detail slots.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: conflict/transient failure rollback.
@@ -1682,14 +1644,14 @@ Steps:
    Expected RED: recovery behavior is absent.
 
 14. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Implement error mapping and rollback/refresh.
 
 16. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: membership/assignment 404 recovery.
@@ -1701,14 +1663,14 @@ Steps:
    Expected RED: revoked-action recovery is absent.
 
 18. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Map 404/not_found to refresh/removal and unavailable state without treating it as success.
 
 20. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the 404 recovery cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: Mark done race and direct-API must-not.
@@ -1720,14 +1682,14 @@ Steps:
    Expected RED: race/must-not behavior is absent.
 
 22. Run test — verify FAIL:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Implement newest mutation precedence and keep all writes in workItemMutations.ts.
 
 24. Run test — verify PASS:
-   `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
+   `npm run test --workspace=client -- src/lib/workItemMutations.test.ts src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Refactor while green (bounded):
@@ -1818,14 +1780,14 @@ Steps:
    Expected RED: API/collaboration not implemented.
 
 2. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement isolated DB fixtures/assertions.
 
 4. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: detail reauthorization.
@@ -1837,14 +1799,14 @@ Steps:
    Expected RED: detail stale-access behavior absent.
 
 6. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Add detail reauth fixture/assertion.
 
 8. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: Board Mark done/activity.
@@ -1856,14 +1818,14 @@ Steps:
    Expected RED: Board source integration absent.
 
 10. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Add Board write/activity fixture/assertion.
 
 12. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: Tracker Mark done/activity.
@@ -1875,14 +1837,14 @@ Steps:
    Expected RED: Tracker source integration absent.
 
 14. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Add Tracker write/activity fixture/assertion.
 
 16. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: stale conflict/no partial write.
@@ -1894,14 +1856,14 @@ Steps:
    Expected RED: conflict integration absent.
 
 18. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Add conflict/source invariant assertion.
 
 20. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: idempotent retry/activity count.
@@ -1913,14 +1875,14 @@ Steps:
    Expected RED: retry integration absent.
 
 22. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Add idempotency/activity assertion.
 
 24. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Write failing test for: revoked membership Mark done status/code/no write.
@@ -1932,14 +1894,14 @@ Steps:
    Expected RED: revoked mutation integration is absent.
 
 26. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
    Add membership revocation status/code/no-write assertions.
 
 28. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 29. Write failing test for: removed assignment Mark done status/code/no write.
@@ -1951,14 +1913,14 @@ Steps:
    Expected RED: assignment-removal mutation integration is absent.
 
 30. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 31. Implement minimal behavior:
    Add assignment-removal status/code/no-write assertions.
 
 32. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: both reauthorization cycles and all prior server cycles pass.
 
 33. Write failing test for: missing done mapping returns 409/status_column_unmappable with no write/activity.
@@ -1970,14 +1932,14 @@ Steps:
    Expected RED: real-DB unmappable-target contract is absent.
 
 34. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 35. Implement minimal behavior:
    Add real-DB mapping removal/absence fixture and exact status/code/no-write assertions.
 
 36. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.integration.test.ts`
    Expected: the mapping-race/unmappable integration cycle passes.
 
 37. Refactor while green (bounded):
@@ -2068,14 +2030,14 @@ Steps:
    Expected RED: integration route behavior is absent.
 
 2. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Build client integration harness for route/detail/back.
 
 4. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: guarded source navigation.
@@ -2087,14 +2049,14 @@ Steps:
    Expected RED: guard collaboration is absent.
 
 6. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Add independent source-guard assertion.
 
 8. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: mobile detail bottom sheet.
@@ -2106,14 +2068,14 @@ Steps:
    Expected RED: mobile collaboration is absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Add mobile integration assertion.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Write failing test for: transient whole-page error/retry.
@@ -2125,14 +2087,14 @@ Steps:
    Expected RED: error collaboration is absent.
 
 14. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
    Add error/retry assertion.
 
 16. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 17. Write failing test for: Active empty state.
@@ -2144,14 +2106,14 @@ Steps:
    Expected RED: empty collaboration is absent.
 
 18. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 19. Implement minimal behavior:
    Add empty-state assertion.
 
 20. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 21. Write failing test for: All query/cursor is server-backed.
@@ -2163,14 +2125,14 @@ Steps:
    Expected RED: All query/cursor collaboration is absent.
 
 22. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 23. Implement minimal behavior:
    Add server-backed All assertion.
 
 24. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 25. Write failing test for: Mark done rollback collaboration.
@@ -2182,14 +2144,14 @@ Steps:
    Expected RED: mutation collaboration is absent.
 
 26. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
    Add rollback/race assertion.
 
 28. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.integration.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.integration.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 29. Refactor while green (bounded):
@@ -2281,14 +2243,14 @@ Steps:
    Expected RED: helper does not exist.
 
 2. Run test — verify FAIL:
-   `npm run test -- server/src/core/my-work-observability.test.ts`
+   `npm run test --workspace=server -- src/core/my-work-observability.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
    Implement domain observability helper.
 
 4. Run test — verify PASS:
-   `npm run test -- server/src/core/my-work-observability.test.ts`
+   `npm run test --workspace=server -- src/core/my-work-observability.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 5. Write failing test for: server p95 workload target.
@@ -2300,14 +2262,14 @@ Steps:
    Expected RED: performance fixture/instrumentation absent.
 
 6. Run test — verify FAIL:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.performance.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.performance.integration.test.ts`
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
    Implement deterministic 5-request warm-up, 30-request measurement, nearest-rank p95 calculation, telemetry assertion, and documentation of migration/Node/PostgreSQL/CI runner plus redacted DB host/database metadata; never capture DATABASE_URL credentials.
 
 8. Run test — verify PASS:
-   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.performance.integration.test.ts`
+   `RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/my-work.performance.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 9. Write failing test for: client initial UI readiness.
@@ -2319,14 +2281,14 @@ Steps:
    Expected RED: readiness test/ready marker absent.
 
 10. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.performance.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.performance.test.tsx`
    Expected failure: the named behavior is absent or its assertion fails.
 
 11. Implement minimal behavior:
    Implement controlled client timing assertion and document environment.
 
 12. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.performance.test.tsx`
+   `npm run test --workspace=client -- src/pages/MyWorkPage.performance.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
 13. Refactor while green (bounded):
