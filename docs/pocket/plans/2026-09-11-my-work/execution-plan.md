@@ -39,7 +39,7 @@ T1 → T2, T4, T5 (parallel) → T3, T6 (as dependencies complete) → T7 → T8
 
 **Out-of-scope:** Physical `work_items` migration; full inline editing; bulk actions; reassignment; arbitrary cross-workspace writes; user-level SSE; reporting/calendar/roadmap/analytics; created-by-only items; silent workspace switching.
 
-**Assumptions at risk:** All-scope fuzzy ranking is candidate-window based; global detail route shape is additive; Tracker done target uses deterministic `slot="done"` position/id selection; existing edit permission checks are reused; visibility/manual refresh is the V1 freshness contract.
+**Assumptions at risk:** All-scope fuzzy ranking is candidate-window based; global detail route shape is additive; Tracker done target uses deterministic `slot="done"` position/id selection; membership/assignment reauthorization follows existing routes; visibility/manual refresh is the V1 freshness contract.
 
 **Sequencing:** Dependency order shown is recommended — pocket-development enforces actual blocking rules. T9, T10, and T11 start as soon as their declared dependencies complete; T11 waits for the T6 client page because it owns the client readiness test.
 
@@ -284,7 +284,7 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 Must-have:
 
 - Domain API methods are composed into the existing façade without a duplicate request implementation.
-- My Work response types carry workspace/source/composite identity and permission/action metadata.
+- My Work response types carry workspace/source/composite identity and action availability/reason metadata.
 - Fuse.js is installed only in the client workspace and lockfile is updated.
 - API unit tests are written before implementation and pass.
 
@@ -642,13 +642,13 @@ Steps:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-13. Write failing test for: permission denial uses existing authorization status/code.
+13. Write failing test for: membership or assignment revocation returns 404/not_found.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent: Given assignee lacks existing edit permission, when Mark done runs, then the existing permission status/code returns and no source/activity write occurs; given membership/assignment is revoked, HTTP 404 with existing `not_found`/`Not found` behavior returns.
+   Test intent: Given membership or assignment is revoked before Mark done, when the command runs, then HTTP 404 with existing `not_found`/`Not found` behavior returns and no source/activity write occurs.
    Exercise through: command authorization boundary.
-   Test doubles: permission dependency returning unauthorized and fake transaction; do not mock mapping.
-   Expected RED: permission behavior is not covered.
+   Test doubles: membership/assignment dependency returning revoked and fake transaction; do not mock mapping.
+   Expected RED: revoked mutation behavior is not covered.
 
 14. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
@@ -810,7 +810,7 @@ Architecture rule: preserve `recordActivity`/`recordTrackerActivity`, optimistic
 ## DELIVERABLE
 
 Given an authorized assignee with a valid Board or Tracker done target, when Mark done is requested, then the correct source changes and exactly one activity is recorded.
-Given stale version, missing mapping, or unauthorized edit permission, when Mark done is requested, then no partial write occurs and the specific failure is returned.
+Given stale version, missing mapping, revoked membership, or removed assignment, when Mark done is requested, then no partial write occurs and the existing specific failure is returned.
 Given the source is already at the canonical done target, when the command is retried, then it succeeds idempotently without duplicate activity.
 [must-not] Given a tracker item, when Mark done runs, then it must not write the `cards` table.
 
@@ -833,7 +833,7 @@ Must-not-have:
 
 Open question risks:
 
-- Existing permission helpers may classify member edit rights differently than the product phrase “edit permission”; reuse current route behavior and report NEEDS_CONTEXT if it cannot be shared.
+- Membership/assignment state may change between list and mutation → enforce the existing 404/not_found route contract at mutation time.
 
 Rollback note:
 
@@ -1701,7 +1701,7 @@ Steps:
 
 ## REFERENCES LOADED
 
-- Spec Mark done, permission, conflict, idempotency, and rollback criteria.
+- Spec Mark done, membership/assignment reauthorization, conflict, idempotency, and rollback criteria.
 - `client/src/lib/workItemMutations.ts` and test — existing source-aware mutation router.
 - `client/src/api/myWork.ts` — Mark done API contract from T1.
 - `client/src/pages/MyWorkPage.tsx`, `MyWorkRow`, and `MyWorkDetailSheet` — action slots from T6/T7.
@@ -1709,7 +1709,7 @@ Steps:
 ## WHY THIS APPROACH
 
 Complexity: standard
-Justification: Client mutation behavior must remain separate from read/list state and must prove source routing, disabled permission state, optimistic removal, and rollback.
+Justification: Client mutation behavior must remain separate from read/list state and must prove source routing, mapping/terminal availability state, optimistic removal, and rollback.
 
 ## SANDWICH CONTEXT
 
@@ -1725,7 +1725,7 @@ Architecture rule: preserve version conflict, idempotency, and permission/mappin
 ## DELIVERABLE
 
 Given an eligible Board/Tracker item, when Mark done succeeds, then Active removes it and All can show it as done.
-Given disabled permission/mapping or conflict, when Mark done is attempted, then no incorrect source write is exposed and the UI recovers/refreshes.
+Given missing mapping, terminal/pending state, or conflict, when Mark done is attempted, then no incorrect source write is exposed and the UI recovers/refreshes.
 [must-not] Given a My Work component, when it writes, then it must not call `api.updateCard` or `api.updateTrackerItem` directly.
 
 Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
@@ -1745,7 +1745,7 @@ Must-not-have:
 
 Open question risks:
 
-- Existing API error code for no edit permission must be mapped without turning authorization failures into empty state.
+- Revoked membership/assignment must map to the existing 404/not_found response without turning authorization failures into empty state.
 
 Rollback note:
 
@@ -1885,13 +1885,13 @@ Steps:
    `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-25. Write failing test for: unauthorized Mark done status/code/no write.
+25. Write failing test for: revoked membership Mark done status/code/no write.
    Test file: `server/src/routes/my-work.integration.test.ts`
    Level: integration
-   Test intent: Given revoked membership or assignee without edit permission, when Mark done runs, then revoked access uses 404/not_found, permission uses existing mutation status/code, and neither source/activity changes.
+   Test intent: Given membership is revoked before Mark done, when the HTTP command runs, then HTTP 404/not_found returns and neither source/activity changes.
    Exercise through: authenticated HTTP API.
-   Test doubles: real DB membership/role state; do not invent policy/mock route.
-   Expected RED: unauthorized mutation integration absent.
+   Test doubles: real DB membership state; do not invent a role policy or mock route.
+   Expected RED: revoked mutation integration is absent.
 
 26. Run test — verify FAIL:
    `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`

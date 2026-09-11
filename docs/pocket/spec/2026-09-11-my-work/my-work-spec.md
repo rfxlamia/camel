@@ -50,7 +50,7 @@ A user with assignments in multiple workspaces must repeatedly switch workspaces
 - All-scope server-backed pagination/search across active, completed, canceled, and Other items.
 - Global read/detail panel or bottom sheet that does not change `activeWorkspaceId`.
 - Explicit `Open in Board` / `Open in Tracker` transition using existing workspace and focus/unsaved-edit guards.
-- `Mark done` as the only V1 mutation, with permission checks, canonical source mappings, version conflicts, rollback/refresh, and idempotent retry.
+- `Mark done` as the only V1 mutation, with membership/assignment reauthorization, canonical source mappings, version conflicts, rollback/refresh, and idempotent retry.
 - Reauthorization on detail and mutation requests; unauthorized workspaces are excluded without data leakage.
 - Whole-page error state for transient/5xx/timeout failures, retry, visibility/manual refresh, stale-response protection, mobile responsive list, and bottom-sheet detail.
 - Unit, route/integration, component, mutation-routing, performance, and observability tests.
@@ -72,7 +72,7 @@ A user with assignments in multiple workspaces must repeatedly switch workspaces
 - **Patterns that must be followed:** server-side membership and assignment authorization; set-based queries and batched hydration; per-workspace tracker-wins deduplication; source-aware `workItemMutations.ts`; optimistic version handling; NodeNext `.js` server imports; client bundler imports; Biome; root `npm run test`.
 - **Status mapping:** normalize existing `category`/`slot` semantics into UI groups. Do not introduce a new global status category solely for My Work.
 - **Done mapping:** reuse existing Board `is_done`/position resolver and Tracker `slot="done"` vocabulary. A deterministic canonical target is required; no valid target means Mark done is disabled.
-- **Authorization:** an assignee without existing edit permission sees Mark done disabled, but the server independently rejects unauthorized writes.
+- **Authorization:** membership and assignment are rechecked at mutation time. Revoked membership or removed assignment returns the existing 404/Not found behavior without a source write or activity. `canMarkDone` is disabled only for missing done mapping, terminal state, or a pending mutation.
 - **Architecture validation result:** CONDITIONAL PASS, with the status normalization, existing done-mapping reuse, and Active-vs-All retrieval rules above treated as mandatory mitigations.
 
 ## Dependencies
@@ -267,23 +267,32 @@ Scenario: Preserve state when the switch guard blocks
 
 ### Story: Mark done as a bounded, source-aware action
 
-> As a user with edit permission, I want to mark an assigned item done from My Work, so that daily triage can finish work without opening every workspace.
+> As a user assigned to an active item, I want to mark it done from My Work, so that daily triage can finish work without opening every workspace.
 
-**Rule 1: Permission and canonical mapping are required.**
+**Rule 1: Reauthorization and canonical mapping are required.**
 
 - Board target: existing `is_done` column resolver, deterministic by existing column ordering.
 - Tracker target: workspace status with `slot="done"`, deterministic by position/id.
 - If no valid target exists, Mark done is disabled.
 
 ```gherkin
-Scenario: Assignee without edit permission cannot mark done
-  Given Alice is assigned to AT-17 but has no edit permission in Atlas
-  When Alice views AT-17 in My Work
-  Then Mark done is disabled with an explanatory message
-  And a direct unauthorized mutation is rejected by the server
+Scenario: Membership revocation blocks Mark done
+  Given AT-17 was visible while Alice belonged to Atlas
+  And Alice is removed from Atlas before Mark done is submitted
+  When Alice selects Mark done
+  Then the server returns HTTP 404 with the existing Not found behavior
+  And no card update or activity is recorded
+
+Scenario: Assignment removal blocks Mark done
+  Given AT-17 was visible while Alice was assigned to it
+  And Alice is removed from AT-17 before Mark done is submitted
+  When Alice selects Mark done
+  Then the server returns HTTP 404 with the existing Not found behavior
+  And no card update or activity is recorded
 
 Scenario: Mark a Board card done
   Given AT-17 is an active Board card in Atlas
+  And Alice remains an authorized workspace member and assignee
   And Atlas has a valid done column mapping
   When Alice selects Mark done
   Then the existing source-aware Board status path moves AT-17 to the done column
@@ -292,6 +301,7 @@ Scenario: Mark a Board card done
 
 Scenario: Mark a Tracker item done
   Given OR-4 is an active Tracker item in Orbit
+  And Alice remains an authorized workspace member and assignee
   And Orbit has a status with slot="done"
   When Alice selects Mark done
   Then OR-4 receives the canonical done status
@@ -424,9 +434,10 @@ Rule: Global detail and source navigation
   ✓ Given source navigation is selected, When no guard blocks it, Then the existing workspace switch guard and source detail route are used.
 
 Rule: Mark done
-  ✓ Given edit permission and a valid Board done mapping, When Mark done is selected, Then the card uses the existing Board status path and one activity event is recorded.
-  ✓ Given edit permission and a Tracker `slot=done` mapping, When Mark done is selected, Then the tracker item receives that status and one activity event is recorded.
-  ✗ Given no edit permission or no valid done mapping, When Mark done is selected, Then the action is disabled or rejected without a source write.
+  ✓ Given membership/assignment remains valid and a Board done mapping exists, When Mark done is selected, Then the card uses the existing Board status path and one activity event is recorded.
+  ✓ Given membership/assignment remains valid and a Tracker `slot=done` mapping exists, When Mark done is selected, Then the tracker item receives that status and one activity event is recorded.
+  ✗ Given membership or assignment was revoked, When Mark done is selected, Then HTTP 404/Not found returns without a source write or activity.
+  ✗ Given no valid done mapping, terminal state, or pending mutation, When Mark done is selected, Then the action is disabled or rejected without a source write.
   ✗ Given a stale version, When Mark done is submitted, Then the write conflicts, optimistic state rolls back, and the item refreshes.
   ✓ Given a commit succeeded but response timed out, When the same intent is retried, Then it is idempotent and does not duplicate activity.
 
@@ -467,7 +478,7 @@ Rule: Performance and observability
 | How should All-scope fuzzy ranking cover unbounded history? | Assumption: server returns all-status candidates in 50-item pages; Fuse.js ranks the loaded/candidate window. | A typo may miss a result outside the candidate window; a later server fuzzy/indexed search may be needed. |
 | What is the exact global detail route shape? | Assumption: a URL-addressable `/my-work` detail state carries workspace id, source, and key; implementation may use a nested route or query state. | Deep-link/back-navigation tests and component boundaries may change. |
 | What makes a done target canonical when multiple targets exist? | Assumption: reuse existing Board `is_done` position resolver and choose Tracker `slot=done` by deterministic position/id; no new setting. | User-configured ordering may not match the preferred completion destination. |
-| What existing role check represents edit permission? | Assumption: reuse the same server authorization path as existing Board/Tracker mutation routes; UI disabled state is advisory only. | A mismatch could allow an assignee to see or attempt a mutation they cannot perform. |
+| Which conditions disable the Mark done control before a request? | Resolved: missing done mapping, terminal state, or pending mutation; membership and assignment are enforced server-side at request time. | A stale UI state may show an enabled action, but the server must still return 404/Not found without writing. |
 | How often should visibility refresh run? | Resolved for V1: initial load plus visibility/manual refresh; no guaranteed periodic/global SSE. | A user may see changes from another workspace later than expected. |
 
 ## Implementation Notes
