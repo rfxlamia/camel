@@ -572,7 +572,7 @@ Escalate when: membership/assignment authorization requires a schema migration o
 
 ## OBJECTIVE
 
-Provide the only V1 My Work mutation: permission-checked, source-aware, version-safe, canonical-target Mark done with idempotent retries and exactly-once activity behavior.
+Provide the only V1 My Work mutation: membership/assignment-rechecked, source-aware, version-safe, canonical-target Mark done with idempotent retries and exactly-once activity behavior.
 
 Files:
 
@@ -655,7 +655,7 @@ Steps:
    Expected failure: the named behavior is absent or its assertion fails.
 
 15. Implement minimal behavior:
-   Reuse existing mutation authorization semantics without creating a role policy.
+   Recheck membership and assignment using the existing route authorization contract; revoked state returns 404/not_found without introducing a role policy.
 
 16. Run test — verify PASS:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
@@ -784,7 +784,7 @@ Steps:
 
 ## REFERENCES LOADED
 
-- `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md` — Mark done rules, permission, mapping, conflict, retry, and activity criteria.
+- `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md` — Mark done rules, membership/assignment reauthorization, mapping, conflict, retry, and activity criteria.
 - `server/src/core/board-card-status-change.ts` — existing Board status/column/WIP/activity transaction.
 - `server/src/core/column-status-map.ts` and `column-status-reverse.ts` — existing Board mapping.
 - `server/src/routes/tracker-items.ts` — inline Tracker status mutation to extract without behavior drift.
@@ -798,14 +798,14 @@ Justification: Mark done crosses authorization, two physical sources, version co
 
 ## SANDWICH CONTEXT
 
-[CRITICAL: Mark done must route through source-specific transactional mutation primitives and must not bypass version/activity/permission rules.]
+[CRITICAL: Mark done must route through source-specific transactional mutation primitives and must not bypass version/activity or membership/assignment reauthorization rules.]
 You are implementing the bounded My Work mutation for `camel-kanban`.
 Spec: `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md`
 Design decision: Mark done is the only V1 write; full editing and bulk actions remain out of scope.
 Files in scope: the listed core services, My Work route, Tracker extraction, and their tests.
 Available after: T2.
 Architecture rule: preserve `recordActivity`/`recordTrackerActivity`, optimistic version conflicts, and existing Board/Tracker mappings.
-[RESTATE: Mark done must route through source-specific transactional mutation primitives and must not bypass version/activity/permission rules.]
+[RESTATE: Mark done must route through source-specific transactional mutation primitives and must not bypass version/activity or membership/assignment reauthorization rules.]
 
 ## DELIVERABLE
 
@@ -823,7 +823,7 @@ Must-have:
 - Existing Tracker write behavior remains green after extraction.
 - Board and Tracker use their correct source tables and activity streams.
 - Permission, mapping, version, idempotency, and no-partial-write behavior are tested.
-- Route tests use the existing auth/permission boundary rather than trusting UI flags.
+- Route tests use the existing membership/assignment reauthorization boundary rather than trusting UI flags.
 
 Must-not-have:
 
@@ -1584,7 +1584,7 @@ Escalate when: implementing global detail requires weakening workspace authoriza
 
 ## OBJECTIVE
 
-Connect the approved Mark done command to My Work through `workItemMutations.ts`, expose only the permission/mapping-allowed action, remove successful items from Active, and rollback/refresh on conflict or failure.
+Connect the approved Mark done command to My Work through `workItemMutations.ts`, expose only the mapping/terminal/pending-allowed action, remove successful items from Active, and rollback/refresh on conflict or failure.
 
 Files:
 
@@ -1616,10 +1616,10 @@ Steps:
    `npm run test -- client/src/lib/workItemMutations.test.ts client/src/components/my-work/MyWorkDoneAction.test.tsx`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-5. Write failing test for: permission/mapping disabled action.
+5. Write failing test for: mapping/terminal/pending disabled action.
    Test file: `client/src/components/my-work/MyWorkDoneAction.test.tsx`
    Level: component
-   Test intent: Given canMarkDone=false, when action renders, then it is disabled/explains reason and makes no mutation call.
+   Test intent: Given canMarkDone=false because mapping is missing, item is terminal, or a mutation is pending, when action renders, then it is disabled with the specific reason and makes no mutation call.
    Exercise through: MyWorkDoneAction.
    Test doubles: fake mutation callback; do not mock disabled rendering.
    Expected RED: action component does not exist.
@@ -1701,7 +1701,7 @@ Steps:
 
 ## REFERENCES LOADED
 
-- Spec Mark done, membership/assignment reauthorization, conflict, idempotency, and rollback criteria.
+- Spec Mark done, membership/assignment reauthorization, mapping/terminal/pending availability, conflict, idempotency, and rollback criteria.
 - `client/src/lib/workItemMutations.ts` and test — existing source-aware mutation router.
 - `client/src/api/myWork.ts` — Mark done API contract from T1.
 - `client/src/pages/MyWorkPage.tsx`, `MyWorkRow`, and `MyWorkDetailSheet` — action slots from T6/T7.
@@ -1719,7 +1719,7 @@ Spec: `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md`
 Design decision: Mark done only; full inline edit and bulk actions are out of scope.
 Files in scope: mutation helper, action component, row/detail wiring, and listed tests.
 Available after: T3 and T7.
-Architecture rule: preserve version conflict, idempotency, and permission/mapping disabled behavior.
+Architecture rule: preserve version conflict, idempotency, membership/assignment reauthorization, and mapping/terminal/pending disabled behavior.
 [RESTATE: All My Work writes must pass through `workItemMutations.ts` and the server source-aware command; the page must never call table-specific update APIs directly.]
 
 ## DELIVERABLE
@@ -1898,18 +1898,37 @@ Steps:
    Expected failure: the named behavior is absent or its assertion fails.
 
 27. Implement minimal behavior:
-   Add exact status/code/no-write assertions.
+   Add membership revocation status/code/no-write assertions.
 
 28. Run test — verify PASS:
    `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
    Expected: the named cycle passes without weakening adjacent behavior.
 
-29. Refactor while green (bounded):
+29. Write failing test for: removed assignment Mark done status/code/no write.
+   Test file: `server/src/routes/my-work.integration.test.ts`
+   Level: integration
+   Test intent: Given Alice is removed from the item before Mark done, when the HTTP command runs, then HTTP 404/not_found returns and neither source/activity changes.
+   Exercise through: authenticated HTTP API.
+   Test doubles: real DB assignment state; do not invent a role policy or mock route.
+   Expected RED: assignment-removal mutation integration is absent.
+
+30. Run test — verify FAIL:
+   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   Expected failure: the named behavior is absent or its assertion fails.
+
+31. Implement minimal behavior:
+   Add assignment-removal status/code/no-write assertions.
+
+32. Run test — verify PASS:
+   `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.integration.test.ts`
+   Expected: both reauthorization cycles and all prior server cycles pass.
+
+33. Refactor while green (bounded):
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
-30. Commit:
+34. Commit:
    git add server/src/routes/my-work.integration.test.ts
-    git commit -m "test(my-work): verify server acceptance boundary"
+   git commit -m "test(my-work): verify server acceptance boundary"
 
 ## REFERENCES LOADED
 

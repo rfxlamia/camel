@@ -457,7 +457,7 @@ Rule: Performance and observability
 
 **Chosen option:** Option A — Server-side personal rollup + global detail.
 
-**Summary:** Use one authenticated personal read boundary over the existing dual-table model, add a global My Work route above workspace/mode navigation, use Fuse.js for the bounded Active set, keep All server-paginated, and expose only a source-aware, permission-checked Mark done command. Global detail never changes the active workspace; source navigation is explicit and guarded.
+**Summary:** Use one authenticated personal read boundary over the existing dual-table model, add a global My Work route above workspace/mode navigation, use Fuse.js for the bounded Active set, keep All server-paginated, and expose only a source-aware Mark done command with membership/assignment reauthorization. Global detail never changes the active workspace; source navigation is explicit and guarded.
 
 **Rejected options:**
 
