@@ -1,3 +1,4 @@
+import { myWorkCursorKeyNumber, myWorkKeyNumber } from "./my-work-cursor.js";
 import { myWorkStatusGroup } from "./my-work-response-serialization.js";
 import type {
 	MyWorkCursor,
@@ -72,6 +73,7 @@ function groupRank(group: MyWorkStatusGroup): number {
 }
 
 function cursorForItem(item: MyWorkSerializedItem, now: Date): MyWorkCursor {
+	const keyNumber = myWorkKeyNumber(item.key);
 	return {
 		group: groupRank(itemStatusGroup(item)),
 		overdue: isMyWorkItemOverdue(item, now),
@@ -80,6 +82,7 @@ function cursorForItem(item: MyWorkSerializedItem, now: Date): MyWorkCursor {
 		workspaceId: item.workspaceId,
 		source: item.source,
 		key: item.key,
+		...(keyNumber === null ? {} : { keyNumber }),
 		id: item.id,
 	};
 }
@@ -100,7 +103,9 @@ export function compareMyWorkCursors(a: MyWorkCursor, b: MyWorkCursor): number {
 	if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? -1 : 1;
 	if (a.workspaceId !== b.workspaceId) return a.workspaceId - b.workspaceId;
 	if (a.source !== b.source) return a.source === "board" ? -1 : 1;
-	if (a.key !== b.key) return a.key < b.key ? -1 : 1;
+	const aKeyNumber = myWorkCursorKeyNumber(a) ?? Number.MAX_SAFE_INTEGER;
+	const bKeyNumber = myWorkCursorKeyNumber(b) ?? Number.MAX_SAFE_INTEGER;
+	if (aKeyNumber !== bKeyNumber) return aKeyNumber - bKeyNumber;
 	return a.id - b.id;
 }
 
@@ -138,6 +143,16 @@ export function decodeMyWorkCursor(value: string): MyWorkCursor | null {
 		) {
 			return null;
 		}
+		const keyNumber = myWorkKeyNumber(candidate.key);
+		if (keyNumber === null) return null;
+		if (
+			candidate.keyNumber !== undefined &&
+			(typeof candidate.keyNumber !== "number" ||
+				!Number.isSafeInteger(candidate.keyNumber) ||
+				candidate.keyNumber !== keyNumber)
+		) {
+			return null;
+		}
 		return {
 			group: candidate.group,
 			overdue: candidate.overdue,
@@ -146,6 +161,7 @@ export function decodeMyWorkCursor(value: string): MyWorkCursor | null {
 			workspaceId: candidate.workspaceId,
 			source: candidate.source,
 			key: candidate.key,
+			keyNumber,
 			id: candidate.id,
 		};
 	} catch {

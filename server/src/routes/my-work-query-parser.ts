@@ -1,5 +1,12 @@
 import type { Request } from "express";
 import { decodeMyWorkCursor } from "./my-work-response-pagination.js";
+import {
+	parseLimitValue,
+	parseScopeValue,
+	parseSourceValue,
+	parseWorkspaceIdValue,
+	scalarQueryError,
+} from "./my-work-query-parser-helpers.js";
 import type {
 	MyWorkScope,
 	MyWorkSource,
@@ -13,65 +20,33 @@ function queryString(value: unknown): string | null {
 export function parseMyWorkQuery(
 	query: Request["query"],
 ): { ok: true; value: ParsedMyWorkQuery } | { ok: false; error: string } {
-	const scalarKeys = [
-		"scope",
-		"q",
-		"workspaceId",
-		"source",
-		"cursor",
-		"limit",
-	] as const;
-	for (const key of scalarKeys) {
-		if (query[key] !== undefined && typeof query[key] !== "string") {
-			return { ok: false, error: `${key} must be a scalar value` };
-		}
-	}
-	const scopeValue = queryString(query.scope);
-	if (scopeValue !== null && scopeValue !== "active" && scopeValue !== "all") {
-		return { ok: false, error: "scope must be active or all" };
-	}
-	const sourceValue = queryString(query.source);
-	if (
-		sourceValue !== null &&
-		sourceValue !== "board" &&
-		sourceValue !== "tracker"
-	) {
-		return { ok: false, error: "source must be board or tracker" };
-	}
+	const scalarError = scalarQueryError(query);
+	if (scalarError) return { ok: false, error: scalarError };
 
-	let workspaceId: number | undefined;
-	const workspaceValue = queryString(query.workspaceId);
-	if (workspaceValue !== null) {
-		const parsed = Number(workspaceValue);
-		if (!Number.isInteger(parsed) || parsed <= 0) {
-			return { ok: false, error: "workspaceId must be a positive integer" };
-		}
-		workspaceId = parsed;
-	}
+	const scope = parseScopeValue(queryString(query.scope));
+	if (!scope.ok) return scope;
+	const source = parseSourceValue(queryString(query.source));
+	if (!source.ok) return source;
+	const workspaceId = parseWorkspaceIdValue(queryString(query.workspaceId));
+	if (!workspaceId.ok) return workspaceId;
+	const limit = parseLimitValue(queryString(query.limit));
+	if (!limit.ok) return limit;
 
-	let limit = 50;
-	const limitValue = queryString(query.limit);
-	if (limitValue !== null) {
-		const parsed = Number(limitValue);
-		if (!Number.isInteger(parsed) || parsed <= 0) {
-			return { ok: false, error: "limit must be a positive integer" };
-		}
-		limit = Math.min(50, parsed);
-	}
-
-	const cursorValue = queryString(query.cursor);
-	if (cursorValue && !decodeMyWorkCursor(cursorValue)) {
+	const cursor = queryString(query.cursor);
+	if (cursor && !decodeMyWorkCursor(cursor)) {
 		return { ok: false, error: "cursor is invalid" };
 	}
 	return {
 		ok: true,
 		value: {
-			scope: scopeValue === "all" ? "all" : "active",
+			scope: scope.value === "all" ? "all" : "active",
 			q: queryString(query.q)?.trim() ?? "",
-			...(workspaceId === undefined ? {} : { workspaceId }),
-			...(sourceValue === null ? {} : { source: sourceValue as MyWorkSource }),
-			cursor: cursorValue || null,
-			limit,
+			...(workspaceId.value === undefined
+				? {}
+				: { workspaceId: workspaceId.value }),
+			...(source.value === null ? {} : { source: source.value }),
+			cursor: cursor || null,
+			limit: limit.value,
 		},
 	};
 }

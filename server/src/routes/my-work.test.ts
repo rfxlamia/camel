@@ -15,6 +15,7 @@ import {
 	type MyWorkTrackerRow,
 	type MyWorkWorkspace,
 	mergeMyWorkRows,
+	serializeMyWorkCandidate,
 } from "./my-work-response.js";
 
 // The service tests use injected source loaders. Keep the module import from
@@ -183,6 +184,36 @@ function capturedDb() {
 	const client = {
 		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
 			queries.push({ sql: sqlText, parameters });
+			return { rows: [] as R[] };
+		},
+		release() {},
+	};
+	const pool = {
+		options: {},
+		async connect() {
+			return client;
+		},
+		async end() {},
+	} as unknown as FakePostgresPool;
+	const executor = new Kysely<DB>({
+		dialect: new PostgresDialect({ pool }),
+	});
+	return { executor, queries };
+}
+
+function pagedTrackerDb(
+	firstPage: MyWorkTrackerRow[],
+	secondPage: MyWorkTrackerRow[],
+) {
+	const queries: CapturedQuery[] = [];
+	let trackerQueryCount = 0;
+	const client = {
+		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
+			queries.push({ sql: sqlText, parameters });
+			if (sqlText.includes('from "tracker_items"')) {
+				const rows = trackerQueryCount++ === 0 ? firstPage : secondPage;
+				return { rows: rows as R[] };
+			}
 			return { rows: [] as R[] };
 		},
 		release() {},
@@ -557,6 +588,67 @@ describe("My Work personal read boundary", () => {
 				})
 			).nextCursor,
 		);
+	});
+
+	it("keeps numeric key ordering across SQL, cursor, and response pages", async () => {
+		const keyTwo = trackerRow({
+			id: 302,
+			workspace_id: ORBIT.id,
+			key_number: 2,
+			title: "Numeric key two",
+			updated_at: NOW,
+		});
+		const keyTen = trackerRow({
+			id: 310,
+			workspace_id: ORBIT.id,
+			key_number: 10,
+			title: "Numeric key ten",
+			updated_at: NOW,
+		});
+		const { executor, queries } = pagedTrackerDb([keyTwo, keyTen], [keyTen]);
+		const source = createMyWorkDataSource(executor);
+		const service = createMyWorkService({
+			executor,
+			listAuthorizedWorkspaces: vi.fn(async () => [ORBIT]),
+			listTrackerRows: source.listTrackerRows,
+			listBoardRows: vi.fn(async () => []),
+			hydrateRows: async (candidates, workspaces) =>
+				candidates.flatMap((candidate) => {
+					const workspace = workspaces.get(candidate.row.workspace_id);
+					return workspace
+						? [serializeMyWorkCandidate(candidate, workspace)]
+						: [];
+				}),
+		});
+
+		const first = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			limit: 1,
+			now: NOW,
+		});
+		const second = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			limit: 1,
+			cursor: first.nextCursor,
+			now: NOW,
+		});
+
+		const keys = [...first.items, ...second.items].map((item) => item.key);
+		expect(keys).toEqual(["OR-2", "OR-10"]);
+		expect(new Set(keys).size).toBe(2);
+		expect(first.nextCursor).not.toBeNull();
+		expect(second.nextCursor).toBeNull();
+
+		const trackerQueries = queries.filter((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(trackerQueries).toHaveLength(2);
+		expect(trackerQueries[0]?.sql).toContain('"ti"."key_number" asc');
+		expect(trackerQueries[1]?.sql).toContain('"ti"."key_number" =');
+		expect(trackerQueries[1]?.parameters).toContain(2);
+		await executor.destroy();
 	});
 
 	it("RED 6 query: captures canonical All-scope key predicates", async () => {
