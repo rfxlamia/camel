@@ -13,6 +13,7 @@ import { focusSessionRouter } from "./routes/focus-session.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { metricsRouter } from "./routes/metrics.js";
+import { myWorkRouter } from "./routes/my-work.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
 import { trackerItemsRouter } from "./routes/tracker-items.js";
@@ -48,6 +49,7 @@ if (config.EMAIL_GATE_ENABLED === "true") {
 }
 
 api.use(focusConfigRouter);
+api.use("/my-work", myWorkRouter);
 
 api.use("/workspaces/:workspaceId/settings", settingsRouter);
 api.use("/workspaces", workspacesRouter);
