@@ -2304,7 +2304,7 @@ Steps:
    Expected failure: the named behavior is absent or its assertion fails.
 
 7. Implement minimal behavior:
-   Implement deterministic 5-request warm-up, 30-request measurement, nearest-rank p95 calculation, telemetry assertion, and documentation of DATABASE_URL/migration/Node/PostgreSQL/CI runner environment.
+   Implement deterministic 5-request warm-up, 30-request measurement, nearest-rank p95 calculation, telemetry assertion, and documentation of migration/Node/PostgreSQL/CI runner plus redacted DB host/database metadata; never capture DATABASE_URL credentials.
 
 8. Run test — verify PASS:
    `RUN_INTEGRATION=1 npm run test -- server/src/routes/my-work.performance.integration.test.ts`
@@ -2386,7 +2386,7 @@ Must-not-have:
 
 Open question risks:
 
-- CI hardware/database variance may require a controlled performance-test environment; record `DATABASE_URL`, migration state, Node version, and runner details, and report DONE_WITH_CONCERNS if threshold cannot be reproduced honestly.
+- CI hardware/database variance may require a controlled performance-test environment; record migration state, Node/PostgreSQL versions, runner details, and only redacted DB host/database metadata, and report DONE_WITH_CONCERNS if threshold cannot be reproduced honestly.
 
 Rollback note:
 
