@@ -330,7 +330,11 @@ describe("createAttachmentUpload", () => {
 		expect(boundary.status).toBe(200);
 		expect(boundary.body).toEqual({ count: 2, memoryBacked: true });
 
-		const overLimit = await addPairs(request(app).post("/"), 1, Buffer.alloc(6));
+		const overLimit = await addPairs(
+			request(app).post("/"),
+			1,
+			Buffer.alloc(6),
+		);
 		expect(overLimit.status).toBe(413);
 		expect(overLimit.body.code).toBe("LIMIT_FILE_TOTAL_SIZE");
 		expect(providerInvocation).toHaveBeenCalledTimes(1);

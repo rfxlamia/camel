@@ -251,7 +251,9 @@ describe("AddCard image staging", () => {
 		const clipboardBlob = new Blob(["png"], { type: "image/png" });
 		fireEvent.paste(dialog, {
 			clipboardData: {
-				items: [{ kind: "file", type: "image/png", getAsFile: () => clipboardBlob }],
+				items: [
+					{ kind: "file", type: "image/png", getAsFile: () => clipboardBlob },
+				],
 				files: [],
 			},
 		});

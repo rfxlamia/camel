@@ -107,7 +107,10 @@ beforeEach(() => {
 	);
 	mocks.lockWorkspaceMutation.mockResolvedValue({ id: 7 });
 	mocks.loadAttachmentPairsForWorkspace.mockResolvedValue([
-		{ thumbnailPath: "pair/thumbnail", originalPath: "pair/original" } satisfies AttachmentPair,
+		{
+			thumbnailPath: "pair/thumbnail",
+			originalPath: "pair/original",
+		} satisfies AttachmentPair,
 	]);
 	mocks.getAttachmentStorage.mockReturnValue({});
 	mocks.removeAttachmentPairsBestEffort.mockResolvedValue(undefined);

@@ -29,13 +29,11 @@ vi.mock("./card-attachment-cleanup.js", () => ({
 	removeAttachmentPairsBestEffort: mocks.removeAttachmentPairsBestEffort,
 }));
 vi.mock("./card-attachment-delivery.js", () => ({
-	attachmentOwnershipGuard: (
-		_req: unknown,
-		_res: unknown,
-		next: () => void,
-	) => next(),
-	createAttachmentOwnershipGuard: () =>
-		(_req: unknown, _res: unknown, next: () => void) => next(),
+	attachmentOwnershipGuard: (_req: unknown, _res: unknown, next: () => void) =>
+		next(),
+	createAttachmentOwnershipGuard:
+		() => (_req: unknown, _res: unknown, next: () => void) =>
+			next(),
 	deliverAttachment: vi.fn(),
 }));
 vi.mock("./card-attachment-upload.js", () => ({
@@ -110,7 +108,9 @@ beforeEach(() => {
 
 describe("DELETE /cards/:cardId/attachments/:attachmentId", () => {
 	it("keeps a committed deletion successful when event publication fails", async () => {
-		const response = await request(createApp()).delete("/cards/42/attachments/9");
+		const response = await request(createApp()).delete(
+			"/cards/42/attachments/9",
+		);
 
 		expect(response.status).toBe(204);
 		expect(mocks.deleteExecute).toHaveBeenCalledTimes(1);

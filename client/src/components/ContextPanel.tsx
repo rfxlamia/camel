@@ -172,11 +172,7 @@ function CardEditor({
 			if (activeWorkspaceId === null) {
 				throw new Error("Workspace not available");
 			}
-			await api.deleteCardAttachment(
-				activeWorkspaceId,
-				card.id,
-				attachmentId,
-			);
+			await api.deleteCardAttachment(activeWorkspaceId, card.id, attachmentId);
 			cancelScheduledRefresh();
 			await refresh();
 		},
@@ -596,10 +592,7 @@ function ActivitySection({ cardId }: { cardId: number }) {
 		api
 			.getCardActivity(activeWorkspaceId, cardId)
 			.then(({ events }) => {
-				if (
-					active &&
-					latestRefreshTickRef.current === requestRefreshTick
-				) {
+				if (active && latestRefreshTickRef.current === requestRefreshTick) {
 					setEvents(events);
 				}
 			})

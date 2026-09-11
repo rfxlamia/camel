@@ -48,10 +48,14 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					expect(rows).toHaveLength(2);
 					const added = rows[1]!;
 					expect(
-						await readFile(path.join(fixture.storage.root, added.thumbnail_path)),
+						await readFile(
+							path.join(fixture.storage.root, added.thumbnail_path),
+						),
 					).toEqual(image);
 					expect(
-						await readFile(path.join(fixture.storage.root, added.original_path)),
+						await readFile(
+							path.join(fixture.storage.root, added.original_path),
+						),
 					).toEqual(image);
 
 					const events = parseSseDataEvents(viewerB.chunks);
