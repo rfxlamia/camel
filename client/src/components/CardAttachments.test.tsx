@@ -92,18 +92,36 @@ describe("CardAttachments — picker/paste/counter", () => {
 		vi.clearAllMocks();
 	});
 
-	it("uploads prepared pairs from multi-select, shows partial batch copy, and reflects server total", async () => {
+	it("prepares only valid pairs within remaining capacity and reports skipped files", async () => {
 		const existing = makeAttachment(1);
+		mockPrepareImageAttachment.mockImplementation(async (input: Blob) => {
+			const file = input as File;
+			if (file.name === "bad.png") {
+				return {
+					kind: "invalid" as const,
+					file,
+					original: file,
+					error: "invalid image",
+				};
+			}
+			const prepared = preparedPair(file.name.replace(/\.png$/, ""));
+			return {
+				kind: "valid" as const,
+				file: prepared.original,
+				original: prepared.original,
+				thumbnail: prepared.thumbnail,
+				prepared,
+			};
+		});
 		onUpload.mockResolvedValue({
 			attachments: [makeAttachment(2), makeAttachment(3)],
 			acceptedCount: 2,
 			addedCount: 2,
-			rejectedCount: 2,
-			requestedCount: 4,
+			rejectedCount: 0,
+			requestedCount: 2,
 			total: 3,
 			totalCount: 3,
 			limit: MAX_ATTACHMENT_COUNT,
-			message: "2 of 4 images added — card limit is 3 images",
 		});
 
 		const { rerender } = render(
@@ -119,20 +137,24 @@ describe("CardAttachments — picker/paste/counter", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Add images" }));
 		const picker = screen.getByLabelText("Select images") as HTMLInputElement;
 		fireEvent.click(screen.getByRole("button", { name: "Select images" }));
-		const files = ["a", "b", "c", "d"].map(
+		const files = ["bad", "a", "b", "c"].map(
 			(label) => new File([label], `${label}.png`, { type: "image/png" }),
 		);
 		fireEvent.change(picker, { target: { files } });
 
 		await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(1));
 		const uploadedPairs = onUpload.mock.calls[0]![0] as PreparedImagePair[];
-		expect(uploadedPairs).toHaveLength(4);
+		expect(uploadedPairs).toHaveLength(2);
 		expect(uploadedPairs[0]?.original.name).toBe("a.png");
+		expect(mockPrepareImageAttachment).toHaveBeenCalledTimes(3);
+		expect(
+			mockPrepareImageAttachment.mock.calls.map(([file]) =>
+				(file as File).name,
+			),
+		).toEqual(["bad.png", "a.png", "b.png"]);
 
 		await waitFor(() => {
-			expect(
-				screen.getByText("2 of 4 images added — card limit is 3 images"),
-			).toBeTruthy();
+			expect(screen.getByText("Skipped files: c.png")).toBeTruthy();
 		});
 
 		rerender(

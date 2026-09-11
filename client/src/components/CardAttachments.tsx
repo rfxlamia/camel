@@ -97,20 +97,39 @@ export default function CardAttachments({
 			setUploading(true);
 			try {
 				const pairs: PreparedImagePair[] = [];
-				for (const file of files) {
+				const skippedFiles: string[] = [];
+				const remainingSlots = Math.max(
+					0,
+					MAX_ATTACHMENT_COUNT - total,
+				);
+				for (const [index, file] of files.entries()) {
+					if (pairs.length >= remainingSlots) {
+						skippedFiles.push(
+							...files.slice(index).map((skippedFile) => skippedFile.name),
+						);
+						break;
+					}
 					const result = await prepareImageAttachment(file);
 					if (result.kind === "valid") {
 						pairs.push(result.prepared);
 					}
 				}
+				const skippedMessage =
+					skippedFiles.length > 0
+						? `Skipped files: ${skippedFiles.join(", ")}`
+						: null;
+				if (skippedMessage) setBatchMessage(skippedMessage);
 				if (pairs.length === 0) {
-					setErrorMessage("No valid images to upload.");
+					if (!skippedMessage) {
+						setErrorMessage("No valid images to upload.");
+					}
 					return;
 				}
 				const response = await onUpload(pairs);
-				if (response.message) {
-					setBatchMessage(response.message);
-				}
+				const messages = [response.message, skippedMessage].filter(
+					(message): message is string => Boolean(message),
+				);
+				if (messages.length > 0) setBatchMessage(messages.join(" "));
 			} catch (err) {
 				setErrorMessage(
 					err instanceof Error ? err.message : "Couldn't upload images.",
@@ -119,7 +138,7 @@ export default function CardAttachments({
 				setUploading(false);
 			}
 		},
-		[onUpload],
+		[onUpload, total],
 	);
 
 	const closeUploadPopover = useCallback(() => {

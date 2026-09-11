@@ -155,29 +155,6 @@ function mockValidImagePreparation() {
 	});
 }
 
-async function selectImageWithoutWaiting(filename: string) {
-	const textarea = getTitleTextarea();
-	const baseTitle = textarea.value.replace(/\s+$/, "");
-	fireEvent.change(textarea, {
-		target: { value: baseTitle ? `${baseTitle} ` : "" },
-	});
-	fireEvent.keyDown(textarea, { key: "@" });
-	await waitFor(() =>
-		expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
-	);
-	fireEvent.change(textarea, {
-		target: { value: `${baseTitle ? `${baseTitle} ` : ""}@image` },
-	});
-	fireEvent.click(screen.getByRole("option", { name: "Image" }));
-
-	const input = document.querySelector(
-		'input[type="file"]',
-	) as HTMLInputElement;
-	expect(input).toBeTruthy();
-	const file = new File(["png"], filename, { type: "image/png" });
-	fireEvent.change(input, { target: { files: [file] } });
-}
-
 async function selectImageThroughCommand(
 	filename: string,
 	{ expectChip = true }: { expectChip?: boolean } = {},
@@ -304,9 +281,9 @@ describe("AddCard image staging", () => {
 		openAddCard();
 		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
 
-		await selectImageWithoutWaiting("one.png");
-		await selectImageWithoutWaiting("two.png");
-		await selectImageWithoutWaiting("three.png");
+		await selectImageThroughCommand("one.png", { expectChip: false });
+		await selectImageThroughCommand("two.png", { expectChip: false });
+		await selectImageThroughCommand("three.png", { expectChip: false });
 		await waitFor(() =>
 			expect(screen.getAllByText("Preparing…")).toHaveLength(3),
 		);
@@ -337,7 +314,7 @@ describe("AddCard image staging", () => {
 
 		const textarea = getTitleTextarea();
 		fireEvent.change(textarea, { target: { value: "Wait for image" } });
-		await selectImageWithoutWaiting("pending.png");
+		await selectImageThroughCommand("pending.png", { expectChip: false });
 		await waitFor(() => expect(screen.getByText("Preparing…")).toBeTruthy());
 
 		const submit = screen.getByRole("button", { name: /add to board/i });
@@ -381,7 +358,7 @@ describe("AddCard image staging", () => {
 		renderAddCard(onAddCard);
 		openAddCard();
 		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
-		await selectImageWithoutWaiting("cancelled.png");
+		await selectImageThroughCommand("cancelled.png", { expectChip: false });
 		await waitFor(() => expect(screen.getByText("Preparing…")).toBeTruthy());
 
 		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

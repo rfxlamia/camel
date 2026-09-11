@@ -141,7 +141,11 @@ function parseJpegSofDimensions(
 	offset: number,
 	segmentLength: number,
 ): DimensionValidationResult {
-	if (segmentLength < 7) {
+	if (segmentLength < 8) {
+		return { error: INVALID_JPEG_DIMENSIONS };
+	}
+	const componentCount = buffer[offset + 7];
+	if (segmentLength !== 8 + 3 * componentCount) {
 		return { error: INVALID_JPEG_DIMENSIONS };
 	}
 

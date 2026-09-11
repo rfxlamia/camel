@@ -24,13 +24,16 @@ function createJpegHeader(width: number, height: number): Buffer {
 		0xff,
 		0xc0,
 		0x00,
-		0x07,
+		0x0b,
 		0x08,
 		(height >> 8) & 0xff,
 		height & 0xff,
 		(width >> 8) & 0xff,
 		width & 0xff,
 		0x01,
+		0x01,
+		0x11,
+		0x00,
 	]);
 }
 
@@ -135,6 +138,16 @@ describe("File Content Validation", () => {
 			expect(heightResult.valid).toBe(false);
 			expect(heightResult.error).toContain("dimensions");
 			expect(validResult.valid).toBe(true);
+		});
+
+		it("rejects JPEG SOF segments with inconsistent component lengths", async () => {
+			const malformedJpeg = createJpegHeader(1024, 768);
+			malformedJpeg.writeUInt16BE(10, 10);
+
+			const result = await validateFileContent(malformedJpeg, "image/jpeg");
+
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("invalid image dimensions");
 		});
 
 		it("rejects malformed image dimension headers without throwing", async () => {

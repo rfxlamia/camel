@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -110,6 +110,26 @@ describe("LocalAttachmentStorage", () => {
 				...REQUIRED_ENV,
 				NODE_ENV: "development",
 				ATTACHMENTS_DIR: path.join(publicRoot, "attachments"),
+			}),
+		).toThrow("ATTACHMENTS_DIR must be outside client/public");
+	});
+
+	it("rejects paths beneath public root through a symlinked parent", async () => {
+		const root = await mkdtemp(
+			path.join(process.cwd(), "attachment-storage-test-"),
+		);
+		temporaryRoots.push(root);
+		const publicRoot = path.resolve(
+			fileURLToPath(new URL("../../../client/public", import.meta.url)),
+		);
+		const publicLink = path.join(root, "public-link");
+		await symlink(publicRoot, publicLink, "dir");
+
+		expect(() =>
+			resolveConfig({
+				...REQUIRED_ENV,
+				NODE_ENV: "development",
+				ATTACHMENTS_DIR: path.join(publicLink, "new-attachments"),
 			}),
 		).toThrow("ATTACHMENTS_DIR must be outside client/public");
 	});
@@ -237,20 +257,20 @@ describe("createAttachmentUpload", () => {
 		expect(providerInvocation).not.toHaveBeenCalled();
 	});
 
-	it("accepts four existing-card pairs but enforces pair, file, and parts ceilings", async () => {
-		const { app, providerInvocation } = await createUploadApp(
-			ATTACHMENT_UPLOAD_PROFILES.existingCard.maxPairs,
-		);
-		const acceptedResponse = await addPairs(request(app).post("/"), 4);
+	it("rejects a fourth existing-card pair while enforcing file and parts ceilings", async () => {
+		const maxPairs = ATTACHMENT_UPLOAD_PROFILES.existingCard.maxPairs;
+		expect(maxPairs).toBe(3);
+		const { app, providerInvocation } = await createUploadApp(maxPairs);
+		const acceptedResponse = await addPairs(request(app).post("/"), maxPairs);
 		expect(acceptedResponse.status).toBe(200);
-		expect(acceptedResponse.body).toEqual({ count: 8, memoryBacked: true });
+		expect(acceptedResponse.body).toEqual({ count: 6, memoryBacked: true });
 
-		const tooManyPairs = await addPairs(request(app).post("/"), 11);
-		expect(tooManyPairs.status).toBe(413);
-		expect(tooManyPairs.body.code).toBe("LIMIT_FILE_COUNT");
+		const rejectedPairBatch = await addPairs(request(app).post("/"), 4);
+		expect(rejectedPairBatch.status).toBe(413);
+		expect(rejectedPairBatch.body.code).toBe("LIMIT_FILE_COUNT");
 
 		const tooManyFiles = request(app).post("/");
-		for (let index = 0; index < 10; index += 1) {
+		for (let index = 0; index < maxPairs; index += 1) {
 			tooManyFiles.attach(
 				"thumbnail",
 				Buffer.from("thumbnail"),
@@ -271,7 +291,7 @@ describe("createAttachmentUpload", () => {
 		expect(tooManyFilesResponse.status).toBe(413);
 		expect(tooManyFilesResponse.body.code).toBe("LIMIT_FILE_COUNT");
 
-		const tooManyParts = addPairs(request(app).post("/"), 10);
+		const tooManyParts = addPairs(request(app).post("/"), maxPairs);
 		tooManyParts.field(
 			CARD_CREATE_METADATA_FIELD,
 			JSON.stringify({ title: "one" }),
@@ -303,12 +323,16 @@ describe("createAttachmentUpload", () => {
 		}
 	});
 
-	it("rejects aggregate file bytes before provider invocation", async () => {
+	it("accepts the aggregate byte boundary and rejects the first over-limit request", async () => {
 		const { app, providerInvocation } = await createUploadApp(3, 10);
-		const response = await addPairs(request(app).post("/"), 1, Buffer.alloc(6));
+		const boundary = await addPairs(request(app).post("/"), 1, Buffer.alloc(5));
 
-		expect(response.status).toBe(413);
-		expect(response.body.code).toBe("LIMIT_FILE_TOTAL_SIZE");
-		expect(providerInvocation).not.toHaveBeenCalled();
+		expect(boundary.status).toBe(200);
+		expect(boundary.body).toEqual({ count: 2, memoryBacked: true });
+
+		const overLimit = await addPairs(request(app).post("/"), 1, Buffer.alloc(6));
+		expect(overLimit.status).toBe(413);
+		expect(overLimit.body.code).toBe("LIMIT_FILE_TOTAL_SIZE");
+		expect(providerInvocation).toHaveBeenCalledTimes(1);
 	});
 });

@@ -18,6 +18,7 @@ import {
 	uploadFailureMessage,
 } from "./addCardImageStaging";
 import type { TaskTitleEditorHandle } from "./task-entry/TaskTitleEditor";
+import type { TaskFieldCommandDefinition } from "./task-entry/taskFieldDefinitions";
 import type { TaskMetadataDraft } from "./task-entry/taskMetadataDraft";
 
 const CHIP_FIELD_PREFIXES: Partial<
@@ -42,7 +43,8 @@ interface UseAddCardSubmitOptions {
 	onSuccess: () => void;
 	editorRef: RefObject<TaskTitleEditorHandle | null>;
 	editorShellRef: RefObject<HTMLDivElement | null>;
-	syncDeps: unknown[];
+	fields: TaskFieldCommandDefinition[];
+	open: boolean;
 }
 
 export function useAddCardSubmit({
@@ -56,7 +58,8 @@ export function useAddCardSubmit({
 	onSuccess,
 	editorRef,
 	editorShellRef,
-	syncDeps,
+	fields,
+	open,
 }: UseAddCardSubmitOptions) {
 	const [submitting, setSubmitting] = useState(false);
 	const [fieldErrors, setFieldErrors] = useState<TaskCreateFieldErrors>({});
@@ -99,9 +102,16 @@ export function useAddCardSubmit({
 	]);
 
 	useLayoutEffect(() => {
+		if (!open) return;
 		const shell = editorShellRef.current;
 		if (!shell) return;
+		const selectedFieldIds = new Set(
+			fields
+				.filter((field) => field.getSelectedOptionIds(draft).length > 0)
+				.map((field) => field.id),
+		);
 		for (const [field, prefix] of Object.entries(CHIP_FIELD_PREFIXES)) {
+			if (!selectedFieldIds.has(field)) continue;
 			const chip = shell.querySelector<HTMLElement>(
 				`button[aria-label^="${prefix}:"]`,
 			);
@@ -114,7 +124,7 @@ export function useAddCardSubmit({
 				chip.removeAttribute("data-invalid");
 			}
 		}
-	}, [editorShellRef, fieldErrors, ...syncDeps]);
+	}, [draft, editorShellRef, fieldErrors, fields, open]);
 
 	return { submitting, fieldErrors, submit };
 }

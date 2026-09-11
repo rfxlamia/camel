@@ -9,6 +9,8 @@ type AttachmentPathRow = {
 	original_path: string;
 };
 
+const ATTACHMENT_CLEANUP_BATCH_SIZE = 8;
+
 function toAttachmentPairs(
 	rows: readonly AttachmentPathRow[],
 ): AttachmentPair[] {
@@ -65,12 +67,21 @@ export async function removeAttachmentPairsBestEffort(
 	storage: AttachmentStorage,
 	pairs: Iterable<AttachmentPair>,
 ): Promise<void> {
-	const results = await Promise.allSettled(
-		[...pairs].map((pair) => storage.removePair(pair)),
-	);
-	for (const result of results) {
-		if (result.status === "rejected") {
-			console.error("Failed to clean up attachment files", result.reason);
+	const pendingPairs = [...pairs];
+	for (
+		let index = 0;
+		index < pendingPairs.length;
+		index += ATTACHMENT_CLEANUP_BATCH_SIZE
+	) {
+		const results = await Promise.allSettled(
+			pendingPairs
+				.slice(index, index + ATTACHMENT_CLEANUP_BATCH_SIZE)
+				.map((pair) => storage.removePair(pair)),
+		);
+		for (const result of results) {
+			if (result.status === "rejected") {
+				console.error("Failed to clean up attachment files", result.reason);
+			}
 		}
 	}
 }
