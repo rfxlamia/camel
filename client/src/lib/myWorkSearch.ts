@@ -1,6 +1,46 @@
 import Fuse from "fuse.js";
 import type { MyWorkItem } from "../types/myWork";
 
+export const MY_WORK_PAGE_SIZE = 50;
+
+export interface MyWorkPage<T> {
+	items: T[];
+	page: number;
+	pageSize: number;
+	pageCount: number;
+	total: number;
+	hasPrevious: boolean;
+	hasNext: boolean;
+}
+
+function positiveInteger(value: number, fallback: number): number {
+	return Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
+}
+
+/** Paginate a finite, already-authorized client result without mutating it. */
+export function paginateMyWorkItems<T>(
+	items: T[],
+	page: number,
+	pageSize = MY_WORK_PAGE_SIZE,
+): MyWorkPage<T> {
+	const safePageSize = Math.min(
+		MY_WORK_PAGE_SIZE,
+		positiveInteger(pageSize, MY_WORK_PAGE_SIZE),
+	);
+	const pageCount = Math.max(1, Math.ceil(items.length / safePageSize));
+	const safePage = Math.min(pageCount, positiveInteger(page, 1));
+	const start = (safePage - 1) * safePageSize;
+	return {
+		items: items.slice(start, start + safePageSize),
+		page: safePage,
+		pageSize: safePageSize,
+		pageCount,
+		total: items.length,
+		hasPrevious: safePage > 1,
+		hasNext: safePage < pageCount,
+	};
+}
+
 export const MY_WORK_SEARCH_KEYS = ["key", "title", "description"] as const;
 export const MY_WORK_SEARCH_THRESHOLD = 0.45;
 export const DEFAULT_MY_WORK_SEARCH_LIMIT = 50;

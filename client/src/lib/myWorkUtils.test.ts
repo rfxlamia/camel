@@ -102,6 +102,20 @@ describe("My Work timezone ordering", () => {
 		).toBe(true);
 	});
 
+	it("does not mark terminal past-due items overdue", () => {
+		const now = new Date("2026-09-11T10:00:00.000Z");
+
+		expect(
+			isMyWorkItemOverdue(
+				item(11, "completed", { dueDate: "2026-09-10" }),
+				now,
+			),
+		).toBe(false);
+		expect(
+			isMyWorkItemOverdue(item(12, "canceled", { dueDate: "2026-09-10" }), now),
+		).toBe(false);
+	});
+
 	it("orders groups, overdue items, due dates, and equal ties deterministically", () => {
 		const items = [
 			item(2, "started", {
