@@ -27,14 +27,17 @@ vi.mock("../lib/imageAttachments", async (importOriginal) => {
 
 import CardAttachments from "./CardAttachments";
 
-function makeAttachment(id: number): CardAttachment {
+function makeAttachment(
+	id: number,
+	createdAt = "2026-09-05T10:00:00.000Z",
+): CardAttachment {
 	return {
 		id,
 		thumbnailUrl: `/api/workspaces/7/cards/42/attachments/${id}/thumbnail`,
 		originalUrl: `/api/workspaces/7/cards/42/attachments/${id}/original`,
 		downloadUrl: `/api/workspaces/7/cards/42/attachments/${id}/original/download`,
 		mimeType: "image/png",
-		createdAt: "2026-09-05T10:00:00.000Z",
+		createdAt,
 	};
 }
 
@@ -227,6 +230,32 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+	});
+
+	it("orders the gallery by creation time and breaks ties by attachment id", () => {
+		const attachments = [
+			makeAttachment(20, "2026-09-05T10:00:00.000Z"),
+			makeAttachment(10, "2026-09-05T10:00:00.000Z"),
+			makeAttachment(1, "2026-09-05T11:00:00.000Z"),
+		];
+		render(
+			<CardAttachments
+				card={makeCard(attachments)}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+
+		expect(
+			screen
+				.getAllByRole("button", { name: /View attachment/ })
+				.map((button) => button.getAttribute("aria-label")),
+		).toEqual([
+			"View attachment 10",
+			"View attachment 20",
+			"View attachment 1",
+		]);
 	});
 
 	it("opens a lightbox with the original image and download action", () => {
