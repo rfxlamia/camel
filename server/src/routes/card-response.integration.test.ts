@@ -245,6 +245,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 							displayName: "Alice",
 						},
 					],
+					attachments: [],
 				},
 				{
 					id: cards[1]!.id,
@@ -279,6 +280,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 							displayName: "Bob",
 						},
 					],
+					attachments: [],
 				},
 				{
 					id: cards[2]!.id,
@@ -301,6 +303,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					phaseId: null,
 					phaseName: null,
 					assignees: [],
+					attachments: [],
 				},
 			];
 

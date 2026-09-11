@@ -70,7 +70,7 @@ Steps:
    Level: unit
 
    Test intent:
-   Given multipart fields named `thumbnail` and `original`, When the factory is configured with `maxPairs: 3` for card-create, Then a fourth pair is rejected. Given the existing-card profile's documented three-pair/six-file and finite parts ceilings, When four image pairs arrive, Then the parser rejects them; when a fourth pair, a seventh file, or one part beyond the documented parts ceiling arrives, Then the real parser rejects with the normalized limit error. Given either profile, When one file exceeds 10MB, Then parsing rejects before provider write. All accepted files remain memory buffers.
+   Given multipart fields named `thumbnail` and `original`, When the factory is configured with `maxPairs: 3` for card-create, Then a fourth pair is rejected. Given the existing-card profile's documented ten-pair/twenty-file and finite parts ceilings, When four image pairs arrive, Then the parser accepts them for route-level partial capacity handling; when an eleventh pair, a twenty-first file, or one part beyond the documented parts ceiling arrives, Then the real parser rejects with the normalized limit error. Given either profile, When one file exceeds 10MB, Then parsing rejects before provider write. All accepted files remain memory buffers.
 
    Exercise through:
    - the exported upload-factory middleware, not a route-specific wrapper.
@@ -88,7 +88,7 @@ Steps:
 
 9. Implement minimal code to satisfy the test:
    File: `server/src/lib/attachment-upload.ts`
-   Implement: a lazy Multer memory-storage factory `createAttachmentUpload({ maxPairs })` with repeated `thumbnail`/`original` fields, route-specific `maxCount`, explicit `limits.files` and `limits.parts`, a documented existing-card ceiling of three pairs/six files with a finite parts allowance compatible with the 70MB nginx limit, `limits.fileSize: 10 * 1024 * 1024`, and an exported error-normalization boundary. Enforce the aggregate file-byte budget in the storage boundary before buffering beyond the shared ceiling. Export or otherwise expose the profile ceilings to tests so each `N + 1` case is asserted without duplicating hidden constants. Do not write files from Multer; storage writes remain explicit so DB rollback can unlink them.
+   Implement: a lazy Multer memory-storage factory `createAttachmentUpload({ maxPairs })` with repeated `thumbnail`/`original` fields, route-specific `maxCount`, explicit `limits.files` and `limits.parts`, a documented existing-card ceiling of ten pairs/twenty files with a finite parts allowance compatible with the configured nginx upload limit, `limits.fileSize: 10 * 1024 * 1024`, and an exported error-normalization boundary. Enforce the aggregate file-byte budget in the storage boundary before buffering beyond the shared ceiling. Export or otherwise expose the profile ceilings to tests so each `N + 1` case is asserted without duplicating hidden constants. Do not write files from Multer; storage writes remain explicit so DB rollback can unlink them.
 
 10. Run test — verify PASS:
     `npm run test --workspace=server -- src/lib/attachment-storage.test.ts`
@@ -132,7 +132,7 @@ Verification — task is DONE when all pass:
 
 Given a self-host sets `ATTACHMENTS_DIR`, When the production provider initializes, Then the resolved root equals and writes only below that directory; without the override, both documented runtime defaults are outside public uploads.
 Given a thumbnail/original pair, When storage writes then removes it, Then both paths are cleaned up and repeated cleanup is harmless.
-Given either card attachment parser profile, When more than three pairs or a file over 10MB arrives, Then Multer rejects before provider write; requests at the aggregate file-byte boundary are accepted and the first over-limit request is rejected before provider invocation.
+Given the card-create parser profile, When more than three pairs or a file over 10MB arrives, Then Multer rejects before provider write; given the existing-card profile, When a four-image batch arrives, Then Multer accepts it for route-level partial capacity handling, while requests exceeding its documented pair/file/parts ceilings reject before provider invocation. Requests at the aggregate file-byte boundary are accepted and the first over-limit request is rejected before provider invocation.
 
 All tests PASS. Commits exist with messages matching `feat(attachments): ...`.
 
@@ -151,7 +151,7 @@ Must-not-have:
 
 - `express.static` registration for the private directory.
 - Multer diskStorage pointing at `client/public/uploads`.
-- A parser profile that permits more than the shared three-pair card capacity or buffers beyond the aggregate byte budget.
+- A card-create parser profile that permits more than three pairs, an existing-card parser cap that prevents valid partial batches, or buffering beyond the aggregate byte budget.
 - Object storage, CDN, presigned URL, quota, sweeper, or new image-processing dependency.
 
 Open question risks:

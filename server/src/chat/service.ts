@@ -1,4 +1,4 @@
-import type { Selectable } from "kysely";
+import { sql, type Selectable } from "kysely";
 import type { DBExecutor } from "../db/kysely.js";
 import type {
 	ChatAttachments,
@@ -83,6 +83,7 @@ export function createChatService(db: DBExecutor) {
 					),
 				)
 				.orderBy("updated_at", "desc")
+				.orderBy("id", "desc")
 				.executeTakeFirst();
 			return row ? mapThread(row) : null;
 		},
@@ -93,11 +94,15 @@ export function createChatService(db: DBExecutor) {
 				.selectAll()
 				.where("user_id", "=", userId)
 				.orderBy("updated_at", "desc")
+				.orderBy("id", "desc")
 				.execute();
 			return rows.map(mapThread);
 		},
 
-		async getThread(userId: number, threadId: number): Promise<ChatThread | null> {
+		async getThread(
+			userId: number,
+			threadId: number,
+		): Promise<ChatThread | null> {
 			const row = await db
 				.selectFrom("chat_threads")
 				.selectAll()
@@ -114,7 +119,7 @@ export function createChatService(db: DBExecutor) {
 		): Promise<ChatThread | null> {
 			const row = await db
 				.updateTable("chat_threads")
-				.set({ title, updated_at: new Date() })
+				.set({ title, updated_at: sql<Date>`clock_timestamp()` })
 				.where("id", "=", threadId)
 				.where("user_id", "=", userId)
 				.returningAll()
@@ -131,7 +136,9 @@ export function createChatService(db: DBExecutor) {
 			return Number(result.numDeletedRows) > 0;
 		},
 
-		async insertMessage(params: InsertMessageParams): Promise<ChatMessage | null> {
+		async insertMessage(
+			params: InsertMessageParams,
+		): Promise<ChatMessage | null> {
 			const thread = await db
 				.selectFrom("chat_threads")
 				.select("id")
@@ -155,7 +162,7 @@ export function createChatService(db: DBExecutor) {
 
 			await db
 				.updateTable("chat_threads")
-				.set({ updated_at: new Date() })
+				.set({ updated_at: sql<Date>`clock_timestamp()` })
 				.where("id", "=", params.threadId)
 				.where("user_id", "=", params.userId)
 				.execute();
@@ -197,7 +204,7 @@ export function createChatService(db: DBExecutor) {
 				.updateTable("chat_threads")
 				.set({
 					title: truncateTitle(firstUserMessage),
-					updated_at: new Date(),
+					updated_at: sql<Date>`clock_timestamp()`,
 				})
 				.where("id", "=", threadId)
 				.where("user_id", "=", userId)

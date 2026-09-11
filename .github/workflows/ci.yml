@@ -20,7 +20,8 @@ jobs:
     timeout-minutes: 10
     env:
       # Fallback values for unit tests — tests mock DB/LLM, so these are never
-      # used for real connections. Required because config.ts validates at import.
+      # used for real connections. Required because config.ts validates at
+      # import.
       DATABASE_URL: postgres://localhost:5432/camel_kanban
       ANTHROPIC_API_KEY: test-not-a-real-key
     steps:
@@ -38,7 +39,7 @@ jobs:
       - run: npm test
 
   db-integration:
-    name: DB Integration Tests
+    name: DB & Route Integration Tests
     needs: [primary]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -70,7 +71,7 @@ jobs:
       DATABASE_URL: postgres://camel:camel@localhost:5432/camel_kanban
       REDIS_URL: redis://localhost:6379
       RUN_INTEGRATION: "1"
-      # Required by config.ts at import — migrate/tests do not call the LLM.
+      # Required by config.ts at import — route tests do not call the LLM.
       ANTHROPIC_API_KEY: test-not-a-real-key
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -82,10 +83,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:migrate
-      - run: npm run test:integration:unified --workspace=server
+      - run: npm run test:integration:routes --workspace=server
 
-  integration:
-    name: Integration Tests
+  llm-integration:
+    name: LLM Integration Tests
     needs: [primary]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -114,7 +115,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      # Test-only credentials for local service containers (intentionally non-sensitive)
       DATABASE_URL: postgres://camel:camel@localhost:5432/camel_kanban
       REDIS_URL: redis://localhost:6379
       RUN_LLM_IT: "1"
@@ -132,7 +132,7 @@ jobs:
         id: check-secret
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "ANTHROPIC_API_KEY secret is not set. Skipping integration tests."
+            echo "ANTHROPIC_API_KEY is not set. Skipping optional LLM tests."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -140,6 +140,6 @@ jobs:
       - name: Run database migration
         if: steps.check-secret.outputs.skip != 'true'
         run: npm run db:migrate
-      - name: Run integration tests
+      - name: Run LLM integration tests
         if: steps.check-secret.outputs.skip != 'true'
-        run: npm run test:integration:routes --workspace=server
+        run: npm run test:integration --workspace=server
