@@ -74,7 +74,9 @@ describe("useAddCardImageStaging cleanup", () => {
 		act(() => {
 			void result.current.stageFiles([file]);
 		});
-		await waitFor(() => expect(prepareImageAttachment).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(prepareImageAttachment).toHaveBeenCalledTimes(1),
+		);
 		unmount();
 
 		await act(async () => {

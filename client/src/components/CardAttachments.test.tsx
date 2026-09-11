@@ -148,8 +148,8 @@ describe("CardAttachments — picker/paste/counter", () => {
 		expect(uploadedPairs[0]?.original.name).toBe("a.png");
 		expect(mockPrepareImageAttachment).toHaveBeenCalledTimes(3);
 		expect(
-			mockPrepareImageAttachment.mock.calls.map(([file]) =>
-				(file as File).name,
+			mockPrepareImageAttachment.mock.calls.map(
+				([file]) => (file as File).name,
 			),
 		).toEqual(["bad.png", "a.png", "b.png"]);
 

@@ -16,7 +16,13 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Card, Column, TrackerPhase, TrackerProject, TrackerVocabulary } from "../types";
+import type {
+	Card,
+	Column,
+	TrackerPhase,
+	TrackerProject,
+	TrackerVocabulary,
+} from "../types";
 
 const mockPriorities: TrackerVocabulary[] = [
 	{
@@ -89,8 +95,7 @@ vi.mock("../api", () => ({
 	api: {
 		getWorkspaceMembers: (...a: unknown[]) => getWorkspaceMembers(...a),
 		getCardActivity: (...a: unknown[]) => getCardActivity(...a),
-		listTrackerVocabularies: (...a: unknown[]) =>
-			listTrackerVocabularies(...a),
+		listTrackerVocabularies: (...a: unknown[]) => listTrackerVocabularies(...a),
 		listTrackerProjects: (...a: unknown[]) => listTrackerProjects(...a),
 		ticketIntake: {
 			getHistory: (...a: unknown[]) => mockGetHistory(...a),
@@ -359,9 +364,7 @@ describe("ContextPanel — taxonomy fields", () => {
 		const { rerender } = render(<ContextPanel />);
 
 		await waitFor(() =>
-			expect(
-				screen.getByRole("button", { name: /priority/i }),
-			).toBeTruthy(),
+			expect(screen.getByRole("button", { name: /priority/i })).toBeTruthy(),
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: /priority/i }));
@@ -418,12 +421,12 @@ describe("ContextPanel — taxonomy fields", () => {
 		setBoard(makeCard({}));
 		render(<ContextPanel />);
 		await waitFor(() =>
-			expect(
-				screen.getByRole("button", { name: /priority/i }),
-			).toBeTruthy(),
+			expect(screen.getByRole("button", { name: /priority/i })).toBeTruthy(),
 		);
 		expect(screen.queryByRole("button", { name: /^status$/i })).toBeNull();
-		expect(screen.queryByRole("combobox", { name: /change status/i })).toBeNull();
+		expect(
+			screen.queryByRole("combobox", { name: /change status/i }),
+		).toBeNull();
 	});
 });
 
@@ -435,10 +438,8 @@ describe("ContextPanel — attachment gallery composition", () => {
 				attachments: [
 					{
 						id: 1,
-						thumbnailUrl:
-							"/api/workspaces/1/cards/1/attachments/1/thumbnail",
-						originalUrl:
-							"/api/workspaces/1/cards/1/attachments/1/original",
+						thumbnailUrl: "/api/workspaces/1/cards/1/attachments/1/thumbnail",
+						originalUrl: "/api/workspaces/1/cards/1/attachments/1/original",
 						downloadUrl:
 							"/api/workspaces/1/cards/1/attachments/1/original/download",
 						mimeType: "image/png",
@@ -446,10 +447,8 @@ describe("ContextPanel — attachment gallery composition", () => {
 					},
 					{
 						id: 2,
-						thumbnailUrl:
-							"/api/workspaces/1/cards/1/attachments/2/thumbnail",
-						originalUrl:
-							"/api/workspaces/1/cards/1/attachments/2/original",
+						thumbnailUrl: "/api/workspaces/1/cards/1/attachments/2/thumbnail",
+						originalUrl: "/api/workspaces/1/cards/1/attachments/2/original",
 						downloadUrl:
 							"/api/workspaces/1/cards/1/attachments/2/original/download",
 						mimeType: "image/jpeg",
@@ -463,9 +462,7 @@ describe("ContextPanel — attachment gallery composition", () => {
 		expect(
 			screen.getByRole("button", { name: "View attachment 1" }),
 		).toBeTruthy();
-		fireEvent.click(
-			screen.getByRole("button", { name: "View attachment 1" }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: "View attachment 1" }));
 		expect(screen.getByRole("dialog", { name: "Image preview" })).toBeTruthy();
 	});
 });
@@ -483,8 +480,6 @@ describe("ContextPanel — Report issue gated on active workspace (Story 9)", ()
 			setHasUnsavedCardEdits: vi.fn(),
 		});
 		render(<ContextPanel />);
-		expect(
-			screen.queryByRole("button", { name: /report issue/i }),
-		).toBeNull();
+		expect(screen.queryByRole("button", { name: /report issue/i })).toBeNull();
 	});
 });

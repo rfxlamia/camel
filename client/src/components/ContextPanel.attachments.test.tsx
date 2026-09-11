@@ -33,8 +33,7 @@ vi.mock("../api", () => ({
 		getCardActivity: (...args: unknown[]) => getCardActivity(...args),
 		uploadCardAttachments: (...args: unknown[]) =>
 			uploadCardAttachments(...args),
-		deleteCardAttachment: (...args: unknown[]) =>
-			deleteCardAttachment(...args),
+		deleteCardAttachment: (...args: unknown[]) => deleteCardAttachment(...args),
 		listTrackerVocabularies: (...args: unknown[]) =>
 			listTrackerVocabularies(...args),
 		listTrackerProjects: (...args: unknown[]) => listTrackerProjects(...args),

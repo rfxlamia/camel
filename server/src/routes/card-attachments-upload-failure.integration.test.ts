@@ -93,7 +93,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					end: vi.fn(),
 				};
 				try {
-					hub.sseHandler(subscriberRequest as never, subscriberResponse as never);
+					hub.sseHandler(
+						subscriberRequest as never,
+						subscriberResponse as never,
+					);
 					const response = await attachPair(
 						request(app).post(uploadUrl(fixture.workspaceId, fixture.cardId)),
 						pngFixture(),

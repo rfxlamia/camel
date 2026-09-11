@@ -98,10 +98,7 @@ export default function CardAttachments({
 			try {
 				const pairs: PreparedImagePair[] = [];
 				const skippedFiles: string[] = [];
-				const remainingSlots = Math.max(
-					0,
-					MAX_ATTACHMENT_COUNT - total,
-				);
+				const remainingSlots = Math.max(0, MAX_ATTACHMENT_COUNT - total);
 				for (const [index, file] of files.entries()) {
 					if (pairs.length >= remainingSlots) {
 						skippedFiles.push(

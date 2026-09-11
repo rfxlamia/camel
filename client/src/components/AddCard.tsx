@@ -52,7 +52,9 @@ export default function AddCard({ column, onAddCard }: Props) {
 			kind: "file",
 			id: "image",
 			label: "Image",
-			icon: <Image size={14} className="shrink-0 text-neutral-500" aria-hidden />,
+			icon: (
+				<Image size={14} className="shrink-0 text-neutral-500" aria-hidden />
+			),
 			accept: "image/png,image/jpeg",
 			multiple: true,
 			onFilesSelected: (files) => {

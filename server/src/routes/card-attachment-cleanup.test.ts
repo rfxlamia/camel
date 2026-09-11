@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AttachmentPair, AttachmentStorage } from "../lib/attachment-storage.js";
+import type {
+	AttachmentPair,
+	AttachmentStorage,
+} from "../lib/attachment-storage.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 
 function pair(index: number): AttachmentPair {
