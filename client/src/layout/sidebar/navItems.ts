@@ -4,15 +4,25 @@ import {
 	History,
 	Inbox,
 	LayoutDashboard,
+	ListChecks,
 	ListTodo,
+	type LucideIcon,
 	MessageSquare,
 	Settings,
-	type LucideIcon,
 	SquareKanban,
 } from "lucide-react";
 import type { Mode } from "./shared";
 
+const MY_WORK_ITEM = {
+	to: "/my-work",
+	label: "My Work",
+	icon: ListChecks,
+} satisfies { to: string; label: string; icon: LucideIcon };
+
+export const GLOBAL_NAV = [MY_WORK_ITEM];
+
 export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
+	MY_WORK_ITEM,
 	{ to: "/board", label: "Board", icon: SquareKanban },
 	{ to: "/tracker", label: "Tracker", icon: ListTodo },
 	{ to: "/inbox", label: "Inbox", icon: Inbox },
