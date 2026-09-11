@@ -131,17 +131,21 @@ async function deleteAttachment(req: Request, res: Response): Promise<void> {
 			originalPath: result.originalPath,
 		},
 	]);
-	await publishEvent(workspaceId, {
-		type: "attachment.removed",
-		actor: req.user,
-		cardId,
-		workspaceId,
-		payload: {
-			attachmentId: result.attachmentId,
-			mimeType: result.mimeType,
-			createdAt: result.createdAt,
-		},
-	});
+	try {
+		await publishEvent(workspaceId, {
+			type: "attachment.removed",
+			actor: req.user,
+			cardId,
+			workspaceId,
+			payload: {
+				attachmentId: result.attachmentId,
+				mimeType: result.mimeType,
+				createdAt: result.createdAt,
+			},
+		});
+	} catch (error) {
+		console.error("Failed to publish attachment event:", error);
+	}
 	res.status(204).end();
 }
 

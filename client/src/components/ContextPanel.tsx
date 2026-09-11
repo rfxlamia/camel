@@ -155,12 +155,12 @@ function CardEditor({
 			if (activeWorkspaceId === null) {
 				throw new Error("Workspace not available");
 			}
-			cancelScheduledRefresh();
 			const response = await api.uploadCardAttachments(
 				activeWorkspaceId,
 				card.id,
 				pairs,
 			);
+			cancelScheduledRefresh();
 			await refresh();
 			return response;
 		},
@@ -172,12 +172,12 @@ function CardEditor({
 			if (activeWorkspaceId === null) {
 				throw new Error("Workspace not available");
 			}
-			cancelScheduledRefresh();
 			await api.deleteCardAttachment(
 				activeWorkspaceId,
 				card.id,
 				attachmentId,
 			);
+			cancelScheduledRefresh();
 			await refresh();
 		},
 		[activeWorkspaceId, cancelScheduledRefresh, card.id, refresh],
@@ -582,24 +582,32 @@ function TicketHistorySection({ cardId }: { cardId: number }) {
 }
 
 function ActivitySection({ cardId }: { cardId: number }) {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId, refreshTick } = useBoard();
 	const [events, setEvents] = useState<ActivityEvent[] | null>(null);
+	const latestRefreshTickRef = useRef(refreshTick);
+	latestRefreshTickRef.current = refreshTick;
 
 	// Fetched on open and after every board refresh, so teammate changes show
 	// up through the existing SSE → refresh model.
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
+		const requestRefreshTick = refreshTick;
 		let active = true;
 		api
 			.getCardActivity(activeWorkspaceId, cardId)
 			.then(({ events }) => {
-				if (active) setEvents(events);
+				if (
+					active &&
+					latestRefreshTickRef.current === requestRefreshTick
+				) {
+					setEvents(events);
+				}
 			})
 			.catch((err) => console.warn("card activity fetch failed", err));
 		return () => {
 			active = false;
 		};
-	}, [activeWorkspaceId, cardId]);
+	}, [activeWorkspaceId, cardId, refreshTick]);
 
 	return (
 		<section

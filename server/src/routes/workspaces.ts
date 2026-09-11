@@ -2,7 +2,10 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
-import { getAttachmentStorage } from "../lib/attachment-storage.js";
+import {
+	getAttachmentStorage,
+	type AttachmentPair,
+} from "../lib/attachment-storage.js";
 import { validateWorkspaceName } from "../validators/input-length.js";
 import {
 	loadAttachmentPairsForWorkspace,
@@ -152,43 +155,75 @@ workspacesRouter.delete("/:workspaceId", async (req, res) => {
 		return res.status(400).json({ error: "workspaceId must be an integer" });
 	}
 
-	const actorRole = await lookupMembership(req.user!.id, workspaceId);
-	if (!actorRole) return res.status(404).json({ error: "Not found" });
-	if (actorRole !== "owner")
-		return res.status(404).json({ error: "Not found" });
+	type WorkspaceDeletionResult =
+		| { kind: "not_found" }
+		| { kind: "personal" }
+		| { kind: "has_members" }
+		| { kind: "deleted"; attachmentPairs: AttachmentPair[] };
+	const result: WorkspaceDeletionResult = await db
+		.transaction()
+		.execute(async (trx) => {
+			if (!(await lockWorkspaceMutation(trx, workspaceId))) {
+				return { kind: "not_found" };
+			}
 
-	const ws = await db
-		.selectFrom("workspaces")
-		.select("is_personal")
-		.where("id", "=", workspaceId)
-		.executeTakeFirst();
-	if (!ws) return res.status(404).json({ error: "Not found" });
-	if (ws.is_personal) {
+			const workspace = await trx
+				.selectFrom("workspaces")
+				.select(["owner_user_id", "is_personal"])
+				.where("id", "=", workspaceId)
+				.executeTakeFirst();
+			if (!workspace) return { kind: "not_found" };
+
+			const actorMembership = await trx
+				.selectFrom("workspace_members")
+				.select("role")
+				.where("workspace_id", "=", workspaceId)
+				.where("user_id", "=", req.user!.id)
+				.executeTakeFirst();
+			if (
+				!actorMembership ||
+				actorMembership.role !== "owner" ||
+				workspace.owner_user_id !== req.user!.id
+			) {
+				return { kind: "not_found" };
+			}
+			if (workspace.is_personal) return { kind: "personal" };
+
+			const countRow = await trx
+				.selectFrom("workspace_members")
+				.select(sql<number>`count(*)::int`.as("n"))
+				.where("workspace_id", "=", workspaceId)
+				.executeTakeFirstOrThrow();
+			if (countRow.n > 1) return { kind: "has_members" };
+
+			const attachmentPairs = await loadAttachmentPairsForWorkspace(
+				trx,
+				workspaceId,
+			);
+			await trx
+				.deleteFrom("workspaces")
+				.where("id", "=", workspaceId)
+				.execute();
+			return { kind: "deleted", attachmentPairs };
+		});
+
+	if (result.kind === "not_found") {
+		return res.status(404).json({ error: "Not found" });
+	}
+	if (result.kind === "personal") {
 		return res
 			.status(403)
 			.json({ error: "Personal workspaces cannot be deleted" });
 	}
-
-	const countRow = await db
-		.selectFrom("workspace_members")
-		.select(sql<number>`count(*)::int`.as("n"))
-		.where("workspace_id", "=", workspaceId)
-		.executeTakeFirstOrThrow();
-	if (countRow.n > 1) {
+	if (result.kind === "has_members") {
 		return res.status(409).json({
 			error: "Remove all other members before deleting this workspace",
 		});
 	}
 
-	const attachmentPairs = await db.transaction().execute(async (trx) => {
-		if (!(await lockWorkspaceMutation(trx, workspaceId))) return [];
-		const pairs = await loadAttachmentPairsForWorkspace(trx, workspaceId);
-		await trx.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
-		return pairs;
-	});
 	await removeAttachmentPairsBestEffort(
 		getAttachmentStorage(),
-		attachmentPairs,
+		result.attachmentPairs,
 	);
 	res.status(204).end();
 });

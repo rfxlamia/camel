@@ -146,7 +146,11 @@ function columnsWith(card: Card): Column[] {
 	];
 }
 
-function setBoard(card: Card, saveCard = vi.fn().mockResolvedValue("saved")) {
+function setBoard(
+	card: Card,
+	saveCard = vi.fn().mockResolvedValue("saved"),
+	refreshTick = 0,
+) {
 	mockUseBoard.mockReturnValue({
 		activeWorkspaceId: 1,
 		ticketIntakeEnabled: true,
@@ -157,6 +161,7 @@ function setBoard(card: Card, saveCard = vi.fn().mockResolvedValue("saved")) {
 		showToast: vi.fn(),
 		setHasUnsavedCardEdits: vi.fn(),
 		refresh: vi.fn().mockResolvedValue(undefined),
+		refreshTick,
 		cancelScheduledRefresh: vi.fn(),
 	});
 }
@@ -213,6 +218,19 @@ describe("ContextPanel server→form sync", () => {
 
 		await waitFor(() => expect(getCardActivity).toHaveBeenCalled());
 		expect(titleInput().value).toBe("My local edit");
+	});
+});
+
+describe("ContextPanel activity refresh", () => {
+	it("refetches activity when the board refresh tick changes", async () => {
+		setBoard(makeCard({}), undefined, 0);
+		const { rerender } = render(<ContextPanel />);
+		await waitFor(() => expect(getCardActivity).toHaveBeenCalledTimes(1));
+
+		setBoard(makeCard({}), undefined, 1);
+		rerender(<ContextPanel />);
+
+		await waitFor(() => expect(getCardActivity).toHaveBeenCalledTimes(2));
 	});
 });
 

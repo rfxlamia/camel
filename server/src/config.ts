@@ -10,6 +10,7 @@
  */
 
 import "dotenv/config";
+import { existsSync, realpathSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -65,7 +66,35 @@ const PUBLIC_CLIENT_ROOT = fileURLToPath(
 );
 
 type Environment = z.input<typeof envSchema>;
-export type AppConfig = z.infer<typeof envSchema>;
+type ParsedAppConfig = z.infer<typeof envSchema>;
+export type AppConfig = Omit<ParsedAppConfig, "ATTACHMENTS_DIR"> & {
+	ATTACHMENTS_DIR: string;
+};
+
+function canonicalizePath(input: string): string {
+	const absolute = path.resolve(input);
+	const missingParts: string[] = [];
+	let existingPath = absolute;
+
+	while (!existsSync(existingPath)) {
+		const parent = path.dirname(existingPath);
+		if (parent === existingPath) return absolute;
+		missingParts.unshift(path.basename(existingPath));
+		existingPath = parent;
+	}
+
+	return path.join(realpathSync(existingPath), ...missingParts);
+}
+
+function isPathWithinOrEqual(candidate: string, parent: string): boolean {
+	const relative = path.relative(parent, candidate);
+	return (
+		relative === "" ||
+		(!path.isAbsolute(relative) &&
+			relative !== ".." &&
+			!relative.startsWith(`..${path.sep}`))
+	);
+}
 
 export function resolveAttachmentDirectory(
 	env: Pick<Environment, "ATTACHMENTS_DIR" | "NODE_ENV">,
@@ -75,11 +104,9 @@ export function resolveAttachmentDirectory(
 		: env.NODE_ENV === "production" || env.NODE_ENV === "container-production"
 			? CONTAINER_ATTACHMENTS_DIR
 			: DEVELOPMENT_ATTACHMENTS_DIR;
-	const resolvedPublicRoot = path.resolve(PUBLIC_CLIENT_ROOT);
-	if (
-		configured === resolvedPublicRoot ||
-		configured.startsWith(`${resolvedPublicRoot}${path.sep}`)
-	) {
+	const canonicalConfigured = canonicalizePath(configured);
+	const canonicalPublicRoot = canonicalizePath(PUBLIC_CLIENT_ROOT);
+	if (isPathWithinOrEqual(canonicalConfigured, canonicalPublicRoot)) {
 		throw new Error("ATTACHMENTS_DIR must be outside client/public");
 	}
 	return configured;

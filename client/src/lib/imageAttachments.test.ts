@@ -140,7 +140,9 @@ describe("image attachment preparation", () => {
 		installImageAndCanvas(
 			640,
 			480,
-			vi.fn<HTMLCanvasElement["toBlob"]>((callback) => callback(null)),
+			vi.fn<HTMLCanvasElement["toBlob"]>((callback) =>
+				callback(new Blob(["thumbnail"], { type: "image/jpeg" })),
+			),
 		);
 		const clipboardBlob = new Blob(["jpeg"], { type: "image/jpeg" });
 
@@ -166,6 +168,7 @@ describe("image attachment preparation", () => {
 		if (result.kind === "valid") {
 			expect(await result.original.text()).toBe("original");
 			expect(await result.thumbnail.text()).toBe("thumbnail");
+			expect(result.thumbnail).not.toBe(result.original);
 		}
 		expect(canvas.width).toBe(1024);
 		expect(canvas.height).toBe(512);
@@ -174,7 +177,7 @@ describe("image attachment preparation", () => {
 		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
 	});
 
-	it("falls back to original bytes when Canvas output is fully transparent", async () => {
+	it("rejects images when Canvas output is fully transparent", async () => {
 		const toBlob = vi.fn<HTMLCanvasElement["toBlob"]>((callback) => {
 			callback(new Blob(["transparent-thumbnail"], { type: "image/png" }));
 		});
@@ -188,16 +191,15 @@ describe("image attachment preparation", () => {
 
 		const result = await prepareImageAttachment(file);
 
-		expect(result.kind).toBe("valid");
-		if (result.kind === "valid") {
-			expect(result.thumbnail).toBe(result.original);
-			expect(await result.thumbnail.text()).toBe("original");
+		expect(result.kind).toBe("invalid");
+		if (result.kind === "invalid") {
+			expect(result.file).toBe(file);
 		}
 		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
 		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
 	});
 
-	it("falls back to original bytes when Canvas encoding fails", async () => {
+	it("rejects images when Canvas encoding fails instead of duplicating the original", async () => {
 		const toBlob = vi.fn<HTMLCanvasElement["toBlob"]>((callback) => {
 			callback(null);
 		});
@@ -206,16 +208,15 @@ describe("image attachment preparation", () => {
 
 		const result = await prepareImageAttachment(file);
 
-		expect(result.kind).toBe("valid");
-		if (result.kind === "valid") {
-			expect(result.thumbnail).toBe(result.original);
-			expect(await result.thumbnail.text()).toBe("original");
+		expect(result.kind).toBe("invalid");
+		if (result.kind === "invalid") {
+			expect(result.file).toBe(file);
 		}
 		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
 		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
 	});
 
-	it("falls back to original bytes when Canvas pixel inspection fails", async () => {
+	it("rejects images when Canvas pixel inspection fails", async () => {
 		const toBlob = vi.fn<HTMLCanvasElement["toBlob"]>((callback) => {
 			callback(new Blob(["thumbnail"], { type: "image/png" }));
 		});
@@ -227,9 +228,9 @@ describe("image attachment preparation", () => {
 
 		const result = await prepareImageAttachment(file);
 
-		expect(result.kind).toBe("valid");
-		if (result.kind === "valid") {
-			expect(result.thumbnail).toBe(result.original);
+		expect(result.kind).toBe("invalid");
+		if (result.kind === "invalid") {
+			expect(result.file).toBe(file);
 		}
 		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
 		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");

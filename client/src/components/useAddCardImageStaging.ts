@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	MAX_ATTACHMENT_COUNT,
 	prepareImageAttachment,
@@ -27,6 +27,13 @@ export function useAddCardImageStaging() {
 		}
 		previewUrlsRef.current = [];
 	}, []);
+
+	useEffect(() => {
+		return () => {
+			preparationGenerationRef.current += 1;
+			revokePreviewUrls();
+		};
+	}, [revokePreviewUrls]);
 
 	const resetStagedImages = useCallback(() => {
 		preparationGenerationRef.current += 1;

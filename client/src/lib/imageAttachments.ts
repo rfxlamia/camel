@@ -13,6 +13,7 @@ export const IMAGE_VALIDATION_MESSAGES = {
 	tooLarge: "File size must be under 10MB",
 	tooLargeDimensions: "Image dimensions must be 4096px or smaller",
 	unreadableDimensions: "Image dimensions could not be read",
+	thumbnailGenerationFailed: "Image thumbnail could not be prepared",
 } as const;
 
 export interface PreparedImagePair {
@@ -108,14 +109,10 @@ function readImageDimensions(file: File): Promise<DecodedImage> {
 	});
 }
 
-function fallbackPair(file: File): PreparedImagePair {
-	return { thumbnail: file, original: file };
-}
-
 async function createThumbnail(
 	file: File,
 	decodedImage: DecodedImage,
-): Promise<PreparedImagePair> {
+): Promise<PreparedImagePair | null> {
 	let objectUrlReleased = false;
 	const releaseObjectUrl = () => {
 		if (objectUrlReleased) return;
@@ -137,7 +134,7 @@ async function createThumbnail(
 		const context = canvas.getContext("2d");
 		if (!context) {
 			releaseObjectUrl();
-			return fallbackPair(file);
+			return null;
 		}
 
 		context.drawImage(image, 0, 0, width, height);
@@ -151,7 +148,7 @@ async function createThumbnail(
 		}
 		if (!hasVisiblePixels) {
 			releaseObjectUrl();
-			return fallbackPair(file);
+			return null;
 		}
 		const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
 			try {
@@ -161,7 +158,7 @@ async function createThumbnail(
 			}
 		});
 		releaseObjectUrl();
-		if (!thumbnailBlob) return fallbackPair(file);
+		if (!thumbnailBlob) return null;
 
 		const extension = extensionForMime(file.type) ?? "bin";
 		const thumbnail = new File(
@@ -172,7 +169,7 @@ async function createThumbnail(
 		return { thumbnail, original: file };
 	} catch {
 		releaseObjectUrl();
-		return fallbackPair(file);
+		return null;
 	}
 }
 
@@ -201,6 +198,9 @@ export async function prepareImageAttachment(
 	}
 
 	const prepared = await createThumbnail(file, decodedImage);
+	if (!prepared) {
+		return invalid(file, IMAGE_VALIDATION_MESSAGES.thumbnailGenerationFailed);
+	}
 	return {
 		kind: "valid",
 		file,

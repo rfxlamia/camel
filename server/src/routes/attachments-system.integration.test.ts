@@ -30,47 +30,48 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					workspaceId: fixture.workspaceId,
 					user: fixture.viewerB,
 				});
+				try {
+					setAuthenticatedViewer(fixture.viewerA);
+					const image = pngFixture();
+					const response = await attachPair(
+						request(app).post(uploadUrl(fixture.workspaceId, fixture.cardId)),
+						image,
+						image,
+					);
 
-				setAuthenticatedViewer(fixture.viewerA);
-				const image = pngFixture();
-				const response = await attachPair(
-					request(app).post(uploadUrl(fixture.workspaceId, fixture.cardId)),
-					image,
-					image,
-				);
+					expect(response.status).toBe(201);
+					expect(response.body.total).toBe(2);
+					expect(response.body.acceptedCount).toBe(1);
+					expect(response.body.attachments).toHaveLength(1);
 
-				expect(response.status).toBe(201);
-				expect(response.body.total).toBe(2);
-				expect(response.body.acceptedCount).toBe(1);
-				expect(response.body.attachments).toHaveLength(1);
+					const rows = await attachmentRows(fixture.cardId);
+					expect(rows).toHaveLength(2);
+					const added = rows[1]!;
+					expect(
+						await readFile(path.join(fixture.storage.root, added.thumbnail_path)),
+					).toEqual(image);
+					expect(
+						await readFile(path.join(fixture.storage.root, added.original_path)),
+					).toEqual(image);
 
-				const rows = await attachmentRows(fixture.cardId);
-				expect(rows).toHaveLength(2);
-				const added = rows[1]!;
-				expect(
-					await readFile(path.join(fixture.storage.root, added.thumbnail_path)),
-				).toEqual(image);
-				expect(
-					await readFile(path.join(fixture.storage.root, added.original_path)),
-				).toEqual(image);
-
-				const events = parseSseDataEvents(viewerB.chunks);
-				expect(events).toHaveLength(1);
-				expect(events[0]).toMatchObject({
-					type: "attachment.added",
-					workspaceId: fixture.workspaceId,
-					cardId: fixture.cardId,
-					actor: {
-						id: fixture.viewerA.id,
-						username: fixture.viewerA.username,
-					},
-					payload: {
-						attachmentId: added.id,
-						mimeType: "image/png",
-					},
-				});
-
-				viewerB.close();
+					const events = parseSseDataEvents(viewerB.chunks);
+					expect(events).toHaveLength(1);
+					expect(events[0]).toMatchObject({
+						type: "attachment.added",
+						workspaceId: fixture.workspaceId,
+						cardId: fixture.cardId,
+						actor: {
+							id: fixture.viewerA.id,
+							username: fixture.viewerA.username,
+						},
+						payload: {
+							attachmentId: added.id,
+							mimeType: "image/png",
+						},
+					});
+				} finally {
+					viewerB.close();
+				}
 			});
 		}, 15_000);
 
@@ -85,7 +86,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 				expect(created.title).toBe("Staged board card");
 				expect(created.attachments).toHaveLength(1);
-				expect(created.attachments[0]).toMatchObject({
+				expect(created.attachments?.[0]).toMatchObject({
 					mimeType: "image/png",
 				});
 

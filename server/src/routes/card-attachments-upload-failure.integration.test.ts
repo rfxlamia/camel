@@ -92,27 +92,30 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					},
 					end: vi.fn(),
 				};
-				hub.sseHandler(subscriberRequest as never, subscriberResponse as never);
-				const response = await attachPair(
-					request(app).post(uploadUrl(fixture.workspaceId, fixture.cardId)),
-					pngFixture(),
-					pngFixture(),
-				);
-				expect(response.status).toBe(201);
-				const payloads = chunks
-					.filter((chunk) => chunk.startsWith("data: "))
-					.map(
-						(chunk) =>
-							JSON.parse(chunk.slice(6).trim()) as Record<string, unknown>,
+				try {
+					hub.sseHandler(subscriberRequest as never, subscriberResponse as never);
+					const response = await attachPair(
+						request(app).post(uploadUrl(fixture.workspaceId, fixture.cardId)),
+						pngFixture(),
+						pngFixture(),
 					);
-				expect(payloads).toHaveLength(1);
-				expect(payloads[0]).toMatchObject({
-					type: "attachment.added",
-					workspaceId: fixture.workspaceId,
-					cardId: fixture.cardId,
-				});
-				expect(payloads[0]).not.toHaveProperty("thumbnail");
-				subscriberRequest.emit("close");
+					expect(response.status).toBe(201);
+					const payloads = chunks
+						.filter((chunk) => chunk.startsWith("data: "))
+						.map(
+							(chunk) =>
+								JSON.parse(chunk.slice(6).trim()) as Record<string, unknown>,
+						);
+					expect(payloads).toHaveLength(1);
+					expect(payloads[0]).toMatchObject({
+						type: "attachment.added",
+						workspaceId: fixture.workspaceId,
+						cardId: fixture.cardId,
+					});
+					expect(payloads[0]).not.toHaveProperty("thumbnail");
+				} finally {
+					subscriberRequest.emit("close");
+				}
 			});
 		}, 15_000);
 	},

@@ -81,7 +81,8 @@ export default function AddCard({ column, onAddCard }: Props) {
 		},
 		editorRef,
 		editorShellRef,
-		syncDeps: [draft, fields, open],
+		fields,
+		open,
 	});
 
 	if (!open) {

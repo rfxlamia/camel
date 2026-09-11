@@ -206,7 +206,7 @@ export async function deliverAttachment(
 			return;
 		}
 		res.sendFile(providerPath, { root: config.ATTACHMENTS_DIR }, (error) => {
-			if (error && !res.headersSent) next(error);
+			if (error) next(error);
 		});
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {

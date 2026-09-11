@@ -42,7 +42,7 @@ function createAttachmentUploadProfile(
  */
 export const ATTACHMENT_UPLOAD_PROFILES = Object.freeze({
 	cardCreate: Object.freeze(createAttachmentUploadProfile(3)),
-	existingCard: Object.freeze(createAttachmentUploadProfile(10)),
+	existingCard: Object.freeze(createAttachmentUploadProfile(3)),
 });
 
 export const ATTACHMENT_UPLOAD_LIMITS = ATTACHMENT_UPLOAD_PROFILES;

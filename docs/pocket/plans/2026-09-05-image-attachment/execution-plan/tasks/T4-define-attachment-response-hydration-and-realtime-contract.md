@@ -6,7 +6,7 @@
 
 ---
 
-### Pocket Packet
+## Pocket Packet
 
 ### Task 4: Define attachment response hydration and realtime contract [depends: T1] [test-risk]
 
