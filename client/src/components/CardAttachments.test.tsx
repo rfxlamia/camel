@@ -178,7 +178,9 @@ describe("CardAttachments — picker/paste/counter", () => {
 		const clipboardBlob = new Blob(["jpeg"], { type: "image/jpeg" });
 		fireEvent.paste(screen.getByRole("dialog", { name: "Upload images" }), {
 			clipboardData: {
-				items: [{ kind: "file", type: "image/jpeg", getAsFile: () => clipboardBlob }],
+				items: [
+					{ kind: "file", type: "image/jpeg", getAsFile: () => clipboardBlob },
+				],
 				files: [],
 			},
 		});
@@ -198,11 +200,7 @@ describe("CardAttachments — picker/paste/counter", () => {
 
 	it("does not upload a clipboard without image items", () => {
 		render(
-			<CardAttachments
-				card={makeCard()}
-				workspaceId={7}
-				onUpload={onUpload}
-			/>,
+			<CardAttachments card={makeCard()} workspaceId={7} onUpload={onUpload} />,
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Add images" }));
@@ -269,9 +267,7 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 			/>,
 		);
 
-		fireEvent.click(
-			screen.getByRole("button", { name: "View attachment 1" }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: "View attachment 1" }));
 
 		const lightbox = screen.getByRole("dialog", { name: "Image preview" });
 		const image = within(lightbox).getByRole("img", { name: "Attachment 1" });
@@ -321,9 +317,7 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 			/>,
 		);
 
-		fireEvent.click(
-			screen.getByRole("button", { name: "View attachment 1" }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: "View attachment 1" }));
 		expect(screen.getByRole("dialog", { name: "Image preview" })).toBeTruthy();
 
 		fireEvent.keyDown(window, { key: "Escape" });
@@ -387,9 +381,7 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 		const dialog = screen.getByRole("dialog", {
 			name: "Confirm attachment delete",
 		});
-		fireEvent.click(
-			within(dialog).getByRole("button", { name: "Cancel" }),
-		);
+		fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 		expect(onDelete).not.toHaveBeenCalled();
 		expect(screen.queryByRole("dialog")).toBeNull();
 
@@ -397,10 +389,9 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 			screen.getByRole("button", { name: "Delete attachment 1" }),
 		);
 		fireEvent.click(
-			within(screen.getByRole("dialog", { name: "Confirm attachment delete" })).getByRole(
-				"button",
-				{ name: "Delete" },
-			),
+			within(
+				screen.getByRole("dialog", { name: "Confirm attachment delete" }),
+			).getByRole("button", { name: "Delete" }),
 		);
 		await waitFor(() =>
 			expect(onDelete).toHaveBeenCalledWith(attachments[0]!.id),

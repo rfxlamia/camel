@@ -97,9 +97,11 @@ describe("CardBody", () => {
 		render(<CardBody card={card({ attachments })} />);
 
 		expect(
-			screen.getByRole("img", {
-				name: "Attachment preview for Keep the title visible",
-			}).getAttribute("src"),
+			screen
+				.getByRole("img", {
+					name: "Attachment preview for Keep the title visible",
+				})
+				.getAttribute("src"),
 		).toBe(attachments[0].thumbnailUrl);
 		expect(screen.queryByText(/^\+/)).toBeNull();
 		expect(screen.queryByLabelText(/more attachments/)).toBeNull();

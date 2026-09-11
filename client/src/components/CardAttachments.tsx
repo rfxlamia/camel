@@ -1,10 +1,5 @@
 import { Download, Trash2, X } from "lucide-react";
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CardAttachmentUploadResponse } from "../api";
 import { orderCardAttachments } from "../lib/cardAttachments";
 import {
@@ -72,7 +67,8 @@ export default function CardAttachments({
 			setPreviewAttachment(null);
 		};
 		window.addEventListener("keydown", onKeyDown, { capture: true });
-		return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+		return () =>
+			window.removeEventListener("keydown", onKeyDown, { capture: true });
 	}, [pendingDeleteId, previewAttachment]);
 
 	useEffect(() => {
