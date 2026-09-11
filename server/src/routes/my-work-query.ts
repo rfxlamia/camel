@@ -1,5 +1,6 @@
 import { type RawBuilder, sql } from "kysely";
 import { parseKeyFromUrl } from "../core/tracker-key.js";
+import { myWorkCursorKeyNumber } from "./my-work-cursor.js";
 import type {
 	MyWorkCursor,
 	MyWorkScope,
@@ -139,8 +140,7 @@ function appendCursorTerm(
 }
 
 function cursorKeyNumber(cursor: MyWorkCursor): number | null {
-	const value = Number(cursor.key.slice(cursor.key.lastIndexOf("-") + 1));
-	return Number.isSafeInteger(value) ? value : null;
+	return myWorkCursorKeyNumber(cursor);
 }
 
 type CursorPredicateParts = {

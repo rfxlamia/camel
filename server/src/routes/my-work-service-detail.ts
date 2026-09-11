@@ -11,6 +11,7 @@ import type {
 	MyWorkSerializedItem,
 	MyWorkService,
 	MyWorkTrackerRow,
+	MyWorkWorkspace,
 } from "./my-work-types.js";
 
 function readDetailRow(
@@ -36,6 +37,33 @@ function detailRowMatches(
 	);
 }
 
+async function findAuthorizedWorkspace(
+	source: MyWorkDataSource,
+	userId: number,
+	workspaceId: number,
+): Promise<MyWorkWorkspace | null> {
+	const workspaces = await source.listAuthorizedWorkspaces(userId);
+	return workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
+}
+
+function detailQueryInput(input: MyWorkDetailInput): MyWorkDetailQueryInput {
+	return {
+		userId: input.userId,
+		workspaceId: input.workspaceId,
+		key: input.key,
+		keyNumber: input.keyNumber,
+	};
+}
+
+async function readAuthorizedDetailRow(
+	source: MyWorkDataSource,
+	input: MyWorkDetailQueryInput,
+	kind: "board" | "tracker",
+): Promise<MyWorkBoardRow | MyWorkTrackerRow | null> {
+	const row = await readDetailRow(source, input, kind);
+	return detailRowMatches(row, input.workspaceId, input.userId) ? row : null;
+}
+
 function detailCandidate(
 	input: MyWorkDetailInput,
 	row: MyWorkBoardRow | MyWorkTrackerRow,
@@ -43,6 +71,19 @@ function detailCandidate(
 	return input.source === "tracker"
 		? { source: "tracker", row: row as MyWorkTrackerRow }
 		: { source: "board", row: row as MyWorkBoardRow };
+}
+
+async function hydrateDetail(
+	hydrate: MyWorkHydrate,
+	input: MyWorkDetailInput,
+	workspace: MyWorkWorkspace,
+	row: MyWorkBoardRow | MyWorkTrackerRow,
+): Promise<MyWorkSerializedItem | null> {
+	const hydrated = await hydrate(
+		[detailCandidate(input, row)],
+		new Map([[workspace.id, workspace]]),
+	);
+	return hydrated[0] ?? null;
 }
 
 export function createMyWorkDetail(
@@ -53,45 +94,33 @@ export function createMyWorkDetail(
 		input: MyWorkDetailInput,
 	): Promise<MyWorkSerializedItem | null> => {
 		try {
-			const workspaces = await source.listAuthorizedWorkspaces(input.userId);
-			const workspace = workspaces.find(
-				(candidate) => candidate.id === input.workspaceId,
-			);
-			if (!workspace) return null;
-
-			const detailInput: MyWorkDetailQueryInput = {
-				userId: input.userId,
-				workspaceId: input.workspaceId,
-				key: input.key,
-				keyNumber: input.keyNumber,
-			};
-			const initialRow = await readDetailRow(source, detailInput, input.source);
-			if (!detailRowMatches(initialRow, workspace.id, input.userId))
-				return null;
-
-			// Re-read membership after the source read to close the stale detail
-			// window for injected repositories and revoked memberships.
-			const currentWorkspaces = await source.listAuthorizedWorkspaces(
+			const initialWorkspace = await findAuthorizedWorkspace(
+				source,
 				input.userId,
+				input.workspaceId,
 			);
-			const currentWorkspace = currentWorkspaces.find(
-				(candidate) => candidate.id === input.workspaceId,
+			if (!initialWorkspace) return null;
+			const queryInput = detailQueryInput(input);
+			const initialRow = await readAuthorizedDetailRow(
+				source,
+				queryInput,
+				input.source,
+			);
+			if (!initialRow) return null;
+
+			const currentWorkspace = await findAuthorizedWorkspace(
+				source,
+				input.userId,
+				input.workspaceId,
 			);
 			if (!currentWorkspace) return null;
-
-			// Assignment is a separate authorization boundary. Re-read the source
-			// row immediately before hydration so revoked assignments fail closed.
-			const currentRow = await readDetailRow(source, detailInput, input.source);
-			if (!detailRowMatches(currentRow, currentWorkspace.id, input.userId)) {
-				return null;
-			}
-
-			const candidate = detailCandidate(input, currentRow);
-			const hydrated = await hydrate(
-				[candidate],
-				new Map([[currentWorkspace.id, currentWorkspace]]),
+			const currentRow = await readAuthorizedDetailRow(
+				source,
+				queryInput,
+				input.source,
 			);
-			return hydrated[0] ?? null;
+			if (!currentRow) return null;
+			return hydrateDetail(hydrate, input, currentWorkspace, currentRow);
 		} catch (error) {
 			throw asUnavailable(error);
 		}

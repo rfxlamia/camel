@@ -72,6 +72,8 @@ export type MyWorkCursor = {
 	workspaceId: number;
 	source: MyWorkSource;
 	key: string;
+	/** Numeric tie-breaker shared by SQL, cursor predicates, and response sorting. */
+	keyNumber?: number;
 	id: number;
 };
 
