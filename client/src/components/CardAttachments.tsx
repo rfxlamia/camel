@@ -193,6 +193,12 @@ export default function CardAttachments({
 										src={attachment.thumbnailUrl}
 										alt={`Attachment ${attachment.id}`}
 										className="aspect-square w-full object-cover"
+										onError={(event) => {
+											const image = event.currentTarget;
+											if (image.dataset.fallbackAttempted === "true") return;
+											image.dataset.fallbackAttempted = "true";
+											image.src = attachment.originalUrl;
+										}}
 									/>
 								</button>
 								{onDelete && (

@@ -20,6 +20,11 @@ function installImageAndCanvas(
 	width: number,
 	height: number,
 	toBlob: HTMLCanvasElement["toBlob"],
+	pixelData = new Uint8ClampedArray([0, 0, 0, 255]),
+	getImageData: CanvasRenderingContext2D["getImageData"] = vi.fn(() => ({
+		data: pixelData,
+	})) as unknown as CanvasRenderingContext2D["getImageData"],
+	imageEvent: "load" | "error" = "load",
 ) {
 	const image: FakeImage = {
 		onload: null,
@@ -28,7 +33,10 @@ function installImageAndCanvas(
 		naturalHeight: height,
 		src: "",
 	};
-	const context = { drawImage: vi.fn() } as unknown as CanvasRenderingContext2D;
+	const context = {
+		drawImage: vi.fn(),
+		getImageData,
+	} as unknown as CanvasRenderingContext2D;
 	const canvas = {
 		width: 0,
 		height: 0,
@@ -47,7 +55,10 @@ function installImageAndCanvas(
 	});
 	vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
 	vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-	queueMicrotask(() => image.onload?.());
+	queueMicrotask(() => {
+		if (imageEvent === "load") image.onload?.();
+		else image.onerror?.();
+	});
 
 	return { canvas, context, image };
 }
@@ -97,6 +108,34 @@ describe("image attachment preparation", () => {
 		}
 	});
 
+	it("revokes the object URL when image decoding fails", async () => {
+		installImageAndCanvas(640, 480, vi.fn(), undefined, undefined, "error");
+		const file = new File(["png"], "broken.png", { type: "image/png" });
+
+		const result = await prepareImageAttachment(file);
+
+		expect(result.kind).toBe("invalid");
+		if (result.kind === "invalid") {
+			expect(result.error).toBe(IMAGE_VALIDATION_MESSAGES.unreadableDimensions);
+		}
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
+	});
+
+	it("revokes the object URL when decoded dimensions are missing", async () => {
+		installImageAndCanvas(0, 0, vi.fn());
+		const file = new File(["png"], "empty.png", { type: "image/png" });
+
+		const result = await prepareImageAttachment(file);
+
+		expect(result.kind).toBe("invalid");
+		if (result.kind === "invalid") {
+			expect(result.error).toBe(IMAGE_VALIDATION_MESSAGES.unreadableDimensions);
+		}
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
+	});
+
 	it("derives a safe extension for clipboard blobs", async () => {
 		installImageAndCanvas(
 			640,
@@ -131,6 +170,31 @@ describe("image attachment preparation", () => {
 		expect(canvas.width).toBe(1024);
 		expect(canvas.height).toBe(512);
 		expect(context.drawImage).toHaveBeenCalled();
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
+	});
+
+	it("falls back to original bytes when Canvas output is fully transparent", async () => {
+		const toBlob = vi.fn<HTMLCanvasElement["toBlob"]>((callback) => {
+			callback(new Blob(["transparent-thumbnail"], { type: "image/png" }));
+		});
+		installImageAndCanvas(
+			640,
+			480,
+			toBlob,
+			new Uint8ClampedArray([0, 0, 0, 0]),
+		);
+		const file = new File(["original"], "photo.png", { type: "image/png" });
+
+		const result = await prepareImageAttachment(file);
+
+		expect(result.kind).toBe("valid");
+		if (result.kind === "valid") {
+			expect(result.thumbnail).toBe(result.original);
+			expect(await result.thumbnail.text()).toBe("original");
+		}
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
 	});
 
 	it("falls back to original bytes when Canvas encoding fails", async () => {
@@ -147,5 +211,27 @@ describe("image attachment preparation", () => {
 			expect(result.thumbnail).toBe(result.original);
 			expect(await result.thumbnail.text()).toBe("original");
 		}
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
+	});
+
+	it("falls back to original bytes when Canvas pixel inspection fails", async () => {
+		const toBlob = vi.fn<HTMLCanvasElement["toBlob"]>((callback) => {
+			callback(new Blob(["thumbnail"], { type: "image/png" }));
+		});
+		const getImageData = vi.fn<CanvasRenderingContext2D["getImageData"]>(() => {
+			throw new Error("pixel inspection failed");
+		});
+		installImageAndCanvas(640, 480, toBlob, undefined, getImageData);
+		const file = new File(["original"], "photo.png", { type: "image/png" });
+
+		const result = await prepareImageAttachment(file);
+
+		expect(result.kind).toBe("valid");
+		if (result.kind === "valid") {
+			expect(result.thumbnail).toBe(result.original);
+		}
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+		expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test");
 	});
 });

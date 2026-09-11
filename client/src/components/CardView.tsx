@@ -26,10 +26,17 @@ export function CardBody({ card }: { card: Card }) {
 			{cover && (
 				<div className="relative mb-2 overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
 					<img
+						key={cover.id}
 						src={cover.thumbnailUrl}
 						alt={`Attachment preview for ${card.title}`}
 						title="Card attachment"
 						className="h-24 w-full object-cover"
+						onError={(event) => {
+							const image = event.currentTarget;
+							if (image.dataset.fallbackAttempted === "true") return;
+							image.dataset.fallbackAttempted = "true";
+							image.src = cover.originalUrl;
+						}}
 					/>
 					{extraCount > 0 && (
 						<span

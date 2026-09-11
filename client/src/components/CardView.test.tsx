@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Card, CardAttachment } from "../types";
 import { CardBody } from "./CardView";
@@ -86,6 +86,20 @@ describe("CardBody", () => {
 		).toBe(attachments[0].thumbnailUrl);
 		expect(screen.queryByText(/^\+/)).toBeNull();
 		expect(screen.queryByLabelText(/more attachments/)).toBeNull();
+	});
+
+	it("falls back to the original when the cover thumbnail fails without looping", () => {
+		const attachments = [makeAttachment(1, "A")];
+		render(<CardBody card={card({ attachments })} />);
+
+		const cover = screen.getByRole("img", {
+			name: "Attachment preview for Keep the title visible",
+		});
+		fireEvent.error(cover);
+
+		expect(cover.getAttribute("src")).toBe(attachments[0].originalUrl);
+		fireEvent.error(cover);
+		expect(cover.getAttribute("src")).toBe(attachments[0].originalUrl);
 	});
 
 	it("renders plain card content without cover or badge when attachments are empty", () => {
