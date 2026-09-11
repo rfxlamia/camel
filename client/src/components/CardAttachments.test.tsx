@@ -256,6 +256,25 @@ describe("CardAttachments — gallery/lightbox/delete", () => {
 		);
 	});
 
+	it("falls back to the original gallery image when a thumbnail fails without looping", () => {
+		const attachments = [makeAttachment(1)];
+		render(
+			<CardAttachments
+				card={makeCard(attachments)}
+				workspaceId={7}
+				onUpload={onUpload}
+				onDelete={onDelete}
+			/>,
+		);
+
+		const image = screen.getByRole("img", { name: "Attachment 1" });
+		fireEvent.error(image);
+
+		expect(image.getAttribute("src")).toBe(attachments[0].originalUrl);
+		fireEvent.error(image);
+		expect(image.getAttribute("src")).toBe(attachments[0].originalUrl);
+	});
+
 	it("dismisses lightbox on Escape without unmounting the attachment section", () => {
 		const attachments = [makeAttachment(1)];
 		const parentEscape = vi.fn();

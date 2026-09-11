@@ -94,18 +94,17 @@ function readImageDimensions(file: File): Promise<DecodedImage> {
 				);
 				return;
 			}
-			finish(() => reject(new Error("missing image dimensions")));
+			finish(() => {
+				URL.revokeObjectURL(objectUrl);
+				reject(new Error("missing image dimensions"));
+			});
 		};
 		image.onerror = () =>
-			finish(() => reject(new Error("image decode failed")));
+			finish(() => {
+				URL.revokeObjectURL(objectUrl);
+				reject(new Error("image decode failed"));
+			});
 		image.src = objectUrl;
-
-		if (typeof image.decode === "function") {
-			void image.decode().then(
-				() => image.onload?.(new Event("load")),
-				() => image.onerror?.(new Event("error")),
-			);
-		}
 	});
 }
 
@@ -117,7 +116,12 @@ async function createThumbnail(
 	file: File,
 	decodedImage: DecodedImage,
 ): Promise<PreparedImagePair> {
-	const releaseObjectUrl = () => URL.revokeObjectURL(decodedImage.objectUrl);
+	let objectUrlReleased = false;
+	const releaseObjectUrl = () => {
+		if (objectUrlReleased) return;
+		objectUrlReleased = true;
+		URL.revokeObjectURL(decodedImage.objectUrl);
+	};
 	try {
 		const { dimensions, element: image } = decodedImage;
 		const canvas = document.createElement("canvas");
@@ -137,6 +141,18 @@ async function createThumbnail(
 		}
 
 		context.drawImage(image, 0, 0, width, height);
+		const pixels = context.getImageData(0, 0, width, height).data;
+		let hasVisiblePixels = false;
+		for (let index = 3; index < pixels.length; index += 4) {
+			if (pixels[index] !== 0) {
+				hasVisiblePixels = true;
+				break;
+			}
+		}
+		if (!hasVisiblePixels) {
+			releaseObjectUrl();
+			return fallbackPair(file);
+		}
 		const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
 			try {
 				canvas.toBlob(resolve, file.type, 0.85);
