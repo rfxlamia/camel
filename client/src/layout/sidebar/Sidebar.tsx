@@ -3,10 +3,10 @@ import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
 import { useBoard } from "../../context/BoardContext";
 import { useNotificationsContext } from "../../context/NotificationsContext";
-import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
-import { type Mode, navLinkClass } from "./shared";
 import { ModeSwitcher } from "./ModeSwitcher";
+import { AGENT_NAV, GLOBAL_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
 import { SignOutPopover } from "./SignOutPopover";
+import { type Mode, navLinkClass } from "./shared";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 /* ------------------------------------------------------------------ */
@@ -57,6 +57,25 @@ export default function Sidebar({
 					{settings.boardName}
 				</span>
 			</div>
+
+			{/* Global navigation */}
+			<nav
+				className="border-b border-neutral-200 px-2 py-2"
+				aria-label="Global"
+			>
+				{GLOBAL_NAV.map(({ to, label, icon: Icon }) => (
+					<NavLink
+						key={to}
+						to={to}
+						className={navLinkClass}
+						title={label}
+						aria-label={collapsed ? label : undefined}
+					>
+						<Icon size={18} className="shrink-0" aria-hidden />
+						<span className={labelClass}>{label}</span>
+					</NavLink>
+				))}
+			</nav>
 
 			{/* Mode switcher — only visible when expanded */}
 			{!collapsed && (
