@@ -27,10 +27,11 @@ T1 → T2, T4, T5 (parallel) → T3 → T6 → T7 → T8 → T9, T10, T11 (paral
 ### Parallelizable Groups
 
 | Group | Tasks | Unblocked After |
-|-------|-------|-----------------|
+| ------- | ------- | ----------------- |
 | Group A | T2, T4, T5 | T1 completes |
-| Group B | T9, T11 | T2 and T3 complete |
+| Group B | T9 | T2 and T3 complete |
 | Group C | T10 | T8 completes |
+| Group D | T11 | T3 and T6 complete |
 
 ### Constraints Reminder
 
@@ -303,104 +304,113 @@ Steps:
 1. Write failing test for: authorized cross-workspace rollup includes both sources exactly once.
    Test file: `server/src/routes/my-work.test.ts`
    Level: unit
-
    Test intent:
-   Given a current user is a member of Atlas and Orbit but not Nebula, with assigned Board and Tracker rows in the first two workspaces
+   Given a current user is a member of Atlas and Orbit, with assigned Board/Tracker rows
    When the personal rollup entry point is called with `scope=active`
-   Then:
-   - only authorized workspaces contribute rows
-   - both physical sources are represented
-   - each row carries workspace id/name, source, key, composite identity, and action metadata
-   - duplicate assignee joins do not duplicate rows
-   - tracker-wins dedup applies only within a workspace
-
-   Exercise through:
-   - the exported personal list handler/service boundary with a fake DB executor and membership result
-
-   Test doubles:
-   - mock/fake: DB executor queries, workspace membership lookup, assignee/label loaders
-   - do NOT mock: the personal merge/dedup/serialization logic under test
-
-   Expected RED:
-   - the personal route/response module does not exist.
+   Then authorized source rows carry workspace/source identity and appear once.
+   Exercise through: exported personal list handler/service with fake DB executor.
+   Test doubles: fake DB/membership/assignee loaders; do not mock merge logic.
+   Expected RED: personal route/response module does not exist.
 
 2. Run test — verify FAIL:
    `npm run test -- server/src/routes/my-work.test.ts`
-   Expected failure: missing personal rollup module or route behavior.
+   Expected failure: missing personal rollup behavior.
 
-3. Implement minimal code:
-   - Create `my-work-response.ts` with source-specific selection, membership-scoped query builders, per-workspace key dedup, batched assignee/label hydration, workspace metadata, composite identity, and normalized response serialization.
-   - Use one set-based query path per source; do not call `listMergedWorkItems()` once per workspace.
-   - Preserve soft-delete filters and existing Board/Tracker status/slot values. Expose enough workspace timezone/due metadata for the approved overdue behavior.
-   - Create `my-work.ts` with authenticated list and detail handlers. List supports active/all, key/title/description query, workspace/source filters, cursor/page-size handling, and unauthorized-workspace exclusion. Detail rechecks membership and assignment before returning data.
-   - Mount the router from `server/src/routes.ts` behind the existing authenticated API router.
-
-4. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
-   Expected: authorization, source merge, identity, dedup, and serialization tests pass.
-
-5. Write failing test for: Active/All normalization, unknown status, and detail reauthorization.
+3. Write failing test for: per-workspace dedup and composite identity.
    Test file: `server/src/routes/my-work.test.ts`
    Level: unit
    Test intent:
-   Given completed/canceled, backlog/started, and unknown status categories plus a previously visible item whose membership is revoked
-   When Active/All list or detail is requested
-   Then terminal filtering, Other preservation, and unavailable detail behavior match the spec.
-   Exercise through: route/service boundary.
-   Test doubles: fake DB executor and membership/assignment state; do not mock normalization.
-   Expected RED: current implementation lacks scope normalization and detail reauthorization.
+   Given duplicate assignee joins, same-key card/tracker rows in Atlas, and the same key in Orbit
+   When the rollup is built
+   Then tracker-wins applies only in Atlas, cross-workspace rows remain distinct, and each item appears once.
+   Exercise through: response merge/serialization boundary.
+   Test doubles: fake source rows/loaders; do not mock dedup logic.
+   Expected RED: dedup/composite identity behavior is absent.
+
+4. Run test — verify FAIL:
+   `npm run test -- server/src/routes/my-work.test.ts`
+   Expected failure: dedup/identity assertions fail.
+
+5. Write failing test for: unauthorized workspace leakage prevention.
+   Test file: `server/src/routes/my-work.test.ts`
+   Level: unit
+   Test intent:
+   Given Alice is not a member of Nebula but an assigned Nebula item exists
+   When the list runs
+   Then Nebula contributes no rows or workspace/task metadata.
+   Exercise through: personal list authorization boundary.
+   Test doubles: fake membership and source rows; do not mock authorization decision.
+   Expected RED: unauthorized filtering is not implemented.
 
 6. Run test — verify FAIL:
    `npm run test -- server/src/routes/my-work.test.ts`
-   Expected failure: missing Active/All and reauthorization assertions.
+   Expected failure: unauthorized row is returned or metadata leaks.
 
-7. Implement minimal code to satisfy the tests, including explicit unauthorized-versus-transient error classification.
-
-8. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.test.ts`
-   Expected: all personal read tests pass.
-
-9. Write failing test for: All-scope search, workspace/source filters, and cursor pagination.
+7. Write failing test for: Active/All normalization and unknown status.
    Test file: `server/src/routes/my-work.test.ts`
    Level: unit
    Test intent:
-   Given active, completed, canceled, and Other items across Atlas and Orbit
-   When an All request includes q, workspace/source filters, cursor, and page size
-   Then all-status candidates are searched, filters apply server-side, and the response returns deterministic items plus the next cursor.
-   Exercise through: personal list handler/service boundary.
-   Test doubles: fake DB executor with captured predicates and result pages; do not mock query construction.
-   Expected RED: the current implementation does not prove All/search/filter/cursor behavior.
+   Given completed/canceled, backlog/started, and unknown status categories
+   When Active and All lists are requested
+   Then terminal items are excluded from Active, unknown remains under Other, and All includes every category.
+   Exercise through: route/service boundary.
+   Test doubles: fake DB rows and status values; do not mock normalization.
+   Expected RED: scope/category behavior is absent.
+
+8. Run test — verify FAIL:
+   `npm run test -- server/src/routes/my-work.test.ts`
+   Expected failure: Active/All/category assertions fail.
+
+9. Write failing test for: detail reauthorization after membership/assignment revocation.
+   Test file: `server/src/routes/my-work.test.ts`
+   Level: unit
+   Test intent:
+   Given an item was visible before access or assignment was revoked
+   When detail is requested
+   Then the route returns the existing `404/not_found` unavailable behavior without cached task content.
+   Exercise through: detail route factory with membership/assignment dependency.
+   Test doubles: fake current authorization state; do not mock error mapping.
+   Expected RED: detail does not reauthorize.
 
 10. Run test — verify FAIL:
     `npm run test -- server/src/routes/my-work.test.ts`
-    Expected failure: missing All/search/filter/cursor assertions.
+    Expected failure: stale detail returns content or the wrong status/code.
 
-11. Implement the All/search/filter/cursor behavior and explicit transient-error classification without changing unauthorized-workspace exclusion.
-
-12. Run test — verify PASS:
-    `npm run test -- server/src/routes/my-work.test.ts`
-    Expected: all personal read tests, including All pagination/search, pass.
-
-13. Write failing test for: transient list failure returns a retryable error classification rather than an empty/partial success.
+11. Write failing test for: All-scope search, workspace/source filters, and cursor pagination.
     Test file: `server/src/routes/my-work.test.ts`
     Level: unit
     Test intent:
-    Given the personal query dependency throws a transient database/network error
+    Given active/completed/canceled/Other items across Atlas and Orbit
+    When an All request includes q, workspace/source filters, cursor, and page size
+    Then all-status candidates are searched, filters apply server-side, deterministic rows are returned, and next cursor is emitted.
+    Exercise through: personal list handler/service boundary.
+    Test doubles: fake DB executor with captured predicates/result pages; do not mock query construction.
+    Expected RED: All/search/filter/cursor behavior is absent.
+
+12. Run test — verify FAIL:
+    `npm run test -- server/src/routes/my-work.test.ts`
+    Expected failure: All/search/filter/cursor assertions fail.
+
+13. Write failing test for: transient list failure returns retryable error rather than empty/partial success.
+    Test file: `server/src/routes/my-work.test.ts`
+    Level: unit
+    Test intent:
+    Given the injected personal query dependency throws a transient error
     When the list handler runs
-    Then it returns the route's retryable error classification and no partial result payload.
-    Exercise through: route factory with an injected failing query dependency.
+    Then it returns the route's retryable error classification with no partial result payload.
+    Exercise through: route factory with injected failing query dependency.
     Test doubles: injected query dependency that throws; do not mock error mapping.
-    Expected RED: the route has no explicit transient failure seam/classification.
+    Expected RED: no explicit failure seam/classification exists.
 
 14. Run test — verify FAIL:
     `npm run test -- server/src/routes/my-work.test.ts`
-    Expected failure: transient error is unclassified or becomes an empty response.
+    Expected failure: transient error is unclassified or becomes empty success.
 
-15. Implement the injected route dependency/error mapping and keep production wiring on the real Kysely executor.
+15. Implement the query/merge/serialization route and response modules, route factory failure seam, authorization/detail logic, status scopes, filters, and cursor behavior required by all RED cycles. Keep production wiring on the real Kysely executor.
 
 16. Run test — verify PASS:
     `npm run test -- server/src/routes/my-work.test.ts`
-    Expected: transient, unauthorized, All, filter, cursor, and detail assertions pass.
+    Expected: all seven independent read/detail/error cycles pass.
 
 17. Refactor while green (bounded):
     - Keep global query/serialization logic in `my-work-response.ts`; do not grow `work-item-response.ts` or `tracker-items.ts` with cross-workspace branches.
@@ -493,84 +503,138 @@ Files:
 
 Steps:
 
-1. Write failing test for: Tracker status-change extraction preserves existing route behavior and resolves the canonical `slot="done"` target deterministically.
+1. Write failing test for: Tracker status-change extraction preserves existing route behavior and resolves `slot="done"` deterministically.
    Test file: `server/src/core/tracker-item-status-change.test.ts`
    Level: unit
-   Test intent:
-   Given a Tracker item with current version and multiple status vocabulary rows
-   When the extracted status-change service is asked to mark it done
-   Then it selects the deterministic position/id target, updates the item once, and records one tracker activity event.
+   Test intent: Given a Tracker item and multiple status rows, when the extracted service marks it done, then position/id target selection, one update, and one activity event are observed.
    Exercise through: exported status-change service used by both route consumers.
-   Test doubles: chainable Kysely executor and activity recorder; do not mock the resolver under test.
-   Expected RED: no extracted service exists and existing route logic is inline.
+   Test doubles: chainable Kysely executor/activity recorder; do not mock resolver.
+   Expected RED: extracted service does not exist.
 
 2. Run test — verify FAIL:
    `npm run test -- server/src/core/tracker-item-status-change.test.ts`
    Expected failure: missing service export.
 
-3. Extract the minimal tracker status mutation primitive from `tracker-items.ts`, preserve its existing API behavior, and make the canonical done selection deterministic.
-
-4. Run test — verify PASS:
-   `npm run test -- server/src/core/tracker-item-status-change.test.ts`
-   Expected: extraction and canonical target tests pass.
-
-5. Write failing test for: Mark done permission, mapping, conflict, idempotency, and activity behavior.
+3. Write failing test for: Board Mark done success and activity.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent:
-   Given Board and Tracker source rows, edit permission, versions, and mappings
-   When Mark done is requested
-   Then:
-   - unauthorized actors and missing mappings produce no source write
-   - stale versions return conflict for both sources
-   - already-done items return idempotent success without a duplicate activity
-   - successful Board/Tracker writes use the correct source primitive and record one activity
-   Exercise through: `my-work-mark-done.ts` public service boundary.
-   Test doubles: fake DB transaction, existing Board status service, extracted Tracker status service, and activity recorders; do not mock the command's decision logic.
-   Expected RED: command service and route action do not exist.
+   Test intent: Given an authorized Board item and valid `is_done` mapping, when Mark done runs, then the Board source changes and exactly one card activity is recorded.
+   Exercise through: command service with Board status primitive.
+   Test doubles: fake transaction/Board service/activity recorder; do not mock command decision logic.
+   Expected RED: command service does not exist.
+
+4. Run test — verify FAIL:
+   `npm run test -- server/src/core/my-work-mark-done.test.ts`
+   Expected failure: missing Board command behavior.
+
+5. Write failing test for: Tracker Mark done success and activity.
+   Test file: `server/src/core/my-work-mark-done.test.ts`
+   Level: unit
+   Test intent: Given an authorized Tracker item and `slot="done"`, when Mark done runs, then only the Tracker source changes and exactly one tracker activity is recorded.
+   Exercise through: command service with extracted Tracker primitive.
+   Test doubles: fake transaction/Tracker service/activity recorder; do not mock source selection.
+   Expected RED: Tracker command behavior is absent.
 
 6. Run test — verify FAIL:
    `npm run test -- server/src/core/my-work-mark-done.test.ts`
-   Expected failure: missing command behavior and decision assertions.
+   Expected failure: Tracker success assertion fails.
 
-7. Implement `my-work-mark-done.ts` and add the POST action to `my-work.ts`:
-   - reauthorize membership, assignment, and existing edit permission;
-   - resolve Board `is_done`/position and Tracker `slot="done"` mappings;
-   - delegate Board changes to `applyBoardCardStatusChange` and Tracker changes to the extracted primitive;
-   - preserve version conflicts and activity semantics;
-   - treat an already-canonical target as idempotent success without a second activity.
-
-8. Run test — verify PASS:
-   `npm run test -- server/src/core/my-work-mark-done.test.ts`
-   Expected: all source, permission, conflict, mapping, and idempotency tests pass.
-
-9. Write failing test for: canonical target removal after page load causes no partial write.
+7. Write failing test for: permission denial.
    Test file: `server/src/core/my-work-mark-done.test.ts`
    Level: unit
-   Test intent:
-   Given a valid done mapping was read earlier
-   When the mapping is removed before the Mark done transaction resolves
-   Then no source row is partially updated, the command returns a mapping failure, and activity is not recorded.
-   Exercise through: `my-work-mark-done.ts` transaction boundary.
-   Test doubles: fake transaction whose mapping lookup changes between reads; do not mock command decision logic.
-   Expected RED: mapping-race behavior is not explicitly covered.
+   Test intent: Given an assignee without existing edit permission, when Mark done runs, then the command returns the existing authorization failure and performs no source/activity write.
+   Exercise through: command authorization boundary.
+   Test doubles: permission dependency returning unauthorized and fake transaction; do not mock failure mapping.
+   Expected RED: permission behavior is not covered.
+
+8. Run test — verify FAIL:
+   `npm run test -- server/src/core/my-work-mark-done.test.ts`
+   Expected failure: unauthorized command assertion fails.
+
+9. Write failing test for: missing canonical mapping.
+   Test file: `server/src/core/my-work-mark-done.test.ts`
+   Level: unit
+   Test intent: Given no valid Board done column or Tracker `slot="done"` status, when Mark done runs, then it returns mapping failure and performs no source/activity write.
+   Exercise through: command mapping boundary.
+   Test doubles: fake transaction with missing mapping; do not mock mapping decision.
+   Expected RED: missing-mapping behavior is not covered.
 
 10. Run test — verify FAIL:
     `npm run test -- server/src/core/my-work-mark-done.test.ts`
-    Expected failure: mapping-race assertion is absent or partial write is observed.
+    Expected failure: mapping failure assertion fails.
 
-11. Implement the atomic mapping recheck/rollback behavior.
+11. Write failing test for: Board stale version conflict.
+    Test file: `server/src/core/my-work-mark-done.test.ts`
+    Level: unit
+    Test intent: Given a stale Board version, when Mark done runs, then conflict is returned with no activity.
+    Exercise through: Board command primitive.
+    Test doubles: fake Board service returning conflict; do not mock command handling.
+    Expected RED: Board conflict handling is not covered.
 
-12. Run test — verify PASS:
+12. Run test — verify FAIL:
     `npm run test -- server/src/core/my-work-mark-done.test.ts`
-    Expected: permission, mapping, conflict, idempotency, activity, and mapping-race tests pass.
+    Expected failure: Board conflict assertion fails.
 
-13. Refactor while green (bounded):
+13. Write failing test for: Tracker stale version conflict.
+    Test file: `server/src/core/my-work-mark-done.test.ts`
+    Level: unit
+    Test intent: Given a stale Tracker version, when Mark done runs, then conflict is returned with no activity and no card write.
+    Exercise through: Tracker command primitive.
+    Test doubles: fake Tracker service returning conflict; do not mock source handling.
+    Expected RED: Tracker conflict assertion fails.
+
+14. Run test — verify FAIL:
+    `npm run test -- server/src/core/my-work-mark-done.test.ts`
+    Expected failure: Tracker conflict assertion fails.
+
+15. Write failing test for: idempotent retry of an already-done item.
+    Test file: `server/src/core/my-work-mark-done.test.ts`
+    Level: unit
+    Test intent: Given the source is already at the canonical done target, when Mark done is retried, then success is returned without a duplicate activity.
+    Exercise through: command service.
+    Test doubles: fake transaction showing canonical target; do not mock idempotency decision.
+    Expected RED: idempotent behavior is not covered.
+
+16. Run test — verify FAIL:
+    `npm run test -- server/src/core/my-work-mark-done.test.ts`
+    Expected failure: idempotency assertion fails.
+
+17. Write failing test for: tracker-to-cards must-not invariant.
+    Test file: `server/src/core/my-work-mark-done.test.ts`
+    Level: unit
+    Test intent: Given a Tracker item, when Mark done runs, then no cards query/update is made.
+    Exercise through: command service with query-table spy.
+    Test doubles: fake transaction recording table access; do not mock source selection.
+    Expected RED: source-table invariant is not explicit.
+
+18. Run test — verify FAIL:
+    `npm run test -- server/src/core/my-work-mark-done.test.ts`
+    Expected failure: table-access assertion fails.
+
+19. Write failing test for: canonical target removal after page load causes no partial write.
+    Test file: `server/src/core/my-work-mark-done.test.ts`
+    Level: unit
+    Test intent: Given a valid mapping was read earlier, when it is removed before the transaction resolves, then no source row/activity is written and mapping failure is returned.
+    Exercise through: command transaction boundary.
+    Test doubles: fake transaction whose mapping changes between reads; do not mock rollback logic.
+    Expected RED: mapping-race behavior is absent.
+
+20. Run test — verify FAIL:
+    `npm run test -- server/src/core/my-work-mark-done.test.ts`
+    Expected failure: mapping-race assertion fails or observes partial write.
+
+21. Implement the extracted Tracker primitive, command service, route action, authorization/mapping/version/idempotency handling, and atomic mapping recheck required by all RED cycles.
+
+22. Run test — verify PASS:
+    `npm run test -- server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts`
+    Expected: every independent source success/failure/invariant cycle passes.
+
+23. Refactor while green (bounded):
     - Keep source-specific behavior in existing/extracted domain services; keep route parsing in `my-work.ts`.
     - Do not duplicate Tracker mutation logic in My Work.
     - Run existing regression tests: `npm run test -- server/src/core/board-card-status-change.test.ts server/src/routes/tracker-items.write.test.ts`.
 
-14. Commit:
+24. Commit:
     `git add server/src/core/tracker-item-status-change.ts server/src/core/my-work-mark-done.ts server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts server/src/routes/tracker-items.ts server/src/routes/my-work.ts`
     `git commit -m "feat(my-work): add source-aware mark done"`
 
@@ -960,88 +1024,133 @@ Files:
 
 Steps:
 
-1. Write failing test for: route load, Active/All controls, workspace/source filters, status grouping, and whole-page error/empty states.
+1. Write failing test for: normal route render, filters, groups, and URL state.
    Test file: `client/src/pages/MyWorkPage.test.tsx`
    Level: component
    Test intent:
-   Given the API returns assigned Board/Tracker items or a failure
-   When My Work renders and the user changes scope/filter/search
-   Then route `/my-work` loads without using activeWorkspaceId as rollup scope, URL filters update, badges/groups render, empty Active differs from transient error, and retry is available without partial data.
-   Exercise through: `RouterProvider`/MemoryRouter, page component, and configured API boundary.
-   Test doubles: fake API responses and BoardContext user/guards; do not mock page state/helpers.
+   Given an authorized API response
+   When `/my-work` renders and scope/workspace/source/search controls change
+   Then the page renders grouped rows with badges and updates URL state without using activeWorkspaceId as rollup scope.
+   Exercise through: RouterProvider/MemoryRouter, page, and API boundary.
+   Test doubles: fake API and BoardContext user/guards; do not mock page state/helpers.
    Expected RED: route/page/components do not exist.
 
 2. Run test — verify FAIL:
    `npm run test -- client/src/pages/MyWorkPage.test.tsx`
-   Expected failure: missing route/page or expected UI controls.
+   Expected failure: missing route/page or controls.
 
-3. Write failing test for: visibility/manual refresh and expired-session distinction.
+3. Write failing test for: transient whole-page failure and retry.
    Test file: `client/src/pages/MyWorkPage.test.tsx`
    Level: component
    Test intent:
-   Given the page is hidden then visible, or the API returns an auth/session error
+   Given the personal list request fails transiently
+   When My Work renders and Retry is clicked
+   Then a retryable whole-page error is shown, no partial list is presented, and retry invokes the complete request.
+   Exercise through: page error boundary and retry button.
+   Test doubles: fake API rejection then success; do not mock error UI.
+   Expected RED: failure/whole-page retry behavior is absent.
+
+4. Run test — verify FAIL:
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   Expected failure: transient-error assertions fail.
+
+5. Write failing test for: actionable Active empty state.
+   Test file: `client/src/pages/MyWorkPage.test.tsx`
+   Level: component
+   Test intent:
+   Given Active has no items but All has historical items
+   When Active renders
+   Then an actionable empty state appears and the All control remains available.
+   Exercise through: page scope rendering.
+   Test doubles: deterministic empty/All API fixture; do not mock empty-state decision.
+   Expected RED: empty-state behavior is absent.
+
+6. Run test — verify FAIL:
+   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+   Expected failure: empty-state assertion fails.
+
+7. Write failing test for: visibility refresh and expired-session distinction.
+   Test file: `client/src/pages/MyWorkPage.test.tsx`
+   Level: component
+   Test intent:
+   Given the page becomes visible after being hidden, or the API returns an auth/session error
    When refresh/effect handling runs
-   Then visibility triggers a newest-request-wins refresh, while expired auth renders an auth/session error rather than an empty state.
+   Then visibility triggers newest-request-wins refresh, while expired auth renders session error rather than empty state.
    Exercise through: page effect and visibility event boundary.
    Test doubles: fake API responses, document visibility events, and timers; do not mock stale-response handling.
    Expected RED: refresh/auth classification is absent.
 
-4. Run test — verify FAIL:
+8. Run test — verify FAIL:
    `npm run test -- client/src/pages/MyWorkPage.test.tsx`
    Expected failure: visibility/auth assertions fail.
 
-5. Write failing test for: page-level 73-item ordering and 50/23 pagination.
+9. Write failing test for: explicit manual refresh action.
    Test file: `client/src/pages/MyWorkPage.test.tsx`
    Level: component
    Test intent:
-   Given 73 active items with overdue/due-date ordering across groups
-   When the page renders and the user changes page
-   Then the first page renders 50 rows in the helper-defined group/order and the second page renders 23 without duplicates/gaps.
-   Exercise through: full page/list rendering with real helper modules.
-   Test doubles: deterministic API fixture only; do not mock list derivation.
-   Expected RED: page has no pagination/order integration.
-
-6. Run test — verify FAIL:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
-   Expected failure: page-level pagination/order assertions fail.
-
-7. Implement:
-   - Add the authenticated lazy route to `App.tsx`.
-   - Build toolbar controls for Active/All, search, workspace/source filters, counts, and retry.
-   - Load the personal API response, guard against stale requests, refresh on visibility, and apply `myWorkUtils`/`myWorkSearch`.
-   - Render status groups and 50-item pages with stable row identity.
-   - Fail the whole page on transient list failure; distinguish session failure from empty state.
-   - Preserve URL state for scope/query/filter/page/detail placeholders.
-
-8. Run test — verify PASS:
-   `npm run test -- client/src/pages/MyWorkPage.test.tsx`
-   Expected: route/load/filter/error/empty/refresh/auth/pagination/order assertions pass.
-
-9. Write failing test for: responsive row content and compact mobile layout.
-   Test file: `client/src/components/my-work/MyWorkRow.test.tsx`
-   Level: component
-   Test intent:
-   Given a Board or Tracker item with long title/workspace/source metadata, when rendered at compact/mobile props, then key, title, status, workspace/source, due state, and an accessible detail trigger remain usable without horizontal table dependence.
-   Exercise through: `MyWorkRow` public props.
-   Test doubles: plain item fixtures and viewport/container class assertions; do not mock row rendering.
-   Expected RED: row component does not exist.
+   Given a rendered My Work list
+   When the user activates Refresh
+   Then a new personal-list request runs, the existing view state remains, and the latest result replaces the previous result.
+   Exercise through: toolbar Refresh control.
+   Test doubles: fake API response sequence; do not mock refresh state transitions.
+   Expected RED: no manual Refresh control/behavior exists.
 
 10. Run test — verify FAIL:
+    `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+    Expected failure: manual refresh assertion fails.
+
+11. Write failing test for: page-level 73-item ordering and 50/23 pagination.
+    Test file: `client/src/pages/MyWorkPage.test.tsx`
+    Level: component
+    Test intent:
+    Given 73 active items with overdue/due-date ordering across groups
+    When the page renders and the user changes page
+    Then page one renders 50 rows in helper-defined order and page two renders 23 without duplicates/gaps.
+    Exercise through: full page/list rendering with real helpers.
+    Test doubles: deterministic API fixture only; do not mock list derivation.
+    Expected RED: page has no pagination/order integration.
+
+12. Run test — verify FAIL:
+    `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+    Expected failure: page-level pagination/order assertions fail.
+
+13. Implement:
+    - Add the authenticated lazy route to `App.tsx`.
+    - Build toolbar controls for Active/All, search, workspace/source filters, counts, Refresh, and retry.
+    - Load the personal API response, guard stale requests, refresh on visibility/manual action, and apply `myWorkUtils`/`myWorkSearch`.
+    - Render status groups and 50-item pages with stable row identity.
+    - Fail the whole page on transient list failure; distinguish session failure from empty state.
+    - Preserve URL state for scope/query/filter/page/detail placeholders.
+
+14. Run test — verify PASS:
+    `npm run test -- client/src/pages/MyWorkPage.test.tsx`
+    Expected: all page render/error/empty/refresh/auth/pagination/order cycles pass.
+
+15. Write failing test for: responsive row content and compact mobile layout.
+    Test file: `client/src/components/my-work/MyWorkRow.test.tsx`
+    Level: component
+    Test intent:
+    Given a Board or Tracker item with long title/workspace/source metadata, when rendered at compact/mobile props, then key, title, status, workspace/source, due state, and accessible detail trigger remain usable without horizontal table dependence.
+    Exercise through: `MyWorkRow` public props.
+    Test doubles: plain fixtures and viewport/container class assertions; do not mock row rendering.
+    Expected RED: row component does not exist.
+
+16. Run test — verify FAIL:
     `npm run test -- client/src/components/my-work/MyWorkRow.test.tsx`
-    Expected failure: missing row component or required metadata.
+    Expected failure: missing row component or metadata.
 
-11. Implement `MyWorkRow`/`MyWorkList`/`MyWorkToolbar` responsive rendering and stable action slots without adding mutation behavior.
+17. Implement `MyWorkRow`/`MyWorkList`/`MyWorkToolbar` responsive rendering and stable action slots without mutation behavior.
 
-12. Run test — verify PASS:
+18. Run test — verify PASS:
     `npm run test -- client/src/components/my-work/MyWorkRow.test.tsx`
     Expected: desktop/mobile content assertions pass.
 
-13. Refactor while green:
-    - Keep fetch/URL/visibility state in the page, controls in the toolbar, grouping/list rendering in list, and row presentation in row.
+19. Refactor while green:
+    - Keep fetch/URL/visibility/manual-refresh state in the page, controls in toolbar, grouping/list rendering in list, and row presentation in row.
     - Keep Mark done/detail actions as explicit slots for T7/T8.
     - Re-run both page and row tests.
 
-14. Commit:
+20. Commit:
     `git add client/src/pages/MyWorkPage.tsx client/src/components/my-work/MyWorkToolbar.tsx client/src/components/my-work/MyWorkList.tsx client/src/components/my-work/MyWorkRow.tsx client/src/App.tsx client/src/pages/MyWorkPage.test.tsx client/src/components/my-work/MyWorkRow.test.tsx`
     `git commit -m "feat(my-work): build personal work list"`
 
@@ -1427,63 +1536,102 @@ Files:
 
 Steps:
 
-1. Write failing test for: cross-workspace authorized read and source identity.
+1. Write failing test for: authorized cross-workspace rollup and composite identity.
    Test file: `server/src/routes/my-work.integration.test.ts`
    Level: integration
-   Test intent:
-   Given a real test DB with Alice in Atlas/Orbit, assigned Board/Tracker items, unauthorized Nebula, and same-key fixtures
-   When authenticated Alice requests My Work
-   Then authorized items appear once, unauthorized data is absent, and per-workspace tracker-wins/composite identity holds.
-   Exercise through: Express app and HTTP API boundary, not internal helpers.
-   Test doubles:
-   - real test PostgreSQL fixture and cookie/session auth helper
-   - do NOT mock routes, Kysely, membership, assignee, or activity behavior
-   Expected RED: My Work API is not mounted/implemented or does not satisfy full collaboration.
+   Test intent: Given real Atlas/Orbit/Nebula fixtures and same-key rows, when authenticated Alice requests My Work, then authorized Board/Tracker rows appear once, unauthorized rows are absent, and per-workspace tracker-wins/composite identity holds.
+   Exercise through: Express app and authenticated HTTP API.
+   Test doubles: real PostgreSQL fixture and cookie/session auth helper; do not mock routes/Kysely/membership.
+   Expected RED: API is not mounted/implemented or collaboration fails.
 
 2. Run test — verify FAIL:
    `npm run test -- server/src/routes/my-work.integration.test.ts`
-   Expected failure: route/fixture/assertion failure.
+   Expected failure: route/fixture/identity assertion failure.
 
-3. Implement integration fixtures/setup and assertions using existing `work-item-unified.integration.test.ts` and workspace fixture conventions. Keep test data isolated and deterministic.
-
-4. Run test — verify PASS:
-   `npm run test -- server/src/routes/my-work.integration.test.ts`
-   Expected: authorized read and identity tests pass with a migrated test DB.
-
-5. Write failing test for: detail reauthorization, Mark done source routing/idempotency, conflict, and unauthorized mutation rejection.
+3. Write failing test for: detail reauthorization.
    Test file: `server/src/routes/my-work.integration.test.ts`
    Level: integration
-   Test intent:
-   Given item access/assignment/permission changes and Board/Tracker source fixtures
-   When detail or Mark done is requested, including retry/conflict cases
-   Then:
-   - revoked detail returns unavailable without content
-   - correct source changes and exactly one activity event is recorded
-   - stale version conflicts without partial write
-   - already-done retry is idempotent
-   - an assignee without edit permission receives the unauthorized response and neither source table nor activity changes
-   Exercise through: authenticated HTTP API.
-   Test doubles:
-   - real DB state transitions and cookie/session auth helper
-   - do NOT mock the My Work command or route
-   Expected RED: cross-unit detail/mutation/permission behavior is not yet covered.
+   Test intent: Given Atlas membership/assignment is revoked after list load, when detail is requested, then existing `404/not_found` unavailable behavior is returned without cached content.
+   Exercise through: authenticated detail HTTP request.
+   Test doubles: real DB membership/assignment transition; do not mock detail route.
+   Expected RED: stale detail access is not covered.
+
+4. Run test — verify FAIL:
+   `npm run test -- server/src/routes/my-work.integration.test.ts`
+   Expected failure: detail reauthorization assertion fails.
+
+5. Write failing test for: Board Mark done source write and exactly one activity.
+   Test file: `server/src/routes/my-work.integration.test.ts`
+   Level: integration
+   Test intent: Given an authorized Board item and valid done mapping, when Mark done is requested, then only the Board source changes and one card activity is recorded.
+   Exercise through: authenticated Mark done HTTP request.
+   Test doubles: real DB/status/activity; do not mock command.
+   Expected RED: source command is absent or writes wrong table/activity.
 
 6. Run test — verify FAIL:
    `npm run test -- server/src/routes/my-work.integration.test.ts`
-   Expected failure: at least one cross-unit assertion fails before the complete implementation.
+   Expected failure: Board mutation/activity assertion fails.
 
-7. Implement fixtures/assertions and only the minimal test-support helpers needed for isolated workspace/auth setup.
+7. Write failing test for: Tracker Mark done source write and exactly one activity.
+   Test file: `server/src/routes/my-work.integration.test.ts`
+   Level: integration
+   Test intent: Given an authorized Tracker item with slot done, when Mark done is requested, then only Tracker state/activity changes.
+   Exercise through: authenticated Mark done HTTP request.
+   Test doubles: real DB/status/activity; do not mock command.
+   Expected RED: Tracker source behavior is absent.
 
-8. Run test — verify PASS:
+8. Run test — verify FAIL:
    `npm run test -- server/src/routes/my-work.integration.test.ts`
-   Expected: read/detail/mutation/auth/idempotency/conflict scenarios pass.
+   Expected failure: Tracker mutation/activity assertion fails.
 
-9. Refactor while green:
-   - Reuse existing integration fixture helpers instead of inventing a second auth/DB harness.
-   - Keep the transient failure injection seam and route classification in `server/src/routes/my-work.test.ts` (T2), not this real-DB suite.
-   - Re-run the integration file.
+9. Write failing test for: stale conflict without partial write.
+   Test file: `server/src/routes/my-work.integration.test.ts`
+   Level: integration
+   Test intent: Given a stale Board or Tracker version, when Mark done is requested, then the existing conflict response is returned and neither source/activity is incorrectly changed.
+   Exercise through: authenticated HTTP API.
+   Test doubles: real DB concurrent/version fixture; do not mock mutation.
+   Expected RED: conflict/source invariants are not covered.
 
-10. Commit:
+10. Run test — verify FAIL:
+    `npm run test -- server/src/routes/my-work.integration.test.ts`
+    Expected failure: conflict assertion fails.
+
+11. Write failing test for: idempotent retry without duplicate activity.
+    Test file: `server/src/routes/my-work.integration.test.ts`
+    Level: integration
+    Test intent: Given the item is already at the canonical done target after an uncertain first response, when the same Mark done request is retried, then success is returned and activity count remains one.
+    Exercise through: authenticated HTTP API.
+    Test doubles: real DB state; do not mock idempotency.
+    Expected RED: retry/activity behavior is absent.
+
+12. Run test — verify FAIL:
+    `npm run test -- server/src/routes/my-work.integration.test.ts`
+    Expected failure: duplicate activity or non-idempotent response.
+
+13. Write failing test for: unauthorized Mark done status/code and no write.
+    Test file: `server/src/routes/my-work.integration.test.ts`
+    Level: integration
+    Test intent: Given an assignee without edit permission or revoked membership, when Mark done is requested, then revoked membership uses existing `404/not_found`, permission denial uses the existing mutation authorization status/code, and neither source table nor activity changes.
+    Exercise through: authenticated HTTP API.
+    Test doubles: real DB membership/role state; do not invent a new permission policy.
+    Expected RED: unauthorized mutation contract/source invariant is absent.
+
+14. Run test — verify FAIL:
+    `npm run test -- server/src/routes/my-work.integration.test.ts`
+    Expected failure: status/code or no-write assertion fails.
+
+15. Implement isolated fixtures/assertions using existing `work-item-unified.integration.test.ts` and workspace fixture conventions. Keep data deterministic and do not add a new fault-injection seam here; transient list classification is covered by T2's injected route unit test.
+
+16. Run test — verify PASS:
+    `npm run test -- server/src/routes/my-work.integration.test.ts`
+    Expected: all seven independent server collaboration cycles pass.
+
+17. Refactor while green:
+    - Reuse existing integration fixture helpers instead of inventing a second auth/DB harness.
+    - Keep the real-DB suite focused on authorization/source/activity behavior.
+    - Re-run the integration file.
+
+18. Commit:
     `git add server/src/routes/my-work.integration.test.ts`
     `git commit -m "test(my-work): verify server acceptance boundary"`
 
@@ -1674,7 +1822,7 @@ Escalate when: test setup requires changing activeWorkspaceId on row selection.
 
 ---
 
-### Task 11: Add My Work observability and performance verification [depends: T2, T3] [test-risk]
+### Task 11: Add My Work observability and performance verification [depends: T3, T6] [test-risk]
 
 ## OBJECTIVE
 
@@ -1733,7 +1881,7 @@ Steps:
    `npm run test -- server/src/routes/my-work.performance.integration.test.ts`
    Expected failure: missing performance fixture, instrumentation, or p95 assertion.
 
-7. Implement fixture setup, warm-up, repeated measurement, p95 calculation, and telemetry assertions. Keep the test isolated from unrelated suites and document DB/container prerequisites.
+7. Implement fixture setup, warm-up, repeated measurement, p95 calculation, and telemetry assertions. Require a migrated PostgreSQL test DB (`make db-migrate`, `DATABASE_URL`, isolated test database), document Node/DB/CI environment details in the test comment, and keep the test isolated from unrelated suites.
 
 8. Run test — verify PASS:
    `npm run test -- server/src/routes/my-work.performance.integration.test.ts`
@@ -1754,7 +1902,7 @@ Steps:
     `npm run test -- client/src/pages/MyWorkPage.performance.test.tsx`
     Expected failure: missing performance test/ready marker or page does not meet the assertion.
 
-11. Implement the client readiness fixture/assertion and document the controlled environment; do not weaken the production loading behavior to satisfy the test.
+11. Implement the client readiness fixture/assertion, document the controlled Node/Vitest environment, and do not weaken production loading behavior to satisfy the test.
 
 12. Run test — verify PASS:
     `npm run test -- client/src/pages/MyWorkPage.performance.test.tsx`
@@ -1790,7 +1938,7 @@ You are verifying My Work production quality.
 Spec: `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md`
 Design decision: server-side personal rollup with bounded Active data and no global SSE.
 Files in scope: observability helper/tests, My Work route instrumentation, server performance integration test, and client readiness test.
-Available after: T2 and T3.
+Available after: T3 and T6.
 Architecture rule: measure the real API/DB boundary; do not replace the workload with mocked query timing.
 [RESTATE: Performance instrumentation must never log task content or unauthorized identifiers, and the personal query must remain set-based.]
 
@@ -1819,7 +1967,7 @@ Must-not-have:
 
 Open question risks:
 
-- CI hardware/database variance may require a controlled performance-test environment; report the measured environment with DONE_WITH_CONCERNS if threshold cannot be reproduced honestly.
+- CI hardware/database variance may require a controlled performance-test environment; record `DATABASE_URL`, migration state, Node version, and runner details, and report DONE_WITH_CONCERNS if threshold cannot be reproduced honestly.
 
 Rollback note:
 
@@ -1847,4 +1995,4 @@ Escalate when: meeting p95 requires a schema migration, persistent projection, o
 | T8 | Add client Mark done action | T3, T7 | standard | mutation routing, disabled state, optimistic rollback |
 | T9 | Verify cross-unit server acceptance | T2, T3 | deep | real auth/DB read/detail/mutation/failure boundary |
 | T10 | Verify cross-component client acceptance | T8 | standard | route/detail/URL/mobile/error/mutation collaboration |
-| T11 | Add observability and performance verification | T2, T3 | deep | sanitized telemetry and p95 workload target |
+| T11 | Add observability and performance verification | T3, T6 | deep | sanitized telemetry, p95 workload, and client-ready target |

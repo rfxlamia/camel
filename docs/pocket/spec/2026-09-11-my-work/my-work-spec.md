@@ -1,7 +1,7 @@
 # My Work
 
 **Date:** 2026-09-11
-**Status:** draft
+**Status:** approved
 **Author:** brainstorm session
 **Spec path:** `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md`
 
