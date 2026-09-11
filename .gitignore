@@ -63,3 +63,6 @@ deploy/docker-compose.ggf.yml
 graphify-out/*
 !graphify-out/graph.json
 !graphify-out/manifest.json
+
+# generated file for attachment
+server/private-uploads/
