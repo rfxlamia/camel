@@ -73,10 +73,7 @@ let requestBaseUrl = "";
 let requestFetch: typeof fetch | null = null;
 
 export function configureRequestBoundaryForTests(
-	options: {
-		baseUrl?: string;
-		fetchImpl?: typeof fetch | null;
-	} = {},
+	options: { baseUrl?: string; fetchImpl?: typeof fetch | null } = {},
 ): void {
 	if (options.baseUrl !== undefined) {
 		requestBaseUrl = options.baseUrl;
@@ -142,7 +139,14 @@ async function throwRequestError(
 			userAction: options.userAction,
 		});
 	}
-	throw new ApiError(message, res.status, code, retryAfterMs, fieldErrors, session);
+	throw new ApiError(
+		message,
+		res.status,
+		code,
+		retryAfterMs,
+		fieldErrors,
+		session,
+	);
 }
 
 async function request<T>(

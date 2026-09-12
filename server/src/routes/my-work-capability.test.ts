@@ -87,64 +87,122 @@ function serviceFor(
 		executor,
 		listAuthorizedWorkspaces: vi.fn(async () => workspaces),
 		listTrackerRows: vi.fn(async (input) =>
-			rows.tracker.filter((row) => input.workspaceIds.includes(row.workspace_id)),
+			rows.tracker.filter((row) =>
+				input.workspaceIds.includes(row.workspace_id),
+			),
 		),
 		listBoardRows: vi.fn(async (input) =>
 			rows.board.filter((row) => input.workspaceIds.includes(row.workspace_id)),
 		),
-		getTrackerRow: vi.fn(async (input) =>
-			rows.tracker.find(
-				(row) =>
-					row.workspace_id === input.workspaceId &&
-					row.key_number === input.keyNumber,
-			) ?? null,
+		getTrackerRow: vi.fn(
+			async (input) =>
+				rows.tracker.find(
+					(row) =>
+						row.workspace_id === input.workspaceId &&
+						row.key_number === input.keyNumber,
+				) ?? null,
 		),
-		getBoardRow: vi.fn(async (input) =>
-			rows.board.find(
-				(row) =>
-					row.workspace_id === input.workspaceId &&
-					row.key_number === input.keyNumber,
-			) ?? null,
+		getBoardRow: vi.fn(
+			async (input) =>
+				rows.board.find(
+					(row) =>
+						row.workspace_id === input.workspaceId &&
+						row.key_number === input.keyNumber,
+				) ?? null,
 		),
 	});
 	return { service, queries };
 }
 
 const atlasColumns: MappingColumn[] = [
-	{ id: 11, workspace_id: ATLAS.id, board_id: null, position: 1, is_done: false },
-	{ id: 12, workspace_id: ATLAS.id, board_id: null, position: 2, is_done: true },
+	{
+		id: 11,
+		workspace_id: ATLAS.id,
+		board_id: null,
+		position: 1,
+		is_done: false,
+	},
+	{
+		id: 12,
+		workspace_id: ATLAS.id,
+		board_id: null,
+		position: 2,
+		is_done: true,
+	},
 ];
 
 const atlasStatuses: MappingStatus[] = [
-	{ id: 101, workspace_id: ATLAS.id, kind: "status", slot: "in_progress", position: 1 },
-	{ id: 102, workspace_id: ATLAS.id, kind: "status", slot: "done", position: 2 },
+	{
+		id: 101,
+		workspace_id: ATLAS.id,
+		kind: "status",
+		slot: "in_progress",
+		position: 1,
+	},
+	{
+		id: 102,
+		workspace_id: ATLAS.id,
+		kind: "status",
+		slot: "done",
+		position: 2,
+	},
 ];
 
 describe("My Work Mark done capability boundary", () => {
 	beforeEach(() => vi.clearAllMocks());
 
 	it("serializes valid and missing Board/Tracker mappings from one batched input set", async () => {
-		const validBoard = boardRow({ id: 201, workspace_id: ATLAS.id, column_id: 11 });
-		const missingBoard = boardRow({ id: 202, workspace_id: NEBULA.id, column_id: 31 });
+		const validBoard = boardRow({
+			id: 201,
+			workspace_id: ATLAS.id,
+			column_id: 11,
+		});
+		const missingBoard = boardRow({
+			id: 202,
+			workspace_id: NEBULA.id,
+			column_id: 31,
+		});
 		const validTracker = trackerRow({ id: 203, workspace_id: ORBIT.id });
 		const missingTracker = trackerRow({ id: 204, workspace_id: NEBULA.id });
 		const { service, queries } = serviceFor(
-			{ board: [validBoard, missingBoard], tracker: [validTracker, missingTracker] },
+			{
+				board: [validBoard, missingBoard],
+				tracker: [validTracker, missingTracker],
+			},
 			{
 				columns: [
 					...atlasColumns,
-					{ id: 31, workspace_id: NEBULA.id, board_id: null, position: 1, is_done: false },
+					{
+						id: 31,
+						workspace_id: NEBULA.id,
+						board_id: null,
+						position: 1,
+						is_done: false,
+					},
 				],
 				statuses: [
 					...atlasStatuses,
-					{ id: 201, workspace_id: ORBIT.id, kind: "status", slot: "done", position: 3 },
+					{
+						id: 201,
+						workspace_id: ORBIT.id,
+						kind: "status",
+						slot: "done",
+						position: 3,
+					},
 				],
 			},
 		);
 
-		const result = await service.list({ userId: ALICE.id, scope: "all", now: NOW });
+		const result = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			now: NOW,
+		});
 		const capabilityById = new Map(
-			result.items.map((item) => [item.id, [item.canMarkDone, item.markDoneReason]]),
+			result.items.map((item) => [
+				item.id,
+				[item.canMarkDone, item.markDoneReason],
+			]),
 		);
 
 		expect(capabilityById.get(validBoard.id)).toEqual([true, null]);
@@ -185,7 +243,11 @@ describe("My Work Mark done capability boundary", () => {
 			{ columns: [], statuses: [] },
 		);
 
-		const result = await service.list({ userId: ALICE.id, scope: "all", now: NOW });
+		const result = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			now: NOW,
+		});
 		expect(result.items).toHaveLength(2);
 		for (const item of result.items) {
 			expect(item.canMarkDone).toBe(false);
@@ -202,7 +264,11 @@ describe("My Work Mark done capability boundary", () => {
 			[ATLAS],
 		);
 
-		const list = await service.list({ userId: ALICE.id, scope: "all", now: NOW });
+		const list = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			now: NOW,
+		});
 		const detail = await service.getDetail({
 			userId: ALICE.id,
 			workspaceId: ATLAS.id,
@@ -229,10 +295,19 @@ describe("My Work Mark done capability boundary", () => {
 
 	it("hydrates mapping once per source set rather than once per row", async () => {
 		const boardRows = Array.from({ length: 12 }, (_, index) =>
-			boardRow({ id: 500 + index, workspace_id: ATLAS.id, column_id: 11, key_number: index + 1 }),
+			boardRow({
+				id: 500 + index,
+				workspace_id: ATLAS.id,
+				column_id: 11,
+				key_number: index + 1,
+			}),
 		);
 		const trackerRows = Array.from({ length: 12 }, (_, index) =>
-			trackerRow({ id: 600 + index, workspace_id: ORBIT.id, key_number: index + 1 }),
+			trackerRow({
+				id: 600 + index,
+				workspace_id: ORBIT.id,
+				key_number: index + 1,
+			}),
 		);
 		const { service, queries } = serviceFor(
 			{ board: boardRows, tracker: trackerRows },
@@ -240,13 +315,23 @@ describe("My Work Mark done capability boundary", () => {
 				columns: atlasColumns,
 				statuses: [
 					...atlasStatuses,
-					{ id: 202, workspace_id: ORBIT.id, kind: "status", slot: "done", position: 1 },
+					{
+						id: 202,
+						workspace_id: ORBIT.id,
+						kind: "status",
+						slot: "done",
+						position: 1,
+					},
 				],
 			},
 			[ATLAS, ORBIT],
 		);
 
-		const result = await service.list({ userId: ALICE.id, scope: "all", now: NOW });
+		const result = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			now: NOW,
+		});
 		const mappingQueries = queries.filter(
 			(entry) =>
 				entry.sql.includes('from "columns"') ||

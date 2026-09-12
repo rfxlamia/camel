@@ -74,15 +74,15 @@ describe("useSidebarMode", () => {
 		expect(currentMode()).toBe("agent");
 	});
 
-	it.each(["to-my-work", "to-my-work-detail"])(
-		"preserves agent mode on navigation to %s",
-		(buttonLabel) => {
-			renderAt("/agent");
-			expect(currentMode()).toBe("agent");
-			fireEvent.click(screen.getByText(buttonLabel));
-			expect(currentMode()).toBe("agent");
-		},
-	);
+	it.each([
+		"to-my-work",
+		"to-my-work-detail",
+	])("preserves agent mode on navigation to %s", (buttonLabel) => {
+		renderAt("/agent");
+		expect(currentMode()).toBe("agent");
+		fireEvent.click(screen.getByText(buttonLabel));
+		expect(currentMode()).toBe("agent");
+	});
 
 	it("preserves kanban mode when navigating to global My Work", () => {
 		renderAt("/board");

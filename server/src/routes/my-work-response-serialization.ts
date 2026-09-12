@@ -160,9 +160,9 @@ export function myWorkDoneCapability(
 	return doneTarget.available
 		? { canMarkDone: true, markDoneReason: null }
 		: {
-					canMarkDone: false,
-					markDoneReason: "missing_done_mapping",
-				};
+				canMarkDone: false,
+				markDoneReason: "missing_done_mapping",
+			};
 }
 
 function asAssignees(

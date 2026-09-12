@@ -96,7 +96,8 @@ function resolveBoardDoneTarget(
 		return unavailable();
 	}
 
-	const destinationSlot = mapColumnSlots(siblingColumns).get(destinationColumnId);
+	const destinationSlot =
+		mapColumnSlots(siblingColumns).get(destinationColumnId);
 	if (destinationSlot !== "done") return unavailable();
 	const statusId = statusIdForWorkspaceSlot(
 		inputs.statusVocabularies,
