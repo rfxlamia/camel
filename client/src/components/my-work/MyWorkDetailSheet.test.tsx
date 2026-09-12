@@ -78,6 +78,7 @@ vi.mock("../../api", () => ({
 }));
 
 import { BoardProvider, useBoard } from "../../context/BoardContext";
+import { WorkspaceSwitcher } from "../../layout/sidebar/WorkspaceSwitcher";
 import MyWorkPage from "../../pages/MyWorkPage";
 
 function makeItem(
@@ -207,6 +208,7 @@ function SourceRouteBoundary() {
 	const navigate = useNavigate();
 	return (
 		<>
+			<WorkspaceSwitcher />
 			<Routes>
 				<Route path="/my-work" element={<MyWorkPage />} />
 				<Route
@@ -543,6 +545,77 @@ describe("MyWorkDetailSheet", () => {
 		expect(screen.getByTestId("location").textContent).toContain("/my-work");
 		expect(screen.queryByTestId("board-route")).toBeNull();
 		expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+	});
+
+	it("gives the workspace confirmation popover focus ownership", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Unsaved Atlas work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		mockListActive.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+
+		renderWithBoard("/my-work?scope=active&workspaceId=7&page=2");
+		const trigger = await screen.findByRole("button", {
+			name: /open AT-17 unsaved atlas work/i,
+		});
+		trigger.focus();
+		fireEvent.click(trigger);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		await waitFor(() =>
+			expect(within(detail).getByText("Unsaved Atlas work")).toBeTruthy(),
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Require confirmation" }),
+		);
+		fireEvent.click(
+			within(detail).getByRole("button", { name: "Open in Board" }),
+		);
+
+		const confirmation = await screen.findByRole("dialog", {
+			name: "Confirm workspace switch",
+		});
+		const cancel = within(confirmation).getByRole("button", {
+			name: "Cancel",
+		});
+		const switchButton = within(confirmation).getByRole("button", {
+			name: "Switch",
+		});
+		await waitFor(() => expect(document.activeElement).toBe(cancel));
+
+		switchButton.focus();
+		fireEvent.keyDown(switchButton, { key: "Tab" });
+		expect(document.activeElement).toBe(cancel);
+		cancel.focus();
+		fireEvent.keyDown(cancel, { key: "Tab", shiftKey: true });
+		expect(document.activeElement).toBe(switchButton);
+
+		fireEvent.keyDown(cancel, { key: "Escape" });
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("dialog", { name: "Confirm workspace switch" }),
+			).toBeNull(),
+		);
+		expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
+		expect(screen.getByTestId("location").textContent).toBe(
+			"/my-work?scope=active&workspaceId=7&page=2&detailWorkspaceId=7&detailSource=board&detailKey=AT-17",
+		);
+		expect(screen.queryByTestId("board-route")).toBeNull();
+
+		fireEvent.click(
+			within(screen.getByRole("dialog", { name: /AT-17/i })).getByRole(
+				"button",
+				{ name: /close/i },
+			),
+		);
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull());
+		expect(document.activeElement).toBe(trigger);
 	});
 
 	it("preserves My Work when an unsaved-edit transition is canceled", async () => {
