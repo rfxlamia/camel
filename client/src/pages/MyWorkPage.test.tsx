@@ -182,6 +182,29 @@ describe("MyWorkPage", () => {
 		);
 	});
 
+	it("shows the page loading surface while the personal request is pending", async () => {
+		let resolveRequest: (value: MyWorkListResponse) => void = () => {};
+		const pendingRequest = new Promise<MyWorkListResponse>((resolve) => {
+			resolveRequest = resolve;
+		});
+		mockListActiveMyWorkCandidates.mockReturnValueOnce(pendingRequest);
+
+		render(
+			<MemoryRouter initialEntries={["/my-work"]}>
+				<MyWorkPage />
+			</MemoryRouter>,
+		);
+
+		expect(await screen.findByTestId("my-work-loading")).toBeTruthy();
+		expect(screen.queryByTestId(/^my-work-row-/)).toBeNull();
+		expect(screen.queryByText("Pending work")).toBeNull();
+
+		resolveRequest(
+			response([makeItem({ id: 9, key: "AT-9", title: "Pending work" })]),
+		);
+		await waitFor(() => expect(screen.getByText("Pending work")).toBeTruthy());
+	});
+
 	it("fails the whole page and retries the complete personal request", async () => {
 		const item = makeItem({ id: 8, key: "OR-8", title: "Retry this work" });
 		mockListActiveMyWorkCandidates

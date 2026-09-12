@@ -55,6 +55,8 @@ const STATUS_META: Record<
 	},
 };
 
+type StatusMetadata = (typeof STATUS_META)[MyWorkStatusGroup];
+
 function dateOnly(value: string): string | null {
 	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 	if (!match) return null;
@@ -89,6 +91,129 @@ function rowIdentity(item: MyWorkItem): string {
 	return `${item.workspaceId}-${item.source}-${item.key}`;
 }
 
+function StatusMark({ statusMeta }: { statusMeta: StatusMetadata }) {
+	const StatusIcon = statusMeta.icon;
+	return (
+		<span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-primary-700">
+			<StatusIcon size={16} aria-hidden />
+		</span>
+	);
+}
+
+function RowIdentityMeta({
+	item,
+	statusMeta,
+}: {
+	item: MyWorkItem;
+	statusMeta: StatusMetadata;
+}) {
+	return (
+		<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+			<span className="shrink-0 font-mono text-neutral-600 text-xs tabular-nums">
+				{item.key}
+			</span>
+			<span
+				className={`inline-flex max-w-[12rem] items-center rounded-md px-1.5 py-0.5 font-medium text-[10px] uppercase tracking-wide ${statusMeta.badge}`}
+				data-testid={`my-work-status-${rowIdentity(item)}`}
+			>
+				{item.status.name || statusMeta.label}
+			</span>
+		</span>
+	);
+}
+
+function RowWorkspaceMeta({
+	workspaceName,
+	sourceLabel,
+	sourceContext,
+}: {
+	workspaceName: string;
+	sourceLabel: string;
+	sourceContext: string;
+}) {
+	return (
+		<span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-neutral-600 text-xs">
+			<span
+				className="inline-flex min-w-0 max-w-[16rem] items-center gap-1 truncate"
+				title={workspaceName}
+			>
+				<span className="shrink-0 text-neutral-400" aria-hidden>
+					{workspaceName.slice(0, 1).toUpperCase()}
+				</span>
+				<span className="truncate">{workspaceName}</span>
+			</span>
+			<span className="text-neutral-300" aria-hidden>
+				·
+			</span>
+			<span className="inline-flex shrink-0 items-center rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800">
+				{sourceLabel}
+			</span>
+			<span className="min-w-0 max-w-[15rem] truncate" title={sourceContext}>
+				{sourceContext}
+			</span>
+		</span>
+	);
+}
+
+function RowSummary({
+	item,
+	statusMeta,
+	workspaceName,
+	sourceLabel,
+	sourceContext,
+}: {
+	item: MyWorkItem;
+	statusMeta: StatusMetadata;
+	workspaceName: string;
+	sourceLabel: string;
+	sourceContext: string;
+}) {
+	return (
+		<span className="min-w-0 flex-1">
+			<RowIdentityMeta item={item} statusMeta={statusMeta} />
+			<span
+				className="mt-1 block truncate font-medium text-neutral-900 text-sm leading-snug"
+				title={item.title}
+			>
+				{item.title}
+			</span>
+			<RowWorkspaceMeta
+				workspaceName={workspaceName}
+				sourceLabel={sourceLabel}
+				sourceContext={sourceContext}
+			/>
+		</span>
+	);
+}
+
+function RowDueMeta({
+	dueValue,
+	overdue,
+}: {
+	dueValue: string | null;
+	overdue: boolean;
+}) {
+	return (
+		<span className="flex w-[5.75rem] shrink-0 flex-col items-end gap-1 text-right text-xs tabular-nums sm:w-28">
+			<span
+				className={`inline-flex items-center gap-1 ${overdue ? "font-medium text-error-900" : "text-neutral-600"}`}
+				aria-label={
+					overdue
+						? `Overdue, due ${formatDueDate(dueValue)}`
+						: `Due ${formatDueDate(dueValue)}`
+				}
+			>
+				<CalendarDays size={13} aria-hidden />
+				{overdue ? "Overdue" : formatDueDate(dueValue)}
+			</span>
+			<span className="inline-flex items-center gap-1 text-primary-700 opacity-0 transition-opacity motion-reduce:transition-none group-hover/row:opacity-100 group-focus-visible/row:opacity-100">
+				Open
+				<ArrowUpRight size={13} aria-hidden />
+			</span>
+		</span>
+	);
+}
+
 /** A read-only, responsive work row. Detail and mutation actions live elsewhere. */
 export default function MyWorkRow({
 	item,
@@ -98,7 +223,6 @@ export default function MyWorkRow({
 }: MyWorkRowProps) {
 	const group = normalizeMyWorkStatus(item);
 	const statusMeta = STATUS_META[group];
-	const StatusIcon = statusMeta.icon;
 	const dueValue =
 		item.source === "board" ? (item.dueDate ?? null) : (item.endDate ?? null);
 	const overdue = isMyWorkItemOverdue(item);
@@ -126,76 +250,20 @@ export default function MyWorkRow({
 				}`}
 			>
 				<span
-					className={`absolute inset-y-0 left-0 w-0.5 bg-primary-600 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100 ${
+					className={`absolute inset-y-0 left-0 w-0.5 bg-primary-600 opacity-0 transition-opacity motion-reduce:transition-none group-hover/row:opacity-100 group-focus-visible/row:opacity-100 ${
 						overdue ? "opacity-100" : ""
 					}`}
 					aria-hidden
 				/>
-				<span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-primary-700">
-					<StatusIcon size={16} aria-hidden />
-				</span>
-
-				<span className="min-w-0 flex-1">
-					<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-						<span className="shrink-0 font-mono text-neutral-600 text-xs tabular-nums">
-							{item.key}
-						</span>
-						<span
-							className={`inline-flex max-w-[12rem] items-center rounded-md px-1.5 py-0.5 font-medium text-[10px] uppercase tracking-wide ${statusMeta.badge}`}
-							data-testid={`my-work-status-${rowIdentity(item)}`}
-						>
-							{item.status.name || statusMeta.label}
-						</span>
-					</span>
-					<span
-						className="mt-1 block truncate font-medium text-neutral-900 text-sm leading-snug"
-						title={item.title}
-					>
-						{item.title}
-					</span>
-					<span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-neutral-600 text-xs">
-						<span
-							className="inline-flex min-w-0 max-w-[16rem] items-center gap-1 truncate"
-							title={workspaceName}
-						>
-							<span className="shrink-0 text-neutral-400" aria-hidden>
-								{workspaceName.slice(0, 1).toUpperCase()}
-							</span>
-							<span className="truncate">{workspaceName}</span>
-						</span>
-						<span className="text-neutral-300" aria-hidden>
-							·
-						</span>
-						<span className="inline-flex shrink-0 items-center rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800">
-							{sourceLabel}
-						</span>
-						<span
-							className="min-w-0 max-w-[15rem] truncate"
-							title={sourceContext}
-						>
-							{sourceContext}
-						</span>
-					</span>
-				</span>
-
-				<span className="flex w-[5.75rem] shrink-0 flex-col items-end gap-1 text-right text-xs tabular-nums sm:w-28">
-					<span
-						className={`inline-flex items-center gap-1 ${overdue ? "font-medium text-error-900" : "text-neutral-600"}`}
-						aria-label={
-							overdue
-								? `Overdue, due ${formatDueDate(dueValue)}`
-								: `Due ${formatDueDate(dueValue)}`
-						}
-					>
-						<CalendarDays size={13} aria-hidden />
-						{overdue ? "Overdue" : formatDueDate(dueValue)}
-					</span>
-					<span className="inline-flex items-center gap-1 text-primary-700 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100">
-						Open
-						<ArrowUpRight size={13} aria-hidden />
-					</span>
-				</span>
-
+				<StatusMark statusMeta={statusMeta} />
+				<RowSummary
+					item={item}
+					statusMeta={statusMeta}
+					workspaceName={workspaceName}
+					sourceLabel={sourceLabel}
+					sourceContext={sourceContext}
+				/>
+				<RowDueMeta dueValue={dueValue} overdue={overdue} />
 				<span
 					className="flex shrink-0 items-center gap-1 text-primary-700 sm:hidden"
 					aria-hidden
