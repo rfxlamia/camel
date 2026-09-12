@@ -1,3 +1,5 @@
+import { resolveMyWorkDoneTarget } from "../core/my-work-done-target.js";
+import type { MyWorkDoneTargetInputs } from "../core/my-work-done-target.js";
 import { derivePrefix } from "../core/tracker-key.js";
 import type { CardAssignee } from "./card-assignees.js";
 import type {
@@ -121,10 +123,46 @@ export function mergeMyWorkRows(
 export const mergeWorkItems = mergeMyWorkRows;
 
 function statusFields(row: {
-	status_category: string | null;
-	status_slot: string | null;
+	status_category: string | null | undefined;
+	status_slot: string | null | undefined;
 }): MyWorkStatusCategory | null {
 	return normalizeMyWorkStatusCategory(row.status_category, row.status_slot);
+}
+
+export function myWorkDoneCapability(
+	candidate: MyWorkCandidate,
+	statusCategory: MyWorkStatusCategory | null,
+	doneTargetInputs?: MyWorkDoneTargetInputs,
+): Pick<MyWorkSerializedItem, "canMarkDone" | "markDoneReason"> {
+	if (statusCategory === "completed" || statusCategory === "canceled") {
+		return { canMarkDone: false, markDoneReason: "terminal" };
+	}
+	if (!doneTargetInputs) {
+		return {
+			canMarkDone: false,
+			markDoneReason: "missing_done_mapping",
+		};
+	}
+
+	const doneTarget = resolveMyWorkDoneTarget(
+		candidate.source === "board"
+			? {
+					source: "board",
+					workspaceId: candidate.row.workspace_id,
+					columnId: candidate.row.column_id,
+				}
+			: {
+					source: "tracker",
+					workspaceId: candidate.row.workspace_id,
+				},
+		doneTargetInputs,
+	);
+	return doneTarget.available
+		? { canMarkDone: true, markDoneReason: null }
+		: {
+					canMarkDone: false,
+					markDoneReason: "missing_done_mapping",
+				};
 }
 
 function asAssignees(
@@ -147,6 +185,7 @@ export function serializeMyWorkCandidate(
 		assignees?: readonly MyWorkAssignee[];
 		labels?: readonly VocabularyRow[];
 	} = {},
+	doneTargetInputs?: MyWorkDoneTargetInputs,
 ): MyWorkSerializedItem {
 	const prefix = derivePrefix(workspace.name);
 	const row = candidate.row;
@@ -169,7 +208,11 @@ export function serializeMyWorkCandidate(
 
 	const key = String(base.key);
 	const category = statusFields(row);
-	const terminal = category === "completed" || category === "canceled";
+	const doneCapability = myWorkDoneCapability(
+		candidate,
+		category,
+		doneTargetInputs,
+	);
 	return {
 		...base,
 		workspace,
@@ -181,8 +224,7 @@ export function serializeMyWorkCandidate(
 			key,
 		},
 		statusCategory: category,
-		canMarkDone: !terminal,
-		markDoneReason: terminal ? "terminal" : null,
+		...doneCapability,
 	} as MyWorkSerializedItem;
 }
 
