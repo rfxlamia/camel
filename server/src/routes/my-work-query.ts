@@ -105,7 +105,7 @@ export function sourceOrderExpressions(
 			? sql<Date>`ti.updated_at`
 			: sql<Date>`coalesce(c.done_at, c.started_at, c.created_at)`;
 	const overdueRank = sql<number>`CASE
-		WHEN ${group} < 2
+		WHEN ${group} NOT IN (2, 3)
 			AND ${dueDate} IS NOT NULL
 			AND ${dueDate} < ${localDateExpression(source, input)}
 		THEN 0
