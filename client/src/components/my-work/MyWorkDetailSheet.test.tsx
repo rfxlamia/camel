@@ -364,6 +364,50 @@ describe("MyWorkDetailSheet", () => {
 		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
 	});
 
+	it("traps focus inside detail and restores the invoking row trigger on close", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Fix Atlas sync",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		mockListActive.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+
+		renderWithBoard("/my-work?scope=active&workspaceId=7&page=2");
+		const trigger = await screen.findByRole("button", {
+			name: /open AT-17 fix atlas sync/i,
+		});
+		trigger.focus();
+		fireEvent.click(trigger);
+
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		const closeButton = within(detail).getByRole("button", {
+			name: /close/i,
+		});
+		const sourceButton = await within(detail).findByRole("button", {
+			name: "Open in Board",
+		});
+		await waitFor(() => expect(document.activeElement).toBe(closeButton));
+
+		sourceButton.focus();
+		fireEvent.keyDown(sourceButton, { key: "Tab" });
+		expect(document.activeElement).toBe(closeButton);
+		closeButton.focus();
+		fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+		expect(document.activeElement).toBe(sourceButton);
+		expect(document.activeElement).not.toBe(trigger);
+		expect(document.activeElement).not.toBe(
+			screen.getByRole("button", { name: "Allow transition" }),
+		);
+
+		fireEvent.click(closeButton);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(document.activeElement).toBe(trigger);
+	});
+
 	it("hides cached content and source actions after detail reauthorization fails", async () => {
 		const item = makeItem({
 			id: 17,
