@@ -66,6 +66,9 @@ Rule: Source-aware Mark done command
   Create: server/src/core/my-work-mark-done.ts                  (created by: T3)
   Modify: server/src/routes/tracker-items.ts
   Modify: server/src/routes/my-work.ts
+  Modify: server/src/routes/my-work-router.ts
+  Modify: server/src/routes/my-work-service.ts
+  Modify: server/src/routes/my-work-types.ts
   Test:   server/src/core/tracker-item-status-change.test.ts
   Test:   server/src/core/my-work-mark-done.test.ts
   Test:   server/src/core/board-card-status-change.test.ts (existing regression)
@@ -562,14 +565,16 @@ Files:
 - Create: `server/src/core/tracker-item-status-change.test.ts`
 - Create: `server/src/core/my-work-mark-done.test.ts`
 - Modify: `server/src/routes/tracker-items.ts`
-- Modify: `server/src/routes/my-work.ts`
+- Modify: `server/src/routes/my-work.ts` (barrel re-exports only)
+- Modify: `server/src/routes/my-work-router.ts` (mount POST `/:workspaceId/:source/:key/done`; result-map errors — its catch-all converts thrown errors into 503 `my_work_unavailable`)
+- Modify: `server/src/routes/my-work-service.ts` and `my-work-types.ts` (wire the command through the existing service seam)
 
 Steps:
 
 1. Write failing test for: Tracker status-change extraction and canonical done target.
    Test file: `server/src/core/tracker-item-status-change.test.ts`
    Level: unit
-   Test intent: Given a Tracker item and multiple status rows, when extracted service marks done, then position/id target selection, one update, and one activity occur.
+   Test intent: Given a Tracker item and the existing `resolveMyWorkDoneTarget` slot='done' resolution, when the extracted service marks done, then one update (status + completed_at) and one activity occur; position/id target selection is already covered by `my-work-done-target.test.ts` and must not be reimplemented.
    Exercise through: exported status-change service.
    Test doubles: chainable Kysely executor/activity recorder; do not mock resolver.
    Expected RED: extracted service does not exist.
@@ -579,7 +584,7 @@ Steps:
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
-   Extract the Tracker status mutation primitive and deterministic target selection.
+   Extract the Tracker status mutation primitive (status set, completed_at category rule, optimistic version, one tracker activity) reusing `resolveMyWorkDoneTarget` for target selection.
 
 4. Run test — verify PASS:
    `npm run test --workspace=server -- src/core/tracker-item-status-change.test.ts`
@@ -779,7 +784,7 @@ Steps:
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
 46. Commit:
-   git add server/src/core/tracker-item-status-change.ts server/src/core/my-work-mark-done.ts server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts server/src/routes/tracker-items.ts server/src/routes/my-work.ts
+   git add server/src/core/tracker-item-status-change.ts server/src/core/my-work-mark-done.ts server/src/core/tracker-item-status-change.test.ts server/src/core/my-work-mark-done.test.ts server/src/routes/tracker-items.ts server/src/routes/my-work.ts server/src/routes/my-work-router.ts server/src/routes/my-work-service.ts server/src/routes/my-work-types.ts
     git commit -m "feat(my-work): add source-aware mark done"
 
 ## REFERENCES LOADED
@@ -789,6 +794,10 @@ Steps:
 - `server/src/core/column-status-map.ts` and `column-status-reverse.ts` — existing Board mapping.
 - `server/src/routes/tracker-items.ts` — inline Tracker status mutation to extract without behavior drift.
 - `server/src/routes/tracker-activity.ts` — Tracker activity contract.
+- `server/src/core/my-work-done-target.ts` — existing deterministic slot="done" target resolver (added as a T2 correction); consume it, do not reimplement target selection.
+- `server/src/routes/my-work-router.ts` — POST mount point and the 503 catch-all boundary.
+- `server/src/routes/my-work-data-source-detail.ts` — membership/assignment EXISTS reauthorization pattern to reuse for the command.
+- `client/src/api/myWork.ts` — T1 Mark done client contract; path/verb/body must match exactly.
 - Existing Board status-change tests — chainable Kysely test-double pattern.
 
 ## WHY THIS APPROACH
@@ -822,6 +831,9 @@ Must-have:
 
 - Existing Tracker write behavior remains green after extraction.
 - Board and Tracker use their correct source tables and activity streams.
+- Tracker done applies the existing completed_at rule (`COALESCE(completed_at, now())` for the completed category, cleared otherwise) and tests pin it.
+- The Mark done route publishes the same workspace events as the existing mutation paths (`tracker.updated`; `card.moved`/`card.updated` plus the CARD_ASSIGNED domain event for Board) so active-workspace views stay fresh.
+- The POST route result-maps 404/409 outcomes; command errors must never reach the router catch-all that converts thrown errors into 503 `my_work_unavailable`.
 - Membership/assignment reauthorization, mapping, version, idempotency, and no-partial-write behavior are tested.
 - Route tests use the existing membership/assignment reauthorization boundary rather than trusting UI flags.
 
@@ -834,6 +846,7 @@ Must-not-have:
 Open question risks:
 
 - Membership/assignment state may change between list and mutation → enforce the existing 404/not_found route contract at mutation time.
+- The existing Tracker PATCH applies status together with other fields in a single version bump/activity. The extracted service owns the status-only mutation path (My Work command and the route's status-only branch) and hosts the shared status-category/completed_at derivation; do not split the combined PATCH update into two writes just to force reuse.
 
 Rollback note:
 
@@ -1365,7 +1378,7 @@ Steps:
 - Spec stories for triage, search, pagination, failure, URL state, and mobile.
 - `client/src/App.tsx` — authenticated route/lazy page pattern.
 - `client/src/pages/TrackerPage.tsx` and `TrackerRow.tsx` — list loading, grouping, inline metadata, and refresh conventions.
-- `client/src/types/myWork.ts`, `client/src/api/myWork.ts`, and helpers from T1/T4.
+- `client/src/types/myWork.ts`, `client/src/api/myWork.ts`, and helpers from T1/T4 — including `listActiveMyWorkCandidates` (bounded ≤20-page Active candidate drain added as a T2 correction); Active-scope search must consume it instead of a single-page `listMyWork`.
 - React Router docs for lazy routes/search params and React docs for stale-effect cleanup.
 
 ## WHY THIS APPROACH
@@ -1397,6 +1410,7 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 Must-have:
 
 - Page tests cover Active/All, filters, loading, empty, transient error, retry, stale response, and URL state.
+- Active-scope search drains the bounded candidate window via `listActiveMyWorkCandidates`; All-scope search stays server-paginated.
 - Row tests cover Board/Tracker metadata and mobile layout.
 - No detail or mutation logic is hidden in the list implementation.
 
@@ -1505,6 +1519,7 @@ Steps:
 
 - Spec global detail, reauthorization, source navigation, and guard scenarios.
 - `client/src/pages/TrackerDetailPage.tsx` — existing detail loading and event/error conventions.
+- `client/src/components/ContextPanel.tsx` — closest existing detail-panel pattern; Board cards open through the nested `/board/card/:cardId` route using the numeric source-row id.
 - `client/src/context/BoardContext.tsx` — workspace switch/focus/unsaved-edit guard callbacks.
 - `client/src/App.tsx` and React Router docs — route/search-state behavior.
 
@@ -1538,6 +1553,7 @@ Must-have:
 
 - Detail tests cover global read, reauthorization failure, URL restoration, successful guarded transition, and blocked transition.
 - Workspace/source identity is visible before navigation.
+- Source navigation targets are explicit: Board → `/board/card/:cardId` (numeric source-row id, not the display key) and Tracker → `/tracker/:key`, both only after the workspace guard for non-active workspaces.
 
 Must-not-have:
 
