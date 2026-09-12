@@ -4,6 +4,7 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "./api";
+import { searchMyWorkCandidates } from "./lib/myWorkSearch";
 import type {
 	MyWorkItem,
 	MyWorkListResponse,
@@ -67,6 +68,16 @@ function jsonResponse(body: unknown): Response {
 	} as Response;
 }
 
+function activeItem(id: number, title = `Active item ${id}`): MyWorkItem {
+	return {
+		...item,
+		id,
+		key: `AT-${id}`,
+		title,
+		identity: { workspaceId: workspace.id, source: "board", key: `AT-${id}` },
+	};
+}
+
 describe("My Work API", () => {
 	beforeEach(() => {
 		fakeFetch.mockReset();
@@ -125,6 +136,68 @@ describe("My Work API", () => {
 		expect(fakeFetch.mock.calls[0]?.[0]).not.toMatch(
 			/[?&](q|workspaceId|source|cursor|limit)=/,
 		);
+	});
+
+	it("aggregates Active candidates before local typo search across cursor pages", async () => {
+		const firstPage: MyWorkListResponse = {
+			items: Array.from({ length: 50 }, (_, index) => activeItem(index + 1)),
+			nextCursor: "cursor-1",
+		};
+		const match = activeItem(73, "Image upload retry");
+		const secondPage: MyWorkListResponse = {
+			items: [
+				...Array.from({ length: 22 }, (_, index) => activeItem(index + 51)),
+				match,
+			],
+			nextCursor: null,
+		};
+		fakeFetch
+			.mockResolvedValueOnce(jsonResponse(firstPage))
+			.mockResolvedValueOnce(jsonResponse(secondPage));
+
+		const candidates = await api.listActiveMyWorkCandidates({
+			q: "imgae uplod",
+			workspaceId: workspace.id,
+			source: "board",
+			limit: 50,
+		});
+		const results = searchMyWorkCandidates(candidates.items, "imgae uplod");
+
+		expect(results).toContain(match);
+		expect(candidates.items).toHaveLength(73);
+		expect(fakeFetch).toHaveBeenCalledTimes(2);
+		expect(fakeFetch).toHaveBeenNthCalledWith(
+			1,
+			"/api/my-work?scope=active&workspaceId=7&source=board&limit=50",
+			expect.objectContaining({ credentials: "include" }),
+		);
+		expect(fakeFetch).toHaveBeenNthCalledWith(
+			2,
+			"/api/my-work?scope=active&workspaceId=7&source=board&cursor=cursor-1&limit=50",
+			expect.objectContaining({ credentials: "include" }),
+		);
+		for (const [url] of fakeFetch.mock.calls) {
+			expect(url).not.toMatch(/[?&]q=/);
+		}
+	});
+
+	it("stops Active candidate aggregation when the server repeats a cursor", async () => {
+		fakeFetch
+			.mockResolvedValueOnce(
+				jsonResponse({ items: [activeItem(1)], nextCursor: "loop" }),
+			)
+			.mockResolvedValueOnce(
+				jsonResponse({ items: [activeItem(2)], nextCursor: "loop" }),
+			);
+
+		const result = await api.listActiveMyWorkCandidates({
+			workspaceId: workspace.id,
+			source: "board",
+		});
+
+		expect(result.items.map((entry) => entry.id)).toEqual([1, 2]);
+		expect(result.nextCursor).toBeNull();
+		expect(fakeFetch).toHaveBeenCalledTimes(2);
 	});
 
 	it("uses composite identity and version for detail and Mark done", async () => {

@@ -112,7 +112,7 @@ function filterCandidates(
 	if (queryInput.scope === "active") {
 		filtered = filtered.filter(isActiveMyWorkCandidate);
 	}
-	if (queryInput.q) {
+	if (queryInput.scope === "all" && queryInput.q) {
 		filtered = filtered.filter((candidate) => {
 			const workspace = workspaceMap.get(candidate.row.workspace_id);
 			return (
