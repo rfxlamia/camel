@@ -151,7 +151,7 @@ function localDateInTimezone(
 }
 
 function dueDateForComparison(item: MyWorkItem): string | null {
-	const raw = item.dueDate;
+	const raw = item.source === "board" ? item.dueDate : item.endDate;
 	if (!raw) return null;
 	const dateOnly = validDateOnly(raw);
 	if (dateOnly) return dateOnly;
@@ -193,10 +193,22 @@ function compareDueDates(a: MyWorkItem, b: MyWorkItem): number {
 	return compareStrings(dueA, dueB);
 }
 
+const CANONICAL_KEY_PATTERN = /^[A-Z?]{1,2}-(\d+)$/;
+
+function keyNumberForComparison(item: MyWorkItem): number {
+	const match = CANONICAL_KEY_PATTERN.exec(item.key.trim().toUpperCase());
+	if (!match) return Number.MAX_SAFE_INTEGER;
+	const keyNumber = Number(match[1]);
+	return Number.isSafeInteger(keyNumber) ? keyNumber : Number.MAX_SAFE_INTEGER;
+}
+
 function compareStableIdentity(a: MyWorkItem, b: MyWorkItem): number {
-	const identityA = `${a.workspaceId}\\u0000${a.source}\\u0000${a.identity.key}\\u0000${a.id}`;
-	const identityB = `${b.workspaceId}\\u0000${b.source}\\u0000${b.identity.key}\\u0000${b.id}`;
-	return compareStrings(identityA, identityB);
+	if (a.workspaceId !== b.workspaceId) return a.workspaceId - b.workspaceId;
+	if (a.source !== b.source) return a.source === "board" ? -1 : 1;
+	const keyNumberDifference =
+		keyNumberForComparison(a) - keyNumberForComparison(b);
+	if (keyNumberDifference !== 0) return keyNumberDifference;
+	return a.id - b.id;
 }
 
 /** Return a new, deterministic list ordered for My Work triage. */
