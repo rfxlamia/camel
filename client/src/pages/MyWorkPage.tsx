@@ -12,6 +12,7 @@ import {
 	useMyWorkData,
 } from "../components/my-work/useMyWorkData";
 import {
+	type MyWorkDetailSelection,
 	parseMyWorkDetailState,
 	withMyWorkDetail,
 	withoutMyWorkDetail,
@@ -24,6 +25,77 @@ import {
 import type { WorkItemSource } from "../types";
 
 type SearchParamSetter = ReturnType<typeof useSearchParams>[1];
+type MyWorkViewUpdate = (
+	patch: Partial<MyWorkViewState>,
+	options?: { resetPage?: boolean },
+) => void;
+
+interface MyWorkPageViewProps {
+	view: MyWorkViewState;
+	detailSelection: MyWorkDetailSelection | null;
+	loaded: LoadedPage | null;
+	loading: boolean;
+	loadError: LoadError | null;
+	workspaceOptions: ReturnType<typeof useMyWorkData>["workspaceOptions"];
+	updateView: MyWorkViewUpdate;
+	handlePageChange: (page: number) => void;
+	onRefresh: () => void;
+	onRetry: () => void;
+	onSelect: (item: LoadedPage["items"][number]) => void;
+	onCloseDetail: () => void;
+}
+
+function MyWorkPageView({
+	view,
+	detailSelection,
+	loaded,
+	loading,
+	loadError,
+	workspaceOptions,
+	updateView,
+	handlePageChange,
+	onRefresh,
+	onRetry,
+	onSelect,
+	onCloseDetail,
+}: MyWorkPageViewProps) {
+	return (
+		<div className="min-h-full bg-neutral-100">
+			<MyWorkToolbar
+				scope={view.scope}
+				q={view.q}
+				workspaceId={view.workspaceId}
+				source={view.source}
+				workspaces={workspaceOptions}
+				activeCount={view.scope === "active" ? loaded?.total : undefined}
+				loading={loading}
+				onScopeChange={(scope) => updateView({ scope })}
+				onQueryChange={(q) => updateView({ q })}
+				onWorkspaceChange={(workspaceId) => updateView({ workspaceId })}
+				onSourceChange={(source: WorkItemSource | "") => updateView({ source })}
+				onRefresh={onRefresh}
+			/>
+			<MyWorkContent
+				loaded={loaded}
+				loading={loading}
+				loadError={loadError}
+				scope={view.scope}
+				query={view.q}
+				onRetry={onRetry}
+				onShowAll={() => updateView({ scope: "all" })}
+				onPageChange={handlePageChange}
+				onSelect={onSelect}
+			/>
+			{detailSelection && (
+				<MyWorkDetailSheet
+					selection={detailSelection}
+					onClose={onCloseDetail}
+				/>
+			)}
+		</div>
+	);
+}
+
 /** Global, route-driven personal work list. It never reads the active workspace. */
 export default function MyWorkPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -48,42 +120,30 @@ export default function MyWorkPage() {
 		setSearchParams,
 		setLoadedPage,
 	);
+	const openDetail = useCallback(
+		(item: LoadedPage["items"][number]) => {
+			setSearchParams(withMyWorkDetail(searchParams, item.identity));
+		},
+		[searchParams, setSearchParams],
+	);
 	const closeDetail = useCallback(() => {
 		setSearchParams(withoutMyWorkDetail(searchParams), { replace: true });
 	}, [searchParams, setSearchParams]);
 	return (
-		<div className="min-h-full bg-neutral-100">
-			<MyWorkToolbar
-				scope={view.scope}
-				q={view.q}
-				workspaceId={view.workspaceId}
-				source={view.source}
-				workspaces={workspaceOptions}
-				activeCount={view.scope === "active" ? loaded?.total : undefined}
-				loading={loading}
-				onScopeChange={(scope) => updateView({ scope })}
-				onQueryChange={(q) => updateView({ q })}
-				onWorkspaceChange={(workspaceId) => updateView({ workspaceId })}
-				onSourceChange={(source: WorkItemSource | "") => updateView({ source })}
-				onRefresh={() => void loadData({ fresh: true })}
-			/>
-			<MyWorkContent
-				loaded={loaded}
-				loading={loading}
-				loadError={loadError}
-				scope={view.scope}
-				query={view.q}
-				onRetry={() => void loadData({ fresh: true })}
-				onShowAll={() => updateView({ scope: "all" })}
-				onPageChange={handlePageChange}
-				onSelect={(item) =>
-					setSearchParams(withMyWorkDetail(searchParams, item.identity))
-				}
-			/>
-			{detailSelection && (
-				<MyWorkDetailSheet selection={detailSelection} onClose={closeDetail} />
-			)}
-		</div>
+		<MyWorkPageView
+			view={view}
+			detailSelection={detailSelection}
+			loaded={loaded}
+			loading={loading}
+			loadError={loadError}
+			workspaceOptions={workspaceOptions}
+			updateView={updateView}
+			handlePageChange={handlePageChange}
+			onRefresh={() => void loadData({ fresh: true })}
+			onRetry={() => void loadData({ fresh: true })}
+			onSelect={openDetail}
+			onCloseDetail={closeDetail}
+		/>
 	);
 }
 function useMyWorkViewActions(

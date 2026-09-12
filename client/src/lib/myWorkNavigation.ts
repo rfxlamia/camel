@@ -242,6 +242,52 @@ function usePendingSourceTransition(
 	}, [activeWorkspaceId, navigate, pending, setPending, switchConfirm.open]);
 }
 
+interface SourceNavigationRuntime {
+	item: MyWorkItem | null;
+	activeWorkspaceId: number | null;
+	attemptSwitchWorkspace: (workspaceId: number) => void;
+	hasUnsavedCardEdits: boolean;
+	hasActiveFocusSession: boolean;
+	focusSessionHydrated: boolean;
+	navigate: (to: string) => void;
+	setPending: (value: PendingSourceNavigation | null) => void;
+}
+
+function executeMyWorkSourceNavigation({
+	item,
+	activeWorkspaceId,
+	attemptSwitchWorkspace,
+	hasUnsavedCardEdits,
+	hasActiveFocusSession,
+	focusSessionHydrated,
+	navigate,
+	setPending,
+}: SourceNavigationRuntime) {
+	if (!item) return;
+	const plan = planMyWorkSourceNavigation(item, {
+		activeWorkspaceId,
+		targetWorkspaceId: item.workspaceId,
+		hasUnsavedCardEdits,
+		hasActiveFocusSession,
+		focusSessionHydrated,
+	});
+	if (plan.guardState.status === "noop") {
+		navigate(plan.to);
+		return;
+	}
+	attemptSwitchWorkspace(item.workspaceId);
+	if (
+		plan.guardState.status === "switch" ||
+		plan.guardState.status === "confirm-required"
+	) {
+		setPending({
+			to: plan.to,
+			workspaceId: item.workspaceId,
+			confirmationRequired: plan.guardState.status === "confirm-required",
+		});
+	}
+}
+
 /** Execute explicit source navigation only after the existing workspace guard. */
 export function useMyWorkSourceNavigation(item: MyWorkItem | null) {
 	const navigate = useNavigate();
@@ -261,38 +307,27 @@ export function useMyWorkSourceNavigation(item: MyWorkItem | null) {
 		switchConfirm,
 		navigate,
 	);
-	const handleSourceNavigation = useCallback(() => {
-		if (!item) return;
-		const plan = planMyWorkSourceNavigation(item, {
+	const handleSourceNavigation = useCallback(
+		() =>
+			executeMyWorkSourceNavigation({
+				item,
+				activeWorkspaceId,
+				attemptSwitchWorkspace,
+				hasUnsavedCardEdits,
+				hasActiveFocusSession,
+				focusSessionHydrated,
+				navigate,
+				setPending,
+			}),
+		[
 			activeWorkspaceId,
-			targetWorkspaceId: item.workspaceId,
-			hasUnsavedCardEdits,
-			hasActiveFocusSession,
+			attemptSwitchWorkspace,
 			focusSessionHydrated,
-		});
-		if (plan.guardState.status === "noop") {
-			navigate(plan.to);
-			return;
-		}
-		attemptSwitchWorkspace(item.workspaceId);
-		if (
-			plan.guardState.status === "switch" ||
-			plan.guardState.status === "confirm-required"
-		) {
-			setPending({
-				to: plan.to,
-				workspaceId: item.workspaceId,
-				confirmationRequired: plan.guardState.status === "confirm-required",
-			});
-		}
-	}, [
-		activeWorkspaceId,
-		attemptSwitchWorkspace,
-		focusSessionHydrated,
-		hasActiveFocusSession,
-		hasUnsavedCardEdits,
-		item,
-		navigate,
-	]);
+			hasActiveFocusSession,
+			hasUnsavedCardEdits,
+			item,
+			navigate,
+		],
+	);
 	return { handleSourceNavigation, pending: pending !== null };
 }
