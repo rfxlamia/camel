@@ -7,8 +7,17 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router";
+import { useState } from "react";
+import {
+	MemoryRouter,
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+	useNavigate,
+} from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import AuthPage from "../components/AuthPage";
 import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 
 const {
@@ -109,14 +118,55 @@ function LocationProbe() {
 	);
 }
 
+const originalLocation = window.location;
+let recoveryNavigate: ((to: string) => void) | undefined;
+let recoverySignOut: (() => void) | undefined;
+
+function RecoveryNavigationBridge() {
+	const navigate = useNavigate();
+	recoveryNavigate = (to) => navigate(to);
+	return null;
+}
+
+function RecoveryRouterBoundary() {
+	const [signedIn, setSignedIn] = useState(true);
+	recoverySignOut = () => setSignedIn(false);
+
+	return (
+		<>
+			<RecoveryNavigationBridge />
+			{signedIn ? (
+				<Routes>
+					<Route path="/my-work" element={<MyWorkPage />} />
+					<Route path="*" element={<Navigate to="/board" replace />} />
+				</Routes>
+			) : (
+				<Routes>
+					<Route
+						path="/login"
+						element={<AuthPage onAuth={() => setSignedIn(true)} />}
+					/>
+					<Route path="*" element={<Navigate to="/" replace />} />
+				</Routes>
+			)}
+		</>
+	);
+}
+
 beforeEach(() => {
-	mockUseBoard.mockReturnValue({ activeWorkspaceId: 999 });
+	mockUseBoard.mockReturnValue({ activeWorkspaceId: 999, logout: vi.fn() });
 	mockListMyWork.mockReset();
 	mockListActiveMyWorkCandidates.mockReset();
+	recoveryNavigate = undefined;
+	recoverySignOut = undefined;
 });
 
 afterEach(() => {
 	cleanup();
+	Object.defineProperty(window, "location", {
+		configurable: true,
+		value: originalLocation,
+	});
 	vi.clearAllMocks();
 	vi.useRealTimers();
 });
@@ -338,7 +388,44 @@ describe("MyWorkPage", () => {
 		);
 		expect(screen.getByText(/session has expired/i)).toBeTruthy();
 		expect(screen.queryByTestId("my-work-empty-active")).toBeNull();
-		expect(screen.getByRole("link", { name: /sign in again/i })).toBeTruthy();
+		expect(screen.getByRole("button", { name: /sign in again/i })).toBeTruthy();
+	});
+
+	it("clears the session and reaches the sign-in surface from the auth error route", async () => {
+		const logout = vi.fn(async () => {
+			recoverySignOut?.();
+		});
+		mockUseBoard.mockReturnValue({ activeWorkspaceId: 999, logout });
+		mockListActiveMyWorkCandidates.mockRejectedValueOnce(
+			new MockApiError("Not authenticated", 401, "session_expired"),
+		);
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: {
+				assign: (to: string) => recoveryNavigate?.(to),
+			},
+		});
+
+		render(
+			<MemoryRouter initialEntries={["/my-work"]}>
+				<RecoveryRouterBoundary />
+				<LocationProbe />
+			</MemoryRouter>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByTestId("my-work-session-error")).toBeTruthy(),
+		);
+		const recoveryAction = within(
+			screen.getByTestId("my-work-session-error"),
+		).getByText("Sign in again", { selector: "a,button" });
+		fireEvent.click(recoveryAction);
+
+		await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Welcome back" })).toBeTruthy(),
+		);
+		expect(screen.getByTestId("location").textContent).toBe("/login");
 	});
 
 	it("refreshes the personal request without changing URL view state", async () => {
