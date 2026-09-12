@@ -3,6 +3,10 @@ import { useLocation } from "react-router";
 import { getModeFromPath } from "./navItems";
 import type { Mode } from "./shared";
 
+function isModeNeutralMyWorkPath(pathname: string): boolean {
+	return pathname === "/my-work" || pathname.startsWith("/my-work/");
+}
+
 export function useSidebarMode(): [Mode, (m: Mode) => void] {
 	const location = useLocation();
 	const [mode, setMode] = useState<Mode>(() =>
@@ -12,7 +16,10 @@ export function useSidebarMode(): [Mode, (m: Mode) => void] {
 		// Exact equality — NOT startsWith. Navigating TO /settings must not change mode;
 		// leaving /settings to a mode route is URL-driven. Effect keyed on pathname only,
 		// so a manual ModeSwitcher click persists until the next navigation.
-		if (location.pathname !== "/settings") {
+		if (
+			location.pathname !== "/settings" &&
+			!isModeNeutralMyWorkPath(location.pathname)
+		) {
 			setMode(getModeFromPath(location.pathname));
 		}
 	}, [location.pathname]);
