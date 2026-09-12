@@ -105,7 +105,11 @@ export default function Sidebar({
 			{/* Footer */}
 			<div className="border-t border-neutral-200 p-2 space-y-1">
 				{/* Workspace switcher */}
-				<WorkspaceSwitcher collapsed={collapsed} placement="top" />
+				<WorkspaceSwitcher
+					collapsed={collapsed}
+					placement="top"
+					renderConfirmation={false}
+				/>
 
 				{/* Settings */}
 				<NavLink

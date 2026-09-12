@@ -78,6 +78,8 @@ vi.mock("../../api", () => ({
 }));
 
 import { BoardProvider, useBoard } from "../../context/BoardContext";
+import { MobileNav } from "../../layout/sidebar/MobileNav";
+import { WorkspaceOverlays } from "../../layout/sidebar/WorkspaceModals";
 import { WorkspaceSwitcher } from "../../layout/sidebar/WorkspaceSwitcher";
 import MyWorkPage from "../../pages/MyWorkPage";
 
@@ -250,6 +252,44 @@ class TestEventSource {
 }
 
 vi.stubGlobal("EventSource", TestEventSource);
+
+function MobileClosedSourceRouteBoundary() {
+	return (
+		<>
+			<WorkspaceOverlays />
+			<MobileNav
+				open={false}
+				onClose={vi.fn()}
+				mode="kanban"
+				onModeChange={vi.fn()}
+			/>
+			<Routes>
+				<Route path="/my-work" element={<MyWorkPage />} />
+				<Route
+					path="/board/card/:cardId"
+					element={<output data-testid="board-route">Board card</output>}
+				/>
+				<Route
+					path="/tracker/:key"
+					element={<output data-testid="tracker-route">Tracker item</output>}
+				/>
+			</Routes>
+			<ActiveWorkspaceProbe />
+			<GuardControls />
+		</>
+	);
+}
+
+function renderMobileClosedWithBoard(initialEntry: string) {
+	return render(
+		<MemoryRouter initialEntries={[initialEntry]}>
+			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+				<MobileClosedSourceRouteBoundary />
+			</BoardProvider>
+			<LocationProbe />
+		</MemoryRouter>,
+	);
+}
 
 function renderWithBoard(initialEntry: string) {
 	return render(
@@ -614,8 +654,79 @@ describe("MyWorkDetailSheet", () => {
 				{ name: /close/i },
 			),
 		);
-		await waitFor(() => expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull());
+		await waitFor(() =>
+			expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull(),
+		);
 		expect(document.activeElement).toBe(trigger);
+	});
+
+	it("shows mobile-closed confirmation and completes guarded source navigation", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Unsaved Atlas work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		mockListActive.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+
+		renderMobileClosedWithBoard("/my-work?scope=active&workspaceId=7&page=2");
+		await waitFor(() => expect(screen.getByText("AT-17")).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", { name: /open AT-17 unsaved atlas work/i }),
+		);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		await waitFor(() =>
+			expect(within(detail).getByText("Unsaved Atlas work")).toBeTruthy(),
+		);
+
+		fireEvent.click(
+			screen.getByRole("button", { name: "Require confirmation" }),
+		);
+		fireEvent.click(
+			within(detail).getByRole("button", { name: "Open in Board" }),
+		);
+
+		const confirmation = await screen.findByRole("dialog", {
+			name: "Confirm workspace switch",
+		});
+		expect(screen.queryByRole("button", { name: "Close menu" })).toBeNull();
+		const cancel = within(confirmation).getByRole("button", {
+			name: "Cancel",
+		});
+		await waitFor(() => expect(document.activeElement).toBe(cancel));
+		fireEvent.click(cancel);
+		await waitFor(() =>
+			expect(screen.getByTestId("switch-confirm-open").textContent).toBe(
+				"false",
+			),
+		);
+		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
+		expect(screen.getByTestId("location").textContent).toBe(
+			"/my-work?scope=active&workspaceId=7&page=2&detailWorkspaceId=7&detailSource=board&detailKey=AT-17",
+		);
+		expect(screen.queryByTestId("board-route")).toBeNull();
+		expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+
+		const sourceButton = within(detail).getByRole("button", {
+			name: "Open in Board",
+		});
+		await waitFor(() =>
+			expect((sourceButton as HTMLButtonElement).disabled).toBe(false),
+		);
+		fireEvent.click(sourceButton);
+		const secondConfirmation = await screen.findByRole("dialog", {
+			name: "Confirm workspace switch",
+		});
+		fireEvent.click(
+			within(secondConfirmation).getByRole("button", { name: "Switch" }),
+		);
+
+		await waitFor(() => expect(screen.getByTestId("board-route")).toBeTruthy());
+		expect(screen.getByTestId("active-workspace").textContent).toBe("7");
+		expect(screen.getByTestId("location").textContent).toBe("/board/card/17");
 	});
 
 	it("preserves My Work when an unsaved-edit transition is canceled", async () => {

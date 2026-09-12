@@ -3,7 +3,10 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useBoard } from "../../context/BoardContext";
 import type { WorkspaceInvite } from "../../types";
 import { inputClass } from "./shared";
-import { WorkspaceAvatar } from "./WorkspaceSwitcher";
+import {
+	WorkspaceAvatar,
+	WorkspaceSwitchConfirmation,
+} from "./WorkspaceSwitcher";
 
 function ModalBackdrop({
 	children,
@@ -215,7 +218,17 @@ function CreateWorkspaceModal() {
 	);
 }
 
-/** Blocking invite, picker, and create modals — mount once at app shell level. */
+function WorkspaceSwitchConfirmationSurface() {
+	return (
+		<div className="fixed inset-x-4 bottom-4 z-[60] flex justify-end">
+			<div className="relative h-0 w-56">
+				<WorkspaceSwitchConfirmation placement="top" />
+			</div>
+		</div>
+	);
+}
+
+/** App-shell workspace confirmation, invite, picker, and create overlays. */
 export function WorkspaceOverlays() {
 	const {
 		workspacesReady,
@@ -223,6 +236,7 @@ export function WorkspaceOverlays() {
 		activeWorkspaceId,
 		pendingInvites,
 		remindedInviteIds,
+		switchConfirm,
 	} = useBoard();
 
 	if (!workspacesReady) return null;
@@ -238,6 +252,7 @@ export function WorkspaceOverlays() {
 				<WorkspacePickerModal />
 			)}
 			<CreateWorkspaceModal />
+			{switchConfirm.open && <WorkspaceSwitchConfirmationSurface />}
 		</>
 	);
 }

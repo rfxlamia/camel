@@ -118,7 +118,7 @@ export function MobileNav({
 						{SETTINGS_ITEM.label}
 					</NavLink>
 
-					<WorkspaceSwitcher placement="top" />
+					<WorkspaceSwitcher placement="top" renderConfirmation={false} />
 
 					<div className="relative">
 						<button
