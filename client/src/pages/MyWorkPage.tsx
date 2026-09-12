@@ -1,8 +1,9 @@
 import { AlertTriangle, ClipboardList, RotateCcw } from "lucide-react";
 import { useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import MyWorkList from "../components/my-work/MyWorkList";
 import MyWorkToolbar from "../components/my-work/MyWorkToolbar";
+import { useBoard } from "../context/BoardContext";
 import type {
 	LoadError,
 	LoadedPage,
@@ -159,6 +160,12 @@ function LoadingState() {
 	);
 }
 function SessionErrorState() {
+	const { logout } = useBoard();
+	const handleSignIn = useCallback(async () => {
+		await logout();
+		window.location.assign("/login");
+	}, [logout]);
+
 	return (
 		<div
 			data-testid="my-work-session-error"
@@ -171,12 +178,13 @@ function SessionErrorState() {
 			<p role="alert" className="mt-1 max-w-sm text-neutral-600 text-sm">
 				Sign in again to see your assigned work.
 			</p>
-			<Link
-				to="/login"
+			<button
+				type="button"
+				onClick={() => void handleSignIn()}
 				className="mt-4 inline-flex h-9 items-center rounded-md bg-primary-600 px-3 font-medium text-sm text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 motion-reduce:transition-none"
 			>
 				Sign in again
-			</Link>
+			</button>
 		</div>
 	);
 }
