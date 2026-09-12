@@ -53,23 +53,11 @@ function handlePopoverKeyDown(
 	trapPopoverFocus(event.nativeEvent, panel);
 }
 
-interface PopoverShellProps {
-	open: boolean;
-	onCancel: () => void;
-	placement?: "right" | "top";
-	ariaLabel: string;
-	children: React.ReactNode;
-}
-
-export function PopoverShell({
-	open,
-	onCancel,
-	placement = "right",
-	ariaLabel,
-	children,
-}: PopoverShellProps) {
-	const panelRef = useRef<HTMLDivElement>(null);
-
+function usePopoverFocusLifecycle(
+	open: boolean,
+	panelRef: React.RefObject<HTMLDivElement>,
+	onCancel: () => void,
+) {
 	useEffect(() => {
 		if (!open) return;
 		const panel = panelRef.current;
@@ -89,7 +77,26 @@ export function PopoverShell({
 		};
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [open, onCancel]);
+	}, [open, onCancel, panelRef]);
+}
+
+interface PopoverShellProps {
+	open: boolean;
+	onCancel: () => void;
+	placement?: "right" | "top";
+	ariaLabel: string;
+	children: React.ReactNode;
+}
+
+export function PopoverShell({
+	open,
+	onCancel,
+	placement = "right",
+	ariaLabel,
+	children,
+}: PopoverShellProps) {
+	const panelRef = useRef<HTMLDivElement>(null);
+	usePopoverFocusLifecycle(open, panelRef, onCancel);
 
 	if (!open) return null;
 
