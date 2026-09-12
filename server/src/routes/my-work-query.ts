@@ -65,10 +65,10 @@ function statusGroupExpression() {
 		WHEN st.category = 'started' THEN 1
 		WHEN st.category = 'completed' THEN 2
 		WHEN st.category = 'canceled' THEN 3
-		WHEN st.slot IN ('backlog', 'todo') THEN 0
-		WHEN st.slot = 'in_progress' THEN 1
-		WHEN st.slot = 'done' THEN 2
-		WHEN st.slot = 'canceled' THEN 3
+		WHEN st.category IS NULL AND st.slot IN ('backlog', 'todo') THEN 0
+		WHEN st.category IS NULL AND st.slot = 'in_progress' THEN 1
+		WHEN st.category IS NULL AND st.slot = 'done' THEN 2
+		WHEN st.category IS NULL AND st.slot = 'canceled' THEN 3
 		ELSE 4
 	END`;
 }

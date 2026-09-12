@@ -34,16 +34,17 @@ const SLOT_TO_CATEGORY: Record<string, MyWorkStatusCategory> = {
 
 /**
  * Normalizes the existing tracker category/slot vocabulary for My Work.
- * Unknown categories deliberately fall back to slot when possible, otherwise
- * null so the item can be rendered in the Other group without inventing a
- * new persisted category.
+ * Unknown non-null categories remain in the Other group; the slot is only a
+ * fallback when the persisted category is absent.
  */
 export function normalizeMyWorkStatusCategory(
 	category: string | null | undefined,
 	slot: string | null | undefined,
 ): MyWorkStatusCategory | null {
-	if (category && STATUS_CATEGORIES.has(category as MyWorkStatusCategory)) {
-		return category as MyWorkStatusCategory;
+	if (category != null) {
+		return STATUS_CATEGORIES.has(category as MyWorkStatusCategory)
+			? (category as MyWorkStatusCategory)
+			: null;
 	}
 	if (slot) return SLOT_TO_CATEGORY[slot] ?? null;
 	return null;
