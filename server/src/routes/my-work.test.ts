@@ -268,6 +268,99 @@ function multiPageTrackerDb(rows: MyWorkTrackerRow[]) {
 	return { executor, queries };
 }
 
+type RawTimestampTrackerRow = {
+	row: MyWorkTrackerRow;
+	updatedAt: string;
+};
+
+function timestampMicros(value: string): number {
+	const match = /^(.*)\.(\d{1,6})Z$/.exec(value);
+	if (!match) throw new Error(`Unsupported timestamp fixture: ${value}`);
+	const fraction = match[2]!.padEnd(6, "0");
+	const millisecondValue = `${match[1]}.${fraction.slice(0, 3)}Z`;
+	return Date.parse(millisecondValue) * 1_000 + Number(fraction.slice(3));
+}
+
+function subMillisecondTrackerDb(rows: readonly RawTimestampTrackerRow[]) {
+	const queries: CapturedQuery[] = [];
+	const client = {
+		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
+			queries.push({ sql: sqlText, parameters });
+			if (!sqlText.includes('from "tracker_items"')) {
+				return { rows: [] as R[] };
+			}
+
+			const cursorId = parameters.find(
+				(parameter): parameter is number =>
+					typeof parameter === "number" &&
+					rows.some(({ row }) => row.id === parameter),
+			);
+			const cursorUpdatedAt = parameters.find(
+				(parameter): parameter is string =>
+					typeof parameter === "string" &&
+					/^\d{4}-\d{2}-\d{2}T.*Z$/.test(parameter),
+			);
+			const usesMillisecondPrecision = sqlText.includes(
+				"date_trunc('milliseconds'",
+			);
+			const cursorTime =
+				cursorUpdatedAt === undefined
+					? undefined
+					: timestampMicros(cursorUpdatedAt);
+			const eligible = rows.filter(({ row, updatedAt }) => {
+				if (cursorId === undefined) return true;
+				if (cursorTime === undefined) {
+					throw new Error("Cursor timestamp was not captured");
+				}
+				const rowTime = timestampMicros(updatedAt);
+				const rowOrderTime = usesMillisecondPrecision
+					? Math.trunc(rowTime / 1_000)
+					: rowTime;
+				const cursorOrderTime = usesMillisecondPrecision
+					? Math.trunc(cursorTime / 1_000)
+					: cursorTime;
+				if (rowOrderTime < cursorOrderTime) return true;
+				if (rowOrderTime > cursorOrderTime) return false;
+				return row.id > cursorId;
+			});
+			const ordered = [...eligible].sort((a, b) => {
+				const aTime = timestampMicros(a.updatedAt);
+				const bTime = timestampMicros(b.updatedAt);
+				const aOrderTime = usesMillisecondPrecision
+					? Math.trunc(aTime / 1_000)
+					: aTime;
+				const bOrderTime = usesMillisecondPrecision
+					? Math.trunc(bTime / 1_000)
+					: bTime;
+				return bOrderTime - aOrderTime || a.row.id - b.row.id;
+			});
+			const queryLimit = parameters.at(-1);
+			const pageRows = ordered.slice(
+				0,
+				typeof queryLimit === "number" ? queryLimit : 0,
+			);
+			return {
+				rows: pageRows.map(({ row, updatedAt }) => ({
+					...row,
+					updated_at: new Date(Math.trunc(timestampMicros(updatedAt) / 1_000)),
+				})) as R[],
+			};
+		},
+		release() {},
+	};
+	const pool = {
+		options: {},
+		async connect() {
+			return client;
+		},
+		async end() {},
+	} as unknown as FakePostgresPool;
+	const executor = new Kysely<DB>({
+		dialect: new PostgresDialect({ pool }),
+	});
+	return { executor, queries };
+}
+
 describe("My Work personal read boundary", () => {
 	beforeEach(() => vi.clearAllMocks());
 
@@ -1033,6 +1126,122 @@ describe("My Work personal read boundary", () => {
 		expect(query?.parameters).toContain(3);
 		expect(query?.parameters).toContain("2026-09-10T00:00:00.000Z");
 		expect(query?.parameters).toContain(100);
+		await executor.destroy();
+	});
+
+	it("normalizes SQL cursor timestamp precision across a sub-millisecond page boundary", async () => {
+		const rows: RawTimestampTrackerRow[] = [
+			{
+				row: trackerRow({
+					id: 5001,
+					workspace_id: ORBIT.id,
+					key_number: 1,
+					status_category: "started",
+				}),
+				updatedAt: "2026-09-10T00:00:00.124900Z",
+			},
+			{
+				row: trackerRow({
+					id: 5002,
+					workspace_id: ORBIT.id,
+					key_number: 2,
+					status_category: "started",
+				}),
+				updatedAt: "2026-09-10T00:00:00.124500Z",
+			},
+			{
+				row: trackerRow({
+					id: 5003,
+					workspace_id: ORBIT.id,
+					key_number: 3,
+					status_category: "started",
+				}),
+				updatedAt: "2026-09-10T00:00:00.123900Z",
+			},
+		];
+		const { executor, queries } = subMillisecondTrackerDb(rows);
+		const source = createMyWorkDataSource(executor);
+		const service = createMyWorkService({
+			executor,
+			listAuthorizedWorkspaces: vi.fn(async () => [ORBIT]),
+			listTrackerRows: source.listTrackerRows,
+			listBoardRows: vi.fn(async () => []),
+			hydrateRows: async (candidates, workspaces) =>
+				candidates.flatMap((candidate) => {
+					const workspace = workspaces.get(candidate.row.workspace_id);
+					return workspace
+						? [serializeMyWorkCandidate(candidate, workspace)]
+						: [];
+				}),
+		});
+
+		const pages: Awaited<ReturnType<typeof service.list>>[] = [];
+		let cursor: string | null = null;
+		for (;;) {
+			const page = await service.list({
+				userId: ALICE.id,
+				scope: "all",
+				limit: 1,
+				cursor,
+				now: NOW,
+			});
+			pages.push(page);
+			if (page.nextCursor === null) break;
+			cursor = page.nextCursor;
+			expect(pages.length).toBeLessThan(4);
+		}
+
+		expect(pages).toHaveLength(3);
+		expect(pages.map((page) => page.items.map((item) => item.key))).toEqual([
+			["OR-1"],
+			["OR-2"],
+			["OR-3"],
+		]);
+		expect(pages[0]?.nextCursor).not.toBeNull();
+		expect(pages[1]?.nextCursor).not.toBeNull();
+		expect(pages[2]?.nextCursor).toBeNull();
+
+		const identities = pages.flatMap((page) => page.items.map((item) => item.identity));
+		expect(identities).toEqual(
+			rows.map(({ row }) => ({
+				workspaceId: ORBIT.id,
+				source: "tracker" as const,
+				key: `OR-${row.key_number}`,
+			})),
+		);
+		expect(new Set(identities.map((identity) => JSON.stringify(identity))).size).toBe(
+			rows.length,
+		);
+
+		const firstCursor = decodeMyWorkCursor(pages[0]?.nextCursor ?? "");
+		const secondCursor = decodeMyWorkCursor(pages[1]?.nextCursor ?? "");
+		expect(firstCursor).toMatchObject({ key: "OR-1", id: 5001 });
+		expect(secondCursor).toMatchObject({ key: "OR-2", id: 5002 });
+		expect(firstCursor?.updatedAt).toBe("2026-09-10T00:00:00.124Z");
+		expect(secondCursor?.updatedAt).toBe("2026-09-10T00:00:00.124Z");
+
+		const trackerQueries = queries.filter((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(trackerQueries).toHaveLength(3);
+		const updatedExpression = `date_trunc('milliseconds', "ti"."updated_at")`;
+		expect(trackerQueries[0]?.sql).toContain(`${updatedExpression} desc`);
+		for (const query of trackerQueries) {
+			expect(query.sql).toContain(updatedExpression);
+			expect(query.sql).not.toContain('"ti"."updated_at" desc');
+		}
+		for (const query of trackerQueries.slice(1)) {
+			expect(query.sql).toContain(`${updatedExpression} <`);
+			expect(query.sql).toContain(`${updatedExpression} =`);
+			expect(query.sql).not.toContain('"ti"."updated_at" <');
+			expect(query.sql).not.toContain('"ti"."updated_at" =');
+		}
+		expect(trackerQueries[1]?.parameters).toContain(
+			"2026-09-10T00:00:00.124Z",
+		);
+		expect(trackerQueries[2]?.parameters).toContain(
+			"2026-09-10T00:00:00.124Z",
+		);
 		await executor.destroy();
 	});
 

@@ -100,10 +100,17 @@ export function sourceOrderExpressions(
 		source === "tracker"
 			? sql<string | null>`ti.end_date::date`
 			: sql<string | null>`c.due_date::date`;
-	const updatedAt =
+	const rawUpdatedAt =
 		source === "tracker"
-			? sql<Date>`ti.updated_at`
-			: sql<Date>`coalesce(c.done_at, c.started_at, c.created_at)`;
+			? sql<Date>`${sql.ref("ti.updated_at")}`
+			: sql<Date>`coalesce(
+				${sql.ref("c.done_at")},
+				${sql.ref("c.started_at")},
+				${sql.ref("c.created_at")}
+			)`;
+	// JavaScript Date/ISO cursors retain milliseconds, so every SQL order and
+	// cursor comparison must use the same normalized timestamp expression.
+	const updatedAt = sql<Date>`date_trunc('milliseconds', ${rawUpdatedAt})`;
 	const overdueRank = sql<number>`CASE
 		WHEN ${group} NOT IN (2, 3)
 			AND ${dueDate} IS NOT NULL
