@@ -1,15 +1,21 @@
 import { ClipboardList, RotateCcw } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
+import MyWorkDetailSheet from "../components/my-work/MyWorkDetailSheet";
 import MyWorkList, {
 	SessionErrorState,
 } from "../components/my-work/MyWorkList";
 import MyWorkToolbar from "../components/my-work/MyWorkToolbar";
-import type {
-	LoadError,
-	LoadedPage,
+import {
+	type LoadError,
+	type LoadedPage,
+	useMyWorkData,
 } from "../components/my-work/useMyWorkData";
-import { useMyWorkData } from "../components/my-work/useMyWorkData";
+import {
+	parseMyWorkDetailState,
+	withMyWorkDetail,
+	withoutMyWorkDetail,
+} from "../lib/myWorkNavigation";
 import type { MyWorkViewState } from "../lib/myWorkUtils";
 import {
 	parseMyWorkViewState,
@@ -25,6 +31,10 @@ export default function MyWorkPage() {
 		() => parseMyWorkViewState(searchParams),
 		[searchParams],
 	);
+	const detailSelection = useMemo(
+		() => parseMyWorkDetailState(searchParams),
+		[searchParams],
+	);
 	const {
 		loaded,
 		loading,
@@ -38,6 +48,9 @@ export default function MyWorkPage() {
 		setSearchParams,
 		setLoadedPage,
 	);
+	const closeDetail = useCallback(() => {
+		setSearchParams(withoutMyWorkDetail(searchParams), { replace: true });
+	}, [searchParams, setSearchParams]);
 	return (
 		<div className="min-h-full bg-neutral-100">
 			<MyWorkToolbar
@@ -63,7 +76,13 @@ export default function MyWorkPage() {
 				onRetry={() => void loadData({ fresh: true })}
 				onShowAll={() => updateView({ scope: "all" })}
 				onPageChange={handlePageChange}
+				onSelect={(item) =>
+					setSearchParams(withMyWorkDetail(searchParams, item.identity))
+				}
 			/>
+			{detailSelection && (
+				<MyWorkDetailSheet selection={detailSelection} onClose={closeDetail} />
+			)}
 		</div>
 	);
 }
@@ -101,6 +120,7 @@ interface MyWorkContentProps {
 	onRetry: () => void;
 	onShowAll: () => void;
 	onPageChange: (page: number) => void;
+	onSelect: (item: LoadedPage["items"][number]) => void;
 }
 function MyWorkContent({
 	loaded,
@@ -111,6 +131,7 @@ function MyWorkContent({
 	onRetry,
 	onShowAll,
 	onPageChange,
+	onSelect,
 }: MyWorkContentProps) {
 	if (loading) return <LoadingState />;
 	if (loadError) {
@@ -133,6 +154,7 @@ function MyWorkContent({
 			hasPrevious={loaded.hasPrevious}
 			hasNext={loaded.hasNext}
 			onPageChange={onPageChange}
+			onSelect={onSelect}
 		/>
 	);
 }
