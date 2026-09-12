@@ -1,25 +1,33 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import {
-	recordListDuration,
-	WORK_ITEMS_LIST_THRESHOLD_MS,
-} from "../core/work-item-latency.js";
+import { applyBoardCardStatusChange } from "../core/board-card-status-change.js";
+import { diffIds } from "../core/diff-ids.js";
 import { neighborsAt, positionBetween, rebalance } from "../core/position.js";
+import {
+	applyTrackerItemStatusChange,
+	completedAtForTrackerCategory,
+	getTrackerStatusCategory,
+} from "../core/tracker-item-status-change.js";
 import {
 	derivePrefix,
 	formatKey,
 	parseKeyFromUrl,
 } from "../core/tracker-key.js";
+import {
+	recordListDuration,
+	WORK_ITEMS_LIST_THRESHOLD_MS,
+} from "../core/work-item-latency.js";
 import { type DBExecutor, db } from "../db/kysely.js";
+import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
-import { diffIds } from "../core/diff-ids.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import {
 	loadTrackerAssigneesForItems,
 	syncTrackerItemAssignees,
 	type TrackerItemAssignee,
 } from "./tracker-assignees.js";
+import { createTrackerItemHandler } from "./tracker-item-create.js";
 import {
 	parseAssigneeIds,
 	parseDateRange,
@@ -30,8 +38,7 @@ import {
 	serializeVocabulary,
 	type VocabularyRow,
 } from "./vocabulary-response.js";
-import { applyBoardCardStatusChange } from "../core/board-card-status-change.js";
-import { domainBus, EVENTS } from "../events.js";
+import { getWorkItemEvents } from "./work-item-events.js";
 import {
 	type BoardWorkItemRow,
 	findBoardCardByKeyNumber,
@@ -40,8 +47,6 @@ import {
 	hydrateTrackerWorkItems,
 	listMergedWorkItems,
 } from "./work-item-response.js";
-import { getWorkItemEvents } from "./work-item-events.js";
-import { createTrackerItemHandler } from "./tracker-item-create.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
 
@@ -299,21 +304,6 @@ async function syncTrackerItemLabels(
 			.onConflict((oc) => oc.doNothing())
 			.execute();
 	}
-}
-
-async function getStatusCategory(
-	dbExec: DBExecutor,
-	workspaceId: number,
-	statusId: number,
-): Promise<string | null> {
-	const row = await dbExec
-		.selectFrom("tracker_vocabularies")
-		.select("category")
-		.where("id", "=", statusId)
-		.where("workspace_id", "=", workspaceId)
-		.where("kind", "=", "status")
-		.executeTakeFirst();
-	return row?.category ?? null;
 }
 
 async function endOfBucketPosition(
@@ -751,6 +741,56 @@ trackerItemsRouter.patch(
 			return res.json(item);
 		}
 
+		const bodyKeys = Object.keys(body).filter((key) => body[key] !== undefined);
+		const hasOnlyStatus =
+			bodyKeys.length > 0 &&
+			bodyKeys.every((key) => key === "version" || key === "statusId") &&
+			body.statusId !== undefined;
+		if (hasOnlyStatus) {
+			if (!Number.isInteger(body.statusId)) {
+				return res.status(400).json({ error: "statusId must be an integer" });
+			}
+			const result = await db.transaction().execute(async (trx) =>
+				applyTrackerItemStatusChange(trx, {
+					workspaceId,
+					actor,
+					trackerItemId: existing.id,
+					targetStatusId: body.statusId as number,
+					version: version as number | undefined,
+				}),
+			);
+
+			if (result.kind === "not_found") {
+				return res.status(404).json({ error: "Not found" });
+			}
+			if (result.kind === "conflict") {
+				return res.status(409).json({
+					error: "Someone else updated this item first.",
+					code: "version_conflict",
+				});
+			}
+			if (result.kind === "invalid_status") {
+				return res.status(400).json({ error: "invalid status" });
+			}
+
+			const row = await findItemByKeyNumber(db, workspaceId, parsed.keyNumber);
+			if (!row) return res.status(404).json({ error: "Not found" });
+			const redirectFrom =
+				parsed.prefix !== prefix
+					? formatKey(parsed.prefix, parsed.keyNumber)
+					: undefined;
+			const item = await hydrateMutationItem(db, row, prefix, {
+				canonicalWorkItem: req.canonicalWorkItemsRoute,
+				redirectFrom,
+			});
+			await publishEvent(workspaceId, {
+				type: "tracker.updated",
+				actor,
+				trackerItemId: existing.id,
+			});
+			return res.json(item);
+		}
+
 		const setFields: Record<string, unknown> = {};
 		if (typeof body.title === "string") {
 			const trimmed = body.title.trim();
@@ -861,16 +901,12 @@ trackerItemsRouter.patch(
 			}
 
 			if (body.statusId !== undefined) {
-				const targetCategory = await getStatusCategory(
+				const targetCategory = await getTrackerStatusCategory(
 					trx,
 					workspaceId,
 					body.statusId as number,
 				);
-				if (targetCategory === "completed") {
-					setFields.completed_at = sql`COALESCE(completed_at, now())`;
-				} else {
-					setFields.completed_at = null;
-				}
+				setFields.completed_at = completedAtForTrackerCategory(targetCategory);
 			}
 
 			const hasSetsNow = Object.keys(setFields).length > 0;

@@ -1,3 +1,4 @@
+import { createMyWorkMarkDoneService } from "../core/my-work-mark-done.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { createMyWorkDataSource } from "./my-work-data-source.js";
 import { hydrateMyWorkRows } from "./my-work-response-hydration.js";
@@ -6,6 +7,7 @@ import { createMyWorkList } from "./my-work-service-list.js";
 import type { MyWorkHydrate } from "./my-work-service-support.js";
 import type {
 	MyWorkCandidate,
+	MyWorkMarkDoneService,
 	MyWorkSerializedItem,
 	MyWorkService,
 	MyWorkServiceDeps,
@@ -46,15 +48,24 @@ export function createMyWorkService(
 		) => hydrateMyWorkRows(executor, candidates, workspaces));
 	const list = createMyWorkList(source, hydrate, usesBoundedSourceQueries);
 	const getDetail = createMyWorkDetail(source, hydrate);
+	const markDone =
+		overrides.markDone ??
+		createMyWorkMarkDoneService({
+			...overrides.markDoneDeps,
+			executor: overrides.markDoneDeps?.executor ?? executor,
+		}).markDone;
 	return {
 		list,
 		listMyWork: list,
 		getDetail,
 		getMyWorkItem: getDetail,
+		markDone,
+		markMyWorkDone: markDone,
 	};
 }
 
 export type {
+	MyWorkMarkDoneService,
 	MyWorkSerializedItem,
 	MyWorkService,
 	MyWorkServiceDeps,
