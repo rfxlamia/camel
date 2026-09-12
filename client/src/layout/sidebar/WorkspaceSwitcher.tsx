@@ -46,11 +46,57 @@ export function WorkspaceAvatar({
 interface WorkspaceSwitcherProps {
 	collapsed?: boolean;
 	placement?: "right" | "top";
+	renderConfirmation?: boolean;
+}
+
+export function WorkspaceSwitchConfirmation({
+	placement = "right",
+	onConfirm,
+}: {
+	placement?: "right" | "top";
+	onConfirm?: () => void;
+}) {
+	const { switchConfirm, confirmPendingSwitch, cancelPendingSwitch } =
+		useBoard();
+
+	return (
+		<PopoverShell
+			open={switchConfirm.open}
+			onCancel={cancelPendingSwitch}
+			placement={placement}
+			ariaLabel="Confirm workspace switch"
+		>
+			<p className="text-sm font-medium text-neutral-700">Switch workspace?</p>
+			<p className="mt-1 text-xs text-neutral-500">
+				You have unsaved card edits. They will be discarded.
+			</p>
+			<div className="mt-3 flex gap-2">
+				<button
+					type="button"
+					onClick={cancelPendingSwitch}
+					className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					onClick={() => {
+						confirmPendingSwitch();
+						onConfirm?.();
+					}}
+					className="flex-1 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+				>
+					Switch
+				</button>
+			</div>
+		</PopoverShell>
+	);
 }
 
 export function WorkspaceSwitcher({
 	collapsed = false,
 	placement = "right",
+	renderConfirmation = true,
 }: WorkspaceSwitcherProps) {
 	const {
 		activeWorkspace,
@@ -64,7 +110,6 @@ export function WorkspaceSwitcher({
 		focusSessionHydrated,
 		attemptSwitchWorkspace,
 		switchConfirm,
-		confirmPendingSwitch,
 		cancelPendingSwitch,
 		openCreateWorkspace,
 		acceptWorkspaceInvite,
@@ -73,6 +118,9 @@ export function WorkspaceSwitcher({
 
 	const [open, setOpen] = useState(false);
 	const [busyInviteId, setBusyInviteId] = useState<number | null>(null);
+	useEffect(() => {
+		if (!renderConfirmation && !switchConfirm.open) setOpen(false);
+	}, [renderConfirmation, switchConfirm.open]);
 	const rootRef = useRef<HTMLDivElement>(null);
 
 	const handleAcceptInvite = async (invite: WorkspaceInvite) => {
@@ -204,36 +252,12 @@ export function WorkspaceSwitcher({
 				</div>
 			)}
 
-			<PopoverShell
-				open={switchConfirm.open}
-				onCancel={cancelPendingSwitch}
-				placement={placement}
-				ariaLabel="Confirm workspace switch"
-			>
-				<p className="text-sm font-medium text-neutral-700">
-					Switch workspace?
-				</p>
-				<p className="mt-1 text-xs text-neutral-500">
-					You have unsaved card edits. They will be discarded.
-				</p>
-				<div className="mt-3 flex gap-2">
-					<button
-						onClick={cancelPendingSwitch}
-						className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-					>
-						Cancel
-					</button>
-					<button
-						onClick={() => {
-							confirmPendingSwitch();
-							setOpen(false);
-						}}
-						className="flex-1 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-					>
-						Switch
-					</button>
-				</div>
-			</PopoverShell>
+			{renderConfirmation && (
+				<WorkspaceSwitchConfirmation
+					placement={placement}
+					onConfirm={() => setOpen(false)}
+				/>
+			)}
 
 			{invitePopover.visible && (
 				<PopoverShell
