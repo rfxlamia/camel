@@ -1,8 +1,5 @@
 import type { MyWorkItem } from "../types/myWork";
-import {
-	normalizeMyWorkStatus,
-	type MyWorkStatusGroup,
-} from "./myWorkStatus";
+import { normalizeMyWorkStatus, type MyWorkStatusGroup } from "./myWorkStatus";
 
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MY_WORK_GROUP_ORDER: Record<MyWorkStatusGroup, number> = {

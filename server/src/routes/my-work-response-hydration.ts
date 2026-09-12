@@ -123,9 +123,7 @@ export async function loadMyWorkDoneTargetInputs(
 	dbExec: DBExecutor,
 	candidates: readonly MyWorkCandidate[],
 ): Promise<MyWorkDoneTargetInputs> {
-	if (
-		typeof (dbExec as { selectFrom?: unknown }).selectFrom !== "function"
-	) {
+	if (typeof (dbExec as { selectFrom?: unknown }).selectFrom !== "function") {
 		return { boardColumns: [], statusVocabularies: [] };
 	}
 
@@ -174,10 +172,7 @@ function candidateHydrationIds(candidates: readonly MyWorkCandidate[]) {
 	const trackerCandidates = sourceCandidates(candidates, "tracker");
 	const boardCandidates = sourceCandidates(candidates, "board");
 	return {
-		trackerIdsForAssignees: candidateIdsWithout(
-			trackerCandidates,
-			"assignees",
-		),
+		trackerIdsForAssignees: candidateIdsWithout(trackerCandidates, "assignees"),
 		trackerIdsForLabels: candidateIdsWithout(trackerCandidates, "labels"),
 		boardIdsForAssignees: candidateIdsWithout(boardCandidates, "assignees"),
 		boardIdsForLabels: candidateIdsWithout(boardCandidates, "labels"),

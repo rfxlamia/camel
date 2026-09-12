@@ -12,8 +12,20 @@ const boardColumns = [
 ];
 
 const statusVocabularies = [
-	{ id: 101, workspaceId: 7, kind: "status", slot: "in_progress" as const, position: 1 },
-	{ id: 102, workspaceId: 7, kind: "status", slot: "done" as const, position: 2 },
+	{
+		id: 101,
+		workspaceId: 7,
+		kind: "status",
+		slot: "in_progress" as const,
+		position: 1,
+	},
+	{
+		id: 102,
+		workspaceId: 7,
+		kind: "status",
+		slot: "done" as const,
+		position: 2,
+	},
 ];
 
 function inputs(
@@ -36,9 +48,9 @@ describe("resolveMyWorkDoneTarget", () => {
 		).toEqual({
 			available: true,
 			source: "board",
-				columnId: 12,
-				statusId: 102,
-				slot: "done",
+			columnId: 12,
+			statusId: 102,
+			slot: "done",
 		});
 	});
 
@@ -48,7 +60,13 @@ describe("resolveMyWorkDoneTarget", () => {
 				{ source: "board", workspaceId: 7, columnId: 11 },
 				inputs({
 					boardColumns: [
-						{ id: 11, workspaceId: 7, boardId: null, position: 1, is_done: false },
+						{
+							id: 11,
+							workspaceId: 7,
+							boardId: null,
+							position: 1,
+							is_done: false,
+						},
 						{ id: 21, workspaceId: 7, boardId: 99, position: 1, is_done: true },
 					],
 				}),
@@ -64,7 +82,13 @@ describe("resolveMyWorkDoneTarget", () => {
 		});
 		const noDoneStatus = inputs({
 			statusVocabularies: [
-				{ id: 101, workspaceId: 7, kind: "status", slot: "in_progress", position: 1 },
+				{
+					id: 101,
+					workspaceId: 7,
+					kind: "status",
+					slot: "in_progress",
+					position: 1,
+				},
 			],
 		});
 
@@ -88,17 +112,35 @@ describe("resolveMyWorkDoneTarget", () => {
 				{ source: "tracker", workspaceId: 7 },
 				inputs({
 					statusVocabularies: [
-						{ id: 203, workspaceId: 7, kind: "status", slot: "done", position: 2 },
-						{ id: 201, workspaceId: 7, kind: "status", slot: "done", position: 1 },
-						{ id: 202, workspaceId: 7, kind: "priority", slot: "done", position: 0 },
+						{
+							id: 203,
+							workspaceId: 7,
+							kind: "status",
+							slot: "done",
+							position: 2,
+						},
+						{
+							id: 201,
+							workspaceId: 7,
+							kind: "status",
+							slot: "done",
+							position: 1,
+						},
+						{
+							id: 202,
+							workspaceId: 7,
+							kind: "priority",
+							slot: "done",
+							position: 0,
+						},
 					],
 				}),
 			),
 		).toEqual({
 			available: true,
 			source: "tracker",
-				statusId: 201,
-				slot: "done",
+			statusId: 201,
+			slot: "done",
 		});
 	});
 
@@ -108,7 +150,13 @@ describe("resolveMyWorkDoneTarget", () => {
 				{ source: "tracker", workspaceId: 7 },
 				inputs({
 					statusVocabularies: [
-						{ id: 101, workspaceId: 7, kind: "status", slot: "in_progress", position: 1 },
+						{
+							id: 101,
+							workspaceId: 7,
+							kind: "status",
+							slot: "in_progress",
+							position: 1,
+						},
 					],
 				}),
 			),
@@ -121,7 +169,13 @@ describe("resolveMyWorkDoneTarget", () => {
 				{ source: "tracker", workspaceId: 12 },
 				inputs({
 					statusVocabularies: [
-						{ id: 301, workspaceId: 7, kind: "status", slot: "done", position: 1 },
+						{
+							id: 301,
+							workspaceId: 7,
+							kind: "status",
+							slot: "done",
+							position: 1,
+						},
 					],
 				}),
 			),
