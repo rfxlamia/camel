@@ -1,17 +1,21 @@
 import { AlertTriangle, ClipboardList, RotateCcw } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router";
-import MyWorkList, {
-	type LoadError,
-	useMyWorkData,
-} from "../components/my-work/MyWorkList";
+import MyWorkList from "../components/my-work/MyWorkList";
 import MyWorkToolbar from "../components/my-work/MyWorkToolbar";
+import type {
+	LoadError,
+	LoadedPage,
+} from "../components/my-work/useMyWorkData";
+import { useMyWorkData } from "../components/my-work/useMyWorkData";
+import type { MyWorkViewState } from "../lib/myWorkUtils";
 import {
 	parseMyWorkViewState,
 	serializeMyWorkViewState,
 } from "../lib/myWorkUtils";
 import type { WorkItemSource } from "../types";
 
+type SearchParamSetter = ReturnType<typeof useSearchParams>[1];
 /** Global, route-driven personal work list. It never reads the active workspace. */
 export default function MyWorkPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -27,29 +31,11 @@ export default function MyWorkPage() {
 		loadData,
 		handlePageChange: setLoadedPage,
 	} = useMyWorkData(view);
-	const updateView = useCallback(
-		(
-			patch: Partial<typeof view>,
-			{ resetPage = true }: { resetPage?: boolean } = {},
-		) => {
-			const next = { ...view, ...patch };
-			if (resetPage) next.page = 1;
-			setSearchParams(serializeMyWorkViewState(next), { replace: true });
-		},
-		[setSearchParams, view],
+	const { updateView, handlePageChange } = useMyWorkViewActions(
+		view,
+		setSearchParams,
+		setLoadedPage,
 	);
-
-	const handlePageChange = useCallback(
-		(page: number) => {
-			setLoadedPage(page);
-			updateView({ page }, { resetPage: false });
-		},
-		[setLoadedPage, updateView],
-	);
-
-	const isEmpty = !loading && !loadError && loaded?.items.length === 0;
-	const scopeCount = view.scope === "active" ? loaded?.total : undefined;
-
 	return (
 		<div className="min-h-full bg-neutral-100">
 			<MyWorkToolbar
@@ -58,7 +44,7 @@ export default function MyWorkPage() {
 				workspaceId={view.workspaceId}
 				source={view.source}
 				workspaces={workspaceOptions}
-				activeCount={scopeCount}
+				activeCount={view.scope === "active" ? loaded?.total : undefined}
 				loading={loading}
 				onScopeChange={(scope) => updateView({ scope })}
 				onQueryChange={(q) => updateView({ q })}
@@ -66,35 +52,88 @@ export default function MyWorkPage() {
 				onSourceChange={(source: WorkItemSource | "") => updateView({ source })}
 				onRefresh={() => void loadData({ fresh: true })}
 			/>
-
-			{loading ? (
-				<LoadingState />
-			) : loadError ? (
-				<ErrorState
-					error={loadError}
-					onRetry={() => void loadData({ fresh: true })}
-				/>
-			) : isEmpty ? (
-				<EmptyResult
-					scope={view.scope}
-					query={view.q}
-					onShowAll={() => updateView({ scope: "all" })}
-				/>
-			) : loaded ? (
-				<MyWorkList
-					items={loaded.items}
-					scope={view.scope}
-					page={loaded.page}
-					pageCount={loaded.pageCount}
-					hasPrevious={loaded.hasPrevious}
-					hasNext={loaded.hasNext}
-					onPageChange={handlePageChange}
-				/>
-			) : null}
+			<MyWorkContent
+				loaded={loaded}
+				loading={loading}
+				loadError={loadError}
+				scope={view.scope}
+				query={view.q}
+				onRetry={() => void loadData({ fresh: true })}
+				onShowAll={() => updateView({ scope: "all" })}
+				onPageChange={handlePageChange}
+			/>
 		</div>
 	);
 }
-
+function useMyWorkViewActions(
+	view: MyWorkViewState,
+	setSearchParams: SearchParamSetter,
+	setLoadedPage: (page: number) => void,
+) {
+	const updateView = useCallback(
+		(
+			patch: Partial<MyWorkViewState>,
+			{ resetPage = true }: { resetPage?: boolean } = {},
+		) => {
+			const next = { ...view, ...patch };
+			if (resetPage) next.page = 1;
+			setSearchParams(serializeMyWorkViewState(next), { replace: true });
+		},
+		[setSearchParams, view],
+	);
+	const handlePageChange = useCallback(
+		(page: number) => {
+			setLoadedPage(page);
+			updateView({ page }, { resetPage: false });
+		},
+		[setLoadedPage, updateView],
+	);
+	return { updateView, handlePageChange };
+}
+interface MyWorkContentProps {
+	loaded: LoadedPage | null;
+	loading: boolean;
+	loadError: LoadError | null;
+	scope: MyWorkViewState["scope"];
+	query: string;
+	onRetry: () => void;
+	onShowAll: () => void;
+	onPageChange: (page: number) => void;
+}
+function MyWorkContent({
+	loaded,
+	loading,
+	loadError,
+	scope,
+	query,
+	onRetry,
+	onShowAll,
+	onPageChange,
+}: MyWorkContentProps) {
+	if (loading) return <LoadingState />;
+	if (loadError) {
+		return loadError.kind === "auth" ? (
+			<SessionErrorState />
+		) : (
+			<TransientErrorState error={loadError} onRetry={onRetry} />
+		);
+	}
+	if (loaded?.items.length === 0) {
+		return <EmptyResult scope={scope} query={query} onShowAll={onShowAll} />;
+	}
+	if (!loaded) return null;
+	return (
+		<MyWorkList
+			items={loaded.items}
+			scope={scope}
+			page={loaded.page}
+			pageCount={loaded.pageCount}
+			hasPrevious={loaded.hasPrevious}
+			hasNext={loaded.hasNext}
+			onPageChange={onPageChange}
+		/>
+	);
+}
 function LoadingState() {
 	return (
 		<div
@@ -119,21 +158,6 @@ function LoadingState() {
 		</div>
 	);
 }
-
-function ErrorState({
-	error,
-	onRetry,
-}: {
-	error: LoadError;
-	onRetry: () => void;
-}) {
-	return error.kind === "auth" ? (
-		<SessionErrorState />
-	) : (
-		<TransientErrorState error={error} onRetry={onRetry} />
-	);
-}
-
 function SessionErrorState() {
 	return (
 		<div
@@ -156,7 +180,6 @@ function SessionErrorState() {
 		</div>
 	);
 }
-
 function TransientErrorState({
 	error,
 	onRetry,
@@ -189,13 +212,12 @@ function TransientErrorState({
 		</div>
 	);
 }
-
 function EmptyResult({
 	scope,
 	query,
 	onShowAll,
 }: {
-	scope: "active" | "all";
+	scope: MyWorkViewState["scope"];
 	query: string;
 	onShowAll: () => void;
 }) {
@@ -205,13 +227,12 @@ function EmptyResult({
 		<ScopeEmptyResult scope={scope} onShowAll={onShowAll} />
 	);
 }
-
 function SearchEmptyResult({
 	scope,
 	query,
 	onShowAll,
 }: {
-	scope: "active" | "all";
+	scope: MyWorkViewState["scope"];
 	query: string;
 	onShowAll: () => void;
 }) {
@@ -236,12 +257,11 @@ function SearchEmptyResult({
 		</div>
 	);
 }
-
 function ScopeEmptyResult({
 	scope,
 	onShowAll,
 }: {
-	scope: "active" | "all";
+	scope: MyWorkViewState["scope"];
 	onShowAll: () => void;
 }) {
 	return (

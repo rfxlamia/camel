@@ -13,7 +13,6 @@ import {
 	normalizeMyWorkStatus,
 } from "../../lib/myWorkStatus";
 import type { MyWorkItem } from "../../types/myWork";
-
 export interface MyWorkRowProps {
 	item: MyWorkItem;
 	/** Called when the row's read-only selection action is activated. */
@@ -23,7 +22,6 @@ export interface MyWorkRowProps {
 	/** Compact mode keeps the same metadata while tightening the mobile rhythm. */
 	compact?: boolean;
 }
-
 const STATUS_META: Record<
 	MyWorkStatusGroup,
 	{ label: string; badge: string; icon: typeof Circle }
@@ -54,9 +52,7 @@ const STATUS_META: Record<
 		icon: Clock3,
 	},
 };
-
 type StatusMetadata = (typeof STATUS_META)[MyWorkStatusGroup];
-
 function dateOnly(value: string): string | null {
 	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 	if (!match) return null;
@@ -72,7 +68,6 @@ function dateOnly(value: string): string | null {
 	}
 	return value;
 }
-
 function formatDueDate(value: string | null): string {
 	if (!value) return "No due date";
 	const parsedDate = dateOnly(value);
@@ -86,11 +81,9 @@ function formatDueDate(value: string | null): string {
 		timeZone: "UTC",
 	}).format(parsed);
 }
-
 function rowIdentity(item: MyWorkItem): string {
 	return `${item.workspaceId}-${item.source}-${item.key}`;
 }
-
 function StatusMark({ statusMeta }: { statusMeta: StatusMetadata }) {
 	const StatusIcon = statusMeta.icon;
 	return (
@@ -99,7 +92,6 @@ function StatusMark({ statusMeta }: { statusMeta: StatusMetadata }) {
 		</span>
 	);
 }
-
 function RowIdentityMeta({
 	item,
 	statusMeta,
@@ -121,7 +113,6 @@ function RowIdentityMeta({
 		</span>
 	);
 }
-
 function RowWorkspaceMeta({
 	workspaceName,
 	sourceLabel,
@@ -154,7 +145,6 @@ function RowWorkspaceMeta({
 		</span>
 	);
 }
-
 function RowSummary({
 	item,
 	statusMeta,
@@ -185,7 +175,6 @@ function RowSummary({
 		</span>
 	);
 }
-
 function RowDueMeta({
 	dueValue,
 	overdue,
@@ -213,64 +202,97 @@ function RowDueMeta({
 		</span>
 	);
 }
-
-/** A read-only, responsive work row. Detail and mutation actions live elsewhere. */
-export default function MyWorkRow({
-	item,
-	onSelect,
-	onOpen,
-	compact = false,
-}: MyWorkRowProps) {
+interface RowView {
+	statusMeta: StatusMetadata;
+	dueValue: string | null;
+	overdue: boolean;
+	workspaceName: string;
+	sourceLabel: string;
+	sourceContext: string;
+}
+function createRowView(item: MyWorkItem): RowView {
 	const group = normalizeMyWorkStatus(item);
-	const statusMeta = STATUS_META[group];
-	const dueValue =
-		item.source === "board" ? (item.dueDate ?? null) : (item.endDate ?? null);
-	const overdue = isMyWorkItemOverdue(item);
-	const workspaceName = item.workspaceName || item.workspace.name;
-	const sourceLabel = item.source === "board" ? "Board" : "Tracker";
-	const sourceContext =
-		item.source === "board" ? item.columnName || "Board" : item.status.name;
-	const handleSelect = () => {
-		if (onSelect) onSelect(item);
-		else onOpen?.(item);
+	return {
+		statusMeta: STATUS_META[group],
+		dueValue:
+			item.source === "board" ? (item.dueDate ?? null) : (item.endDate ?? null),
+		overdue: isMyWorkItemOverdue(item),
+		workspaceName: item.workspaceName || item.workspace.name,
+		sourceLabel: item.source === "board" ? "Board" : "Tracker",
+		sourceContext:
+			item.source === "board" ? item.columnName || "Board" : item.status.name,
 	};
-
+}
+function activateRow(
+	item: MyWorkItem,
+	onSelect?: (item: MyWorkItem) => void,
+	onOpen?: (item: MyWorkItem) => void,
+) {
+	if (onSelect) onSelect(item);
+	else onOpen?.(item);
+}
+function RowButton({
+	item,
+	compact,
+	view,
+	onActivate,
+}: {
+	item: MyWorkItem;
+	compact: boolean;
+	view: RowView;
+	onActivate: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onActivate}
+			aria-label={`Open ${item.key} ${item.title}`}
+			className={`group/row relative flex w-full min-w-0 items-start gap-3 bg-white text-left transition-colors hover:bg-primary-100/35 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 motion-reduce:transition-none ${
+				compact ? "px-3 py-2.5" : "px-4 py-3 md:px-5"
+			}`}
+		>
+			<span
+				className={`absolute inset-y-0 left-0 w-0.5 bg-primary-600 opacity-0 transition-opacity motion-reduce:transition-none group-hover/row:opacity-100 group-focus-visible/row:opacity-100 ${
+					view.overdue ? "opacity-100" : ""
+				}`}
+				aria-hidden
+			/>
+			<StatusMark statusMeta={view.statusMeta} />
+			<RowSummary
+				item={item}
+				statusMeta={view.statusMeta}
+				workspaceName={view.workspaceName}
+				sourceLabel={view.sourceLabel}
+				sourceContext={view.sourceContext}
+			/>
+			<RowDueMeta dueValue={view.dueValue} overdue={view.overdue} />
+			<span
+				className="flex shrink-0 items-center gap-1 text-primary-700 sm:hidden"
+				aria-hidden
+			>
+				<ArrowUpRight size={15} />
+			</span>
+		</button>
+	);
+}
+function RowShell({ item, onSelect, onOpen, compact = false }: MyWorkRowProps) {
+	const view = createRowView(item);
 	return (
 		<li
 			data-testid={`my-work-row-${rowIdentity(item)}`}
 			data-work-item-key={item.key}
 			className="border-neutral-200 border-b last:border-b-0"
 		>
-			<button
-				type="button"
-				onClick={handleSelect}
-				aria-label={`Open ${item.key} ${item.title}`}
-				className={`group/row relative flex w-full min-w-0 items-start gap-3 bg-white text-left transition-colors hover:bg-primary-100/35 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 motion-reduce:transition-none ${
-					compact ? "px-3 py-2.5" : "px-4 py-3 md:px-5"
-				}`}
-			>
-				<span
-					className={`absolute inset-y-0 left-0 w-0.5 bg-primary-600 opacity-0 transition-opacity motion-reduce:transition-none group-hover/row:opacity-100 group-focus-visible/row:opacity-100 ${
-						overdue ? "opacity-100" : ""
-					}`}
-					aria-hidden
-				/>
-				<StatusMark statusMeta={statusMeta} />
-				<RowSummary
-					item={item}
-					statusMeta={statusMeta}
-					workspaceName={workspaceName}
-					sourceLabel={sourceLabel}
-					sourceContext={sourceContext}
-				/>
-				<RowDueMeta dueValue={dueValue} overdue={overdue} />
-				<span
-					className="flex shrink-0 items-center gap-1 text-primary-700 sm:hidden"
-					aria-hidden
-				>
-					<ArrowUpRight size={15} />
-				</span>
-			</button>
+			<RowButton
+				item={item}
+				compact={compact}
+				view={view}
+				onActivate={() => activateRow(item, onSelect, onOpen)}
+			/>
 		</li>
 	);
+}
+/** A read-only, responsive work row. Detail and mutation actions live elsewhere. */
+export default function MyWorkRow(props: MyWorkRowProps) {
+	return <RowShell {...props} />;
 }
