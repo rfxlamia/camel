@@ -11,6 +11,8 @@ import {
 	type MyWorkDataSource,
 } from "./my-work.js";
 import {
+	decodeMyWorkCursor,
+	isMyWorkItemOverdue,
 	type MyWorkBoardRow,
 	type MyWorkTrackerRow,
 	type MyWorkWorkspace,
@@ -213,6 +215,41 @@ function pagedTrackerDb(
 			if (sqlText.includes('from "tracker_items"')) {
 				const rows = trackerQueryCount++ === 0 ? firstPage : secondPage;
 				return { rows: rows as R[] };
+			}
+			return { rows: [] as R[] };
+		},
+		release() {},
+	};
+	const pool = {
+		options: {},
+		async connect() {
+			return client;
+		},
+		async end() {},
+	} as unknown as FakePostgresPool;
+	const executor = new Kysely<DB>({
+		dialect: new PostgresDialect({ pool }),
+	});
+	return { executor, queries };
+}
+
+function multiPageTrackerDb(rows: MyWorkTrackerRow[]) {
+	const queries: CapturedQuery[] = [];
+	const client = {
+		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
+			queries.push({ sql: sqlText, parameters });
+			if (sqlText.includes('from "tracker_items"')) {
+				const cursorId = parameters.find(
+					(parameter): parameter is number =>
+						typeof parameter === "number" &&
+						rows.some((row) => row.id === parameter),
+				);
+				const cursorIndex =
+					cursorId === undefined
+						? -1
+						: rows.findIndex((row) => row.id === cursorId);
+				const offset = cursorIndex + 1;
+				return { rows: rows.slice(offset, offset + 51) as R[] };
 			}
 			return { rows: [] as R[] };
 		},
@@ -708,6 +745,169 @@ describe("My Work personal read boundary", () => {
 		expect(trackerQueries[0]?.sql).toContain('"ti"."key_number" asc');
 		expect(trackerQueries[1]?.sql).toContain('"ti"."key_number" =');
 		expect(trackerQueries[1]?.parameters).toContain(2);
+		await executor.destroy();
+	});
+
+	it("paginates overdue Other rows across bounded query and response pages", async () => {
+		const otherRows = Array.from({ length: 70 }, (_, index) => {
+			const keyNumber = index + 1;
+			const endDate =
+				index < 55
+					? "2026-09-10"
+					: index < 60
+						? "2026-09-11"
+						: index < 65
+							? "2026-09-12"
+							: null;
+			return trackerRow({
+				id: 4000 + index,
+				workspace_id: ORBIT.id,
+				key_number: keyNumber,
+				title: `Other item ${keyNumber}`,
+				status_category: "mystery",
+				status_slot: "done",
+				end_date: endDate,
+				updated_at: NOW,
+			});
+		});
+		const undefinedCategory = trackerRow({
+			id: 4071,
+			workspace_id: ORBIT.id,
+			key_number: 71,
+			title: "Undefined category control",
+			status_category: null,
+			status_slot: "in_progress",
+			end_date: "2026-09-10",
+			updated_at: NOW,
+		});
+		delete (undefinedCategory as unknown as { status_category?: string | null })
+			.status_category;
+		const nullCategoryTerminal = trackerRow({
+			id: 4072,
+			workspace_id: ORBIT.id,
+			key_number: 72,
+			title: "Null category terminal control",
+			status_category: null,
+			status_slot: "done",
+			end_date: "2026-09-10",
+			updated_at: NOW,
+		});
+		const canceled = trackerRow({
+			id: 4073,
+			workspace_id: ORBIT.id,
+			key_number: 73,
+			title: "Canceled control",
+			status_category: "canceled",
+			status_slot: "in_progress",
+			end_date: "2026-09-10",
+			updated_at: NOW,
+		});
+		const rows = [
+			undefinedCategory,
+			nullCategoryTerminal,
+			canceled,
+			...otherRows,
+		];
+		const { executor, queries } = multiPageTrackerDb(rows);
+		const service = createMyWorkService({
+			executor,
+			listAuthorizedWorkspaces: vi.fn(async () => [ORBIT]),
+			hydrateRows: async (candidates, workspaces) =>
+				candidates.flatMap((candidate) => {
+					const workspace = workspaces.get(candidate.row.workspace_id);
+					return workspace
+						? [serializeMyWorkCandidate(candidate, workspace)]
+						: [];
+				}),
+		});
+
+		const pages = [] as Awaited<ReturnType<typeof service.list>>[];
+		let cursor: string | null = null;
+		for (;;) {
+			const page = await service.list({
+				userId: ALICE.id,
+				scope: "all",
+				limit: 50,
+				cursor,
+				now: NOW,
+			});
+			pages.push(page);
+			if (page.nextCursor === null) break;
+			cursor = page.nextCursor;
+			expect(pages.length).toBeLessThan(3);
+		}
+
+		expect(pages).toHaveLength(2);
+		expect(pages[0]?.items).toHaveLength(50);
+		expect(pages[1]?.items).toHaveLength(23);
+		expect(pages[0]?.nextCursor).not.toBeNull();
+		expect(pages[1]?.nextCursor).toBeNull();
+
+		const firstCursor = decodeMyWorkCursor(pages[0]?.nextCursor ?? "");
+		expect(firstCursor).toMatchObject({
+			group: 4,
+			overdue: true,
+			dueDate: "2026-09-10",
+			workspaceId: ORBIT.id,
+			source: "tracker",
+			key: "OR-47",
+			keyNumber: 47,
+			id: 4046,
+		});
+
+		const items = pages.flatMap((page) => page.items);
+		const expectedIdentities = rows.map((row) => ({
+			workspaceId: ORBIT.id,
+			source: "tracker" as const,
+			key: `OR-${row.key_number}`,
+		}));
+		expect(items.map((item) => item.identity)).toEqual(expectedIdentities);
+		const identityStrings = items.map((item) => JSON.stringify(item.identity));
+		expect(new Set(identityStrings).size).toBe(73);
+		expect(items).toHaveLength(73);
+
+		const numericKeys = items
+			.filter((item) => item.key === "OR-2" || item.key === "OR-10")
+			.map((item) => item.key);
+		expect(numericKeys).toEqual(["OR-2", "OR-10"]);
+
+		const unknownDone = items.find((item) => item.key === "OR-2");
+		expect(unknownDone).toMatchObject({
+			statusCategory: null,
+			status: { category: "mystery", slot: "done" },
+		});
+		expect(isMyWorkItemOverdue(unknownDone!, NOW)).toBe(true);
+		const dueToday = items.find((item) => item.key === "OR-56");
+		expect(isMyWorkItemOverdue(dueToday!, NOW)).toBe(false);
+		const undefinedControl = items.find((item) => item.key === "OR-71");
+		expect(undefinedControl).toMatchObject({ statusCategory: "started" });
+		expect(isMyWorkItemOverdue(undefinedControl!, NOW)).toBe(true);
+		const nullControl = items.find((item) => item.key === "OR-72");
+		expect(nullControl).toMatchObject({
+			statusCategory: "completed",
+			status: { category: null, slot: "done" },
+		});
+		expect(isMyWorkItemOverdue(nullControl!, NOW)).toBe(false);
+		const canceledControl = items.find((item) => item.key === "OR-73");
+		expect(isMyWorkItemOverdue(canceledControl!, NOW)).toBe(false);
+
+		const trackerQueries = queries.filter((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(trackerQueries).toHaveLength(2);
+		const firstQuery = trackerQueries[0]!;
+		const secondQuery = trackerQueries[1]!;
+		expect(firstQuery.sql).toContain("NOT IN (2, 3)");
+		expect(firstQuery.sql).not.toContain(" < 2");
+		expect(firstQuery.sql).toContain('"ti"."key_number" asc');
+		expect(firstQuery.sql).toContain('"ti"."id" asc');
+		expect(firstQuery.parameters).toContain("2026-09-11");
+		expect(firstQuery.parameters).toContain(51);
+		expect(secondQuery.sql).toContain('"ti"."key_number" =');
+		expect(secondQuery.sql).toContain('"ti"."id" >');
+		expect(secondQuery.parameters).toContain(firstCursor?.keyNumber);
+		expect(secondQuery.parameters).toContain(firstCursor?.id);
+		expect(secondQuery.parameters).toContain(51);
 		await executor.destroy();
 	});
 
