@@ -394,6 +394,66 @@ describe("My Work personal read boundary", () => {
 		).toBeNull();
 	});
 
+	it("keeps unknown non-null categories in Other despite terminal slots", async () => {
+		const started = trackerRow({
+			id: 110,
+			key_number: 10,
+			status_category: "started",
+			status_slot: "in_progress",
+		});
+		const unknownTerminal = trackerRow({
+			id: 111,
+			key_number: 11,
+			title: "Unknown terminal category",
+			status_category: "mystery",
+			status_slot: "done",
+		});
+		const nullTerminal = trackerRow({
+			id: 112,
+			key_number: 12,
+			title: "Null category terminal slot",
+			status_category: null,
+			status_slot: "done",
+		});
+		const service = createMyWorkService(
+			sourceDeps({ tracker: [started, unknownTerminal, nullTerminal], board: [] }),
+		);
+
+		const active = await service.list({
+			userId: ALICE.id,
+			scope: "active",
+			now: NOW,
+		});
+		const all = await service.list({
+			userId: ALICE.id,
+			scope: "all",
+			now: NOW,
+		});
+
+		expect(active.items.map((item) => item.id)).toEqual([
+			started.id,
+			unknownTerminal.id,
+		]);
+		const activeUnknown = active.items.find(
+			(item) => item.id === unknownTerminal.id,
+		);
+		expect(activeUnknown?.statusCategory).toBeNull();
+		expect(activeUnknown?.status.category).toBe("mystery");
+		expect(activeUnknown?.status.slot).toBe("done");
+
+		expect(all.items.map((item) => item.id)).toEqual([
+			started.id,
+			nullTerminal.id,
+			unknownTerminal.id,
+		]);
+		expect(
+			all.items.find((item) => item.id === unknownTerminal.id)?.statusCategory,
+		).toBeNull();
+		expect(
+			all.items.find((item) => item.id === nullTerminal.id)?.statusCategory,
+		).toBe("completed");
+	});
+
 	it("RED 5: reauthorizes detail and maps revoked access to HTTP 404 Not found", async () => {
 		let revoked = false;
 		const row = boardRow({ id: 210, workspace_id: ATLAS.id, key_number: 17 });
@@ -648,6 +708,33 @@ describe("My Work personal read boundary", () => {
 		expect(trackerQueries[0]?.sql).toContain('"ti"."key_number" asc');
 		expect(trackerQueries[1]?.sql).toContain('"ti"."key_number" =');
 		expect(trackerQueries[1]?.parameters).toContain(2);
+		await executor.destroy();
+	});
+
+	it("keeps unknown non-null categories active at the SQL boundary", async () => {
+		const { executor, queries } = capturedDb();
+		const source = createMyWorkDataSource(executor);
+		await source.listTrackerRows({
+			userId: ALICE.id,
+			workspaceIds: [ORBIT.id],
+			q: "",
+			scope: "active",
+			limit: 2,
+			workspaceLocalDates: new Map([[ORBIT.id, "2026-09-11"]]),
+		});
+
+		const query = queries.find((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(query).toBeDefined();
+		const sqlText = query?.sql ?? "";
+		const fallbackGuard = sqlText.indexOf("st.category IS NULL");
+		const slotFallback = sqlText.indexOf("st.slot IN");
+		expect(fallbackGuard).toBeGreaterThanOrEqual(0);
+		expect(slotFallback).toBeGreaterThan(fallbackGuard);
+		expect(sqlText).toContain("st.category = 'completed'");
+		expect(sqlText).toMatch(/CASE[\s\S]*st.category IS NULL[\s\S]*st.slot IN/);
+		expect(sqlText).toMatch(/NOT IN \(2, 3\)/);
 		await executor.destroy();
 	});
 
