@@ -31,7 +31,6 @@ export interface MyWorkPageViewProps {
 export function MyWorkPageView(props: MyWorkPageViewProps) {
 	const {
 		view,
-		detailSelection,
 		loaded,
 		loading,
 		loadError,
@@ -41,7 +40,6 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 		onRefresh,
 		onRetry,
 		onSelect,
-		onCloseDetail,
 	} = props;
 	return (
 		<div className="min-h-full bg-neutral-100">
@@ -70,13 +68,26 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 				onPageChange={handlePageChange}
 				onSelect={onSelect}
 			/>
-			{detailSelection && (
-				<MyWorkDetailSheet
-					selection={detailSelection}
-					onClose={onCloseDetail}
-				/>
-			)}
+			<MyWorkDetail {...props} />
 		</div>
+	);
+}
+
+type MyWorkDetailProps = Pick<
+	MyWorkPageViewProps,
+	"detailSelection" | "onCloseDetail"
+>;
+
+function MyWorkDetail({
+	detailSelection,
+	onCloseDetail,
+}: MyWorkDetailProps) {
+	if (!detailSelection) return null;
+	return (
+		<MyWorkDetailSheet
+			selection={detailSelection}
+			onClose={onCloseDetail}
+		/>
 	);
 }
 
