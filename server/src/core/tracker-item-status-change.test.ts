@@ -35,21 +35,24 @@ function chainable(result: unknown) {
 	return builder;
 }
 
-function makeTrackerTrx(options: { targetCategory?: string | null } = {}) {
+function makeTrackerTrx(
+	options: { targetCategory?: string | null; completedAt?: Date | null } = {},
+) {
 	const updateCalls: Array<Record<string, unknown>> = [];
 	const tableQueries: string[] = [];
 	let vocabularyReads = 0;
+	const persistedItem = {
+		id: 100,
+		title: "Retry image upload",
+		status_id: 11,
+		version: 3,
+		completed_at: options.completedAt ?? null,
+	};
 	const trx = {
 		selectFrom: vi.fn((table: string) => {
 			tableQueries.push(table);
 			if (table === "tracker_items" || table === "tracker_items as ti") {
-				return chainable({
-					id: 100,
-					title: "Retry image upload",
-					status_id: 11,
-					version: 3,
-					completed_at: null,
-				});
+				return chainable(persistedItem);
 			}
 			if (table === "tracker_vocabularies") {
 				vocabularyReads += 1;
@@ -69,6 +72,7 @@ function makeTrackerTrx(options: { targetCategory?: string | null } = {}) {
 			set: vi.fn((values: Record<string, unknown>) => ({
 				where: vi.fn(() => {
 					updateCalls.push(values);
+					if (values.completed_at === null) persistedItem.completed_at = null;
 					return chainable({
 						id: 100,
 						title: "Retry image upload",
@@ -82,7 +86,18 @@ function makeTrackerTrx(options: { targetCategory?: string | null } = {}) {
 		trx: trx as Parameters<typeof applyTrackerItemStatusChange>[0],
 		updateCalls,
 		tableQueries,
+		persistedItem,
 	};
+}
+
+function rawSql(value: unknown): string {
+	if (typeof value !== "object" || value === null) return "";
+	const operationNode = (
+		value as {
+			toOperationNode?: () => { sqlFragments?: readonly string[] };
+		}
+	).toOperationNode?.();
+	return operationNode?.sqlFragments?.join("") ?? "";
 }
 
 const targetInputs = {
@@ -109,7 +124,7 @@ beforeEach(() => {
 });
 
 describe("applyTrackerItemStatusChange", () => {
-	it("uses the resolved done target and records one status update/activity", async () => {
+	it("uses the resolved done target and preserves completed_at via COALESCE", async () => {
 		const target = resolveMyWorkDoneTarget(
 			{ source: "tracker", workspaceId: 7 },
 			targetInputs,
@@ -121,7 +136,10 @@ describe("applyTrackerItemStatusChange", () => {
 			slot: "done",
 		});
 
-		const { trx, updateCalls } = makeTrackerTrx();
+		const existingCompletedAt = new Date("2026-09-10T12:30:00.000Z");
+		const { trx, updateCalls, persistedItem } = makeTrackerTrx({
+			completedAt: existingCompletedAt,
+		});
 		const result = await applyTrackerItemStatusChange(trx, {
 			workspaceId: 7,
 			actor,
@@ -135,11 +153,14 @@ describe("applyTrackerItemStatusChange", () => {
 		expect(updateCalls[0]).toEqual(
 			expect.objectContaining({
 				status_id: 22,
-				completed_at: expect.anything(),
 				version: expect.anything(),
 				updated_at: expect.anything(),
 			}),
 		);
+		expect(rawSql(updateCalls[0]?.completed_at)).toBe(
+			"COALESCE(completed_at, now())",
+		);
+		expect(persistedItem.completed_at).toBe(existingCompletedAt);
 		expect(mockRecordTrackerActivity).toHaveBeenCalledOnce();
 		expect(mockRecordTrackerActivity).toHaveBeenCalledWith(
 			trx,

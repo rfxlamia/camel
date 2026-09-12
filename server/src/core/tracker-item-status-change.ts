@@ -46,18 +46,30 @@ export function completedAtForTrackerCategory(
 		: null;
 }
 
-/**
- * Apply one optimistic-lock-protected Tracker status change.
- *
- * Callers own source selection and authorization. This primitive deliberately
- * only touches tracker_items and tracker_events, so Board work cannot leak
- * into the Tracker mutation path.
- */
-export async function applyTrackerItemStatusChange(
+type TrackerStatusChangeItem = {
+	id: number;
+	title: string;
+	status_id: number;
+	version: number;
+	completed_at: Date | null;
+};
+
+type TrackerTargetStatus = {
+	id: number;
+	category: string | null;
+	slot: string | null;
+};
+
+type TrackerUpdateResult =
+	| { kind: "not_found" }
+	| { kind: "conflict" }
+	| { kind: "updated"; id: number; title: string };
+
+async function loadTrackerStatusChangeItem(
 	trx: DBExecutor,
 	params: TrackerItemStatusChangeParams,
-): Promise<TrackerItemStatusChangeResult> {
-	const item = await trx
+): Promise<TrackerStatusChangeItem | undefined> {
+	return trx
 		.selectFrom("tracker_items as ti")
 		.select([
 			"ti.id",
@@ -71,15 +83,20 @@ export async function applyTrackerItemStatusChange(
 		.where("ti.deleted_at", "is", null)
 		.forUpdate()
 		.executeTakeFirst();
-	if (!item) return { kind: "not_found" };
-	if (params.version !== undefined && item.version !== params.version) {
-		return { kind: "conflict" };
-	}
+}
 
-	// Read and lock the status row inside the same transaction as the item
-	// update. A status/mapping deletion that committed before this point is
-	// therefore rejected before any source write or activity is recorded.
-	const targetStatus = await trx
+function hasTrackerVersionConflict(
+	item: TrackerStatusChangeItem,
+	version: number | undefined,
+): boolean {
+	return version !== undefined && item.version !== version;
+}
+
+async function loadTargetTrackerStatus(
+	trx: DBExecutor,
+	params: TrackerItemStatusChangeParams,
+): Promise<TrackerTargetStatus | undefined> {
+	return trx
 		.selectFrom("tracker_vocabularies")
 		.select(["id", "category", "slot"])
 		.where("id", "=", params.targetStatusId)
@@ -87,15 +104,32 @@ export async function applyTrackerItemStatusChange(
 		.where("kind", "=", "status")
 		.forUpdate()
 		.executeTakeFirst();
-	if (!targetStatus) return { kind: "invalid_status" };
+}
 
-	const completedAt = completedAtForTrackerCategory(targetStatus.category);
+async function classifyTrackerUpdateFailure(
+	trx: DBExecutor,
+	params: TrackerItemStatusChangeParams,
+): Promise<Exclude<TrackerUpdateResult, { kind: "updated" }>> {
+	const current = await trx
+		.selectFrom("tracker_items as ti")
+		.select("ti.id")
+		.where("ti.id", "=", params.trackerItemId)
+		.where("ti.workspace_id", "=", params.workspaceId)
+		.where("ti.deleted_at", "is", null)
+		.executeTakeFirst();
+	return current ? { kind: "conflict" } : { kind: "not_found" };
+}
 
+async function updateTrackerStatus(
+	trx: DBExecutor,
+	params: TrackerItemStatusChangeParams,
+	targetStatus: TrackerTargetStatus,
+): Promise<TrackerUpdateResult> {
 	let update = trx
 		.updateTable("tracker_items")
 		.set({
 			status_id: params.targetStatusId,
-			completed_at: completedAt,
+			completed_at: completedAtForTrackerCategory(targetStatus.category),
 			version: sql`version + 1`,
 			updated_at: sql`now()`,
 		})
@@ -107,17 +141,15 @@ export async function applyTrackerItemStatusChange(
 	}
 
 	const updated = await update.returning(["id", "title"]).executeTakeFirst();
-	if (!updated) {
-		const current = await trx
-			.selectFrom("tracker_items as ti")
-			.select("ti.id")
-			.where("ti.id", "=", params.trackerItemId)
-			.where("ti.workspace_id", "=", params.workspaceId)
-			.where("ti.deleted_at", "is", null)
-			.executeTakeFirst();
-		return current ? { kind: "conflict" } : { kind: "not_found" };
-	}
+	if (!updated) return classifyTrackerUpdateFailure(trx, params);
+	return { kind: "updated", id: updated.id, title: updated.title };
+}
 
+async function recordTrackerStatusActivity(
+	trx: DBExecutor,
+	params: TrackerItemStatusChangeParams,
+	item: TrackerStatusChangeItem,
+): Promise<void> {
 	await recordTrackerActivity(
 		trx,
 		params.actor,
@@ -125,18 +157,35 @@ export async function applyTrackerItemStatusChange(
 		"tracker_item_updated",
 		{
 			trackerItemId: params.trackerItemId,
-			payload: {
-				title: item.title,
-				changed: ["status"],
-			},
+			payload: { title: item.title, changed: ["status"] },
 		},
 	);
+}
 
-	return {
-		kind: "ok",
-		itemId: updated.id,
-		itemTitle: updated.title,
-	};
+/**
+ * Apply one optimistic-lock-protected Tracker status change.
+ *
+ * Callers own source selection and authorization. This primitive deliberately
+ * only touches tracker_items and tracker_events, so Board work cannot leak
+ * into the Tracker mutation path.
+ */
+export async function applyTrackerItemStatusChange(
+	trx: DBExecutor,
+	params: TrackerItemStatusChangeParams,
+): Promise<TrackerItemStatusChangeResult> {
+	const item = await loadTrackerStatusChangeItem(trx, params);
+	if (!item) return { kind: "not_found" };
+	if (hasTrackerVersionConflict(item, params.version)) {
+		return { kind: "conflict" };
+	}
+
+	const targetStatus = await loadTargetTrackerStatus(trx, params);
+	if (!targetStatus) return { kind: "invalid_status" };
+
+	const updated = await updateTrackerStatus(trx, params, targetStatus);
+	if (updated.kind !== "updated") return updated;
+	await recordTrackerStatusActivity(trx, params, item);
+	return { kind: "ok", itemId: updated.id, itemTitle: updated.title };
 }
 
 /** Backward-compatible descriptive alias for source mutation callers. */

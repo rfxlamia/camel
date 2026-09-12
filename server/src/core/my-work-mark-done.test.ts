@@ -10,9 +10,18 @@ import type {
 import { createMyWorkMarkDoneService } from "./my-work-mark-done.js";
 
 const mockPublishEvent = vi.hoisted(() => vi.fn());
+const mockRecordCardActivity = vi.hoisted(() => vi.fn());
+const mockRecordTrackerActivity = vi.hoisted(() => vi.fn());
 vi.mock("../realtime.js", () => ({
 	publishEvent: (...args: unknown[]) => mockPublishEvent(...args),
 	clearPresence: vi.fn(),
+}));
+vi.mock("../routes/helpers.js", () => ({
+	recordActivity: (...args: unknown[]) => mockRecordCardActivity(...args),
+}));
+vi.mock("../routes/tracker-activity.js", () => ({
+	recordTrackerActivity: (...args: unknown[]) =>
+		mockRecordTrackerActivity(...args),
 }));
 
 const actor = {
@@ -24,26 +33,33 @@ const actor = {
 	needsUsername: false,
 };
 
-function chainable(result: unknown) {
+function chainable(result: unknown, onExecute?: () => void) {
 	const builder: Record<string, ReturnType<typeof vi.fn>> = {};
 	for (const method of [
 		"where",
 		"select",
 		"orderBy",
 		"forUpdate",
+		"returning",
 		"innerJoin",
 		"leftJoin",
 	]) {
 		builder[method] = vi.fn(() => builder);
 	}
-	builder.execute = vi
-		.fn()
-		.mockResolvedValue(
-			Array.isArray(result) ? result : result == null ? [] : [result],
-		);
-	builder.executeTakeFirst = vi
-		.fn()
-		.mockResolvedValue(Array.isArray(result) ? result[0] : result);
+	const resolve = () =>
+		typeof result === "function" ? (result as () => unknown)() : result;
+	const rows = (value: unknown) =>
+		Array.isArray(value) ? value : value == null ? [] : [value];
+	builder.execute = vi.fn().mockImplementation(async () => {
+		const value = resolve();
+		onExecute?.();
+		return rows(value);
+	});
+	builder.executeTakeFirst = vi.fn().mockImplementation(async () => {
+		const value = resolve();
+		onExecute?.();
+		return Array.isArray(value) ? value[0] : value;
+	});
 	return builder;
 }
 
@@ -91,14 +107,18 @@ function makeDb(options: CommandDbOptions = {}) {
 						{
 							id: 11,
 							workspace_id: 7,
+							workspaceId: 7,
 							board_id: null,
+							boardId: null,
 							position: 1,
 							is_done: false,
 						},
 						{
 							id: 12,
 							workspace_id: 7,
+							workspaceId: 7,
 							board_id: null,
+							boardId: null,
 							position: 2,
 							is_done: true,
 						},
@@ -111,6 +131,7 @@ function makeDb(options: CommandDbOptions = {}) {
 						{
 							id: 101,
 							workspace_id: 7,
+							workspaceId: 7,
 							kind: "status",
 							slot: "in_progress",
 							position: 1,
@@ -118,6 +139,7 @@ function makeDb(options: CommandDbOptions = {}) {
 						{
 							id: 102,
 							workspace_id: 7,
+							workspaceId: 7,
 							kind: "status",
 							slot: "done",
 							position: 2,
@@ -178,6 +200,7 @@ function makeTrackerDb(options: CommandDbOptions = {}) {
 						{
 							id: 101,
 							workspace_id: 7,
+							workspaceId: 7,
 							kind: "status",
 							slot: "in_progress",
 							position: 1,
@@ -185,6 +208,7 @@ function makeTrackerDb(options: CommandDbOptions = {}) {
 						{
 							id: 102,
 							workspace_id: 7,
+							workspaceId: 7,
 							kind: "status",
 							slot: "done",
 							position: 2,
@@ -205,11 +229,139 @@ function makeTrackerDb(options: CommandDbOptions = {}) {
 	return { db: db as unknown as DBExecutor, trx, tableQueries };
 }
 
-const mockRecordCardActivity = vi.fn();
+type MappingRaceSource = "board" | "tracker";
+
+function makeMappingRaceDb(source: MappingRaceSource) {
+	const tableQueries: string[] = [];
+	const sourceWrites: string[] = [];
+	const loadedColumns = [
+		{
+			id: 11,
+			workspace_id: 7,
+			workspaceId: 7,
+			board_id: null,
+			boardId: null,
+			position: 1,
+			is_done: false,
+		},
+		{
+			id: 12,
+			workspace_id: 7,
+			workspaceId: 7,
+			board_id: null,
+			boardId: null,
+			position: 2,
+			is_done: true,
+		},
+	];
+	const loadedStatuses = [
+		{
+			id: 101,
+			workspace_id: 7,
+			workspaceId: 7,
+			kind: "status",
+			slot: "in_progress",
+			position: 1,
+		},
+		{
+			id: 102,
+			workspace_id: 7,
+			workspaceId: 7,
+			kind: "status",
+			slot: "done",
+			position: 2,
+		},
+	];
+	let mappingRemoved = false;
+	let columnReads = 0;
+	let statusReads = 0;
+	const trx = {
+		selectFrom: vi.fn((table: string) => {
+			tableQueries.push(table);
+			if (table === "workspace_members") return chainable({ user_id: 42 });
+			if (table === "card_assignees") return chainable({ card_id: 200 });
+			if (table === "tracker_item_assignees") {
+				return chainable({ tracker_item_id: 300 });
+			}
+			if (table === "cards") {
+				return chainable({
+					id: 200,
+					key_number: 17,
+					column_id: 11,
+					status_id: 101,
+					title: "Board work",
+					version: 4,
+				});
+			}
+			if (table === "tracker_items" || table === "tracker_items as ti") {
+				return chainable({
+					id: 300,
+					key_number: 4,
+					status_id: 101,
+					title: "Tracker work",
+					version: 2,
+					completed_at: null,
+				});
+			}
+			if (table === "columns") {
+				columnReads += 1;
+				if (source !== "board") return chainable([]);
+				if (columnReads === 1) {
+					return chainable(loadedColumns, () => {
+						mappingRemoved = true;
+					});
+				}
+				if (columnReads === 2) return chainable({ board_id: null });
+				return chainable(() =>
+					mappingRemoved ? [loadedColumns[0]] : loadedColumns,
+				);
+			}
+			if (table === "tracker_vocabularies") {
+				statusReads += 1;
+				if (statusReads === 1) {
+					return chainable(
+						loadedStatuses,
+						source === "tracker"
+							? () => {
+									mappingRemoved = true;
+								}
+							: undefined,
+					);
+				}
+				if (source === "board" && statusReads === 2) {
+					return chainable({ id: 102, slot: "done" });
+				}
+				return chainable(() => (mappingRemoved ? [] : loadedStatuses));
+			}
+			return chainable([]);
+		}),
+		updateTable: vi.fn((table: string) => {
+			sourceWrites.push(table);
+			return {
+				set: vi.fn(() => chainable({ id: 200, title: "Board work" })),
+			};
+		}),
+	};
+	const db = {
+		transaction: vi.fn(() => ({
+			execute: vi.fn(async (callback: (executor: typeof trx) => unknown) =>
+				callback(trx),
+			),
+		})),
+	};
+	return {
+		db: db as unknown as DBExecutor,
+		trx,
+		tableQueries,
+		sourceWrites,
+	};
+}
+
 const mockBoardStatusChange = vi.fn();
 
 beforeEach(() => {
 	mockRecordCardActivity.mockReset();
+	mockRecordTrackerActivity.mockReset();
 	mockBoardStatusChange.mockReset();
 	mockPublishEvent.mockReset();
 	mockPublishEvent.mockResolvedValue(undefined);
@@ -449,22 +601,44 @@ describe("My Work Mark done command", () => {
 		expect(tableQueries).not.toContain("cards");
 	});
 
-	it("maps a mapping removal race without a partial source write", async () => {
-		const { db } = makeDb();
-		const boardStatusChange = vi.fn().mockResolvedValue({ kind: "unmappable" });
-		const result = await createMyWorkMarkDoneService({
-			executor: db,
-			boardStatusChange,
-		}).markDone({
-			userId: actor.id,
-			actor,
-			workspaceId: 7,
-			source: "board",
-			keyNumber: 17,
-		});
+	it("rejects a Board mapping removal race before source or activity writes", async () => {
+		const { db, sourceWrites, tableQueries } = makeMappingRaceDb("board");
+		const markDone = createMyWorkMarkDoneService({ executor: db }).markDone;
+		const response = await request(
+			routeApp({ list: vi.fn(), getDetail: vi.fn(), markDone }),
+		)
+			.post("/my-work/7/board/AT-17/done")
+			.send({ version: 4 });
 
-		expect(result).toEqual({ kind: "unmappable" });
-		expect(boardStatusChange).toHaveBeenCalledOnce();
+		expect(response.status).toBe(409);
+		expect(response.body.code).toBe("status_column_unmappable");
+		expect(sourceWrites).toEqual([]);
+		expect(tableQueries.filter((table) => table === "columns")).toHaveLength(3);
+		expect(
+			tableQueries.filter((table) => table === "tracker_vocabularies"),
+		).toHaveLength(3);
+		expect(mockRecordCardActivity).not.toHaveBeenCalled();
+		expect(mockRecordTrackerActivity).not.toHaveBeenCalled();
+	});
+
+	it("rejects a Tracker mapping removal race before source or activity writes", async () => {
+		const { db, sourceWrites, tableQueries } = makeMappingRaceDb("tracker");
+		const markDone = createMyWorkMarkDoneService({ executor: db }).markDone;
+		const response = await request(
+			routeApp({ list: vi.fn(), getDetail: vi.fn(), markDone }),
+		)
+			.post("/my-work/7/tracker/OR-4/done")
+			.send({ version: 2 });
+
+		expect(response.status).toBe(409);
+		expect(response.body.code).toBe("status_column_unmappable");
+		expect(sourceWrites).toEqual([]);
+		expect(
+			tableQueries.filter((table) => table === "tracker_vocabularies"),
+		).toHaveLength(2);
+		expect(tableQueries).not.toContain("cards");
+		expect(mockRecordCardActivity).not.toHaveBeenCalled();
+		expect(mockRecordTrackerActivity).not.toHaveBeenCalled();
 	});
 });
 

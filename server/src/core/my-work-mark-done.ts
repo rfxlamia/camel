@@ -1,19 +1,11 @@
+import type { Selectable } from "kysely";
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
+import type { Cards, TrackerItems } from "../db/types.js";
 import type { MyWorkSource } from "../routes/my-work-types.js";
-import {
-	applyBoardCardStatusChange,
-	type BoardCardStatusChangeResult,
-} from "./board-card-status-change.js";
-import {
-	type MyWorkDoneBoardColumn,
-	type MyWorkDoneStatusVocabulary,
-	resolveMyWorkDoneTarget,
-} from "./my-work-done-target.js";
-import {
-	applyTrackerItemStatusChange,
-	type TrackerItemStatusChangeResult,
-} from "./tracker-item-status-change.js";
+import { applyBoardCardStatusChange } from "./board-card-status-change.js";
+import { resolveMyWorkDoneTarget } from "./my-work-done-target.js";
+import { applyTrackerItemStatusChange } from "./tracker-item-status-change.js";
 
 export type MyWorkMarkDoneInput = {
 	userId: number;
@@ -40,38 +32,26 @@ export type MyWorkMarkDoneResult =
 			addedSignableAssignee?: number;
 	  };
 
-type BoardMarkDoneRow = {
-	id: number;
-	key_number: number | null;
-	column_id: number;
-	status_id: number | null;
-	title: string;
-	version: number;
-};
+type BoardMarkDoneRow = Pick<
+	Selectable<Cards>,
+	"id" | "column_id" | "status_id" | "title" | "version"
+>;
+type TrackerMarkDoneRow = Pick<
+	Selectable<TrackerItems>,
+	"id" | "status_id" | "title" | "version"
+>;
+type Transaction = <T>(callback: (trx: DBExecutor) => Promise<T>) => Promise<T>;
 
-type TrackerMarkDoneRow = {
-	id: number;
-	key_number: number;
-	status_id: number;
-	title: string;
-	version: number;
-};
-
-type BoardStatusChange = (
-	trx: DBExecutor,
-	params: Parameters<typeof applyBoardCardStatusChange>[1],
-) => Promise<BoardCardStatusChangeResult>;
-
-type TrackerStatusChange = (
-	trx: DBExecutor,
-	params: Parameters<typeof applyTrackerItemStatusChange>[1],
-) => Promise<TrackerItemStatusChangeResult>;
+type BoardStatusChange = typeof applyBoardCardStatusChange;
+type TrackerStatusChange = typeof applyTrackerItemStatusChange;
+type SourceChangeResult = Awaited<
+	ReturnType<BoardStatusChange | TrackerStatusChange>
+>;
+type DoneTargetInputs = Parameters<typeof resolveMyWorkDoneTarget>[1];
 
 export type MyWorkMarkDoneDeps = {
 	executor?: DBExecutor;
-	/** Override the root transaction seam in unit tests. */
-	transaction?: <T>(callback: (trx: DBExecutor) => Promise<T>) => Promise<T>;
-	/** Source-specific primitives remain injectable without changing routing. */
+	transaction?: Transaction;
 	boardStatusChange?: BoardStatusChange;
 	trackerStatusChange?: TrackerStatusChange;
 };
@@ -90,81 +70,71 @@ async function membershipExists(
 	return membership != null;
 }
 
-async function boardAssignmentExists(
+async function assignmentExists(
 	trx: DBExecutor,
 	input: MyWorkMarkDoneInput,
-	cardId: number,
+	itemId: number,
 ): Promise<boolean> {
+	const table =
+		input.source === "board" ? "card_assignees" : "tracker_item_assignees";
+	const itemColumn = input.source === "board" ? "card_id" : "tracker_item_id";
 	const assignment = await trx
-		.selectFrom("card_assignees")
-		.select("card_id")
-		.where("card_id", "=", cardId)
+		.selectFrom(table)
+		.select(itemColumn)
+		.where(itemColumn, "=", itemId)
 		.where("user_id", "=", input.userId)
 		.forUpdate()
 		.executeTakeFirst();
 	return assignment != null;
 }
 
-async function trackerAssignmentExists(
-	trx: DBExecutor,
-	input: MyWorkMarkDoneInput,
-	trackerItemId: number,
-): Promise<boolean> {
-	const assignment = await trx
-		.selectFrom("tracker_item_assignees")
-		.select("tracker_item_id")
-		.where("tracker_item_id", "=", trackerItemId)
-		.where("user_id", "=", input.userId)
-		.forUpdate()
-		.executeTakeFirst();
-	return assignment != null;
-}
+type AuthorizedMarkDoneItem =
+	| { source: "board"; item: BoardMarkDoneRow }
+	| { source: "tracker"; item: TrackerMarkDoneRow };
 
-async function readAuthorizedBoardItem(
+async function readAuthorizedItem(
 	trx: DBExecutor,
 	input: MyWorkMarkDoneInput,
-): Promise<BoardMarkDoneRow | null> {
-	const item = await trx
-		.selectFrom("cards")
-		.select(["id", "key_number", "column_id", "status_id", "title", "version"])
-		.where("workspace_id", "=", input.workspaceId)
-		.where("key_number", "=", input.keyNumber)
-		.where("deleted_at", "is", null)
-		.forUpdate()
-		.executeTakeFirst();
-	if (!item) return null;
-	if (!(await boardAssignmentExists(trx, input, item.id))) return null;
-	return item;
-}
+): Promise<AuthorizedMarkDoneItem | null> {
+	if (input.source === "board") {
+		const item = await trx
+			.selectFrom("cards")
+			.select(["id", "column_id", "status_id", "title", "version"])
+			.where("workspace_id", "=", input.workspaceId)
+			.where("key_number", "=", input.keyNumber)
+			.where("deleted_at", "is", null)
+			.forUpdate()
+			.executeTakeFirst();
+		if (!item || !(await assignmentExists(trx, input, item.id))) return null;
+		return { source: "board", item };
+	}
 
-async function readAuthorizedTrackerItem(
-	trx: DBExecutor,
-	input: MyWorkMarkDoneInput,
-): Promise<TrackerMarkDoneRow | null> {
 	const item = await trx
 		.selectFrom("tracker_items")
-		.select(["id", "key_number", "status_id", "title", "version"])
+		.select(["id", "status_id", "title", "version"])
 		.where("workspace_id", "=", input.workspaceId)
 		.where("key_number", "=", input.keyNumber)
 		.where("deleted_at", "is", null)
 		.forUpdate()
 		.executeTakeFirst();
-	if (!item) return null;
-	if (!(await trackerAssignmentExists(trx, input, item.id))) return null;
-	return item;
+	if (!item || !(await assignmentExists(trx, input, item.id))) return null;
+	return { source: "tracker", item };
 }
 
 async function loadDoneTargetInputs(
 	trx: DBExecutor,
 	workspaceId: number,
-): Promise<{
-	boardColumns: MyWorkDoneBoardColumn[];
-	statusVocabularies: MyWorkDoneStatusVocabulary[];
-}> {
+): Promise<DoneTargetInputs> {
 	const [columns, statuses] = await Promise.all([
 		trx
 			.selectFrom("columns")
-			.select(["id", "workspace_id", "board_id", "position", "is_done"])
+			.select([
+				"id",
+				"workspace_id as workspaceId",
+				"board_id as boardId",
+				"position",
+				"is_done",
+			])
 			.where("workspace_id", "=", workspaceId)
 			.orderBy("board_id", "asc")
 			.orderBy("position", "asc")
@@ -173,7 +143,7 @@ async function loadDoneTargetInputs(
 			.execute(),
 		trx
 			.selectFrom("tracker_vocabularies")
-			.select(["id", "workspace_id", "kind", "slot", "position"])
+			.select(["id", "workspace_id as workspaceId", "kind", "slot", "position"])
 			.where("workspace_id", "=", workspaceId)
 			.where("kind", "=", "status")
 			.where("slot", "=", "done")
@@ -182,29 +152,14 @@ async function loadDoneTargetInputs(
 			.forUpdate()
 			.execute(),
 	]);
-	return {
-		boardColumns: columns.map((column) => ({
-			id: column.id,
-			workspaceId: column.workspace_id,
-			boardId: column.board_id,
-			position: column.position,
-			is_done: column.is_done,
-		})),
-		statusVocabularies: statuses.map((status) => ({
-			id: status.id,
-			workspaceId: status.workspace_id,
-			kind: status.kind,
-			slot: status.slot,
-			position: status.position,
-		})),
-	};
+	return { boardColumns: columns, statusVocabularies: statuses };
 }
 
 function sourceResult(
 	source: MyWorkSource,
 	itemId: number,
 	itemTitle: string,
-	result: BoardCardStatusChangeResult | TrackerItemStatusChangeResult,
+	result: SourceChangeResult,
 ): MyWorkMarkDoneResult {
 	if (result.kind === "not_found") return { kind: "not_found" };
 	if (result.kind === "conflict") return { kind: "conflict" };
@@ -233,107 +188,109 @@ function sourceResult(
 	};
 }
 
-/**
- * Creates the authenticated, source-aware Mark done command.
- *
- * Authorization, canonical target resolution, and the source mutation all run
- * inside one transaction. The command never writes the other physical source.
- */
-export function createMyWorkMarkDoneService(deps: MyWorkMarkDoneDeps = {}) {
-	const executor = deps.executor ?? db;
-	const boardStatusChange =
-		deps.boardStatusChange ?? applyBoardCardStatusChange;
-	const trackerStatusChange =
-		deps.trackerStatusChange ?? applyTrackerItemStatusChange;
-	const executorWithTransaction = executor as {
-		transaction?: () => {
-			execute: <T>(callback: (trx: DBExecutor) => Promise<T>) => Promise<T>;
-		};
+type DoneCommandContext = {
+	input: MyWorkMarkDoneInput;
+} & Pick<
+	Required<MyWorkMarkDoneDeps>,
+	"boardStatusChange" | "trackerStatusChange"
+>;
+
+function unchangedResult(item: AuthorizedMarkDoneItem): MyWorkMarkDoneResult {
+	const result = {
+		kind: "ok" as const,
+		source: item.source,
+		itemId: item.item.id,
+		itemTitle: item.item.title,
+		changed: false,
 	};
-	const runTransaction =
-		deps.transaction ??
-		(typeof executorWithTransaction.transaction === "function"
-			? async <T>(callback: (trx: DBExecutor) => Promise<T>): Promise<T> =>
-					executorWithTransaction.transaction!().execute(callback)
-			: async <T>(callback: (trx: DBExecutor) => Promise<T>): Promise<T> =>
-					callback(executor));
+	return item.source === "board" ? { ...result, moved: false } : result;
+}
 
-	const markDone = async (
-		input: MyWorkMarkDoneInput,
-	): Promise<MyWorkMarkDoneResult> =>
-		runTransaction(async (trx) => {
-			if (!(await membershipExists(trx, input))) {
-				return { kind: "not_found" };
-			}
-
-			if (input.source === "board") {
-				const item = await readAuthorizedBoardItem(trx, input);
-				if (!item) return { kind: "not_found" };
-				const targetInputs = await loadDoneTargetInputs(trx, input.workspaceId);
-				const target = resolveMyWorkDoneTarget(
-					{
-						source: "board",
-						workspaceId: input.workspaceId,
-						columnId: item.column_id,
-					},
-					targetInputs,
-				);
-				if (!target.available) return { kind: "unmappable" };
-				if (
-					target.source === "board" &&
-					item.column_id === target.columnId &&
-					item.status_id === target.statusId
-				) {
-					return {
-						kind: "ok",
-						source: "board",
-						itemId: item.id,
-						itemTitle: item.title,
-						changed: false,
-						moved: false,
-					};
+async function markSourceDone(
+	trx: DBExecutor,
+	context: DoneCommandContext,
+): Promise<MyWorkMarkDoneResult> {
+	const { input } = context;
+	const authorized = await readAuthorizedItem(trx, input);
+	if (!authorized) return { kind: "not_found" };
+	const target = resolveMyWorkDoneTarget(
+		authorized.source === "board"
+			? {
+					source: "board",
+					workspaceId: input.workspaceId,
+					columnId: authorized.item.column_id,
 				}
-				const result = await boardStatusChange(trx, {
+			: { source: "tracker", workspaceId: input.workspaceId },
+		await loadDoneTargetInputs(trx, input.workspaceId),
+	);
+	if (!target.available) return { kind: "unmappable" };
+	const alreadyDone =
+		authorized.source === "board"
+			? target.source === "board" &&
+				authorized.item.column_id === target.columnId &&
+				authorized.item.status_id === target.statusId
+			: authorized.item.status_id === target.statusId;
+	if (alreadyDone) return unchangedResult(authorized);
+	const result =
+		authorized.source === "board"
+			? await context.boardStatusChange(trx, {
 					workspaceId: input.workspaceId,
 					actor: input.actor,
-					cardId: item.id,
+					cardId: authorized.item.id,
+					targetStatusId: target.statusId,
+					version: input.version,
+				})
+			: await context.trackerStatusChange(trx, {
+					workspaceId: input.workspaceId,
+					actor: input.actor,
+					trackerItemId: authorized.item.id,
 					targetStatusId: target.statusId,
 					version: input.version,
 				});
-				return sourceResult("board", item.id, item.title, result);
-			}
+	return sourceResult(
+		authorized.source,
+		authorized.item.id,
+		authorized.item.title,
+		result,
+	);
+}
 
-			const item = await readAuthorizedTrackerItem(trx, input);
-			if (!item) return { kind: "not_found" };
-			const targetInputs = await loadDoneTargetInputs(trx, input.workspaceId);
-			const target = resolveMyWorkDoneTarget(
-				{ source: "tracker", workspaceId: input.workspaceId },
-				targetInputs,
-			);
-			if (!target.available) return { kind: "unmappable" };
-			if (item.status_id === target.statusId) {
-				return {
-					kind: "ok",
-					source: "tracker",
-					itemId: item.id,
-					itemTitle: item.title,
-					changed: false,
-				};
-			}
-			const result = await trackerStatusChange(trx, {
-				workspaceId: input.workspaceId,
-				actor: input.actor,
-				trackerItemId: item.id,
-				targetStatusId: target.statusId,
-				version: input.version,
-			});
-			return sourceResult("tracker", item.id, item.title, result);
-		});
+async function markDoneInTransaction(
+	trx: DBExecutor,
+	context: DoneCommandContext,
+): Promise<MyWorkMarkDoneResult> {
+	if (!(await membershipExists(trx, context.input))) {
+		return { kind: "not_found" };
+	}
+	return markSourceDone(trx, context);
+}
 
-	return {
-		markDone,
-		markMyWorkDone: markDone,
+function createTransactionRunner(
+	executor: DBExecutor,
+	transaction?: Transaction,
+): Transaction {
+	if (transaction) return transaction;
+	const factory = (executor as { transaction?: () => { execute: Transaction } })
+		.transaction;
+	if (factory) {
+		return <T>(callback: (trx: DBExecutor) => Promise<T>) =>
+			factory().execute(callback);
+	}
+	return <T>(callback: (trx: DBExecutor) => Promise<T>) => callback(executor);
+}
+
+/** Creates the authenticated, source-aware Mark done command. */
+export function createMyWorkMarkDoneService(deps: MyWorkMarkDoneDeps = {}) {
+	const executor = deps.executor ?? db;
+	const runTransaction = createTransactionRunner(executor, deps.transaction);
+	const context = {
+		boardStatusChange: deps.boardStatusChange ?? applyBoardCardStatusChange,
+		trackerStatusChange:
+			deps.trackerStatusChange ?? applyTrackerItemStatusChange,
 	};
+	const markDone = (input: MyWorkMarkDoneInput) =>
+		runTransaction((trx) => markDoneInTransaction(trx, { ...context, input }));
+	return { markDone, markMyWorkDone: markDone };
 }
 
 export const createMyWorkMarkDoneCommand = createMyWorkMarkDoneService;
