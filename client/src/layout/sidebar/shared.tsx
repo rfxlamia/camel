@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type React from "react";
 
 export type Mode = "kanban" | "agent";
@@ -18,6 +18,41 @@ export const inputClass =
 /*  Shared popover shell (SignOutPopover pattern)                      */
 /* ------------------------------------------------------------------ */
 
+const POPOVER_FOCUSABLE_SELECTOR =
+	"button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
+function trapPopoverFocus(event: KeyboardEvent, panel: HTMLElement) {
+	const focusable = Array.from(
+		panel.querySelectorAll<HTMLElement>(POPOVER_FOCUSABLE_SELECTOR),
+	).filter((element) => !element.hasAttribute("disabled"));
+	const first = focusable[0];
+	const last = focusable.at(-1);
+	if (!first || !last) return;
+	if (event.shiftKey && document.activeElement === first) {
+		event.preventDefault();
+		last.focus();
+	} else if (!event.shiftKey && document.activeElement === last) {
+		event.preventDefault();
+		first.focus();
+	}
+}
+
+function handlePopoverKeyDown(
+	event: React.KeyboardEvent<HTMLDivElement>,
+	panel: HTMLElement | null,
+	onCancel: () => void,
+) {
+	if (event.key === "Escape") {
+		event.preventDefault();
+		event.stopPropagation();
+		onCancel();
+		return;
+	}
+	if (event.key !== "Tab" || !panel) return;
+	event.stopPropagation();
+	trapPopoverFocus(event.nativeEvent, panel);
+}
+
 interface PopoverShellProps {
 	open: boolean;
 	onCancel: () => void;
@@ -33,10 +68,24 @@ export function PopoverShell({
 	ariaLabel,
 	children,
 }: PopoverShellProps) {
+	const panelRef = useRef<HTMLDivElement>(null);
+
 	useEffect(() => {
 		if (!open) return;
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape") onCancel();
+		const panel = panelRef.current;
+		panel
+			?.querySelector<HTMLElement>(POPOVER_FOCUSABLE_SELECTOR)
+			?.focus();
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				event.stopPropagation();
+				onCancel();
+				return;
+			}
+			if (event.key !== "Tab" || !panel?.contains(event.target as Node)) return;
+			event.stopPropagation();
+			trapPopoverFocus(event, panel);
 		};
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
@@ -56,6 +105,11 @@ export function PopoverShell({
 
 	return (
 		<div
+			ref={panelRef}
+			onKeyDown={(event) =>
+				handlePopoverKeyDown(event, panelRef.current, onCancel)
+			}
+			data-overlay-layer="popover"
 			className={`absolute z-50 ${positionClasses}`}
 			role="dialog"
 			aria-label={ariaLabel}
