@@ -1,6 +1,16 @@
 // Public My Work route API. Implementation is split by data source, service,
 // query parsing, routing, and response responsibility.
 
+export type {
+	MyWorkMarkDoneDeps,
+	MyWorkMarkDoneInput,
+	MyWorkMarkDoneResult,
+} from "../core/my-work-mark-done.js";
+export {
+	createMyWorkMarkDoneCommand,
+	createMyWorkMarkDoneService,
+} from "../core/my-work-mark-done.js";
+
 export {
 	createDefaultMyWorkDataSource,
 	createMyWorkDataSource,

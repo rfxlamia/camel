@@ -1,3 +1,8 @@
+import type {
+	MyWorkMarkDoneDeps,
+	MyWorkMarkDoneInput,
+	MyWorkMarkDoneResult,
+} from "../core/my-work-mark-done.js";
 import type { DBExecutor } from "../db/kysely.js";
 import type { CardAssignee } from "./card-assignees.js";
 import type { TrackerItemAssignee } from "./tracker-assignees.js";
@@ -133,12 +138,18 @@ export type MyWorkDataSource = {
 	) => Promise<MyWorkBoardRow | null>;
 };
 
+export type MyWorkMarkDoneService = (
+	input: MyWorkMarkDoneInput,
+) => Promise<MyWorkMarkDoneResult>;
+
 export type MyWorkServiceDeps = Partial<MyWorkDataSource> & {
 	executor?: DBExecutor;
 	hydrateRows?: (
 		candidates: readonly MyWorkCandidate[],
 		workspaces: ReadonlyMap<number, MyWorkWorkspace>,
 	) => Promise<MyWorkSerializedItem[]>;
+	markDone?: MyWorkMarkDoneService;
+	markDoneDeps?: MyWorkMarkDoneDeps;
 };
 
 export type MyWorkListResponse = {
@@ -153,16 +164,19 @@ export type MyWorkService = {
 	getMyWorkItem: (
 		input: MyWorkDetailInput,
 	) => Promise<MyWorkSerializedItem | null>;
+	markDone: MyWorkMarkDoneService;
+	markMyWorkDone: MyWorkMarkDoneService;
 };
 
 export type MyWorkServiceLike =
-	| Pick<MyWorkService, "list" | "getDetail">
-	| {
+	| (Pick<MyWorkService, "list" | "getDetail"> &
+			Partial<Pick<MyWorkService, "markDone" | "markMyWorkDone">>)
+	| ({
 			listMyWork: (input: MyWorkListInput) => Promise<MyWorkListResponse>;
 			getMyWorkItem: (
 				input: MyWorkDetailInput,
 			) => Promise<MyWorkSerializedItem | null>;
-	  };
+	  } & Partial<Pick<MyWorkService, "markDone" | "markMyWorkDone">>);
 
 export type MyWorkRouterOptions = {
 	service?: MyWorkServiceLike;
