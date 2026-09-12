@@ -69,7 +69,7 @@ function buildTrackerRowsQuery(
 	if (input.scope === "active") {
 		query = query.where(sql<boolean>`${order.group} NOT IN (2, 3)`);
 	}
-	if (input.q) {
+	if (input.scope === "all" && input.q) {
 		query = query.where(
 			sourceSearchPredicate("tracker", input, `%${input.q}%`),
 		);
@@ -132,7 +132,7 @@ function buildBoardRowsQuery(
 	if (input.scope === "active") {
 		query = query.where(sql<boolean>`${order.group} NOT IN (2, 3)`);
 	}
-	if (input.q) {
+	if (input.scope === "all" && input.q) {
 		query = query.where(sourceSearchPredicate("board", input, `%${input.q}%`));
 	}
 	return { query, order };

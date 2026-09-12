@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMyWorkDataSource, createMyWorkService } from "./my-work.js";
-import { decodeMyWorkCursor } from "./my-work-response.js";
 import {
 	ALICE,
 	ATLAS,
@@ -130,6 +129,58 @@ describe("My Work status and ordering boundary", () => {
 		expect(trackerQueries[1]?.sql).toContain('"ti"."key_number" =');
 		expect(trackerQueries[1]?.parameters).toContain(2);
 		await executor.destroy();
+	});
+
+	it("does not apply q to Active SQL but keeps All search server-backed", async () => {
+		const { executor, queries } = capturedDb();
+		const source = createMyWorkDataSource(executor);
+		const common = {
+			userId: ALICE.id,
+			workspaceIds: [ORBIT.id],
+			q: "imgae uplod",
+			limit: 50,
+			workspaceLocalDates: new Map([[ORBIT.id, "2026-09-11"]]),
+		};
+
+		await source.listTrackerRows({ ...common, scope: "active" });
+		await source.listTrackerRows({ ...common, scope: "all" });
+
+		const trackerQueries = queries.filter((entry) =>
+			entry.sql.includes('from "tracker_items"'),
+		);
+		expect(trackerQueries).toHaveLength(2);
+		expect(trackerQueries[0]?.sql).not.toContain("ILIKE");
+		expect(trackerQueries[0]?.parameters).not.toContain("%imgae uplod%");
+		expect(trackerQueries[1]?.sql).toContain("ILIKE");
+		expect(trackerQueries[1]?.parameters).toContain("%imgae uplod%");
+		await executor.destroy();
+	});
+
+	it("keeps Active service candidates available for local Fuse search", async () => {
+		const match = numericKeyRows().keyTwo;
+		const service = createMyWorkService(
+			sourceDeps({
+				tracker: [
+					{
+						...match,
+						title: "Image upload retry",
+						description: "Retry the image upload",
+					},
+				],
+				board: [],
+			}),
+		);
+
+		const result = await service.list({
+			userId: ALICE.id,
+			scope: "active",
+			q: "imgae uplod",
+			now: NOW,
+		});
+
+		expect(result.items.map((item) => item.title)).toEqual([
+			"Image upload retry",
+		]);
 	});
 
 	it("keeps unknown non-null categories active at the SQL boundary", async () => {
