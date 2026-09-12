@@ -53,6 +53,12 @@ const router = createBrowserRouter([
 				children: [{ path: "card/:cardId", Component: ContextPanel }],
 			},
 			{
+				path: "my-work",
+				lazy: async () => ({
+					Component: (await import("./pages/MyWorkPage")).default,
+				}),
+			},
+			{
 				path: "dashboard",
 				lazy: async () => ({
 					Component: (await import("./pages/DashboardPage")).default,
