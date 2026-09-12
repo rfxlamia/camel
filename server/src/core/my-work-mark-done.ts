@@ -270,11 +270,12 @@ function createTransactionRunner(
 	transaction?: Transaction,
 ): Transaction {
 	if (transaction) return transaction;
-	const factory = (executor as { transaction?: () => { execute: Transaction } })
-		.transaction;
-	if (factory) {
+	const candidate = executor as {
+		transaction?: () => { execute: Transaction };
+	};
+	if (candidate.transaction) {
 		return <T>(callback: (trx: DBExecutor) => Promise<T>) =>
-			factory().execute(callback);
+			candidate.transaction!().execute(callback);
 	}
 	return <T>(callback: (trx: DBExecutor) => Promise<T>) => callback(executor);
 }
