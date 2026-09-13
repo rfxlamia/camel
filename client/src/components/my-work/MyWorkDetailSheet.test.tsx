@@ -825,6 +825,18 @@ describe("MyWorkDetailSheet", () => {
 		expect(detail.className).toContain("md:animate-panel-in");
 		expect(detail.className).toContain("motion-reduce:animate-none");
 		expect(detail.className).toContain("md:motion-reduce:animate-none");
+		expect(detail.className).toContain("backdrop-blur-md");
+		expect(detail.className).toContain("bg-white/80");
+		expect(detail.className).toContain(
+			"[@media(prefers-reduced-transparency:reduce)]:bg-white",
+		);
+		expect(detail.className).toContain(
+			"[@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
+		);
+		expect(detail.className).not.toMatch(/(?:^|\s)bg-white(?:\s|$)/);
+		expect(detail.className).not.toMatch(/(?:^|\s)backdrop-blur-none(?:\s|$)/);
+		expect(detail.parentElement?.className).toContain("bg-neutral-900/15");
+		expect(detail.parentElement?.className).not.toContain("bg-neutral-900/35");
 	});
 
 	it.each([
