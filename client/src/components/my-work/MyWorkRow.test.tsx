@@ -74,9 +74,7 @@ describe("MyWorkRow", () => {
 			name: new RegExp(`Open ${key}`),
 		});
 		const keyElement = within(row).getByText(key);
-		const titleElement = within(row).getByText(
-			/A title that stays readable/,
-		);
+		const titleElement = within(row).getByText(/A title that stays readable/);
 		const doneAction = within(row).getByRole("button", {
 			name: "Mark done",
 		});
@@ -86,7 +84,9 @@ describe("MyWorkRow", () => {
 		expect(titleElement.compareDocumentPosition(keyElement)).toBe(
 			Node.DOCUMENT_POSITION_FOLLOWING,
 		);
-		expect(screen.queryByTestId(`my-work-status-7-${source}-${key}`)).toBeNull();
+		expect(
+			screen.queryByTestId(`my-work-status-7-${source}-${key}`),
+		).toBeNull();
 		expect(doneAction.className).toContain("motion-safe:active:scale-[0.97]");
 		if (source === "tracker") {
 			expect(within(row).getAllByText("In progress").length).toBeGreaterThan(0);
@@ -113,8 +113,8 @@ describe("MyWorkRow", () => {
 			</ul>,
 		);
 
-		expect(
-			screen.getByTestId("my-work-status-7-board-AT-17").textContent,
-		).toBe("Requested");
+		expect(screen.getByTestId("my-work-status-7-board-AT-17").textContent).toBe(
+			"Requested",
+		);
 	});
 });

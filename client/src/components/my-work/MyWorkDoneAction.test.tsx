@@ -260,9 +260,7 @@ describe("MyWorkDoneAction", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /mark done/i }));
 		await waitFor(() =>
-			expect(
-				screen.queryByTestId("my-work-status-7-board-AT-21"),
-			).toBeNull(),
+			expect(screen.queryByTestId("my-work-status-7-board-AT-21")).toBeNull(),
 		);
 		expect(screen.getByTestId("my-work-row-7-board-AT-21")).toBeTruthy();
 	});

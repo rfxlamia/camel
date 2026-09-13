@@ -385,10 +385,7 @@ async function openDetailWhilePending(item: MyWorkItem) {
 	return { detail, settle, fail };
 }
 
-async function openReadyDetail(
-	item: MyWorkItem,
-	initialEntry = "/my-work",
-) {
+async function openReadyDetail(item: MyWorkItem, initialEntry = "/my-work") {
 	mockListActive.mockResolvedValueOnce(response([item]));
 	mockGetDetail.mockResolvedValueOnce(item);
 	renderWithBoard(initialEntry);
@@ -595,46 +592,47 @@ describe("MyWorkDetailSheet", () => {
 		expect(document.activeElement).toBe(trigger);
 	});
 
-	it.each(["button", "escape", "backdrop"] as const)(
-		"keeps the detail mounted while the %s close exits",
-		async (source) => {
-			const item = makeItem({
-				id: 17,
-				key: "AT-17",
-				title: "Close lifecycle work",
-				workspaceId: 7,
-				workspaceName: "Atlas",
-				source: "board",
+	it.each([
+		"button",
+		"escape",
+		"backdrop",
+	] as const)("keeps the detail mounted while the %s close exits", async (source) => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Close lifecycle work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		const detail = await openReadyDetail(item);
+		vi.useFakeTimers();
+		try {
+			const closeButton = within(detail).getByRole("button", {
+				name: /close/i,
 			});
-			const detail = await openReadyDetail(item);
-			vi.useFakeTimers();
-			try {
-				const closeButton = within(detail).getByRole("button", {
-					name: /close/i,
-				});
-				if (source === "button") {
-					fireEvent.click(closeButton);
-				} else if (source === "escape") {
-					fireEvent.keyDown(closeButton, { key: "Escape" });
-				} else {
-					const backdrop = detail.parentElement;
-					expect(backdrop).toBeTruthy();
-					fireEvent.mouseDown(backdrop as HTMLElement);
-				}
+			if (source === "button") {
 				fireEvent.click(closeButton);
-				expect(detail.getAttribute("data-state")).toBe("closing");
-				expect(screen.getByTestId("location").textContent).toContain(
-					"detailWorkspaceId",
-				);
-				act(() => vi.advanceTimersByTime(199));
-				expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
-				act(() => vi.advanceTimersByTime(1));
-				expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull();
-			} finally {
-				vi.useRealTimers();
+			} else if (source === "escape") {
+				fireEvent.keyDown(closeButton, { key: "Escape" });
+			} else {
+				const backdrop = detail.parentElement;
+				expect(backdrop).toBeTruthy();
+				fireEvent.mouseDown(backdrop as HTMLElement);
 			}
-		},
-	);
+			fireEvent.click(closeButton);
+			expect(detail.getAttribute("data-state")).toBe("closing");
+			expect(screen.getByTestId("location").textContent).toContain(
+				"detailWorkspaceId",
+			);
+			act(() => vi.advanceTimersByTime(199));
+			expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+			act(() => vi.advanceTimersByTime(1));
+			expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 
 	it("closes immediately without positional exit when reduced motion is preferred", async () => {
 		const originalMatchMedia = window.matchMedia;
@@ -652,9 +650,7 @@ describe("MyWorkDetailSheet", () => {
 				source: "board",
 			});
 			const detail = await openReadyDetail(item);
-			fireEvent.click(
-				within(detail).getByRole("button", { name: /close/i }),
-			);
+			fireEvent.click(within(detail).getByRole("button", { name: /close/i }));
 			expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull();
 		} finally {
 			Object.defineProperty(window, "matchMedia", {
