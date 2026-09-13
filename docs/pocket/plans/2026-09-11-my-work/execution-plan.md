@@ -120,7 +120,7 @@ Rule: Performance and observability
   Create: server/src/core/my-work-observability.test.ts             (created by: T11)
   Create: server/src/routes/my-work.performance.integration.test.ts  (created by: T11)
   Create: client/src/pages/MyWorkPage.performance.test.tsx           (created by: T11)
-  Modify: server/src/routes/my-work.ts
+  Modify: server/src/routes/my-work-router.ts             (instrumentation; my-work.ts is a barrel)
 
 Rule: Existing read-only references used by packets
   Reference: server/src/routes/work-item-response.ts
@@ -1787,12 +1787,14 @@ Files:
 
 Steps:
 
+> RED expectation: T2/T3 are already implemented, so these acceptance cycles may PASS on first run. Treat an immediate PASS as acceptance confirmed — RED is only expected when a regression or gap exists. Do not weaken assertions to force a red phase.
+
 1. Write failing test for: authorized cross-workspace rollup and composite identity.
    Test file: `server/src/routes/my-work.integration.test.ts`
    Level: integration
    Test intent: Given real Atlas/Orbit/Nebula fixtures, when authenticated Alice requests My Work, then authorized Board/Tracker rows appear once, unauthorized rows are absent, and tracker-wins/composite identity holds.
    Exercise through: Express/authenticated HTTP API.
-   Test doubles: real PostgreSQL/session fixture; do not mock route/Kysely/auth.
+   Test doubles: real PostgreSQL + Express app; stub only the `requireAuth` seam to inject the fixture user (per `work-item-unified.integration.test.ts` convention) — membership/assignment authorization still runs against the real DB. Do not mock route/Kysely/authorization queries.
    Expected RED: API/collaboration not implemented.
 
 2. Run test — verify FAIL:
@@ -1985,7 +1987,7 @@ Spec: `docs/pocket/spec/2026-09-11-my-work/my-work-spec.md`
 Design decision: set-based personal read plus source-aware Mark done.
 Files in scope: only the new server integration test and declared test fixtures.
 Available after: T2 and T3.
-Architecture rule: use real auth/DB/integration seams; do not mock the collaboration being verified.
+Architecture rule: exercise the real route/DB/authorization path; stub only the `requireAuth` session seam per the existing integration convention — never mock membership/assignment authorization.
 [RESTATE: The HTTP API must never leak unauthorized workspace data and must preserve source-specific transactional writes/activity.]
 
 ## DELIVERABLE
@@ -1999,7 +2001,7 @@ Format: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 Must-have:
 
-- Real DB/auth boundary is exercised; no mock-only substitute.
+- Real DB and route authorization boundary is exercised (`requireAuth` stubbed only to inject the fixture user); no mock-only substitute.
 - Both Board and Tracker sources are represented.
 - Activity count and source table effects are asserted.
 - Test is isolated and runnable with the repository's DB setup.
@@ -2036,6 +2038,8 @@ Files:
 - Create: `client/src/pages/MyWorkPage.integration.test.tsx`
 
 Steps:
+
+> RED expectation: T6/T7/T8 are already implemented when this task runs, so these acceptance cycles may PASS on first run. Treat an immediate PASS as acceptance confirmed — RED is only expected when a regression or cross-component gap exists. Do not weaken assertions to force a red phase.
 
 1. Write failing test for: route/detail/back state.
    Test file: `client/src/pages/MyWorkPage.integration.test.tsx`
@@ -2246,7 +2250,7 @@ Files:
 - Create: `server/src/core/my-work-observability.test.ts`
 - Create: `server/src/routes/my-work.performance.integration.test.ts`
 - Create: `client/src/pages/MyWorkPage.performance.test.tsx`
-- Modify: `server/src/routes/my-work.ts`
+- Modify: `server/src/routes/my-work-router.ts` (instrumentation wiring; `my-work.ts` is a barrel — touch only if a re-export is needed)
 
 Steps:
 
@@ -2263,7 +2267,7 @@ Steps:
    Expected failure: the named behavior is absent or its assertion fails.
 
 3. Implement minimal behavior:
-   Implement domain observability helper.
+   Implement domain observability helper, reusing/extending `work-item-latency.ts` sampling/percentile primitives rather than duplicating them.
 
 4. Run test — verify PASS:
    `npm run test --workspace=server -- src/core/my-work-observability.test.ts`
@@ -2311,13 +2315,13 @@ Steps:
    Keep logic within the task's declared files, reuse existing helpers, and do not implement out-of-scope behavior. Re-run the task test command.
 
 14. Commit:
-   git add server/src/core/my-work-observability.ts server/src/core/my-work-observability.test.ts server/src/routes/my-work.performance.integration.test.ts client/src/pages/MyWorkPage.performance.test.tsx server/src/routes/my-work.ts
-    git commit -m "test(my-work): verify latency and observability"
+   git add server/src/core/my-work-observability.ts server/src/core/my-work-observability.test.ts server/src/routes/my-work.performance.integration.test.ts client/src/pages/MyWorkPage.performance.test.tsx server/src/routes/my-work-router.ts
+   git commit -m "test(my-work): verify latency and observability"
 
 ## REFERENCES LOADED
 
 - Spec performance, observability, failure, and privacy criteria.
-- `server/src/core/work-item-latency.ts` — existing latency sampling conventions.
+- `server/src/core/work-item-latency.ts` — existing latency sampling/percentile primitives to reuse, not duplicate.
 - `server/src/routes/my-work.ts` from T2 and Mark done route from T3.
 - Existing server integration fixture patterns.
 - `client/src/pages/MyWorkPage.tsx` and client test conventions for visible-ready markers.
@@ -2354,6 +2358,7 @@ Must-have:
 - p95 test uses a real DB/query path and documents prerequisites.
 - Client readiness test uses real page rendering with only the network boundary doubled.
 - Telemetry is structured, sanitized, and covered by unit tests.
+- The observability helper reuses `work-item-latency.ts` sampling/percentile primitives.
 - The route remains set-based and response semantics are unchanged.
 
 Must-not-have:
