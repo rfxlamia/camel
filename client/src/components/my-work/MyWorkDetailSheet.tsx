@@ -1,4 +1,10 @@
-import { type RefObject, useEffect, useRef } from "react";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { useBoard } from "../../context/BoardContext";
 import {
 	type MyWorkDetailSelection,
@@ -13,6 +19,7 @@ export interface MyWorkDetailSheetProps {
 	onRefresh?: () => void | Promise<void>;
 }
 
+const SHEET_EXIT_DURATION_MS = 200;
 const DIALOG_FOCUSABLE_SELECTOR =
 	"button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
 
@@ -39,6 +46,14 @@ function restoreDetailTrigger(triggerRef: { current: HTMLElement | null }) {
 	const trigger = triggerRef.current;
 	triggerRef.current = null;
 	if (trigger?.isConnected) trigger.focus();
+}
+
+function prefersReducedMotion() {
+	return (
+		typeof window !== "undefined" &&
+		typeof window.matchMedia === "function" &&
+		window.matchMedia("(prefers-reduced-motion: reduce)").matches
+	);
 }
 
 function trapDetailSheetFocus(
@@ -132,9 +147,43 @@ export default function MyWorkDetailSheet({
 	const { switchConfirm } = useBoard();
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
 	const dialogRef = useRef<HTMLElement>(null);
+	const closeTimerRef = useRef<number | null>(null);
+	const closeStartedRef = useRef(false);
+	const [closing, setClosing] = useState(false);
+	const selectionIdentity = selection
+		? `${selection.workspaceId}:${selection.source}:${selection.key}`
+		: "";
+	const selectionIdentityRef = useRef(selectionIdentity);
+	const clearCloseTimer = useCallback(() => {
+		if (closeTimerRef.current !== null) {
+			window.clearTimeout(closeTimerRef.current);
+			closeTimerRef.current = null;
+		}
+	}, []);
+	useEffect(() => {
+		if (selectionIdentityRef.current === selectionIdentity) return;
+		selectionIdentityRef.current = selectionIdentity;
+		closeStartedRef.current = false;
+		setClosing(false);
+		clearCloseTimer();
+	}, [clearCloseTimer, selectionIdentity]);
+	useEffect(() => clearCloseTimer, [clearCloseTimer]);
+	const requestClose = useCallback(() => {
+		if (closeStartedRef.current) return;
+		closeStartedRef.current = true;
+		if (prefersReducedMotion()) {
+			onClose();
+			return;
+		}
+		setClosing(true);
+		closeTimerRef.current = window.setTimeout(() => {
+			closeTimerRef.current = null;
+			onClose();
+		}, SHEET_EXIT_DURATION_MS);
+	}, [onClose]);
 	useDetailSheetKeyboard(
 		selection,
-		onClose,
+		requestClose,
 		closeButtonRef,
 		dialogRef,
 		switchConfirm.open,
@@ -159,11 +208,12 @@ export default function MyWorkDetailSheet({
 			sourceLabel={sourceLabel}
 			closeButtonRef={closeButtonRef}
 			dialogRef={dialogRef}
-			onClose={onClose}
+			onClose={requestClose}
 			onRetry={retryDetail}
 			onRefresh={onRefresh}
 			onNavigate={handleSourceNavigation}
 			pending={pending}
+			closing={closing}
 		/>
 	);
 }
