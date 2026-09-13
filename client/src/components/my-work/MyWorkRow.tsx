@@ -7,13 +7,37 @@ import {
 	CircleDot,
 	Clock3,
 } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { useInRouterContext, useSearchParams } from "react-router";
 import { isMyWorkItemOverdue } from "../../lib/myWorkOrdering";
 import {
 	type MyWorkStatusGroup,
 	normalizeMyWorkStatus,
 } from "../../lib/myWorkStatus";
-import type { MyWorkItem } from "../../types/myWork";
-export interface MyWorkRowProps {
+import {
+	getMyWorkMutationSnapshot,
+	type MyWorkMutationSnapshot,
+	myWorkMutationIdentity,
+	subscribeToMyWorkMutations,
+} from "../../lib/workItemMutations";
+import type { MyWorkItem, MyWorkScope } from "../../types/myWork";
+import MyWorkDoneAction, {
+	type MyWorkDoneActionProps,
+} from "./MyWorkDoneAction";
+
+function useRowMutationSnapshot(
+	item: MyWorkItem,
+): MyWorkMutationSnapshot | undefined {
+	const identity = myWorkMutationIdentity(item);
+	return useSyncExternalStore(
+		subscribeToMyWorkMutations,
+		() => getMyWorkMutationSnapshot(identity),
+		() => undefined,
+	);
+}
+
+export interface MyWorkRowProps
+	extends Partial<Omit<MyWorkDoneActionProps, "item">> {
 	item: MyWorkItem;
 	/** Called when the row's read-only selection action is activated. */
 	onSelect?: (item: MyWorkItem) => void;
@@ -21,6 +45,8 @@ export interface MyWorkRowProps {
 	onOpen?: (item: MyWorkItem) => void;
 	/** Compact mode keeps the same metadata while tightening the mobile rhythm. */
 	compact?: boolean;
+	/** Scope controls whether a successful item is hidden or retained as Done. */
+	scope?: MyWorkScope;
 }
 const STATUS_META: Record<
 	MyWorkStatusGroup,
@@ -247,7 +273,7 @@ function RowButton({
 			type="button"
 			onClick={onActivate}
 			aria-label={`Open ${item.key} ${item.title}`}
-			className={`group/row relative flex w-full min-w-0 items-start gap-3 bg-white text-left transition-colors hover:bg-primary-100/35 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 motion-reduce:transition-none ${
+			className={`group/row relative flex min-w-0 flex-1 items-start gap-3 bg-white text-left transition-colors hover:bg-primary-100/35 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 motion-reduce:transition-none ${
 				compact ? "px-3 py-2.5" : "px-4 py-3 md:px-5"
 			}`}
 		>
@@ -275,24 +301,62 @@ function RowButton({
 		</button>
 	);
 }
-function RowShell({ item, onSelect, onOpen, compact = false }: MyWorkRowProps) {
-	const view = createRowView(item);
+function RowShell({
+	item,
+	onSelect,
+	onOpen,
+	compact = false,
+	scope = "active",
+	...actionProps
+}: MyWorkRowProps & { scope: MyWorkScope }) {
+	const snapshot = useRowMutationSnapshot(item);
+	if (
+		snapshot?.status === "unavailable" ||
+		(scope === "active" &&
+			(snapshot?.status === "pending" || snapshot?.status === "success"))
+	) {
+		return null;
+	}
+	const displayItem =
+		scope === "all" && snapshot?.status === "success" ? snapshot.item : item;
+	const view = createRowView(displayItem);
 	return (
 		<li
 			data-testid={`my-work-row-${rowIdentity(item)}`}
 			data-work-item-key={item.key}
 			className="border-neutral-200 border-b last:border-b-0"
 		>
-			<RowButton
-				item={item}
-				compact={compact}
-				view={view}
-				onActivate={() => activateRow(item, onSelect, onOpen)}
-			/>
+			<div className="flex min-w-0 items-stretch bg-white">
+				<RowButton
+					item={displayItem}
+					compact={compact}
+					view={view}
+					onActivate={() => activateRow(displayItem, onSelect, onOpen)}
+				/>
+				<div
+					className={`flex shrink-0 items-center justify-center border-neutral-100 border-l bg-white ${
+						compact ? "px-2" : "px-2 md:px-3"
+					}`}
+				>
+					<MyWorkDoneAction item={displayItem} {...actionProps} />
+				</div>
+			</div>
 		</li>
 	);
 }
-/** A read-only, responsive work row. Detail and mutation actions live elsewhere. */
+
+function RoutedMyWorkRow(props: MyWorkRowProps) {
+	const [searchParams] = useSearchParams();
+	const scope: MyWorkScope =
+		searchParams.get("scope") === "all" ? "all" : "active";
+	return <RowShell {...props} scope={props.scope ?? scope} />;
+}
+
+/** A responsive work row with the shared My Work Mark done action. */
 export default function MyWorkRow(props: MyWorkRowProps) {
-	return <RowShell {...props} />;
+	const inRouter = useInRouterContext();
+	if (props.scope !== undefined || !inRouter) {
+		return <RowShell {...props} scope={props.scope ?? "active"} />;
+	}
+	return <RoutedMyWorkRow {...props} />;
 }

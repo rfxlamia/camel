@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import { updateWorkItem, updateWorkItemStatus, reorderWorkItem } from "./workItemMutations";
 import type { WorkItem } from "../types";
+import type { MyWorkItem } from "../types/myWork";
+import {
+	markWorkItemDone,
+	reorderWorkItem,
+	updateWorkItem,
+	updateWorkItemStatus,
+} from "./workItemMutations";
 
 vi.mock("../api", () => ({
 	api: {
 		updateCard: vi.fn(),
 		updateWorkItem: vi.fn(),
 		reorderWorkItem: vi.fn(),
+		markMyWorkDone: vi.fn(),
 	},
 }));
 
@@ -36,6 +43,40 @@ const boardItem: WorkItem = {
 };
 
 describe("workItemMutations", () => {
+	it.each([
+		"board",
+		"tracker",
+	] as const)("routes %s Mark done through the My Work command and preserves its source", async (source) => {
+		const item: MyWorkItem = {
+			...boardItem,
+			source,
+			key: source === "board" ? "TE-9" : "CA-9",
+			workspace: { id: 12, name: "Atlas", timezone: "UTC" },
+			workspaceId: 12,
+			workspaceName: "Atlas",
+			identity: {
+				workspaceId: 12,
+				source,
+				key: source === "board" ? "TE-9" : "CA-9",
+			},
+			canMarkDone: true,
+			markDoneReason: null,
+		};
+		const completed = { ...item, source, version: 2 };
+		vi.mocked(api.markMyWorkDone).mockResolvedValueOnce(completed as never);
+
+		const updated = await markWorkItemDone(12, item);
+
+		expect(api.markMyWorkDone).toHaveBeenCalledWith(
+			12,
+			source,
+			item.key,
+			item.version,
+		);
+		expect(updated.source).toBe(source);
+		expect(updated.version).toBe(2);
+	});
+
 	it("routes board field updates to updateCard", async () => {
 		vi.mocked(api.updateCard).mockResolvedValue({
 			...boardItem,
