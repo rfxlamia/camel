@@ -19,7 +19,8 @@ function getDetailStateCopy(
 	keyValue: string,
 	error?: unknown,
 ) {
-	if (status === "loading") return { title: `Loading ${keyValue}…`, message: null };
+	if (status === "loading")
+		return { title: `Loading ${keyValue}…`, message: null };
 	if (status === "unavailable") {
 		return {
 			title: "Work item unavailable",

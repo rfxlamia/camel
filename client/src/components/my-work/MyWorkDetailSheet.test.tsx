@@ -383,10 +383,10 @@ async function openShellDetail({
 	const detail = await screen.findByRole("dialog", {
 		name: new RegExp(item.key, "i"),
 	});
-	await waitFor(() => expect(within(detail).getByText(item.title)).toBeTruthy());
-	fireEvent.click(
-		screen.getByRole("button", { name: "Require confirmation" }),
+	await waitFor(() =>
+		expect(within(detail).getByText(item.title)).toBeTruthy(),
 	);
+	fireEvent.click(screen.getByRole("button", { name: "Require confirmation" }));
 	return detail;
 }
 
@@ -830,12 +830,8 @@ describe("MyWorkDetailSheet", () => {
 		});
 		const detail = await openShellDetail({ item, mobileOpen: false });
 		const desktop = screen.getByTestId("desktop-sidebar");
-		fireEvent.click(
-			within(desktop).getByRole("button", { name: /Orbit/i }),
-		);
-		fireEvent.click(
-			within(desktop).getByRole("option", { name: /Atlas/i }),
-		);
+		fireEvent.click(within(desktop).getByRole("button", { name: /Orbit/i }));
+		fireEvent.click(within(desktop).getByRole("option", { name: /Atlas/i }));
 
 		const confirmation = await screen.findByRole("dialog", {
 			name: "Confirm workspace switch",
@@ -919,46 +915,49 @@ describe("MyWorkDetailSheet", () => {
 			expectedRoute: "/tracker/OR-4",
 			routeTestId: "tracker-route",
 		},
-	])(
-		"keeps an external source confirmation actionable with the $label list open",
-		async ({ mobileOpen, source, id, key, title, expectedRoute, routeTestId }) => {
-			const item = makeItem({
-				id,
-				key,
-				title,
-				workspaceId: 7,
-				workspaceName: "Atlas",
-				source,
-			});
-			const detail = await openShellDetail({ item, mobileOpen });
-			const shell = screen.getByTestId(
-				mobileOpen ? "mobile-nav" : "desktop-sidebar",
-			);
-			fireEvent.click(within(shell).getByRole("button", { name: /Orbit/i }));
-			const sourceButton = within(detail).getByRole("button", {
-				name: `Open in ${source === "board" ? "Board" : "Tracker"}`,
-			});
-			fireEvent.click(sourceButton);
+	])("keeps an external source confirmation actionable with the $label list open", async ({
+		mobileOpen,
+		source,
+		id,
+		key,
+		title,
+		expectedRoute,
+		routeTestId,
+	}) => {
+		const item = makeItem({
+			id,
+			key,
+			title,
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source,
+		});
+		const detail = await openShellDetail({ item, mobileOpen });
+		const shell = screen.getByTestId(
+			mobileOpen ? "mobile-nav" : "desktop-sidebar",
+		);
+		fireEvent.click(within(shell).getByRole("button", { name: /Orbit/i }));
+		const sourceButton = within(detail).getByRole("button", {
+			name: `Open in ${source === "board" ? "Board" : "Tracker"}`,
+		});
+		fireEvent.click(sourceButton);
 
-			const confirmation = await screen.findByRole("dialog", {
-				name: "Confirm workspace switch",
-			});
-			const switchButton = within(confirmation).getByRole("button", {
-				name: "Switch",
-			});
-			fireEvent.mouseDown(switchButton);
-			expect(
-				screen.getByRole("dialog", { name: "Confirm workspace switch" }),
-			).toBeTruthy();
-			fireEvent.click(switchButton);
+		const confirmation = await screen.findByRole("dialog", {
+			name: "Confirm workspace switch",
+		});
+		const switchButton = within(confirmation).getByRole("button", {
+			name: "Switch",
+		});
+		fireEvent.mouseDown(switchButton);
+		expect(
+			screen.getByRole("dialog", { name: "Confirm workspace switch" }),
+		).toBeTruthy();
+		fireEvent.click(switchButton);
 
-			await waitFor(() =>
-				expect(screen.getByTestId(routeTestId)).toBeTruthy(),
-			);
-			expect(screen.getByTestId("active-workspace").textContent).toBe("7");
-			expect(screen.getByTestId("location").textContent).toBe(expectedRoute);
-		},
-	);
+		await waitFor(() => expect(screen.getByTestId(routeTestId)).toBeTruthy());
+		expect(screen.getByTestId("active-workspace").textContent).toBe("7");
+		expect(screen.getByTestId("location").textContent).toBe(expectedRoute);
+	});
 
 	it("preserves My Work when an unsaved-edit transition is canceled", async () => {
 		const item = makeItem({
