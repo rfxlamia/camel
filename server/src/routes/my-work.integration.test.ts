@@ -446,6 +446,10 @@ integration("My Work server acceptance boundary", () => {
 		expect(items).not.toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ title: "Atlas board shadow" }),
+			]),
+		);
+		expect(items).not.toEqual(
+			expect.arrayContaining([
 				expect.objectContaining({ title: "Nebula secret assigned work" }),
 			]),
 		);
