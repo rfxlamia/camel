@@ -30,6 +30,7 @@ const {
 	mockHeartbeat,
 	mockGetPresence,
 	mockFocusConfig,
+	mockUseNotificationsContext,
 	MockApiError,
 } = vi.hoisted(() => {
 	class HoistedApiError extends Error {
@@ -55,6 +56,7 @@ const {
 		mockHeartbeat: vi.fn(),
 		mockGetPresence: vi.fn(),
 		mockFocusConfig: vi.fn(),
+		mockUseNotificationsContext: vi.fn(),
 		MockApiError: HoistedApiError,
 	};
 });
@@ -77,8 +79,14 @@ vi.mock("../../api", () => ({
 	ApiError: MockApiError,
 }));
 
+vi.mock("../../context/NotificationsContext", () => ({
+	useNotificationsContext: (...args: unknown[]) =>
+		mockUseNotificationsContext(...args),
+}));
+
 import { BoardProvider, useBoard } from "../../context/BoardContext";
 import { MobileNav } from "../../layout/sidebar/MobileNav";
+import Sidebar from "../../layout/sidebar/Sidebar";
 import { WorkspaceOverlays } from "../../layout/sidebar/WorkspaceModals";
 import { WorkspaceSwitcher } from "../../layout/sidebar/WorkspaceSwitcher";
 import MyWorkPage from "../../pages/MyWorkPage";
@@ -280,6 +288,43 @@ function MobileClosedSourceRouteBoundary() {
 	);
 }
 
+function ShellSourceRouteBoundary({ mobileOpen }: { mobileOpen: boolean }) {
+	return (
+		<>
+			<WorkspaceOverlays />
+			<div data-testid="desktop-sidebar">
+				<Sidebar
+					collapsed={false}
+					onToggle={vi.fn()}
+					mode="kanban"
+					onModeChange={vi.fn()}
+				/>
+			</div>
+			<div data-testid="mobile-nav">
+				<MobileNav
+					open={mobileOpen}
+					onClose={vi.fn()}
+					mode="kanban"
+					onModeChange={vi.fn()}
+				/>
+			</div>
+			<Routes>
+				<Route path="/my-work" element={<MyWorkPage />} />
+				<Route
+					path="/board/card/:cardId"
+					element={<output data-testid="board-route">Board card</output>}
+				/>
+				<Route
+					path="/tracker/:key"
+					element={<output data-testid="tracker-route">Tracker item</output>}
+				/>
+			</Routes>
+			<ActiveWorkspaceProbe />
+			<GuardControls />
+		</>
+	);
+}
+
 function renderMobileClosedWithBoard(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
@@ -302,6 +347,49 @@ function renderWithBoard(initialEntry: string) {
 	);
 }
 
+function renderShellWithBoard(initialEntry: string, mobileOpen: boolean) {
+	return render(
+		<MemoryRouter initialEntries={[initialEntry]}>
+			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+				<ShellSourceRouteBoundary mobileOpen={mobileOpen} />
+			</BoardProvider>
+			<LocationProbe />
+		</MemoryRouter>,
+	);
+}
+
+async function openShellDetail({
+	item,
+	mobileOpen,
+}: {
+	item: MyWorkItem;
+	mobileOpen: boolean;
+}) {
+	mockListActive.mockResolvedValueOnce(response([item]));
+	mockGetDetail.mockResolvedValueOnce(item);
+	renderShellWithBoard(
+		"/my-work?scope=active&workspaceId=7&page=2",
+		mobileOpen,
+	);
+	await waitFor(() =>
+		expect(screen.getByTestId("active-workspace").textContent).toBe("999"),
+	);
+	await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
+	fireEvent.click(
+		screen.getByRole("button", {
+			name: new RegExp(`open ${item.key}`, "i"),
+		}),
+	);
+	const detail = await screen.findByRole("dialog", {
+		name: new RegExp(item.key, "i"),
+	});
+	await waitFor(() => expect(within(detail).getByText(item.title)).toBeTruthy());
+	fireEvent.click(
+		screen.getByRole("button", { name: "Require confirmation" }),
+	);
+	return detail;
+}
+
 beforeEach(() => {
 	localStorage.clear();
 	localStorage.setItem("activeWorkspaceId", "999");
@@ -317,6 +405,8 @@ beforeEach(() => {
 	mockHeartbeat.mockReset();
 	mockGetPresence.mockReset();
 	mockFocusConfig.mockReset();
+	mockUseNotificationsContext.mockReset();
+	mockUseNotificationsContext.mockReturnValue({ unreadCount: 0 });
 	mockGetWorkspaces.mockResolvedValue({
 		workspaces: [
 			{
@@ -728,6 +818,147 @@ describe("MyWorkDetailSheet", () => {
 		expect(screen.getByTestId("active-workspace").textContent).toBe("7");
 		expect(screen.getByTestId("location").textContent).toBe("/board/card/17");
 	});
+
+	it("keeps the desktop list selection from canceling external confirmation", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Unsaved Atlas work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		const detail = await openShellDetail({ item, mobileOpen: false });
+		const desktop = screen.getByTestId("desktop-sidebar");
+		fireEvent.click(
+			within(desktop).getByRole("button", { name: /Orbit/i }),
+		);
+		fireEvent.click(
+			within(desktop).getByRole("option", { name: /Atlas/i }),
+		);
+
+		const confirmation = await screen.findByRole("dialog", {
+			name: "Confirm workspace switch",
+		});
+		const cancel = within(confirmation).getByRole("button", {
+			name: "Cancel",
+		});
+		fireEvent.mouseDown(cancel);
+		expect(
+			screen.getByRole("dialog", { name: "Confirm workspace switch" }),
+		).toBeTruthy();
+		fireEvent.click(cancel);
+
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("dialog", { name: "Confirm workspace switch" }),
+			).toBeNull(),
+		);
+		expect(screen.getByTestId("switch-confirm-open").textContent).toBe("false");
+		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
+		expect(screen.getByTestId("location").textContent).toBe(
+			"/my-work?scope=active&workspaceId=7&page=2&detailWorkspaceId=7&detailSource=board&detailKey=AT-17",
+		);
+		expect(screen.getByRole("dialog", { name: /AT-17/i })).toBe(detail);
+	});
+
+	it("keeps the mobile list selection switch actionable", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Unsaved Atlas work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		const detail = await openShellDetail({ item, mobileOpen: true });
+		const mobile = screen.getByTestId("mobile-nav");
+		fireEvent.click(within(mobile).getByRole("button", { name: /Orbit/i }));
+		fireEvent.click(within(mobile).getByRole("option", { name: /Atlas/i }));
+
+		const confirmation = await screen.findByRole("dialog", {
+			name: "Confirm workspace switch",
+		});
+		const switchButton = within(confirmation).getByRole("button", {
+			name: "Switch",
+		});
+		fireEvent.mouseDown(switchButton);
+		expect(
+			screen.getByRole("dialog", { name: "Confirm workspace switch" }),
+		).toBeTruthy();
+		fireEvent.click(switchButton);
+
+		await waitFor(() =>
+			expect(screen.getByTestId("active-workspace").textContent).toBe("7"),
+		);
+		expect(screen.getByTestId("switch-confirm-open").textContent).toBe("false");
+		expect(screen.getByTestId("location").textContent).toBe(
+			"/my-work?scope=active&workspaceId=7&page=2&detailWorkspaceId=7&detailSource=board&detailKey=AT-17",
+		);
+		expect(screen.getByRole("dialog", { name: /AT-17/i })).toBe(detail);
+	});
+
+	it.each([
+		{
+			label: "desktop Board",
+			mobileOpen: false,
+			source: "board" as const,
+			id: 17,
+			key: "AT-17",
+			title: "Desktop Atlas work",
+			expectedRoute: "/board/card/17",
+			routeTestId: "board-route",
+		},
+		{
+			label: "mobile Tracker",
+			mobileOpen: true,
+			source: "tracker" as const,
+			id: 4,
+			key: "OR-4",
+			title: "Mobile Atlas work",
+			expectedRoute: "/tracker/OR-4",
+			routeTestId: "tracker-route",
+		},
+	])(
+		"keeps an external source confirmation actionable with the $label list open",
+		async ({ mobileOpen, source, id, key, title, expectedRoute, routeTestId }) => {
+			const item = makeItem({
+				id,
+				key,
+				title,
+				workspaceId: 7,
+				workspaceName: "Atlas",
+				source,
+			});
+			const detail = await openShellDetail({ item, mobileOpen });
+			const shell = screen.getByTestId(
+				mobileOpen ? "mobile-nav" : "desktop-sidebar",
+			);
+			fireEvent.click(within(shell).getByRole("button", { name: /Orbit/i }));
+			const sourceButton = within(detail).getByRole("button", {
+				name: `Open in ${source === "board" ? "Board" : "Tracker"}`,
+			});
+			fireEvent.click(sourceButton);
+
+			const confirmation = await screen.findByRole("dialog", {
+				name: "Confirm workspace switch",
+			});
+			const switchButton = within(confirmation).getByRole("button", {
+				name: "Switch",
+			});
+			fireEvent.mouseDown(switchButton);
+			expect(
+				screen.getByRole("dialog", { name: "Confirm workspace switch" }),
+			).toBeTruthy();
+			fireEvent.click(switchButton);
+
+			await waitFor(() =>
+				expect(screen.getByTestId(routeTestId)).toBeTruthy(),
+			);
+			expect(screen.getByTestId("active-workspace").textContent).toBe("7");
+			expect(screen.getByTestId("location").textContent).toBe(expectedRoute);
+		},
+	);
 
 	it("preserves My Work when an unsaved-edit transition is canceled", async () => {
 		const item = makeItem({
