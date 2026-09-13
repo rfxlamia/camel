@@ -82,8 +82,7 @@ async function refreshDetailAfterFailure(
 	]);
 }
 
-type DetailSheetFrameProps =
-	DetailSheetHeaderProps &
+type DetailSheetFrameProps = DetailSheetHeaderProps &
 	Omit<DetailSheetBodyProps, "onRefresh"> & {
 		dialogRef: RefObject<HTMLElement>;
 		closing: boolean;
