@@ -78,7 +78,8 @@ function RowShell({
 					onActivate={() => activateRow(displayItem, onSelect, onOpen)}
 				/>
 				<div
-					className={`flex shrink-0 items-center justify-center border-neutral-100 border-l bg-white ${
+					data-testid="my-work-done-gutter"
+					className={`flex shrink-0 items-center justify-center border-neutral-100 border-l bg-white [&:not(:has(*))]:hidden ${
 						compact ? "px-2" : "px-2 md:px-3"
 					}`}
 				>

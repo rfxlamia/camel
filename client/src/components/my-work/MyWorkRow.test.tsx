@@ -10,7 +10,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MyWorkItem } from "../../types/myWork";
 import MyWorkRow from "./MyWorkRow";
 
-function makeItem(source: "board" | "tracker"): MyWorkItem {
+function makeItem(
+	source: "board" | "tracker",
+	overrides: Partial<MyWorkItem> = {},
+): MyWorkItem {
 	const key = source === "board" ? "AT-17" : "OR-4";
 	const item: MyWorkItem = {
 		id: source === "board" ? 17 : 4,
@@ -50,6 +53,7 @@ function makeItem(source: "board" | "tracker"): MyWorkItem {
 					dueDate: "2099-01-02",
 				}
 			: { endDate: "2099-01-04" }),
+		...overrides,
 	};
 	return item;
 }
@@ -102,6 +106,38 @@ describe("MyWorkRow", () => {
 
 		fireEvent.click(action);
 		expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ key }));
+	});
+
+	it("collapses the action gutter when the item is already terminal", () => {
+		render(
+			<ul>
+				<MyWorkRow
+					item={makeItem("board", {
+						canMarkDone: false,
+						markDoneReason: "terminal",
+						statusCategory: "completed",
+						status: {
+							id: 17,
+							kind: "status",
+							name: "Done",
+							position: 1,
+							colour: "#49814c",
+							category: "completed",
+							slot: "done",
+						},
+					})}
+				/>
+			</ul>,
+		);
+
+		const row = screen.getByTestId("my-work-row-7-board-AT-17");
+		const gutter = row.querySelector("[data-testid='my-work-done-gutter']");
+		expect(
+			within(row).queryByRole("button", { name: /mark done/i }),
+		).toBeNull();
+		expect(gutter).toBeTruthy();
+		expect(gutter?.className).toContain("[&:not(:has(*))]:hidden");
+		expect(gutter?.childElementCount).toBe(0);
 	});
 
 	it("keeps a custom status badge when it differs from the group label", () => {

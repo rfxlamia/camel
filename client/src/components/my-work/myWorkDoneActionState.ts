@@ -282,6 +282,7 @@ export function buildActionController({
 		handleClick,
 		inFlight,
 		completed,
+		hideButton: completed || item.markDoneReason === "terminal",
 		disabledReason: disabledReason(item, visibleState, inFlight, completed),
 		message: feedback(visibleState),
 	};

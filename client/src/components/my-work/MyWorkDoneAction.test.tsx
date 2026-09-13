@@ -5,6 +5,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sourceItem } from "../../lib/myWorkTestSupport";
@@ -30,35 +31,41 @@ afterEach(() => {
 });
 
 describe("MyWorkDoneAction", () => {
-	it.each([
-		{
-			label: "missing mapping",
-			overrides: {
-				canMarkDone: false,
-				markDoneReason: "missing_done_mapping" as const,
-			},
-			copy: /no done mapping|done status.*configured/i,
-		},
-		{
-			label: "terminal item",
-			overrides: {
-				canMarkDone: false,
-				markDoneReason: "terminal" as const,
-			},
-			copy: /already (?:complete|in a terminal state)/i,
-		},
-	])("disables the action and explains the $label reason", ({
-		overrides,
-		copy,
-	}) => {
+	it("disables the action and explains a missing mapping reason", () => {
 		const mutation = vi.fn();
-		render(<MyWorkDoneAction item={makeItem(overrides)} mutation={mutation} />);
+		render(
+			<MyWorkDoneAction
+				item={makeItem({
+					canMarkDone: false,
+					markDoneReason: "missing_done_mapping",
+				})}
+				mutation={mutation}
+			/>,
+		);
 
 		const button = screen.getByRole("button", { name: /mark done/i });
 		expect((button as HTMLButtonElement).disabled).toBe(true);
-		expect(screen.getByRole("note").textContent).toMatch(copy);
+		expect(screen.getByRole("note").textContent).toMatch(
+			/no done mapping|done status.*configured/i,
+		);
 		fireEvent.click(button);
 		expect(mutation).not.toHaveBeenCalled();
+	});
+
+	it("hides Mark done when the item is already terminal", () => {
+		const mutation = vi.fn();
+		render(
+			<MyWorkDoneAction
+				item={makeItem({
+					canMarkDone: false,
+					markDoneReason: "terminal",
+				})}
+				mutation={mutation}
+			/>,
+		);
+
+		expect(screen.queryByRole("button", { name: /mark done/i })).toBeNull();
+		expect(screen.queryByRole("note")).toBeNull();
 	});
 
 	it("disables the action with a pending reason while a mutation is in flight", () => {
@@ -102,13 +109,8 @@ describe("MyWorkDoneAction", () => {
 		expect(onOptimisticRemove).toHaveBeenCalledWith(item);
 		await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(completed));
 		expect(screen.getByRole("status").textContent).toMatch(/marked done/i);
-		expect(
-			screen.getByRole("button", { name: /mark done/i }).textContent,
-		).toMatch(/Done/i);
-		expect(
-			(screen.getByRole("button", { name: /mark done/i }) as HTMLButtonElement)
-				.disabled,
-		).toBe(true);
+		expect(screen.queryByRole("button", { name: /done/i })).toBeNull();
+		expect(screen.queryByRole("note")).toBeNull();
 	});
 
 	it.each([
@@ -262,6 +264,12 @@ describe("MyWorkDoneAction", () => {
 		await waitFor(() =>
 			expect(screen.queryByTestId("my-work-status-7-board-AT-21")).toBeNull(),
 		);
-		expect(screen.getByTestId("my-work-row-7-board-AT-21")).toBeTruthy();
+		const row = screen.getByTestId("my-work-row-7-board-AT-21");
+		expect(row).toBeTruthy();
+		expect(
+			within(row).queryByRole("button", { name: /mark done/i }),
+		).toBeNull();
+		expect(within(row).queryByRole("note")).toBeNull();
+		expect(within(row).getByRole("status").textContent).toMatch(/marked done/i);
 	});
 });
