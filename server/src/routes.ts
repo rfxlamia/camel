@@ -13,6 +13,8 @@ import { focusSessionRouter } from "./routes/focus-session.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { metricsRouter } from "./routes/metrics.js";
+import { myWorkObservability } from "./core/my-work-observability.js";
+import { createMyWorkPreAuthObservabilityMiddleware } from "./routes/my-work-router.js";
 import { myWorkRouter } from "./routes/my-work.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
@@ -42,6 +44,10 @@ import { createScopedBoardService } from "./routes/helpers.js";
 
 export const api = Router();
 
+api.use(
+	"/my-work",
+	createMyWorkPreAuthObservabilityMiddleware(myWorkObservability),
+);
 api.use(requireAuth);
 
 if (config.EMAIL_GATE_ENABLED === "true") {
