@@ -1,16 +1,16 @@
 import { useState, useSyncExternalStore } from "react";
 import {
 	getMyWorkMutationSnapshot,
-	markWorkItemDone,
-	subscribeToMyWorkMutations,
 	type MyWorkMutationSnapshot,
+	markWorkItemDone,
 	myWorkMutationIdentity,
+	subscribeToMyWorkMutations,
 } from "../../lib/workItemMutations";
 import type { MyWorkItem } from "../../types/myWork";
 import {
+	type ActionState,
 	buildActionController,
 	createMutationClickHandler,
-	type ActionState,
 	type MyWorkDoneFeedback,
 	type MyWorkDoneMutation,
 } from "./myWorkDoneActionState";
@@ -45,6 +45,7 @@ export interface MyWorkDoneActionController {
 	handleClick: () => void;
 	inFlight: boolean;
 	completed: boolean;
+	hideButton: boolean;
 	disabledReason: string | null;
 	message: MyWorkDoneFeedback | null;
 }

@@ -845,6 +845,113 @@ describe("MyWorkDetailSheet", () => {
 		}
 	});
 
+	it("hides Mark done in the detail footer when the item is already terminal", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Closed Atlas work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+			statusCategory: "completed",
+			canMarkDone: false,
+			markDoneReason: "terminal",
+			status: {
+				id: 17,
+				kind: "status",
+				name: "Done",
+				position: 17,
+				colour: "#49814c",
+				category: "completed",
+				slot: "done",
+			},
+		});
+		mockListAll.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+
+		renderWithBoard("/my-work?scope=all&workspaceId=7");
+		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /open AT-17 closed atlas work/i,
+			}),
+		);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		await waitFor(() =>
+			expect(within(detail).getByText(item.title)).toBeTruthy(),
+		);
+
+		expect(
+			within(detail).queryByRole("button", { name: /mark done/i }),
+		).toBeNull();
+		expect(within(detail).queryByRole("note")).toBeNull();
+		expect(
+			within(detail).getByRole("button", { name: "Open in Board" }),
+		).toBeTruthy();
+	});
+
+	it("keeps only Marked done feedback in the detail footer after success", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Detail done work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		const completed = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Detail done work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+			statusCategory: "completed",
+			canMarkDone: false,
+			markDoneReason: "terminal",
+			version: 2,
+			status: {
+				id: 17,
+				kind: "status",
+				name: "Done",
+				position: 17,
+				colour: "#49814c",
+				category: "completed",
+				slot: "done",
+			},
+		});
+		mockListActive.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValue(item);
+		mockMarkMyWorkDone.mockResolvedValueOnce(completed);
+
+		renderWithBoard("/my-work?scope=active&workspaceId=7");
+		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /open AT-17 detail done work/i,
+			}),
+		);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		await waitFor(() =>
+			expect(within(detail).getByText(item.title)).toBeTruthy(),
+		);
+
+		fireEvent.click(within(detail).getByRole("button", { name: "Mark done" }));
+		await waitFor(() =>
+			expect(mockMarkMyWorkDone).toHaveBeenCalledWith(7, "board", "AT-17", 1),
+		);
+		await waitFor(() =>
+			expect(within(detail).getByRole("status").textContent).toMatch(
+				/marked done/i,
+			),
+		);
+		expect(within(detail).queryByRole("button", { name: /done/i })).toBeNull();
+		expect(within(detail).queryByRole("note")).toBeNull();
+		expect(
+			within(detail).getByRole("button", { name: "Open in Board" }),
+		).toBeTruthy();
+	});
+
 	it("uses the real workspace guard before an allowed Board transition", async () => {
 		const item = makeItem({
 			id: 17,

@@ -70,29 +70,35 @@ export default function MyWorkDoneActionView({
 	handleClick,
 	inFlight,
 	completed,
+	hideButton,
 	disabledReason,
 	message,
 	className,
 }: MyWorkDoneActionViewProps) {
+	if (hideButton && !message) return null;
 	return (
 		<span
 			className={`inline-flex min-w-0 flex-col items-end gap-1 ${className}`}
 		>
-			<ActionButton
-				identity={identity}
-				reasonId={reasonId}
-				handleClick={handleClick}
-				inFlight={inFlight}
-				completed={completed}
-				disabledReason={disabledReason}
-			/>
-			<span
-				id={reasonId}
-				role={disabledReason ? "note" : undefined}
-				className={`max-w-56 text-right text-[11px] leading-snug ${disabledReason ? "text-neutral-600" : "sr-only"}`}
-			>
-				{disabledReason ?? "Marks this work item done."}
-			</span>
+			{hideButton ? null : (
+				<>
+					<ActionButton
+						identity={identity}
+						reasonId={reasonId}
+						handleClick={handleClick}
+						inFlight={inFlight}
+						completed={completed}
+						disabledReason={disabledReason}
+					/>
+					<span
+						id={reasonId}
+						role={disabledReason ? "note" : undefined}
+						className={`max-w-56 text-right text-[11px] leading-snug ${disabledReason ? "text-neutral-600" : "sr-only"}`}
+					>
+						{disabledReason ?? "Marks this work item done."}
+					</span>
+				</>
+			)}
 			<ActionMessage message={message} />
 		</span>
 	);
