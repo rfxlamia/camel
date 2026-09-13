@@ -57,6 +57,32 @@ function isMyWorkReadFailure(error: unknown): boolean {
 	);
 }
 
+/**
+ * Observes authentication failures before the API-wide auth middleware rejects
+ * the request. Authorized requests are left untouched because requireAuth sets
+ * req.user before any response status is written.
+ */
+export function createMyWorkPreAuthObservabilityMiddleware(
+	observability: MyWorkObservability,
+) {
+	return (req: Request, res: Response, next: NextFunction): void => {
+		let recorded = false;
+		const originalStatus = res.status.bind(res);
+		res.status = (statusCode: number) => {
+			if (!recorded && !req.user && statusCode === 401) {
+				recorded = true;
+				observability.record({
+					latencyMs: 0,
+					count: 0,
+					statusCode,
+				});
+			}
+			return originalStatus(statusCode);
+		};
+		next();
+	};
+}
+
 function createMyWorkAuthMiddleware(observability: MyWorkObservability) {
 	return (req: Request, res: Response, next: NextFunction): void => {
 		if (!req.user) {
