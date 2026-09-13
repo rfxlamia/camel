@@ -221,13 +221,17 @@ function createMarkDoneHandler(methods: ReturnType<typeof serviceMethods>) {
 			}
 			if (result.kind === "unmappable" || result.kind === "invalid_status") {
 				return res.status(409).json({
-					error: "This status cannot be mapped to the current board columns.",
+					error:
+						sourceValue === "tracker"
+							? "This status cannot be mapped to the current Tracker statuses."
+							: "This status cannot be mapped to the current board columns.",
 					code: "status_column_unmappable",
 				});
 			}
 			if (result.kind === "wip") {
 				return res.status(409).json({
 					error: "WIP limit reached for this column",
+					code: "wip_limit_reached",
 					reason: result.reason,
 				});
 			}

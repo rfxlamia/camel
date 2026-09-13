@@ -50,6 +50,28 @@ async function assertStaleTrackerWrite(fixtures: Fixtures): Promise<void> {
 	await expectNoTrackerEvents(fixtures.orbitTracker.id);
 }
 
+async function assertBoardWipRejection(fixtures: Fixtures): Promise<void> {
+	const before = await boardState(fixtures.atlasBoard.id);
+	await query("UPDATE columns SET wip_limit = 1 WHERE id = $1", [
+		fixtures.atlas.doneColumnId,
+	]);
+	await query("UPDATE cards SET column_id = $1 WHERE id = $2", [
+		fixtures.atlas.doneColumnId,
+		fixtures.atlasShadow.id,
+	]);
+	const response = await request(app)
+		.post(`/api/my-work/${ATLAS_ID}/board/AT-18/done`)
+		.send({ version: before.version });
+	expect(response.status).toBe(409);
+	expect(response.body).toMatchObject({
+		code: "wip_limit_reached",
+		reason: "wip_limit_reached",
+	});
+	expect(response.body.error).toMatch(/WIP limit reached/i);
+	expect(await boardState(fixtures.atlasBoard.id)).toEqual(before);
+	await expectNoCardEvents(fixtures.atlasBoard.id);
+}
+
 export function registerMutationScenarios(): void {
 	// Cycle 3 — Board Mark done and exactly-once activity/source isolation.
 	it("marks a Board item done with one card activity and no Tracker write", async () => {
@@ -103,7 +125,12 @@ export function registerMutationScenarios(): void {
 		).toEqual(beforeTrackerRows);
 	});
 
-	// Cycle 4 — Tracker Mark done and exactly-once activity/source isolation.
+	// Cycle 4 — Board WIP rejection keeps the 409 response source-aware.
+	it("returns a distinct WIP error for a Board Mark done rejection", async () => {
+		await assertBoardWipRejection(getFixtures());
+	});
+
+	// Cycle 5 — Tracker Mark done and exactly-once activity/source isolation.
 	it("marks a Tracker item done with one tracker activity and no Board write", async () => {
 		const fixtures = getFixtures();
 		const beforeBoard = await boardState(fixtures.orbitBoard.id);
@@ -140,14 +167,14 @@ export function registerMutationScenarios(): void {
 		await expectNoCardEventsInWorkspace(ORBIT_ID);
 	});
 
-	// Cycle 5 — stale conflict and no partial source/activity write.
+	// Cycle 6 — stale conflict and no partial source/activity write.
 	it("returns version_conflict for stale Board and Tracker writes", async () => {
 		const fixtures = getFixtures();
 		await assertStaleBoardWrite(fixtures);
 		await assertStaleTrackerWrite(fixtures);
 	});
 
-	// Cycle 6 — idempotent retry and activity count.
+	// Cycle 7 — idempotent retry and activity count.
 	it("accepts retries after completion without duplicating activity", async () => {
 		const fixtures = getFixtures();
 		const boardDone = await request(app)
