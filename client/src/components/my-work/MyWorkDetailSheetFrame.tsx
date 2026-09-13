@@ -12,9 +12,9 @@ import {
 } from "./MyWorkDetailContent";
 
 const SHEET_BACKDROP =
-	"fixed inset-0 z-40 flex items-end bg-neutral-900/35 opacity-100 transition-opacity duration-200 ease-out animate-backdrop-in data-[state=closing]:animate-none data-[state=closing]:opacity-0 motion-reduce:animate-none motion-reduce:transition-none overscroll-none md:justify-end";
+	"fixed inset-0 z-40 flex items-end bg-neutral-900/15 opacity-100 transition-opacity duration-200 ease-out animate-backdrop-in data-[state=closing]:animate-none data-[state=closing]:opacity-0 motion-reduce:animate-none motion-reduce:transition-none overscroll-none md:justify-end";
 const SHEET_PANEL =
-	"flex max-h-[92vh] w-full transform flex-col rounded-t-lg border-neutral-200 border-t bg-white shadow-xl transition-transform duration-200 ease-out animate-sheet-in md:animate-panel-in data-[state=closing]:animate-none md:data-[state=closing]:animate-none data-[state=closing]:translate-y-full md:data-[state=closing]:translate-y-0 md:data-[state=closing]:translate-x-full motion-reduce:animate-none md:motion-reduce:animate-none motion-reduce:transition-none md:motion-reduce:transition-none md:h-full md:max-h-none md:w-104 md:rounded-none md:border-t-0 md:border-l";
+	"flex max-h-[92vh] w-full transform flex-col rounded-t-lg border-neutral-200 border-t bg-white/80 shadow-xl backdrop-blur-md transition-transform duration-200 ease-out animate-sheet-in md:animate-panel-in data-[state=closing]:animate-none md:data-[state=closing]:animate-none data-[state=closing]:translate-y-full md:data-[state=closing]:translate-y-0 md:data-[state=closing]:translate-x-full motion-reduce:animate-none md:motion-reduce:animate-none motion-reduce:transition-none md:motion-reduce:transition-none md:h-full md:max-h-none md:w-104 md:rounded-none md:border-t-0 md:border-l [@media(prefers-reduced-transparency:reduce)]:bg-white [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none";
 const SHEET_HEADER =
 	"flex shrink-0 items-center justify-between gap-3 border-neutral-200 border-b px-4 py-3 md:px-5";
 const CLOSE_BUTTON =
