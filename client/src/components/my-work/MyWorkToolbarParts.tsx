@@ -63,7 +63,7 @@ export function ToolbarIntro({
 				type="button"
 				onClick={onRefresh}
 				disabled={loading}
-				className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 font-medium text-primary-700 text-sm shadow-sm transition-colors motion-reduce:transition-none hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
+				className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 font-medium text-primary-700 text-sm shadow-sm transition-[background-color,border-color,color,transform] motion-safe:active:scale-[0.97] motion-reduce:transition-none hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
 				aria-label="Refresh My Work"
 			>
 				<RefreshCw
@@ -91,7 +91,7 @@ export function ScopeTabs({
 	return (
 		<div
 			className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-neutral-200 bg-neutral-100 p-0.5"
-			role="tablist"
+			role="group"
 			aria-label="My Work scope"
 		>
 			<ScopeTab
@@ -242,10 +242,9 @@ function ScopeTab({
 	return (
 		<button
 			type="button"
-			role="tab"
-			aria-selected={active}
+			aria-pressed={active}
 			onClick={onClick}
-			className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600 ${
+			className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-[background-color,border-color,color,transform] motion-safe:active:scale-[0.97] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-600 ${
 				active
 					? "bg-white font-medium text-primary-800 shadow-sm"
 					: "text-neutral-600 hover:text-neutral-900"

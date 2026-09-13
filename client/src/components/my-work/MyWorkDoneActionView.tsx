@@ -2,7 +2,7 @@ import { Check, LoaderCircle } from "lucide-react";
 import type { MyWorkDoneActionController } from "./useMyWorkDoneAction";
 
 const ACTION_BUTTON =
-	"inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-primary-300 bg-white px-2.5 font-medium text-primary-700 text-xs shadow-sm transition-colors hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 motion-reduce:transition-none disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-200 disabled:text-neutral-400";
+	"inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-primary-300 bg-white px-2.5 font-medium text-primary-700 text-xs shadow-sm transition-[background-color,border-color,color,transform] hover:bg-primary-100 motion-safe:active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 motion-reduce:transition-none disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-200 disabled:text-neutral-400";
 
 type MyWorkDoneActionViewProps = MyWorkDoneActionController & {
 	className: string;

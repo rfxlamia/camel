@@ -73,10 +73,24 @@ describe("MyWorkRow", () => {
 		const action = within(row).getByRole("button", {
 			name: new RegExp(`Open ${key}`),
 		});
+		const keyElement = within(row).getByText(key);
+		const titleElement = within(row).getByText(
+			/A title that stays readable/,
+		);
+		const doneAction = within(row).getByRole("button", {
+			name: "Mark done",
+		});
 		expect(action.className).toContain("min-w-0");
-		expect(within(row).getByText(key)).toBeTruthy();
-		expect(within(row).getByText(/A title that stays readable/)).toBeTruthy();
-		expect(within(row).getAllByText("In progress").length).toBeGreaterThan(0);
+		expect(action.className).toContain("active:bg-primary-100/55");
+		expect(action.className).not.toContain("active:scale");
+		expect(titleElement.compareDocumentPosition(keyElement)).toBe(
+			Node.DOCUMENT_POSITION_FOLLOWING,
+		);
+		expect(screen.queryByTestId(`my-work-status-7-${source}-${key}`)).toBeNull();
+		expect(doneAction.className).toContain("motion-safe:active:scale-[0.97]");
+		if (source === "tracker") {
+			expect(within(row).getAllByText("In progress").length).toBeGreaterThan(0);
+		}
 		expect(
 			within(row).getByText(
 				"A workspace with a deliberately long display name",
@@ -88,5 +102,19 @@ describe("MyWorkRow", () => {
 
 		fireEvent.click(action);
 		expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ key }));
+	});
+
+	it("keeps a custom status badge when it differs from the group label", () => {
+		const item = makeItem("board");
+		item.status = { ...item.status, name: "Requested" };
+		render(
+			<ul>
+				<MyWorkRow item={item} compact />
+			</ul>,
+		);
+
+		expect(
+			screen.getByTestId("my-work-status-7-board-AT-17").textContent,
+		).toBe("Requested");
 	});
 });

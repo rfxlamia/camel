@@ -97,17 +97,22 @@ function RowIdentityMeta({
 	item: MyWorkItem;
 	statusMeta: StatusMetadata;
 }) {
+	const statusLabel = item.status.name.trim() || statusMeta.label;
+	const showStatusBadge =
+		statusLabel.toLowerCase() !== statusMeta.label.toLowerCase();
 	return (
 		<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
 			<span className="shrink-0 font-mono text-neutral-600 text-xs tabular-nums">
 				{item.key}
 			</span>
-			<span
-				className={`inline-flex max-w-[12rem] items-center rounded-md px-1.5 py-0.5 font-medium text-[10px] uppercase tracking-wide ${statusMeta.badge}`}
-				data-testid={`my-work-status-${rowIdentity(item)}`}
-			>
-				{item.status.name || statusMeta.label}
-			</span>
+			{showStatusBadge && (
+				<span
+					className={`inline-flex max-w-[12rem] items-center rounded-md px-1.5 py-0.5 font-medium text-[10px] uppercase tracking-wide ${statusMeta.badge}`}
+					data-testid={`my-work-status-${rowIdentity(item)}`}
+				>
+					{statusLabel}
+				</span>
+			)}
 		</span>
 	);
 }
@@ -160,12 +165,14 @@ function RowSummary({
 }) {
 	return (
 		<span className="min-w-0 flex-1">
-			<RowIdentityMeta item={item} statusMeta={statusMeta} />
 			<span
-				className="mt-1 block truncate font-medium text-neutral-900 text-sm leading-snug"
+				className="block truncate font-medium text-neutral-900 text-sm leading-snug"
 				title={item.title}
 			>
 				{item.title}
+			</span>
+			<span className="mt-1 block">
+				<RowIdentityMeta item={item} statusMeta={statusMeta} />
 			</span>
 			<RowWorkspaceMeta
 				workspaceName={workspaceName}
@@ -243,7 +250,7 @@ export function RowButton({
 			type="button"
 			onClick={onActivate}
 			aria-label={`Open ${item.key} ${item.title}`}
-			className={`group/row relative flex min-w-0 flex-1 items-start gap-3 bg-white text-left transition-colors hover:bg-primary-100/35 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 motion-reduce:transition-none ${
+			className={`group/row relative flex min-w-0 flex-1 items-start gap-3 bg-white text-left transition-colors hover:bg-primary-100/35 active:bg-primary-100/55 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-600 motion-reduce:transition-none ${
 				compact ? "px-3 py-2.5" : "px-4 py-3 md:px-5"
 			}`}
 		>
