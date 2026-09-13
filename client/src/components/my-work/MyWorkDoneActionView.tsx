@@ -10,7 +10,12 @@ type MyWorkDoneActionViewProps = MyWorkDoneActionController & {
 
 type ActionButtonProps = Pick<
 	MyWorkDoneActionController,
-	"identity" | "reasonId" | "handleClick" | "inFlight" | "completed" | "disabledReason"
+	| "identity"
+	| "reasonId"
+	| "handleClick"
+	| "inFlight"
+	| "completed"
+	| "disabledReason"
 >;
 
 function ActionButton({
