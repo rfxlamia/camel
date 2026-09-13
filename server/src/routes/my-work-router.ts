@@ -4,6 +4,10 @@ import {
 	type Response,
 	Router,
 } from "express";
+import {
+	myWorkObservability,
+	type MyWorkObservability,
+} from "../core/my-work-observability.js";
 import { parseKeyFromUrl } from "../core/tracker-key.js";
 import { domainBus, EVENTS } from "../events.js";
 import { publishEvent } from "../realtime.js";
@@ -53,33 +57,49 @@ function isMyWorkReadFailure(error: unknown): boolean {
 	);
 }
 
-function requireMyWorkAuth(
-	req: Request,
-	res: Response,
-	next: NextFunction,
-): void {
-	if (!req.user) {
-		res.status(401).json({ error: "authentication required" });
-		return;
-	}
-	next();
+function createMyWorkAuthMiddleware(observability: MyWorkObservability) {
+	return (req: Request, res: Response, next: NextFunction): void => {
+		if (!req.user) {
+			observability.record({
+				latencyMs: 0,
+				count: 0,
+				statusCode: 401,
+			});
+			res.status(401).json({ error: "authentication required" });
+			return;
+		}
+		next();
+	};
 }
 
-function createListHandler(methods: ReturnType<typeof serviceMethods>) {
+function createListHandler(
+	methods: ReturnType<typeof serviceMethods>,
+	observability: MyWorkObservability,
+) {
 	return async (req: Request, res: Response) => {
+		const measurement = observability.start();
 		const parsed = parseMyWorkQuery(req.query);
-		if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+		if (!parsed.ok) {
+			measurement.finish({ count: 0, statusCode: 400 });
+			return res.status(400).json({ error: parsed.error });
+		}
 		try {
 			const result = await methods.list({
 				userId: req.user!.id,
 				...parsed.value,
 			});
+			measurement.finish({
+				count: result.items.length,
+				statusCode: 200,
+			});
 			return res.json(result);
 		} catch (error) {
 			if (isMyWorkReadFailure(error)) {
+				measurement.finish({ count: 0, statusCode: 503, error });
 				sendUnavailable(res);
 				return;
 			}
+			measurement.finish({ count: 0, statusCode: 500, error });
 			throw error;
 		}
 	};
@@ -231,14 +251,21 @@ function createMarkDoneHandler(methods: ReturnType<typeof serviceMethods>) {
 }
 
 /** Creates the global authenticated router. It is mounted under /api/my-work. */
-export function createMyWorkRouter(options: MyWorkRouterOptions = {}): Router {
+type MyWorkRouterOptionsWithObservability = MyWorkRouterOptions & {
+	observability?: MyWorkObservability;
+};
+
+export function createMyWorkRouter(
+	options: MyWorkRouterOptionsWithObservability = {},
+): Router {
 	const service =
 		options.service ??
 		createMyWorkService(options.deps ?? options.dbExec ?? {});
 	const methods = serviceMethods(service);
+	const observability = options.observability ?? myWorkObservability;
 	const router = Router();
-	router.use(requireMyWorkAuth);
-	router.get("/", createListHandler(methods));
+	router.use(createMyWorkAuthMiddleware(observability));
+	router.get("/", createListHandler(methods, observability));
 	router.get("/:workspaceId/:source/:key", createDetailHandler(methods));
 	router.post(
 		"/:workspaceId/:source/:key/done",
