@@ -196,7 +196,6 @@ export default function MyWorkDetailSheet({
 	}
 
 	const item = state.status === "ready" ? state.item : null;
-	const sourceLabel = source === "board" ? "Board" : "Tracker";
 	const retryDetail = () => {
 		void retry();
 	};
@@ -205,7 +204,6 @@ export default function MyWorkDetailSheet({
 			state={state}
 			item={item}
 			keyValue={key}
-			sourceLabel={sourceLabel}
 			closeButtonRef={closeButtonRef}
 			dialogRef={dialogRef}
 			onClose={requestClose}

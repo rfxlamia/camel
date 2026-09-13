@@ -544,6 +544,67 @@ describe("MyWorkDetailSheet", () => {
 		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
 	});
 
+	it("omits the sheet eyebrow and empty description, and shows a board due date", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Quiet detail work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+			description: "",
+			dueDate: "2026-09-10",
+		});
+		mockListActive.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+
+		renderWithBoard("/my-work?scope=active&workspaceId=7");
+		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /open AT-17 quiet detail work/i,
+			}),
+		);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		await waitFor(() =>
+			expect(within(detail).getByText(item.title)).toBeTruthy(),
+		);
+
+		expect(within(detail).queryByText(/My Work ·/)).toBeNull();
+		expect(within(detail).queryByText("No description.")).toBeNull();
+		expect(within(detail).getByText(/Sep 10/)).toBeTruthy();
+	});
+
+	it("shows a tracker due date from endDate", async () => {
+		const item = makeItem({
+			id: 4,
+			key: "OR-4",
+			title: "Quiet tracker work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "tracker",
+			description: "",
+			endDate: "2026-09-12",
+		});
+		mockListAll.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+
+		renderWithBoard("/my-work?scope=all&workspaceId=7");
+		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /open OR-4 quiet tracker work/i,
+			}),
+		);
+		const detail = await screen.findByRole("dialog", { name: /OR-4/i });
+		await waitFor(() =>
+			expect(within(detail).getByText(item.title)).toBeTruthy(),
+		);
+
+		expect(within(detail).queryByText("No description.")).toBeNull();
+		expect(within(detail).getByText(/Sep 12/)).toBeTruthy();
+	});
+
 	it("traps focus inside detail and restores the invoking row trigger on close", async () => {
 		const item = makeItem({
 			id: 17,

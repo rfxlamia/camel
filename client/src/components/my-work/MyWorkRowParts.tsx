@@ -63,7 +63,7 @@ function dateOnly(value: string): string | null {
 	return value;
 }
 
-function formatDueDate(value: string | null): string | null {
+export function formatDueDate(value: string | null): string | null {
 	if (!value) return null;
 	const parsedDate = dateOnly(value);
 	const parsed = parsedDate

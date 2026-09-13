@@ -1,10 +1,11 @@
 import { AlertTriangle, ArrowUpRight, LoaderCircle } from "lucide-react";
 import {
-	myWorkDetailErrorMessage,
 	type MyWorkDetailState,
+	myWorkDetailErrorMessage,
 } from "../../lib/myWorkNavigation";
 import type { MyWorkItem } from "../../types/myWork";
 import MyWorkDoneAction from "./MyWorkDoneAction";
+import { createRowView, formatDueDate } from "./MyWorkRowParts";
 
 const STATUS_SURFACE =
 	"flex flex-1 flex-col items-center justify-center px-6 py-16 text-center";
@@ -101,6 +102,7 @@ function DetailContent({ item }: { item: MyWorkItem }) {
 	const sourceName = item.source === "board" ? "Board" : "Tracker";
 	const sourceContext =
 		item.source === "board" ? item.columnName || "Board" : item.status.name;
+	const due = formatDueDate(createRowView(item).dueValue);
 	return (
 		<div className="space-y-5 px-4 py-5 md:px-5">
 			<section
@@ -128,13 +130,14 @@ function DetailContent({ item }: { item: MyWorkItem }) {
 				<h3 className="font-semibold text-neutral-900 text-lg leading-snug">
 					{item.title}
 				</h3>
+				{due ? (
+					<p className="mt-2 text-neutral-600 text-sm tabular-nums">{due}</p>
+				) : null}
 				{item.description ? (
 					<p className="mt-3 whitespace-pre-wrap text-neutral-700 text-sm leading-relaxed">
 						{item.description}
 					</p>
-				) : (
-					<p className="mt-3 text-neutral-500 text-sm">No description.</p>
-				)}
+				) : null}
 			</section>
 		</div>
 	);
