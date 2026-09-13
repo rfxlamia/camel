@@ -4,11 +4,12 @@ import {
 	type MyWorkDetailState,
 } from "../../lib/myWorkNavigation";
 import type { MyWorkItem } from "../../types/myWork";
+import MyWorkDoneAction from "./MyWorkDoneAction";
 
 const STATUS_SURFACE =
 	"flex flex-1 flex-col items-center justify-center px-6 py-16 text-center";
 const SHEET_FOOTER =
-	"flex shrink-0 border-neutral-200 border-t bg-white px-4 py-3 md:px-5";
+	"flex shrink-0 items-stretch gap-2 border-neutral-200 border-t bg-white px-4 py-3 md:px-5";
 const SOURCE_BUTTON =
 	"inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 font-medium text-sm text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-wait disabled:bg-primary-300 motion-reduce:transition-none";
 
@@ -142,14 +143,24 @@ function DetailContent({ item }: { item: MyWorkItem }) {
 function DetailSheetActions({
 	item,
 	onNavigate,
+	onRefresh,
+	onClose,
 	pending,
 }: {
 	item: MyWorkItem;
 	onNavigate: () => void;
+	onRefresh: () => void | Promise<void>;
+	onClose: () => void;
 	pending: boolean;
 }) {
 	return (
 		<footer className={SHEET_FOOTER}>
+			<MyWorkDoneAction
+				item={item}
+				onRefresh={onRefresh}
+				onUnavailable={onClose}
+				className="min-w-0 flex-1 items-stretch [&>button]:w-full"
+			/>
 			<button
 				type="button"
 				onClick={onNavigate}
@@ -169,14 +180,21 @@ export interface DetailSheetBodyProps {
 	keyValue: string;
 	onRetry: () => void;
 	onNavigate: () => void;
+	onRefresh: () => void | Promise<void>;
+	onClose: () => void;
 	pending: boolean;
 }
 
 function DetailSheetReadyContent({
 	item,
 	onNavigate,
+	onRefresh,
+	onClose,
 	pending,
-}: Pick<DetailSheetBodyProps, "item" | "onNavigate" | "pending">) {
+}: Pick<
+	DetailSheetBodyProps,
+	"item" | "onNavigate" | "onRefresh" | "onClose" | "pending"
+>) {
 	if (!item) return null;
 	return (
 		<>
@@ -186,6 +204,8 @@ function DetailSheetReadyContent({
 			<DetailSheetActions
 				item={item}
 				onNavigate={onNavigate}
+				onRefresh={onRefresh}
+				onClose={onClose}
 				pending={pending}
 			/>
 		</>
@@ -198,6 +218,8 @@ export function DetailSheetBody({
 	keyValue,
 	onRetry,
 	onNavigate,
+	onRefresh,
+	onClose,
 	pending,
 }: DetailSheetBodyProps) {
 	return (
@@ -213,6 +235,8 @@ export function DetailSheetBody({
 			<DetailSheetReadyContent
 				item={item}
 				onNavigate={onNavigate}
+				onRefresh={onRefresh}
+				onClose={onClose}
 				pending={pending}
 			/>
 		</>

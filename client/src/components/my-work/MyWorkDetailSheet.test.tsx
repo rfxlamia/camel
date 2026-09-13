@@ -550,6 +550,10 @@ describe("MyWorkDetailSheet", () => {
 		const sourceButton = await within(detail).findByRole("button", {
 			name: "Open in Board",
 		});
+		const doneButton = within(detail).getByRole("button", {
+			name: "Mark done",
+		});
+		expect(doneButton.closest("footer")).toBe(sourceButton.closest("footer"));
 		await waitFor(() => expect(document.activeElement).toBe(closeButton));
 
 		sourceButton.focus();
