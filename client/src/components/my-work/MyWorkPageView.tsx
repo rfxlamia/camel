@@ -78,16 +78,10 @@ type MyWorkDetailProps = Pick<
 	"detailSelection" | "onCloseDetail"
 >;
 
-function MyWorkDetail({
-	detailSelection,
-	onCloseDetail,
-}: MyWorkDetailProps) {
+function MyWorkDetail({ detailSelection, onCloseDetail }: MyWorkDetailProps) {
 	if (!detailSelection) return null;
 	return (
-		<MyWorkDetailSheet
-			selection={detailSelection}
-			onClose={onCloseDetail}
-		/>
+		<MyWorkDetailSheet selection={detailSelection} onClose={onCloseDetail} />
 	);
 }
 

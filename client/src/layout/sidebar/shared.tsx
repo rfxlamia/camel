@@ -61,9 +61,7 @@ function usePopoverFocusLifecycle(
 	useEffect(() => {
 		if (!open) return;
 		const panel = panelRef.current;
-		panel
-			?.querySelector<HTMLElement>(POPOVER_FOCUSABLE_SELECTOR)
-			?.focus();
+		panel?.querySelector<HTMLElement>(POPOVER_FOCUSABLE_SELECTOR)?.focus();
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
 				event.preventDefault();

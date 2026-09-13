@@ -423,7 +423,9 @@ describe("MyWorkPage", () => {
 
 		await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Welcome back" })).toBeTruthy(),
+			expect(
+				screen.getByRole("heading", { name: "Welcome back" }),
+			).toBeTruthy(),
 		);
 		expect(screen.getByTestId("location").textContent).toBe("/login");
 	});
