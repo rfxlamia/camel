@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -384,6 +385,28 @@ async function openDetailWhilePending(item: MyWorkItem) {
 	return { detail, settle, fail };
 }
 
+async function openReadyDetail(
+	item: MyWorkItem,
+	initialEntry = "/my-work",
+) {
+	mockListActive.mockResolvedValueOnce(response([item]));
+	mockGetDetail.mockResolvedValueOnce(item);
+	renderWithBoard(initialEntry);
+	await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
+	fireEvent.click(
+		screen.getByRole("button", {
+			name: new RegExp(`open ${item.key} ${item.title}`, "i"),
+		}),
+	);
+	const detail = await screen.findByRole("dialog", {
+		name: new RegExp(item.key, "i"),
+	});
+	await waitFor(() =>
+		expect(within(detail).getByText(item.title)).toBeTruthy(),
+	);
+	return detail;
+}
+
 async function openShellDetail({
 	item,
 	mobileOpen,
@@ -572,6 +595,75 @@ describe("MyWorkDetailSheet", () => {
 		expect(document.activeElement).toBe(trigger);
 	});
 
+	it.each(["button", "escape", "backdrop"] as const)(
+		"keeps the detail mounted while the %s close exits",
+		async (source) => {
+			const item = makeItem({
+				id: 17,
+				key: "AT-17",
+				title: "Close lifecycle work",
+				workspaceId: 7,
+				workspaceName: "Atlas",
+				source: "board",
+			});
+			const detail = await openReadyDetail(item);
+			vi.useFakeTimers();
+			try {
+				const closeButton = within(detail).getByRole("button", {
+					name: /close/i,
+				});
+				if (source === "button") {
+					fireEvent.click(closeButton);
+				} else if (source === "escape") {
+					fireEvent.keyDown(closeButton, { key: "Escape" });
+				} else {
+					const backdrop = detail.parentElement;
+					expect(backdrop).toBeTruthy();
+					fireEvent.mouseDown(backdrop as HTMLElement);
+				}
+				fireEvent.click(closeButton);
+				expect(detail.getAttribute("data-state")).toBe("closing");
+				expect(screen.getByTestId("location").textContent).toContain(
+					"detailWorkspaceId",
+				);
+				act(() => vi.advanceTimersByTime(199));
+				expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+				act(() => vi.advanceTimersByTime(1));
+				expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull();
+			} finally {
+				vi.useRealTimers();
+			}
+		},
+	);
+
+	it("closes immediately without positional exit when reduced motion is preferred", async () => {
+		const originalMatchMedia = window.matchMedia;
+		Object.defineProperty(window, "matchMedia", {
+			configurable: true,
+			value: vi.fn(() => ({ matches: true })),
+		});
+		try {
+			const item = makeItem({
+				id: 17,
+				key: "AT-17",
+				title: "Reduced motion work",
+				workspaceId: 7,
+				workspaceName: "Atlas",
+				source: "board",
+			});
+			const detail = await openReadyDetail(item);
+			fireEvent.click(
+				within(detail).getByRole("button", { name: /close/i }),
+			);
+			expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull();
+		} finally {
+			Object.defineProperty(window, "matchMedia", {
+				configurable: true,
+				value: originalMatchMedia,
+			});
+		}
+	});
+
 	it("hides cached content and source actions after detail reauthorization fails", async () => {
 		const item = makeItem({
 			id: 17,
@@ -671,6 +763,7 @@ describe("MyWorkDetailSheet", () => {
 			}),
 		);
 		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		expect(detail.getAttribute("data-state")).toBe("open");
 		expect(detail.className).toContain("animate-sheet-in");
 		expect(detail.className).toContain("md:animate-panel-in");
 		expect(detail.className).toContain("motion-reduce:animate-none");
@@ -741,6 +834,11 @@ describe("MyWorkDetailSheet", () => {
 				/version|service unavailable|updated this item/i,
 			);
 		} else {
+			expect(
+				screen
+					.getByRole("dialog", { name: /AT-17/i })
+					.getAttribute("data-state"),
+			).toBe("closing");
 			await waitFor(() =>
 				expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull(),
 			);
