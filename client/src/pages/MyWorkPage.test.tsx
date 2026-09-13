@@ -23,6 +23,7 @@ import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 const {
 	mockListMyWork,
 	mockListActiveMyWorkCandidates,
+	mockMarkMyWorkDone,
 	mockUseBoard,
 	MockApiError,
 } = vi.hoisted(() => {
@@ -40,6 +41,7 @@ const {
 	return {
 		mockListMyWork: vi.fn(),
 		mockListActiveMyWorkCandidates: vi.fn(),
+		mockMarkMyWorkDone: vi.fn(),
 		mockUseBoard: vi.fn(),
 		MockApiError: TestApiError,
 	};
@@ -50,6 +52,7 @@ vi.mock("../api", () => ({
 		listMyWork: (...args: unknown[]) => mockListMyWork(...args),
 		listActiveMyWorkCandidates: (...args: unknown[]) =>
 			mockListActiveMyWorkCandidates(...args),
+		markMyWorkDone: (...args: unknown[]) => mockMarkMyWorkDone(...args),
 	},
 	ApiError: MockApiError,
 }));
@@ -157,6 +160,7 @@ beforeEach(() => {
 	mockUseBoard.mockReturnValue({ activeWorkspaceId: 999, logout: vi.fn() });
 	mockListMyWork.mockReset();
 	mockListActiveMyWorkCandidates.mockReset();
+	mockMarkMyWorkDone.mockReset();
 	recoveryNavigate = undefined;
 	recoverySignOut = undefined;
 });
@@ -456,6 +460,58 @@ describe("MyWorkPage", () => {
 		await waitFor(() => expect(screen.getByText("After refresh")).toBeTruthy());
 		expect(mockListActiveMyWorkCandidates).toHaveBeenCalledTimes(2);
 		expect(screen.getByTestId("location").textContent).toBe(locationBefore);
+	});
+
+	it.each([
+		{
+			label: "a version conflict",
+			key: "AT-90",
+			error: { status: 409, code: "version_conflict", message: "stale" },
+		},
+		{
+			label: "a transient failure",
+			key: "AT-91",
+			error: { status: 503, message: "Service unavailable" },
+		},
+		{
+			label: "a revoked assignment",
+			key: "AT-92",
+			error: { status: 404, code: "not_found", message: "Not found" },
+		},
+	])("refreshes the Active list after Mark done $label and removes stale work", async ({
+		key,
+		error,
+	}) => {
+		const item = makeItem({
+			id: Number(key.slice(3)),
+			key,
+			title: `Stale ${key}`,
+		});
+		mockListActiveMyWorkCandidates
+			.mockResolvedValueOnce(response([item]))
+			.mockResolvedValueOnce(response([]));
+		mockMarkMyWorkDone.mockRejectedValueOnce(error);
+
+		render(
+			<MemoryRouter initialEntries={["/my-work"]}>
+				<MyWorkPage />
+			</MemoryRouter>,
+		);
+
+		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
+		fireEvent.click(screen.getByTestId("my-work-done-action-7-tracker-" + key));
+
+		await waitFor(() =>
+			expect(mockListActiveMyWorkCandidates).toHaveBeenCalledTimes(2),
+		);
+		await waitFor(() =>
+			expect(screen.getByTestId("my-work-empty-active")).toBeTruthy(),
+		);
+		expect(screen.queryByText(item.title)).toBeNull();
+		expect(screen.queryByTestId(`my-work-row-7-tracker-${key}`)).toBeNull();
+		expect(
+			screen.queryByTestId("my-work-done-action-7-tracker-" + key),
+		).toBeNull();
 	});
 
 	it("integrates helper-defined status and due ordering across a large Active set", async () => {
