@@ -122,6 +122,12 @@ function createNetwork(myWorkHandler?: FetchHandler) {
 	return fetchImpl;
 }
 
+function networkFor(item: MyWorkItem, list = response([item])) {
+	return createNetwork((url) =>
+		url.pathname === "/api/my-work" ? jsonResponse(list) : jsonResponse(item),
+	);
+}
+
 function LocationProbe() {
 	const location = useLocation();
 	return (
@@ -306,10 +312,7 @@ describe("MyWorkPage cross-component integration", () => {
 			}),
 		);
 		const item = items[50]!;
-		createNetwork((url) => {
-			if (url.pathname === "/api/my-work") return jsonResponse(response(items));
-			return jsonResponse(item);
-		});
+		networkFor(item, response(items));
 
 		renderSurface("/my-work");
 		await waitFor(() => expect(screen.getByText(items[0]!.key)).toBeTruthy());
@@ -360,108 +363,93 @@ describe("MyWorkPage cross-component integration", () => {
 	});
 
 	// Cycle 2 — guarded source navigation.
-	it("navigates to the allowed Board source after the real workspace guard", async () => {
-		const item = makeItem({
-			id: 17,
-			key: "AT-17",
-			title: "Allowed Atlas work",
-			source: "board",
-			workspaceId: 7,
-		});
-		createNetwork((url) => {
-			if (url.pathname === "/api/my-work")
-				return jsonResponse(response([item]));
-			return jsonResponse(item);
-		});
+	const sourceGuardScenarios = [
+		["Board allowed", "board", 17, "AT-17", "allowed"],
+		["Tracker allowed", "tracker", 27, "OR-27", "allowed"],
+		["Board focus-blocked", "board", 18, "AT-18", "blocked"],
+		["Tracker focus-blocked", "tracker", 28, "OR-28", "blocked"],
+		["Board confirmation-canceled", "board", 19, "AT-19", "canceled"],
+		["Tracker confirmation-canceled", "tracker", 29, "OR-29", "canceled"],
+	] as const;
 
-		renderSurface("/my-work?scope=active&workspaceId=7&page=2");
-		await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
+	async function runSourceGuardScenario(
+		item: MyWorkItem,
+		outcome: (typeof sourceGuardScenarios)[number][4],
+	) {
+		const sourceLabel = item.source === "board" ? "Board" : "Tracker";
+		const routeTestId = `${item.source}-route`;
 		const detail = await openDetailFor(item);
-
-		fireEvent.click(screen.getByRole("button", { name: "Allow transition" }));
-		fireEvent.click(
-			within(detail).getByRole("button", { name: "Open in Board" }),
-		);
-
-		await waitFor(() => expect(screen.getByTestId("board-route")).toBeTruthy());
-		expect(screen.getByTestId("active-workspace").textContent).toBe("7");
-		expect(screen.getByTestId("location").textContent).toBe("/board/card/17");
-	});
-
-	it("keeps the detail route when the real focus guard blocks Board navigation", async () => {
-		const item = makeItem({
-			id: 18,
-			key: "AT-18",
-			title: "Focus-protected Atlas work",
-			source: "board",
-			workspaceId: 7,
-		});
-		createNetwork((url) => {
-			if (url.pathname === "/api/my-work")
-				return jsonResponse(response([item]));
-			return jsonResponse(item);
-		});
-
-		renderSurface("/my-work?scope=active&workspaceId=7&page=2");
-		await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
-		const detail = await openDetailFor(item);
-
-		fireEvent.click(screen.getByRole("button", { name: "Block focus" }));
-		fireEvent.click(
-			within(detail).getByRole("button", { name: "Open in Board" }),
-		);
-
-		await waitFor(() =>
-			expect(screen.getByTestId("guard-toast").textContent).toMatch(
-				/finish your focus session/i,
-			),
-		);
+		if (outcome === "allowed") {
+			fireEvent.click(screen.getByRole("button", { name: "Allow transition" }));
+			fireEvent.click(
+				within(detail).getByRole("button", {
+					name: `Open in ${sourceLabel}`,
+				}),
+			);
+			await waitFor(() => expect(screen.getByTestId(routeTestId)).toBeTruthy());
+			expect(screen.getByTestId("active-workspace").textContent).toBe("7");
+			expect(screen.getByTestId("location").textContent).toBe(
+				item.source === "board"
+					? `/board/card/${item.id}`
+					: `/tracker/${item.key}`,
+			);
+			return;
+		}
+		if (outcome === "blocked") {
+			fireEvent.click(screen.getByRole("button", { name: "Block focus" }));
+			fireEvent.click(
+				within(detail).getByRole("button", {
+					name: `Open in ${sourceLabel}`,
+				}),
+			);
+			await waitFor(() =>
+				expect(screen.getByTestId("guard-toast").textContent).toMatch(
+					/finish your focus session/i,
+				),
+			);
+		} else {
+			fireEvent.click(
+				screen.getByRole("button", { name: "Require confirmation" }),
+			);
+			fireEvent.click(
+				within(detail).getByRole("button", {
+					name: `Open in ${sourceLabel}`,
+				}),
+			);
+			const confirmation = await screen.findByRole("dialog", {
+				name: "Confirm workspace switch",
+			});
+			fireEvent.click(
+				within(confirmation).getByRole("button", { name: "Cancel" }),
+			);
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", { name: "Confirm workspace switch" }),
+				).toBeNull(),
+			);
+		}
 		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
 		expect(screen.getByTestId("location").textContent).toContain("/my-work");
-		expect(screen.queryByTestId("board-route")).toBeNull();
-		expect(screen.getByRole("dialog", { name: /AT-18/i })).toBeTruthy();
-	});
+		expect(screen.queryByTestId(routeTestId)).toBeNull();
+		expect(
+			screen.getByRole("dialog", { name: new RegExp(item.key) }),
+		).toBeTruthy();
+	}
 
-	it("keeps My Work when the real unsaved-edit confirmation is canceled", async () => {
+	it.each(
+		sourceGuardScenarios,
+	)("handles %s through the real workspace guard", async (label, source, id, key, outcome) => {
 		const item = makeItem({
-			id: 19,
-			key: "AT-19",
-			title: "Unsaved Atlas work",
-			source: "board",
+			id,
+			key,
+			title: `${label} work`,
+			source,
 			workspaceId: 7,
 		});
-		createNetwork((url) => {
-			if (url.pathname === "/api/my-work")
-				return jsonResponse(response([item]));
-			return jsonResponse(item);
-		});
-
+		networkFor(item);
 		renderSurface("/my-work?scope=active&workspaceId=7&page=2");
 		await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
-		const detail = await openDetailFor(item);
-
-		fireEvent.click(
-			screen.getByRole("button", { name: "Require confirmation" }),
-		);
-		fireEvent.click(
-			within(detail).getByRole("button", { name: "Open in Board" }),
-		);
-		const confirmation = await screen.findByRole("dialog", {
-			name: "Confirm workspace switch",
-		});
-		fireEvent.click(
-			within(confirmation).getByRole("button", { name: "Cancel" }),
-		);
-
-		await waitFor(() =>
-			expect(
-				screen.queryByRole("dialog", { name: "Confirm workspace switch" }),
-			).toBeNull(),
-		);
-		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
-		expect(screen.getByTestId("location").textContent).toContain("/my-work");
-		expect(screen.queryByTestId("board-route")).toBeNull();
-		expect(screen.getByRole("dialog", { name: /AT-19/i })).toBeTruthy();
+		await runSourceGuardScenario(item, outcome);
 	});
 
 	// Cycle 3 — mobile detail bottom sheet.
@@ -474,11 +462,7 @@ describe("MyWorkPage cross-component integration", () => {
 			source: "tracker",
 			workspaceId: 7,
 		});
-		createNetwork((url) => {
-			if (url.pathname === "/api/my-work")
-				return jsonResponse(response([item]));
-			return jsonResponse(item);
-		});
+		networkFor(item);
 
 		renderSurface("/my-work?scope=active");
 		await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
@@ -570,7 +554,7 @@ describe("MyWorkPage cross-component integration", () => {
 		expect(allCalls).toBe(1);
 	});
 
-	// Cycle 6A — server-backed All query/cursor.
+	// Cycle 6 — server-backed All query/cursor.
 	it("uses server cursors for All pages and starts a bounded query request", async () => {
 		const firstPage = makeItem({
 			id: 23,
@@ -629,8 +613,8 @@ describe("MyWorkPage cross-component integration", () => {
 		expect(allRequests[2]?.searchParams.get("cursor")).toBeNull();
 	});
 
-	// Cycle 6B — Mark done conflict rollback/refresh race.
-	it("rolls back a conflicted Mark done and ignores an older refresh snapshot", async () => {
+	// Cycle 7 — Mark done conflict rollback/refresh race.
+	it("observes optimistic removal, conflict rollback, and stale refresh protection", async () => {
 		const item = makeItem({
 			id: 26,
 			key: "AT-26",
@@ -638,16 +622,37 @@ describe("MyWorkPage cross-component integration", () => {
 			source: "board",
 			workspaceId: 7,
 		});
+		const retained = makeItem({
+			id: 26,
+			key: "AT-26",
+			title: "Fresh conflict snapshot",
+			source: "board",
+			workspaceId: 7,
+			version: 2,
+		});
+		const stale = makeItem({
+			id: 26,
+			key: "AT-26",
+			title: "Stale older snapshot",
+			source: "board",
+			workspaceId: 7,
+		});
 		let activeListCalls = 0;
+		let mutationCalls = 0;
+		let mutationMethod: string | undefined;
+		let releaseMutation: ((value: Response) => void) | undefined;
 		let releaseOlder: ((value: Response) => void) | undefined;
 		let releaseNewer: ((value: Response) => void) | undefined;
+		const mutationResponse = new Promise<Response>((resolve) => {
+			releaseMutation = resolve;
+		});
 		const olderRefresh = new Promise<Response>((resolve) => {
 			releaseOlder = resolve;
 		});
 		const newerRefresh = new Promise<Response>((resolve) => {
 			releaseNewer = resolve;
 		});
-		createNetwork((url) => {
+		createNetwork((url, init) => {
 			if (url.pathname === "/api/my-work") {
 				activeListCalls += 1;
 				if (activeListCalls === 1) return jsonResponse(response([item]));
@@ -655,7 +660,9 @@ describe("MyWorkPage cross-component integration", () => {
 				return newerRefresh;
 			}
 			if (url.pathname.endsWith("/done")) {
-				return jsonResponse({ error: "stale", code: "version_conflict" }, 409);
+				mutationCalls += 1;
+				mutationMethod = init?.method;
+				return mutationResponse;
 			}
 			return jsonResponse(item);
 		});
@@ -663,10 +670,19 @@ describe("MyWorkPage cross-component integration", () => {
 		renderSurface("/my-work?scope=active&workspaceId=7");
 		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
 		const detail = await openDetailFor(item);
+		const rowId = "my-work-row-7-board-AT-26";
+		expect(screen.getByTestId(rowId)).toBeTruthy();
+
+		fireEvent.click(within(detail).getByRole("button", { name: "Mark done" }));
+		await waitFor(() => expect(screen.queryByTestId(rowId)).toBeNull());
+		await waitFor(() => expect(mutationCalls).toBe(1));
+		expect(mutationMethod).toBe("POST");
 
 		fireEvent.click(screen.getByRole("button", { name: "Refresh My Work" }));
 		await waitFor(() => expect(activeListCalls).toBe(2));
-		fireEvent.click(within(detail).getByRole("button", { name: "Mark done" }));
+		releaseMutation?.(
+			jsonResponse({ error: "stale", code: "version_conflict" }, 409),
+		);
 		await waitFor(() => expect(activeListCalls).toBe(3));
 		await waitFor(() =>
 			expect(within(detail).getByRole("alert").textContent).toMatch(
@@ -674,15 +690,19 @@ describe("MyWorkPage cross-component integration", () => {
 			),
 		);
 
-		releaseNewer?.(jsonResponse(response([])));
-		await waitFor(() =>
-			expect(screen.getByTestId("my-work-empty-active")).toBeTruthy(),
+		releaseNewer?.(jsonResponse(response([retained])));
+		const retainedRow = await screen.findByTestId(rowId);
+		expect(within(retainedRow).getByText(retained.title)).toBeTruthy();
+		expect(within(retainedRow).getByRole("alert").textContent).toMatch(
+			/someone else updated this item first/i,
 		);
-		releaseOlder?.(jsonResponse(response([item])));
+
+		releaseOlder?.(jsonResponse(response([stale])));
 		await waitFor(() => {
-			expect(screen.getByTestId("my-work-empty-active")).toBeTruthy();
-			expect(screen.queryByTestId("my-work-row-7-board-AT-26")).toBeNull();
+			expect(screen.getByTestId(rowId)).toBe(retainedRow);
+			expect(screen.getByTestId(rowId).textContent).toContain(retained.title);
+			expect(screen.queryByText(stale.title)).toBeNull();
 		});
-		expect(screen.getByRole("dialog", { name: /AT-26/i })).toBeTruthy();
+		expect(activeListCalls).toBe(3);
 	});
 });
