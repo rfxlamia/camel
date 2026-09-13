@@ -90,7 +90,7 @@ function GroupSection({
 			data-testid={`my-work-group-${group}`}
 			aria-labelledby={`my-work-group-label-${group}`}
 		>
-			<div className="flex items-center gap-2 border-primary-200 border-b bg-neutral-100/80 px-4 py-2.5 md:px-5">
+			<div className="flex items-center gap-2 border-neutral-200/70 border-b bg-neutral-100/80 px-4 py-2.5 md:px-5">
 				<span
 					className={`h-2 w-2 rounded-full ${GROUP_DOT_CLASSES[group]}`}
 					aria-hidden

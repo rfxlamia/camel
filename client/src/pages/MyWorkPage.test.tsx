@@ -214,6 +214,26 @@ describe("MyWorkPage", () => {
 		expect(within(row).getByText("Atlas")).toBeTruthy();
 		expect(within(row).getByText("Board")).toBeTruthy();
 		expect(within(row).getAllByText("In progress").length).toBeGreaterThan(0);
+		const scopeGroup = screen.getByRole("group", { name: "My Work scope" });
+		expect(screen.queryByRole("tablist")).toBeNull();
+		expect(
+			within(scopeGroup)
+				.getByRole("button", { name: /Active/ })
+				.getAttribute("aria-pressed"),
+		).toBe("true");
+		expect(
+			within(scopeGroup)
+				.getByRole("button", { name: /All/ })
+				.getAttribute("aria-pressed"),
+		).toBe("false");
+		const filterRow = screen.getByTestId("my-work-filter-row");
+		expect(filterRow.className).toContain("sticky");
+		expect(filterRow.className).toContain("top-0");
+		expect(filterRow.className).toContain("z-20");
+		expect(filterRow.className).toContain("border-neutral-200/70");
+		expect(
+			screen.getByTestId("my-work-group-started").firstElementChild?.className,
+		).toContain("border-neutral-200/70");
 		expect(mockListActiveMyWorkCandidates).toHaveBeenCalledWith(
 			expect.objectContaining({ workspaceId: 7, source: "board" }),
 		);
@@ -221,7 +241,7 @@ describe("MyWorkPage", () => {
 			expect.objectContaining({ workspaceId: 999 }),
 		);
 
-		fireEvent.click(screen.getByRole("tab", { name: /All/ }));
+		fireEvent.click(screen.getByRole("button", { name: /All/ }));
 		await waitFor(() =>
 			expect(mockListMyWork).toHaveBeenCalledWith(
 				expect.objectContaining({

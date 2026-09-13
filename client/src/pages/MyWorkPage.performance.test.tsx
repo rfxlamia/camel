@@ -78,7 +78,7 @@ describe("MyWorkPage initial readiness", () => {
 			await Promise.resolve();
 		});
 		const row = screen.getByTestId("my-work-row-1-tracker-MW-1");
-		const toolbar = screen.getByRole("tablist", { name: "My Work scope" });
+		const toolbar = screen.getByRole("group", { name: "My Work scope" });
 		const elapsedMs = performance.now() - startedAt;
 
 		expect(row).toBeTruthy();
