@@ -234,6 +234,11 @@ describe("MyWorkPage", () => {
 		expect(
 			screen.getByTestId("my-work-group-started").firstElementChild?.className,
 		).toContain("border-neutral-200/70");
+		expect(
+			within(screen.getByTestId("my-work-group-started")).getByRole("heading", {
+				name: "In progress",
+			}).className,
+		).not.toContain("uppercase");
 		expect(mockListActiveMyWorkCandidates).toHaveBeenCalledWith(
 			expect.objectContaining({ workspaceId: 7, source: "board" }),
 		);

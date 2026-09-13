@@ -97,7 +97,7 @@ function GroupSection({
 				/>
 				<h2
 					id={`my-work-group-label-${group}`}
-					className="font-semibold text-neutral-700 text-xs uppercase tracking-wide"
+					className="font-semibold text-neutral-700 text-xs"
 				>
 					{GROUP_LABELS[group]}
 				</h2>

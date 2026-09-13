@@ -100,12 +100,32 @@ describe("MyWorkRow", () => {
 				"A workspace with a deliberately long display name",
 			),
 		).toBeTruthy();
-		expect(within(row).getByText(sourceLabel)).toBeTruthy();
+		const sourceEl = within(row).getByText(sourceLabel);
+		expect(sourceEl).toBeTruthy();
+		expect(sourceEl.className).not.toContain("bg-primary-100");
+		expect(sourceEl.className).not.toContain("rounded-md");
+		expect(sourceEl.className).not.toContain("px-1.5");
+		expect(within(row).queryByText("A", { exact: true })).toBeNull();
+		expect(within(row).getAllByText("·")).toHaveLength(2);
 		expect(within(row).getAllByText(context).length).toBeGreaterThan(0);
 		expect(within(row).getByText(dueLabel)).toBeTruthy();
 
 		fireEvent.click(action);
 		expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ key }));
+	});
+
+	it("omits due chrome when the board item has no due date", () => {
+		render(
+			<ul>
+				<MyWorkRow item={makeItem("board", { dueDate: null })} />
+			</ul>,
+		);
+
+		const row = screen.getByTestId("my-work-row-7-board-AT-17");
+		expect(within(row).queryByText("No due date")).toBeNull();
+		expect(within(row).queryByLabelText(/^Due /)).toBeNull();
+		expect(row.querySelector(".lucide-calendar-days")).toBeNull();
+		expect(within(row).getByText("Open")).toBeTruthy();
 	});
 
 	it("collapses the action gutter when the item is already terminal", () => {
@@ -149,8 +169,8 @@ describe("MyWorkRow", () => {
 			</ul>,
 		);
 
-		expect(screen.getByTestId("my-work-status-7-board-AT-17").textContent).toBe(
-			"Requested",
-		);
+		const status = screen.getByTestId("my-work-status-7-board-AT-17");
+		expect(status.textContent).toBe("Requested");
+		expect(status.className).not.toContain("uppercase");
 	});
 });
