@@ -10,7 +10,6 @@ import {
 	DetailSheetBody,
 	type DetailSheetBodyProps,
 } from "./MyWorkDetailContent";
-import MyWorkDoneAction from "./MyWorkDoneAction";
 
 const SHEET_BACKDROP =
 	"fixed inset-0 z-40 flex items-end bg-neutral-900/35 overscroll-none md:justify-end";
@@ -83,30 +82,8 @@ async function refreshDetailAfterFailure(
 	]);
 }
 
-function DetailSheetAction({
-	item,
-	onRefresh,
-	onClose,
-}: {
-	item: MyWorkItem | null;
-	onRefresh: () => void | Promise<void>;
-	onClose: () => void;
-}) {
-	if (!item) return null;
-	return (
-		<div className="shrink-0 border-neutral-200 border-b bg-white px-4 py-3 md:px-5">
-			<MyWorkDoneAction
-				item={item}
-				onRefresh={onRefresh}
-				onUnavailable={() => onClose()}
-				className="w-full items-start"
-			/>
-		</div>
-	);
-}
-
 type DetailSheetFrameProps = DetailSheetHeaderProps &
-	DetailSheetBodyProps & {
+	Omit<DetailSheetBodyProps, "onRefresh"> & {
 		dialogRef: RefObject<HTMLElement>;
 		onRefresh?: () => void | Promise<void>;
 	};
@@ -147,17 +124,14 @@ function DetailSheetPanel({
 				closeButtonRef={closeButtonRef}
 				onClose={onClose}
 			/>
-			<DetailSheetAction
-				item={projectedItem}
-				onRefresh={onRefresh}
-				onClose={onClose}
-			/>
 			<DetailSheetBody
 				state={state}
 				item={projectedItem}
 				keyValue={keyValue}
 				onRetry={onRetry}
 				onNavigate={onNavigate}
+				onRefresh={onRefresh}
+				onClose={onClose}
 				pending={pending}
 			/>
 		</aside>

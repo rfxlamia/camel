@@ -7,6 +7,7 @@ import { AutoErrorListener } from "../components/ticketIntake/AutoErrorListener"
 import Toast from "../components/Toast";
 import { useBoard } from "../context/BoardContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
+import { parseMyWorkDetailState } from "../lib/myWorkNavigation";
 import { formatTitle, getFaviconLink } from "../lib/title";
 import FocusIndicator from "./FocusIndicator";
 import Sidebar, { MobileNav, NAV_ITEMS, WorkspaceOverlays } from "./sidebar";
@@ -26,6 +27,9 @@ export default function AppLayout() {
 	const onSettings = location.pathname.startsWith("/settings");
 	const onChat = location.pathname.startsWith("/chat");
 	const onFocus = location.pathname.startsWith("/focus");
+	const myWorkDetailOpen =
+		location.pathname === "/my-work" &&
+		parseMyWorkDetailState(location.search) !== null;
 
 	useEffect(() => {
 		localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
@@ -119,7 +123,7 @@ export default function AppLayout() {
 				</div>
 
 				{toast && <Toast message={toast.message} type={toast.type} />}
-				{!onChat && <FloatingChatButton />}
+				{!onChat && !myWorkDetailOpen && <FloatingChatButton />}
 				<AutoErrorListener />
 			</div>
 		</NotificationsProvider>
