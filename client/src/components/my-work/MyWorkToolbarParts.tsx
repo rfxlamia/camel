@@ -10,12 +10,10 @@ export interface MyWorkToolbarProps {
 	workspaces: MyWorkWorkspace[];
 	activeCount?: number;
 	allCount?: number;
-	loading?: boolean;
 	onScopeChange: (scope: MyWorkScope) => void;
 	onQueryChange: (query: string) => void;
 	onWorkspaceChange: (workspaceId: number | "") => void;
 	onSourceChange: (source: WorkItemSource | "") => void;
-	onRefresh: () => void;
 }
 
 const CONTROL_CLASS =
@@ -49,21 +47,18 @@ export function ToolbarIntro({
 	return (
 		<div className="flex flex-wrap items-start justify-between gap-4">
 			<div className="min-w-0">
-				<p className="font-medium text-primary-700 text-xs uppercase tracking-[0.12em]">
-					Personal queue
-				</p>
-				<h1 className="mt-1 text-xl font-semibold tracking-tight text-neutral-900 md:text-[25px]">
+				<h1 className="text-xl font-semibold tracking-tight text-neutral-900 md:text-[25px]">
 					My Work
 				</h1>
 				<p className="mt-1 max-w-xl text-neutral-600 text-sm">
-					Your assigned work, across every workspace you can access.
+					Assigned to you.
 				</p>
 			</div>
 			<button
 				type="button"
 				onClick={onRefresh}
 				disabled={loading}
-				className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 font-medium text-primary-700 text-sm shadow-sm transition-[background-color,border-color,color,transform] motion-safe:active:scale-[0.97] motion-reduce:transition-none hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
+				className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-3 font-medium text-primary-600 text-sm transition-[background-color,color,transform] motion-safe:active:scale-[0.97] motion-reduce:transition-none hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
 				aria-label="Refresh My Work"
 			>
 				<RefreshCw

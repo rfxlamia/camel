@@ -226,11 +226,27 @@ describe("MyWorkPage", () => {
 				.getByRole("button", { name: /All/ })
 				.getAttribute("aria-pressed"),
 		).toBe("false");
+		expect(screen.queryByText("Personal queue")).toBeNull();
+		expect(screen.getByText("Assigned to you.")).toBeTruthy();
+		const refresh = screen.getByRole("button", { name: "Refresh My Work" });
+		expect(refresh.className).not.toContain("border-neutral-300");
+		expect(refresh.className).not.toContain("shadow-sm");
+		expect(refresh.className).toContain("hover:bg-primary-100");
+		expect(refresh.className).not.toMatch(/(?:^|\s)bg-neutral-100(?:\s|$)/);
 		const filterRow = screen.getByTestId("my-work-filter-row");
 		expect(filterRow.className).toContain("sticky");
 		expect(filterRow.className).toContain("top-0");
 		expect(filterRow.className).toContain("z-20");
 		expect(filterRow.className).toContain("border-neutral-200/70");
+		expect(filterRow.className).toContain("backdrop-blur-md");
+		expect(filterRow.className).toContain("rounded-t-md");
+		expect(filterRow.className).toContain("bg-white/80");
+		expect(filterRow.className).not.toContain("border-y");
+		const group = screen.getByTestId("my-work-group-started");
+		expect(filterRow.parentElement).toBe(group.parentElement);
+		expect(filterRow.parentElement?.className).toContain("rounded-md");
+		expect(filterRow.parentElement?.className).toContain("border");
+		expect(filterRow.parentElement?.className).not.toContain("overflow-hidden");
 		expect(
 			screen.getByTestId("my-work-group-started").firstElementChild?.className,
 		).toContain("border-neutral-200/70");
@@ -275,6 +291,12 @@ describe("MyWorkPage", () => {
 		);
 
 		expect(await screen.findByTestId("my-work-loading")).toBeTruthy();
+		expect(screen.getByTestId("my-work-filter-row").parentElement).toBe(
+			screen.getByTestId("my-work-loading").parentElement,
+		);
+		expect(
+			screen.getByTestId("my-work-filter-row").parentElement?.className,
+		).toContain("rounded-md");
 		const loadingStatus = screen.getByRole("status", {
 			name: "Loading your work",
 		});
@@ -331,6 +353,12 @@ describe("MyWorkPage", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("my-work-empty-active")).toBeTruthy(),
 		);
+		expect(screen.getByTestId("my-work-filter-row").parentElement).toBe(
+			screen.getByTestId("my-work-empty-active").parentElement,
+		);
+		expect(
+			screen.getByTestId("my-work-filter-row").parentElement?.className,
+		).toContain("rounded-md");
 		expect(screen.getByRole("button", { name: /view all work/i })).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: /view all work/i }));
 		await waitFor(() =>

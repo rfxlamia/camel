@@ -6,6 +6,7 @@ import type { MyWorkItem, MyWorkWorkspace } from "../../types/myWork";
 import MyWorkDetailSheet from "./MyWorkDetailSheet";
 import MyWorkList, { SessionErrorState } from "./MyWorkList";
 import MyWorkToolbar from "./MyWorkToolbar";
+import { ToolbarIntro } from "./MyWorkToolbarParts";
 import type { LoadError, LoadedPage } from "./useMyWorkData";
 
 type MyWorkViewUpdate = (
@@ -43,32 +44,37 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 	} = props;
 	return (
 		<div className="min-h-full bg-neutral-100">
-			<MyWorkToolbar
-				scope={view.scope}
-				q={view.q}
-				workspaceId={view.workspaceId}
-				source={view.source}
-				workspaces={workspaceOptions}
-				activeCount={view.scope === "active" ? loaded?.total : undefined}
-				loading={loading}
-				onScopeChange={(scope) => updateView({ scope })}
-				onQueryChange={(q) => updateView({ q })}
-				onWorkspaceChange={(workspaceId) => updateView({ workspaceId })}
-				onSourceChange={(source: WorkItemSource | "") => updateView({ source })}
-				onRefresh={onRefresh}
-			/>
-			<MyWorkContent
-				loaded={loaded}
-				loading={loading}
-				loadError={loadError}
-				scope={view.scope}
-				query={view.q}
-				onRetry={onRetry}
-				onRefresh={onRefresh}
-				onShowAll={() => updateView({ scope: "all" })}
-				onPageChange={handlePageChange}
-				onSelect={onSelect}
-			/>
+			<div className="mx-auto max-w-6xl px-4 pt-5 pb-8 md:px-6 md:pt-7">
+				<ToolbarIntro loading={loading} onRefresh={onRefresh} />
+				<div className="mt-4 rounded-md border border-neutral-200 bg-white">
+					<MyWorkToolbar
+						scope={view.scope}
+						q={view.q}
+						workspaceId={view.workspaceId}
+						source={view.source}
+						workspaces={workspaceOptions}
+						activeCount={view.scope === "active" ? loaded?.total : undefined}
+						onScopeChange={(scope) => updateView({ scope })}
+						onQueryChange={(q) => updateView({ q })}
+						onWorkspaceChange={(workspaceId) => updateView({ workspaceId })}
+						onSourceChange={(source: WorkItemSource | "") =>
+							updateView({ source })
+						}
+					/>
+					<MyWorkContent
+						loaded={loaded}
+						loading={loading}
+						loadError={loadError}
+						scope={view.scope}
+						query={view.q}
+						onRetry={onRetry}
+						onRefresh={onRefresh}
+						onShowAll={() => updateView({ scope: "all" })}
+						onPageChange={handlePageChange}
+						onSelect={onSelect}
+					/>
+				</div>
+			</div>
 			<MyWorkDetail {...props} />
 		</div>
 	);
@@ -154,22 +160,19 @@ function LoadingState() {
 			aria-live="polite"
 			aria-atomic="true"
 			aria-label="Loading your work"
-			className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-7"
 		>
-			<div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-				{[0, 1, 2, 3, 4].map((index) => (
-					<div
-						key={index}
-						className="flex items-center gap-3 border-neutral-200 border-b px-4 py-4 last:border-b-0"
-					>
-						<div className="h-8 w-8 animate-pulse rounded-md bg-neutral-200 motion-reduce:animate-none" />
-						<div className="min-w-0 flex-1 space-y-2">
-							<div className="h-3 w-1/4 animate-pulse rounded bg-neutral-200 motion-reduce:animate-none" />
-							<div className="h-3 w-2/3 animate-pulse rounded bg-neutral-100 motion-reduce:animate-none" />
-						</div>
+			{[0, 1, 2, 3, 4].map((index) => (
+				<div
+					key={index}
+					className="flex items-center gap-3 border-neutral-200 border-b px-4 py-4 last:border-b-0"
+				>
+					<div className="h-8 w-8 animate-pulse rounded-md bg-neutral-200 motion-reduce:animate-none" />
+					<div className="min-w-0 flex-1 space-y-2">
+						<div className="h-3 w-1/4 animate-pulse rounded bg-neutral-200 motion-reduce:animate-none" />
+						<div className="h-3 w-2/3 animate-pulse rounded bg-neutral-100 motion-reduce:animate-none" />
 					</div>
-				))}
-			</div>
+				</div>
+			))}
 		</div>
 	);
 }
@@ -185,7 +188,7 @@ function TransientErrorState({
 		<div
 			data-testid="my-work-error"
 			role="alert"
-			className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center md:px-6"
+			className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center"
 		>
 			<RotateCcw size={22} className="text-neutral-400" aria-hidden />
 			<h2 className="mt-3 font-semibold text-neutral-900 text-base">
@@ -233,7 +236,7 @@ function SearchEmptyResult({
 	onShowAll: () => void;
 }) {
 	return (
-		<div className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center md:px-6">
+		<div className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center">
 			<ClipboardList size={22} className="text-neutral-400" aria-hidden />
 			<h2 className="mt-3 font-semibold text-neutral-900 text-base">
 				No work matches “{query}”
@@ -266,7 +269,7 @@ function ScopeEmptyResult({
 			data-testid={
 				scope === "active" ? "my-work-empty-active" : "my-work-empty-all"
 			}
-			className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center md:px-6"
+			className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center"
 		>
 			<ClipboardList size={22} className="text-neutral-400" aria-hidden />
 			<h2 className="mt-3 font-semibold text-neutral-900 text-base">

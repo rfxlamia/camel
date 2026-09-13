@@ -18,7 +18,7 @@ export function SessionErrorState() {
 	return (
 		<div
 			data-testid="my-work-session-error"
-			className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center md:px-6"
+			className="mx-auto flex max-w-xl flex-col items-center px-4 py-16 text-center"
 		>
 			<AlertTriangle size={22} className="text-warning-500" aria-hidden />
 			<h2 className="mt-3 font-semibold text-neutral-900 text-base">
@@ -131,7 +131,7 @@ function PaginationControls({
 	const next = hasNext ?? page < pageCount;
 	return (
 		<nav
-			className="mt-4 flex items-center justify-between gap-3"
+			className="flex items-center justify-between gap-3 border-neutral-200 border-t px-4 py-3"
 			aria-label="My Work pages"
 		>
 			<button
@@ -179,18 +179,16 @@ export default function MyWorkList({
 	const showPagination = hasPrevious || hasNext || pageCount > 1;
 
 	return (
-		<div className="mx-auto max-w-6xl px-4 pb-8 md:px-6">
-			<div className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-				{visibleGroups.map((group) => (
-					<GroupSection
-						key={group}
-						group={group}
-						items={groups[group]}
-						onSelect={onSelect}
-						onRefresh={onRefresh}
-					/>
-				))}
-			</div>
+		<>
+			{visibleGroups.map((group) => (
+				<GroupSection
+					key={group}
+					group={group}
+					items={groups[group]}
+					onSelect={onSelect}
+					onRefresh={onRefresh}
+				/>
+			))}
 			{showPagination && (
 				<PaginationControls
 					page={page}
@@ -200,6 +198,6 @@ export default function MyWorkList({
 					onPageChange={onPageChange}
 				/>
 			)}
-		</div>
+		</>
 	);
 }
