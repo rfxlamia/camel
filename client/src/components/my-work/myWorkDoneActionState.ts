@@ -58,7 +58,7 @@ export function isVersionConflict(error: unknown): boolean {
 	const code = errorCode(error);
 	return (
 		errorStatus(error) === 409 &&
-		(code === null || code === "version_conflict" || code === "conflict")
+		(code === "version_conflict" || code === "conflict")
 	);
 }
 

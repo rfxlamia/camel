@@ -122,6 +122,20 @@ describe("MyWorkDoneAction", () => {
 			error: { status: 503, message: "Service unavailable" },
 			copy: /service unavailable/i,
 		},
+		{
+			label: "a WIP limit rejection without a code",
+			error: { status: 409, message: "WIP limit reached for this column" },
+			copy: /WIP limit reached for this column/i,
+		},
+		{
+			label: "an explicitly coded WIP limit rejection",
+			error: {
+				status: 409,
+				code: "wip_limit_reached",
+				message: "WIP limit reached for this column",
+			},
+			copy: /WIP limit reached for this column/i,
+		},
 	])("rolls back and refreshes after $label", async ({ error, copy }) => {
 		const item = makeItem({ key: "AT-18" });
 		const mutation = vi.fn().mockRejectedValue(error);

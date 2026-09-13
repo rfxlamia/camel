@@ -24,7 +24,10 @@ async function assertBoardUnmappable(fixtures: Fixtures): Promise<void> {
 		.post(`/api/my-work/${ATLAS_ID}/board/AT-18/done`)
 		.send({ version: before.version });
 	expect(response.status).toBe(409);
-	expect(response.body.code).toBe("status_column_unmappable");
+	expect(response.body).toMatchObject({
+		code: "status_column_unmappable",
+		error: "This status cannot be mapped to the current board columns.",
+	});
 	expect(await boardState(fixtures.atlasBoard.id)).toEqual(before);
 	await expectNoCardEvents(fixtures.atlasBoard.id);
 }
@@ -39,7 +42,11 @@ async function assertTrackerUnmappable(fixtures: Fixtures): Promise<void> {
 		.post(`/api/my-work/${ORBIT_ID}/tracker/OR-4/done`)
 		.send({ version: before.version });
 	expect(response.status).toBe(409);
-	expect(response.body.code).toBe("status_column_unmappable");
+	expect(response.body).toMatchObject({
+		code: "status_column_unmappable",
+		error: "This status cannot be mapped to the current Tracker statuses.",
+	});
+	expect(response.body.error).not.toMatch(/current board columns/i);
 	expect(await trackerState(fixtures.orbitTracker.id)).toEqual(before);
 	await expectNoTrackerEvents(fixtures.orbitTracker.id);
 }
