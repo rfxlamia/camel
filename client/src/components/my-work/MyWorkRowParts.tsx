@@ -63,13 +63,13 @@ function dateOnly(value: string): string | null {
 	return value;
 }
 
-function formatDueDate(value: string | null): string {
-	if (!value) return "No due date";
+function formatDueDate(value: string | null): string | null {
+	if (!value) return null;
 	const parsedDate = dateOnly(value);
 	const parsed = parsedDate
 		? new Date(`${parsedDate}T00:00:00Z`)
 		: new Date(value);
-	if (Number.isNaN(parsed.getTime())) return "No due date";
+	if (Number.isNaN(parsed.getTime())) return null;
 	return new Intl.DateTimeFormat("en-US", {
 		month: "short",
 		day: "numeric",
@@ -107,7 +107,7 @@ function RowIdentityMeta({
 			</span>
 			{showStatusBadge && (
 				<span
-					className={`inline-flex max-w-[12rem] items-center rounded-md px-1.5 py-0.5 font-medium text-[10px] uppercase tracking-wide ${statusMeta.badge}`}
+					className={`inline-flex max-w-[12rem] items-center rounded-md px-1.5 py-0.5 font-medium text-[10px] ${statusMeta.badge}`}
 					data-testid={`my-work-status-${rowIdentity(item)}`}
 				>
 					{statusLabel}
@@ -128,20 +128,15 @@ function RowWorkspaceMeta({
 }) {
 	return (
 		<span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-neutral-600 text-xs">
-			<span
-				className="inline-flex min-w-0 max-w-[16rem] items-center gap-1 truncate"
-				title={workspaceName}
-			>
-				<span className="shrink-0 text-neutral-400" aria-hidden>
-					{workspaceName.slice(0, 1).toUpperCase()}
-				</span>
-				<span className="truncate">{workspaceName}</span>
+			<span className="min-w-0 max-w-[16rem] truncate" title={workspaceName}>
+				{workspaceName}
 			</span>
 			<span className="text-neutral-300" aria-hidden>
 				·
 			</span>
-			<span className="inline-flex shrink-0 items-center rounded-md bg-primary-100 px-1.5 py-0.5 font-medium text-primary-800">
-				{sourceLabel}
+			<span className="shrink-0">{sourceLabel}</span>
+			<span className="text-neutral-300" aria-hidden>
+				·
 			</span>
 			<span className="min-w-0 max-w-[15rem] truncate" title={sourceContext}>
 				{sourceContext}
@@ -190,19 +185,20 @@ function RowDueMeta({
 	dueValue: string | null;
 	overdue: boolean;
 }) {
+	const formatted = formatDueDate(dueValue);
 	return (
 		<span className="flex w-[5.75rem] shrink-0 flex-col items-end gap-1 text-right text-xs tabular-nums sm:w-28">
-			<span
-				className={`inline-flex items-center gap-1 ${overdue ? "font-medium text-error-900" : "text-neutral-600"}`}
-				aria-label={
-					overdue
-						? `Overdue, due ${formatDueDate(dueValue)}`
-						: `Due ${formatDueDate(dueValue)}`
-				}
-			>
-				<CalendarDays size={13} aria-hidden />
-				{overdue ? "Overdue" : formatDueDate(dueValue)}
-			</span>
+			{formatted ? (
+				<span
+					className={`inline-flex items-center gap-1 ${overdue ? "font-medium text-error-900" : "text-neutral-600"}`}
+					aria-label={
+						overdue ? `Overdue, due ${formatted}` : `Due ${formatted}`
+					}
+				>
+					<CalendarDays size={13} aria-hidden />
+					{overdue ? "Overdue" : formatted}
+				</span>
+			) : null}
 			<span className="inline-flex items-center gap-1 text-primary-700 opacity-0 transition-opacity motion-reduce:transition-none group-hover/row:opacity-100 group-focus-visible/row:opacity-100">
 				Open
 				<ArrowUpRight size={13} aria-hidden />
