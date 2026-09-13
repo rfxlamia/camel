@@ -19,6 +19,7 @@ import MyWorkDoneAction from "./MyWorkDoneAction";
 export interface MyWorkDetailSheetProps {
 	selection: MyWorkDetailSelection | null;
 	onClose: () => void;
+	onRefresh?: () => void | Promise<void>;
 }
 const SHEET_BACKDROP =
 	"fixed inset-0 z-40 flex items-end bg-neutral-900/35 overscroll-none md:justify-end";
@@ -178,6 +179,7 @@ function DetailSheetHeader({
 type DetailSheetFrameProps = DetailSheetHeaderProps &
 	DetailSheetBodyProps & {
 		dialogRef: RefObject<HTMLElement>;
+		onRefresh: () => void | Promise<void>;
 	};
 
 function DetailSheetFrame(props: DetailSheetFrameProps) {
@@ -191,6 +193,7 @@ function DetailSheetFrame(props: DetailSheetFrameProps) {
 		onClose,
 		onRetry,
 		onNavigate,
+		onRefresh,
 		pending,
 	} = props;
 	const identity = item ? myWorkMutationIdentity(item) : "";
@@ -230,7 +233,7 @@ function DetailSheetFrame(props: DetailSheetFrameProps) {
 					<div className="shrink-0 border-neutral-200 border-b bg-white px-4 py-3 md:px-5">
 						<MyWorkDoneAction
 							item={projectedItem}
-							onRefresh={onRetry}
+							onRefresh={onRefresh}
 							onUnavailable={() => onClose()}
 							className="w-full items-start"
 						/>
@@ -251,6 +254,7 @@ function DetailSheetFrame(props: DetailSheetFrameProps) {
 export default function MyWorkDetailSheet({
 	selection,
 	onClose,
+	onRefresh,
 }: MyWorkDetailSheetProps) {
 	const { state, retry, workspaceId, source, key } =
 		useMyWorkDetailState(selection);
@@ -273,6 +277,17 @@ export default function MyWorkDetailSheet({
 
 	const item = state.status === "ready" ? state.item : null;
 	const sourceLabel = source === "board" ? "Board" : "Tracker";
+	const retryDetail = () => {
+		void retry();
+	};
+	const refreshAfterFailure = async () => {
+		await Promise.allSettled([
+			Promise.resolve().then(async () => {
+				await onRefresh?.();
+			}),
+			Promise.resolve().then(retryDetail),
+		]);
+	};
 	return (
 		<DetailSheetFrame
 			state={state}
@@ -282,7 +297,8 @@ export default function MyWorkDetailSheet({
 			closeButtonRef={closeButtonRef}
 			dialogRef={dialogRef}
 			onClose={onClose}
-			onRetry={() => void retry()}
+			onRetry={retryDetail}
+			onRefresh={refreshAfterFailure}
 			onNavigate={handleSourceNavigation}
 			pending={pending}
 		/>

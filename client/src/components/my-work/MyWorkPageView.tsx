@@ -76,13 +76,21 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 
 type MyWorkDetailProps = Pick<
 	MyWorkPageViewProps,
-	"detailSelection" | "onCloseDetail"
+	"detailSelection" | "onCloseDetail" | "onRefresh"
 >;
 
-function MyWorkDetail({ detailSelection, onCloseDetail }: MyWorkDetailProps) {
+function MyWorkDetail({
+	detailSelection,
+	onCloseDetail,
+	onRefresh,
+}: MyWorkDetailProps) {
 	if (!detailSelection) return null;
 	return (
-		<MyWorkDetailSheet selection={detailSelection} onClose={onCloseDetail} />
+		<MyWorkDetailSheet
+			selection={detailSelection}
+			onClose={onCloseDetail}
+			onRefresh={onRefresh}
+		/>
 	);
 }
 
