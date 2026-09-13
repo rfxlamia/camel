@@ -67,9 +67,11 @@ describe("my-work-observability", () => {
 			error: new Error("database credentials and task body"),
 		});
 
-		expect(
-			[successful.errorClass, clientFailure.errorClass, serverFailure.errorClass],
-		).toEqual(["none", "client", "server"]);
+		expect([
+			successful.errorClass,
+			clientFailure.errorClass,
+			serverFailure.errorClass,
+		]).toEqual(["none", "client", "server"]);
 		expect(observability.getLatencySnapshot()).toMatchObject({
 			count: 3,
 			p95: 24,
@@ -77,7 +79,9 @@ describe("my-work-observability", () => {
 		expect(JSON.stringify(logger.mock.calls)).not.toContain(
 			"private query text",
 		);
-		expect(JSON.stringify(logger.mock.calls)).not.toContain("database credentials");
+		expect(JSON.stringify(logger.mock.calls)).not.toContain(
+			"database credentials",
+		);
 		expect(JSON.stringify(logger.mock.calls)).not.toContain("task body");
 	});
 });

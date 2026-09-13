@@ -56,12 +56,14 @@ afterEach(() => {
 
 describe("MyWorkPage initial readiness", () => {
 	it("renders the usable toolbar and list state within one second", async () => {
-		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
-			new Response(
-				JSON.stringify({ items: [makeReadyItem()], nextCursor: null }),
-				{ status: 200, headers: { "Content-Type": "application/json" } },
-			),
-		);
+		const fetchImpl = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(
+				new Response(
+					JSON.stringify({ items: [makeReadyItem()], nextCursor: null }),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				),
+			);
 		configureRequestBoundaryForTests({ fetchImpl });
 
 		const startedAt = performance.now();

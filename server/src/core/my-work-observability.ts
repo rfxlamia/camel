@@ -42,8 +42,9 @@ export type MyWorkObservabilityOptions = {
 };
 
 export type MyWorkObservabilityMeasurement = {
-	finish: (input?: Omit<MyWorkObservabilityInput, "startedAt">) =>
-		MyWorkObservabilityEvent;
+	finish: (
+		input?: Omit<MyWorkObservabilityInput, "startedAt">,
+	) => MyWorkObservabilityEvent;
 };
 
 export type MyWorkObservability = {
@@ -86,7 +87,10 @@ function statusCodeFrom(input: MyWorkObservabilityInput): number | null {
 		status?: unknown;
 		statusCode?: unknown;
 	};
-	if (typeof candidate.status === "number" && Number.isInteger(candidate.status)) {
+	if (
+		typeof candidate.status === "number" &&
+		Number.isInteger(candidate.status)
+	) {
 		return candidate.status;
 	}
 	if (

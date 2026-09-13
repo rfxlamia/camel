@@ -79,7 +79,8 @@ export function useMyWorkDoneAction({
 	const [state, setState] = useState<ActionState>({ status: "idle" });
 	const identity = myWorkMutationIdentity(item);
 	const reasonId = `my-work-done-${identity.replace(IDENTITY_SEPARATOR, "-")}`;
-	const execute = mutation ?? onMarkDone ?? markDone ?? onMutate ?? markWorkItemDone;
+	const execute =
+		mutation ?? onMarkDone ?? markDone ?? onMutate ?? markWorkItemDone;
 	const handleClick = createMutationClickHandler({
 		item,
 		identity,

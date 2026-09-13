@@ -5,24 +5,22 @@ import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const {
-	PERFORMANCE_USER_ID,
-	PERFORMANCE_WORKSPACE_IDS,
-	mockCurrentUser,
-} = vi.hoisted(() => ({
-	PERFORMANCE_USER_ID: 47111,
-	PERFORMANCE_WORKSPACE_IDS: Array.from({ length: 10 }, (_, index) =>
-		47111 + index,
-	),
-	mockCurrentUser: {
-		id: 47111,
-		username: "my-work-performance-user",
-		displayName: "Performance User",
-		email: "my-work-performance@example.test",
-		emailVerified: true,
-		needsUsername: false,
-	},
-}));
+const { PERFORMANCE_USER_ID, PERFORMANCE_WORKSPACE_IDS, mockCurrentUser } =
+	vi.hoisted(() => ({
+		PERFORMANCE_USER_ID: 47111,
+		PERFORMANCE_WORKSPACE_IDS: Array.from(
+			{ length: 10 },
+			(_, index) => 47111 + index,
+		),
+		mockCurrentUser: {
+			id: 47111,
+			username: "my-work-performance-user",
+			displayName: "Performance User",
+			email: "my-work-performance@example.test",
+			emailVerified: true,
+			needsUsername: false,
+		},
+	}));
 
 // Keep the API, Express, authorization, Kysely, and PostgreSQL paths real.
 // Only authentication session resolution and realtime side effects are outside
@@ -109,11 +107,12 @@ async function environmentEvidence() {
 		tables.tracker_item_assignees
 			? "required schema tables present"
 			: "required schema tables missing";
-	const runner = process.env.GITHUB_ACTIONS === "true"
-		? "github-actions"
-		: process.env.CI
-			? "ci"
-			: "local";
+	const runner =
+		process.env.GITHUB_ACTIONS === "true"
+			? "github-actions"
+			: process.env.CI
+				? "ci"
+				: "local";
 	const evidence = {
 		migrationState,
 		migrationSource: "schema.sql + agent-schema.sql + chat-schema.sql",
@@ -130,10 +129,9 @@ async function environmentEvidence() {
 }
 
 async function cleanupPerformanceFixtures(): Promise<void> {
-	await pool.query(
-		"DELETE FROM workspaces WHERE id = ANY($1::int[])",
-		[PERFORMANCE_WORKSPACE_IDS],
-	);
+	await pool.query("DELETE FROM workspaces WHERE id = ANY($1::int[])", [
+		PERFORMANCE_WORKSPACE_IDS,
+	]);
 	await pool.query("DELETE FROM users WHERE id = $1", [PERFORMANCE_USER_ID]);
 }
 
@@ -165,7 +163,8 @@ async function setupPerformanceFixtures(): Promise<void> {
 			[workspaceId],
 		);
 		const statusId = statusResult.rows[0]?.id;
-		if (statusId === undefined) throw new Error("benchmark status insert failed");
+		if (statusId === undefined)
+			throw new Error("benchmark status insert failed");
 		await pool.query(
 			`WITH inserted AS (
          INSERT INTO tracker_items
