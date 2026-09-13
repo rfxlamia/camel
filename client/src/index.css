@@ -158,6 +158,7 @@
 
   /* Context panel slide-in (calm, brief — per brand emotional goal) */
   --animate-panel-in: panel-in 200ms ease-out;
+  --animate-sheet-in: sheet-in 200ms ease-out;
 
   @keyframes panel-in {
     from {
@@ -165,6 +166,15 @@
     }
     to {
       transform: translateX(0);
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
     }
   }
 

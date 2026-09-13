@@ -1,7 +1,8 @@
 import express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DBExecutor } from "../db/kysely.js";
+import { domainBus, EVENTS } from "../events.js";
 import { createMyWorkRouter } from "../routes/my-work-router.js";
 import type {
 	MyWorkSerializedItem,
@@ -652,6 +653,14 @@ const routeItem = {
 	updatedAt: "2026-09-11T00:00:00.000Z",
 } as unknown as MyWorkSerializedItem;
 
+const trackerRouteItem = {
+	...routeItem,
+	id: 4,
+	key: "OR-4",
+	source: "tracker",
+	title: "Tracker work",
+} as unknown as MyWorkSerializedItem;
+
 function routeApp(service: MyWorkServiceLike) {
 	const app = express();
 	app.use(express.json());
@@ -667,6 +676,10 @@ describe("My Work Mark done HTTP boundary", () => {
 	beforeEach(() => {
 		mockPublishEvent.mockReset();
 		mockPublishEvent.mockResolvedValue(undefined);
+	});
+
+	afterEach(() => {
+		domainBus.removeAllListeners();
 	});
 
 	it("maps successful Board command results to the refreshed item", async () => {
@@ -704,6 +717,107 @@ describe("My Work Mark done HTTP boundary", () => {
 			7,
 			expect.objectContaining({ type: "card.moved", cardId: 200 }),
 		);
+	});
+
+	it("publishes tracker.updated for a successful Tracker command", async () => {
+		const markDone = vi.fn().mockResolvedValue({
+			kind: "ok",
+			source: "tracker",
+			itemId: 4,
+			itemTitle: "Tracker work",
+			changed: true,
+		});
+		const response = await request(
+			routeApp({
+				list: vi.fn(),
+				getDetail: vi.fn().mockResolvedValue(trackerRouteItem),
+				markDone,
+			}),
+		)
+			.post("/my-work/7/tracker/OR-4/done")
+			.send({ version: 2 });
+
+		expect(response.status).toBe(200);
+		expect(response.body).toEqual(trackerRouteItem);
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			7,
+			expect.objectContaining({ type: "tracker.updated", trackerItemId: 4 }),
+		);
+		expect(mockPublishEvent).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ type: "card.moved" }),
+		);
+	});
+
+	it("publishes card.updated when a Board command does not move the card", async () => {
+		const assigned: unknown[] = [];
+		domainBus.once(EVENTS.CARD_ASSIGNED, (event) => assigned.push(event));
+		const markDone = vi.fn().mockResolvedValue({
+			kind: "ok",
+			source: "board",
+			itemId: 200,
+			itemTitle: "Board work",
+			changed: true,
+			moved: false,
+		});
+		const response = await request(
+			routeApp({
+				list: vi.fn(),
+				getDetail: vi.fn().mockResolvedValue(routeItem),
+				markDone,
+			}),
+		)
+			.post("/my-work/7/board/AT-17/done")
+			.send({ version: 4 });
+
+		expect(response.status).toBe(200);
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			7,
+			expect.objectContaining({ type: "card.updated", cardId: 200 }),
+		);
+		expect(mockPublishEvent).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ type: "card.moved" }),
+		);
+		expect(assigned).toHaveLength(0);
+	});
+
+	it("emits CARD_ASSIGNED when Board mark done adds a signable assignee", async () => {
+		const assigned: unknown[] = [];
+		domainBus.once(EVENTS.CARD_ASSIGNED, (event) => assigned.push(event));
+		const markDone = vi.fn().mockResolvedValue({
+			kind: "ok",
+			source: "board",
+			itemId: 200,
+			itemTitle: "Board work",
+			changed: true,
+			moved: false,
+			addedSignableAssignee: 88,
+		});
+		const response = await request(
+			routeApp({
+				list: vi.fn(),
+				getDetail: vi.fn().mockResolvedValue(routeItem),
+				markDone,
+			}),
+		)
+			.post("/my-work/7/board/AT-17/done")
+			.send({ version: 4 });
+
+		expect(response.status).toBe(200);
+		expect(assigned).toEqual([
+			{
+				type: EVENTS.CARD_ASSIGNED,
+				workspaceId: 7,
+				actorId: actor.id,
+				payload: {
+					cardId: 200,
+					assigneeId: 88,
+					cardTitle: "Board work",
+					actorDisplayName: actor.displayName,
+				},
+			},
+		]);
 	});
 
 	it("maps known command errors instead of the unavailable catch-all", async () => {

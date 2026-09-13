@@ -15,7 +15,7 @@ import MyWorkDoneAction from "./MyWorkDoneAction";
 const SHEET_BACKDROP =
 	"fixed inset-0 z-40 flex items-end bg-neutral-900/35 overscroll-none md:justify-end";
 const SHEET_PANEL =
-	"flex max-h-[92vh] w-full flex-col rounded-t-lg border-neutral-200 border-t bg-white shadow-xl animate-panel-in motion-reduce:animate-none md:h-full md:max-h-none md:w-104 md:rounded-none md:border-t-0 md:border-l";
+	"flex max-h-[92vh] w-full flex-col rounded-t-lg border-neutral-200 border-t bg-white shadow-xl animate-sheet-in md:animate-panel-in motion-reduce:animate-none md:motion-reduce:animate-none md:h-full md:max-h-none md:w-104 md:rounded-none md:border-t-0 md:border-l";
 const SHEET_HEADER =
 	"flex shrink-0 items-center justify-between gap-3 border-neutral-200 border-b px-4 py-3 md:px-5";
 const CLOSE_BUTTON =

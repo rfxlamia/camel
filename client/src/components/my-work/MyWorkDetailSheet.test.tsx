@@ -362,6 +362,28 @@ function renderShellWithBoard(initialEntry: string, mobileOpen: boolean) {
 	);
 }
 
+async function openDetailWhilePending(item: MyWorkItem) {
+	let settle: (value: MyWorkItem | PromiseLike<MyWorkItem>) => void = () => {};
+	let fail: (reason?: unknown) => void = () => {};
+	const pending = new Promise<MyWorkItem>((resolve, reject) => {
+		settle = resolve;
+		fail = reject;
+	});
+	mockListActive.mockResolvedValueOnce(response([item]));
+	mockGetDetail.mockReturnValueOnce(pending);
+	renderWithBoard("/my-work");
+	await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
+	fireEvent.click(
+		screen.getByRole("button", {
+			name: new RegExp(`open ${item.key}`, "i"),
+		}),
+	);
+	const detail = await screen.findByRole("dialog", {
+		name: new RegExp(item.key, "i"),
+	});
+	return { detail, settle, fail };
+}
+
 async function openShellDetail({
 	item,
 	mobileOpen,
@@ -577,6 +599,78 @@ describe("MyWorkDetailSheet", () => {
 		expect(
 			within(detail).queryByRole("button", { name: /open in/i }),
 		).toBeNull();
+	});
+
+	it("shows the pending loading surface then the ready detail", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Atlas loading title",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		const { detail, settle } = await openDetailWhilePending(item);
+
+		const loading = within(detail).getByTestId("my-work-detail-loading");
+		expect(loading.getAttribute("aria-live")).toBe("polite");
+		expect(within(detail).getByText("Loading AT-17…")).toBeTruthy();
+		expect(within(detail).queryByText("Atlas loading title")).toBeNull();
+
+		settle(item);
+		await waitFor(() =>
+			expect(within(detail).getByText("Atlas loading title")).toBeTruthy(),
+		);
+		expect(within(detail).queryByTestId("my-work-detail-loading")).toBeNull();
+	});
+
+	it("shows the pending loading surface then unavailable after reauthorization fails", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Atlas loading title",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		const { detail, fail } = await openDetailWhilePending(item);
+
+		expect(within(detail).getByTestId("my-work-detail-loading")).toBeTruthy();
+		expect(within(detail).queryByText("Atlas loading title")).toBeNull();
+
+		fail({ status: 404, code: "not_found" });
+		await waitFor(() =>
+			expect(
+				within(detail).getByTestId("my-work-detail-unavailable"),
+			).toBeTruthy(),
+		);
+		expect(within(detail).queryByText("Atlas loading title")).toBeNull();
+		expect(within(detail).queryByTestId("my-work-detail-loading")).toBeNull();
+	});
+
+	it("animates the mobile sheet vertically and the desktop dock from the right", async () => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Atlas loading title",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		mockListActive.mockResolvedValueOnce(response([item]));
+		mockGetDetail.mockResolvedValueOnce(item);
+		renderWithBoard("/my-work");
+		await waitFor(() => expect(screen.getByText("AT-17")).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /open AT-17 atlas loading title/i,
+			}),
+		);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		expect(detail.className).toContain("animate-sheet-in");
+		expect(detail.className).toContain("md:animate-panel-in");
+		expect(detail.className).toContain("motion-reduce:animate-none");
+		expect(detail.className).toContain("md:motion-reduce:animate-none");
 	});
 
 	it.each([
