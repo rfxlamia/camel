@@ -19,28 +19,23 @@ const SHEET_HEADER =
 	"flex shrink-0 items-center justify-between gap-3 border-neutral-200 border-b px-4 py-3 md:px-5";
 const CLOSE_BUTTON =
 	"shrink-0 rounded-md p-1.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 motion-reduce:transition-none";
-const DETAIL_LABEL =
-	"font-medium text-[11px] text-primary-700 uppercase tracking-[0.1em]";
 const DETAIL_KEY =
-	"mt-0.5 truncate font-mono font-medium text-neutral-900 text-sm tabular-nums";
+	"truncate font-mono font-medium text-neutral-900 text-sm tabular-nums";
 
 interface DetailSheetHeaderProps {
 	keyValue: string;
-	sourceLabel: string;
 	closeButtonRef: RefObject<HTMLButtonElement>;
 	onClose: () => void;
 }
 
 function DetailSheetHeader({
 	keyValue,
-	sourceLabel,
 	closeButtonRef,
 	onClose,
 }: DetailSheetHeaderProps) {
 	return (
 		<header className={SHEET_HEADER}>
 			<div className="min-w-0">
-				<p className={DETAIL_LABEL}>My Work · {sourceLabel}</p>
 				<h2 id="my-work-detail-title" className={DETAIL_KEY}>
 					{keyValue}
 				</h2>
@@ -101,7 +96,6 @@ function DetailSheetPanel({
 	state,
 	projectedItem,
 	keyValue,
-	sourceLabel,
 	closeButtonRef,
 	dialogRef,
 	onClose,
@@ -123,7 +117,6 @@ function DetailSheetPanel({
 		>
 			<DetailSheetHeader
 				keyValue={projectedItem?.key ?? keyValue}
-				sourceLabel={sourceLabel}
 				closeButtonRef={closeButtonRef}
 				onClose={onClose}
 			/>
