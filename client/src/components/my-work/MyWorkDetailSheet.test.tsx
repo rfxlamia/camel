@@ -15,6 +15,7 @@ import {
 	useNavigate,
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetMyWorkMutationsForTests } from "../../lib/workItemMutations";
 import type { User } from "../../types";
 import type { MyWorkItem, MyWorkListResponse } from "../../types/myWork";
 
@@ -22,6 +23,7 @@ const {
 	mockListActive,
 	mockListAll,
 	mockGetDetail,
+	mockMarkMyWorkDone,
 	mockGetWorkspaces,
 	mockGetBoard,
 	mockGetMetrics,
@@ -48,6 +50,7 @@ const {
 		mockListActive: vi.fn(),
 		mockListAll: vi.fn(),
 		mockGetDetail: vi.fn(),
+		mockMarkMyWorkDone: vi.fn(),
 		mockGetWorkspaces: vi.fn(),
 		mockGetBoard: vi.fn(),
 		mockGetMetrics: vi.fn(),
@@ -66,6 +69,7 @@ vi.mock("../../api", () => ({
 		listActiveMyWorkCandidates: (...args: unknown[]) => mockListActive(...args),
 		listMyWork: (...args: unknown[]) => mockListAll(...args),
 		getMyWorkItem: (...args: unknown[]) => mockGetDetail(...args),
+		markMyWorkDone: (...args: unknown[]) => mockMarkMyWorkDone(...args),
 		getWorkspaces: (...args: unknown[]) => mockGetWorkspaces(...args),
 		getBoard: (...args: unknown[]) => mockGetBoard(...args),
 		getMetrics: (...args: unknown[]) => mockGetMetrics(...args),
@@ -397,6 +401,7 @@ beforeEach(() => {
 	mockListActive.mockReset();
 	mockListAll.mockReset();
 	mockGetDetail.mockReset();
+	mockMarkMyWorkDone.mockReset();
 	mockGetWorkspaces.mockReset();
 	mockGetBoard.mockReset();
 	mockGetMetrics.mockReset();
@@ -441,6 +446,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
+	resetMyWorkMutationsForTests();
 	localStorage.clear();
 	vi.clearAllMocks();
 });
@@ -571,6 +577,80 @@ describe("MyWorkDetailSheet", () => {
 		expect(
 			within(detail).queryByRole("button", { name: /open in/i }),
 		).toBeNull();
+	});
+
+	it.each([
+		{
+			label: "a version conflict",
+			error: { status: 409, code: "version_conflict", message: "stale" },
+			keepsDetail: true,
+		},
+		{
+			label: "a transient failure",
+			error: { status: 503, message: "Service unavailable" },
+			keepsDetail: true,
+		},
+		{
+			label: "a revoked assignment",
+			error: { status: 404, code: "not_found", message: "Not found" },
+			keepsDetail: false,
+		},
+	])("refreshes the page rollup after detail Mark done $label", async ({
+		error,
+		keepsDetail,
+	}) => {
+		const item = makeItem({
+			id: 17,
+			key: "AT-17",
+			title: "Detail recovery work",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+			source: "board",
+		});
+		mockListActive
+			.mockResolvedValueOnce(response([item]))
+			.mockResolvedValueOnce(response([]));
+		mockGetDetail.mockResolvedValue(item);
+		mockMarkMyWorkDone.mockRejectedValueOnce(error);
+
+		renderWithBoard("/my-work?scope=active&workspaceId=7");
+		await waitFor(() => expect(screen.getByText(item.title)).toBeTruthy());
+		fireEvent.click(
+			screen.getByRole("button", {
+				name: /open AT-17 detail recovery work/i,
+			}),
+		);
+		const detail = await screen.findByRole("dialog", { name: /AT-17/i });
+		await waitFor(() =>
+			expect(within(detail).getByText(item.title)).toBeTruthy(),
+		);
+
+		fireEvent.click(within(detail).getByRole("button", { name: "Mark done" }));
+
+		await waitFor(() =>
+			expect(mockMarkMyWorkDone).toHaveBeenCalledWith(7, "board", "AT-17", 1),
+		);
+		await waitFor(() => expect(mockListActive).toHaveBeenCalledTimes(2));
+		if (keepsDetail) {
+			expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+			expect(
+				within(screen.getByRole("dialog", { name: /AT-17/i })).getByText(
+					item.title,
+				),
+			).toBeTruthy();
+			expect(mockGetDetail).toHaveBeenCalledTimes(2);
+			expect(screen.getByRole("alert").textContent).toMatch(
+				/version|service unavailable|updated this item/i,
+			);
+		} else {
+			await waitFor(() =>
+				expect(screen.queryByRole("dialog", { name: /AT-17/i })).toBeNull(),
+			);
+			expect(screen.queryByText(item.title)).toBeNull();
+			expect(screen.queryByTestId("my-work-row-7-board-AT-17")).toBeNull();
+			expect(screen.queryByRole("button", { name: "Mark done" })).toBeNull();
+			expect(screen.queryByText(/marked done/i)).toBeNull();
+		}
 	});
 
 	it("uses the real workspace guard before an allowed Board transition", async () => {
