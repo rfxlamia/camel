@@ -1,11 +1,11 @@
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback } from "react";
+import { useBoard } from "../../context/BoardContext";
 import {
 	deriveMyWorkGroups,
 	type MyWorkStatusGroup,
 } from "../../lib/myWorkStatus";
 import type { MyWorkItem, MyWorkScope } from "../../types/myWork";
-import { useBoard } from "../../context/BoardContext";
 import MyWorkRow from "./MyWorkRow";
 
 export function SessionErrorState() {
@@ -47,6 +47,7 @@ export interface MyWorkListProps {
 	hasNext?: boolean;
 	onPageChange: (page: number) => void;
 	onSelect?: (item: MyWorkItem) => void;
+	onRefresh?: () => void | Promise<void>;
 }
 
 const GROUP_ORDER: MyWorkStatusGroup[] = [
@@ -77,10 +78,12 @@ function GroupSection({
 	group,
 	items,
 	onSelect,
+	onRefresh,
 }: {
 	group: MyWorkStatusGroup;
 	items: MyWorkItem[];
 	onSelect?: (item: MyWorkItem) => void;
+	onRefresh?: () => void | Promise<void>;
 }) {
 	return (
 		<section
@@ -108,6 +111,7 @@ function GroupSection({
 						key={`${item.workspaceId}:${item.source}:${item.key}`}
 						item={item}
 						onSelect={onSelect}
+						onRefresh={onRefresh}
 					/>
 				))}
 			</ul>
@@ -168,6 +172,7 @@ export default function MyWorkList({
 	hasNext = page < pageCount,
 	onPageChange,
 	onSelect,
+	onRefresh,
 }: MyWorkListProps) {
 	const groups = deriveMyWorkGroups(items, scope);
 	const visibleGroups = GROUP_ORDER.filter((group) => groups[group].length > 0);
@@ -182,6 +187,7 @@ export default function MyWorkList({
 						group={group}
 						items={groups[group]}
 						onSelect={onSelect}
+						onRefresh={onRefresh}
 					/>
 				))}
 			</div>

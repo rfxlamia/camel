@@ -64,6 +64,7 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 				scope={view.scope}
 				query={view.q}
 				onRetry={onRetry}
+				onRefresh={onRefresh}
 				onShowAll={() => updateView({ scope: "all" })}
 				onPageChange={handlePageChange}
 				onSelect={onSelect}
@@ -92,6 +93,7 @@ interface MyWorkContentProps {
 	scope: MyWorkViewState["scope"];
 	query: string;
 	onRetry: () => void;
+	onRefresh: () => void;
 	onShowAll: () => void;
 	onPageChange: (page: number) => void;
 	onSelect: (item: MyWorkItem) => void;
@@ -104,6 +106,7 @@ function MyWorkContent({
 	scope,
 	query,
 	onRetry,
+	onRefresh,
 	onShowAll,
 	onPageChange,
 	onSelect,
@@ -130,6 +133,7 @@ function MyWorkContent({
 			hasNext={loaded.hasNext}
 			onPageChange={onPageChange}
 			onSelect={onSelect}
+			onRefresh={onRefresh}
 		/>
 	);
 }
