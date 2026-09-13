@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef, useSyncExternalStore } from "react";
 import { useBoard } from "../../context/BoardContext";
 import {
 	type MyWorkDetailSelection,
@@ -7,9 +7,15 @@ import {
 } from "../../lib/myWorkNavigation";
 import { useMyWorkSourceNavigation } from "../../lib/myWorkSourceNavigation";
 import {
+	getMyWorkMutationSnapshot,
+	myWorkMutationIdentity,
+	subscribeToMyWorkMutations,
+} from "../../lib/workItemMutations";
+import {
 	DetailSheetBody,
 	type DetailSheetBodyProps,
 } from "./MyWorkDetailContent";
+import MyWorkDoneAction from "./MyWorkDoneAction";
 export interface MyWorkDetailSheetProps {
 	selection: MyWorkDetailSelection | null;
 	onClose: () => void;
@@ -187,6 +193,18 @@ function DetailSheetFrame(props: DetailSheetFrameProps) {
 		onNavigate,
 		pending,
 	} = props;
+	const identity = item ? myWorkMutationIdentity(item) : "";
+	const mutation = useSyncExternalStore(
+		subscribeToMyWorkMutations,
+		() => (identity ? getMyWorkMutationSnapshot(identity) : undefined),
+		() => undefined,
+	);
+	const projectedItem =
+		mutation?.status === "success"
+			? mutation.item
+			: mutation?.status === "unavailable"
+				? null
+				: item;
 	return (
 		<div
 			className={SHEET_BACKDROP}
@@ -203,14 +221,24 @@ function DetailSheetFrame(props: DetailSheetFrameProps) {
 				className={SHEET_PANEL}
 			>
 				<DetailSheetHeader
-					keyValue={item?.key ?? keyValue}
+					keyValue={projectedItem?.key ?? keyValue}
 					sourceLabel={sourceLabel}
 					closeButtonRef={closeButtonRef}
 					onClose={onClose}
 				/>
+				{projectedItem && (
+					<div className="shrink-0 border-neutral-200 border-b bg-white px-4 py-3 md:px-5">
+						<MyWorkDoneAction
+							item={projectedItem}
+							onRefresh={onRetry}
+							onUnavailable={() => onClose()}
+							className="w-full items-start"
+						/>
+					</div>
+				)}
 				<DetailSheetBody
 					state={state}
-					item={item}
+					item={projectedItem}
 					keyValue={keyValue}
 					onRetry={onRetry}
 					onNavigate={onNavigate}
