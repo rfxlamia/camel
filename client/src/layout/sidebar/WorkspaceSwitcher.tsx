@@ -119,7 +119,7 @@ export function WorkspaceSwitcher({
 	const [open, setOpen] = useState(false);
 	const [busyInviteId, setBusyInviteId] = useState<number | null>(null);
 	useEffect(() => {
-		if (!renderConfirmation && !switchConfirm.open) setOpen(false);
+		if (!renderConfirmation && switchConfirm.open) setOpen(false);
 	}, [renderConfirmation, switchConfirm.open]);
 	const rootRef = useRef<HTMLDivElement>(null);
 
