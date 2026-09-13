@@ -150,8 +150,11 @@ function LoadingState() {
 	return (
 		<div
 			data-testid="my-work-loading"
-			className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-7"
+			role="status"
+			aria-live="polite"
+			aria-atomic="true"
 			aria-label="Loading your work"
+			className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-7"
 		>
 			<div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
 				{[0, 1, 2, 3, 4].map((index) => (

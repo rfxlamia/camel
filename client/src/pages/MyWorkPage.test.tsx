@@ -250,6 +250,11 @@ describe("MyWorkPage", () => {
 		);
 
 		expect(await screen.findByTestId("my-work-loading")).toBeTruthy();
+		const loadingStatus = screen.getByRole("status", {
+			name: "Loading your work",
+		});
+		expect(loadingStatus.getAttribute("aria-live")).toBe("polite");
+		expect(loadingStatus.getAttribute("aria-atomic")).toBe("true");
 		expect(screen.queryByTestId(/^my-work-row-/)).toBeNull();
 		expect(screen.queryByText("Pending work")).toBeNull();
 
