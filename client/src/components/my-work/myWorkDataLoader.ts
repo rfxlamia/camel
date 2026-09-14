@@ -55,8 +55,12 @@ function applyPresentationFilters(
 	);
 }
 
+export function myWorkSearchQuery(view: MyWorkViewState): string {
+	return view.q.trim();
+}
+
 export function myWorkViewKey(view: MyWorkViewState): string {
-	return `${view.scope}|${view.q}|${view.workspaceId}|${view.source}`;
+	return `${view.scope}|${myWorkSearchQuery(view)}|${view.workspaceId}|${view.source}`;
 }
 
 function mergeWorkspaceOptions(
@@ -88,10 +92,11 @@ async function loadAllResponse(
 	for (let page = 1; page <= view.page; page += 1) {
 		response = cache.pages.get(page);
 		if (!response) {
+			const searchQuery = myWorkSearchQuery(view);
 			response = await api.listMyWork({
 				scope: "all",
 				...requestFilters(view),
-				...(view.q ? { q: view.q } : {}),
+				...(searchQuery ? { q: searchQuery } : {}),
 				...(cursor ? { cursor } : {}),
 				limit: MY_WORK_PAGE_SIZE,
 			});
@@ -119,8 +124,9 @@ function prepareActivePage(
 		"active",
 	);
 	const ordered = orderMyWorkItems(activeItems);
-	const visibleItems = view.q
-		? searchMyWorkCandidates(ordered, view.q, { limit: 50 })
+	const searchQuery = myWorkSearchQuery(view);
+	const visibleItems = searchQuery
+		? searchMyWorkCandidates(ordered, searchQuery, { limit: 50 })
 		: ordered;
 	return {
 		loaded: paginateMyWorkItems(visibleItems, page),
