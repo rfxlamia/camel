@@ -5,6 +5,7 @@ import type { MyWorkItem, MyWorkWorkspace } from "../../types/myWork";
 import {
 	type AllPageCache,
 	loadMyWorkRequest,
+	mergeWorkspaceOptions,
 	myWorkViewKey,
 } from "./myWorkDataLoader";
 
@@ -15,6 +16,7 @@ export interface LoadedPage {
 	total: number;
 	hasPrevious: boolean;
 	hasNext: boolean;
+	candidateSetIncomplete?: boolean;
 }
 
 export interface LoadError {
@@ -80,8 +82,11 @@ function useMyWorkDataState(view: MyWorkViewState) {
 		key: string;
 		items: MyWorkItem[];
 	} | null>(null);
+	const [detailRefreshToken, setDetailRefreshToken] = useState(0);
 	return {
 		...data,
+		detailRefreshToken,
+		setDetailRefreshToken,
 		setData,
 		loadSeqRef,
 		viewRef,
@@ -99,7 +104,12 @@ type MyWorkDataState = ReturnType<typeof useMyWorkDataState>;
 
 type LoaderContext = Pick<
 	MyWorkDataState,
-	"setData" | "loadSeqRef" | "viewRef" | "allCacheRef" | "activeCandidatesRef"
+	| "setData"
+	| "loadSeqRef"
+	| "viewRef"
+	| "allCacheRef"
+	| "activeCandidatesRef"
+	| "setDetailRefreshToken"
 >;
 type DataSetter = MyWorkDataState["setData"];
 
@@ -122,6 +132,7 @@ async function runMyWorkLoad({
 	viewRef,
 	allCacheRef,
 	activeCandidatesRef,
+	setDetailRefreshToken,
 }: LoaderContext & { fresh: boolean }) {
 	const requestView = viewRef.current;
 	const requestViewKey = myWorkViewKey(requestView);
@@ -143,10 +154,15 @@ async function runMyWorkLoad({
 			requestViewKey,
 			prepared.activeCandidates,
 		);
-		updateData(setData, {
+		setData((previous) => ({
+			...previous,
 			loaded: prepared.loaded,
-			workspaceOptions: prepared.workspaceOptions,
-		});
+			workspaceOptions: mergeWorkspaceOptions(
+				previous.workspaceOptions,
+				prepared.workspaceItems,
+			),
+		}));
+		if (fresh) setDetailRefreshToken((token) => token + 1);
 	} catch (error) {
 		if (!isCurrent()) return;
 		updateData(setData, {
@@ -164,6 +180,7 @@ function useMyWorkLoader({
 	viewRef,
 	allCacheRef,
 	activeCandidatesRef,
+	setDetailRefreshToken,
 }: MyWorkDataState) {
 	return useCallback(
 		({ fresh = false }: { fresh?: boolean } = {}) =>
@@ -174,8 +191,16 @@ function useMyWorkLoader({
 				viewRef,
 				allCacheRef,
 				activeCandidatesRef,
+				setDetailRefreshToken,
 			}),
-		[activeCandidatesRef, allCacheRef, loadSeqRef, setData, viewRef],
+		[
+			activeCandidatesRef,
+			allCacheRef,
+			loadSeqRef,
+			setData,
+			setDetailRefreshToken,
+			viewRef,
+		],
 	);
 }
 
@@ -264,6 +289,7 @@ export function useMyWorkData(view: MyWorkViewState) {
 		loading: state.loading,
 		loadError: state.loadError,
 		workspaceOptions: state.workspaceOptions,
+		detailRefreshToken: state.detailRefreshToken,
 		loadData,
 		handlePageChange,
 	};
