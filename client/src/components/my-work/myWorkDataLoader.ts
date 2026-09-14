@@ -5,6 +5,10 @@ import {
 	searchMyWorkCandidates,
 } from "../../lib/myWorkSearch";
 import {
+	projectMyWorkListItems,
+	reconcileMyWorkMutations,
+} from "../../lib/myWorkMutationReconciliation";
+import {
 	filterMyWorkItems,
 	type MyWorkViewState,
 	orderMyWorkItems,
@@ -28,8 +32,10 @@ export interface PreparedPage {
 		total: number;
 		hasPrevious: boolean;
 		hasNext: boolean;
+		candidateSetIncomplete?: boolean;
 	};
 	workspaceOptions: MyWorkWorkspace[];
+	workspaceItems: MyWorkItem[];
 	activeCandidates?: MyWorkItem[];
 }
 
@@ -63,7 +69,7 @@ export function myWorkViewKey(view: MyWorkViewState): string {
 	return `${view.scope}|${myWorkSearchQuery(view)}|${view.workspaceId}|${view.source}`;
 }
 
-function mergeWorkspaceOptions(
+export function mergeWorkspaceOptions(
 	previous: MyWorkWorkspace[],
 	items: MyWorkItem[],
 ): MyWorkWorkspace[] {
@@ -123,14 +129,28 @@ function prepareActivePage(
 		applyPresentationFilters(response.items, view),
 		"active",
 	);
-	const ordered = orderMyWorkItems(activeItems);
+	reconcileMyWorkMutations(activeItems);
+	const ordered = orderMyWorkItems(
+		projectMyWorkListItems(activeItems, "active"),
+	);
 	const searchQuery = myWorkSearchQuery(view);
 	const visibleItems = searchQuery
 		? searchMyWorkCandidates(ordered, searchQuery, { limit: 50 })
 		: ordered;
+	const paged = paginateMyWorkItems(visibleItems, page);
+	const candidateSetIncomplete = Boolean(response.nextCursor);
 	return {
-		loaded: paginateMyWorkItems(visibleItems, page),
+		loaded: {
+			...paged,
+			hasNext: paged.hasNext || candidateSetIncomplete,
+			pageCount:
+				candidateSetIncomplete && !paged.hasNext
+					? paged.page + 1
+					: paged.pageCount,
+			candidateSetIncomplete,
+		},
 		workspaceOptions: mergeWorkspaceOptions([], activeItems),
+		workspaceItems: activeItems,
 		activeCandidates: visibleItems,
 	};
 }
@@ -140,9 +160,9 @@ function prepareAllPage(
 	view: MyWorkViewState,
 	page: number,
 ): PreparedPage {
-	const ordered = orderMyWorkItems(
-		applyPresentationFilters(response.items, view),
-	);
+	const filtered = applyPresentationFilters(response.items, view);
+	reconcileMyWorkMutations(filtered);
+	const ordered = orderMyWorkItems(projectMyWorkListItems(filtered, "all"));
 	return {
 		loaded: {
 			items: ordered,
@@ -152,7 +172,8 @@ function prepareAllPage(
 			hasPrevious: page > 1,
 			hasNext: Boolean(response.nextCursor),
 		},
-		workspaceOptions: mergeWorkspaceOptions([], ordered),
+		workspaceOptions: mergeWorkspaceOptions([], filtered),
+		workspaceItems: filtered,
 	};
 }
 
