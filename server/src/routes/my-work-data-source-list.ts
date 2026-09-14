@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import type { DBExecutor } from "../db/kysely.js";
 import {
+	buildSearchPattern,
 	sourceCursorPredicate,
 	sourceOrderExpressions,
 	sourceQueryLimit,
@@ -71,7 +72,7 @@ function buildTrackerRowsQuery(
 	}
 	if (input.scope === "all" && input.q) {
 		query = query.where(
-			sourceSearchPredicate("tracker", input, `%${input.q}%`),
+			sourceSearchPredicate("tracker", input, buildSearchPattern(input.q)),
 		);
 	}
 	return { query, order };
@@ -125,6 +126,31 @@ function buildBoardRowsQuery(
 					.whereRef("me_ca.card_id", "=", "c.id")
 					.where("me_ca.user_id", "=", input.userId),
 			),
+		)
+		.where((eb) =>
+			eb.not(
+				eb.exists(
+					eb
+						.selectFrom("tracker_items as shadow_ti")
+						.select("shadow_ti.id")
+						.whereRef("shadow_ti.workspace_id", "=", "c.workspace_id")
+						.whereRef("shadow_ti.key_number", "=", "c.key_number")
+						.where("shadow_ti.deleted_at", "is", null)
+						.where((inner) =>
+							inner.exists(
+								inner
+									.selectFrom("tracker_item_assignees as shadow_tia")
+									.select("shadow_tia.tracker_item_id")
+									.whereRef(
+										"shadow_tia.tracker_item_id",
+										"=",
+										"shadow_ti.id",
+									)
+									.where("shadow_tia.user_id", "=", input.userId),
+							),
+						),
+				),
+			),
 		);
 	if (input.workspaceId !== undefined) {
 		query = query.where("c.workspace_id", "=", input.workspaceId);
@@ -133,7 +159,9 @@ function buildBoardRowsQuery(
 		query = query.where(sql<boolean>`${order.group} NOT IN (2, 3)`);
 	}
 	if (input.scope === "all" && input.q) {
-		query = query.where(sourceSearchPredicate("board", input, `%${input.q}%`));
+		query = query.where(
+			sourceSearchPredicate("board", input, buildSearchPattern(input.q)),
+		);
 	}
 	return { query, order };
 }
