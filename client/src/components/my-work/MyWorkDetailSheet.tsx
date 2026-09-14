@@ -17,6 +17,7 @@ export interface MyWorkDetailSheetProps {
 	selection: MyWorkDetailSelection | null;
 	onClose: () => void;
 	onRefresh?: () => void | Promise<void>;
+	refreshToken?: number;
 }
 
 const SHEET_EXIT_DURATION_MS = 200;
@@ -141,9 +142,12 @@ export default function MyWorkDetailSheet({
 	selection,
 	onClose,
 	onRefresh,
+	refreshToken = 0,
 }: MyWorkDetailSheetProps) {
-	const { state, retry, workspaceId, source, key } =
-		useMyWorkDetailState(selection);
+	const { state, retry, workspaceId, source, key } = useMyWorkDetailState(
+		selection,
+		refreshToken,
+	);
 	const { switchConfirm } = useBoard();
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
 	const dialogRef = useRef<HTMLElement>(null);

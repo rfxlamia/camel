@@ -28,6 +28,7 @@ export interface MyWorkPageViewProps {
 	onRetry: () => void;
 	onSelect: (item: MyWorkItem) => void;
 	onCloseDetail: () => void;
+	detailRefreshToken: number;
 }
 
 export function MyWorkPageView(props: MyWorkPageViewProps) {
@@ -83,13 +84,14 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 
 type MyWorkDetailProps = Pick<
 	MyWorkPageViewProps,
-	"detailSelection" | "onCloseDetail" | "onRefresh"
+	"detailSelection" | "onCloseDetail" | "onRefresh" | "detailRefreshToken"
 >;
 
 function MyWorkDetail({
 	detailSelection,
 	onCloseDetail,
 	onRefresh,
+	detailRefreshToken,
 }: MyWorkDetailProps) {
 	if (!detailSelection) return null;
 	return (
@@ -97,6 +99,7 @@ function MyWorkDetail({
 			selection={detailSelection}
 			onClose={onCloseDetail}
 			onRefresh={onRefresh}
+			refreshToken={detailRefreshToken}
 		/>
 	);
 }

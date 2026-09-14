@@ -128,7 +128,10 @@ function requestMyWorkDetail(
 	};
 }
 
-export function useMyWorkDetailState(selection: MyWorkDetailSelection | null) {
+export function useMyWorkDetailState(
+	selection: MyWorkDetailSelection | null,
+	refreshToken = 0,
+) {
 	const [state, setState] = useState<MyWorkDetailState>({
 		status: "loading",
 		item: null,
@@ -140,6 +143,7 @@ export function useMyWorkDetailState(selection: MyWorkDetailSelection | null) {
 	const key = selection?.key ?? null;
 	const loadDetail = useCallback(() => {
 		if (workspaceId === null || source === null || key === null) return;
+		void refreshToken;
 		return requestMyWorkDetail(
 			workspaceId,
 			source,
@@ -147,7 +151,7 @@ export function useMyWorkDetailState(selection: MyWorkDetailSelection | null) {
 			sequenceRef.current,
 			setState,
 		);
-	}, [key, source, workspaceId]);
+	}, [key, refreshToken, source, workspaceId]);
 	useEffect(() => loadDetail(), [loadDetail]);
 	return { state, retry: loadDetail, workspaceId, source, key };
 }
