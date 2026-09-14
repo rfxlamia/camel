@@ -13,16 +13,8 @@ import {
 } from "lucide-react";
 import type { Mode } from "./shared";
 
-const MY_WORK_ITEM = {
-	to: "/my-work",
-	label: "My Work",
-	icon: Briefcase,
-} satisfies { to: string; label: string; icon: LucideIcon };
-
-export const GLOBAL_NAV = [MY_WORK_ITEM];
-
 export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
-	MY_WORK_ITEM,
+	{ to: "/my-work", label: "My Work", icon: Briefcase },
 	{ to: "/board", label: "Board", icon: SquareKanban },
 	{ to: "/tracker", label: "Tracker", icon: ListTodo },
 	{ to: "/inbox", label: "Inbox", icon: Inbox },
@@ -38,10 +30,10 @@ export const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 // Activity is intentionally not a top-level nav item — it's a board changelog,
 // reachable from the Dashboard "View all" drill-down rather than a primary peer.
 export const KANBAN_NAV = NAV_ITEMS.filter((i) =>
-	["/board", "/tracker", "/inbox", "/dashboard"].includes(i.to),
+	["/my-work", "/board", "/tracker", "/inbox", "/dashboard"].includes(i.to),
 );
 export const AGENT_NAV = NAV_ITEMS.filter((i) =>
-	["/agent", "/chat", "/history"].includes(i.to),
+	["/my-work", "/agent", "/chat", "/history"].includes(i.to),
 );
 export const AGENT_PATHS = ["/agent", "/chat", "/history"];
 export const SETTINGS_ITEM = NAV_ITEMS.find((i) => i.to === "/settings")!;

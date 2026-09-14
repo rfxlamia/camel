@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_NAV, AGENT_PATHS, getModeFromPath } from "./navItems";
+import {
+	AGENT_NAV,
+	AGENT_PATHS,
+	getModeFromPath,
+	KANBAN_NAV,
+} from "./navItems";
 
 describe("getModeFromPath", () => {
 	it("returns 'agent' for /agent", () => {
@@ -24,6 +29,27 @@ describe("getModeFromPath", () => {
 
 	it("returns 'kanban' for /dashboard", () => {
 		expect(getModeFromPath("/dashboard")).toBe("kanban");
+	});
+});
+
+describe("mode nav order", () => {
+	it("puts My Work first in KANBAN_NAV", () => {
+		expect(KANBAN_NAV.map((i) => i.to)).toEqual([
+			"/my-work",
+			"/board",
+			"/tracker",
+			"/inbox",
+			"/dashboard",
+		]);
+	});
+
+	it("puts My Work first in AGENT_NAV", () => {
+		expect(AGENT_NAV.map((i) => i.to)).toEqual([
+			"/my-work",
+			"/agent",
+			"/chat",
+			"/history",
+		]);
 	});
 });
 

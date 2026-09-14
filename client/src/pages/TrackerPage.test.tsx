@@ -1027,7 +1027,12 @@ describe("TrackerPage", () => {
 
 	it("includes Tracker nav between Board and Inbox", () => {
 		const paths = KANBAN_NAV.map((i) => i.to);
-		expect(paths).toEqual(["/board", "/tracker", "/inbox", "/dashboard"]);
+		const board = paths.indexOf("/board");
+		const tracker = paths.indexOf("/tracker");
+		const inbox = paths.indexOf("/inbox");
+		expect(board).toBeGreaterThanOrEqual(0);
+		expect(tracker).toBe(board + 1);
+		expect(inbox).toBe(tracker + 1);
 	});
 
 	describe("inline assignee and label toggles", () => {

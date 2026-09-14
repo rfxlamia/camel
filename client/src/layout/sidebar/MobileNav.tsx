@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
 import { useBoard } from "../../context/BoardContext";
 import { ModeSwitcher } from "./ModeSwitcher";
-import { AGENT_NAV, GLOBAL_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
+import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
 import { SignOutPopover } from "./SignOutPopover";
 import { type Mode, navLinkClass } from "./shared";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
@@ -61,27 +61,6 @@ export function MobileNav({
 						<X size={18} aria-hidden />
 					</button>
 				</div>
-
-				{/* Global navigation */}
-				<nav
-					className="border-b border-neutral-200 px-3 py-2"
-					aria-label="Global"
-				>
-					{GLOBAL_NAV.map(({ to, label, icon: Icon }) => (
-						<NavLink
-							key={to}
-							to={to}
-							onClick={onClose}
-							title={label}
-							className={({ isActive }) =>
-								`${navLinkClass({ isActive })} min-h-11 text-base`
-							}
-						>
-							<Icon size={20} className="shrink-0" aria-hidden />
-							{label}
-						</NavLink>
-					))}
-				</nav>
 
 				{/* Mode switcher */}
 				<div className="border-b border-neutral-200 px-3 py-2">
