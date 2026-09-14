@@ -127,13 +127,14 @@ function rememberActiveCandidates(
 
 async function runMyWorkLoad({
 	fresh,
+	refreshDetail,
 	setData,
 	loadSeqRef,
 	viewRef,
 	allCacheRef,
 	activeCandidatesRef,
 	setDetailRefreshToken,
-}: LoaderContext & { fresh: boolean }) {
+}: LoaderContext & { fresh: boolean; refreshDetail: boolean }) {
 	const requestView = viewRef.current;
 	const requestViewKey = myWorkViewKey(requestView);
 	const seq = ++loadSeqRef.current;
@@ -162,7 +163,9 @@ async function runMyWorkLoad({
 				prepared.workspaceItems,
 			),
 		}));
-		if (fresh) setDetailRefreshToken((token) => token + 1);
+		if (fresh && refreshDetail) {
+			setDetailRefreshToken((token) => token + 1);
+		}
 	} catch (error) {
 		if (!isCurrent()) return;
 		updateData(setData, {
@@ -183,9 +186,13 @@ function useMyWorkLoader({
 	setDetailRefreshToken,
 }: MyWorkDataState) {
 	return useCallback(
-		({ fresh = false }: { fresh?: boolean } = {}) =>
+		({
+			fresh = false,
+			refreshDetail = fresh,
+		}: { fresh?: boolean; refreshDetail?: boolean } = {}) =>
 			runMyWorkLoad({
 				fresh,
+				refreshDetail,
 				setData,
 				loadSeqRef,
 				viewRef,

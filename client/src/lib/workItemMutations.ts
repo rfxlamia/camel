@@ -51,6 +51,10 @@ export function subscribeToMyWorkMutations(
 	return () => myWorkMutationListeners.delete(listener);
 }
 
+export function getMyWorkMutationRevision(): number {
+	return myWorkMutationSequence;
+}
+
 export function getMyWorkMutationSnapshot(
 	identity: string | MyWorkMutationIdentity,
 ): MyWorkMutationSnapshot | undefined {

@@ -1,6 +1,11 @@
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { useBoard } from "../../context/BoardContext";
+import { projectMyWorkListItems } from "../../lib/myWorkMutationReconciliation";
+import {
+	getMyWorkMutationRevision,
+	subscribeToMyWorkMutations,
+} from "../../lib/workItemMutations";
 import {
 	deriveMyWorkGroups,
 	type MyWorkStatusGroup,
@@ -174,7 +179,14 @@ export default function MyWorkList({
 	onSelect,
 	onRefresh,
 }: MyWorkListProps) {
-	const groups = deriveMyWorkGroups(items, scope);
+	const mutationRevision = useSyncExternalStore(
+		subscribeToMyWorkMutations,
+		getMyWorkMutationRevision,
+		() => 0,
+	);
+	void mutationRevision;
+	const projectedItems = projectMyWorkListItems(items, scope);
+	const groups = deriveMyWorkGroups(projectedItems, scope);
 	const visibleGroups = GROUP_ORDER.filter((group) => groups[group].length > 0);
 	const showPagination = hasPrevious || hasNext || pageCount > 1;
 

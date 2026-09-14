@@ -128,7 +128,6 @@ async function runMutation({
 		if (!settleMyWorkMutation(item, sequence, "success", updated)) return;
 		setState({ status: "success", item: updated });
 		invokeCallback(onSuccess, updated);
-		await refreshSafely(onRefresh);
 	} catch (error: unknown) {
 		const unavailable = isUnavailableError(error);
 		if (

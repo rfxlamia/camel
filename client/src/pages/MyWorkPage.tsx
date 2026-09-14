@@ -60,8 +60,11 @@ export default function MyWorkPage() {
 			workspaceOptions={workspaceOptions}
 			updateView={updateView}
 			handlePageChange={handlePageChange}
-			onRefresh={() => void loadData({ fresh: true })}
-			onRetry={() => void loadData({ fresh: true })}
+			onRefresh={() => void loadData({ fresh: true, refreshDetail: true })}
+			onListRefresh={() =>
+				void loadData({ fresh: true, refreshDetail: false })
+			}
+			onRetry={() => void loadData({ fresh: true, refreshDetail: true })}
 			onSelect={openDetail}
 			onCloseDetail={closeDetail}
 			detailRefreshToken={detailRefreshToken}
