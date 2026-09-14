@@ -105,9 +105,17 @@ describe("My Work pagination and URL state", () => {
 			q: "  retry  ",
 			page: 2,
 		};
-		expect(parseMyWorkViewState(serializeMyWorkViewState(state))).toEqual({
-			...state,
-			q: "retry",
-		});
+		expect(parseMyWorkViewState(serializeMyWorkViewState(state))).toEqual(
+			state,
+		);
+	});
+
+	it("preserves spaces while typing a multiword search query", () => {
+		let q = "image";
+		q = `${q} `;
+		q = `${q}upload`;
+		const params = serializeMyWorkViewState({ q });
+		expect(params.get("q")).toBe("image upload");
+		expect(parseMyWorkViewState(params).q).toBe("image upload");
 	});
 });

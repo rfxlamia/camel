@@ -59,7 +59,7 @@ export function parseMyWorkViewState(
 		scope,
 		workspaceId,
 		source,
-		q: params.get("q")?.trim() ?? "",
+		q: params.get("q") ?? "",
 		page,
 	};
 }
@@ -76,8 +76,7 @@ export function serializeMyWorkViewState(
 	if (state.source === "board" || state.source === "tracker") {
 		params.set("source", state.source);
 	}
-	const query = state.q?.trim() ?? "";
-	if (query) params.set("q", query);
+	if (state.q) params.set("q", state.q);
 	if (
 		state.page !== undefined &&
 		Number.isSafeInteger(state.page) &&
