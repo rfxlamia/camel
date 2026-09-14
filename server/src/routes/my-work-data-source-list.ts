@@ -127,12 +127,11 @@ function buildBoardRowsQuery(
 					.where("me_ca.user_id", "=", input.userId),
 			),
 		);
-	const suppressBoardShadows = !(input.scope === "all" && input.q);
-	if (suppressBoardShadows) {
-		query = query.where((eb) =>
-			eb.not(
-				eb.exists(
-					eb
+	query = query.where((eb) =>
+		eb.not(
+			eb.exists(
+				(() => {
+					let shadow = eb
 						.selectFrom("tracker_items as shadow_ti")
 						.select("shadow_ti.id")
 						.whereRef("shadow_ti.workspace_id", "=", "c.workspace_id")
@@ -150,11 +149,22 @@ function buildBoardRowsQuery(
 									)
 									.where("shadow_tia.user_id", "=", input.userId),
 							),
-						),
-				),
+						);
+					if (input.scope === "all" && input.q) {
+						shadow = shadow.where(
+							sourceSearchPredicate(
+								"tracker",
+								input,
+								buildSearchPattern(input.q),
+								"shadow_ti",
+							),
+						);
+					}
+					return shadow;
+				})(),
 			),
-		);
-	}
+		),
+	);
 	if (input.workspaceId !== undefined) {
 		query = query.where("c.workspace_id", "=", input.workspaceId);
 	}

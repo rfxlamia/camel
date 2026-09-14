@@ -263,8 +263,9 @@ export function sourceSearchPredicate(
 	source: MyWorkSource,
 	input: MyWorkSourceQueryInput,
 	pattern: string,
+	tableAlias?: string,
 ): RawBuilder<boolean> {
-	const alias = sourceAlias(source);
+	const alias = tableAlias ?? sourceAlias(source);
 	const canonicalKey = canonicalKeyInSearch(input.q);
 	const textPredicates = [
 		sql<boolean>`${sql.ref(`${alias}.title`)} ILIKE ${pattern} ESCAPE '\\'`,
