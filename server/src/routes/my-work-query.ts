@@ -8,8 +8,12 @@ import type {
 	MyWorkSourceQueryInput,
 } from "./my-work-types.js";
 
+export function escapeIlikePattern(value: string): string {
+	return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 export function buildSearchPattern(q: string): string {
-	return `%${q}%`;
+	return `%${escapeIlikePattern(q)}%`;
 }
 
 /** Extracts the numeric suffix from either `17` or a canonical `AT-17` key. */
@@ -263,8 +267,8 @@ export function sourceSearchPredicate(
 	const alias = sourceAlias(source);
 	const canonicalKey = canonicalKeyInSearch(input.q);
 	const textPredicates = [
-		sql<boolean>`${sql.ref(`${alias}.title`)} ILIKE ${pattern}`,
-		sql<boolean>`${sql.ref(`${alias}.description`)} ILIKE ${pattern}`,
+		sql<boolean>`${sql.ref(`${alias}.title`)} ILIKE ${pattern} ESCAPE '\\'`,
+		sql<boolean>`${sql.ref(`${alias}.description`)} ILIKE ${pattern} ESCAPE '\\'`,
 	];
 
 	if (canonicalKey) {
@@ -284,7 +288,7 @@ export function sourceSearchPredicate(
 
 	const keyPredicates: RawBuilder<unknown>[] = [
 		...textPredicates,
-		sql<boolean>`${sql.ref(`${alias}.key_number`)}::text ILIKE ${buildSearchPattern(input.q)}`,
+		sql<boolean>`${sql.ref(`${alias}.key_number`)}::text ILIKE ${buildSearchPattern(input.q)} ESCAPE '\\'`,
 	];
 	const keyNumber = keyNumberInSearch(input.q);
 	if (keyNumber) {
