@@ -1,10 +1,10 @@
 import {
 	Activity,
 	Bot,
+	Briefcase,
 	History,
 	Inbox,
 	LayoutDashboard,
-	ListChecks,
 	ListTodo,
 	type LucideIcon,
 	MessageSquare,
@@ -16,7 +16,7 @@ import type { Mode } from "./shared";
 const MY_WORK_ITEM = {
 	to: "/my-work",
 	label: "My Work",
-	icon: ListChecks,
+	icon: Briefcase,
 } satisfies { to: string; label: string; icon: LucideIcon };
 
 export const GLOBAL_NAV = [MY_WORK_ITEM];
