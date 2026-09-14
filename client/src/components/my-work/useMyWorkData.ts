@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { paginateMyWorkItems } from "../../lib/myWorkSearch";
 import { type MyWorkViewState } from "../../lib/myWorkUtils";
 import type { MyWorkItem, MyWorkWorkspace } from "../../types/myWork";
 import {
 	type AllPageCache,
+	activeLoadedPage,
 	loadMyWorkRequest,
 	mergeWorkspaceOptions,
-	myWorkViewKey,
+	myWorkLoadIdentity,
+	myWorkRequestKey,
 } from "./myWorkDataLoader";
 
 export interface LoadedPage {
@@ -62,6 +63,12 @@ type DataSnapshot = {
 	workspaceOptions: MyWorkWorkspace[];
 };
 
+type ActiveCandidates = {
+	key: string;
+	items: MyWorkItem[];
+	candidateSetIncomplete: boolean;
+};
+
 function useMyWorkDataState(view: MyWorkViewState) {
 	const [data, setData] = useState<DataSnapshot>({
 		loaded: null,
@@ -72,16 +79,14 @@ function useMyWorkDataState(view: MyWorkViewState) {
 	const loadSeqRef = useRef(0);
 	const viewRef = useRef(view);
 	viewRef.current = view;
-	const loadedViewKeyRef = useRef<string | null>(null);
+	const loadedRequestKeyRef = useRef<string | null>(null);
 	const loadedAllPageRef = useRef<number | null>(null);
+	const displayedIdentityRef = useRef<string | null>(null);
 	const visibilityWasHiddenRef = useRef(
 		typeof document !== "undefined" ? document.hidden : false,
 	);
 	const allCacheRef = useRef<AllPageCache>({ key: "", pages: new Map() });
-	const activeCandidatesRef = useRef<{
-		key: string;
-		items: MyWorkItem[];
-	} | null>(null);
+	const activeCandidatesRef = useRef<ActiveCandidates | null>(null);
 	const [detailRefreshToken, setDetailRefreshToken] = useState(0);
 	return {
 		...data,
@@ -90,13 +95,14 @@ function useMyWorkDataState(view: MyWorkViewState) {
 		setData,
 		loadSeqRef,
 		viewRef,
-		loadedViewKeyRef,
+		loadedRequestKeyRef,
 		loadedAllPageRef,
+		displayedIdentityRef,
 		visibilityWasHiddenRef,
 		allCacheRef,
 		activeCandidatesRef,
 		view,
-		viewKey: myWorkViewKey(view),
+		requestKey: myWorkRequestKey(view),
 	};
 }
 
@@ -109,6 +115,7 @@ type LoaderContext = Pick<
 	| "viewRef"
 	| "allCacheRef"
 	| "activeCandidatesRef"
+	| "displayedIdentityRef"
 	| "setDetailRefreshToken"
 >;
 type DataSetter = MyWorkDataState["setData"];
@@ -121,8 +128,9 @@ function rememberActiveCandidates(
 	ref: MyWorkDataState["activeCandidatesRef"],
 	key: string,
 	items: MyWorkItem[] | undefined,
+	candidateSetIncomplete: boolean,
 ) {
-	if (items) ref.current = { key, items };
+	if (items) ref.current = { key, items, candidateSetIncomplete };
 }
 
 async function runMyWorkLoad({
@@ -131,19 +139,30 @@ async function runMyWorkLoad({
 	setData,
 	loadSeqRef,
 	viewRef,
+	requestKey,
 	allCacheRef,
 	activeCandidatesRef,
+	displayedIdentityRef,
 	setDetailRefreshToken,
-}: LoaderContext & { fresh: boolean; refreshDetail: boolean }) {
+}: LoaderContext & {
+	fresh: boolean;
+	refreshDetail: boolean;
+	requestKey: string;
+}) {
 	const requestView = viewRef.current;
-	const requestViewKey = myWorkViewKey(requestView);
+	const identity = myWorkLoadIdentity(requestView);
 	const seq = ++loadSeqRef.current;
 	const isCurrent = () => seq === loadSeqRef.current;
-	updateData(setData, { loading: true, loadError: null, loaded: null });
+	const retainLoaded = displayedIdentityRef.current === identity;
+	updateData(setData, {
+		loading: true,
+		loadError: null,
+		...(retainLoaded ? {} : { loaded: null }),
+	});
 	try {
 		const prepared = await loadMyWorkRequest({
 			requestView,
-			requestViewKey,
+			requestViewKey: requestKey,
 			fresh,
 			currentPage: () => viewRef.current.page,
 			allCacheRef,
@@ -152,9 +171,11 @@ async function runMyWorkLoad({
 		if (!prepared || !isCurrent()) return;
 		rememberActiveCandidates(
 			activeCandidatesRef,
-			requestViewKey,
+			requestKey,
 			prepared.activeCandidates,
+			Boolean(prepared.loaded.candidateSetIncomplete),
 		);
+		displayedIdentityRef.current = identity;
 		setData((previous) => ({
 			...previous,
 			loaded: prepared.loaded,
@@ -181,29 +202,38 @@ function useMyWorkLoader({
 	setData,
 	loadSeqRef,
 	viewRef,
+	requestKey,
 	allCacheRef,
 	activeCandidatesRef,
+	displayedIdentityRef,
 	setDetailRefreshToken,
 }: MyWorkDataState) {
 	return useCallback(
 		({
 			fresh = false,
 			refreshDetail = fresh,
-		}: { fresh?: boolean; refreshDetail?: boolean } = {}) =>
+		}: {
+			fresh?: boolean;
+			refreshDetail?: boolean;
+		} = {}) =>
 			runMyWorkLoad({
 				fresh,
 				refreshDetail,
 				setData,
 				loadSeqRef,
 				viewRef,
+				requestKey,
 				allCacheRef,
 				activeCandidatesRef,
+				displayedIdentityRef,
 				setDetailRefreshToken,
 			}),
 		[
 			activeCandidatesRef,
 			allCacheRef,
+			displayedIdentityRef,
 			loadSeqRef,
+			requestKey,
 			setData,
 			setDetailRefreshToken,
 			viewRef,
@@ -212,23 +242,23 @@ function useMyWorkLoader({
 }
 
 function useViewLoadEffect(
-	{ view, viewKey, loadedViewKeyRef, loadedAllPageRef }: MyWorkDataState,
+	{ view, requestKey, loadedRequestKeyRef, loadedAllPageRef }: MyWorkDataState,
 	loadData: ReturnType<typeof useMyWorkLoader>,
 ) {
 	useEffect(() => {
-		const viewChanged = loadedViewKeyRef.current !== viewKey;
+		const requestChanged = loadedRequestKeyRef.current !== requestKey;
 		const allPageChanged =
 			view.scope === "all" && loadedAllPageRef.current !== view.page;
-		if (!viewChanged && !allPageChanged) return;
-		loadedViewKeyRef.current = viewKey;
+		if (!requestChanged && !allPageChanged) return;
+		loadedRequestKeyRef.current = requestKey;
 		if (view.scope === "all") loadedAllPageRef.current = view.page;
 		void loadData();
 	}, [
 		loadData,
-		view.page,
 		view.scope,
-		viewKey,
-		loadedViewKeyRef,
+		view.page,
+		requestKey,
+		loadedRequestKeyRef,
 		loadedAllPageRef,
 	]);
 }
@@ -253,17 +283,40 @@ function useVisibilityRefresh(
 	}, [loadData, visibilityWasHiddenRef]);
 }
 
+function useActiveSearchEffect({
+	view,
+	requestKey,
+	activeCandidatesRef,
+	setData,
+}: MyWorkDataState) {
+	useEffect(() => {
+		if (view.scope !== "active") return;
+		if (activeCandidatesRef.current?.key !== requestKey) return;
+		const candidates = activeCandidatesRef.current;
+		if (!candidates) return;
+		setData((previous) => ({
+			...previous,
+			loaded: activeLoadedPage(
+				candidates.items,
+				view,
+				candidates.candidateSetIncomplete,
+			),
+		}));
+	}, [view, requestKey, activeCandidatesRef, setData]);
+}
+
 function useMyWorkEffects(
 	state: MyWorkDataState,
 	loadData: ReturnType<typeof useMyWorkLoader>,
 ) {
 	useViewLoadEffect(state, loadData);
 	useVisibilityRefresh(state, loadData);
+	useActiveSearchEffect(state);
 }
 
 function useMyWorkPageChange({
 	view,
-	viewKey,
+	requestKey,
 	activeCandidatesRef,
 	setData,
 }: MyWorkDataState) {
@@ -271,17 +324,21 @@ function useMyWorkPageChange({
 		(page: number) => {
 			if (
 				view.scope === "active" &&
-				activeCandidatesRef.current?.key === viewKey
+				activeCandidatesRef.current?.key === requestKey
 			) {
 				const candidates = activeCandidatesRef.current;
 				if (!candidates) return;
 				setData((previous) => ({
 					...previous,
-					loaded: paginateMyWorkItems(candidates.items, page),
+					loaded: activeLoadedPage(
+						candidates.items,
+						{ ...view, page },
+						candidates.candidateSetIncomplete,
+					),
 				}));
 			}
 		},
-		[activeCandidatesRef, setData, view.scope, viewKey],
+		[activeCandidatesRef, requestKey, setData, view],
 	);
 }
 

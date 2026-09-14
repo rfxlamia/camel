@@ -662,7 +662,6 @@ describe("MyWorkPage", () => {
 		});
 		mockListActiveMyWorkCandidates
 			.mockResolvedValueOnce(response([atlas, orbit]))
-			.mockResolvedValueOnce(response([orbit]))
 			.mockResolvedValueOnce(response([orbit]));
 
 		render(
@@ -690,6 +689,7 @@ describe("MyWorkPage", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("location").textContent).toContain("q=orbit"),
 		);
+		expect(mockListActiveMyWorkCandidates).toHaveBeenCalledTimes(2);
 		expect(mockListActiveMyWorkCandidates).toHaveBeenLastCalledWith(
 			expect.objectContaining({ workspaceId: 12 }),
 		);

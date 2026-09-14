@@ -1,13 +1,13 @@
 import { api } from "../../api";
 import {
+	projectMyWorkListItems,
+	reconcileMyWorkMutations,
+} from "../../lib/myWorkMutationReconciliation";
+import {
 	MY_WORK_PAGE_SIZE,
 	paginateMyWorkItems,
 	searchMyWorkCandidates,
 } from "../../lib/myWorkSearch";
-import {
-	projectMyWorkListItems,
-	reconcileMyWorkMutations,
-} from "../../lib/myWorkMutationReconciliation";
 import {
 	filterMyWorkItems,
 	type MyWorkViewState,
@@ -67,6 +67,38 @@ export function myWorkSearchQuery(view: MyWorkViewState): string {
 
 export function myWorkViewKey(view: MyWorkViewState): string {
 	return `${view.scope}|${myWorkSearchQuery(view)}|${view.workspaceId}|${view.source}`;
+}
+
+/**
+ * Key for the data request. For the Active scope the server does not receive the
+ * search query, so query-only changes must not trigger a refetch. For All scope
+ * the query is part of the server request and therefore belongs in the key.
+ */
+export function myWorkRequestKey(view: MyWorkViewState): string {
+	return view.scope === "active"
+		? `${view.scope}|${view.workspaceId}|${view.source}`
+		: myWorkViewKey(view);
+}
+
+/** Identity of an in-flight load. Active page is client-side; All page is not. */
+export function myWorkLoadIdentity(view: MyWorkViewState): string {
+	const key = myWorkRequestKey(view);
+	return view.scope === "all" ? `${key}|${view.page}` : key;
+}
+
+export function activeLoadedPage(
+	items: MyWorkItem[],
+	view: MyWorkViewState,
+	candidateSetIncomplete = false,
+): PreparedPage["loaded"] {
+	const query = myWorkSearchQuery(view);
+	const visibleItems = query
+		? searchMyWorkCandidates(items, query, { limit: 50 })
+		: items;
+	return {
+		...paginateMyWorkItems(visibleItems, view.page),
+		candidateSetIncomplete,
+	};
 }
 
 export function mergeWorkspaceOptions(
@@ -133,19 +165,15 @@ function prepareActivePage(
 	const ordered = orderMyWorkItems(
 		projectMyWorkListItems(activeItems, "active"),
 	);
-	const searchQuery = myWorkSearchQuery(view);
-	const visibleItems = searchQuery
-		? searchMyWorkCandidates(ordered, searchQuery, { limit: 50 })
-		: ordered;
-	const paged = paginateMyWorkItems(visibleItems, page);
 	return {
-		loaded: {
-			...paged,
-			candidateSetIncomplete: Boolean(response.nextCursor),
-		},
+		loaded: activeLoadedPage(
+			ordered,
+			{ ...view, page },
+			Boolean(response.nextCursor),
+		),
 		workspaceOptions: mergeWorkspaceOptions([], activeItems),
 		workspaceItems: activeItems,
-		activeCandidates: visibleItems,
+		activeCandidates: ordered,
 	};
 }
 

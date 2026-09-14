@@ -262,4 +262,208 @@ describe("My Work state integration", () => {
 		"observes optimistic removal, conflict rollback, and stale refresh protection",
 		runRollbackRace,
 	);
+
+	it("filters Active search locally without refetching or dropping the truncated banner", async () => {
+		const alpha = makeItem({
+			id: 27,
+			key: "AT-27",
+			title: "Alpha task",
+			source: "board",
+			workspaceId: 7,
+		});
+		const beta = makeItem({
+			id: 28,
+			key: "AT-28",
+			title: "Beta task",
+			source: "board",
+			workspaceId: 7,
+		});
+		let activeListCalls = 0;
+		createNetwork((url) => {
+			if (url.pathname === "/api/my-work") {
+				activeListCalls += 1;
+				const drainPage = Number(url.searchParams.get("cursor")?.slice(7) ?? 0);
+				return jsonResponse(
+					response(
+						drainPage === 0 ? [alpha, beta] : [],
+						`cursor-${drainPage + 1}`,
+					),
+				);
+			}
+			return jsonResponse(alpha);
+		});
+		renderSurface("/my-work");
+
+		const alphaRowId = "my-work-row-7-board-AT-27";
+		await waitFor(() => expect(screen.getByTestId(alphaRowId)).toBeTruthy());
+		expect(screen.getByTestId("my-work-row-7-board-AT-28")).toBeTruthy();
+		expect(
+			screen.getByText(/Showing the first 2 active matches/i),
+		).toBeTruthy();
+		const callsAfterLoad = activeListCalls;
+		expect(callsAfterLoad).toBeGreaterThan(1);
+		const alphaRow = screen.getByTestId(alphaRowId);
+
+		fireEvent.change(screen.getByLabelText("Search My Work"), {
+			target: { value: "alpha" },
+		});
+		await waitFor(() =>
+			expect(screen.queryByTestId("my-work-row-7-board-AT-28")).toBeNull(),
+		);
+		expect(screen.getByTestId(alphaRowId)).toBe(alphaRow);
+		expect(
+			screen.getByText(/Showing the first 1 active matches/i),
+		).toBeTruthy();
+		expect(screen.queryByTestId("my-work-loading")).toBeNull();
+		expect(activeListCalls).toBe(callsAfterLoad);
+
+		fireEvent.change(screen.getByLabelText("Search My Work"), {
+			target: { value: "zzz-no-match" },
+		});
+		await waitFor(() => expect(screen.queryByTestId(alphaRowId)).toBeNull());
+		expect(screen.queryByTestId("my-work-row-7-board-AT-28")).toBeNull();
+		expect(screen.queryByTestId("my-work-loading")).toBeNull();
+		expect(activeListCalls).toBe(callsAfterLoad);
+
+		fireEvent.change(screen.getByLabelText("Search My Work"), {
+			target: { value: "" },
+		});
+		await waitFor(() =>
+			expect(screen.getByTestId("my-work-row-7-board-AT-28")).toBeTruthy(),
+		);
+		expect(screen.getByTestId(alphaRowId)).toBeTruthy();
+		expect(
+			screen.getByText(/Showing the first 2 active matches/i),
+		).toBeTruthy();
+		expect(activeListCalls).toBe(callsAfterLoad);
+	});
+
+	it("re-paginates Active search from the filtered candidate set", async () => {
+		const items = [
+			...Array.from({ length: 50 }, (_, index) =>
+				makeItem({
+					id: 200 + index,
+					key: `AT-${200 + index}`,
+					title: `Alpha task ${index + 1}`,
+					source: "board",
+					workspaceId: 7,
+				}),
+			),
+			makeItem({
+				id: 250,
+				key: "AT-250",
+				title: "Zebra unique",
+				source: "board",
+				workspaceId: 7,
+			}),
+		];
+		let activeListCalls = 0;
+		createNetwork((url) => {
+			if (url.pathname === "/api/my-work") {
+				activeListCalls += 1;
+				return jsonResponse(response(items));
+			}
+			return jsonResponse(items[0]!);
+		});
+		renderSurface("/my-work");
+		await waitFor(() => expect(screen.getByText("Alpha task 1")).toBeTruthy());
+		fireEvent.click(screen.getByRole("button", { name: /next page/i }));
+		await waitFor(() => expect(screen.getByText("Zebra unique")).toBeTruthy());
+
+		fireEvent.change(screen.getByLabelText("Search My Work"), {
+			target: { value: "zebra unique" },
+		});
+		await waitFor(() => expect(screen.getByText("Zebra unique")).toBeTruthy());
+		expect(screen.queryByText("Alpha task 1")).toBeNull();
+		expect(activeListCalls).toBe(1);
+
+		fireEvent.change(screen.getByLabelText("Search My Work"), {
+			target: { value: "alpha task 1" },
+		});
+		await waitFor(() => expect(screen.getByText("Alpha task 1")).toBeTruthy());
+		expect(screen.queryByText("Zebra unique")).toBeNull();
+		expect(activeListCalls).toBe(1);
+	});
+
+	it("does not keep the previous workspace list while a new Active request is in flight", async () => {
+		const atlas = makeItem({
+			id: 28,
+			key: "AT-28",
+			title: "Atlas only",
+			source: "board",
+			workspaceId: 7,
+			workspaceName: "Atlas",
+		});
+		const orbit = makeItem({
+			id: 29,
+			key: "OR-29",
+			title: "Orbit only",
+			source: "board",
+			workspaceId: 12,
+			workspaceName: "Orbit",
+		});
+		const second = deferred<Response>();
+		let activeListCalls = 0;
+		createNetwork((url) => {
+			if (url.pathname === "/api/my-work") {
+				activeListCalls += 1;
+				if (activeListCalls === 1)
+					return jsonResponse(response([atlas, orbit]));
+				return second.promise;
+			}
+			return jsonResponse(orbit);
+		});
+		renderSurface("/my-work");
+		await waitFor(() => expect(screen.getByText("Atlas only")).toBeTruthy());
+		fireEvent.change(screen.getByLabelText("Filter by workspace"), {
+			target: { value: "12" },
+		});
+		await waitFor(() =>
+			expect(screen.getByTestId("location").textContent).toContain(
+				"workspaceId=12",
+			),
+		);
+		expect(screen.queryByText("Atlas only")).toBeNull();
+		expect(screen.queryByText("Orbit only")).toBeNull();
+		second.resolve(jsonResponse(response([orbit])));
+		await waitFor(() => expect(screen.getByText("Orbit only")).toBeTruthy());
+		expect(activeListCalls).toBe(2);
+	});
+
+	it("does not keep the previous All page while a new search request is in flight", async () => {
+		const first = makeItem({
+			id: 23,
+			key: "AT-23",
+			title: "First history page",
+			statusCategory: "completed",
+		});
+		const queryPage = makeItem({
+			id: 25,
+			key: "AT-25",
+			title: "Search result page",
+			statusCategory: "completed",
+		});
+		const pending = deferred<Response>();
+		let allCalls = 0;
+		createNetwork((url) => {
+			if (url.pathname === "/api/my-work") {
+				allCalls += 1;
+				if (allCalls === 1) return jsonResponse(response([first]));
+				return pending.promise;
+			}
+			return jsonResponse(queryPage);
+		});
+		renderSurface("/my-work?scope=all");
+		await waitFor(() => expect(screen.getByText(first.title)).toBeTruthy());
+		fireEvent.change(screen.getByLabelText("Search My Work"), {
+			target: { value: "needle" },
+		});
+		await waitFor(() =>
+			expect(screen.getByTestId("location").textContent).toContain("q=needle"),
+		);
+		expect(screen.queryByText(first.title)).toBeNull();
+		pending.resolve(jsonResponse(response([queryPage])));
+		await waitFor(() => expect(screen.getByText(queryPage.title)).toBeTruthy());
+		expect(allCalls).toBe(2);
+	});
 });
