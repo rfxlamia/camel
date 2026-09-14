@@ -290,6 +290,7 @@ describe("MyWorkPage", () => {
 			</MemoryRouter>,
 		);
 
+		expect(screen.queryByTestId("my-work-loading")).toBeNull();
 		expect(await screen.findByTestId("my-work-loading")).toBeTruthy();
 		expect(screen.getByTestId("my-work-filter-row").parentElement).toBe(
 			screen.getByTestId("my-work-loading").parentElement,

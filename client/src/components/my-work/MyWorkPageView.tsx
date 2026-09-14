@@ -7,6 +7,7 @@ import MyWorkDetailSheet from "./MyWorkDetailSheet";
 import MyWorkList, { SessionErrorState } from "./MyWorkList";
 import MyWorkToolbar from "./MyWorkToolbar";
 import { ToolbarIntro } from "./MyWorkToolbarParts";
+import { useDelayedLoading } from "./useDelayedLoading";
 import type { LoadError, LoadedPage } from "./useMyWorkData";
 
 type MyWorkViewUpdate = (
@@ -125,7 +126,8 @@ function MyWorkContent({
 	onPageChange,
 	onSelect,
 }: MyWorkContentProps) {
-	if (loading) return <LoadingState />;
+	const showSkeleton = useDelayedLoading(loading);
+	if (showSkeleton) return <LoadingState />;
 	if (loadError) {
 		return loadError.kind === "auth" ? (
 			<SessionErrorState />

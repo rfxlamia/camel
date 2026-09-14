@@ -68,8 +68,14 @@ async function runUrlDetailScenario() {
 		expect(screen.getByTestId("active-workspace").textContent).toBe("999"),
 	);
 	await applyUrlFilters();
+	await waitFor(() =>
+		expect(screen.queryByTestId("my-work-loading")).toBeNull(),
+	);
 	fireEvent.click(screen.getByRole("button", { name: /next page/i }));
 	await waitFor(() => expect(screen.getByText(item.key)).toBeTruthy());
+	await waitFor(() =>
+		expect(screen.queryByTestId("my-work-loading")).toBeNull(),
+	);
 	const detail = await openDetailFor(item);
 	expect(screen.getByTestId("location").textContent).toBe(
 		`/my-work?workspaceId=7&source=board&page=2&detailWorkspaceId=7&detailSource=board&detailKey=${item.key}`,
