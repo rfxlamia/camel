@@ -93,6 +93,13 @@ export function settleMyWorkMutation(
 	return true;
 }
 
+/** Clear a settled overlay after a newer authoritative read supersedes it. */
+export function reconcileMyWorkMutationSnapshot(identity: string): boolean {
+	if (!myWorkMutationSnapshots.delete(identity)) return false;
+	notifyMyWorkMutationListeners();
+	return true;
+}
+
 /** Test-only reset for the process-local mutation reconciliation state. */
 export function resetMyWorkMutationsForTests(): void {
 	myWorkMutationSnapshots.clear();
