@@ -34,6 +34,7 @@ export default function MyWorkPage() {
 		workspaceOptions,
 		loadData,
 		handlePageChange: setLoadedPage,
+		detailRefreshToken,
 	} = useMyWorkData(view);
 	const { updateView, handlePageChange } = useMyWorkViewActions(
 		view,
@@ -63,6 +64,7 @@ export default function MyWorkPage() {
 			onRetry={() => void loadData({ fresh: true })}
 			onSelect={openDetail}
 			onCloseDetail={closeDetail}
+			detailRefreshToken={detailRefreshToken}
 		/>
 	);
 }
