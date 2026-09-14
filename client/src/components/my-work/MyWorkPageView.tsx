@@ -25,6 +25,7 @@ export interface MyWorkPageViewProps {
 	updateView: MyWorkViewUpdate;
 	handlePageChange: (page: number) => void;
 	onRefresh: () => void;
+	onListRefresh: () => void;
 	onRetry: () => void;
 	onSelect: (item: MyWorkItem) => void;
 	onCloseDetail: () => void;
@@ -41,6 +42,7 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 		updateView,
 		handlePageChange,
 		onRefresh,
+		onListRefresh,
 		onRetry,
 		onSelect,
 	} = props;
@@ -70,7 +72,7 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 						scope={view.scope}
 						query={view.q}
 						onRetry={onRetry}
-						onRefresh={onRefresh}
+						onListRefresh={onListRefresh}
 						onShowAll={() => updateView({ scope: "all" })}
 						onPageChange={handlePageChange}
 						onSelect={onSelect}
@@ -84,13 +86,16 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 
 type MyWorkDetailProps = Pick<
 	MyWorkPageViewProps,
-	"detailSelection" | "onCloseDetail" | "onRefresh" | "detailRefreshToken"
+	| "detailSelection"
+	| "onCloseDetail"
+	| "onListRefresh"
+	| "detailRefreshToken"
 >;
 
 function MyWorkDetail({
 	detailSelection,
 	onCloseDetail,
-	onRefresh,
+	onListRefresh,
 	detailRefreshToken,
 }: MyWorkDetailProps) {
 	if (!detailSelection) return null;
@@ -98,7 +103,7 @@ function MyWorkDetail({
 		<MyWorkDetailSheet
 			selection={detailSelection}
 			onClose={onCloseDetail}
-			onRefresh={onRefresh}
+			onRefresh={onListRefresh}
 			refreshToken={detailRefreshToken}
 		/>
 	);
@@ -111,7 +116,7 @@ interface MyWorkContentProps {
 	scope: MyWorkViewState["scope"];
 	query: string;
 	onRetry: () => void;
-	onRefresh: () => void;
+	onListRefresh: () => void;
 	onShowAll: () => void;
 	onPageChange: (page: number) => void;
 	onSelect: (item: MyWorkItem) => void;
@@ -124,7 +129,7 @@ function MyWorkContent({
 	scope,
 	query,
 	onRetry,
-	onRefresh,
+	onListRefresh,
 	onShowAll,
 	onPageChange,
 	onSelect,
@@ -143,17 +148,28 @@ function MyWorkContent({
 	}
 	if (!loaded) return null;
 	return (
-		<MyWorkList
-			items={loaded.items}
-			scope={scope}
-			page={loaded.page}
-			pageCount={loaded.pageCount}
-			hasPrevious={loaded.hasPrevious}
-			hasNext={loaded.hasNext}
-			onPageChange={onPageChange}
-			onSelect={onSelect}
-			onRefresh={onRefresh}
-		/>
+		<>
+			{loaded.candidateSetIncomplete && (
+				<p
+					role="status"
+					className="border-neutral-200/70 border-b bg-neutral-50 px-4 py-2 text-neutral-600 text-xs md:px-5"
+				>
+					Showing the first {loaded.total} active matches. Narrow filters or
+					search to find more.
+				</p>
+			)}
+			<MyWorkList
+				items={loaded.items}
+				scope={scope}
+				page={loaded.page}
+				pageCount={loaded.pageCount}
+				hasPrevious={loaded.hasPrevious}
+				hasNext={loaded.hasNext}
+				onPageChange={onPageChange}
+				onSelect={onSelect}
+				onRefresh={onListRefresh}
+			/>
+		</>
 	);
 }
 

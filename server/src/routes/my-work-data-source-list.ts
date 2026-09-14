@@ -126,8 +126,10 @@ function buildBoardRowsQuery(
 					.whereRef("me_ca.card_id", "=", "c.id")
 					.where("me_ca.user_id", "=", input.userId),
 			),
-		)
-		.where((eb) =>
+		);
+	const suppressBoardShadows = !(input.scope === "all" && input.q);
+	if (suppressBoardShadows) {
+		query = query.where((eb) =>
 			eb.not(
 				eb.exists(
 					eb
@@ -152,6 +154,7 @@ function buildBoardRowsQuery(
 				),
 			),
 		);
+	}
 	if (input.workspaceId !== undefined) {
 		query = query.where("c.workspace_id", "=", input.workspaceId);
 	}

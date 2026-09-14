@@ -138,16 +138,10 @@ function prepareActivePage(
 		? searchMyWorkCandidates(ordered, searchQuery, { limit: 50 })
 		: ordered;
 	const paged = paginateMyWorkItems(visibleItems, page);
-	const candidateSetIncomplete = Boolean(response.nextCursor);
 	return {
 		loaded: {
 			...paged,
-			hasNext: paged.hasNext || candidateSetIncomplete,
-			pageCount:
-				candidateSetIncomplete && !paged.hasNext
-					? paged.page + 1
-					: paged.pageCount,
-			candidateSetIncomplete,
+			candidateSetIncomplete: Boolean(response.nextCursor),
 		},
 		workspaceOptions: mergeWorkspaceOptions([], activeItems),
 		workspaceItems: activeItems,

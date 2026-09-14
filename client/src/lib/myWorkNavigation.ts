@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type Dispatch,
+	type SetStateAction,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { api } from "../api";
 import type { MyWorkIdentity, MyWorkItem } from "../types/myWork";
 
@@ -100,11 +107,16 @@ function requestMyWorkDetail(
 	source: MyWorkDetailSelection["source"],
 	key: string,
 	sequenceRef: { current: number },
-	setState: (state: MyWorkDetailState) => void,
+	setState: Dispatch<SetStateAction<MyWorkDetailState>>,
+	preserveContent = false,
 ) {
 	const requestSeq = ++sequenceRef.current;
 	let active = true;
-	setState({ status: "loading", item: null, error: null });
+	setState((previous) =>
+		preserveContent && previous.status === "ready"
+			? previous
+			: { status: "loading", item: null, error: null },
+	);
 	void api
 		.getMyWorkItem(workspaceId, source, key)
 		.then((item) => {
@@ -141,18 +153,25 @@ export function useMyWorkDetailState(
 	const workspaceId = selection?.workspaceId ?? null;
 	const source = selection?.source ?? null;
 	const key = selection?.key ?? null;
-	const loadDetail = useCallback(() => {
-		if (workspaceId === null || source === null || key === null) return;
-		void refreshToken;
-		return requestMyWorkDetail(
-			workspaceId,
-			source,
-			key,
-			sequenceRef.current,
-			setState,
-		);
-	}, [key, refreshToken, source, workspaceId]);
-	useEffect(() => loadDetail(), [loadDetail]);
+	const loadDetail = useCallback(
+		(preserveContent = false) => {
+			if (workspaceId === null || source === null || key === null) return;
+			return requestMyWorkDetail(
+				workspaceId,
+				source,
+				key,
+				sequenceRef.current,
+				setState,
+				preserveContent,
+			);
+		},
+		[key, source, workspaceId],
+	);
+	useEffect(() => loadDetail(false), [loadDetail]);
+	useEffect(() => {
+		if (refreshToken === 0) return;
+		return loadDetail(true);
+	}, [loadDetail, refreshToken]);
 	return { state, retry: loadDetail, workspaceId, source, key };
 }
 
