@@ -268,8 +268,9 @@ describe("My Work status and ordering boundary", () => {
 		expect(boardQuery?.parameters).toContain(ATLAS.id);
 		expect(boardQuery?.parameters).toContain(4);
 		expect(
-			queries.some((entry) => entry.sql.includes('from "tracker_items"')),
+			queries.some((entry) => entry.sql.includes('from "tracker_items" as "ti"')),
 		).toBe(false);
+		expect(boardQuery?.sql).toContain('"tracker_items" as "shadow_ti"');
 		await executor.destroy();
 	});
 });
