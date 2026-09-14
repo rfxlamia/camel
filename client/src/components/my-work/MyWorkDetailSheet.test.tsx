@@ -503,17 +503,17 @@ describe("MyWorkDetailSheet", () => {
 			workspaceName: "Atlas",
 			source: "board",
 		});
-		mockListActive.mockResolvedValueOnce(response([item]));
-		mockGetDetail.mockResolvedValueOnce(item);
+		mockListActive.mockResolvedValue(response([item]));
+		mockGetDetail.mockResolvedValue(item);
 
 		renderWithBoard(
 			"/my-work?scope=active&workspaceId=7&source=board&q=atlas&page=2",
 		);
 
-		await waitFor(() => expect(screen.getByText("AT-17")).toBeTruthy());
-		fireEvent.click(
-			screen.getByRole("button", { name: /open AT-17 fix atlas sync/i }),
-		);
+		const openRow = await screen.findByRole("button", {
+			name: /open AT-17 fix atlas sync/i,
+		});
+		fireEvent.click(openRow);
 
 		await waitFor(() =>
 			expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy(),
