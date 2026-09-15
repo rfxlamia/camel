@@ -7,6 +7,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../types";
 
@@ -125,7 +126,9 @@ function setupApiMocks() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
-import { ToastProvider, useToastState } from "./ToastContext";
+import { PresenceProvider } from "./PresenceContext";
+import { ToastProvider, useShowToast, useToastState } from "./ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 import {
 	FOCUS_BLOCKED_TOAST,
 	FOCUS_LOADING_TOAST,
@@ -139,7 +142,7 @@ function FocusGuardProbe() {
 		setFocusSessionHydrated,
 		setHasUnsavedCardEdits,
 		confirmPendingSwitch,
-	} = useBoard();
+	} = useWorkspace();
 	const toast = useToastState();
 	return (
 		<>
@@ -197,14 +200,24 @@ function FocusGuardProbe() {
 	);
 }
 
+function Providers({ children }: { children: ReactNode }) {
+	return (
+		<ToastProvider>
+			<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+				<PresenceProvider>
+					<BoardProvider>{children}</BoardProvider>
+				</PresenceProvider>
+			</WorkspaceProvider>
+		</ToastProvider>
+	);
+}
+
 async function renderBoard() {
 	await act(async () => {
 		render(
-			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<FocusGuardProbe />
-				</BoardProvider>
-			</ToastProvider>,
+			<Providers>
+				<FocusGuardProbe />
+			</Providers>,
 		);
 	});
 	await waitFor(() =>
@@ -302,11 +315,17 @@ describe("BoardContext focus workspace switch guard", () => {
 
 		function BoardOnlyProbe() {
 			const board = useBoard();
-			showToast = board.showToast;
 			renders.count += 1;
 			return (
-				<span data-testid="board-only">{String(board.activeWorkspaceId)}</span>
+				<span data-testid="board-only">
+					{board.columns === null ? "loading" : "ready"}
+				</span>
 			);
+		}
+
+		function ToastTriggerProbe() {
+			showToast = useShowToast();
+			return null;
 		}
 
 		function IsolatedToastProbe() {
@@ -316,17 +335,16 @@ describe("BoardContext focus workspace switch guard", () => {
 
 		await act(async () => {
 			render(
-				<ToastProvider>
-					<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-						<BoardOnlyProbe />
-						<IsolatedToastProbe />
-					</BoardProvider>
-				</ToastProvider>,
+				<Providers>
+					<BoardOnlyProbe />
+					<ToastTriggerProbe />
+					<IsolatedToastProbe />
+				</Providers>,
 			);
 		});
 
 		await waitFor(() => {
-			expect(screen.getByTestId("board-only").textContent).toBe("1");
+			expect(screen.getByTestId("board-only").textContent).toBe("ready");
 			expect(mockGetBoard).toHaveBeenCalled();
 			expect(mockGetSettings).toHaveBeenCalled();
 			expect(mockFocusGetConfig).toHaveBeenCalled();

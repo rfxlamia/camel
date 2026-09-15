@@ -1,6 +1,6 @@
 import { Check, ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import {
 	getInvitePopoverState,
 	getSwitchAttemptState,
@@ -57,7 +57,7 @@ export function WorkspaceSwitchConfirmation({
 	onConfirm?: () => void;
 }) {
 	const { switchConfirm, confirmPendingSwitch, cancelPendingSwitch } =
-		useBoard();
+		useWorkspace();
 
 	return (
 		<PopoverShell
@@ -114,7 +114,7 @@ export function WorkspaceSwitcher({
 		openCreateWorkspace,
 		acceptWorkspaceInvite,
 		declineWorkspaceInvite,
-	} = useBoard();
+	} = useWorkspace();
 
 	const [open, setOpen] = useState(false);
 	const [busyInviteId, setBusyInviteId] = useState<number | null>(null);

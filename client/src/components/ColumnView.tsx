@@ -6,7 +6,7 @@ import {
 import { Settings2, Shuffle, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { useBoard } from "../context/BoardContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { COLOR_LABELS, type ColumnColor } from "../lib/columnColors";
 import {
 	columnColorPreviewStyle,
@@ -78,7 +78,7 @@ function ColumnSettings({
 	onUpdateColumn: Props["onUpdateColumn"];
 	onClose: () => void;
 }) {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const [title, setTitle] = useState(column.title);
 	const [wipLimit, setWipLimit] = useState(
 		column.wipLimit === null ? "" : String(column.wipLimit),

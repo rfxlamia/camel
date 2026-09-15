@@ -114,11 +114,13 @@ function setupApiMocks() {
 	mockGetPresence.mockResolvedValue({ users: [] });
 }
 
-import { BoardProvider, useBoard } from "./BoardContext";
+import { BoardProvider } from "./BoardContext";
+import { PresenceProvider } from "./PresenceContext";
 import { ToastProvider } from "./ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 
 function FocusFlagProbe() {
-	const { focusModeEnabled } = useBoard();
+	const { focusModeEnabled } = useWorkspace();
 	return <span data-testid="focus-enabled">{String(focusModeEnabled)}</span>;
 }
 
@@ -126,9 +128,13 @@ async function renderBoard() {
 	await act(async () => {
 		render(
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<FocusFlagProbe />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<FocusFlagProbe />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>,
 		);
 	});

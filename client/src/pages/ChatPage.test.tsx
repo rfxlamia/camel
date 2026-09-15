@@ -34,8 +34,8 @@ vi.mock("../chat/ui", () => ({
 	),
 }));
 
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => ({ activeWorkspaceId: 7 }),
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => ({ activeWorkspaceId: 7 }),
 }));
 
 describe("ChatPage", () => {

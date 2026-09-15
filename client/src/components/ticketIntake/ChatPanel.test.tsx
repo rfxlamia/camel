@@ -8,8 +8,12 @@ vi.mock("../../hooks/useTicketIntakeChat", () => ({
 }));
 vi.mock("../../context/BoardContext", () => ({
 	useBoard: () => ({
-		activeWorkspaceId: 1,
 		ticketIntakeEvents: [],
+	}),
+}));
+vi.mock("../../context/WorkspaceContext", () => ({
+	useWorkspace: () => ({
+		activeWorkspaceId: 1,
 	}),
 }));
 vi.mock("./PreviewScreen", () => ({

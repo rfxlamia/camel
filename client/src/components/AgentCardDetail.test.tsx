@@ -6,8 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentColumn } from "../types";
 
 const mockUseBoard = vi.fn();
+const mockUseWorkspace = vi.fn();
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
 
 const getAgentCardOutput = vi.fn();
@@ -28,12 +32,14 @@ const COLUMN: AgentColumn = {
 };
 
 function setBoard(agentEvents: unknown[]) {
-	mockUseBoard.mockReturnValue({ activeWorkspaceId: 1, agentEvents });
+	mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 1 });
+	mockUseBoard.mockReturnValue({ agentEvents });
 }
 
 beforeEach(() => {
 	getAgentCardOutput.mockReset();
 	mockUseBoard.mockReset();
+	mockUseWorkspace.mockReset();
 	getAgentCardOutput.mockResolvedValue({
 		columnSlug: "analysis-specialist",
 		output: "DB FINAL OUTPUT",

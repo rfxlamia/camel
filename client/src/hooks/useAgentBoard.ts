@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
 import { useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { shouldRefetchBoardOnTerminalEvent } from "../lib/agentBoardSync";
 import type { AgentArtifact, AgentBoard } from "../types";
 
 export function useAgentBoard() {
-	const { activeWorkspaceId, showToast, agentEvents, clearAgentEvents } =
-		useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const showToast = useShowToast();
+	const { agentEvents, clearAgentEvents } = useBoard();
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	const [board, setBoard] = useState<AgentBoard | null>(null);

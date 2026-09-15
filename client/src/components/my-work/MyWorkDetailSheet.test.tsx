@@ -89,7 +89,15 @@ vi.mock("../../context/NotificationsContext", () => ({
 		mockUseNotificationsContext(...args),
 }));
 
-import { BoardProvider, useBoard } from "../../context/BoardContext";
+vi.mock("./useDelayedLoading", () => ({
+	useDelayedLoading: () => false,
+	SKELETON_SHOW_DELAY_MS: 0,
+	SKELETON_MIN_VISIBLE_MS: 0,
+}));
+
+import { BoardProvider } from "../../context/BoardContext";
+import { PresenceProvider } from "../../context/PresenceContext";
+import { useWorkspace, WorkspaceProvider } from "../../context/WorkspaceContext";
 import { ToastProvider } from "../../context/ToastContext";
 import { MobileNav } from "../../layout/sidebar/MobileNav";
 import Sidebar from "../../layout/sidebar/Sidebar";
@@ -161,7 +169,7 @@ function LocationProbe() {
 }
 
 function ActiveWorkspaceProbe() {
-	const { activeWorkspaceId, switchConfirm } = useBoard();
+	const { activeWorkspaceId, switchConfirm } = useWorkspace();
 	return (
 		<>
 			<output data-testid="active-workspace">{activeWorkspaceId}</output>
@@ -179,7 +187,7 @@ function GuardControls() {
 		setHasUnsavedCardEdits,
 		confirmPendingSwitch,
 		cancelPendingSwitch,
-	} = useBoard();
+	} = useWorkspace();
 	return (
 		<div>
 			<button
@@ -335,9 +343,13 @@ function renderMobileClosedWithBoard(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<MobileClosedSourceRouteBoundary />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<MobileClosedSourceRouteBoundary />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
@@ -348,9 +360,13 @@ function renderWithBoard(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<SourceRouteBoundary />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<SourceRouteBoundary />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
@@ -361,9 +377,13 @@ function renderShellWithBoard(initialEntry: string, mobileOpen: boolean) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<ShellSourceRouteBoundary mobileOpen={mobileOpen} />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<ShellSourceRouteBoundary mobileOpen={mobileOpen} />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
@@ -444,6 +464,11 @@ async function openShellDetail({
 }
 
 beforeEach(() => {
+	vi.useRealTimers();
+	Object.defineProperty(document, "hidden", {
+		configurable: true,
+		get: () => false,
+	});
 	localStorage.clear();
 	localStorage.setItem("activeWorkspaceId", "999");
 	TestEventSource.instances = [];
@@ -498,6 +523,7 @@ afterEach(() => {
 	resetMyWorkMutationsForTests();
 	localStorage.clear();
 	vi.clearAllMocks();
+	vi.useRealTimers();
 });
 
 describe("MyWorkDetailSheet", () => {
@@ -510,27 +536,30 @@ describe("MyWorkDetailSheet", () => {
 			workspaceName: "Atlas",
 			source: "board",
 		});
-		mockListActive.mockResolvedValueOnce(response([item]));
-		mockGetDetail.mockResolvedValueOnce(item);
+		mockListActive.mockResolvedValue(response([item]));
+		mockGetDetail.mockResolvedValue(item);
 
 		renderWithBoard(
 			"/my-work?scope=active&workspaceId=7&source=board&q=atlas&page=2",
 		);
 
-		expect(await screen.findByText("AT-17")).toBeTruthy();
-		fireEvent.click(
-			screen.getByRole("button", { name: /open AT-17 fix atlas sync/i }),
-		);
-
-		await waitFor(() =>
-			expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy(),
-		);
+		// Click + dialog assert must be atomic: delayed skeleton can reappear
+		// between separate await waitFor(...) and fireEvent.click(...) under load.
+		await waitFor(() => {
+			expect(screen.queryByTestId("my-work-loading")).toBeNull();
+			fireEvent.click(
+				screen.getByRole("button", { name: /open AT-17 fix atlas sync/i }),
+			);
+			expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
+		});
 		const detail = screen.getByRole("dialog", { name: /AT-17/i });
 		expect(within(detail).getByText("Fix Atlas sync")).toBeTruthy();
 		expect(within(detail).getByText("Atlas")).toBeTruthy();
 		expect(within(detail).getByText("Board")).toBeTruthy();
 		expect(mockGetDetail).toHaveBeenCalledWith(7, "board", "AT-17");
-		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
+		await waitFor(() =>
+			expect(screen.getByTestId("active-workspace").textContent).toBe("999"),
+		);
 		expect(screen.getByTestId("location").textContent).toContain(
 			"scope=active&workspaceId=7&source=board&q=atlas&page=2",
 		);
@@ -548,7 +577,9 @@ describe("MyWorkDetailSheet", () => {
 			),
 		);
 		expect(screen.queryByRole("dialog")).toBeNull();
-		expect(screen.getByTestId("active-workspace").textContent).toBe("999");
+		await waitFor(() =>
+			expect(screen.getByTestId("active-workspace").textContent).toBe("999"),
+		);
 	});
 
 	it("omits the sheet eyebrow and empty description, and shows a board due date", async () => {

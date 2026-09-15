@@ -160,17 +160,25 @@ async function advanceRefreshDebounce() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { PresenceProvider } from "./PresenceContext";
 import { ToastProvider, useToastState } from "./ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
+
+function Providers({ children }: { children: React.ReactNode }) {
+	return (
+		<ToastProvider>
+			<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+				<PresenceProvider>
+					<BoardProvider>{children}</BoardProvider>
+				</PresenceProvider>
+			</WorkspaceProvider>
+		</ToastProvider>
+	);
+}
 
 async function renderBoard(children: React.ReactNode) {
 	await act(async () => {
-		render(
-			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					{children}
-				</BoardProvider>
-			</ToastProvider>,
-		);
+		render(<Providers>{children}</Providers>);
 	});
 	await waitFor(() => expect(mockGetBoard).toHaveBeenCalled());
 	const callsAfterLoad = mockGetBoard.mock.calls.length;
@@ -377,11 +385,9 @@ describe("BoardContext focus SSE seams", () => {
 			cleanup();
 			MockEventSource.instances = [];
 			render(
-				<ToastProvider>
-					<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-						<Probe />
-					</BoardProvider>
-				</ToastProvider>,
+				<Providers>
+					<Probe />
+				</Providers>,
 			);
 		});
 		await waitFor(() => expect(mockGetBoard).toHaveBeenCalled());
@@ -414,7 +420,7 @@ describe("BoardContext focus SSE seams", () => {
 				focusSessionHydrated,
 				setHasActiveFocusSession,
 				setFocusSessionHydrated,
-			} = useBoard();
+			} = useWorkspace();
 			return (
 				<>
 					<span data-testid="has-active">{String(hasActiveFocusSession)}</span>

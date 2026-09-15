@@ -17,6 +17,7 @@ const {
 	mockGetWorkspaceMembers,
 	mockNavigate,
 	mockUseBoard,
+	mockUseWorkspace,
 	mockShowToast,
 } = vi.hoisted(() => ({
 	mockGetTrackerItem: vi.fn(),
@@ -27,6 +28,7 @@ const {
 	mockGetWorkspaceMembers: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 	mockShowToast: vi.fn(),
 }));
 
@@ -55,6 +57,14 @@ vi.mock("../api", () => ({
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => mockShowToast,
 }));
 
 vi.mock("react-router", () => ({
@@ -191,9 +201,10 @@ beforeEach(() => {
 		),
 	);
 	mockGetWorkspaceMembers.mockResolvedValue({ members: [] });
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspaceId: 7,
-		showToast: mockShowToast,
+	});
+	mockUseBoard.mockReturnValue({
 		refreshTrackerList: vi.fn(),
 		subscribeTrackerEvents: vi.fn(() => () => {}),
 	});
@@ -257,9 +268,10 @@ describe("TrackerDetailPage", () => {
 		let sseHandler:
 			| ((e: { type: string; trackerItemId?: number }) => void)
 			| undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
-			showToast: mockShowToast,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			refreshTrackerList: vi.fn(),
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -323,9 +335,10 @@ describe("TrackerDetailPage", () => {
 			title: "Live title",
 			version: 3,
 		});
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
-			showToast: mockShowToast,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			refreshTrackerList: vi.fn(),
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -346,9 +359,10 @@ describe("TrackerDetailPage", () => {
 		let sseHandler:
 			| ((e: { type: string; payload?: unknown }) => void)
 			| undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
-			showToast: mockShowToast,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			refreshTrackerList,
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -473,9 +487,10 @@ describe("TrackerDetailPage", () => {
 		let sseHandler:
 			| ((e: { type: string; trackerItemId?: number }) => void)
 			| undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
-			showToast: mockShowToast,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			refreshTrackerList: vi.fn(),
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;

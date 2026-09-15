@@ -109,11 +109,13 @@ function setupApiMocks() {
 	mockGetPresence.mockResolvedValue({ users: [] });
 }
 
-import { BoardProvider, useBoard } from "./BoardContext";
+import { BoardProvider } from "./BoardContext";
+import { PresenceProvider } from "./PresenceContext";
 import { ToastProvider } from "./ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 
 function ViewModeProbe() {
-	const { boardViewMode, switchWorkspace, setBoardViewMode } = useBoard();
+	const { boardViewMode, switchWorkspace, setBoardViewMode } = useWorkspace();
 	return (
 		<>
 			<span data-testid="view-mode">{boardViewMode}</span>
@@ -131,9 +133,13 @@ async function renderBoard() {
 	await act(async () => {
 		render(
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<ViewModeProbe />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<ViewModeProbe />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>,
 		);
 	});

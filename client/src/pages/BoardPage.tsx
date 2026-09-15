@@ -24,6 +24,8 @@ import TrashZone from "../components/TrashZone";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { TaskMetadataCatalogProvider } from "../components/task-entry/TaskMetadataCatalogProvider";
 import { useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { moveCardToColumn, revertCardMove } from "../lib/boardColumnMoves";
 import { WORKSPACE_TEMPLATES } from "../lib/templates";
 import type { BoardCreatePayload } from "../lib/taskCreateContracts";
@@ -210,13 +212,15 @@ export default function BoardPage() {
 		loadError,
 		refresh,
 		cancelScheduledRefresh,
-		showToast,
 		deleteCard,
 		saveCard,
+	} = useBoard();
+	const {
 		activeWorkspaceId,
 		boardViewMode,
 		setBoardViewMode,
-	} = useBoard();
+	} = useWorkspace();
+	const showToast = useShowToast();
 	const navigate = useNavigate();
 	const [activeCard, setActiveCard] = useState<Card | null>(null);
 	const [pickerState, setPickerState] = useState<

@@ -15,6 +15,7 @@ import type { AgentBoard, AgentEvent } from "../types";
 
 const {
 	mockUseBoard,
+	mockUseWorkspace,
 	mockGetBoard,
 	getAgentArtifact,
 	mockSendAgentBoardMessage,
@@ -25,6 +26,7 @@ const {
 	stableClearFollowUpAgentEvents,
 } = vi.hoisted(() => ({
 	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 	mockGetBoard: vi.fn(),
 	getAgentArtifact: vi.fn(),
 	mockSendAgentBoardMessage: vi.fn(),
@@ -37,6 +39,14 @@ const {
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => stableShowToast,
 }));
 
 // AgentPage reads searchParams.get("boardId") — the param name MUST be
@@ -107,13 +117,10 @@ beforeEach(() => {
 		explanation: "Here is the answer.",
 		boardUpdated: false,
 	});
-	// AgentPage destructures showToast + clearAgentEvents from useBoard() and
-	// calls clearAgentEvents() in the load effect — both MUST be stubbed or the
-	// page crashes (undefined is not a function) once the board loads.
+	// useAgentBoard reads workspace/toast; AgentPage also needs clearFollowUpAgentEvents.
+	mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 1 });
 	mockUseBoard.mockReturnValue({
-		activeWorkspaceId: 1,
 		agentEvents: [],
-		showToast: stableShowToast,
 		clearAgentEvents: stableClearAgentEvents,
 		clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
 	});
@@ -213,10 +220,9 @@ describe("AgentPage follow-up chat bubbles", () => {
 		];
 		mockGetBoard.mockResolvedValue(makeBoard("done"));
 		getAgentArtifact.mockResolvedValue(null);
+		mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 1 });
 		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 1,
 			agentEvents: followUpEvents,
-			showToast: stableShowToast,
 			clearAgentEvents: stableClearAgentEvents,
 		});
 
@@ -363,17 +369,16 @@ describe("bug-hunting: multi-turn conversation", () => {
 	it("clears follow-up SSE events before each follow-up send", async () => {
 		mockGetBoard.mockResolvedValue(makeBoard("done"));
 		getAgentArtifact.mockResolvedValue(null);
+		mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 1 });
 		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 1,
 			agentEvents: [
 				{
 					type: "agent.card.token",
 					columnSlug: "__notfirst__",
 					boardId: 2,
-					token: "Previous answer.",
-				},
+					token: "Previous answer."
+	},
 			],
-			showToast: stableShowToast,
 			clearAgentEvents: stableClearAgentEvents,
 			clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
 		});
@@ -419,17 +424,16 @@ describe("bug-hunting: multi-turn conversation", () => {
 			streamed: true,
 			boardUpdated: false,
 		});
+		mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 1 });
 		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 1,
 			agentEvents: [
 				{
 					type: "agent.card.token",
 					columnSlug: "__notfirst__",
 					boardId: 2,
-					token: answer,
-				},
+					token: answer
+	},
 			],
-			showToast: stableShowToast,
 			clearAgentEvents: stableClearAgentEvents,
 			clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
 		});
@@ -482,10 +486,9 @@ describe("AgentPage __notfirst__ column state", () => {
 		];
 		mockGetBoard.mockResolvedValue(boardWithColumn);
 		getAgentArtifact.mockResolvedValue(null);
+		mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 1 });
 		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 1,
 			agentEvents: followUpEvents,
-			showToast: stableShowToast,
 			clearAgentEvents: stableClearAgentEvents,
 		});
 

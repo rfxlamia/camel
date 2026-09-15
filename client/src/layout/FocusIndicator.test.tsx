@@ -3,10 +3,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FocusSession } from "../types";
 
-const { mockUseFocusSession, mockNavigate, mockUseBoard } = vi.hoisted(() => ({
+const { mockUseFocusSession, mockNavigate } = vi.hoisted(() => ({
 	mockUseFocusSession: vi.fn(),
 	mockNavigate: vi.fn(),
-	mockUseBoard: vi.fn(),
 }));
 
 vi.mock("../context/FocusSessionContext", () => ({
@@ -20,10 +19,6 @@ vi.mock("react-router", async (importOriginal) => {
 		useNavigate: () => mockNavigate,
 	};
 });
-
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
-}));
 
 import FocusIndicator from "./FocusIndicator";
 
@@ -55,7 +50,6 @@ function setupActiveSession(session: FocusSession = makeSession()) {
 		resume: vi.fn(),
 		finish: vi.fn(),
 	});
-	mockUseBoard.mockReturnValue({ focusModeEnabled: true });
 }
 
 describe("FocusIndicator", () => {
@@ -99,33 +93,6 @@ describe("FocusIndicator", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({ focusModeEnabled: true });
-		render(<FocusIndicator />);
-
-		expect(screen.queryByRole("button", { name: /focus active/i })).toBeNull();
-	});
-
-	it("renders Focus active when a session exists even if focusModeEnabled is false", () => {
-		setupActiveSession();
-		mockUseBoard.mockReturnValue({ focusModeEnabled: false });
-		render(<FocusIndicator />);
-
-		expect(screen.getByRole("button", { name: /focus active/i })).toBeTruthy();
-	});
-
-	it("renders nothing when focusModeEnabled is false and there is no session", () => {
-		mockUseFocusSession.mockReturnValue({
-			session: null,
-			loading: false,
-			actionError: null,
-			focus: vi.fn(),
-			switchTo: vi.fn(),
-			start: vi.fn(),
-			pause: vi.fn(),
-			resume: vi.fn(),
-			finish: vi.fn(),
-		});
-		mockUseBoard.mockReturnValue({ focusModeEnabled: false });
 		render(<FocusIndicator />);
 
 		expect(screen.queryByRole("button", { name: /focus active/i })).toBeNull();
@@ -143,7 +110,6 @@ describe("FocusIndicator", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({ focusModeEnabled: true });
 		render(<FocusIndicator />);
 
 		expect(screen.queryByRole("button", { name: /focus active/i })).toBeNull();

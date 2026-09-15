@@ -12,42 +12,17 @@ import {
 import { ApiError, api } from "../api";
 import type { TicketIntakeResultEvent } from "../hooks/useTicketIntakeChat";
 import { shouldClearOnWorkspaceChange } from "../lib/agentStream";
-import {
-	type BoardViewMode,
-	readBoardViewMode,
-	writeBoardViewMode,
-} from "../lib/boardViewPrefs";
-import {
-	chooseInitialWorkspace,
-	clearSavedWorkspaceId,
-	getRemovalRedirect,
-	persistWorkspaceId,
-	readSavedWorkspaceId,
-} from "../lib/workspaceSelection";
-import {
-	applyCreatedWorkspaceSelection,
-	FOCUS_BLOCKED_TOAST,
-	FOCUS_LOADING_TOAST,
-	getSwitchAttemptState,
-	persistRemindedInviteIds,
-	readRemindedInviteIds,
-} from "../lib/workspaceSwitcher";
+import { getRemovalRedirect } from "../lib/workspaceSelection";
 import type {
 	ActivityEvent,
 	AgentEvent,
 	Column,
 	FlowMetrics,
-	PresenceUser,
-	SettingsMap,
-	SwitchConfirmState,
 	User,
-	Workspace,
-	WorkspaceInvite,
 } from "../types";
-import { type ToastType, useShowToast } from "./ToastContext";
+import { useShowToast } from "./ToastContext";
+import { useWorkspace } from "./WorkspaceContext";
 
-const HEARTBEAT_INTERVAL_MS = 25_000;
-const PRESENCE_REFRESH_MS = 30_000;
 /** Trailing debounce for SSE-triggered refreshes. Chosen to coalesce burst
  *  events (e.g. own mutation + its echo) without noticeable UI lag. */
 const REFRESH_DEBOUNCE_MS = 150;
@@ -100,34 +75,10 @@ function createSubscriberRegistry<T>() {
 }
 
 interface BoardContextValue {
-	user: User;
-	activeWorkspaceId: number | null;
-	activeWorkspace: Workspace | null;
-	workspaces: Workspace[];
-	pendingInvites: WorkspaceInvite[];
-	pickerRequired: boolean;
-	workspacesReady: boolean;
-	remindedInviteIds: number[];
-	hasUnsavedCardEdits: boolean;
-	setHasUnsavedCardEdits: (dirty: boolean) => void;
-	switchConfirm: SwitchConfirmState;
-	attemptSwitchWorkspace: (workspaceId: number) => void;
-	confirmPendingSwitch: () => void;
-	cancelPendingSwitch: () => void;
-	switchWorkspace: (workspaceId: number) => void;
-	reloadWorkspaces: () => Promise<Workspace[]>;
-	acceptWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
-	declineWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
-	remindInviteLater: (invite: WorkspaceInvite) => void;
-	openCreateWorkspace: () => void;
-	closeCreateWorkspace: () => void;
-	createWorkspaceOpen: boolean;
-	submitCreateWorkspace: (name: string) => Promise<void>;
 	columns: Column[] | null;
 	setColumns: Dispatch<SetStateAction<Column[] | null>>;
 	metrics: FlowMetrics | null;
 	activity: ActivityEvent[];
-	presence: PresenceUser[];
 	loadError: boolean;
 	refreshTick: number;
 	refresh: () => Promise<void>;
@@ -149,27 +100,14 @@ interface BoardContextValue {
 		},
 	) => Promise<SaveCardResult>;
 	deleteCard: (id: number) => Promise<void>;
-	showToast: (message: string, type?: ToastType) => void;
-	logout: () => Promise<void>;
-	settings: SettingsMap;
-	settingsVersion: number;
-	refreshSettings: () => Promise<void>;
 	agentEvents: AgentEvent[];
 	clearAgentEvents: () => void;
 	clearFollowUpAgentEvents: () => void;
 	ticketIntakeEvents: TicketIntakeResultEvent[];
-	ticketIntakeEnabled: boolean;
-	focusModeEnabled: boolean;
-	boardViewMode: BoardViewMode;
-	setBoardViewMode: (mode: BoardViewMode) => void;
 	subscribeTrackerEvents: (handler: TrackerEventHandler) => () => void;
 	subscribeFocusEvents: (handler: FocusEventHandler) => () => void;
 	subscribeCardEvents: (handler: CardEventHandler) => () => void;
 	subscribeMembershipEvents: (handler: MembershipEventHandler) => () => void;
-	hasActiveFocusSession: boolean;
-	setHasActiveFocusSession: (active: boolean) => void;
-	focusSessionHydrated: boolean;
-	setFocusSessionHydrated: (hydrated: boolean) => void;
 	/** Reload the tracker list page (registered by TrackerPage). */
 	refreshTrackerList: () => void;
 	registerRefreshTrackerList: (fn: (() => void) | null) => void;
@@ -183,52 +121,28 @@ export function useBoard(): BoardContextValue {
 	return ctx;
 }
 
-interface Props {
-	user: User;
-	onSignedOut: () => void;
-	children: ReactNode;
-}
-
-export function BoardProvider({ user, onSignedOut, children }: Props) {
+export function BoardProvider({ children }: { children: ReactNode }) {
 	const showToast = useShowToast();
-	const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(
-		null,
-	);
-	const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-	const [pendingInvites, setPendingInvites] = useState<WorkspaceInvite[]>([]);
-	const [pickerRequired, setPickerRequired] = useState(false);
-	const [workspacesReady, setWorkspacesReady] = useState(false);
-	const [remindedInviteIds, setRemindedInviteIds] = useState<number[]>(() =>
-		readRemindedInviteIds(),
-	);
-	const [hasUnsavedCardEdits, setHasUnsavedCardEdits] = useState(false);
-	const [switchConfirm, setSwitchConfirm] = useState<SwitchConfirmState>({
-		open: false,
-	});
-	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+	const {
+		user,
+		activeWorkspaceId,
+		workspaces,
+		switchWorkspace,
+		reloadWorkspaces,
+		refreshSettings,
+		logout,
+	} = useWorkspace();
+
 	const [columns, setColumns] = useState<Column[] | null>(null);
 	const [metrics, setMetrics] = useState<FlowMetrics | null>(null);
-	const [presence, setPresence] = useState<PresenceUser[]>([]);
 	const [activity, setActivity] = useState<ActivityEvent[]>([]);
 	const [loadError, setLoadError] = useState(false);
 	const [refreshTick, setRefreshTick] = useState(0);
-	const [settings, setSettings] = useState<SettingsMap>({
-		boardName: "Camel",
-		logoPath: "/logo.png",
-		version: 0,
-	});
-	const [settingsVersion, setSettingsVersion] = useState(0);
 	const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
 	const [ticketIntakeEvents, setTicketIntakeEvents] = useState<
 		TicketIntakeResultEvent[]
 	>([]);
-	const [ticketIntakeEnabled, setTicketIntakeEnabled] = useState(false);
-	const [focusModeEnabled, setFocusModeEnabled] = useState(false);
-	const [hasActiveFocusSession, setHasActiveFocusSession] = useState(false);
-	const [focusSessionHydrated, setFocusSessionHydrated] = useState(false);
-	const [boardViewMode, setBoardViewModeState] = useState<BoardViewMode>(() =>
-		readBoardViewMode(activeWorkspaceId ?? 0),
-	);
+	const [boardWorkspaceId, setBoardWorkspaceId] = useState(activeWorkspaceId);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const trackerEventRegistry = useRef(
 		createSubscriberRegistry<TrackerEventHandler>(),
@@ -246,49 +160,15 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const prevWorkspaceIdRef = useRef<number | null>(null);
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
-	const hasUnsavedRef = useRef(hasUnsavedCardEdits);
-	hasUnsavedRef.current = hasUnsavedCardEdits;
-	const hasActiveFocusRef = useRef(hasActiveFocusSession);
-	hasActiveFocusRef.current = hasActiveFocusSession;
-	const focusSessionHydratedRef = useRef(focusSessionHydrated);
-	focusSessionHydratedRef.current = focusSessionHydrated;
 
-	const activeWorkspace =
-		activeWorkspaceId === null
-			? null
-			: (workspaces.find((w) => w.id === activeWorkspaceId) ?? null);
-
-	// Ticket-intake availability (Linear API keys configured on server).
-	useEffect(() => {
-		let active = true;
-		api.ticketIntake
-			.getConfig()
-			.then(({ enabled }) => {
-				if (active) setTicketIntakeEnabled(enabled);
-			})
-			.catch(() => {
-				if (active) setTicketIntakeEnabled(false);
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	// Focus mode availability (FOCUS_MODE_ENABLED on server).
-	useEffect(() => {
-		let active = true;
-		api.focus
-			.getConfig()
-			.then(({ enabled }) => {
-				if (active) setFocusModeEnabled(enabled);
-			})
-			.catch(() => {
-				if (active) setFocusModeEnabled(false);
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
+	// Render-phase reset: never paint new workspace id with stale board data.
+	if (boardWorkspaceId !== activeWorkspaceId) {
+		setBoardWorkspaceId(activeWorkspaceId);
+		setColumns(null);
+		setMetrics(null);
+		setActivity([]);
+		setLoadError(false);
+	}
 
 	// Clear stale live agent events when switching workspaces (EC3).
 	useEffect(() => {
@@ -303,21 +183,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		}
 		prevWorkspaceIdRef.current = activeWorkspaceId;
 	}, [activeWorkspaceId]);
-
-	// Re-resolve view mode when active workspace changes.
-	useEffect(() => {
-		if (activeWorkspaceId === null) return;
-		setBoardViewModeState(readBoardViewMode(activeWorkspaceId));
-	}, [activeWorkspaceId]);
-
-	const setBoardViewMode = useCallback(
-		(mode: BoardViewMode) => {
-			if (activeWorkspaceId === null) return;
-			setBoardViewModeState(mode);
-			writeBoardViewMode(activeWorkspaceId, mode);
-		},
-		[activeWorkspaceId],
-	);
 
 	const subscribeTrackerEvents = useCallback((handler: TrackerEventHandler) => {
 		return trackerEventRegistry.current.subscribe(handler);
@@ -374,19 +239,16 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			setRefreshTick((t) => t + 1);
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 401) {
-				onSignedOut();
+				void logout();
 				return;
 			}
 			setLoadError(true);
 		}
-	}, [activeWorkspaceId, onSignedOut]);
+	}, [activeWorkspaceId, logout]);
 
-	// Stable ref so the debounced callback always calls the latest refresh.
 	const refreshRef = useRef(refresh);
 	refreshRef.current = refresh;
 
-	/** Trailing debounce: coalesces burst SSE events into a single refresh.
-	 *  Uses a stable empty-deps callback + ref pattern. */
 	const scheduleRefresh = useCallback(() => {
 		if (refreshTimer.current) clearTimeout(refreshTimer.current);
 		refreshTimer.current = setTimeout(() => {
@@ -395,8 +257,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		}, REFRESH_DEBOUNCE_MS);
 	}, []);
 
-	/** Cancel a pending debounced refresh. Call before mutations to prevent
-	 *  the debounced refresh from overwriting the mutation's own refresh. */
 	const cancelScheduledRefresh = useCallback(() => {
 		if (refreshTimer.current) {
 			clearTimeout(refreshTimer.current);
@@ -404,232 +264,15 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		}
 	}, []);
 
-	const refreshSettings = useCallback(async () => {
-		if (activeWorkspaceId === null) return;
-		const s = await api.getSettings(activeWorkspaceId);
-		setSettings(s);
-		setSettingsVersion(s.version);
-	}, [activeWorkspaceId]);
-
-	const reloadWorkspaces = useCallback(async () => {
-		const { workspaces: list, pendingInvites: invites } =
-			await api.getWorkspaces();
-		setWorkspaces(list);
-		setPendingInvites(invites);
-		return list;
-	}, []);
-
-	const switchWorkspace = useCallback((workspaceId: number) => {
-		setHasUnsavedCardEdits(false);
-		setSwitchConfirm({ open: false });
-		setActiveWorkspaceId(workspaceId);
-		persistWorkspaceId(workspaceId);
-		setPickerRequired(false);
-		setColumns(null);
-		setMetrics(null);
-		setActivity([]);
-		setPresence([]);
-		setLoadError(false);
-	}, []);
-
-	const guardFocusBeforeSwitch = useCallback((): boolean => {
-		if (!focusSessionHydratedRef.current) {
-			showToast(FOCUS_LOADING_TOAST, "warning");
-			return false;
-		}
-		if (hasActiveFocusRef.current) {
-			showToast(FOCUS_BLOCKED_TOAST, "warning");
-			return false;
-		}
-		return true;
-	}, [showToast]);
-
-	const attemptSwitchWorkspace = useCallback(
-		(workspaceId: number) => {
-			const state = getSwitchAttemptState({
-				activeWorkspaceId,
-				targetWorkspaceId: workspaceId,
-				hasUnsavedCardEdits: hasUnsavedRef.current,
-				hasActiveFocusSession: hasActiveFocusRef.current,
-				focusSessionHydrated: focusSessionHydratedRef.current,
-			});
-			if (state.status === "noop") return;
-			if (state.status === "focus-loading") {
-				showToast(FOCUS_LOADING_TOAST, "warning");
-				return;
-			}
-			if (state.status === "focus-blocked") {
-				showToast(FOCUS_BLOCKED_TOAST, "warning");
-				return;
-			}
-			if (state.status === "confirm-required") {
-				setSwitchConfirm({
-					open: true,
-					pendingWorkspaceId: state.pendingWorkspaceId,
-				});
-				return;
-			}
-			switchWorkspace(state.workspaceId);
-		},
-		[activeWorkspaceId, showToast, switchWorkspace],
-	);
-
-	const confirmPendingSwitch = useCallback(() => {
-		if (!switchConfirm.open) return;
-		const pendingWorkspaceId = switchConfirm.pendingWorkspaceId;
-		setSwitchConfirm({ open: false });
-		if (!guardFocusBeforeSwitch()) return;
-		switchWorkspace(pendingWorkspaceId);
-	}, [switchConfirm, switchWorkspace, guardFocusBeforeSwitch]);
-
-	const cancelPendingSwitch = useCallback(() => {
-		setSwitchConfirm({ open: false });
-	}, []);
-
-	const acceptWorkspaceInvite = useCallback(
-		async (invite: WorkspaceInvite) => {
-			try {
-				await api.acceptInvite(invite.workspaceId, invite.id);
-				const list = await reloadWorkspaces();
-				if (!guardFocusBeforeSwitch()) return;
-				switchWorkspace(
-					list.find((w) => w.id === invite.workspaceId)?.id ??
-						invite.workspaceId,
-				);
-			} catch (err) {
-				if (err instanceof ApiError && err.status === 409) {
-					showToast(
-						err.message || "Couldn't accept the invite. Try again.",
-						"error",
-					);
-					return;
-				}
-				showToast("Couldn't accept the invite. Try again.", "error");
-			}
-		},
-		[reloadWorkspaces, showToast, switchWorkspace, guardFocusBeforeSwitch],
-	);
-
-	const declineWorkspaceInvite = useCallback(
-		async (invite: WorkspaceInvite) => {
-			try {
-				await api.declineInvite(invite.workspaceId, invite.id);
-				await reloadWorkspaces();
-			} catch {
-				showToast("Couldn't decline the invite. Try again.", "error");
-			}
-		},
-		[reloadWorkspaces, showToast],
-	);
-
-	const remindInviteLater = useCallback((invite: WorkspaceInvite) => {
-		setRemindedInviteIds((prev) => {
-			if (prev.includes(invite.id)) return prev;
-			const next = [...prev, invite.id];
-			persistRemindedInviteIds(next);
-			return next;
-		});
-	}, []);
-
-	const openCreateWorkspace = useCallback(() => {
-		setCreateWorkspaceOpen(true);
-	}, []);
-
-	const closeCreateWorkspace = useCallback(() => {
-		setCreateWorkspaceOpen(false);
-	}, []);
-
-	const submitCreateWorkspace = useCallback(
-		async (name: string) => {
-			const trimmed = name.trim();
-			if (!trimmed) return;
-			try {
-				const prevIds = workspacesRef.current.map((w) => w.id);
-				const created = await api.createWorkspace({ name: trimmed });
-				await reloadWorkspaces();
-				// .workspaces and .localStorageWrite are unused: reloadWorkspaces() and switchWorkspace() cover them.
-				const selection = applyCreatedWorkspaceSelection({
-					currentWorkspaceIds: prevIds,
-					createdWorkspace: created,
-				});
-				setCreateWorkspaceOpen(false);
-				if (!guardFocusBeforeSwitch()) return;
-				switchWorkspace(selection.activeWorkspaceId);
-				showToast(selection.toast, "success");
-			} catch {
-				showToast("Couldn't create the workspace. Try again.", "error");
-			}
-		},
-		[reloadWorkspaces, showToast, switchWorkspace, guardFocusBeforeSwitch],
-	);
-
-	// Load workspace list and restore last-active workspace from localStorage.
-	useEffect(() => {
-		let active = true;
-		void (async () => {
-			try {
-				const { workspaces: list, pendingInvites: invites } =
-					await api.getWorkspaces();
-				if (!active) return;
-				const selection = chooseInitialWorkspace({
-					workspaces: list,
-					savedWorkspaceId: readSavedWorkspaceId(),
-				});
-				if (selection.clearSavedWorkspace) clearSavedWorkspaceId();
-				setWorkspaces(list);
-				setPendingInvites(invites);
-				setPickerRequired(selection.pickerRequired);
-				if (selection.activeWorkspaceId !== null) {
-					setActiveWorkspaceId(selection.activeWorkspaceId);
-					persistWorkspaceId(selection.activeWorkspaceId);
-				}
-			} catch (err) {
-				if (err instanceof ApiError && err.status === 401) {
-					onSignedOut();
-					return;
-				}
-			} finally {
-				if (active) setWorkspacesReady(true);
-			}
-		})();
-		return () => {
-			active = false;
-		};
-	}, [onSignedOut]);
-
-	// Board + collaboration wiring scoped to the active workspace.
+	// Board realtime wiring scoped to the active workspace (EventSource only).
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
 
 		void refresh();
-		void refreshSettings();
-
-		const beat = () => {
-			void api
-				.heartbeat(activeWorkspaceId)
-				.catch((err) => console.debug("heartbeat failed", err));
-			void api
-				.getPresence(activeWorkspaceId)
-				.then(({ users }) => setPresence(users))
-				.catch((err) => console.debug("presence fetch failed", err));
-		};
-		beat();
-		const heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
-		const presenceTimer = setInterval(
-			() =>
-				void api
-					.getPresence(activeWorkspaceId)
-					.then(({ users }) => setPresence(users))
-					.catch((err) => console.debug("presence refresh failed", err)),
-			PRESENCE_REFRESH_MS,
-		);
 
 		const stream = new EventSource(
 			`/api/workspaces/${activeWorkspaceId}/events/stream`,
 		);
-		// Re-fetch board data whenever the SSE connection (re)opens — covers the
-		// startup race where the server wasn't ready on first connect, leaving
-		// loadError=true until the next board event arrived.
 		stream.onopen = () => void refresh();
 		stream.onmessage = (e) => {
 			try {
@@ -719,20 +362,14 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 			} catch {
 				// non-JSON keep-alive comment
 			}
-			// Debounce: coalesce burst events (own mutation + echo, rapid updates)
-			// into a single refresh.
 			scheduleRefresh();
 		};
 
 		return () => {
-			// Cancel pending debounced refresh — the new effect will call refresh()
-			// on mount, so no event is truly lost.
 			if (refreshTimer.current) {
 				clearTimeout(refreshTimer.current);
 				refreshTimer.current = null;
 			}
-			clearInterval(heartbeatTimer);
-			clearInterval(presenceTimer);
 			stream.close();
 		};
 	}, [
@@ -806,73 +443,27 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		[activeWorkspaceId, columns, refresh, cancelScheduledRefresh],
 	);
 
-	const logout = useCallback(async () => {
-		try {
-			await api.logout();
-		} catch {
-			// session cookie is gone either way
-		}
-		onSignedOut();
-	}, [onSignedOut]);
-
 	return (
 		<BoardContext.Provider
 			value={{
-				user,
-				activeWorkspaceId,
-				activeWorkspace,
-				workspaces,
-				pendingInvites,
-				pickerRequired,
-				workspacesReady,
-				remindedInviteIds,
-				hasUnsavedCardEdits,
-				setHasUnsavedCardEdits,
-				switchConfirm,
-				attemptSwitchWorkspace,
-				confirmPendingSwitch,
-				cancelPendingSwitch,
-				switchWorkspace,
-				reloadWorkspaces,
-				acceptWorkspaceInvite,
-				declineWorkspaceInvite,
-				remindInviteLater,
-				openCreateWorkspace,
-				closeCreateWorkspace,
-				createWorkspaceOpen,
-				submitCreateWorkspace,
 				columns,
 				setColumns,
 				metrics,
 				activity,
-				presence,
 				loadError,
 				refreshTick,
 				refresh,
 				cancelScheduledRefresh,
 				saveCard,
 				deleteCard,
-				showToast,
-				logout,
-				settings,
-				settingsVersion,
-				refreshSettings,
 				agentEvents,
 				clearAgentEvents,
 				clearFollowUpAgentEvents,
 				ticketIntakeEvents,
-				ticketIntakeEnabled,
-				focusModeEnabled,
-				boardViewMode,
-				setBoardViewMode,
 				subscribeTrackerEvents,
 				subscribeFocusEvents,
 				subscribeCardEvents,
 				subscribeMembershipEvents,
-				hasActiveFocusSession,
-				setHasActiveFocusSession,
-				focusSessionHydrated,
-				setFocusSessionHydrated,
 				refreshTrackerList,
 				registerRefreshTrackerList,
 			}}

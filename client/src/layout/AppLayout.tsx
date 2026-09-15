@@ -5,9 +5,10 @@ import PresenceBar from "../components/PresenceBar";
 import { FloatingChatButton } from "../components/ticketIntake/FloatingChatButton";
 import { AutoErrorListener } from "../components/ticketIntake/AutoErrorListener";
 import Toast from "../components/Toast";
-import { useBoard } from "../context/BoardContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
+import { usePresence } from "../context/PresenceContext";
 import { useToastState } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { parseMyWorkDetailState } from "../lib/myWorkNavigation";
 import { formatTitle, getFaviconLink } from "../lib/title";
 import FocusIndicator from "./FocusIndicator";
@@ -23,7 +24,8 @@ function ToastHost() {
 }
 
 export default function AppLayout() {
-	const { user, presence, settings } = useBoard();
+	const { user, settings } = useWorkspace();
+	const { presence } = usePresence();
 	const [mode, setMode] = useSidebarMode();
 	const [collapsed, setCollapsed] = useState(
 		() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",

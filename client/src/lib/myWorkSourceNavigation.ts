@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useBoard } from "../context/BoardContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import type { MyWorkItem } from "../types/myWork";
 import {
 	getSwitchAttemptState,
@@ -124,7 +124,7 @@ export function useMyWorkSourceNavigation(item: MyWorkItem | null) {
 		hasActiveFocusSession,
 		focusSessionHydrated,
 		switchConfirm = { open: false },
-	} = useBoard();
+	} = useWorkspace();
 	const [pending, setPending] = useState<PendingSourceNavigation | null>(null);
 	usePendingSourceTransition(
 		pending,

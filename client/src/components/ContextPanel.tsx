@@ -10,6 +10,8 @@ import { useNavigate, useParams } from "react-router";
 import { api, type TicketHistoryEntry } from "../api";
 import type { PreparedImagePair } from "../lib/imageAttachments";
 import { type SaveCardResult, useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { useTicketIntakeChat } from "../hooks/useTicketIntakeChat";
 import {
 	describeCardEvent,
@@ -106,11 +108,9 @@ function CardEditor({
 		setHasUnsavedCardEdits,
 		activeWorkspaceId,
 		ticketIntakeEnabled,
-		ticketIntakeEvents,
 		focusModeEnabled,
-		refresh,
-		cancelScheduledRefresh,
-	} = useBoard();
+	} = useWorkspace();
+	const { ticketIntakeEvents, refresh, cancelScheduledRefresh } = useBoard();
 	const [title, setTitle] = useState(card.title);
 	const [description, setDescription] = useState(card.description);
 	const [assigneeIds, setAssigneeIds] = useState<number[]>(
@@ -508,7 +508,7 @@ function DangerZone({ onDelete }: { onDelete: () => Promise<void> }) {
 }
 
 function TicketHistorySection({ cardId }: { cardId: number }) {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const [tickets, setTickets] = useState<TicketHistoryEntry[] | null>(null);
 
 	useEffect(() => {
@@ -578,7 +578,8 @@ function TicketHistorySection({ cardId }: { cardId: number }) {
 }
 
 function ActivitySection({ cardId }: { cardId: number }) {
-	const { activeWorkspaceId, refreshTick } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const { refreshTick } = useBoard();
 	const [events, setEvents] = useState<ActivityEvent[] | null>(null);
 	const latestRefreshTickRef = useRef(refreshTick);
 	latestRefreshTickRef.current = refreshTick;
@@ -652,7 +653,8 @@ function ActivitySection({ cardId }: { cardId: number }) {
 export default function ContextPanel() {
 	const { cardId: cardIdParam } = useParams();
 	const navigate = useNavigate();
-	const { columns, saveCard, deleteCard, showToast } = useBoard();
+	const { columns, saveCard, deleteCard } = useBoard();
+	const showToast = useShowToast();
 
 	const cardId = parseCardId(cardIdParam);
 	const card = findCardInColumns(columns, cardId);

@@ -5,7 +5,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import {
 	type MyWorkDetailSelection,
 	useMyWorkDetailState,
@@ -148,7 +148,7 @@ export default function MyWorkDetailSheet({
 		selection,
 		refreshToken,
 	);
-	const { switchConfirm } = useBoard();
+	const { switchConfirm } = useWorkspace();
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
 	const dialogRef = useRef<HTMLElement>(null);
 	const closeTimerRef = useRef<number | null>(null);

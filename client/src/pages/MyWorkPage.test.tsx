@@ -24,7 +24,8 @@ const {
 	mockListMyWork,
 	mockListActiveMyWorkCandidates,
 	mockMarkMyWorkDone,
-	mockUseBoard,
+	mockUseWorkspace,
+	mockDelayedLoading,
 	MockApiError,
 } = vi.hoisted(() => {
 	class TestApiError extends Error {
@@ -42,7 +43,8 @@ const {
 		mockListMyWork: vi.fn(),
 		mockListActiveMyWorkCandidates: vi.fn(),
 		mockMarkMyWorkDone: vi.fn(),
-		mockUseBoard: vi.fn(),
+		mockUseWorkspace: vi.fn(),
+		mockDelayedLoading: { useDelay: false },
 		MockApiError: TestApiError,
 	};
 });
@@ -57,9 +59,21 @@ vi.mock("../api", () => ({
 	ApiError: MockApiError,
 }));
 
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
+
+vi.mock("../components/my-work/useDelayedLoading", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../components/my-work/useDelayedLoading")>();
+	return {
+		...actual,
+		useDelayedLoading: (loading: boolean) =>
+			mockDelayedLoading.useDelay
+				? actual.useDelayedLoading(loading)
+				: false,
+	};
+});
 
 import MyWorkPage from "./MyWorkPage";
 
@@ -157,7 +171,13 @@ function RecoveryRouterBoundary() {
 }
 
 beforeEach(() => {
-	mockUseBoard.mockReturnValue({ activeWorkspaceId: 999, logout: vi.fn() });
+	vi.useRealTimers();
+	mockDelayedLoading.useDelay = false;
+	Object.defineProperty(document, "hidden", {
+		configurable: true,
+		get: () => false,
+	});
+	mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 999, logout: vi.fn() });
 	mockListMyWork.mockReset();
 	mockListActiveMyWorkCandidates.mockReset();
 	mockMarkMyWorkDone.mockReset();
@@ -194,7 +214,7 @@ describe("MyWorkPage", () => {
 			workspaceId: 12,
 			workspaceName: "Orbit",
 		});
-		mockListActiveMyWorkCandidates.mockResolvedValueOnce(
+		mockListActiveMyWorkCandidates.mockResolvedValue(
 			response([activeBoard, activeTracker]),
 		);
 		mockListMyWork.mockResolvedValue(response([activeBoard, activeTracker]));
@@ -208,8 +228,12 @@ describe("MyWorkPage", () => {
 			</MemoryRouter>,
 		);
 
-		await waitFor(() => expect(screen.getByText("AT-17")).toBeTruthy());
-		expect(screen.getByText("Fix Atlas sync")).toBeTruthy();
+		await waitFor(() => {
+			expect(screen.queryByTestId("my-work-loading")).toBeNull();
+			expect(screen.getByTestId("my-work-row-7-board-AT-17")).toBeTruthy();
+			expect(screen.getByText("AT-17")).toBeTruthy();
+			expect(screen.getByText("Fix Atlas sync")).toBeTruthy();
+		});
 		const row = screen.getByTestId("my-work-row-7-board-AT-17");
 		expect(within(row).getByText("Atlas")).toBeTruthy();
 		expect(within(row).getByText("Board")).toBeTruthy();
@@ -278,6 +302,7 @@ describe("MyWorkPage", () => {
 	});
 
 	it("shows the page loading surface while the personal request is pending", async () => {
+		mockDelayedLoading.useDelay = true;
 		let resolveRequest: (value: MyWorkListResponse) => void = () => {};
 		const pendingRequest = new Promise<MyWorkListResponse>((resolve) => {
 			resolveRequest = resolve;
@@ -458,7 +483,7 @@ describe("MyWorkPage", () => {
 		const logout = vi.fn(async () => {
 			recoverySignOut?.();
 		});
-		mockUseBoard.mockReturnValue({ activeWorkspaceId: 999, logout });
+		mockUseWorkspace.mockReturnValue({ activeWorkspaceId: 999, logout });
 		mockListActiveMyWorkCandidates.mockRejectedValueOnce(
 			new MockApiError("Not authenticated", 401, "session_expired"),
 		);

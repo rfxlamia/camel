@@ -17,6 +17,8 @@ import {
 } from "../lib/focusGuards";
 import type { FocusSession, WorkItemSource } from "../types";
 import { useBoard } from "./BoardContext";
+import { useShowToast } from "./ToastContext";
+import { useWorkspace } from "./WorkspaceContext";
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;
@@ -51,13 +53,15 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 	const {
 		activeWorkspaceId,
 		user,
-		showToast,
+		setHasActiveFocusSession,
+		setFocusSessionHydrated,
+	} = useWorkspace();
+	const showToast = useShowToast();
+	const {
 		subscribeFocusEvents,
 		subscribeCardEvents: subscribeCardEventsFromBoard,
 		subscribeTrackerEvents: subscribeTrackerEventsFromBoard,
 		subscribeMembershipEvents: subscribeMembershipEventsFromBoard,
-		setHasActiveFocusSession,
-		setFocusSessionHydrated,
 	} = useBoard();
 
 	const subscribeCardEvents =

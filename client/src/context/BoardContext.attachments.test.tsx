@@ -146,15 +146,21 @@ async function advanceRefreshDebounce() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { PresenceProvider } from "./PresenceContext";
 import { ToastProvider } from "./ToastContext";
+import { WorkspaceProvider } from "./WorkspaceContext";
 
 async function renderBoard(children: React.ReactNode) {
 	await act(async () => {
 		render(
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					{children}
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							{children}
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>,
 		);
 	});

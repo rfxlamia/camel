@@ -125,13 +125,21 @@ function createWrapper() {
 	};
 }
 
-vi.mock("./BoardContext", () => ({
-	useBoard: () => ({
+vi.mock("./WorkspaceContext", () => ({
+	useWorkspace: () => ({
 		activeWorkspaceId,
 		user: testUser,
-		showToast: mockShowToast,
 		setHasActiveFocusSession: mockSetHasActiveFocusSession,
 		setFocusSessionHydrated: mockSetFocusSessionHydrated,
+	}),
+}));
+
+vi.mock("./ToastContext", () => ({
+	useShowToast: () => mockShowToast,
+}));
+
+vi.mock("./BoardContext", () => ({
+	useBoard: () => ({
 		subscribeFocusEvents: (
 			handler: (event: {
 				type: "focus_session.updated";

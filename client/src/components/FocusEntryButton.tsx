@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { ApiError } from "../api";
-import { useBoard } from "../context/BoardContext";
 import { useFocusSession } from "../context/FocusSessionContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import type { WorkItemSource } from "../types";
 
 export type FocusEntryButtonProps = {
@@ -112,7 +113,7 @@ function FocusSwitchDialog({
 }
 
 export default function FocusEntryButton(props: FocusEntryButtonProps) {
-	const { focusModeEnabled } = useBoard();
+	const { focusModeEnabled } = useWorkspace();
 	if (!focusModeEnabled) {
 		return null;
 	}
@@ -121,7 +122,7 @@ export default function FocusEntryButton(props: FocusEntryButtonProps) {
 
 function FocusEntryButtonInner({ source, taskId }: FocusEntryButtonProps) {
 	const navigate = useNavigate();
-	const { showToast } = useBoard();
+	const showToast = useShowToast();
 	const { session, focus, switchTo } = useFocusSession();
 	const [pending, setPending] = useState(false);
 	const [switchDialogOpen, setSwitchDialogOpen] = useState(false);

@@ -15,7 +15,10 @@ vi.mock("@dnd-kit/sortable", () => ({
 	verticalListSortingStrategy: {},
 }));
 vi.mock("../context/BoardContext", () => ({
-	useBoard: () => ({ activeWorkspaceId: null }),
+	useBoard: () => ({}),
+}));
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => ({ activeWorkspaceId: null }),
 }));
 const {
 	mockGetWorkspaceMembers,

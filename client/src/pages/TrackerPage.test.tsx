@@ -25,6 +25,7 @@ const {
 	mockUpdateTrackerItem,
 	mockShowToast,
 	mockUseBoard,
+	mockUseWorkspace,
 	mockNavigate,
 	mockLocation,
 } = vi.hoisted(() => ({
@@ -40,6 +41,7 @@ const {
 	mockUpdateTrackerItem: vi.fn(),
 	mockShowToast: vi.fn(),
 	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockLocation: { pathname: "/tracker", key: "tracker-1" },
 }));
@@ -73,6 +75,14 @@ vi.mock("../api", () => ({
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => mockShowToast,
 }));
 
 // useSearchParams is stateful here: the page reads the active tab from the
@@ -330,12 +340,13 @@ beforeEach(() => {
 	mockCreateWorkItem.mockResolvedValue(
 		makeItem({ id: 3, key: "CA-3", title: "New" }),
 	);
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 		subscribeTrackerEvents: vi.fn(() => () => {}),
 		registerRefreshTrackerList: vi.fn(),
 		refreshTrackerList: vi.fn(),
-		showToast: mockShowToast,
 	});
 	mockLocation.key = "tracker-1";
 });
@@ -804,15 +815,16 @@ describe("TrackerPage", () => {
 
 	it("keeps rows on screen while an SSE-triggered refresh is in flight", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
@@ -831,15 +843,16 @@ describe("TrackerPage", () => {
 
 	it("does not let a stale SSE refresh overwrite newer item state", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		const initialItem = makeItem({ id: 1, key: "CA-1", version: 1 });
 		mockListWorkItems.mockResolvedValueOnce([initialItem]);
@@ -979,8 +992,10 @@ describe("TrackerPage", () => {
 					trackerItemId?: number;
 			  }) => void)
 			| undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
 				return () => {};
@@ -999,8 +1014,10 @@ describe("TrackerPage", () => {
 		let sseHandler:
 			| ((e: { type: string; payload?: unknown }) => void)
 			| undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (
 				cb: (e: { type: string; payload?: unknown }) => void,
 			) => {
@@ -1571,15 +1588,16 @@ describe("TrackerPage items tab", () => {
 
 	it("keeps rows on screen when a background refresh fails", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("CA-1"));
@@ -2287,15 +2305,16 @@ describe("TrackerPage projects", () => {
 
 	it("reloads and shows the card on tracker.project.created without a manual refresh", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("Backlog"));
@@ -2307,15 +2326,16 @@ describe("TrackerPage projects", () => {
 
 	it("drops the card and the item's chip on tracker.project.deleted", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
 		mockListWorkItems.mockResolvedValueOnce([
@@ -2353,15 +2373,16 @@ describe("TrackerPage projects", () => {
 
 	it("keeps the projects tab mounted when items are empty during a refresh", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		mockListWorkItems.mockResolvedValueOnce([]);
 		mockListTrackerProjects.mockResolvedValueOnce([releaseProject]);
@@ -2464,14 +2485,15 @@ describe("TrackerPage projects", () => {
 
 		it("ignores stale labels and members from an older load sequence", async () => {
 			let refreshCallback: (() => void) | undefined;
-			mockUseBoard.mockReturnValue({
-				activeWorkspaceId: 7,
+			mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 				subscribeTrackerEvents: vi.fn(() => () => {}),
 				registerRefreshTrackerList: vi.fn((cb: (() => void) | null) => {
 					refreshCallback = cb ?? undefined;
 				}),
 				refreshTrackerList: vi.fn(),
-				showToast: mockShowToast,
 			});
 
 			let resolveFirstLabels: (value: TrackerVocabulary[]) => void;
@@ -2683,23 +2705,25 @@ describe("TrackerPage projects", () => {
 				});
 			});
 
-			mockUseBoard.mockReturnValue({
-				activeWorkspaceId: 7,
+			mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 				subscribeTrackerEvents: vi.fn(() => () => {}),
 				registerRefreshTrackerList: vi.fn(),
 				refreshTrackerList: vi.fn(),
-				showToast: mockShowToast,
 			});
 
 			const { rerender } = render(<TrackerPage />);
 			await waitFor(() => screen.getByText("CA-1"));
 
-			mockUseBoard.mockReturnValue({
-				activeWorkspaceId: 8,
+			mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 8,
+	});
+	mockUseBoard.mockReturnValue({
 				subscribeTrackerEvents: vi.fn(() => () => {}),
 				registerRefreshTrackerList: vi.fn(),
 				refreshTrackerList: vi.fn(),
-				showToast: mockShowToast,
 			});
 			rerender(<TrackerPage />);
 			await waitFor(() => screen.getByText("CA-1"));
@@ -2763,15 +2787,16 @@ describe("TrackerPage projects", () => {
 					}),
 			);
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
 			registerRefreshTrackerList: vi.fn(),
 			refreshTrackerList: vi.fn(),
-			showToast: mockShowToast,
 		});
 		render(<TrackerPage />);
 		await waitFor(() => screen.getByText("CA-1"));

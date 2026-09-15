@@ -96,7 +96,9 @@ vi.stubGlobal("EventSource", MockEventSource);
 
 import { api } from "../api";
 import { BoardProvider, useBoard } from "../context/BoardContext";
+import { PresenceProvider } from "../context/PresenceContext";
 import { ToastProvider } from "../context/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../context/WorkspaceContext";
 import CardAttachments from "./CardAttachments";
 
 const testUser: User = {
@@ -204,8 +206,8 @@ async function advanceRefreshDebounce() {
 }
 
 function BoardCardAttachmentsProbe() {
-	const { columns, activeWorkspaceId, refresh, cancelScheduledRefresh } =
-		useBoard();
+	const { columns, refresh, cancelScheduledRefresh } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const card = columns?.flatMap((column) => column.cards).find((c) => c.id === 42);
 	if (!card || activeWorkspaceId === null) return null;
 
@@ -253,10 +255,14 @@ describe("CardAttachments SSE gallery refresh", () => {
 		await act(async () => {
 			render(
 				<ToastProvider>
-					<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-						<BoardCardAttachmentsProbe />
-					</BoardProvider>
-				</ToastProvider>,
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<BoardCardAttachmentsProbe />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
+			</ToastProvider>,
 			);
 		});
 

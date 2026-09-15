@@ -1,8 +1,8 @@
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
-import { useBoard } from "../../context/BoardContext";
 import { useNotificationsContext } from "../../context/NotificationsContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
 import { SignOutPopover } from "./SignOutPopover";
@@ -26,7 +26,7 @@ export default function Sidebar({
 	mode,
 	onModeChange,
 }: SidebarProps) {
-	const { logout, settings } = useBoard();
+	const { logout, settings } = useWorkspace();
 	const { unreadCount } = useNotificationsContext();
 	const labelClass = collapsed
 		? "hidden"

@@ -1,11 +1,12 @@
 import { MessageSquarePlus } from "lucide-react";
 import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
 import { TicketIntakeChatOverlay } from "./TicketIntakeChatOverlay";
 
 export function FloatingChatButton() {
-	const { activeWorkspaceId, ticketIntakeEnabled, ticketIntakeEvents } =
-		useBoard();
+	const { activeWorkspaceId, ticketIntakeEnabled } = useWorkspace();
+	const { ticketIntakeEvents } = useBoard();
 	const chat = useTicketIntakeChat({
 		workspaceId: activeWorkspaceId,
 		variant: "global",

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
 import { ticketIntakeInputClass } from "./inputClass";
 import { PreviewScreen } from "./PreviewScreen";
@@ -10,7 +11,8 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ onClose, chat: chatOverride }: ChatPanelProps) {
-	const { activeWorkspaceId, ticketIntakeEvents } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const { ticketIntakeEvents } = useBoard();
 	const internalChat = useTicketIntakeChat({
 		workspaceId: activeWorkspaceId,
 		variant: "global",

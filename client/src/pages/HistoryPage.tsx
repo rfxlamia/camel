@@ -9,7 +9,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api } from "../api";
-import { useBoard } from "../context/BoardContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import type { AgentBoard } from "../types";
 import { formatRelativeTime, templateName } from "../types";
 
@@ -173,7 +173,7 @@ function BoardRow({
 // ---- Page ----
 
 export default function HistoryPage() {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const navigate = useNavigate();
 	const [boards, setBoards] = useState<AgentBoard[]>([]);
 	const [loading, setLoading] = useState(true);

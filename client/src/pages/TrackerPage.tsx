@@ -15,6 +15,8 @@ import TrackerTabs, {
 } from "../components/tracker/TrackerTabs";
 import type { TrackerAuxiliaryLoadState } from "../components/tracker/trackerAuxiliaryState";
 import { useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
 import { partitionTrackerSearch } from "../lib/trackerSearch";
 import {
@@ -59,12 +61,9 @@ interface CreateDefaults {
 }
 
 export default function TrackerPage() {
-	const {
-		activeWorkspaceId,
-		subscribeTrackerEvents,
-		registerRefreshTrackerList,
-		showToast,
-	} = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const { subscribeTrackerEvents, registerRefreshTrackerList } = useBoard();
+	const showToast = useShowToast();
 	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);

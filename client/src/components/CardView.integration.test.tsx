@@ -8,6 +8,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BoardProvider, useBoard } from "../context/BoardContext";
+import { PresenceProvider } from "../context/PresenceContext";
+import { WorkspaceProvider } from "../context/WorkspaceContext";
 import { ToastProvider } from "../context/ToastContext";
 import type { User } from "../types";
 import { CardBody } from "./CardView";
@@ -183,9 +185,13 @@ async function renderHydratedBoard() {
 	await act(async () => {
 		render(
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<HydratedCardBodyProbe />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<HydratedCardBodyProbe />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>,
 		);
 	});
