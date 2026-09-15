@@ -543,13 +543,14 @@ describe("MyWorkDetailSheet", () => {
 			"/my-work?scope=active&workspaceId=7&source=board&q=atlas&page=2",
 		);
 
-		// Click + dialog assert must be atomic: delayed skeleton can reappear
-		// between separate await waitFor(...) and fireEvent.click(...) under load.
+		// Skeleton is mocked off in this file; click once outside waitFor retries.
 		await waitFor(() => {
 			expect(screen.queryByTestId("my-work-loading")).toBeNull();
-			fireEvent.click(
-				screen.getByRole("button", { name: /open AT-17 fix atlas sync/i }),
-			);
+		});
+		fireEvent.click(
+			screen.getByRole("button", { name: /open AT-17 fix atlas sync/i }),
+		);
+		await waitFor(() => {
 			expect(screen.getByRole("dialog", { name: /AT-17/i })).toBeTruthy();
 		});
 		const detail = screen.getByRole("dialog", { name: /AT-17/i });
