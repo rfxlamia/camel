@@ -158,6 +158,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 	);
 	const trackerListRefreshRef = useRef<(() => void) | null>(null);
 	const prevWorkspaceIdRef = useRef<number | null>(null);
+	const activeWorkspaceIdRef = useRef(activeWorkspaceId);
+	activeWorkspaceIdRef.current = activeWorkspaceId;
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
 
@@ -225,19 +227,23 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 	);
 
 	const refresh = useCallback(async () => {
-		if (activeWorkspaceId === null) return;
+		const workspaceId = activeWorkspaceId;
+		if (workspaceId === null) return;
 		try {
 			const [board, m, a] = await Promise.all([
-				api.getBoard(activeWorkspaceId),
-				api.getMetrics(activeWorkspaceId),
-				api.getActivity(activeWorkspaceId),
+				api.getBoard(workspaceId),
+				api.getMetrics(workspaceId),
+				api.getActivity(workspaceId),
 			]);
+			// Drop responses that belong to a workspace we already left.
+			if (activeWorkspaceIdRef.current !== workspaceId) return;
 			setColumns(board.columns);
 			setMetrics(m);
 			setActivity(a.events);
 			setLoadError(false);
 			setRefreshTick((t) => t + 1);
 		} catch (err) {
+			if (activeWorkspaceIdRef.current !== workspaceId) return;
 			if (err instanceof ApiError && err.status === 401) {
 				void logout();
 				return;
