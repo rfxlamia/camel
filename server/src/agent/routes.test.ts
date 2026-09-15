@@ -17,6 +17,7 @@ import {
 	deleteCardsForBoard,
 	deleteOutputsForBoard,
 	getToolTrace,
+	loadAgentBoardColumns,
 	realArtifactDeps,
 	resolveMessageAction,
 	runInsertColumns,
@@ -162,6 +163,214 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		afterAll(async () => {
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 			await db.deleteFrom("users").where("id", "=", userId).execute();
+		});
+
+		describe("loadAgentBoardColumns", () => {
+			it("loads active cards in two queries with board/workspace scoping", async () => {
+				const columns = await db
+					.insertInto("columns")
+					.values([
+						{
+							title: "Empty",
+							position: 1000,
+							workspace_id: workspaceId,
+							board_id: boardId,
+							slug: "empty",
+							reasoning: false,
+							system_prompt: "Empty prompt",
+						},
+						{
+							title: "First",
+							position: 2000,
+							workspace_id: workspaceId,
+							board_id: boardId,
+							slug: "first",
+							reasoning: false,
+							system_prompt: "First prompt",
+						},
+						{
+							title: "Second",
+							position: 3000,
+							workspace_id: workspaceId,
+							board_id: boardId,
+							slug: "second",
+							reasoning: true,
+							system_prompt: "Second prompt",
+						},
+					])
+					.returning(["id", "slug"])
+					.execute();
+				const firstColumnId = columns.find(
+					(column) => column.slug === "first",
+				)!.id;
+				const secondColumnId = columns.find(
+					(column) => column.slug === "second",
+				)!.id;
+
+				const otherBoard = await db
+					.insertInto("agent_boards")
+					.values({
+						workspace_id: workspaceId,
+						user_id: userId,
+						original_intent: "other board fixture",
+						template_id: "research-report",
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const otherBoardColumn = await db
+					.insertInto("columns")
+					.values({
+						title: "Other board",
+						position: 4000,
+						workspace_id: workspaceId,
+						board_id: otherBoard.id,
+						slug: "other-board",
+						reasoning: false,
+						system_prompt: "Other board prompt",
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+
+				const foreignWorkspace = await db
+					.insertInto("workspaces")
+					.values({
+						name: `Agent Foreign WS ${Date.now()}`,
+						owner_user_id: userId,
+						is_personal: false,
+					})
+					.returning("id")
+					.executeTakeFirstOrThrow();
+				const foreignWorkspaceId = foreignWorkspace.id;
+				await seedTrackerVocabulary(db, foreignWorkspaceId);
+				const foreignBacklogStatus = await db
+					.selectFrom("tracker_vocabularies")
+					.select("id")
+					.where("workspace_id", "=", foreignWorkspaceId)
+					.where("kind", "=", "status")
+					.where("slot", "=", "backlog")
+					.executeTakeFirstOrThrow();
+				await db
+					.insertInto("columns")
+					.values({
+						title: "Foreign column",
+						position: 5000,
+						workspace_id: foreignWorkspaceId,
+						board_id: boardId,
+						slug: "foreign",
+						reasoning: false,
+						system_prompt: "Foreign prompt",
+					})
+					.execute();
+
+				try {
+					const cards = await db
+						.insertInto("cards")
+						.values([
+							{
+								title: "Active A",
+								column_id: firstColumnId,
+								position: 100,
+								workspace_id: workspaceId,
+								status_id: backlogStatusId,
+							},
+							{
+								title: "Active B",
+								column_id: firstColumnId,
+								position: 100,
+								workspace_id: workspaceId,
+								status_id: backlogStatusId,
+							},
+							{
+								title: "Deleted",
+								column_id: firstColumnId,
+								position: 200,
+								workspace_id: workspaceId,
+								status_id: backlogStatusId,
+								deleted_at: new Date(),
+							},
+							{
+								title: "Active C",
+								column_id: secondColumnId,
+								position: 100,
+								workspace_id: workspaceId,
+								status_id: backlogStatusId,
+							},
+							{
+								title: "Other board",
+								column_id: otherBoardColumn.id,
+								position: 75,
+								workspace_id: workspaceId,
+								status_id: backlogStatusId,
+							},
+							{
+								title: "Foreign workspace",
+								column_id: firstColumnId,
+								position: 50,
+								workspace_id: foreignWorkspaceId,
+								status_id: foreignBacklogStatus.id,
+							},
+						])
+						.returning(["id", "title"])
+						.execute();
+
+					let queryCount = 0;
+					const countedDb = db.withPlugin({
+						transformQuery({ node }) {
+							queryCount += 1;
+							return node;
+						},
+						async transformResult({ result }) {
+							return result;
+						},
+					});
+
+					const result = await loadAgentBoardColumns(
+						countedDb,
+						boardId,
+						workspaceId,
+					);
+
+					expect(queryCount).toBe(2);
+					expect(result.map((column) => column.slug)).toEqual([
+						"empty",
+						"first",
+						"second",
+					]);
+					const emptyCards = result.find(
+						(column) => column.slug === "empty",
+					)!.cards;
+					const firstCards = result.find(
+						(column) => column.slug === "first",
+					)!.cards;
+					expect(emptyCards).toEqual([]);
+					const secondCards = result.find(
+						(column) => column.slug === "second",
+					)!.cards;
+					const activeAId = cards.find((card) => card.title === "Active A")!.id;
+					const activeBId = cards.find((card) => card.title === "Active B")!.id;
+					const activeCId = cards.find((card) => card.title === "Active C")!.id;
+					expect(firstCards.map(({ id, title }) => ({ id, title }))).toEqual([
+						{ id: activeAId, title: "Active A" },
+						{ id: activeBId, title: "Active B" },
+					]);
+					expect(secondCards.map(({ id, title }) => ({ id, title }))).toEqual([
+						{ id: activeCId, title: "Active C" },
+					]);
+				} finally {
+					await db
+						.deleteFrom("workspaces")
+						.where("id", "=", foreignWorkspaceId)
+						.execute();
+					await db
+						.deleteFrom("columns")
+						.where(
+							"id",
+							"in",
+							columns.map((column) => column.id),
+						)
+						.execute();
+				}
+			});
 		});
 
 		describe("getToolTrace (read-only replay)", () => {

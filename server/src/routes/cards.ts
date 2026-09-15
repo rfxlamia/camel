@@ -57,6 +57,33 @@ function toCardDbRow(row: FullCardRow): CardDbRow {
 
 const mapCardResponse = buildCardResponse;
 
+export async function batchUpdateCardPositions(
+	dbExec: DBExecutor,
+	workspaceId: number,
+	columnId: number,
+	rows: ReadonlyArray<{ id: number; position: number }>,
+): Promise<void> {
+	if (rows.length === 0) return;
+
+	const values = sql.join(
+		rows.map(
+			({ id, position }) =>
+				sql`(${id}::integer, ${position}::double precision)`,
+		),
+		sql`, `,
+	);
+
+	await sql`
+		UPDATE cards AS c
+		SET position = v.position
+		FROM (VALUES ${values}) AS v(id, position)
+		WHERE c.id = v.id
+			AND c.workspace_id = ${workspaceId}
+			AND c.column_id = ${columnId}
+			AND c.deleted_at IS NULL
+	`.execute(dbExec);
+}
+
 export function selectFullCard(dbExec: DBExecutor) {
 	return dbExec
 		.selectFrom("cards as c")
@@ -845,6 +872,7 @@ cardsRouter.post(
 				.where("id", "<>", cardId)
 				.where("deleted_at", "is", null)
 				.orderBy("position")
+				.orderBy("id")
 				.forUpdate()
 				.execute();
 
@@ -864,13 +892,15 @@ cardsRouter.post(
 				position = positionBetween(before, after);
 			} catch {
 				const fresh = rebalance(siblings.length);
-				for (let i = 0; i < siblings.length; i++) {
-					await trx
-						.updateTable("cards")
-						.set({ position: fresh[i] })
-						.where("id", "=", siblings[i].id)
-						.execute();
-				}
+				await batchUpdateCardPositions(
+					trx,
+					workspaceId,
+					toColumnId,
+					siblings.map((sibling, i) => ({
+						id: sibling.id,
+						position: fresh[i],
+					})),
+				);
 				const { before, after } = neighborsAt(fresh, index);
 				position = positionBetween(before, after);
 			}
