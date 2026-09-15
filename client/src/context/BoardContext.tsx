@@ -270,7 +270,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		}
 	}, []);
 
-	// Board realtime wiring scoped to the active workspace (EventSource only).
+	// Board realtime wiring scoped to the active workspace (EventSource + membership redirect).
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
 
@@ -320,9 +320,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 					});
 					if (redirect) {
 						showToast(redirect.toast, "warning");
-						void reloadWorkspaces().then(() => {
-							switchWorkspace(redirect.nextWorkspaceId);
-						});
+						void reloadWorkspaces()
+							.then(() => {
+								switchWorkspace(redirect.nextWorkspaceId);
+							})
+							.catch((err) => {
+								console.debug("membership reload failed", err);
+							});
 						return;
 					}
 				}
