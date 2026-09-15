@@ -97,8 +97,11 @@ vi.mock("./useDelayedLoading", () => ({
 
 import { BoardProvider } from "../../context/BoardContext";
 import { PresenceProvider } from "../../context/PresenceContext";
-import { useWorkspace, WorkspaceProvider } from "../../context/WorkspaceContext";
 import { ToastProvider } from "../../context/ToastContext";
+import {
+	useWorkspace,
+	WorkspaceProvider,
+} from "../../context/WorkspaceContext";
 import { MobileNav } from "../../layout/sidebar/MobileNav";
 import Sidebar from "../../layout/sidebar/Sidebar";
 import { WorkspaceOverlays } from "../../layout/sidebar/WorkspaceModals";

@@ -147,7 +147,7 @@ describe("PresenceContext", () => {
 	});
 
 	it("ignores in-flight presence responses after workspace switch", async () => {
-		let resolveFirstPresence: (value: { users: typeof alice[] }) => void =
+		let resolveFirstPresence: (value: { users: (typeof alice)[] }) => void =
 			() => {};
 		mockGetPresence.mockImplementationOnce(
 			() =>
@@ -169,7 +169,9 @@ describe("PresenceContext", () => {
 			);
 		});
 
-		await waitFor(() => expect(screen.getByTestId("workspace").textContent).toBe("7"));
+		await waitFor(() =>
+			expect(screen.getByTestId("workspace").textContent).toBe("7"),
+		);
 		await waitFor(() => expect(mockGetPresence).toHaveBeenCalledWith(7));
 
 		await act(async () => {
