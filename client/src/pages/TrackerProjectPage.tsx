@@ -11,6 +11,8 @@ import TrackerPhaseEditor, {
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
 import { updateWorkItemStatus, reorderWorkItem } from "../lib/workItemMutations";
 import type {
@@ -110,7 +112,9 @@ function optimisticReorderPosition(
 export default function TrackerProjectPage() {
 	const { projectId: projectIdParam } = useParams<{ projectId: string }>();
 	const navigate = useNavigate();
-	const { activeWorkspaceId, subscribeTrackerEvents, showToast } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const { subscribeTrackerEvents } = useBoard();
+	const showToast = useShowToast();
 	const [projects, setProjects] = useState<TrackerProject[]>([]);
 	const [items, setItems] = useState<WorkItem[]>([]);
 	const [statuses, setStatuses] = useState<TrackerVocabulary[]>([]);

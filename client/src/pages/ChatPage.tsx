@@ -4,13 +4,13 @@ import { Navigate, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { ChatRuntimeProvider } from "../chat/ChatRuntimeProvider";
 import { ChatPanel } from "../chat/ui";
-import { useBoard } from "../context/BoardContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import type { ChatThread } from "../types";
 
 export default function ChatPage() {
 	const { threadId: threadIdParam } = useParams();
 	const navigate = useNavigate();
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const [threads, setThreads] = useState<ChatThread[]>([]);
 	const [loading, setLoading] = useState(true);
 

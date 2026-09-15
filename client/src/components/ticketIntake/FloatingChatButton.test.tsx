@@ -3,8 +3,12 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockUseBoard = vi.fn();
+const mockUseWorkspace = vi.fn();
 vi.mock("../../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+vi.mock("../../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
 vi.mock("../../hooks/useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => ({
@@ -28,9 +32,11 @@ describe("FloatingChatButton", () => {
 	afterEach(cleanup);
 
 	it("renders nothing when activeWorkspaceId is null", () => {
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			activeWorkspaceId: null,
 			ticketIntakeEnabled: true,
+		});
+		mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 		});
 		const { container } = render(<FloatingChatButton />);
@@ -38,9 +44,11 @@ describe("FloatingChatButton", () => {
 	});
 
 	it("renders nothing when ticket intake is disabled", () => {
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			activeWorkspaceId: 1,
 			ticketIntakeEnabled: false,
+		});
+		mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 		});
 		const { container } = render(<FloatingChatButton />);
@@ -48,9 +56,11 @@ describe("FloatingChatButton", () => {
 	});
 
 	it("renders a clickable Button Primary token button when a workspace is active", () => {
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			activeWorkspaceId: 1,
 			ticketIntakeEnabled: true,
+		});
+		mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 		});
 		render(<FloatingChatButton />);

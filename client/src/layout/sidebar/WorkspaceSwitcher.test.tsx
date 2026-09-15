@@ -4,19 +4,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Workspace, WorkspaceInvite } from "../../types";
 
 const {
-	mockUseBoard,
+	mockUseWorkspace,
 	mockGetSwitchAttemptState,
 	mockGetInvitePopoverState,
 	mockAttemptSwitchWorkspace,
 } = vi.hoisted(() => ({
-	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 	mockGetSwitchAttemptState: vi.fn(),
 	mockGetInvitePopoverState: vi.fn(),
 	mockAttemptSwitchWorkspace: vi.fn(),
 }));
 
-vi.mock("../../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
+vi.mock("../../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
 
 vi.mock("../../lib/workspaceSwitcher", async (importOriginal) => {
@@ -50,7 +50,7 @@ const workspaceB: Workspace = {
 };
 
 function setupBoard(overrides: Record<string, unknown> = {}) {
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspace: workspaceA,
 		activeWorkspaceId: 1,
 		workspaces: [workspaceA, workspaceB],

@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useSyncExternalStore } from "react";
-import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { projectMyWorkListItems } from "../../lib/myWorkMutationReconciliation";
 import {
 	getMyWorkMutationRevision,
@@ -14,7 +14,7 @@ import type { MyWorkItem, MyWorkScope } from "../../types/myWork";
 import MyWorkRow from "./MyWorkRow";
 
 export function SessionErrorState() {
-	const { logout } = useBoard();
+	const { logout } = useWorkspace();
 	const handleSignIn = useCallback(async () => {
 		await logout();
 		window.location.assign("/login");

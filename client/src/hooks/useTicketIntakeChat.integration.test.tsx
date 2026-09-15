@@ -140,15 +140,21 @@ describe("useTicketIntakeChat integration — SSE submit-result to PreviewScreen
 
 	async function renderChatPanel() {
 		const { BoardProvider } = await import("../context/BoardContext");
+		const { PresenceProvider } = await import("../context/PresenceContext");
 		const { ToastProvider } = await import("../context/ToastContext");
+		const { WorkspaceProvider } = await import("../context/WorkspaceContext");
 		const { ChatPanel } = await import(
 			"../components/ticketIntake/ChatPanel"
 		);
 		render(
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<ChatPanel onClose={vi.fn()} />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<ChatPanel onClose={vi.fn()} />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>,
 		);
 		await waitFor(() => {

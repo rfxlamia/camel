@@ -1,6 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import type { WorkspaceInvite } from "../../types";
 import { inputClass } from "./shared";
 import {
@@ -25,7 +25,7 @@ function ModalBackdrop({
 
 function BlockingInviteModal({ invite }: { invite: WorkspaceInvite }) {
 	const { acceptWorkspaceInvite, declineWorkspaceInvite, remindInviteLater } =
-		useBoard();
+		useWorkspace();
 	const [busy, setBusy] = useState(false);
 
 	const run = async (action: () => Promise<void> | void) => {
@@ -92,7 +92,7 @@ function WorkspacePickerModal() {
 		activeWorkspaceId,
 		attemptSwitchWorkspace,
 		openCreateWorkspace,
-	} = useBoard();
+	} = useWorkspace();
 
 	return (
 		<ModalBackdrop>
@@ -142,7 +142,7 @@ function WorkspacePickerModal() {
 
 function CreateWorkspaceModal() {
 	const { createWorkspaceOpen, closeCreateWorkspace, submitCreateWorkspace } =
-		useBoard();
+		useWorkspace();
 	const [name, setName] = useState("");
 	const [busy, setBusy] = useState(false);
 
@@ -237,7 +237,7 @@ export function WorkspaceOverlays() {
 		pendingInvites,
 		remindedInviteIds,
 		switchConfirm,
-	} = useBoard();
+	} = useWorkspace();
 
 	if (!workspacesReady) return null;
 

@@ -32,6 +32,7 @@ const {
 	mockNavigate,
 	mockUseParams,
 	mockUseBoard,
+	mockUseWorkspace,
 	mockShowToast,
 } = vi.hoisted(() => ({
 	mockListTrackerProjects: vi.fn(),
@@ -53,6 +54,7 @@ const {
 	mockNavigate: vi.fn(),
 	mockUseParams: vi.fn(),
 	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 	mockShowToast: vi.fn(),
 }));
 
@@ -89,6 +91,14 @@ vi.mock("../api", () => ({
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => mockShowToast,
 }));
 
 vi.mock("react-router", () => ({
@@ -201,10 +211,11 @@ beforeEach(() => {
 			return Promise.resolve([]);
 		},
 	);
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 		subscribeTrackerEvents: vi.fn(() => () => {}),
-		showToast: mockShowToast,
 	});
 	mockGetWorkspaceMembers.mockResolvedValue({ members: [] });
 	mockCreateWorkItem.mockResolvedValue({ id: 99, key: "CA-99" });
@@ -350,13 +361,14 @@ describe("TrackerProjectPage", () => {
 
 	it("keeps a collapsed phase collapsed through an SSE-triggered reload", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
@@ -370,13 +382,14 @@ describe("TrackerProjectPage", () => {
 
 	it("shows the 404 state when tracker.project.deleted fires for the open project", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));
@@ -388,13 +401,14 @@ describe("TrackerProjectPage", () => {
 
 	it("reloads on every project/phase event plus the three item events (eight of the nine)", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));
@@ -418,13 +432,14 @@ describe("TrackerProjectPage", () => {
 
 	it("refreshes the phase and project percentages after a tracker.updated event", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("50%"));
@@ -439,13 +454,14 @@ describe("TrackerProjectPage", () => {
 
 	it("shows a new row from a tracker.created event without a manual refresh", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByTestId("tracker-row-CA-1"));
@@ -463,13 +479,14 @@ describe("TrackerProjectPage", () => {
 
 	it("removes the row and updates the percentages on a tracker.deleted event", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("50%"));
@@ -486,13 +503,14 @@ describe("TrackerProjectPage", () => {
 
 	it('moves a deleted phase\'s tasks into "No phase" on tracker.phase.deleted', async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: 7,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: 7,
+	});
+	mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
 			},
-			showToast: mockShowToast,
 		});
 		render(<TrackerProjectPage />);
 		await waitFor(() => screen.getByText("Persiapan"));

@@ -5,6 +5,7 @@ import { api } from "../api";
 import FocusTimer from "../components/FocusTimer";
 import { useBoard } from "../context/BoardContext";
 import { useFocusSession } from "../context/FocusSessionContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import type { FocusSession } from "../types";
 
 const TASK_LOAD_ERROR =
@@ -26,12 +27,8 @@ type TaskContent = {
 
 export default function FocusPage() {
 	const navigate = useNavigate();
-	const {
-		activeWorkspaceId,
-		focusSessionHydrated,
-		subscribeCardEvents,
-		subscribeTrackerEvents,
-	} = useBoard();
+	const { activeWorkspaceId, focusSessionHydrated } = useWorkspace();
+	const { subscribeCardEvents, subscribeTrackerEvents } = useBoard();
 	const { session, loading, actionError, start, pause, resume, finish } =
 		useFocusSession();
 

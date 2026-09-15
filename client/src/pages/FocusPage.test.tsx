@@ -19,12 +19,14 @@ const {
 	mockNavigate,
 	mockUseFocusSession,
 	mockUseBoard,
+	mockUseWorkspace,
 } = vi.hoisted(() => ({
 	mockGetCard: vi.fn(),
 	mockGetWorkItem: vi.fn(),
 	mockNavigate: vi.fn(),
 	mockUseFocusSession: vi.fn(),
 	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
@@ -40,6 +42,10 @@ vi.mock("../context/FocusSessionContext", () => ({
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
 
 vi.mock("react-router", async (importOriginal) => {
@@ -113,9 +119,16 @@ function makePopulatedCard() {
 }
 
 function setupBoardMocks(overrides: Record<string, unknown> = {}) {
+	const {
+		activeWorkspaceId = WORKSPACE_ID,
+		focusSessionHydrated = true,
+		...boardOverrides
+	} = overrides;
+	mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId,
+		focusSessionHydrated,
+	});
 	mockUseBoard.mockReturnValue({
-		activeWorkspaceId: WORKSPACE_ID,
-		focusSessionHydrated: true,
 		subscribeCardEvents: (handler: (event: unknown) => void) => {
 			cardEventHandlers.push(handler);
 			return () => {
@@ -130,7 +143,7 @@ function setupBoardMocks(overrides: Record<string, unknown> = {}) {
 				if (index >= 0) trackerEventHandlers.splice(index, 1);
 			};
 		},
-		...overrides,
+		...boardOverrides,
 	});
 }
 

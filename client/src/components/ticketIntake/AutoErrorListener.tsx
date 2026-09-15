@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
 import type { AutoErrorDetail } from "../../lib/ticketIntakeBus";
 import { subscribeAutoError } from "../../lib/ticketIntakeBus";
@@ -16,11 +17,8 @@ function autoErrorDetailToPrefill(detail: AutoErrorDetail) {
 }
 
 export function AutoErrorListener() {
-	const {
-		activeWorkspaceId,
-		ticketIntakeEnabled,
-		ticketIntakeEvents,
-	} = useBoard();
+	const { activeWorkspaceId, ticketIntakeEnabled } = useWorkspace();
+	const { ticketIntakeEvents } = useBoard();
 	const chat = useTicketIntakeChat({
 		workspaceId: activeWorkspaceId,
 		variant: "global",

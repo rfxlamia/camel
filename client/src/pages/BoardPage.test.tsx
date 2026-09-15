@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	mockUseBoard,
+	mockUseWorkspace,
 	applyTemplate,
 	refresh,
 	showToast,
@@ -20,6 +21,7 @@ const {
 	mockListTrackerProjects,
 } = vi.hoisted(() => ({
 	mockUseBoard: vi.fn(),
+	mockUseWorkspace: vi.fn(),
 	applyTemplate: vi.fn(),
 	refresh: vi.fn(),
 	showToast: vi.fn(),
@@ -33,6 +35,14 @@ const {
 
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => showToast,
 }));
 
 vi.mock("react-router", () => ({
@@ -93,13 +103,31 @@ function makeListBoardValue(
 		loadError: false,
 		refresh,
 		cancelScheduledRefresh: vi.fn(),
-		showToast,
 		deleteCard: vi.fn(),
 		saveCard: vi.fn(),
-		activeWorkspaceId: 7,
-		boardViewMode: "list" as const,
-		setBoardViewMode: vi.fn(),
 	};
+}
+
+function makeWorkspaceValue(
+	overrides: {
+		activeWorkspaceId?: number;
+		boardViewMode?: "board" | "list" | "calendar";
+		setBoardViewMode?: ReturnType<typeof vi.fn>;
+	} = {},
+) {
+	return {
+		activeWorkspaceId: overrides.activeWorkspaceId ?? 7,
+		boardViewMode: overrides.boardViewMode ?? ("list" as const),
+		setBoardViewMode: overrides.setBoardViewMode ?? vi.fn(),
+	};
+}
+
+function stubBoardPageContexts(
+	board: Record<string, unknown>,
+	workspace: Record<string, unknown> = makeWorkspaceValue(),
+) {
+	mockUseBoard.mockReturnValue(board);
+	mockUseWorkspace.mockReturnValue(workspace);
 }
 
 function renderListBoard(initialColumns: Column[]) {
@@ -110,10 +138,10 @@ function renderListBoard(initialColumns: Column[]) {
 			typeof updater === "function"
 				? (updater(currentColumns) ?? currentColumns)
 				: (updater ?? currentColumns);
-		mockUseBoard.mockReturnValue(makeListBoardValue(currentColumns, setColumns));
+		stubBoardPageContexts(makeListBoardValue(currentColumns, setColumns));
 		rerenderBoard();
 	});
-	mockUseBoard.mockReturnValue(makeListBoardValue(currentColumns, setColumns));
+	stubBoardPageContexts(makeListBoardValue(currentColumns, setColumns));
 	const view = render(<BoardPage />);
 	rerenderBoard = () => view.rerender(<BoardPage />);
 	return { ...view, setColumns };
@@ -184,14 +212,16 @@ beforeEach(() => {
 			phases: [],
 		},
 	] satisfies TrackerProject[]);
-	mockUseBoard.mockReturnValue({
+	stubBoardPageContexts({
+
 		columns: [],
 		setColumns: vi.fn(),
 		loadError: false,
 		refresh,
 		cancelScheduledRefresh: vi.fn(),
-		showToast,
 		deleteCard: vi.fn(),
+	
+	}, {
 		activeWorkspaceId: 7,
 		boardViewMode: "board",
 		setBoardViewMode: vi.fn(),
@@ -290,19 +320,21 @@ const listColumns = [
 describe("BoardPage list view column change", () => {
 	it("moves a card via the list status picker", async () => {
 		const setColumns = vi.fn();
-		mockUseBoard.mockReturnValue({
+		stubBoardPageContexts({
+
 			columns: listColumns,
 			setColumns,
 			loadError: false,
 			refresh,
 			cancelScheduledRefresh: vi.fn(),
-			showToast,
 			deleteCard: vi.fn(),
 			saveCard: vi.fn(),
-			activeWorkspaceId: 7,
-			boardViewMode: "list",
-			setBoardViewMode: vi.fn(),
-		});
+		
+	}, {
+		activeWorkspaceId: 7,
+		boardViewMode: "list",
+		setBoardViewMode: vi.fn(),
+	});
 		render(<BoardPage />);
 		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
@@ -320,19 +352,21 @@ describe("BoardPage list view column change", () => {
 	it("rolls back and shows an error toast when moveCard fails", async () => {
 		moveCard.mockRejectedValueOnce(new Error("network down"));
 		const setColumns = vi.fn();
-		mockUseBoard.mockReturnValue({
+		stubBoardPageContexts({
+
 			columns: listColumns,
 			setColumns,
 			loadError: false,
 			refresh,
 			cancelScheduledRefresh: vi.fn(),
-			showToast,
 			deleteCard: vi.fn(),
 			saveCard: vi.fn(),
-			activeWorkspaceId: 7,
-			boardViewMode: "list",
-			setBoardViewMode: vi.fn(),
-		});
+		
+	}, {
+		activeWorkspaceId: 7,
+		boardViewMode: "list",
+		setBoardViewMode: vi.fn(),
+	});
 		render(<BoardPage />);
 		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
@@ -572,15 +606,17 @@ function renderBoardView(
 	columns: Column[] = boardColumns,
 	workspaceId = 7,
 ) {
-	mockUseBoard.mockReturnValue({
+	stubBoardPageContexts({
+
 		columns,
 		setColumns: vi.fn(),
 		loadError: false,
 		refresh,
 		cancelScheduledRefresh: vi.fn(),
-		showToast,
 		deleteCard: vi.fn(),
 		saveCard: vi.fn(),
+	
+	}, {
 		activeWorkspaceId: workspaceId,
 		boardViewMode: "board",
 		setBoardViewMode: vi.fn(),
@@ -662,19 +698,21 @@ describe("BoardPage Add Card integration", () => {
 			mockListTrackerVocabularies.mock.calls.filter(([, kind]) => kind === "priority"),
 		).toHaveLength(1);
 
-		mockUseBoard.mockReturnValue({
+		stubBoardPageContexts({
+
 			columns: boardColumns,
 			setColumns: vi.fn(),
 			loadError: false,
 			refresh,
 			cancelScheduledRefresh: vi.fn(),
-			showToast,
 			deleteCard: vi.fn(),
 			saveCard: vi.fn(),
-			activeWorkspaceId: 9,
-			boardViewMode: "board",
-			setBoardViewMode: vi.fn(),
-		});
+		
+	}, {
+		activeWorkspaceId: 9,
+		boardViewMode: "board",
+		setBoardViewMode: vi.fn(),
+	});
 		view.rerender(<BoardPage />);
 
 		await waitFor(() => expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(2));

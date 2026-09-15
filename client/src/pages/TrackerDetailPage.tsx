@@ -20,6 +20,8 @@ import TrackerProperties, {
 	type PropertyPatch,
 } from "../components/tracker/TrackerProperties";
 import { useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import { isTaskOverdue } from "../lib/trackerRollup";
 import { resolveToggle } from "../lib/trackerUtils";
 import type {
@@ -67,12 +69,9 @@ function autoGrow(el: HTMLTextAreaElement | null) {
 export default function TrackerDetailPage() {
 	const { key: routeKey } = useParams<{ key: string }>();
 	const navigate = useNavigate();
-	const {
-		activeWorkspaceId,
-		showToast,
-		refreshTrackerList,
-		subscribeTrackerEvents,
-	} = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const { refreshTrackerList, subscribeTrackerEvents } = useBoard();
+	const showToast = useShowToast();
 
 	const [item, setItem] = useState<WorkItem | null>(null);
 	const [events, setEvents] = useState<TrackerEvent[]>([]);

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import {
 	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
@@ -46,7 +47,8 @@ export default function AgentCardDetail({
 	toolTrace = [],
 	onClose,
 }: AgentCardDetailProps) {
-	const { activeWorkspaceId, agentEvents } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
+	const { agentEvents } = useBoard();
 	const [output, setOutput] = useState<AgentCardOutput | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);

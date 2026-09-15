@@ -6,9 +6,11 @@ import ContextPanel from "./components/ContextPanel";
 import EmailGatePage from "./components/EmailGatePage";
 import LoadingCamel from "./components/LoadingCamel";
 import PickUsernamePage from "./components/PickUsernamePage";
-import { BoardProvider, useBoard } from "./context/BoardContext";
+import { BoardProvider } from "./context/BoardContext";
 import { FocusSessionProvider } from "./context/FocusSessionContext";
+import { PresenceProvider } from "./context/PresenceContext";
 import { ToastProvider } from "./context/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./context/WorkspaceContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
@@ -127,7 +129,7 @@ const router = createBrowserRouter([
 ]);
 
 function AuthenticatedApp() {
-	const { workspacesReady } = useBoard();
+	const { workspacesReady } = useWorkspace();
 
 	if (!workspacesReady) return <LoadingScreen />;
 
@@ -186,11 +188,15 @@ export default function App() {
 
 	return (
 		<ToastProvider>
-			<BoardProvider user={user} onSignedOut={() => setUser(null)}>
-				<FocusSessionProvider>
-					<AuthenticatedApp />
-				</FocusSessionProvider>
-			</BoardProvider>
+			<WorkspaceProvider user={user} onSignedOut={() => setUser(null)}>
+				<PresenceProvider>
+					<BoardProvider>
+						<FocusSessionProvider>
+							<AuthenticatedApp />
+						</FocusSessionProvider>
+					</BoardProvider>
+				</PresenceProvider>
+			</WorkspaceProvider>
 		</ToastProvider>
 	);
 }

@@ -9,13 +9,17 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FocusSession } from "../types";
 
-const { mockUseFocusSession, mockNavigate, mockUseBoard, mockShowToast } =
-	vi.hoisted(() => ({
-		mockUseFocusSession: vi.fn(),
-		mockNavigate: vi.fn(),
-		mockUseBoard: vi.fn(),
-		mockShowToast: vi.fn(),
-	}));
+const {
+	mockUseFocusSession,
+	mockNavigate,
+	mockUseWorkspace,
+	mockShowToast,
+} = vi.hoisted(() => ({
+	mockUseFocusSession: vi.fn(),
+	mockNavigate: vi.fn(),
+	mockUseWorkspace: vi.fn(),
+	mockShowToast: vi.fn(),
+}));
 
 vi.mock("../context/FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),
@@ -29,8 +33,12 @@ vi.mock("react-router", async (importOriginal) => {
 	};
 });
 
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => mockShowToast,
 }));
 
 import { ApiError } from "../api";
@@ -66,9 +74,8 @@ function setupNoSession() {
 		resume: vi.fn(),
 		finish: vi.fn(),
 	});
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		focusModeEnabled: true,
-		showToast: mockShowToast,
 	});
 	return { focus, switchTo };
 }
@@ -124,9 +131,8 @@ describe("FocusEntryButton", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			focusModeEnabled: true,
-			showToast: mockShowToast,
 		});
 
 		render(<FocusEntryButton source="board" taskId={481} taskKey="CA-42" />);
@@ -174,9 +180,8 @@ describe("FocusEntryButton", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			focusModeEnabled: true,
-			showToast: mockShowToast,
 		});
 
 		render(<FocusEntryButton source="board" taskId={481} taskKey="CA-99" />);
@@ -235,9 +240,8 @@ describe("FocusEntryButton", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			focusModeEnabled: true,
-			showToast: mockShowToast,
 		});
 
 		render(<FocusEntryButton source="board" taskId={481} taskKey="CA-99" />);
@@ -283,9 +287,8 @@ describe("FocusEntryButton", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			focusModeEnabled: true,
-			showToast: mockShowToast,
 		});
 
 		render(<FocusEntryButton source="tracker" taskId={77} taskKey="CAM-42" />);
@@ -352,9 +355,8 @@ describe("FocusEntryButton", () => {
 			resume: vi.fn(),
 			finish: vi.fn(),
 		});
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			focusModeEnabled: true,
-			showToast: mockShowToast,
 		});
 
 		render(<FocusEntryButton source="board" taskId={481} taskKey="CA-99" />);
@@ -380,9 +382,8 @@ describe("FocusEntryButton", () => {
 
 	it("renders nothing when focusModeEnabled is false", () => {
 		setupNoSession();
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			focusModeEnabled: false,
-			showToast: mockShowToast,
 		});
 
 		render(<FocusEntryButton source="board" taskId={481} taskKey="CA-42" />);

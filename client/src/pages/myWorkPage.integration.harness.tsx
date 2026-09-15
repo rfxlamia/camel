@@ -19,8 +19,13 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "../api";
-import { BoardProvider, useBoard } from "../context/BoardContext";
+import { BoardProvider } from "../context/BoardContext";
+import { PresenceProvider } from "../context/PresenceContext";
 import { ToastProvider, useToastState } from "../context/ToastContext";
+import {
+	useWorkspace,
+	WorkspaceProvider,
+} from "../context/WorkspaceContext";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
 import { sourceItem } from "../lib/myWorkTestSupport";
 import { resetMyWorkMutationsForTests } from "../lib/workItemMutations";
@@ -124,7 +129,7 @@ function LocationProbe() {
 }
 
 function ActiveWorkspaceProbe() {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const toast = useToastState();
 	return (
 		<>
@@ -139,7 +144,7 @@ function GuardControls() {
 		setFocusSessionHydrated,
 		setHasActiveFocusSession,
 		setHasUnsavedCardEdits,
-	} = useBoard();
+	} = useWorkspace();
 	return (
 		<div>
 			<button
@@ -203,9 +208,13 @@ export function renderSurface(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
 			<ToastProvider>
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<RouteBoundary />
-				</BoardProvider>
+				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<RouteBoundary />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
 			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,

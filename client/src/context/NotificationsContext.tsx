@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext } from "react";
-import { useBoard } from "./BoardContext";
+import { useWorkspace } from "./WorkspaceContext";
 import {
 	type UseNotificationsResult,
 	useNotifications,
@@ -8,7 +8,7 @@ import {
 const NotificationsContext = createContext<UseNotificationsResult | null>(null);
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-	const { activeWorkspaceId } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const value = useNotifications(activeWorkspaceId);
 
 	return (

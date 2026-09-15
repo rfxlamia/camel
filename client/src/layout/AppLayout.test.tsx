@@ -3,10 +3,13 @@ import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseBoard, mockUseToastState } = vi.hoisted(() => ({
-	mockUseBoard: vi.fn(),
-	mockUseToastState: vi.fn(),
-}));
+const { mockUseWorkspace, mockUsePresence, mockUseToastState } = vi.hoisted(
+	() => ({
+		mockUseWorkspace: vi.fn(),
+		mockUsePresence: vi.fn(),
+		mockUseToastState: vi.fn(),
+	}),
+);
 
 vi.mock("../components/PresenceBar", () => ({
 	default: () => null,
@@ -24,8 +27,11 @@ vi.mock("../components/ticketIntake/FloatingChatButton", () => ({
 vi.mock("../components/Toast", () => ({
 	default: () => null,
 }));
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+vi.mock("../context/PresenceContext", () => ({
+	usePresence: () => mockUsePresence(),
 }));
 vi.mock("../context/ToastContext", () => ({
 	useToastState: () => mockUseToastState(),
@@ -73,9 +79,9 @@ describe("AppLayout My Work detail overlay", () => {
 
 	beforeEach(() => {
 		mockUseToastState.mockReturnValue(null);
-		mockUseBoard.mockReturnValue({
+		mockUsePresence.mockReturnValue({ presence: [] });
+		mockUseWorkspace.mockReturnValue({
 			user: null,
-			presence: [],
 			settings: { boardName: "Camel", logoPath: null },
 		});
 	});

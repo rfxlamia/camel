@@ -11,8 +11,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card, CardAttachment, Column } from "../types";
 
 const mockUseBoard = vi.fn();
+const mockUseWorkspace = vi.fn();
+const mockShowToast = vi.fn();
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => mockShowToast,
 }));
 
 vi.mock("react-router", () => ({
@@ -111,16 +119,17 @@ function columnsWith(card: Card): Column[] {
 function setBoard(card: Card) {
 	const refresh = vi.fn().mockResolvedValue(undefined);
 	const cancelScheduledRefresh = vi.fn();
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspaceId: 1,
 		ticketIntakeEnabled: false,
-		ticketIntakeEvents: [],
 		focusModeEnabled: false,
+		setHasUnsavedCardEdits: vi.fn(),
+	});
+	mockUseBoard.mockReturnValue({
+		ticketIntakeEvents: [],
 		columns: columnsWith(card),
 		saveCard: vi.fn().mockResolvedValue("saved"),
 		deleteCard: vi.fn(),
-		showToast: vi.fn(),
-		setHasUnsavedCardEdits: vi.fn(),
 		refresh,
 		cancelScheduledRefresh,
 	});

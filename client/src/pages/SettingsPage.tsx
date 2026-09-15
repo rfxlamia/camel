@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import LogoCropper from "../components/LogoCropper";
 import ManageMembersSection from "../components/settings/ManageMembersSection";
-import { useBoard } from "../context/BoardContext";
+import { useShowToast } from "../context/ToastContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import {
 	canEditWorkspaceSettings,
 	getWorkspaceDangerZoneState,
@@ -66,10 +67,10 @@ export default function SettingsPage() {
 		settings,
 		settingsVersion,
 		refreshSettings,
-		showToast,
 		reloadWorkspaces,
 		switchWorkspace,
-	} = useBoard();
+	} = useWorkspace();
+	const showToast = useShowToast();
 
 	const [boardNameInput, setBoardNameInput] = useState(settings.boardName);
 	const [nameError, setNameError] = useState<string | null>(null);

@@ -25,6 +25,7 @@ import { api } from "../api";
 import EmptyState from "../components/EmptyState";
 import PageHeader from "../components/PageHeader";
 import { useBoard } from "../context/BoardContext";
+import { useWorkspace } from "../context/WorkspaceContext";
 import type { MetricsHistoryBucket } from "../types";
 import { formatDuration, formatRelativeTime } from "../types";
 import { describeEvent } from "./ActivityPage";
@@ -254,7 +255,8 @@ function ChartCard({
 }
 
 export default function DashboardPage() {
-	const { metrics, activity, activeWorkspaceId } = useBoard();
+	const { metrics, activity } = useBoard();
+	const { activeWorkspaceId } = useWorkspace();
 	const [history, setHistory] = useState<MetricsHistoryBucket[] | null>(null);
 	const [historyError, setHistoryError] = useState(false);
 

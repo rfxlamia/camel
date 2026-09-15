@@ -50,7 +50,9 @@ vi.mock("./lib/workspaceSelection", async (importOriginal) => {
 });
 
 import { BoardProvider, useBoard } from "./context/BoardContext";
+import { PresenceProvider } from "./context/PresenceContext";
 import { ToastProvider } from "./context/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./context/WorkspaceContext";
 import CardAttachments from "./components/CardAttachments";
 
 const viewerUser: User = {
@@ -120,7 +122,8 @@ describe("attachment viewer system contract", () => {
 	const uploadSpy = vi.fn();
 
 	function BoardCardAttachmentsSurface() {
-		const { columns, activeWorkspaceId } = useBoard();
+		const { columns } = useBoard();
+		const { activeWorkspaceId } = useWorkspace();
 		const card = columns?.flatMap((column) => column.cards).find((c) => c.id === 42);
 		if (!card || activeWorkspaceId === null) return null;
 
@@ -161,10 +164,14 @@ describe("attachment viewer system contract", () => {
 		await act(async () => {
 			render(
 				<ToastProvider>
-					<BoardProvider user={viewerUser} onSignedOut={vi.fn()}>
-						<BoardCardAttachmentsSurface />
-					</BoardProvider>
-				</ToastProvider>,
+				<WorkspaceProvider user={viewerUser} onSignedOut={vi.fn()}>
+					<PresenceProvider>
+						<BoardProvider>
+							<BoardCardAttachmentsSurface />
+						</BoardProvider>
+					</PresenceProvider>
+				</WorkspaceProvider>
+			</ToastProvider>,
 			);
 		});
 

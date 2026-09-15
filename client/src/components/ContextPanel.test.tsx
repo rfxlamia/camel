@@ -77,8 +77,16 @@ const mockProjects: TrackerProject[] = [
 ];
 
 const mockUseBoard = vi.fn();
+const mockUseWorkspace = vi.fn();
+const mockShowToast = vi.fn();
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+vi.mock("../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
+}));
+vi.mock("../context/ToastContext", () => ({
+	useShowToast: () => mockShowToast,
 }));
 
 vi.mock("react-router", () => ({
@@ -156,15 +164,18 @@ function setBoard(
 	saveCard = vi.fn().mockResolvedValue("saved"),
 	refreshTick = 0,
 ) {
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspaceId: 1,
 		ticketIntakeEnabled: true,
+		focusModeEnabled: false,
+		setHasUnsavedCardEdits: vi.fn(),
+	});
+	mockShowToast.mockReset();
+	mockUseBoard.mockReturnValue({
 		ticketIntakeEvents: [],
 		columns: columnsWith(card),
 		saveCard,
 		deleteCard: vi.fn(),
-		showToast: vi.fn(),
-		setHasUnsavedCardEdits: vi.fn(),
 		refresh: vi.fn().mockResolvedValue(undefined),
 		refreshTick,
 		cancelScheduledRefresh: vi.fn(),
@@ -469,15 +480,16 @@ describe("ContextPanel — attachment gallery composition", () => {
 
 describe("ContextPanel — Report issue gated on active workspace (Story 9)", () => {
 	it("does not render the Report issue button when activeWorkspaceId is null", () => {
-		mockUseBoard.mockReturnValue({
-			activeWorkspaceId: null,
-			ticketIntakeEnabled: true,
+		mockUseWorkspace.mockReturnValue({
+		activeWorkspaceId: null,
+		ticketIntakeEnabled: true,
+		setHasUnsavedCardEdits: vi.fn(),
+	});
+	mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 			columns: columnsWith(makeCard({ id: 1 })),
 			saveCard: vi.fn(),
 			deleteCard: vi.fn(),
-			showToast: vi.fn(),
-			setHasUnsavedCardEdits: vi.fn(),
 		});
 		render(<ContextPanel />);
 		expect(screen.queryByRole("button", { name: /report issue/i })).toBeNull();

@@ -4,11 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishAutoError } from "../../lib/ticketIntakeBus";
 
 const mockUseBoard = vi.fn();
+const mockUseWorkspace = vi.fn();
 const mockOpen = vi.fn();
 const mockConfirm = vi.fn();
 
 vi.mock("../../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+
+vi.mock("../../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
 
 vi.mock("../../hooks/useTicketIntakeChat", () => ({
@@ -34,9 +39,11 @@ describe("AutoErrorListener", () => {
 	beforeEach(() => {
 		mockOpen.mockReset();
 		mockConfirm.mockReset();
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			activeWorkspaceId: 1,
 			ticketIntakeEnabled: true,
+		});
+		mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 		});
 	});
@@ -74,9 +81,11 @@ describe("AutoErrorListener", () => {
 	});
 
 	it("ignores bus events when activeWorkspaceId is null", async () => {
-		mockUseBoard.mockReturnValue({
+		mockUseWorkspace.mockReturnValue({
 			activeWorkspaceId: null,
 			ticketIntakeEnabled: true,
+		});
+		mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 		});
 		render(<AutoErrorListener />);

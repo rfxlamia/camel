@@ -9,13 +9,13 @@ import {
 import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseBoard, mockUseNotificationsContext } = vi.hoisted(() => ({
-	mockUseBoard: vi.fn(),
+const { mockUseWorkspace, mockUseNotificationsContext } = vi.hoisted(() => ({
+	mockUseWorkspace: vi.fn(),
 	mockUseNotificationsContext: vi.fn(),
 }));
 
-vi.mock("../../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
+vi.mock("../../context/WorkspaceContext", () => ({
+	useWorkspace: () => mockUseWorkspace(),
 }));
 
 vi.mock("../../context/NotificationsContext", () => ({
@@ -36,7 +36,7 @@ const workspace = {
 };
 
 function setupContexts() {
-	mockUseBoard.mockReturnValue({
+	mockUseWorkspace.mockReturnValue({
 		activeWorkspace: workspace,
 		activeWorkspaceId: workspace.id,
 		workspaces: [workspace],

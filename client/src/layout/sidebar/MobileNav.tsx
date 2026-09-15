@@ -1,7 +1,7 @@
 import { LogOut, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
-import { useBoard } from "../../context/BoardContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
 import { SignOutPopover } from "./SignOutPopover";
@@ -21,7 +21,7 @@ export function MobileNav({
 	mode,
 	onModeChange,
 }: MobileNavProps) {
-	const { logout, settings } = useBoard();
+	const { logout, settings } = useWorkspace();
 	const [showSignOutPopover, setShowSignOutPopover] = useState(false);
 
 	const handleSignOut = useCallback(() => {
