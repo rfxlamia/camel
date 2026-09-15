@@ -68,10 +68,11 @@ vi.mock("../components/my-work/useDelayedLoading", async (importOriginal) => {
 		await importOriginal<typeof import("../components/my-work/useDelayedLoading")>();
 	return {
 		...actual,
-		useDelayedLoading: (loading: boolean) =>
-			mockDelayedLoading.useDelay
-				? actual.useDelayedLoading(loading)
-				: false,
+		useDelayedLoading: (loading: boolean) => {
+			// Always call the hook (Rules of Hooks); gate only the returned value.
+			const delayed = actual.useDelayedLoading(loading);
+			return mockDelayedLoading.useDelay ? delayed : false;
+		},
 	};
 });
 
