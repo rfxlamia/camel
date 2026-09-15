@@ -183,15 +183,28 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 		[activeWorkspaceId],
 	);
 
+	const signOutLocally = useCallback(() => {
+		onSignedOut();
+	}, [onSignedOut]);
+
 	const refreshSettings = useCallback(async () => {
 		const workspaceId = activeWorkspaceId;
 		if (workspaceId === null) return;
-		const s = await api.getSettings(workspaceId);
-		// Drop responses that belong to a workspace we already left.
-		if (activeWorkspaceIdRef.current !== workspaceId) return;
-		setSettings(s);
-		setSettingsVersion(s.version);
-	}, [activeWorkspaceId]);
+		try {
+			const s = await api.getSettings(workspaceId);
+			// Drop responses that belong to a workspace we already left.
+			if (activeWorkspaceIdRef.current !== workspaceId) return;
+			setSettings(s);
+			setSettingsVersion(s.version);
+		} catch (err) {
+			if (activeWorkspaceIdRef.current !== workspaceId) return;
+			if (err instanceof ApiError && err.status === 401) {
+				signOutLocally();
+				return;
+			}
+			console.debug("settings fetch failed", err);
+		}
+	}, [activeWorkspaceId, signOutLocally]);
 
 	// Enter-load: hydrate settings whenever the active workspace changes.
 	useEffect(() => {
@@ -385,10 +398,6 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 		} catch {
 			// session cookie is gone either way
 		}
-		onSignedOut();
-	}, [onSignedOut]);
-
-	const signOutLocally = useCallback(() => {
 		onSignedOut();
 	}, [onSignedOut]);
 
