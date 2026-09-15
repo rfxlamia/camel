@@ -61,6 +61,8 @@ interface WorkspaceContextValue {
 	createWorkspaceOpen: boolean;
 	submitCreateWorkspace: (name: string) => Promise<void>;
 	logout: () => Promise<void>;
+	/** Immediate local sign-out (no POST /logout). Use for already-rejected sessions (401). */
+	signOutLocally: () => void;
 	settings: SettingsMap;
 	settingsVersion: number;
 	refreshSettings: () => Promise<void>;
@@ -386,6 +388,10 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 		onSignedOut();
 	}, [onSignedOut]);
 
+	const signOutLocally = useCallback(() => {
+		onSignedOut();
+	}, [onSignedOut]);
+
 	return (
 		<WorkspaceContext.Provider
 			value={{
@@ -413,6 +419,7 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 				createWorkspaceOpen,
 				submitCreateWorkspace,
 				logout,
+				signOutLocally,
 				settings,
 				settingsVersion,
 				refreshSettings,
