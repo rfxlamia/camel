@@ -49,12 +49,17 @@ const testUser: User = {
 };
 
 function Probe() {
-	const { workspacesReady, activeWorkspaceId, settings } = useWorkspace();
+	const { workspacesReady, activeWorkspaceId, settings, switchWorkspace } =
+		useWorkspace();
 	return (
 		<>
 			<span data-testid="ready">{String(workspacesReady)}</span>
 			<span data-testid="workspace">{String(activeWorkspaceId)}</span>
 			<span data-testid="board-name">{settings.boardName}</span>
+			<span data-testid="settings-version">{String(settings.version)}</span>
+			<button type="button" onClick={() => switchWorkspace(9)}>
+				Switch
+			</button>
 		</>
 	);
 }
@@ -67,6 +72,13 @@ describe("WorkspaceContext", () => {
 				{
 					id: 7,
 					name: "Atlas",
+					role: "member",
+					isPersonal: false,
+					memberCount: 1,
+				},
+				{
+					id: 9,
+					name: "Orbit",
 					role: "member",
 					isPersonal: false,
 					memberCount: 1,
@@ -110,5 +122,60 @@ describe("WorkspaceContext", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("board-name").textContent).toBe("Atlas Board"),
 		);
+	});
+
+	it("ignores stale settings responses after workspace switch", async () => {
+		let resolveAtlasSettings: (value: {
+			boardName: string;
+			logoPath: string;
+			version: number;
+		}) => void = () => {};
+		mockGetSettings.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveAtlasSettings = resolve;
+				}),
+		);
+		mockGetSettings.mockResolvedValue({
+			boardName: "Orbit Board",
+			logoPath: "/orbit.png",
+			version: 3,
+		});
+
+		await act(async () => {
+			render(
+				<ToastProvider>
+					<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+						<Probe />
+					</WorkspaceProvider>
+				</ToastProvider>,
+			);
+		});
+
+		await waitFor(() =>
+			expect(screen.getByTestId("workspace").textContent).toBe("7"),
+		);
+		await waitFor(() => expect(mockGetSettings).toHaveBeenCalledWith(7));
+
+		await act(async () => {
+			screen.getByRole("button", { name: "Switch" }).click();
+		});
+		await waitFor(() =>
+			expect(screen.getByTestId("workspace").textContent).toBe("9"),
+		);
+		await waitFor(() =>
+			expect(screen.getByTestId("board-name").textContent).toBe("Orbit Board"),
+		);
+
+		await act(async () => {
+			resolveAtlasSettings({
+				boardName: "Stale Atlas",
+				logoPath: "/stale.png",
+				version: 99,
+			});
+		});
+
+		expect(screen.getByTestId("board-name").textContent).toBe("Orbit Board");
+		expect(screen.getByTestId("settings-version").textContent).toBe("3");
 	});
 });
