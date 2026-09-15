@@ -3,6 +3,7 @@ import {
 	type ReactNode,
 	useContext,
 	useEffect,
+	useMemo,
 	useState,
 } from "react";
 import { api } from "../api";
@@ -74,9 +75,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 		};
 	}, [activeWorkspaceId]);
 
+	const value = useMemo(() => ({ presence }), [presence]);
+
 	return (
-		<PresenceContext.Provider value={{ presence }}>
-			{children}
-		</PresenceContext.Provider>
+		<PresenceContext.Provider value={value}>{children}</PresenceContext.Provider>
 	);
 }
