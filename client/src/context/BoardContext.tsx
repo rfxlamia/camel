@@ -252,9 +252,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		}
 	}, [activeWorkspaceId, signOutLocally]);
 
+	// Stable ref so the debounced callback always calls the latest refresh.
 	const refreshRef = useRef(refresh);
 	refreshRef.current = refresh;
 
+	/** Trailing debounce: coalesces burst SSE events into a single refresh.
+	 *  Uses a stable empty-deps callback + ref pattern. */
 	const scheduleRefresh = useCallback(() => {
 		if (refreshTimer.current) clearTimeout(refreshTimer.current);
 		refreshTimer.current = setTimeout(() => {
@@ -279,6 +282,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		const stream = new EventSource(
 			`/api/workspaces/${activeWorkspaceId}/events/stream`,
 		);
+		// Re-fetch board data whenever the SSE connection (re)opens — covers the
+		// startup race where the server wasn't ready on first connect, leaving
+		// loadError=true until the next board event arrived.
 		stream.onopen = () => void refresh();
 		stream.onmessage = (e) => {
 			try {
@@ -376,6 +382,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		};
 
 		return () => {
+			// Cancel pending debounced refresh — the new effect will call refresh()
+			// on mount, so no event is truly lost.
 			if (refreshTimer.current) {
 				clearTimeout(refreshTimer.current);
 				refreshTimer.current = null;
