@@ -96,6 +96,7 @@ vi.stubGlobal("EventSource", MockEventSource);
 
 import { api } from "../api";
 import { BoardProvider, useBoard } from "../context/BoardContext";
+import { ToastProvider } from "../context/ToastContext";
 import CardAttachments from "./CardAttachments";
 
 const testUser: User = {
@@ -251,9 +252,11 @@ describe("CardAttachments SSE gallery refresh", () => {
 	it("updates the counter and gallery after attachment.added refreshes the board", async () => {
 		await act(async () => {
 			render(
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<BoardCardAttachmentsProbe />
-				</BoardProvider>,
+				<ToastProvider>
+					<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+						<BoardCardAttachmentsProbe />
+					</BoardProvider>
+				</ToastProvider>,
 			);
 		});
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
 import { initials } from "../tracker/TrackerGlyphs";
-import type { ToastType } from "../../context/BoardContext";
+import type { ToastType } from "../../context/ToastContext";
 import type { WorkspaceMember, WorkspaceRole } from "../../types";
 
 function roleLabel(role: WorkspaceRole): string {

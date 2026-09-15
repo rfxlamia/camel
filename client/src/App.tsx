@@ -8,6 +8,7 @@ import LoadingCamel from "./components/LoadingCamel";
 import PickUsernamePage from "./components/PickUsernamePage";
 import { BoardProvider, useBoard } from "./context/BoardContext";
 import { FocusSessionProvider } from "./context/FocusSessionContext";
+import { ToastProvider } from "./context/ToastContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
@@ -184,10 +185,12 @@ export default function App() {
 		return <EmailGatePage user={user} onComplete={setUser} />;
 
 	return (
-		<BoardProvider user={user} onSignedOut={() => setUser(null)}>
-			<FocusSessionProvider>
-				<AuthenticatedApp />
-			</FocusSessionProvider>
-		</BoardProvider>
+		<ToastProvider>
+			<BoardProvider user={user} onSignedOut={() => setUser(null)}>
+				<FocusSessionProvider>
+					<AuthenticatedApp />
+				</FocusSessionProvider>
+			</BoardProvider>
+		</ToastProvider>
 	);
 }

@@ -125,6 +125,7 @@ function setupApiMocks() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { ToastProvider, useToastState } from "./ToastContext";
 import {
 	FOCUS_BLOCKED_TOAST,
 	FOCUS_LOADING_TOAST,
@@ -138,8 +139,8 @@ function FocusGuardProbe() {
 		setFocusSessionHydrated,
 		setHasUnsavedCardEdits,
 		confirmPendingSwitch,
-		toast,
 	} = useBoard();
+	const toast = useToastState();
 	return (
 		<>
 			<span data-testid="active-workspace">{String(activeWorkspaceId)}</span>
@@ -199,9 +200,11 @@ function FocusGuardProbe() {
 async function renderBoard() {
 	await act(async () => {
 		render(
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<FocusGuardProbe />
-			</BoardProvider>,
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<FocusGuardProbe />
+				</BoardProvider>
+			</ToastProvider>,
 		);
 	});
 	await waitFor(() =>
@@ -291,5 +294,53 @@ describe("BoardContext focus workspace switch guard", () => {
 		expect(screen.getByTestId("active-workspace").textContent).toBe("1");
 		expect(mockPersistWorkspaceId).not.toHaveBeenCalled();
 		expect(screen.getByTestId("toast").textContent).toBe(FOCUS_BLOCKED_TOAST);
+	});
+
+	it("does not re-render useBoard consumers when toast state changes", async () => {
+		const renders = { count: 0 };
+		let showToast: (message: string) => void = () => {};
+
+		function BoardOnlyProbe() {
+			const board = useBoard();
+			showToast = board.showToast;
+			renders.count += 1;
+			return (
+				<span data-testid="board-only">{String(board.activeWorkspaceId)}</span>
+			);
+		}
+
+		function IsolatedToastProbe() {
+			const toast = useToastState();
+			return <span data-testid="isolated-toast">{toast?.message ?? ""}</span>;
+		}
+
+		await act(async () => {
+			render(
+				<ToastProvider>
+					<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+						<BoardOnlyProbe />
+						<IsolatedToastProbe />
+					</BoardProvider>
+				</ToastProvider>,
+			);
+		});
+
+		await waitFor(() => {
+			expect(screen.getByTestId("board-only").textContent).toBe("1");
+			expect(mockGetBoard).toHaveBeenCalled();
+			expect(mockGetSettings).toHaveBeenCalled();
+			expect(mockFocusGetConfig).toHaveBeenCalled();
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+		const afterIdle = renders.count;
+
+		await act(async () => {
+			showToast("isolated");
+		});
+
+		expect(screen.getByTestId("isolated-toast").textContent).toBe("isolated");
+		expect(renders.count).toBe(afterIdle);
 	});
 });

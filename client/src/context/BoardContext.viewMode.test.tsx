@@ -110,6 +110,7 @@ function setupApiMocks() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { ToastProvider } from "./ToastContext";
 
 function ViewModeProbe() {
 	const { boardViewMode, switchWorkspace, setBoardViewMode } = useBoard();
@@ -129,9 +130,11 @@ function ViewModeProbe() {
 async function renderBoard() {
 	await act(async () => {
 		render(
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<ViewModeProbe />
-			</BoardProvider>,
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<ViewModeProbe />
+				</BoardProvider>
+			</ToastProvider>,
 		);
 	});
 	await waitFor(() => expect(screen.getByTestId("view-mode")).toBeTruthy());

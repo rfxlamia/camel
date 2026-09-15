@@ -160,13 +160,16 @@ async function advanceRefreshDebounce() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { ToastProvider, useToastState } from "./ToastContext";
 
 async function renderBoard(children: React.ReactNode) {
 	await act(async () => {
 		render(
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				{children}
-			</BoardProvider>,
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					{children}
+				</BoardProvider>
+			</ToastProvider>,
 		);
 	});
 	await waitFor(() => expect(mockGetBoard).toHaveBeenCalled());
@@ -325,7 +328,8 @@ describe("BoardContext focus SSE seams", () => {
 		let unsubscribe = () => {};
 
 		function Probe() {
-			const { subscribeMembershipEvents, toast } = useBoard();
+			const { subscribeMembershipEvents } = useBoard();
+			const toast = useToastState();
 			React.useEffect(() => {
 				unsubscribe = subscribeMembershipEvents(membershipHandler);
 				return unsubscribe;
@@ -373,9 +377,11 @@ describe("BoardContext focus SSE seams", () => {
 			cleanup();
 			MockEventSource.instances = [];
 			render(
-				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-					<Probe />
-				</BoardProvider>,
+				<ToastProvider>
+					<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+						<Probe />
+					</BoardProvider>
+				</ToastProvider>,
 			);
 		});
 		await waitFor(() => expect(mockGetBoard).toHaveBeenCalled());

@@ -50,6 +50,7 @@ vi.mock("./lib/workspaceSelection", async (importOriginal) => {
 });
 
 import { BoardProvider, useBoard } from "./context/BoardContext";
+import { ToastProvider } from "./context/ToastContext";
 import CardAttachments from "./components/CardAttachments";
 
 const viewerUser: User = {
@@ -159,9 +160,11 @@ describe("attachment viewer system contract", () => {
 	it("refreshes mounted CardAttachments from 1/3 to 2/3 after attachment.added SSE", async () => {
 		await act(async () => {
 			render(
-				<BoardProvider user={viewerUser} onSignedOut={vi.fn()}>
-					<BoardCardAttachmentsSurface />
-				</BoardProvider>,
+				<ToastProvider>
+					<BoardProvider user={viewerUser} onSignedOut={vi.fn()}>
+						<BoardCardAttachmentsSurface />
+					</BoardProvider>
+				</ToastProvider>,
 			);
 		});
 
