@@ -44,7 +44,7 @@ const {
 		mockListActiveMyWorkCandidates: vi.fn(),
 		mockMarkMyWorkDone: vi.fn(),
 		mockUseWorkspace: vi.fn(),
-		mockDelayedLoading: { useDelay: false },
+		mockDelayedLoading: { disableDelay: false },
 		MockApiError: TestApiError,
 	};
 });
@@ -71,7 +71,7 @@ vi.mock("../components/my-work/useDelayedLoading", async (importOriginal) => {
 		useDelayedLoading: (loading: boolean) => {
 			// Always call the hook (Rules of Hooks); gate only the returned value.
 			const delayed = actual.useDelayedLoading(loading);
-			return mockDelayedLoading.useDelay ? delayed : false;
+			return mockDelayedLoading.disableDelay ? false : delayed;
 		},
 	};
 });
@@ -173,7 +173,7 @@ function RecoveryRouterBoundary() {
 
 beforeEach(() => {
 	vi.useRealTimers();
-	mockDelayedLoading.useDelay = false;
+	mockDelayedLoading.disableDelay = false;
 	Object.defineProperty(document, "hidden", {
 		configurable: true,
 		get: () => false,
@@ -303,7 +303,6 @@ describe("MyWorkPage", () => {
 	});
 
 	it("shows the page loading surface while the personal request is pending", async () => {
-		mockDelayedLoading.useDelay = true;
 		let resolveRequest: (value: MyWorkListResponse) => void = () => {};
 		const pendingRequest = new Promise<MyWorkListResponse>((resolve) => {
 			resolveRequest = resolve;
