@@ -123,6 +123,8 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 
 	const workspacesRef = useRef(workspaces);
 	workspacesRef.current = workspaces;
+	const activeWorkspaceIdRef = useRef(activeWorkspaceId);
+	activeWorkspaceIdRef.current = activeWorkspaceId;
 	const hasUnsavedRef = useRef(hasUnsavedCardEdits);
 	hasUnsavedRef.current = hasUnsavedCardEdits;
 	const hasActiveFocusRef = useRef(hasActiveFocusSession);
@@ -180,8 +182,11 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 	);
 
 	const refreshSettings = useCallback(async () => {
-		if (activeWorkspaceId === null) return;
-		const s = await api.getSettings(activeWorkspaceId);
+		const workspaceId = activeWorkspaceId;
+		if (workspaceId === null) return;
+		const s = await api.getSettings(workspaceId);
+		// Drop responses that belong to a workspace we already left.
+		if (activeWorkspaceIdRef.current !== workspaceId) return;
 		setSettings(s);
 		setSettingsVersion(s.version);
 	}, [activeWorkspaceId]);
