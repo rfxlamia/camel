@@ -41,13 +41,19 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
 
+		let active = true;
+		const applyPresence = (users: PresenceUser[]) => {
+			if (!active) return;
+			setPresence(users);
+		};
+
 		const beat = () => {
 			void api
 				.heartbeat(activeWorkspaceId)
 				.catch((err) => console.debug("heartbeat failed", err));
 			void api
 				.getPresence(activeWorkspaceId)
-				.then(({ users }) => setPresence(users))
+				.then(({ users }) => applyPresence(users))
 				.catch((err) => console.debug("presence fetch failed", err));
 		};
 		beat();
@@ -56,12 +62,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 			() =>
 				void api
 					.getPresence(activeWorkspaceId)
-					.then(({ users }) => setPresence(users))
+					.then(({ users }) => applyPresence(users))
 					.catch((err) => console.debug("presence refresh failed", err)),
 			PRESENCE_REFRESH_MS,
 		);
 
 		return () => {
+			active = false;
 			clearInterval(heartbeatTimer);
 			clearInterval(presenceTimer);
 		};
