@@ -115,6 +115,7 @@ function setupApiMocks() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { ToastProvider } from "./ToastContext";
 
 function FocusFlagProbe() {
 	const { focusModeEnabled } = useBoard();
@@ -124,9 +125,11 @@ function FocusFlagProbe() {
 async function renderBoard() {
 	await act(async () => {
 		render(
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<FocusFlagProbe />
-			</BoardProvider>,
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<FocusFlagProbe />
+				</BoardProvider>
+			</ToastProvider>,
 		);
 	});
 }

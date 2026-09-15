@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseBoard } = vi.hoisted(() => ({
+const { mockUseBoard, mockUseToastState } = vi.hoisted(() => ({
 	mockUseBoard: vi.fn(),
+	mockUseToastState: vi.fn(),
 }));
 
 vi.mock("../components/PresenceBar", () => ({
@@ -25,6 +26,9 @@ vi.mock("../components/Toast", () => ({
 }));
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
+}));
+vi.mock("../context/ToastContext", () => ({
+	useToastState: () => mockUseToastState(),
 }));
 vi.mock("../context/NotificationsContext", () => ({
 	NotificationsProvider: ({ children }: { children: ReactNode }) => (
@@ -68,10 +72,10 @@ describe("AppLayout My Work detail overlay", () => {
 	afterEach(cleanup);
 
 	beforeEach(() => {
+		mockUseToastState.mockReturnValue(null);
 		mockUseBoard.mockReturnValue({
 			user: null,
 			presence: [],
-			toast: null,
 			settings: { boardName: "Camel", logoPath: null },
 		});
 	});

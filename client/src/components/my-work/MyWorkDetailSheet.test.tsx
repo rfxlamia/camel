@@ -90,6 +90,7 @@ vi.mock("../../context/NotificationsContext", () => ({
 }));
 
 import { BoardProvider, useBoard } from "../../context/BoardContext";
+import { ToastProvider } from "../../context/ToastContext";
 import { MobileNav } from "../../layout/sidebar/MobileNav";
 import Sidebar from "../../layout/sidebar/Sidebar";
 import { WorkspaceOverlays } from "../../layout/sidebar/WorkspaceModals";
@@ -333,9 +334,11 @@ function ShellSourceRouteBoundary({ mobileOpen }: { mobileOpen: boolean }) {
 function renderMobileClosedWithBoard(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<MobileClosedSourceRouteBoundary />
-			</BoardProvider>
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<MobileClosedSourceRouteBoundary />
+				</BoardProvider>
+			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
 	);
@@ -344,9 +347,11 @@ function renderMobileClosedWithBoard(initialEntry: string) {
 function renderWithBoard(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<SourceRouteBoundary />
-			</BoardProvider>
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<SourceRouteBoundary />
+				</BoardProvider>
+			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
 	);
@@ -355,9 +360,11 @@ function renderWithBoard(initialEntry: string) {
 function renderShellWithBoard(initialEntry: string, mobileOpen: boolean) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<ShellSourceRouteBoundary mobileOpen={mobileOpen} />
-			</BoardProvider>
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<ShellSourceRouteBoundary mobileOpen={mobileOpen} />
+				</BoardProvider>
+			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
 	);

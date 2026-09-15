@@ -146,13 +146,16 @@ async function advanceRefreshDebounce() {
 }
 
 import { BoardProvider, useBoard } from "./BoardContext";
+import { ToastProvider } from "./ToastContext";
 
 async function renderBoard(children: React.ReactNode) {
 	await act(async () => {
 		render(
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				{children}
-			</BoardProvider>,
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					{children}
+				</BoardProvider>
+			</ToastProvider>,
 		);
 	});
 	await waitFor(() => expect(mockGetBoard).toHaveBeenCalled());

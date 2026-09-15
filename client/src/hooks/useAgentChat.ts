@@ -8,7 +8,7 @@ import {
 	useState,
 } from "react";
 import { api } from "../api";
-import type { ToastType } from "../context/BoardContext";
+import type { ToastType } from "../context/ToastContext";
 import type { FollowUpMessage } from "../lib/agentFollowUp";
 import { conversationsToFollowUpMessages } from "../lib/agentFollowUp";
 import {

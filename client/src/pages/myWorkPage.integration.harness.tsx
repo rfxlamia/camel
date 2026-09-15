@@ -20,6 +20,7 @@ import {
 	resetRequestBoundaryForTests,
 } from "../api";
 import { BoardProvider, useBoard } from "../context/BoardContext";
+import { ToastProvider, useToastState } from "../context/ToastContext";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
 import { sourceItem } from "../lib/myWorkTestSupport";
 import { resetMyWorkMutationsForTests } from "../lib/workItemMutations";
@@ -123,7 +124,8 @@ function LocationProbe() {
 }
 
 function ActiveWorkspaceProbe() {
-	const { activeWorkspaceId, toast } = useBoard();
+	const { activeWorkspaceId } = useBoard();
+	const toast = useToastState();
 	return (
 		<>
 			<output data-testid="active-workspace">{activeWorkspaceId}</output>
@@ -200,9 +202,11 @@ function RouteBoundary() {
 export function renderSurface(initialEntry: string) {
 	return render(
 		<MemoryRouter initialEntries={[initialEntry]}>
-			<BoardProvider user={testUser} onSignedOut={vi.fn()}>
-				<RouteBoundary />
-			</BoardProvider>
+			<ToastProvider>
+				<BoardProvider user={testUser} onSignedOut={vi.fn()}>
+					<RouteBoundary />
+				</BoardProvider>
+			</ToastProvider>
 			<LocationProbe />
 		</MemoryRouter>,
 	);

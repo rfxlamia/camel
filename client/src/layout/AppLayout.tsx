@@ -7,6 +7,7 @@ import { AutoErrorListener } from "../components/ticketIntake/AutoErrorListener"
 import Toast from "../components/Toast";
 import { useBoard } from "../context/BoardContext";
 import { NotificationsProvider } from "../context/NotificationsContext";
+import { useToastState } from "../context/ToastContext";
 import { parseMyWorkDetailState } from "../lib/myWorkNavigation";
 import { formatTitle, getFaviconLink } from "../lib/title";
 import FocusIndicator from "./FocusIndicator";
@@ -15,8 +16,14 @@ import { useSidebarMode } from "./sidebar/useSidebarMode";
 
 const SIDEBAR_COLLAPSED_KEY = "camel.sidebar.collapsed";
 
+function ToastHost() {
+	const toast = useToastState();
+	if (!toast) return null;
+	return <Toast message={toast.message} type={toast.type} />;
+}
+
 export default function AppLayout() {
-	const { user, presence, toast, settings } = useBoard();
+	const { user, presence, settings } = useBoard();
 	const [mode, setMode] = useSidebarMode();
 	const [collapsed, setCollapsed] = useState(
 		() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
@@ -69,7 +76,7 @@ export default function AppLayout() {
 					    blank screen and no picker, since the sidebar is gone. */}
 					<WorkspaceOverlays />
 					<Outlet />
-					{toast && <Toast message={toast.message} type={toast.type} />}
+					<ToastHost />
 					<AutoErrorListener />
 				</div>
 			</NotificationsProvider>
@@ -122,7 +129,7 @@ export default function AppLayout() {
 					</main>
 				</div>
 
-				{toast && <Toast message={toast.message} type={toast.type} />}
+				<ToastHost />
 				{!onChat && !myWorkDetailOpen && <FloatingChatButton />}
 				<AutoErrorListener />
 			</div>

@@ -44,6 +44,7 @@ import type {
 	Workspace,
 	WorkspaceInvite,
 } from "../types";
+import { type ToastType, useShowToast } from "./ToastContext";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const PRESENCE_REFRESH_MS = 30_000;
@@ -53,8 +54,6 @@ const REFRESH_DEBOUNCE_MS = 150;
 
 /** Outcome of a save, so callers (e.g. the context panel) can react to a 409. */
 export type SaveCardResult = "saved" | "conflict" | "error";
-
-export type ToastType = "success" | "error" | "warning" | "info";
 
 export type TrackerEventHandler = (event: {
 	type: string;
@@ -150,7 +149,6 @@ interface BoardContextValue {
 		},
 	) => Promise<SaveCardResult>;
 	deleteCard: (id: number) => Promise<void>;
-	toast: { message: string; type: ToastType } | null;
 	showToast: (message: string, type?: ToastType) => void;
 	logout: () => Promise<void>;
 	settings: SettingsMap;
@@ -192,6 +190,7 @@ interface Props {
 }
 
 export function BoardProvider({ user, onSignedOut, children }: Props) {
+	const showToast = useShowToast();
 	const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(
 		null,
 	);
@@ -213,10 +212,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const [activity, setActivity] = useState<ActivityEvent[]>([]);
 	const [loadError, setLoadError] = useState(false);
 	const [refreshTick, setRefreshTick] = useState(0);
-	const [toast, setToast] = useState<{
-		message: string;
-		type: ToastType;
-	} | null>(null);
 	const [settings, setSettings] = useState<SettingsMap>({
 		boardName: "Camel",
 		logoPath: "/logo.png",
@@ -234,7 +229,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	const [boardViewMode, setBoardViewModeState] = useState<BoardViewMode>(() =>
 		readBoardViewMode(activeWorkspaceId ?? 0),
 	);
-	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const trackerEventRegistry = useRef(
 		createSubscriberRegistry<TrackerEventHandler>(),
@@ -325,12 +319,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 		[activeWorkspaceId],
 	);
 
-	const showToast = useCallback((message: string, type: ToastType = "info") => {
-		setToast({ message, type });
-		if (toastTimer.current) clearTimeout(toastTimer.current);
-		toastTimer.current = setTimeout(() => setToast(null), 3500);
-	}, []);
-
 	const subscribeTrackerEvents = useCallback((handler: TrackerEventHandler) => {
 		return trackerEventRegistry.current.subscribe(handler);
 	}, []);
@@ -398,7 +386,7 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 	refreshRef.current = refresh;
 
 	/** Trailing debounce: coalesces burst SSE events into a single refresh.
-	 *  Uses a stable empty-deps callback + ref pattern (same as toastTimer). */
+	 *  Uses a stable empty-deps callback + ref pattern. */
 	const scheduleRefresh = useCallback(() => {
 		if (refreshTimer.current) clearTimeout(refreshTimer.current);
 		refreshTimer.current = setTimeout(() => {
@@ -864,7 +852,6 @@ export function BoardProvider({ user, onSignedOut, children }: Props) {
 				cancelScheduledRefresh,
 				saveCard,
 				deleteCard,
-				toast,
 				showToast,
 				logout,
 				settings,
