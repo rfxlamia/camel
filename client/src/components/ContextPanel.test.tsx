@@ -481,11 +481,11 @@ describe("ContextPanel — attachment gallery composition", () => {
 describe("ContextPanel — Report issue gated on active workspace (Story 9)", () => {
 	it("does not render the Report issue button when activeWorkspaceId is null", () => {
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: null,
-		ticketIntakeEnabled: true,
-		setHasUnsavedCardEdits: vi.fn(),
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: null,
+			ticketIntakeEnabled: true,
+			setHasUnsavedCardEdits: vi.fn(),
+		});
+		mockUseBoard.mockReturnValue({
 			ticketIntakeEvents: [],
 			columns: columnsWith(makeCard({ id: 1 })),
 			saveCard: vi.fn(),

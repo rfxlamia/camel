@@ -9,17 +9,13 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FocusSession } from "../types";
 
-const {
-	mockUseFocusSession,
-	mockNavigate,
-	mockUseWorkspace,
-	mockShowToast,
-} = vi.hoisted(() => ({
-	mockUseFocusSession: vi.fn(),
-	mockNavigate: vi.fn(),
-	mockUseWorkspace: vi.fn(),
-	mockShowToast: vi.fn(),
-}));
+const { mockUseFocusSession, mockNavigate, mockUseWorkspace, mockShowToast } =
+	vi.hoisted(() => ({
+		mockUseFocusSession: vi.fn(),
+		mockNavigate: vi.fn(),
+		mockUseWorkspace: vi.fn(),
+		mockShowToast: vi.fn(),
+	}));
 
 vi.mock("../context/FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),

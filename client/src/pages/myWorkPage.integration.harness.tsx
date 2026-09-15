@@ -22,10 +22,7 @@ import {
 import { BoardProvider } from "../context/BoardContext";
 import { PresenceProvider } from "../context/PresenceContext";
 import { ToastProvider, useToastState } from "../context/ToastContext";
-import {
-	useWorkspace,
-	WorkspaceProvider,
-} from "../context/WorkspaceContext";
+import { useWorkspace, WorkspaceProvider } from "../context/WorkspaceContext";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
 import { sourceItem } from "../lib/myWorkTestSupport";
 import { resetMyWorkMutationsForTests } from "../lib/workItemMutations";

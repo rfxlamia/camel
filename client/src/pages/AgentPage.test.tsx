@@ -376,8 +376,8 @@ describe("bug-hunting: multi-turn conversation", () => {
 					type: "agent.card.token",
 					columnSlug: "__notfirst__",
 					boardId: 2,
-					token: "Previous answer."
-	},
+					token: "Previous answer.",
+				},
 			],
 			clearAgentEvents: stableClearAgentEvents,
 			clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
@@ -431,8 +431,8 @@ describe("bug-hunting: multi-turn conversation", () => {
 					type: "agent.card.token",
 					columnSlug: "__notfirst__",
 					boardId: 2,
-					token: answer
-	},
+					token: answer,
+				},
 			],
 			clearAgentEvents: stableClearAgentEvents,
 			clearFollowUpAgentEvents: stableClearFollowUpAgentEvents,
