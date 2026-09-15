@@ -81,6 +81,13 @@ describe("FocusIndicator", () => {
 		expect(screen.getByRole("button", { name: /focus active/i })).toBeTruthy();
 	});
 
+	it("always shows Focus active when a live session exists so the user can exit", () => {
+		setupActiveSession(makeSession({ state: "running" }));
+		render(<FocusIndicator />);
+
+		expect(screen.getByRole("button", { name: /focus active/i })).toBeTruthy();
+	});
+
 	it("renders nothing when session is null", () => {
 		mockUseFocusSession.mockReturnValue({
 			session: null,
