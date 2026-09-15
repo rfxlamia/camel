@@ -75,6 +75,7 @@ import request from "supertest";
 import { seedTrackerVocabulary } from "./core/tracker-vocabulary-seed.js";
 import { db } from "./db/kysely.js";
 import { pool } from "./db/pool.js";
+import { batchUpdateCardPositions } from "./routes/cards.js";
 import { api } from "./routes.js";
 
 // ---------------------------------------------------------------------------
@@ -351,10 +352,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		it("triggers rebalance when positions are too close", async () => {
 			// Insert 3 cards with positions closer than MIN_SPACING (1e-9)
-			await insertCard("R-1", col1Id, 0);
-			await insertCard("R-2", col1Id, 1e-15);
-			await insertCard("R-3", col1Id, 2e-15);
+			const firstId = await insertCard("R-1", col1Id, 0);
+			const secondId = await insertCard("R-2", col1Id, 0);
+			const thirdId = await insertCard("R-3", col1Id, 0);
 			const cardId = await insertCard("Card E", col1Id, 5000);
+			const outsideId = await insertCard("Outside", col2Id, 7777, 7);
 
 			// Move card between the tightly-packed siblings — triggers RangeError → rebalance
 			const res = await request(app)
@@ -363,6 +365,158 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 			expect(res.status).toBe(200);
 			expect(res.body.columnId).toBe(col1Id);
+
+			const rows = await db
+				.selectFrom("cards")
+				.select(["id", "position", "version"])
+				.where("column_id", "=", col1Id)
+				.where("deleted_at", "is", null)
+				.orderBy("position")
+				.orderBy("id")
+				.execute();
+			expect(rows.map((row) => row.id)).toEqual([
+				firstId,
+				cardId,
+				secondId,
+				thirdId,
+			]);
+			expect(rows.map((row) => Number(row.position))).toEqual([
+				1024, 1536, 2048, 3072,
+			]);
+			expect(
+				rows
+					.filter((row) => [firstId, secondId, thirdId].includes(row.id))
+					.map((row) => row.version),
+			).toEqual([1, 1, 1]);
+			expect(rows.find((row) => row.id === cardId)).toMatchObject({
+				position: 1536,
+				version: 2,
+			});
+
+			const events = await db
+				.selectFrom("card_events")
+				.select(["event_type", "from_column_id", "to_column_id"])
+				.where("card_id", "=", cardId)
+				.execute();
+			expect(events).toEqual([
+				{
+					event_type: "reorder",
+					from_column_id: col1Id,
+					to_column_id: col1Id,
+				},
+			]);
+
+			const outside = await db
+				.selectFrom("cards")
+				.select(["position", "version"])
+				.where("id", "=", outsideId)
+				.executeTakeFirstOrThrow();
+			expect(outside).toEqual({ position: 7777, version: 7 });
+		});
+
+		it("updates positions with one scoped batch statement", async () => {
+			const firstId = await insertCard("Batch 1", col1Id, 10, 4);
+			const secondId = await insertCard("Batch 2", col1Id, 20, 5);
+			const outsideId = await insertCard("Batch outside", col2Id, 30, 6);
+			const deleted = await db
+				.insertInto("cards")
+				.values({
+					title: "Batch deleted",
+					column_id: col1Id,
+					position: 40,
+					version: 8,
+					workspace_id: WS_ID,
+					status_id: await statusIdForColumn(col1Id),
+					deleted_at: new Date(),
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			const foreignWorkspace = await db
+				.insertInto("workspaces")
+				.values({
+					name: `Batch Foreign WS ${Date.now()}`,
+					owner_user_id: mockTestUser.id,
+					is_personal: false,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+			const foreignWorkspaceId = foreignWorkspace.id;
+			await seedTrackerVocabulary(db, foreignWorkspaceId);
+			const foreignStatus = await db
+				.selectFrom("tracker_vocabularies")
+				.select("id")
+				.where("workspace_id", "=", foreignWorkspaceId)
+				.where("kind", "=", "status")
+				.where("slot", "=", "backlog")
+				.executeTakeFirstOrThrow();
+			const foreignCard = await db
+				.insertInto("cards")
+				.values({
+					title: "Batch foreign",
+					column_id: col1Id,
+					position: 50,
+					version: 9,
+					workspace_id: foreignWorkspaceId,
+					status_id: foreignStatus.id,
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+
+			try {
+				let queryCount = 0;
+				const countedDb = db.withPlugin({
+					transformQuery({ node }) {
+						queryCount += 1;
+						return node;
+					},
+					async transformResult({ result }) {
+						return result;
+					},
+				});
+
+				await batchUpdateCardPositions(countedDb, WS_ID, col1Id, [
+					{ id: firstId, position: 1024 },
+					{ id: secondId, position: 2048 },
+					{ id: deleted.id, position: 3072 },
+					{ id: foreignCard.id, position: 4096 },
+				]);
+
+				expect(queryCount).toBe(1);
+				const updated = await db
+					.selectFrom("cards")
+					.select(["id", "position", "version", "deleted_at"])
+					.where("id", "in", [
+						firstId,
+						secondId,
+						outsideId,
+						deleted.id,
+						foreignCard.id,
+					])
+					.orderBy("id")
+					.execute();
+				expect(updated).toEqual([
+					{ id: firstId, position: 1024, version: 4, deleted_at: null },
+					{ id: secondId, position: 2048, version: 5, deleted_at: null },
+					{ id: outsideId, position: 30, version: 6, deleted_at: null },
+					expect.objectContaining({
+						id: deleted.id,
+						position: 40,
+						version: 8,
+						deleted_at: expect.any(Date),
+					}),
+					expect.objectContaining({
+						id: foreignCard.id,
+						position: 50,
+						version: 9,
+						deleted_at: null,
+					}),
+				]);
+			} finally {
+				await db
+					.deleteFrom("workspaces")
+					.where("id", "=", foreignWorkspaceId)
+					.execute();
+			}
 		});
 
 		// ----- Activity logging -----

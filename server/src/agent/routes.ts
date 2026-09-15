@@ -300,6 +300,59 @@ export function validateBoardColumns(keys: string[]): void {
 	}
 }
 
+export async function loadAgentBoardColumns(
+	dbExec: DBExecutor,
+	boardId: number,
+	workspaceId: number,
+) {
+	const colRows = await dbExec
+		.selectFrom("columns")
+		.select(["id", "title", "position", "slug", "reasoning", "system_prompt"])
+		.where("board_id", "=", boardId)
+		.where("workspace_id", "=", workspaceId)
+		.orderBy("position")
+		.orderBy("id")
+		.execute();
+
+	const cardRows = await dbExec
+		.selectFrom("cards as c")
+		.innerJoin("columns as col", "col.id", "c.column_id")
+		.select(["c.id", "c.column_id", "c.title", "c.position"])
+		.where("c.workspace_id", "=", workspaceId)
+		.where("c.deleted_at", "is", null)
+		.where("col.board_id", "=", boardId)
+		.where("col.workspace_id", "=", workspaceId)
+		.orderBy("c.column_id")
+		.orderBy("c.position")
+		.orderBy("c.id")
+		.execute();
+
+	const cardsByColumn = new Map<number, Array<(typeof cardRows)[number]>>();
+	for (const card of cardRows) {
+		const cards = cardsByColumn.get(card.column_id);
+		if (cards) {
+			cards.push(card);
+		} else {
+			cardsByColumn.set(card.column_id, [card]);
+		}
+	}
+
+	return colRows.map((col) => ({
+		id: col.id,
+		slug: col.slug,
+		name: col.title,
+		position: col.position,
+		reasoning: col.reasoning,
+		systemPrompt: col.system_prompt,
+		cards: (cardsByColumn.get(col.id) ?? []).map((card) => ({
+			id: card.id,
+			columnId: card.column_id,
+			title: card.title,
+			position: card.position,
+		})),
+	}));
+}
+
 // Workspace membership helper
 // ---------------------------------------------------------------------------
 
@@ -810,44 +863,7 @@ export function createAgentRouter(
 					return res.status(statusCode).json(result ?? { error: "Not found" });
 				}
 
-				// Fetch columns + cards for this agent board
-				const colRows = await db
-					.selectFrom("columns")
-					.select([
-						"id",
-						"title",
-						"position",
-						"slug",
-						"reasoning",
-						"system_prompt",
-					])
-					.where("board_id", "=", boardId)
-					.orderBy("position")
-					.execute();
-				const columns = [];
-				for (const col of colRows) {
-					const cardRows = await db
-						.selectFrom("cards")
-						.select(["id", "column_id", "title", "position"])
-						.where("column_id", "=", col.id)
-						.where("deleted_at", "is", null)
-						.orderBy("position")
-						.execute();
-					columns.push({
-						id: col.id,
-						slug: col.slug,
-						name: col.title,
-						position: col.position,
-						reasoning: col.reasoning,
-						systemPrompt: col.system_prompt,
-						cards: cardRows.map((c) => ({
-							id: c.id,
-							columnId: c.column_id,
-							title: c.title,
-							position: c.position,
-						})),
-					});
-				}
+				const columns = await loadAgentBoardColumns(db, boardId, workspaceId);
 
 				// Fetch stored tool trace (read-only replay)
 				const toolTrace = await getToolTrace(db, boardId);
