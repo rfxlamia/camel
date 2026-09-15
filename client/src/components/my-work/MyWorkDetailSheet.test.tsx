@@ -561,6 +561,8 @@ describe("MyWorkDetailSheet", () => {
 		expect(within(detail).getByText("Atlas")).toBeTruthy();
 		expect(within(detail).getByText("Board")).toBeTruthy();
 		expect(mockGetDetail).toHaveBeenCalledWith(7, "board", "AT-17");
+		expect(mockListActive).toHaveBeenCalledTimes(1);
+		expect(mockGetDetail).toHaveBeenCalledTimes(1);
 		await waitFor(() =>
 			expect(screen.getByTestId("active-workspace").textContent).toBe("999"),
 		);
