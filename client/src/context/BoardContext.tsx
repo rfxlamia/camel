@@ -130,7 +130,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		switchWorkspace,
 		reloadWorkspaces,
 		refreshSettings,
-		logout,
+		signOutLocally,
 	} = useWorkspace();
 
 	const [columns, setColumns] = useState<Column[] | null>(null);
@@ -245,12 +245,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		} catch (err) {
 			if (activeWorkspaceIdRef.current !== workspaceId) return;
 			if (err instanceof ApiError && err.status === 401) {
-				void logout();
+				signOutLocally();
 				return;
 			}
 			setLoadError(true);
 		}
-	}, [activeWorkspaceId, logout]);
+	}, [activeWorkspaceId, signOutLocally]);
 
 	const refreshRef = useRef(refresh);
 	refreshRef.current = refresh;
