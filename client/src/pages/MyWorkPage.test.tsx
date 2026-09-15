@@ -285,6 +285,7 @@ describe("MyWorkPage", () => {
 		expect(mockListActiveMyWorkCandidates).toHaveBeenCalledWith(
 			expect.objectContaining({ workspaceId: 7, source: "board" }),
 		);
+		expect(mockListActiveMyWorkCandidates).toHaveBeenCalledTimes(1);
 		expect(mockListActiveMyWorkCandidates.mock.calls[0]?.[0]).not.toEqual(
 			expect.objectContaining({ workspaceId: 999 }),
 		);
@@ -299,6 +300,7 @@ describe("MyWorkPage", () => {
 				}),
 			),
 		);
+		expect(mockListMyWork).toHaveBeenCalledTimes(1);
 		expect(screen.getByTestId("location").textContent).toContain(
 			"scope=all&workspaceId=7&source=board",
 		);
