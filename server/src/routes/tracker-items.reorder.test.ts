@@ -29,9 +29,24 @@ const updateCalls: Array<{ id: number; values: any }> = [];
 
 function makeTrx(
 	siblings: Array<{ id: number; key_number: number; position: number }>,
+	locked: {
+		id: number;
+		title: string;
+		project_id: number | null;
+		phase_id: number | null;
+	} | null = {
+		id: 3,
+		title: "C",
+		project_id: 5,
+		phase_id: 9,
+	},
 ) {
 	const trx: any = {};
-	trx.selectFrom = vi.fn(() => chainable(siblings));
+	let selects = 0;
+	trx.selectFrom = vi.fn(() => {
+		selects += 1;
+		return selects === 1 ? chainable(locked) : chainable(siblings);
+	});
 	trx.updateTable = vi.fn(() => ({
 		set: vi.fn((values: any) => ({
 			where: vi.fn((_col: string, _op: string, id: number) => {
@@ -343,6 +358,21 @@ describe("PATCH /tracker/items/:key/position", () => {
 		expect(res.status).toBe(409);
 		expect(res.body).toMatchObject({ code: "board_item_use_card_api" });
 		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
+	it("returns 404 when the locked tracker row is gone inside the transaction", async () => {
+		mockTransaction.mockImplementation(() => ({
+			execute: async (cb: (trx: unknown) => unknown) =>
+				cb(makeTrx([{ id: 1, key_number: 1, position: 1024 }], null)),
+		}));
+		mockDbSelect();
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CT-1", afterKey: "CT-2" });
+
+		expect(res.status).toBe(404);
+		expect(updateCalls).toHaveLength(0);
 	});
 
 	it("rejects a reorder targeting an item in another workspace without a 500", async () => {
