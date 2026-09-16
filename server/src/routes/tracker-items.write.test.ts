@@ -42,10 +42,10 @@ function makeTrx() {
 		set: vi.fn((values: unknown) => {
 			updatedSets.push(values);
 			return chainable({
-			id: 1,
-			title: "Ship WBS",
-			tracker_key_counter: 1,
-		});
+				id: 1,
+				title: "Ship WBS",
+				tracker_key_counter: 1,
+			});
 		}),
 	}));
 	trx.insertInto = vi.fn(() => ({
@@ -297,7 +297,10 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 	});
 
 	it("nulls phase_id when projectId alone is supplied", async () => {
-		mockParseProjectPhase.mockResolvedValueOnce({ projectId: 2, phaseId: null });
+		mockParseProjectPhase.mockResolvedValueOnce({
+			projectId: 2,
+			phaseId: null,
+		});
 		const res = await request(app)
 			.patch("/workspaces/7/tracker/items/CT-42")
 			.send({ projectId: 2, version: 3 });
@@ -434,5 +437,23 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		expect(res.status).toBe(200);
 		const update = updatedSets.find((s) => "status_id" in s);
 		expect(update.completed_at).toBeNull();
+	});
+});
+
+describe("DELETE /tracker/items/:key", () => {
+	it("rejects deleting a board item via the tracker API", async () => {
+		mockSelectFrom.mockImplementation((table: string) => {
+			if (table === "workspaces") return chainable({ name: "Camel Team" });
+			if (table === "cards as c") {
+				return chainable({ id: 99, key_number: 42 });
+			}
+			return chainable(undefined);
+		});
+		const res = await request(app)
+			.delete("/workspaces/7/tracker/items/CT-42")
+			.send({ version: 1 });
+		expect(res.status).toBe(409);
+		expect(res.body).toMatchObject({ code: "board_item_use_card_api" });
+		expect(mockTransaction).not.toHaveBeenCalled();
 	});
 });
