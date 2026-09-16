@@ -122,17 +122,30 @@ export async function reorderTrackerItemHandler(req: Request, res: Response) {
 	}
 
 	type ReorderResult =
+		| { kind: "not_found" }
 		| { kind: "bad_neighbors" }
 		| { kind: "non_adjacent_neighbors" }
 		| { kind: "ok" };
 
 	const result: ReorderResult = await db.transaction().execute(async (trx) => {
+		const locked = await trx
+			.selectFrom("tracker_items")
+			.select(["id", "title", "project_id", "phase_id"])
+			.where("id", "=", existing.id)
+			.where("workspace_id", "=", workspaceId)
+			.where("deleted_at", "is", null)
+			.forUpdate()
+			.executeTakeFirst();
+		if (!locked) {
+			return { kind: "not_found" };
+		}
+
 		const siblings = await loadBucketSiblings(
 			trx,
 			workspaceId,
-			existing.project_id,
-			existing.phase_id,
-			existing.id,
+			locked.project_id,
+			locked.phase_id,
+			locked.id,
 		);
 
 		const beforeIndex =
@@ -183,7 +196,7 @@ export async function reorderTrackerItemHandler(req: Request, res: Response) {
 		await trx
 			.updateTable("tracker_items")
 			.set({ position })
-			.where("id", "=", existing.id)
+			.where("id", "=", locked.id)
 			.execute();
 
 		await recordTrackerActivity(
@@ -192,9 +205,9 @@ export async function reorderTrackerItemHandler(req: Request, res: Response) {
 			workspaceId,
 			"tracker_item_updated",
 			{
-				trackerItemId: existing.id,
+				trackerItemId: locked.id,
 				payload: {
-					title: existing.title,
+					title: locked.title,
 					changed: ["position"],
 				},
 			},
@@ -203,6 +216,9 @@ export async function reorderTrackerItemHandler(req: Request, res: Response) {
 		return { kind: "ok" };
 	});
 
+	if (result.kind === "not_found") {
+		return res.status(404).json({ error: "Not found" });
+	}
 	if (result.kind === "bad_neighbors") {
 		return res.status(400).json({ error: "neighbor not in bucket" });
 	}
