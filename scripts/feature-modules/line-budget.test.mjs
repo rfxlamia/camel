@@ -412,6 +412,43 @@ describe("Cycle F — hunk producer + CLI grandfather (integration)", () => {
 		});
 	});
 
+	it("fails C<100 copy-with-edit via collectLineBudgetViolations when source hunks are empty", () => {
+		withTempGitRepo(".tmp-fm-line-budget-copy-edit-", (dir) => {
+			const fromPath = "server/src/routes/copy-src.ts";
+			const toPath = "server/src/modules/board/copied.ts";
+			mkdirSync(join(dir, "server/src/routes"), { recursive: true });
+			mkdirSync(join(dir, "server/src/modules/board"), { recursive: true });
+			writeFileSync(join(dir, fromPath), makeLines(521));
+			git(dir, ["add", fromPath]);
+			git(dir, ["commit", "-m", "base"]);
+
+			writeFileSync(join(dir, toPath), `${makeLines(521)}\n// copy edit touch`);
+			git(dir, ["add", toPath]);
+			git(dir, ["commit", "-m", "copy with edit"]);
+
+			const baseRef = git(dir, ["rev-parse", "HEAD~1"]);
+			const diff = collectGitDiff(dir, baseRef);
+			const copy = diff.copied.find((c) => c.to === toPath);
+			assert.ok(copy, `expected copied entry for ${toPath}`);
+			assert.ok(copy.similarity < 100, "expected C<100 copy-with-edit");
+
+			const mergeBase = git(dir, ["merge-base", "HEAD", baseRef]);
+			const sourceHunks = spawnSync(
+				"git",
+				["diff", "-U0", mergeBase, "HEAD", "--", fromPath],
+				{ cwd: dir, encoding: "utf8" },
+			).stdout;
+			assert.equal(sourceHunks, "", "source path must have empty hunks");
+
+			const violations = collectLineBudgetViolations({
+				rootDir: dir,
+				baseRef,
+				diff,
+			});
+			expectLineBudgetViolation(toPath, 522)(violations);
+		});
+	});
+
 	it("does not invent a touch for unmodified BoardContext-sized grandfather file", () => {
 		withTempGitRepo(".tmp-fm-line-budget-board-", (dir) => {
 			writeFileSync(join(dir, "README.md"), "# base\n");

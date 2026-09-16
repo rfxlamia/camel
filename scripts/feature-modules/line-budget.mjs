@@ -217,14 +217,20 @@ function gitShowText(rootDir, objectRef, path) {
  * @param {string} [oldPath]
  */
 function gitDiffHunks(rootDir, mergeBase, path, oldPath) {
-	const diffPath = oldPath ?? path;
-	const result = spawnSync(
-		"git",
-		["diff", "-U0", mergeBase, "HEAD", "--", diffPath],
-		{ cwd: rootDir, encoding: "utf8" },
-	);
-	if (result.status !== 0) return "";
-	return result.stdout;
+	/** @type {string[]} */
+	const diffPaths = oldPath ? [path, oldPath] : [path];
+	/** @type {string[]} */
+	const hunks = [];
+	for (const diffPath of diffPaths) {
+		const result = spawnSync(
+			"git",
+			["diff", "-U0", mergeBase, "HEAD", "--", diffPath],
+			{ cwd: rootDir, encoding: "utf8" },
+		);
+		if (result.status !== 0) continue;
+		if (result.stdout) hunks.push(result.stdout);
+	}
+	return hunks.join("\n");
 }
 
 /**
