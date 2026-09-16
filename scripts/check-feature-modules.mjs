@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { assertBaseRefResolvable, collectGitDiff } from "./feature-modules/git-diff.mjs";
 import * as map from "./feature-modules/map.mjs";
+import { collectLineBudgetViolations } from "./feature-modules/line-budget.mjs";
 import { collectPlacementViolations } from "./feature-modules/placement.mjs";
 
 /** @param {string[]} argv */
@@ -35,10 +36,16 @@ function main() {
 
 	const diff = collectGitDiff(rootDir, baseRef);
 	const placementViolations = collectPlacementViolations({ ...diff, map });
+	const lineBudgetViolations = collectLineBudgetViolations({
+		rootDir,
+		baseRef,
+		diff,
+	});
 
-	if (placementViolations.length > 0) {
+	const allViolations = [...placementViolations, ...lineBudgetViolations];
+	if (allViolations.length > 0) {
 		console.error(
-			"Feature module placement violations:\n" + placementViolations.join("\n"),
+			"Feature module violations:\n" + allViolations.join("\n"),
 		);
 		process.exit(1);
 	}
