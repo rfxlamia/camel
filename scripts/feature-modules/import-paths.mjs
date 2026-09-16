@@ -1,22 +1,11 @@
 import { dirname } from "node:path";
 
-/** Server kernel prefixes (importable from any feature module). */
-export const SERVER_KERNEL_PREFIXES = [
-	"server/src/core/",
-	"server/src/lib/",
-	"server/src/db/",
-	"server/src/middleware/",
-	"server/src/realtime/",
-	"server/src/validators/",
-	"server/src/config.ts",
-	"server/src/auth.ts",
-];
+import {
+	CLIENT_KERNEL_PREFIXES,
+	SERVER_KERNEL_PREFIXES,
+} from "./map.mjs";
 
-/** Client kernel prefixes. */
-export const CLIENT_KERNEL_PREFIXES = [
-	"client/src/shared/",
-	"client/src/layout/",
-];
+export { CLIENT_KERNEL_PREFIXES, SERVER_KERNEL_PREFIXES };
 
 /** Legacy type-folder trees where modules must not deep-import feature code. */
 export const LEGACY_FEATURE_PREFIXES = [

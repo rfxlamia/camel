@@ -87,6 +87,24 @@ describe("Cycle A — kernel allow (unit)", () => {
 		});
 		assert.deepEqual(violations, []);
 	});
+
+	it("allows new files under client layout kernel prefix", () => {
+		const violations = checkPlacement({
+			path: "client/src/layout/Foo.tsx",
+			status: "new",
+			map,
+		});
+		assert.deepEqual(violations, []);
+	});
+
+	it("allows new files under server db kernel prefix", () => {
+		const violations = checkPlacement({
+			path: "server/src/db/bar.ts",
+			status: "new",
+			map,
+		});
+		assert.deepEqual(violations, []);
+	});
 });
 
 describe("Cycle B — forbidden type-folders (unit)", () => {

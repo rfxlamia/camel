@@ -1,11 +1,9 @@
 import { SCAN_ROOTS } from "./map.mjs";
+import { isKernelPath } from "./import-paths.mjs";
 
 export const PLACEMENT_RULE_ID = "FM-RULE-1";
 
 const TS_SOURCE = /\.(ts|tsx)$/i;
-
-/** POSIX prefixes where new kernel code may land (Rule 1). */
-const KERNEL_PREFIXES = ["client/src/shared/", "server/src/lib/"];
 
 /** Legacy type-folder trees where new source files are forbidden (Rule 1). */
 const FORBIDDEN_PREFIXES = [
@@ -28,16 +26,6 @@ const FORBIDDEN_PREFIXES = [
 function isPlacementScope(path) {
 	if (!TS_SOURCE.test(path)) return false;
 	return SCAN_ROOTS.some((root) => path === root || path.startsWith(`${root}/`));
-}
-
-/**
- * @param {string} path
- * @param {Set<string>} featureSet
- */
-function isKernelPath(path) {
-	return KERNEL_PREFIXES.some(
-		(prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix),
-	);
 }
 
 function isMappedModulePath(path, featureSet) {
