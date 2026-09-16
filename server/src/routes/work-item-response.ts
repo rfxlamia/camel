@@ -261,6 +261,15 @@ export function serializeTrackerWorkItem(
 	return body;
 }
 
+export function legacyTrackerItemResponse(
+	item: Record<string, unknown>,
+	canonical: boolean,
+): Record<string, unknown> {
+	if (canonical) return item;
+	const { source: _source, ...legacy } = item;
+	return legacy;
+}
+
 export function serializeBoardWorkItem(
 	row: BoardWorkItemRow,
 	prefix: string,

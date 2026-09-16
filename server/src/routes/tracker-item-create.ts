@@ -1,23 +1,24 @@
 import type { Request, Response } from "express";
-import type { AuthUser } from "../auth.js";
 import { sql } from "kysely";
-import { derivePrefix, formatKey } from "../core/tracker-key.js";
+import type { AuthUser } from "../auth.js";
 import { positionBetween } from "../core/position.js";
+import { derivePrefix, formatKey } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
-import { lockTaskCreateReferences } from "./workspace-mutation-lock.js";
+import { recordTrackerActivity } from "./tracker-activity.js";
+import { syncTrackerItemAssignees } from "./tracker-assignees.js";
+import { parseDateRange } from "./tracker-item-parsers.js";
 import {
-	validateTaskCreateMetadata,
 	type NormalizedTaskCreateMetadata,
 	type TaskCreateFieldErrors,
+	validateTaskCreateMetadata,
 } from "./work-item-create-metadata.js";
-import { parseDateRange } from "./tracker-item-parsers.js";
-import { syncTrackerItemAssignees } from "./tracker-assignees.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
 import {
 	findTrackerItemByKeyNumber,
 	hydrateTrackerWorkItems,
+	legacyTrackerItemResponse,
 } from "./work-item-response.js";
+import { lockTaskCreateReferences } from "./workspace-mutation-lock.js";
 
 async function workspacePrefix(
 	dbExec: DBExecutor,
@@ -130,12 +131,6 @@ function mergeDateErrors(
 			fieldErrors[field] = dateErrors[field] ?? parsed.error;
 		}
 	}
-}
-
-function legacyResponse(item: Record<string, unknown>, canonical: boolean) {
-	if (canonical) return item;
-	const { source: _source, ...legacy } = item;
-	return legacy;
 }
 
 function parsedDateValue(
@@ -321,6 +316,9 @@ export async function createTrackerItemHandler(req: Request, res: Response) {
 		console.error("Failed to publish tracker.created event:", error);
 	}
 	return res.status(201).json(
-		legacyResponse(result.item, Boolean(req.canonicalWorkItemsRoute)),
+		legacyTrackerItemResponse(
+			result.item,
+			Boolean(req.canonicalWorkItemsRoute),
+		),
 	);
 }

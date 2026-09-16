@@ -105,14 +105,21 @@ vi.mock("./tracker-item-parsers.js", () => ({
 }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
+import { workItemsRouter } from "./work-items.js";
 
-const app = express();
-app.use(express.json());
-app.use((req, _res, next) => {
-	(req as any).user = { id: 1, displayName: "Bob" };
-	next();
-});
-app.use("/workspaces/:workspaceId", trackerItemsRouter);
+function createApp(router: express.Router) {
+	const created = express();
+	created.use(express.json());
+	created.use((req, _res, next) => {
+		(req as any).user = { id: 1, displayName: "Bob" };
+		next();
+	});
+	created.use("/workspaces/:workspaceId", router);
+	return created;
+}
+
+const app = createApp(trackerItemsRouter);
+const canonicalApp = createApp(workItemsRouter);
 
 const existingItemRow = {
 	id: 1,
@@ -229,6 +236,7 @@ describe("POST /tracker/items — assignment, dates, completion", () => {
 			.send({ title: "Existing create regression" });
 		expect(res.status).toBe(201);
 		expect(res.body).toMatchObject({ title: "Ship WBS" });
+		expect(res.body).not.toHaveProperty("source");
 	});
 
 	it("stamps completed_at when the initial status category is completed", async () => {
@@ -260,6 +268,16 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		expect(update.phase_id).toBe(9);
 		expect(update.project_id).toBe(5);
 		expect(update.version).toBeDefined();
+		expect(res.body).not.toHaveProperty("source");
+	});
+
+	it("includes source on the canonical /work-items PATCH response", async () => {
+		mockParseProjectPhase.mockResolvedValueOnce({ projectId: 5, phaseId: 9 });
+		const res = await request(canonicalApp)
+			.patch("/workspaces/7/work-items/CT-42")
+			.send({ phaseId: 9, version: 3 });
+		expect(res.status).toBe(200);
+		expect(res.body).toMatchObject({ source: "tracker" });
 	});
 
 	it("nulls phase_id when projectId alone is supplied", async () => {
