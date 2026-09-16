@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { resolve } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertBaseRefResolvable, collectGitDiff } from "./feature-modules/git-diff.mjs";
@@ -23,6 +24,33 @@ function parseArgs(argv) {
 	return { baseRef, rootArg };
 }
 
+const TS_SOURCE = /\.(ts|tsx)$/i;
+
+/**
+ * @param {string} rootDir
+ */
+function countScannedSourceFiles(rootDir) {
+	let count = 0;
+
+	/** @param {string} dirAbs */
+	function walk(dirAbs) {
+		if (!existsSync(dirAbs)) return;
+		for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
+			const abs = join(dirAbs, entry.name);
+			if (entry.isDirectory()) {
+				walk(abs);
+				continue;
+			}
+			if (TS_SOURCE.test(entry.name)) count++;
+		}
+	}
+
+	for (const scanRoot of map.SCAN_ROOTS) {
+		walk(join(rootDir, scanRoot));
+	}
+	return count;
+}
+
 function main() {
 	const { baseRef, rootArg } = parseArgs(process.argv);
 	const rootDir = resolve(rootArg);
@@ -44,6 +72,9 @@ function main() {
 	});
 	const importViolations = collectImportViolations({ rootDir, map });
 
+	const scannedFiles = countScannedSourceFiles(rootDir);
+	const rulesEvaluated = 3;
+
 	const allViolations = [
 		...placementViolations,
 		...lineBudgetViolations,
@@ -54,7 +85,9 @@ function main() {
 		process.exit(1);
 	}
 
-	console.log(`Feature module check: base-ref=${baseRef} root=${rootArg}`);
+	console.log(
+		`Feature module check: base-ref=${baseRef} root=${rootArg} scanned-files=${scannedFiles} rules-evaluated=${rulesEvaluated}`,
+	);
 	console.log("Feature module check passed.");
 }
 

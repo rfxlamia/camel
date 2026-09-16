@@ -53,9 +53,10 @@ typecheck: ## Type-check both workspaces (tsc --noEmit)
 	@cd client && npx tsc --noEmit
 	@echo "✓ All types OK"
 
-check: ## Lint + mutation routing guard (+ key collision if DATABASE_URL set)
+check: ## Lint + architecture guards (+ key collision if DATABASE_URL set)
 	@$(NPM) run lint
 	@$(NPM) run check:mutation-routing
+	@$(NPM) run check:feature-modules
 	@if [ -n "$$DATABASE_URL" ]; then $(NPM) run check:key-collisions --workspace=server; fi
 
 # ---- Database & Services ---------------------------------------------------
