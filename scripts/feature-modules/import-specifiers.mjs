@@ -1,4 +1,11 @@
 /**
+ * @param {string} ch
+ */
+function isIdentChar(ch) {
+	return /[A-Za-z0-9_$]/.test(ch);
+}
+
+/**
  * @param {string} source
  * @param {number} i
  * @param {number} len
@@ -28,9 +35,40 @@ function skipBlockComment(source, i, len) {
  * @param {string} source
  * @param {number} i
  * @param {number} len
+ * @param {string[]} specifiers
+ * @returns {number} index after the matching `}`
+ */
+function scanInterpolation(source, i, len, specifiers) {
+	let depth = 1;
+	while (i < len && depth > 0) {
+		const next =
+			skipLineComment(source, i, len) ??
+			skipBlockComment(source, i, len) ??
+			skipTemplateLiteral(source, i, len, specifiers) ??
+			skipStringLiteral(source, i, len) ??
+			tryCaptureImportSpecifier(source, i, len, specifiers);
+		if (next !== null) {
+			i = next;
+			continue;
+		}
+		if (source[i] === "{") depth++;
+		else if (source[i] === "}") {
+			depth--;
+			if (depth === 0) return i + 1;
+		}
+		i++;
+	}
+	return i;
+}
+
+/**
+ * @param {string} source
+ * @param {number} i
+ * @param {number} len
+ * @param {string[]} specifiers
  * @returns {number | null}
  */
-function skipTemplateLiteral(source, i, len) {
+function skipTemplateLiteral(source, i, len, specifiers) {
 	if (source[i] !== "`") return null;
 	i++;
 	while (i < len) {
@@ -39,6 +77,10 @@ function skipTemplateLiteral(source, i, len) {
 			continue;
 		}
 		if (source[i] === "`") return i + 1;
+		if (source[i] === "$" && source[i + 1] === "{") {
+			i = scanInterpolation(source, i + 2, len, specifiers);
+			continue;
+		}
 		i++;
 	}
 	return len;
@@ -73,11 +115,17 @@ function skipStringLiteral(source, i, len) {
  * @returns {number | null}
  */
 function tryCaptureImportSpecifier(source, i, len, specifiers) {
-	if (source.startsWith("import(", i)) {
-		const match = source.slice(i).match(/^import\s*\(\s*['"]([^'"]+)['"]\s*\)/);
-		if (match) {
-			specifiers.push(match[1]);
-			return i + match[0].length;
+	const atWordStart = i === 0 || !isIdentChar(source[i - 1]);
+	if (atWordStart && source.startsWith("import", i)) {
+		const afterKeyword = source.slice(i + 6);
+		if (/^\s*\(/.test(afterKeyword)) {
+			const match = source
+				.slice(i)
+				.match(/^import\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+			if (match) {
+				specifiers.push(match[1]);
+				return i + match[0].length;
+			}
 		}
 	}
 	const staticImport = source.slice(i).match(
@@ -104,7 +152,7 @@ export function extractImportSpecifiers(source) {
 		const next =
 			skipLineComment(source, i, len) ??
 			skipBlockComment(source, i, len) ??
-			skipTemplateLiteral(source, i, len) ??
+			skipTemplateLiteral(source, i, len, specifiers) ??
 			skipStringLiteral(source, i, len) ??
 			tryCaptureImportSpecifier(source, i, len, specifiers);
 

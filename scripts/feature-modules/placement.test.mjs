@@ -109,6 +109,21 @@ describe("Cycle A — kernel allow (unit)", () => {
 		});
 		assert.deepEqual(violations, []);
 	});
+
+	it("allows the exact kernel file server/src/config.ts", () => {
+		const violations = checkPlacement({
+			path: "server/src/config.ts",
+			status: "new",
+			map,
+		});
+		assert.deepEqual(violations, []);
+	});
+
+	it("does not treat config-extra.ts or configuration.ts as kernel files", () => {
+		expectPlacementViolation("server/src/config-extra.ts");
+		expectPlacementViolation("server/src/configuration.ts");
+		expectPlacementViolation("server/src/authentication.ts");
+	});
 });
 
 describe("Cycle B — forbidden type-folders (unit)", () => {

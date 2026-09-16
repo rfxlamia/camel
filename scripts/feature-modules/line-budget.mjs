@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { isSourceFile } from "./git-diff.mjs";
+import { isNonTrivialTouch } from "./line-budget-hunks.mjs";
+
+export { isNonTrivialTouch } from "./line-budget-hunks.mjs";
 
 export const LINE_BUDGET_RULE_ID = "FM-RULE-3";
 export const LINE_BUDGET_MAX = 300;
@@ -31,82 +34,6 @@ export function isExcludedFromLineBudget(path) {
 	if (GENERATED_FILE.test(path)) return true;
 	if (GENERATED_DIR.test(path)) return true;
 	return false;
-}
-
-/**
- * @param {string} hunks
- */
-function parseChangedLines(hunks) {
-	/** @type {string[]} */
-	const removed = [];
-	/** @type {string[]} */
-	const added = [];
-	for (const line of hunks.split("\n")) {
-		if (
-			line.startsWith("+++") ||
-			line.startsWith("---") ||
-			line.startsWith("@@")
-		) {
-			continue;
-		}
-		if (line.startsWith("-")) removed.push(line.slice(1));
-		else if (line.startsWith("+")) added.push(line.slice(1));
-	}
-	return { removed, added };
-}
-
-/**
- * @param {string} line
- */
-function collapseWhitespace(line) {
-	return line.replace(/\s+/g, " ").trim();
-}
-
-/**
- * @param {string} hunks
- */
-function isWhitespaceOnlyHunks(hunks) {
-	const { removed, added } = parseChangedLines(hunks);
-	if (removed.length === 0 && added.length === 0) return true;
-	if (removed.length !== added.length) return false;
-	for (let i = 0; i < removed.length; i++) {
-		if (collapseWhitespace(removed[i]) !== collapseWhitespace(added[i])) {
-			return false;
-		}
-	}
-	return true;
-}
-
-/**
- * @param {string} line
- */
-function isImportOrExportFromLine(line) {
-	const trimmed = line.trim();
-	return (
-		trimmed.startsWith("import ") ||
-		/^export\s+\{/.test(trimmed) ||
-		/^export\s+\*\s+from\s/.test(trimmed) ||
-		/^export\s+type\s+\{/.test(trimmed)
-	);
-}
-
-/**
- * @param {string} hunks
- */
-function isImportSpecifierOnlyHunks(hunks) {
-	const { removed, added } = parseChangedLines(hunks);
-	const changed = [...removed, ...added];
-	if (changed.length === 0) return true;
-	return changed.every(isImportOrExportFromLine);
-}
-
-/**
- * @param {string} hunks
- */
-export function isNonTrivialTouch(hunks) {
-	if (isWhitespaceOnlyHunks(hunks)) return false;
-	if (isImportSpecifierOnlyHunks(hunks)) return false;
-	return true;
 }
 
 /**

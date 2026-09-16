@@ -11,7 +11,11 @@ import { describe, it } from "node:test";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { collectGitDiff, parseNameStatusOutput } from "./git-diff.mjs";
+import {
+	collectGitDiff,
+	parseNameStatusOutput,
+	unquoteGitPath,
+} from "./git-diff.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const cliScript = join(repoRoot, "scripts/check-feature-modules.mjs");
@@ -80,6 +84,17 @@ describe("Cycle 1 — git-diff parser (unit)", () => {
 			"client/src/a.tsx",
 		]);
 		assert.ok(!result.sourceFiles.includes("client/src/gone.ts"));
+	});
+
+	it("decodes C-quoted octal and tab escapes in git pathnames", () => {
+		assert.equal(unquoteGitPath('"caf\\303\\251.ts"'), "café.ts");
+		assert.equal(
+			unquoteGitPath('"client/src/foo\\tbar.ts"'),
+			"client/src/foo\tbar.ts",
+		);
+
+		const result = parseNameStatusOutput('A\t"caf\\303\\251.ts"\n');
+		assert.deepEqual(result.new, ["café.ts"]);
 	});
 });
 

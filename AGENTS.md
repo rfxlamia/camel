@@ -54,7 +54,7 @@ This file provides guidance to agents when working with code in this repository.
 - Test: `npm run test`
 - Lint: `npm run lint`
 - Typecheck: `npm run typecheck`
-- Check: `make check` (lint + mutation routing guard; key-collision when `DATABASE_URL` set)
+- Check: `make check` (lint + mutation routing + feature-module guards; key-collision when `DATABASE_URL` set)
 - Dev: `make dev` (server + client)
 - DB Migrate: `make db-migrate`
 - DB Seed: `make db-seed`

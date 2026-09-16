@@ -235,9 +235,51 @@ describe("Cycle D — non-touches (unit)", () => {
 
 		assert.deepEqual(violations, []);
 	});
+
+	it("passes for a multiline from-path-only change on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+		const hunks = [
+			"@@ -12,1 +12,1 @@",
+			'-} from "./old-path.js";',
+			'+} from "../modules/board/old-path.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
 });
 
 describe("Cycle E — exemption negatives and edges (unit)", () => {
+	it("treats an import binding rename as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { oldHelper } from "./old-path.js";',
+			'+import { newHelper } from "./old-path.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
 	it("treats mixed import-specifier and body change as a touch", () => {
 		const path = "server/src/routes/cards.ts";
 		const beforeText = makeLines(999);

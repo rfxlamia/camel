@@ -47,7 +47,7 @@ function checkSpecifier({ filePath, specifier, resolved, mapConfig }) {
 			importerFeature.side === target.side &&
 			importerFeature.feature === target.feature;
 
-		if (!sameModule && !isIndexImport(resolved)) {
+		if (!sameModule && !isIndexImport(resolved, target.root)) {
 			violations.push(
 				`${filePath}: ${DEEP_IMPORT_RULE_ID}: deep import into feature module "${target.feature}" must use index.ts (${specifier})`,
 			);

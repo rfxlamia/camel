@@ -8,15 +8,60 @@ import { join } from "node:path";
 const TS_SOURCE = /\.(ts|tsx)$/i;
 const CAMEL_LOTTIE = /^camel-lottie\//;
 
+const GIT_ESCAPE = {
+	a: "\x07",
+	b: "\b",
+	f: "\f",
+	n: "\n",
+	r: "\r",
+	t: "\t",
+	v: "\v",
+	'"': '"',
+	"\\": "\\",
+};
+
 /**
+ * Decode a git C-quoted path (octal bytes, \\t, \\n, \\").
  * @param {string} raw
  */
 export function unquoteGitPath(raw) {
 	const trimmed = raw.trim();
-	if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-		return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, "\n");
+	if (!(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+		return trimmed;
 	}
-	return trimmed;
+	const inner = trimmed.slice(1, -1);
+	let out = "";
+	for (let i = 0; i < inner.length; i++) {
+		if (inner[i] !== "\\") {
+			out += inner[i];
+			continue;
+		}
+		const next = inner[i + 1];
+		if (next >= "0" && next <= "7") {
+			let oct = next;
+			let j = i + 2;
+			while (
+				j < inner.length &&
+				oct.length < 3 &&
+				inner[j] >= "0" &&
+				inner[j] <= "7"
+			) {
+				oct += inner[j];
+				j++;
+			}
+			out += String.fromCharCode(Number.parseInt(oct, 8));
+			i = j - 1;
+			continue;
+		}
+		if (next !== undefined && next in GIT_ESCAPE) {
+			out += GIT_ESCAPE[next];
+			i++;
+			continue;
+		}
+		out += next ?? "";
+		if (next !== undefined) i++;
+	}
+	return Buffer.from(out, "latin1").toString("utf8");
 }
 
 /**

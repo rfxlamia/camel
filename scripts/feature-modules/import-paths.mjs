@@ -67,11 +67,17 @@ export function stripExtension(path) {
 }
 
 /**
+ * True only for the feature-root public API (`<root>` or `<root>/index`).
+ * Nested barrels such as `<root>/internal/index` are not public API.
  * @param {string} resolved POSIX path (may include extension)
+ * @param {string} [moduleRoot] e.g. client/src/features/activity
  */
-export function isIndexImport(resolved) {
+export function isIndexImport(resolved, moduleRoot) {
 	const base = stripExtension(resolved);
-	return base.endsWith("/index") || base.endsWith("/index/index");
+	if (moduleRoot) {
+		return base === moduleRoot || base === `${moduleRoot}/index`;
+	}
+	return /\/index$/.test(base);
 }
 
 /**
@@ -110,18 +116,26 @@ export function parseImporterFeature(filePath) {
 }
 
 /**
+ * Directory prefixes match descendants; file prefixes match that path only.
+ * @param {string} pathNoExt
+ * @param {string} prefix map entry (dir with trailing slash, or file with extension)
+ */
+function matchesKernelPrefix(pathNoExt, prefix) {
+	if (prefix.endsWith("/")) {
+		return pathNoExt === prefix.slice(0, -1) || pathNoExt.startsWith(prefix);
+	}
+	return pathNoExt === stripExtension(prefix);
+}
+
+/**
  * @param {string} path
  */
 export function isKernelPath(path) {
 	const noExt = stripExtension(path);
-	if (
-		SERVER_KERNEL_PREFIXES.some(
-			(p) => noExt === stripExtension(p) || noExt.startsWith(stripExtension(p)),
-		)
-	) {
-		return true;
-	}
-	return CLIENT_KERNEL_PREFIXES.some((p) => noExt.startsWith(stripExtension(p)));
+	return (
+		SERVER_KERNEL_PREFIXES.some((p) => matchesKernelPrefix(noExt, p)) ||
+		CLIENT_KERNEL_PREFIXES.some((p) => matchesKernelPrefix(noExt, p))
+	);
 }
 
 /**

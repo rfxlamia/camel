@@ -145,6 +145,18 @@ describe("Cycle B — cross-feature (unit)", () => {
 		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
 		assert.match(violations[0], /describeEvent\.ts/);
 	});
+
+	it("flags nested barrel import as a deep import from outside the module", () => {
+		const source = `import { hidden } from "../activity/internal/index.ts";\n`;
+		const violations = checkImports({
+			filePath: "client/src/features/board/x.ts",
+			source,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+		assert.match(violations[0], /internal\/index/);
+	});
 });
 
 describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
@@ -232,6 +244,22 @@ describe("Cycle D — composition root, missing index, work-items (unit)", () =>
 		}
 	});
 
+	it("flags a module that only has a nested internal/index.ts", () => {
+		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-nested-index-"));
+		try {
+			const moduleDir = join(dir, "client/src/features/activity/internal");
+			mkdirSync(moduleDir, { recursive: true });
+			writeFileSync(join(moduleDir, "index.ts"), "export {};\n");
+			writeFileSync(join(moduleDir, "private.ts"), "export {};\n");
+			const violations = checkMissingModuleIndexes({ rootDir: dir, map });
+			assert.equal(violations.length, 1);
+			assert.match(violations[0], new RegExp(MISSING_INDEX_RULE_ID));
+			assert.match(violations[0], /client\/src\/features\/activity/);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("flags client features/work-items as forbidden product module", () => {
 		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-work-items-"));
 		try {
@@ -310,6 +338,29 @@ import { ok } from "../modules/board/index.js";
 
 	it("flags dynamic import() deep paths", () => {
 		const source = `const m = await import("../modules/board/cards-update.js");\n`;
+		const violations = checkImports({
+			filePath: "server/src/routes/cards.ts",
+			source,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+	});
+
+	it("flags dynamic import() with whitespace before the parenthesis", () => {
+		const source = `const m = await import ("../modules/board/cards-update.js");\n`;
+		const violations = checkImports({
+			filePath: "server/src/routes/cards.ts",
+			source,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+	});
+
+	it("flags dynamic import() inside a template interpolation", () => {
+		const source =
+			"const msg = `loaded ${(await import(\"../modules/board/cards-update.js\")).name}`;\n";
 		const violations = checkImports({
 			filePath: "server/src/routes/cards.ts",
 			source,

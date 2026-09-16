@@ -53,7 +53,9 @@ export function checkMissingModuleIndexes({ rootDir, map: mapConfig }) {
 			if (!existsSync(dirAbs)) continue;
 			const files = listModuleSourceFiles(dirAbs, prefix);
 			if (files.length === 0) continue;
-			const hasIndex = files.some((f) => /\/index\.tsx?$/.test(f));
+			const hasIndex =
+				existsSync(join(dirAbs, "index.ts")) ||
+				existsSync(join(dirAbs, "index.tsx"));
 			if (!hasIndex) {
 				violations.push(
 					`${prefix}: ${MISSING_INDEX_RULE_ID}: module tree has source files but no index.ts`,

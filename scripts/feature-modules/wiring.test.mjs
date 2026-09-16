@@ -109,9 +109,14 @@ describe("Cycle B — Makefile and CI (unit)", () => {
 		const makefile = readFileSync(makefilePath, "utf8");
 		assert.match(makefile, /check:mutation-routing/);
 		assert.match(makefile, /check:feature-modules/);
-		const checkRecipe = makefile.slice(makefile.indexOf("check:"));
+		const checkRecipe =
+			makefile.match(/^check:.*(?:\n\t.*)*/m)?.[0] ?? "";
 		assert.match(checkRecipe, /check:mutation-routing/);
 		assert.match(checkRecipe, /check:feature-modules/);
+		assert.ok(
+			!/^db-up:/m.test(checkRecipe),
+			"check recipe slice must not include later Makefile targets",
+		);
 	});
 
 	it("ci.yml primary job runs check:feature-modules beside mutation-routing with full checkout", () => {
