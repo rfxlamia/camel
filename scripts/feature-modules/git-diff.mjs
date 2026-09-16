@@ -34,6 +34,71 @@ export function isSourceFile(path) {
 }
 
 /**
+ * @param {string} status
+ * @param {string} rest
+ * @returns {RenameEntry | null}
+ */
+function parseRenameStatusLine(status, rest) {
+	if (!status.startsWith("R")) return null;
+	const similarity = Number.parseInt(status.slice(1), 10);
+	const parts = rest.split("\t");
+	if (parts.length < 2) return null;
+	const from = unquoteGitPath(parts[0]);
+	const to = unquoteGitPath(parts[1]);
+	const kind = similarity === 100 ? "rename" : "rename-with-edit";
+	return { from, to, similarity, kind };
+}
+
+/**
+ * @param {string} status
+ * @param {string} rest
+ * @returns {CopyEntry | null}
+ */
+function parseCopyStatusLine(status, rest) {
+	if (!status.startsWith("C")) return null;
+	const similarity = Number.parseInt(status.slice(1), 10);
+	const parts = rest.split("\t");
+	if (parts.length < 2) return null;
+	return {
+		from: unquoteGitPath(parts[0]),
+		to: unquoteGitPath(parts[1]),
+		similarity,
+	};
+}
+
+/**
+ * @param {{ new: string[], modified: string[], renamed: RenameEntry[], copied: CopyEntry[] }} buckets
+ */
+function assembleSourceFilePaths(buckets) {
+	const sourceSet = new Set([...buckets.new, ...buckets.modified]);
+	for (const entry of buckets.renamed) {
+		if (isSourceFile(entry.to)) sourceSet.add(entry.to);
+	}
+	for (const entry of buckets.copied) {
+		if (isSourceFile(entry.to)) sourceSet.add(entry.to);
+	}
+	return [...sourceSet];
+}
+
+/**
+ * @param {import("node:child_process").SpawnSyncReturns<string>} result
+ */
+function gitCommandDetail(result) {
+	return (result.stderr || result.stdout || "").trim();
+}
+
+/**
+ * @param {string} messageBody
+ * @param {import("node:child_process").SpawnSyncReturns<string>} result
+ */
+function throwFmRule5GitError(messageBody, result) {
+	const detail = gitCommandDetail(result);
+	throw new Error(
+		`FM-RULE-5: ${messageBody} (${detail || "unknown git error"})`,
+	);
+}
+
+/**
  * Parse `git diff --name-status` / `--find-renames` text (no git spawn).
  * @param {string} output
  * @param {{ baseRef?: string }} [options]
@@ -62,26 +127,15 @@ export function parseNameStatusOutput(output, options = {}) {
 		const status = trimmed.slice(0, tab);
 		const rest = trimmed.slice(tab + 1);
 
-		if (status.startsWith("R")) {
-			const similarity = Number.parseInt(status.slice(1), 10);
-			const parts = rest.split("\t");
-			if (parts.length < 2) continue;
-			const from = unquoteGitPath(parts[0]);
-			const to = unquoteGitPath(parts[1]);
-			const kind = similarity === 100 ? "rename" : "rename-with-edit";
-			renamed.push({ from, to, similarity, kind });
+		const renameEntry = parseRenameStatusLine(status, rest);
+		if (renameEntry) {
+			renamed.push(renameEntry);
 			continue;
 		}
 
-		if (status.startsWith("C")) {
-			const similarity = Number.parseInt(status.slice(1), 10);
-			const parts = rest.split("\t");
-			if (parts.length < 2) continue;
-			copied.push({
-				from: unquoteGitPath(parts[0]),
-				to: unquoteGitPath(parts[1]),
-				similarity,
-			});
+		const copyEntry = parseCopyStatusLine(status, rest);
+		if (copyEntry) {
+			copied.push(copyEntry);
 			continue;
 		}
 
@@ -92,18 +146,10 @@ export function parseNameStatusOutput(output, options = {}) {
 			continue;
 		}
 
-		if (isIgnoredPath(path) || !isSourceFile(path)) continue;
+		if (!isSourceFile(path)) continue;
 
 		if (status === "A") newFiles.push(path);
 		else if (status === "M") modified.push(path);
-	}
-
-	const sourceSet = new Set([...newFiles, ...modified]);
-	for (const entry of renamed) {
-		if (isSourceFile(entry.to)) sourceSet.add(entry.to);
-	}
-	for (const entry of copied) {
-		if (isSourceFile(entry.to)) sourceSet.add(entry.to);
 	}
 
 	return {
@@ -113,7 +159,12 @@ export function parseNameStatusOutput(output, options = {}) {
 		renamed,
 		copied,
 		deleted,
-		sourceFiles: [...sourceSet],
+		sourceFiles: assembleSourceFilePaths({
+			new: newFiles,
+			modified,
+			renamed,
+			copied,
+		}),
 	};
 }
 
@@ -140,9 +191,9 @@ export function assertBaseRefResolvable(baseRef, rootDir) {
 		{ cwd: rootDir, encoding: "utf8" },
 	);
 	if (result.status !== 0) {
-		const detail = (result.stderr || result.stdout || "").trim();
-		throw new Error(
-			`FM-RULE-5: merge-base ref "${baseRef}" is not reachable (${detail || "unknown git error"})`,
+		throwFmRule5GitError(
+			`merge-base ref "${baseRef}" is not reachable`,
+			result,
 		);
 	}
 }
@@ -161,9 +212,9 @@ export function collectGitDiff(rootDir, baseRef = "origin/main") {
 		{ cwd: rootDir, encoding: "utf8" },
 	);
 	if (mergeBaseResult.status !== 0) {
-		const detail = (mergeBaseResult.stderr || mergeBaseResult.stdout || "").trim();
-		throw new Error(
-			`FM-RULE-5: cannot compute merge-base for "${baseRef}" (${detail || "unknown git error"})`,
+		throwFmRule5GitError(
+			`cannot compute merge-base for "${baseRef}"`,
+			mergeBaseResult,
 		);
 	}
 
@@ -182,10 +233,7 @@ export function collectGitDiff(rootDir, baseRef = "origin/main") {
 		{ cwd: rootDir, encoding: "utf8" },
 	);
 	if (diffResult.status !== 0) {
-		const detail = (diffResult.stderr || diffResult.stdout || "").trim();
-		throw new Error(
-			`FM-RULE-5: git diff failed (${detail || "unknown git error"})`,
-		);
+		throwFmRule5GitError("git diff failed", diffResult);
 	}
 
 	return parseNameStatusOutput(diffResult.stdout, { baseRef });

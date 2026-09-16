@@ -164,14 +164,25 @@ function git(cwd, args) {
 	return result.stdout.trim();
 }
 
+/**
+ * @param {string} dirPrefix
+ * @param {(dir: string) => void} run
+ */
+function withTempGitRepo(dirPrefix, run) {
+	const dir = mkdtempSync(join(repoRoot, dirPrefix));
+	try {
+		git(dir, ["init"]);
+		git(dir, ["config", "user.email", "fm@test.local"]);
+		git(dir, ["config", "user.name", "FM Test"]);
+		run(dir);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
 describe("Cycle Git — real git binary (integration)", () => {
 	it("collects name-status from merge-base through real git", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-git-"));
-		try {
-			git(dir, ["init"]);
-			git(dir, ["config", "user.email", "fm@test.local"]);
-			git(dir, ["config", "user.name", "FM Test"]);
-
+		withTempGitRepo(".tmp-fm-git-", (dir) => {
 			writeFileSync(join(dir, "keep.ts"), "// keep\n");
 			writeFileSync(join(dir, "modify-me.ts"), "// v1\n");
 			writeFileSync(join(dir, "rename-me.ts"), "// rename\n");
@@ -210,17 +221,11 @@ describe("Cycle Git — real git binary (integration)", () => {
 			);
 			assert.equal(result.sourceFiles.length, 4);
 			assert.ok(!result.sourceFiles.includes("noise.md"));
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+		});
 	});
 
 	it("fails loud when base ref is missing", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-git-miss-"));
-		try {
-			git(dir, ["init"]);
-			git(dir, ["config", "user.email", "fm@test.local"]);
-			git(dir, ["config", "user.name", "FM Test"]);
+		withTempGitRepo(".tmp-fm-git-miss-", (dir) => {
 			writeFileSync(join(dir, "solo.ts"), "// solo\n");
 			git(dir, ["add", "solo.ts"]);
 			git(dir, ["commit", "-m", "solo"]);
@@ -229,17 +234,11 @@ describe("Cycle Git — real git binary (integration)", () => {
 				() => collectGitDiff(dir, "refs/no/such-base-fm-129"),
 				/FM-RULE-5/,
 			);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+		});
 	});
 
 	it("reports zero source files when HEAD equals merge-base", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-git-empty-"));
-		try {
-			git(dir, ["init"]);
-			git(dir, ["config", "user.email", "fm@test.local"]);
-			git(dir, ["config", "user.name", "FM Test"]);
+		withTempGitRepo(".tmp-fm-git-empty-", (dir) => {
 			writeFileSync(join(dir, "only.ts"), "// only\n");
 			git(dir, ["add", "only.ts"]);
 			git(dir, ["commit", "-m", "only"]);
@@ -249,9 +248,7 @@ describe("Cycle Git — real git binary (integration)", () => {
 			assert.deepEqual(result.sourceFiles, []);
 			assert.deepEqual(result.new, []);
 			assert.deepEqual(result.modified, []);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+		});
 	});
 });
 
