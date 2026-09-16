@@ -288,5 +288,21 @@ export function collectLineBudgetViolations({ rootDir, baseRef, diff }) {
 		);
 	}
 
+	for (const entry of diff.copied) {
+		if (!isSourceFile(entry.to)) continue;
+		const renameKind =
+			entry.similarity === 100 ? "rename" : "rename-with-edit";
+		violations.push(
+			...checkLineBudget({
+				path: entry.to,
+				status: "rename",
+				beforeText: gitShowText(rootDir, mergeBase, entry.from),
+				afterText: readWorkingTreeText(rootDir, entry.to),
+				hunks: gitDiffHunks(rootDir, mergeBase, entry.to, entry.from),
+				renameKind,
+			}),
+		);
+	}
+
 	return violations;
 }

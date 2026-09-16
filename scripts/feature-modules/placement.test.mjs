@@ -11,7 +11,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { FEATURES } from "./map.mjs";
-import { checkPlacement, PLACEMENT_RULE_ID } from "./placement.mjs";
+import {
+	checkPlacement,
+	collectPlacementViolations,
+	PLACEMENT_RULE_ID,
+} from "./placement.mjs";
 
 /** @type {import("./map.mjs")} */
 const map = { FEATURES };
@@ -162,6 +166,25 @@ describe("Cycle D — test file placement (unit)", () => {
 			map,
 		});
 		assert.deepEqual(violations, []);
+	});
+});
+
+describe("Cycle F — copy destination placement (unit)", () => {
+	it("rejects copy destination under legacy routes tree", () => {
+		const violations = collectPlacementViolations({
+			new: [],
+			modified: [],
+			copied: [
+				{
+					from: "server/src/lib/source.ts",
+					to: "server/src/routes/copied.ts",
+				},
+			],
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], /server\/src\/routes\/copied\.ts/);
+		assert.match(violations[0], new RegExp(PLACEMENT_RULE_ID));
 	});
 });
 

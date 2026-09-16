@@ -156,6 +156,39 @@ describe("Cycle C — rename (unit)", () => {
 
 		expectLineBudgetViolation(path, 522)(violations);
 	});
+
+	it("passes for C100 copy with 301-line content (same as pure rename)", () => {
+		const path = "server/src/modules/board/cards-copy.ts";
+		const content = makeLines(301);
+
+		const violations = checkLineBudget({
+			path,
+			status: "rename",
+			beforeText: content,
+			afterText: content,
+			hunks: "",
+			renameKind: "rename",
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("fails when C<100 copy-with-edit keeps destination >300 lines", () => {
+		const path = "server/src/routes/copied.ts";
+		const beforeText = makeLines(521);
+		const afterText = `${beforeText}\n// copy edit touch`;
+
+		const violations = checkLineBudget({
+			path,
+			status: "rename",
+			beforeText,
+			afterText,
+			hunks: handlerBodyHunk(),
+			renameKind: "rename-with-edit",
+		});
+
+		expectLineBudgetViolation(path, 522)(violations);
+	});
 });
 
 describe("Cycle D — non-touches (unit)", () => {

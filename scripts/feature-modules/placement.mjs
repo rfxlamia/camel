@@ -117,10 +117,15 @@ export function checkPlacement({ path, status, map }) {
 }
 
 /**
- * @param {{ new: string[], modified: string[], map: import("./map.mjs") }} input
+ * @param {{ new: string[], modified: string[], copied?: { to: string }[], map: import("./map.mjs") }} input
  * @returns {string[]}
  */
-export function collectPlacementViolations({ new: newFiles, modified, map }) {
+export function collectPlacementViolations({
+	new: newFiles,
+	modified,
+	copied = [],
+	map,
+}) {
 	/** @type {string[]} */
 	const violations = [];
 	for (const path of newFiles) {
@@ -128,6 +133,11 @@ export function collectPlacementViolations({ new: newFiles, modified, map }) {
 	}
 	for (const path of modified) {
 		violations.push(...checkPlacement({ path, status: "modified", map }));
+	}
+	for (const entry of copied) {
+		violations.push(
+			...checkPlacement({ path: entry.to, status: "new", map }),
+		);
 	}
 	return violations;
 }
