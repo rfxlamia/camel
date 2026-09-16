@@ -327,6 +327,24 @@ describe("PATCH /tracker/items/:key/position", () => {
 		expect(move?.values.position).toBeDefined();
 	});
 
+	it("rejects reordering a board item via the tracker position API", async () => {
+		mockSelectFrom.mockImplementation((table: string) => {
+			if (table === "workspaces") return chainable({ name: "Camel Team" });
+			if (table === "cards as c") {
+				return chainable({ id: 99, key_number: 3 });
+			}
+			return chainable(undefined);
+		});
+
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-3/position")
+			.send({ beforeKey: "CT-1", afterKey: "CT-2" });
+
+		expect(res.status).toBe(409);
+		expect(res.body).toMatchObject({ code: "board_item_use_card_api" });
+		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
 	it("rejects a reorder targeting an item in another workspace without a 500", async () => {
 		mockSelectFrom.mockReturnValue(chainable(undefined));
 		const res = await request(app)

@@ -328,6 +328,23 @@ export async function hydrateTrackerWorkItems(
 	);
 }
 
+export async function hydrateMutationItem(
+	dbExec: DBExecutor,
+	row: TrackerItemRow,
+	prefix: string,
+	opts?: { canonicalWorkItem?: boolean; redirectFrom?: string },
+) {
+	const [item] = await hydrateTrackerWorkItems(dbExec, [row], prefix);
+	const body = opts?.redirectFrom
+		? {
+				...item,
+				canonicalKey: item.key,
+				redirectFrom: opts.redirectFrom,
+			}
+		: item;
+	return legacyTrackerItemResponse(body, Boolean(opts?.canonicalWorkItem));
+}
+
 export async function hydrateBoardWorkItems(
 	dbExec: DBExecutor,
 	rows: BoardWorkItemRow[],
