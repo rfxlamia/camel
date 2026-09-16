@@ -2,7 +2,9 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertBaseRefResolvable } from "./feature-modules/git-diff.mjs";
+import { assertBaseRefResolvable, collectGitDiff } from "./feature-modules/git-diff.mjs";
+import * as map from "./feature-modules/map.mjs";
+import { collectPlacementViolations } from "./feature-modules/placement.mjs";
 
 /** @param {string[]} argv */
 function parseArgs(argv) {
@@ -19,7 +21,7 @@ function parseArgs(argv) {
 	return { baseRef, rootArg };
 }
 
-async function main() {
+function main() {
 	const { baseRef, rootArg } = parseArgs(process.argv);
 	const rootDir = resolve(rootArg);
 
@@ -31,7 +33,15 @@ async function main() {
 		process.exit(1);
 	}
 
-	await import("./feature-modules/map.mjs");
+	const diff = collectGitDiff(rootDir, baseRef);
+	const placementViolations = collectPlacementViolations({ ...diff, map });
+
+	if (placementViolations.length > 0) {
+		console.error(
+			"Feature module placement violations:\n" + placementViolations.join("\n"),
+		);
+		process.exit(1);
+	}
 
 	console.log(`Feature module check: base-ref=${baseRef} root=${rootArg}`);
 	console.log("Feature module check passed.");
@@ -42,8 +52,10 @@ const invokedFromCli =
 	resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedFromCli) {
-	main().catch((error) => {
+	try {
+		main();
+	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exit(1);
-	});
+	}
 }
