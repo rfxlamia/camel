@@ -259,6 +259,29 @@ describe("Cycle D — non-touches (unit)", () => {
 });
 
 describe("Cycle E — exemption negatives and edges (unit)", () => {
+	it("treats +++/--- source lines inside a hunk as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+		const hunks = [
+			"--- a/server/src/routes/cards.ts",
+			"+++ b/server/src/routes/cards.ts",
+			"@@ -42,1 +42,1 @@",
+			"----counter;",
+			"++++counter;",
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
 	it("treats an import binding rename as a touch", () => {
 		const path = "server/src/routes/cards.ts";
 		const beforeText = makeLines(999);

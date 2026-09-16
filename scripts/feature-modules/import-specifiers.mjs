@@ -44,9 +44,9 @@ function scanInterpolation(source, i, len, specifiers) {
 		const next =
 			skipLineComment(source, i, len) ??
 			skipBlockComment(source, i, len) ??
+			tryCaptureImportSpecifier(source, i, len, specifiers) ??
 			skipTemplateLiteral(source, i, len, specifiers) ??
-			skipStringLiteral(source, i, len) ??
-			tryCaptureImportSpecifier(source, i, len, specifiers);
+			skipStringLiteral(source, i, len);
 		if (next !== null) {
 			i = next;
 			continue;
@@ -121,9 +121,9 @@ function tryCaptureImportSpecifier(source, i, len, specifiers) {
 		if (/^\s*\(/.test(afterKeyword)) {
 			const match = source
 				.slice(i)
-				.match(/^import\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+				.match(/^import\s*\(\s*(?:['"]([^'"]+)['"]|`([^`$]*)`)\s*\)/);
 			if (match) {
-				specifiers.push(match[1]);
+				specifiers.push(match[1] ?? match[2]);
 				return i + match[0].length;
 			}
 		}
@@ -152,9 +152,9 @@ export function extractImportSpecifiers(source) {
 		const next =
 			skipLineComment(source, i, len) ??
 			skipBlockComment(source, i, len) ??
+			tryCaptureImportSpecifier(source, i, len, specifiers) ??
 			skipTemplateLiteral(source, i, len, specifiers) ??
-			skipStringLiteral(source, i, len) ??
-			tryCaptureImportSpecifier(source, i, len, specifiers);
+			skipStringLiteral(source, i, len);
 
 		if (next !== null) {
 			i = next;

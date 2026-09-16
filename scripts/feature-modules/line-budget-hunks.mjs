@@ -6,14 +6,13 @@ function parseChangedLines(hunks) {
 	const removed = [];
 	/** @type {string[]} */
 	const added = [];
+	let inHunk = false;
 	for (const line of hunks.split("\n")) {
-		if (
-			line.startsWith("+++") ||
-			line.startsWith("---") ||
-			line.startsWith("@@")
-		) {
+		if (line.startsWith("@@")) {
+			inHunk = true;
 			continue;
 		}
+		if (!inHunk) continue;
 		if (line.startsWith("-")) removed.push(line.slice(1));
 		else if (line.startsWith("+")) added.push(line.slice(1));
 	}

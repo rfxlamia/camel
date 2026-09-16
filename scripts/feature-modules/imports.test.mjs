@@ -369,6 +369,19 @@ import { ok } from "../modules/board/index.js";
 		assert.equal(violations.length, 1);
 		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
 	});
+
+	it("flags no-substitution template-literal dynamic import() deep paths", () => {
+		const source =
+			"const m = await import(`../modules/board/cards-update.js`);\n";
+		const violations = checkImports({
+			filePath: "server/src/routes/cards.ts",
+			source,
+			map,
+		});
+		assert.equal(violations.length, 1, violations.join("; "));
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+		assert.match(violations[0], /cards-update\.js/);
+	});
 });
 
 describe("Cycle F — scan scope and CLI exit 1 (integration)", () => {
