@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+	act,
 	cleanup,
 	fireEvent,
 	render,
@@ -18,6 +19,10 @@ import {
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AuthPage from "../components/AuthPage";
+import {
+	beginMyWorkMutation,
+	resetMyWorkMutationsForTests,
+} from "../lib/workItemMutations";
 import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 
 const {
@@ -44,7 +49,7 @@ const {
 		mockListActiveMyWorkCandidates: vi.fn(),
 		mockMarkMyWorkDone: vi.fn(),
 		mockUseWorkspace: vi.fn(),
-		mockDelayedLoading: { disableDelay: false },
+		mockDelayedLoading: { disableDelay: true },
 		MockApiError: TestApiError,
 	};
 });
@@ -175,7 +180,8 @@ function RecoveryRouterBoundary() {
 
 beforeEach(() => {
 	vi.useRealTimers();
-	mockDelayedLoading.disableDelay = false;
+	resetMyWorkMutationsForTests();
+	mockDelayedLoading.disableDelay = true;
 	Object.defineProperty(document, "hidden", {
 		configurable: true,
 		get: () => false,
@@ -190,6 +196,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
+	resetMyWorkMutationsForTests();
 	Object.defineProperty(window, "location", {
 		configurable: true,
 		value: originalLocation,
@@ -231,13 +238,10 @@ describe("MyWorkPage", () => {
 			</MemoryRouter>,
 		);
 
-		await waitFor(() => {
-			expect(screen.queryByTestId("my-work-loading")).toBeNull();
-			expect(screen.getByTestId("my-work-row-7-board-AT-17")).toBeTruthy();
-			expect(screen.getByText("AT-17")).toBeTruthy();
-			expect(screen.getByText("Fix Atlas sync")).toBeTruthy();
-		});
-		const row = screen.getByTestId("my-work-row-7-board-AT-17");
+		const row = await screen.findByTestId("my-work-row-7-board-AT-17");
+		expect(screen.queryByTestId("my-work-loading")).toBeNull();
+		expect(screen.getByText("AT-17")).toBeTruthy();
+		expect(screen.getByText("Fix Atlas sync")).toBeTruthy();
 		expect(within(row).getByText("Atlas")).toBeTruthy();
 		expect(within(row).getByText("Board")).toBeTruthy();
 		expect(within(row).getAllByText("In progress").length).toBeGreaterThan(0);
@@ -306,7 +310,37 @@ describe("MyWorkPage", () => {
 		);
 	});
 
+	it("reveals an Active board row once a leftover pending overlay is cleared", async () => {
+		const item = makeItem({
+			id: 1,
+			key: "AT-17",
+			title: "Fix Atlas sync",
+			source: "board",
+			workspaceId: 7,
+		});
+		mockListActiveMyWorkCandidates.mockResolvedValue(response([item]));
+
+		render(
+			<MemoryRouter initialEntries={["/my-work?workspaceId=7&source=board"]}>
+				<MyWorkPage />
+			</MemoryRouter>,
+		);
+
+		expect(await screen.findByTestId("my-work-row-7-board-AT-17")).toBeTruthy();
+
+		act(() => {
+			beginMyWorkMutation(item);
+		});
+		expect(screen.queryByTestId("my-work-row-7-board-AT-17")).toBeNull();
+
+		act(() => {
+			resetMyWorkMutationsForTests();
+		});
+		expect(await screen.findByTestId("my-work-row-7-board-AT-17")).toBeTruthy();
+	});
+
 	it("shows the page loading surface while the personal request is pending", async () => {
+		mockDelayedLoading.disableDelay = false;
 		let resolveRequest: (value: MyWorkListResponse) => void = () => {};
 		const pendingRequest = new Promise<MyWorkListResponse>((resolve) => {
 			resolveRequest = resolve;
