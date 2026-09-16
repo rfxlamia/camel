@@ -1,0 +1,18 @@
+{
+  "phase_key": "phase-1",
+  "phase_file": "execution-plan/index.md",
+  "timestamp": "2026-09-16T11:41:26Z",
+  "reviewer_mode": "read-only",
+  "task_ranges": [
+    { "task_id": "T1", "range": "992f2c788161bc8e7d34e3fd32619cf59eeba2be..6b98c2a2650b51cf44f525d6537334789c099ba4" },
+    { "task_id": "T2", "range": "6b98c2a2650b51cf44f525d6537334789c099ba4..be2834d6411d27ce331dbdea87e02e59bfeaf38e" },
+    { "task_id": "T6", "range": "be2834d6411d27ce331dbdea87e02e59bfeaf38e..5f13a438ba9f94f85fa4033c8764c48b21c6cb93" },
+    { "task_id": "T3", "range": "5f13a438ba9f94f85fa4033c8764c48b21c6cb93..9f4708b398df8dcb5dc8861e4d60733928f812a9" },
+    { "task_id": "T4", "range": "9f4708b398df8dcb5dc8861e4d60733928f812a9..d64df223969d892ccbb9ea4b20995e34fab81cfe" },
+    { "task_id": "T5", "range": "d64df223969d892ccbb9ea4b20995e34fab81cfe..b2e409523f0ef2fb2b0d67f76585866793ad2a70" }
+  ],
+  "compose_note": "HEAD f1c4fa54. Round-2 re-run after f1c4fa54. Finding 1 still holds: KERNEL prefixes live in map.mjs (SERVER includes db/; CLIENT includes layout/); placement uses isKernelPath. Finding 2 placement half still holds: collectPlacementViolations walks copied[] and treats dest as status new. Line-budget half cleared: gitDiffHunks unions dest then source when oldPath is set; collectLineBudgetViolations copy C<100 path calls gitDiffHunks(to, from); C100 stays rename grandfather (similarity===100 → renameKind rename, early return before hunks). Real-git test 'fails C<100 copy-with-edit via collectLineBudgetViolations when source hunks are empty' passes (source hunks '', dest 522-line 300-on-touch). Dispatcher still unifies placement+line-budget+imports. T2/T3/T4/T5 TDD Minors not re-raised. Zero Important/Critical remain.",
+  "findings": [],
+  "loop_info": { "current_cycle": 3, "max_cycles": 2, "cycles_remaining": 0 },
+  "status": "PHASE_PASS_RESOLVED"
+}

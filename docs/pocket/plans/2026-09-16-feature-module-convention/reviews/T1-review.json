@@ -1,0 +1,36 @@
+{
+  "task_id": "T1",
+  "task_name": "Map data, git-diff helper, CLI stub, shared kernel folder",
+  "cycle": 4,
+  "timestamp": "2026-09-16T11:18:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Correction 0b3901df254335187c8d6cf6138582af5cb86961 (for_task T2, bleed T1 via map.mjs). T1-owned map.mjs still lists all 11 locked features (board, tracker, my-work, agent, chat, focus, settings, workspaces, notifications, activity, auth) at map.mjs:2-14. SCAN_ROOTS remain client/src and server/src (map.mjs:17). KERNEL_IN_WAITING still includes client/src/lib/workItemMutations.ts plus work-item-response, work-items, helpers, vocabulary-response, tracker-item-parsers (map.mjs:41-48).",
+      "New SERVER_KERNEL_PREFIXES (map.mjs:20-29) and CLIENT_KERNEL_PREFIXES (map.mjs:32-35) are the shared kernel allowlist: core/lib/db/middleware/realtime/validators plus config.ts/auth.ts, and client shared/ + layout/. That matches T4 import-paths (now re-exported from map) and the ADR kernel table. T1 QUALITY BAR must-have 'Map lists every locked feature and kernel allowlist prefix from the spec' still holds; prefixes are now explicit on the map rather than only KERNEL_IN_WAITING.",
+      "Diff does not drop FEATURES, SCAN_ROOTS, or KERNEL_IN_WAITING. No git-diff parser, CLI stub, or client/src/shared/index.ts regression in this commit. No runtime/schema/workItemMutations/BoardContext edits."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Single-source kernel prefixes live on map.mjs, which T1 already owns as the canonical list file. Placement and import walls now import the same arrays instead of drifting copies.",
+      "QUALITY BAR must-haves hold: 11 locked features still exported; workItemMutations.ts remains on KERNEL_IN_WAITING; no new npm dependencies; no BoardContext.tsx; no tracker/board/agent git-mv.",
+      "Refactor heuristics clear on the T1 slice: map.mjs is 48 lines (was ~30). Arrays only; no function >~50; no 3× duplicated prefix lists left in map.mjs.",
+      "Correction commit is conventional: fix(architecture): share kernel prefixes for placement and import walls."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "0b3901df254335187c8d6cf6138582af5cb86961"
+}

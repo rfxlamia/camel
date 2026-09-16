@@ -1,0 +1,58 @@
+{
+  "task_id": "T3",
+  "task_name": "300-line ceiling on touch",
+  "cycle": 2,
+  "timestamp": "2026-09-16T11:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Correction f1c4fa54c2e5359385eb0ac01d9fc51ed1c65da2 closes the remaining Important from phase-pass finding 2. gitDiffHunks now unions dest then source (`oldPath ? [path, oldPath] : [path]`) so a C<100 copy whose `from` is unchanged still feeds dest hunks into isNonTrivialTouch (line-budget.mjs:219-234,297-310). collectLineBudgetViolations still maps similarity === 100 → renameKind rename (C100 grandfather) and else rename-with-edit (C<100) with status rename (line-budget.mjs:297-310). C100 short-circuits before hunk classification (line-budget.mjs:156-158).",
+      "Cycle F integration now exercises the production collector on a real git C status: temp repo copies 521-line source to modules/board/copied.ts with a body line (522 after), asserts copied.similarity < 100, asserts `git diff -U0 mergeBase HEAD -- fromPath` is empty, then collectLineBudgetViolations reports FM-RULE-3 + dest path + 522 (line-budget.test.mjs:415-449). node --test scripts/feature-modules/line-budget.test.mjs = 20/20 pass, including that case.",
+      "Rule 3 GWT still hold: 999-line non-trivial body hunk still >300 → FM-RULE-3 + path + line count (line-budget.mjs:160-174; line-budget.test.mjs:58-73); extract leftover ≤300 passes (line-budget.mjs:169-177; line-budget.test.mjs:76-91); new 301-line source fails (line-budget.mjs:145-152; line-budget.test.mjs:94-108); 800-line *.test.ts excluded (line-budget.mjs:10-11,28-30; line-budget.test.mjs:110-123); pure rename 521 identical content does not fail 300-new-file (line-budget.mjs:156-158; line-budget.test.mjs:126-141); rename+body still >300 fails (line-budget.mjs:160-174; line-budget.test.mjs:143-158); C100 301-line copy passes (line-budget.test.mjs:160-174); C<100 dest >300 fails (line-budget.test.mjs:176-191,415-449); whitespace/format-only and import-specifier-only hunks do not fire (line-budget.mjs:68-110,167; line-budget.test.mjs:194-238); BoardContext.tsx not in the diff is not invented as a touch (line-budget.mjs:252-314; line-budget.test.mjs:452-466). [must-not] paired format-only hunk does not require a split (line-budget.test.mjs:195-215).",
+      "QUALITY BAR still applies on this correction: test/generated exclusions unchanged (line-budget.mjs:10-33); original Cycle 1 tests existed before line-budget.mjs; no 3× identical logic (dest+source is a two-path loop, not a third copy of git spawn); commit is conventional fix(architecture): treat copy-with-edit dest as 300-on-touch. Diff is only line-budget.mjs and line-budget.test.mjs — T3 scope. No BoardContext.tsx or cards.ts split. Tests inject hunks or use local temp-repo --base-ref; no origin/main network fetch."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "QUALITY BAR must-haves met: test files (*.test.ts/tsx, *.integration.test.ts, *test-support*) and generated (*.generated.ts(x), /generated/) excluded from 300 (line-budget.mjs:10-33); dest+source union is the minimal fix the finding named; C100 stays on the rename grandfather (line-budget.mjs:156-158,299-300). Commit matches conventional commits.",
+      "Must-not-haves absent: diff does not split BoardContext or cards.ts; no files outside T3's two scoped paths; tests use injected hunks or temp git repos, not a real origin/main network.",
+      "Refactor heuristics on this correction: gitDiffHunks is 16 lines (line-budget.mjs:219-234); checkLineBudget remains 47 (line-budget.mjs:132-178). The dest+source union is a loop over at most two paths, not 3× identical spawn logic. Renamed and copied collectors still share one gitDiffHunks call shape (line-budget.mjs:281-310).",
+      "Violations remain `{path}: FM-RULE-3: detail ({N} lines)` (line-budget.mjs:117-118). Production copy walk uses collectGitDiff copied[] plus dest hunks, matching the unit C<100 Then."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Cycles A–G were not independently observed RED. All cycle tests were authored up front; Cycle 1 RED was only ERR_MODULE_NOT_FOUND; the first implementation already included extract success, new-file ceiling, rename, exemptions, generated globs, git-show hunks, and CLI wiring, so later Expected RED states never failed on their named heuristic. Process observation only; GWT coverage remains intact. Unfixed from cycle 1.",
+        "location": "scripts/feature-modules/line-budget.mjs:132-178"
+      },
+      {
+        "severity": "Minor",
+        "description": "Cycle F integration coverage is thinner than the packet text: the test named whitespace-only and import-only only commits an import-specifier change (no real-git whitespace hunk; no rename old-path hunk). The BoardContext grandfather CLI case uses a README-only repo and never creates an unmodified BoardContext.tsx. Production still only walks git-diff entries, so the DELIVERABLE 'not in the diff' Then holds. The new C<100 copy-with-edit collector test does not close these gaps.",
+        "location": "scripts/feature-modules/line-budget.test.mjs:388-413,452-466"
+      },
+      {
+        "severity": "Minor",
+        "description": "Whitespace-only exemption requires 1:1 paired added/removed lines with equal collapsed text (line-budget.mjs:68-77). Adding or deleting a blank line on an oversized file would classify as a touch and could demand a split. Paired format hunks in Cycle D pass; this is a heuristic edge, not a missed DELIVERABLE scenario. Unfixed from cycle 1.",
+        "location": "scripts/feature-modules/line-budget.mjs:68-77"
+      },
+      {
+        "severity": "Minor",
+        "description": "Unused import readFileSync in the test file. Unfixed from cycle 1.",
+        "location": "scripts/feature-modules/line-budget.test.mjs:6"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "f1c4fa54c2e5359385eb0ac01d9fc51ed1c65da2"
+}

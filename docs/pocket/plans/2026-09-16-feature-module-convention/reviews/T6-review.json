@@ -1,0 +1,35 @@
+{
+  "task_id": "T6",
+  "task_name": "ADR and agent convention docs",
+  "cycle": 4,
+  "timestamp": "2026-09-16T11:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Correction f1c4fa54c2e5359385eb0ac01d9fc51ed1c65da2 does not touch T6 files (docs/pocket/adr/2026-09-16-feature-module-convention.md, AGENTS.md, CLAUDE.md). Fan-out is bleed: the remaining Important closed a gitDiffHunks dest-empty bypass in the 300 guard, not a docs gap.",
+      "No required doc change: 300-on-touch already lists \"pure git mv/copy with unchanged body\" as not a touch (ADR:48), which is C100; copy-with-edit of an oversized dest still >300 is the existing non-trivial-touch rule (ADR:46). Placement already forbids new .ts/.tsx in closed type-folders (ADR:51-53). AGENTS.md/CLAUDE.md still point at the ADR, map.mjs, and the CI guard as canonical lists.",
+      "T6 QUALITY BAR still holds on the unchanged docs: hotfix order kernel extract → tracker git-mv → later splits; map.mjs cited as canonical; no BoardContext-must-split-this-PR claim; no Nest/Nx required implementation; work-items remains a deletable kernel adapter. Dual-table workItemMutations bullets are untouched. [no-tdd — structural task] scope is unchanged."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Docs already described copy-with-unchanged-body as a 300 grandfather and non-trivial edits of oversized files as 300-on-touch; this correction makes gitDiffHunks match that prose instead of rewriting the ADR. That is the instructed direction (pass if no required doc change).",
+      "QUALITY BAR must-haves remain in the existing ADR/AGENTS/CLAUDE text. Structural [no-tdd] scope is unchanged. No new 3× duplication or ~300-line docs issue.",
+      "Must-not-haves still absent: no big-bang git-mv instruction, no Nest/Nx, no files outside T6 scope in this commit's doc tree (docs were not edited)."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "f1c4fa54c2e5359385eb0ac01d9fc51ed1c65da2"
+}

@@ -1,0 +1,48 @@
+{
+  "task_id": "T2",
+  "task_name": "Placement allowlist",
+  "cycle": 3,
+  "timestamp": "2026-09-16T11:21:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Correction 793c090e3a28d7afee57deb75e73d139472342dc wires git copies into placement. collectPlacementViolations now walks copied (default []) and calls checkPlacement({ path: entry.to, status: \"new\" }) (placement.mjs:123-141). A copy (or copy-classified add from --find-copies-harder) into a closed type-folder is no longer skipped; it is Rule 1 new-path placement.",
+      "CLI still spreads collectGitDiff into placement (check-feature-modules.mjs:66-67), so diff.copied from T1 parseNameStatusOutput / collectGitDiff --find-copies --find-copies-harder reaches the collector. Unit Cycle F asserts collectPlacementViolations rejects copied to server/src/routes/copied.ts with FM-RULE-1 and path (placement.test.mjs:172-190).",
+      "Line-budget half of the same finding is in this commit: collectLineBudgetViolations walks diff.copied; similarity === 100 maps to renameKind \"rename\" (C100 like pure rename / grandfather), else \"rename-with-edit\" (C<100 like rename-with-edit) with status \"rename\" (line-budget.mjs:291-305). Unit tests assert C100 301-line copy passes and C<100 copy-with-edit staying >300 fails FM-RULE-3 (line-budget.test.mjs:160-191).",
+      "Prior kernel-prefix share (0b3901d) still holds: checkPlacement allows kernel via import-paths.mjs isKernelPath (placement.mjs:2,92). DELIVERABLE GWT still hold: mapped modules/board pass; forbidden routes/pages/client lib/agent/src-root fail with FM-RULE-1; unmapped billing fails; colocated module tests pass; modified src-root siblings still grandfathered (status !== new, placement.mjs:87). Docs/scripts still out of SCAN_ROOTS. This commit does not touch HTTP/schema/workItemMutations or BoardContext."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Copy wiring matches the phase finding exactly: placement treats copy destinations as new paths; line-budget treats C100 like rename and C<100 like rename-with-edit. Production dispatcher needed no extra glue because it already passed the full diff object.",
+      "QUALITY BAR must-haves still met: violations remain `path: FM-RULE-1: detail` (placement.mjs:80-82). Deny-by-default catch-all remains (placement.mjs:113-116). Correction commit is conventional fix(architecture): apply placement and 300 rules to git copies.",
+      "Must-not-haves absent: placement still only applies to new .ts/.tsx under client/src and server/src (copies use status new on the destination); camel-lottie/scripts/docs are not feature trees. No HTTP/schema/workItemMutations edits.",
+      "T2-owned files stay under refactor thresholds: placement.mjs 143, placement.test.mjs 219, checkPlacement 32 lines, collectPlacementViolations 21. The copied loop is not a third copy of identical logic (new vs modified still differ by status; copied reuses status new)."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Cycles B/C/D/E were not independently observed RED because Cycle 1 deny-by-default (and Cycle 1 CLI wire) already satisfied those Then clauses. Process observation only; GWT coverage remains intact. Unfixed from cycle 1.",
+        "location": "scripts/feature-modules/placement.mjs:113-116"
+      },
+      {
+        "severity": "Minor",
+        "description": "Copy coverage is unit-injected, not a real-git C status: placement Cycle F calls collectPlacementViolations with a hand-built copied[] (no temp-repo --find-copies CLI). Line-budget C100/C<100 tests call checkLineBudget with renameKind already set and never walk diff.copied / similarity === 100 inside collectLineBudgetViolations. Production mapping is a four-line rename-parallel and CLI still spreads the full diff; GWT Then clauses hold. Process/coverage observation only.",
+        "location": "scripts/feature-modules/placement.test.mjs:172-190; scripts/feature-modules/line-budget.test.mjs:160-191; scripts/feature-modules/line-budget.mjs:291-305"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "793c090e3a28d7afee57deb75e73d139472342dc"
+}
