@@ -22,11 +22,7 @@ import { domainBus, EVENTS } from "../events.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
-import {
-	loadTrackerAssigneesForItems,
-	syncTrackerItemAssignees,
-	type TrackerItemAssignee,
-} from "./tracker-assignees.js";
+import { syncTrackerItemAssignees } from "./tracker-assignees.js";
 import { createTrackerItemHandler } from "./tracker-item-create.js";
 import {
 	parseAssigneeIds,
@@ -34,10 +30,6 @@ import {
 	parseLabelIds,
 	parseProjectPhase,
 } from "./tracker-item-parsers.js";
-import {
-	serializeVocabulary,
-	type VocabularyRow,
-} from "./vocabulary-response.js";
 import { getWorkItemEvents } from "./work-item-events.js";
 import {
 	type BoardWorkItemRow,
@@ -45,98 +37,15 @@ import {
 	findTrackerItemByKeyNumber,
 	hydrateBoardWorkItems,
 	hydrateTrackerWorkItems,
+	legacyTrackerItemResponse,
 	listMergedWorkItems,
+	type TrackerItemRow,
 } from "./work-item-response.js";
 
 export const trackerItemsRouter = Router({ mergeParams: true });
 
 function routeKeyParam(raw: string | string[]): string {
 	return Array.isArray(raw) ? (raw[0] ?? "") : raw;
-}
-
-type ItemRow = {
-	id: number;
-	key_number: number;
-	title: string;
-	description: string;
-	version: number;
-	created_at: Date;
-	updated_at: Date;
-	status_id: number;
-	status_name: string;
-	status_kind: string;
-	status_position: number;
-	status_colour: string;
-	status_category: string | null;
-	status_slot: string | null;
-	priority_id: number | null;
-	priority_name: string | null;
-	priority_kind: string | null;
-	priority_position: number | null;
-	priority_colour: string | null;
-	project_id: number | null;
-	phase_id: number | null;
-	start_date: Date | string | null;
-	end_date: Date | string | null;
-	completed_at: Date | null;
-	position: number | null;
-};
-
-function formatDateOnly(value: Date | string | null): string | null {
-	if (value == null) return null;
-	if (typeof value === "string") return value.slice(0, 10);
-	return value.toISOString().slice(0, 10);
-}
-
-function serializeItem(
-	row: ItemRow,
-	prefix: string,
-	assignees: TrackerItemAssignee[],
-	labels: VocabularyRow[] = [],
-	opts?: { redirectFrom?: string },
-) {
-	const key = formatKey(prefix, row.key_number);
-	const body: Record<string, unknown> = {
-		id: row.id,
-		key,
-		title: row.title,
-		description: row.description,
-		projectId: row.project_id,
-		phaseId: row.phase_id,
-		startDate: formatDateOnly(row.start_date),
-		endDate: formatDateOnly(row.end_date),
-		completedAt: row.completed_at?.toISOString() ?? null,
-		position: row.position,
-		status: serializeVocabulary({
-			id: row.status_id,
-			kind: row.status_kind,
-			name: row.status_name,
-			position: row.status_position,
-			colour: row.status_colour,
-			category: row.status_category,
-			slot: row.status_slot,
-		}),
-		priority:
-			row.priority_id != null
-				? serializeVocabulary({
-						id: row.priority_id,
-						kind: row.priority_kind!,
-						name: row.priority_name!,
-						position: row.priority_position!,
-						colour: row.priority_colour!,
-					})
-				: null,
-		labels: labels.map(serializeVocabulary),
-		assignees,
-		version: row.version,
-		createdAt: row.created_at.toISOString(),
-		updatedAt: row.updated_at.toISOString(),
-	};
-	if (opts?.redirectFrom) {
-		body.canonicalKey = key;
-		body.redirectFrom = opts.redirectFrom;
-	}
-	return body;
 }
 
 async function getWorkspacePrefix(workspaceId: number): Promise<string | null> {
@@ -149,84 +58,21 @@ async function getWorkspacePrefix(workspaceId: number): Promise<string | null> {
 	return derivePrefix(ws.name);
 }
 
-async function loadLabelsForItems(
-	dbExec: DBExecutor,
-	itemIds: number[],
-): Promise<Map<number, VocabularyRow[]>> {
-	const map = new Map<number, VocabularyRow[]>();
-	if (itemIds.length === 0) return map;
-
-	const rows = await dbExec
-		.selectFrom("tracker_item_labels as til")
-		.innerJoin("tracker_vocabularies as tv", "tv.id", "til.vocabulary_id")
-		.select([
-			"til.tracker_item_id",
-			"tv.id",
-			"tv.kind",
-			"tv.name",
-			"tv.position",
-			"tv.colour",
-		])
-		.where("til.tracker_item_id", "in", itemIds)
-		.orderBy("til.tracker_item_id")
-		.orderBy("tv.position")
-		.execute();
-
-	for (const row of rows) {
-		const list = map.get(row.tracker_item_id) ?? [];
-		list.push({
-			id: row.id,
-			kind: row.kind,
-			name: row.name,
-			position: row.position,
-			colour: row.colour,
-		});
-		map.set(row.tracker_item_id, list);
-	}
-	return map;
-}
-
-async function hydrateItems(
-	dbExec: DBExecutor,
-	rows: ItemRow[],
-	prefix: string,
-) {
-	const ids = rows.map((r) => r.id);
-	const assigneesByItem = await loadTrackerAssigneesForItems(dbExec, ids);
-	const labelsByItem = await loadLabelsForItems(dbExec, ids);
-	return rows.map((row) =>
-		serializeItem(
-			row,
-			prefix,
-			assigneesByItem.get(row.id) ?? [],
-			labelsByItem.get(row.id) ?? [],
-		),
-	);
-}
-
 async function hydrateMutationItem(
 	dbExec: DBExecutor,
-	row: ItemRow,
+	row: TrackerItemRow,
 	prefix: string,
 	opts?: { canonicalWorkItem?: boolean; redirectFrom?: string },
 ) {
-	if (opts?.canonicalWorkItem) {
-		const [item] = await hydrateTrackerWorkItems(dbExec, [row], prefix);
-		if (opts.redirectFrom) {
-			return {
+	const [item] = await hydrateTrackerWorkItems(dbExec, [row], prefix);
+	const body = opts?.redirectFrom
+		? {
 				...item,
 				canonicalKey: item.key,
 				redirectFrom: opts.redirectFrom,
-			};
-		}
-		return item;
-	}
-
-	const [item] = await hydrateItems(dbExec, [row], prefix);
-	if (opts?.redirectFrom) {
-		return { ...item, canonicalKey: item.key, redirectFrom: opts.redirectFrom };
-	}
-	return item;
+			}
+		: item;
+	return legacyTrackerItemResponse(body, Boolean(opts?.canonicalWorkItem));
 }
 
 const findItemByKeyNumber = findTrackerItemByKeyNumber;
