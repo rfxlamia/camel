@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertBaseRefResolvable, collectGitDiff } from "./feature-modules/git-diff.mjs";
-import * as map from "./feature-modules/map.mjs";
+import { collectImportViolations } from "./feature-modules/imports.mjs";
 import { collectLineBudgetViolations } from "./feature-modules/line-budget.mjs";
+import * as map from "./feature-modules/map.mjs";
 import { collectPlacementViolations } from "./feature-modules/placement.mjs";
 
 /** @param {string[]} argv */
@@ -41,12 +42,15 @@ function main() {
 		baseRef,
 		diff,
 	});
+	const importViolations = collectImportViolations({ rootDir, map });
 
-	const allViolations = [...placementViolations, ...lineBudgetViolations];
+	const allViolations = [
+		...placementViolations,
+		...lineBudgetViolations,
+		...importViolations,
+	];
 	if (allViolations.length > 0) {
-		console.error(
-			"Feature module violations:\n" + allViolations.join("\n"),
-		);
+		console.error(`Feature module violations:\n${allViolations.join("\n")}`);
 		process.exit(1);
 	}
 
