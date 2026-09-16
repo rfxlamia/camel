@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { assertBaseRefResolvable, collectGitDiff } from "./feature-modules/git-diff.mjs";
 import * as map from "./feature-modules/map.mjs";
+import { collectImportViolations } from "./feature-modules/imports.mjs";
 import { collectPlacementViolations } from "./feature-modules/placement.mjs";
 
 /** @param {string[]} argv */
@@ -35,11 +36,20 @@ function main() {
 
 	const diff = collectGitDiff(rootDir, baseRef);
 	const placementViolations = collectPlacementViolations({ ...diff, map });
+	const importViolations = collectImportViolations({ rootDir, map });
 
-	if (placementViolations.length > 0) {
-		console.error(
-			"Feature module placement violations:\n" + placementViolations.join("\n"),
-		);
+	/** @type {string[]} */
+	const allViolations = [...placementViolations, ...importViolations];
+
+	if (allViolations.length > 0) {
+		const placementOnly = placementViolations.length > 0;
+		const importOnly = importViolations.length > 0;
+		const header = placementOnly && importOnly
+			? "Feature module violations:"
+			: placementOnly
+				? "Feature module placement violations:"
+				: "Feature module import violations:";
+		console.error(header + "\n" + allViolations.join("\n"));
 		process.exit(1);
 	}
 
