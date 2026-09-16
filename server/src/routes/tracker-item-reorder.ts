@@ -1,35 +1,19 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
 import { neighborsAt, positionBetween, rebalance } from "../core/position.js";
-import {
-	derivePrefix,
-	formatKey,
-	parseKeyFromUrl,
-} from "../core/tracker-key.js";
+import { formatKey, parseKeyFromUrl } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
+import {
+	routeKeyParam,
+	workspacePrefix,
+} from "./tracker-item-route-helpers.js";
 import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
 	hydrateMutationItem,
 } from "./work-item-response.js";
-
-function routeKeyParam(raw: string | string[]): string {
-	return Array.isArray(raw) ? (raw[0] ?? "") : raw;
-}
-
-async function workspacePrefix(
-	dbExec: DBExecutor,
-	workspaceId: number,
-): Promise<string | null> {
-	const row = await dbExec
-		.selectFrom("workspaces")
-		.select("name")
-		.where("id", "=", workspaceId)
-		.executeTakeFirst();
-	return row ? derivePrefix(row.name) : null;
-}
 
 async function loadBucketSiblings(
 	dbExec: DBExecutor,

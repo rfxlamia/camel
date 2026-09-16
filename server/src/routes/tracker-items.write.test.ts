@@ -280,6 +280,22 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		expect(res.body).toMatchObject({ source: "tracker" });
 	});
 
+	it("rejects updating a board item via the tracker field API", async () => {
+		mockSelectFrom.mockImplementation((table: string) => {
+			if (table === "workspaces") return chainable({ name: "Camel Team" });
+			if (table === "cards as c") {
+				return chainable({ id: 99, key_number: 42 });
+			}
+			return chainable(undefined);
+		});
+		const res = await request(app)
+			.patch("/workspaces/7/tracker/items/CT-42")
+			.send({ priorityId: null, version: 1 });
+		expect(res.status).toBe(409);
+		expect(res.body).toMatchObject({ code: "board_item_use_card_api" });
+		expect(mockTransaction).not.toHaveBeenCalled();
+	});
+
 	it("nulls phase_id when projectId alone is supplied", async () => {
 		mockParseProjectPhase.mockResolvedValueOnce({ projectId: 2, phaseId: null });
 		const res = await request(app)
