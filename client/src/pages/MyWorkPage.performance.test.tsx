@@ -9,6 +9,7 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "../api";
+import { resetMyWorkMutationsForTests } from "../lib/workItemMutations";
 import type { MyWorkItem } from "../types/myWork";
 import MyWorkPage from "./MyWorkPage";
 
@@ -51,6 +52,7 @@ function makeReadyItem(): MyWorkItem {
 afterEach(() => {
 	cleanup();
 	resetRequestBoundaryForTests();
+	resetMyWorkMutationsForTests();
 	vi.restoreAllMocks();
 });
 

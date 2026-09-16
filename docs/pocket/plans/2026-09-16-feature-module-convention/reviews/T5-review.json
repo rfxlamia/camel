@@ -1,0 +1,52 @@
+{
+  "task_id": "T5",
+  "task_name": "Wire npm, Makefile, and CI",
+  "cycle": 1,
+  "timestamp": "2026-09-16T11:05:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle C never-RED: observation, not a missing Then. Packet Cycle C step 3 says implement dispatcher aggregation in check-feature-modules.mjs only 'if still missing'. Parent d64df22 already concatenates placement + line-budget + import violations and exits 1 with Feature module violations: (check-feature-modules.mjs:78-85 at HEAD; identical aggregation at d64df22). wiring.test.mjs:127-179 still exercises the CLI on a real temp git repo (no mocks of placement.mjs / line-budget.mjs / imports.mjs) and asserts exit 1 plus PLACEMENT_RULE_ID + routes/cards-update.ts, LINE_BUDGET_RULE_ID + too-long.ts + 301, and DEEP_IMPORT_RULE_ID + cards-update.js. Not a skipped failing-test step: Cycles 1/A/B would RED against d64df22 (missing scripts, no scan count, no Makefile/CI mention). Same classification as T2 Cycle E / T4 Cycles A–F.",
+      "Amend once (2946d2c then commit --amend to b2e4095): process, not a spec miss. Diff of the amend is only wiring.test.mjs Cycle B recipe extraction (broken /^check:.*?$/ms that stopped at EOL → makefile.slice(indexOf('check:'))). Makefile/ci.yml implementation was already on the first commit. DELIVERABLE requires a commit whose message matches chore(architecture): run feature-module guard in check and CI — HEAD is that commit (b2e4095). Pre-commit in this repo is lint+typecheck only (.husky/pre-commit); it never ran wiring tests before or after the amend. QUALITY BAR must-not 'skipping the failing test step' is about TDD RED-before-green, not husky. HEAD assertion for Makefile is present (wiring.test.mjs:108-115)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "QUALITY BAR must-haves: root test is workspace server && client && test:feature-modules (package.json:20); test:feature-modules is node --test scripts/feature-modules/*.test.mjs (package.json:21); check:feature-modules is node scripts/check-feature-modules.mjs (package.json:22). Commit b2e4095 is exactly chore(architecture): run feature-module guard in check and CI. No 3× identical logic inside T5 in-scope files.",
+      "Must-not-haves absent: check:mutation-routing still in Makefile:58 and ci.yml:37; check:key-collisions still gated in Makefile:60; diff is only package.json, Makefile, .github/workflows/ci.yml, scripts/check-feature-modules.mjs, scripts/feature-modules/wiring.test.mjs.",
+      "Verify gates: primary checkout fetch-depth: 0 (ci.yml:31); check:feature-modules beside mutation-routing (Makefile:58-59, ci.yml:37-38). Live CLI at reviewed SHA: exit 0, scanned-files=637 rules-evaluated=3. wiring.test.mjs 5/5 pass.",
+      "Refactor heuristics clear: check-feature-modules.mjs 106 lines, wiring.test.mjs 180 (test file; spec Rule 3 excludes tests from 300). Longest production function main() is 39 lines (check-feature-modules.mjs:54-92); countScannedSourceFiles is 21 (32-52). Cycle A logging is additive on the T3/T4 dispatcher, not a rewrite.",
+      "Cycle C uses the T1 temp-git protocol and does not mock rule modules. Scan count walks map.SCAN_ROOTS (client/src, server/src) so an empty dispatcher cannot print scanned-files=0 and pass Cycle A."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Cycle C was not independently observed RED because T3/T4 already aggregated rule-module return values and exited 1. Process observation only; GWT coverage remains intact (wiring.test.mjs:127-179). Packet explicitly allowed skipping dispatcher work if already present.",
+        "location": "scripts/check-feature-modules.mjs:78-85"
+      },
+      {
+        "severity": "Minor",
+        "description": "Implementer amended once (reflog: 2946d2c → b2e4095) to retarget the Makefile recipe assertion. Pre-commit does not run npm test, so wiring tests were not hook-gated. HEAD still has the assertion; no additional commit is required for DELIVERABLE.",
+        "location": "scripts/feature-modules/wiring.test.mjs:108-115"
+      },
+      {
+        "severity": "Minor",
+        "description": "Cycle B recipe slice uses makefile.indexOf('check:'), which hits the substring inside typecheck: first, then matches mutation-routing / feature-modules anywhere after that. Whole-file asserts still require both script names. Implementation of the check: target is correct (Makefile:56-59).",
+        "location": "scripts/feature-modules/wiring.test.mjs:112-114"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "b2e409523f0ef2fb2b0d67f76585866793ad2a70"
+}

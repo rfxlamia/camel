@@ -1,0 +1,105 @@
+#!/usr/bin/env node
+import { existsSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { assertBaseRefResolvable, collectGitDiff } from "./feature-modules/git-diff.mjs";
+import { collectImportViolations } from "./feature-modules/imports.mjs";
+import { collectLineBudgetViolations } from "./feature-modules/line-budget.mjs";
+import * as map from "./feature-modules/map.mjs";
+import { collectPlacementViolations } from "./feature-modules/placement.mjs";
+
+/** @param {string[]} argv */
+function parseArgs(argv) {
+	let baseRef = "origin/main";
+	let rootArg = ".";
+	for (let i = 2; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === "--base-ref" && argv[i + 1]) {
+			baseRef = argv[++i];
+		} else if (arg === "--root" && argv[i + 1]) {
+			rootArg = argv[++i];
+		}
+	}
+	return { baseRef, rootArg };
+}
+
+const TS_SOURCE = /\.(ts|tsx)$/i;
+
+/**
+ * @param {string} rootDir
+ */
+function countScannedSourceFiles(rootDir) {
+	let count = 0;
+
+	/** @param {string} dirAbs */
+	function walk(dirAbs) {
+		if (!existsSync(dirAbs)) return;
+		for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
+			const abs = join(dirAbs, entry.name);
+			if (entry.isDirectory()) {
+				walk(abs);
+				continue;
+			}
+			if (TS_SOURCE.test(entry.name)) count++;
+		}
+	}
+
+	for (const scanRoot of map.SCAN_ROOTS) {
+		walk(join(rootDir, scanRoot));
+	}
+	return count;
+}
+
+function main() {
+	const { baseRef, rootArg } = parseArgs(process.argv);
+	const rootDir = resolve(rootArg);
+
+	try {
+		assertBaseRefResolvable(baseRef, rootDir);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(message);
+		process.exit(1);
+	}
+
+	const diff = collectGitDiff(rootDir, baseRef);
+	const placementViolations = collectPlacementViolations({ ...diff, map });
+	const lineBudgetViolations = collectLineBudgetViolations({
+		rootDir,
+		baseRef,
+		diff,
+	});
+	const importViolations = collectImportViolations({ rootDir, map });
+
+	const scannedFiles = countScannedSourceFiles(rootDir);
+	const rulesEvaluated = 3;
+
+	const allViolations = [
+		...placementViolations,
+		...lineBudgetViolations,
+		...importViolations,
+	];
+	if (allViolations.length > 0) {
+		console.error(`Feature module violations:\n${allViolations.join("\n")}`);
+		process.exit(1);
+	}
+
+	console.log(
+		`Feature module check: base-ref=${baseRef} root=${rootArg} scanned-files=${scannedFiles} rules-evaluated=${rulesEvaluated}`,
+	);
+	console.log("Feature module check passed.");
+}
+
+const invokedFromCli =
+	process.argv[1] &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (invokedFromCli) {
+	try {
+		main();
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exit(1);
+	}
+}

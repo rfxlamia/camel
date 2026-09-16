@@ -1,0 +1,92 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-09-16-feature-module-convention",
+    "plan_type": "flat",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-09-16",
+    "date_completed": null,
+    "baseline_sha": "992f2c788161bc8e7d34e3fd32619cf59eeba2be",
+    "pipeline": 4
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/index.md",
+      "status": "REVIEW",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Map data, git-diff helper, CLI stub, shared kernel folder",
+          "file": "execution-plan/tasks/T1-map-data-git-diff-helper-cli-stub-shared-kernel-folder.md",
+          "status": "DONE",
+          "done_sha": "6b98c2a2650b51cf44f525d6537334789c099ba4"
+        },
+        {
+          "id": "T2",
+          "name": "Placement allowlist",
+          "file": "execution-plan/tasks/T2-placement-allowlist.md",
+          "status": "DONE",
+          "done_sha": "be2834d6411d27ce331dbdea87e02e59bfeaf38e"
+        },
+        {
+          "id": "T3",
+          "name": "300-line ceiling on touch",
+          "file": "execution-plan/tasks/T3-300-line-ceiling-on-touch.md",
+          "status": "DONE",
+          "done_sha": "9f4708b398df8dcb5dc8861e4d60733928f812a9"
+        },
+        {
+          "id": "T4",
+          "name": "Public API and one-way import walls",
+          "file": "execution-plan/tasks/T4-public-api-and-one-way-import-walls.md",
+          "status": "DONE",
+          "done_sha": "d64df223969d892ccbb9ea4b20995e34fab81cfe"
+        },
+        {
+          "id": "T5",
+          "name": "Wire npm, Makefile, and CI",
+          "file": "execution-plan/tasks/T5-wire-npm-makefile-and-ci.md",
+          "status": "DONE",
+          "done_sha": "b2e409523f0ef2fb2b0d67f76585866793ad2a70"
+        },
+        {
+          "id": "T6",
+          "name": "ADR and agent convention docs",
+          "file": "execution-plan/tasks/T6-adr-and-agent-convention-docs.md",
+          "status": "DONE",
+          "done_sha": "5f13a438ba9f94f85fa4033c8764c48b21c6cb93"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "0b3901df254335187c8d6cf6138582af5cb86961",
+          "files": [
+            "scripts/feature-modules/import-paths.mjs",
+            "scripts/feature-modules/map.mjs",
+            "scripts/feature-modules/placement.mjs",
+            "scripts/feature-modules/placement.test.mjs"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "793c090e3a28d7afee57deb75e73d139472342dc",
+          "files": [
+            "scripts/feature-modules/line-budget.mjs",
+            "scripts/feature-modules/line-budget.test.mjs",
+            "scripts/feature-modules/placement.mjs",
+            "scripts/feature-modules/placement.test.mjs"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "f1c4fa54c2e5359385eb0ac01d9fc51ed1c65da2",
+          "files": [
+            "scripts/feature-modules/line-budget.mjs",
+            "scripts/feature-modules/line-budget.test.mjs"
+          ],
+          "for_task": "T3"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "task_id": "T4",
+  "task_name": "Public API and one-way import walls",
+  "cycle": 3,
+  "timestamp": "2026-09-16T10:50:29Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Merge re-audit of d64df223969d892ccbb9ea4b20995e34fab81cfe (range 9f4708b398df8dcb5dc8861e4d60733928f812a9..d64df223969d892ccbb9ea4b20995e34fab81cfe). Unify intent held: dispatcher calls collectPlacementViolations (check-feature-modules.mjs:39), collectLineBudgetViolations (40-44), and collectImportViolations (45); all three concatenated (47-51). Header `Feature module violations:` (53) matches the approved unify. Neither collector was dropped (would have been Critical).",
+      "T4-owned import files are identical to worktree tip 0519e36c4bc8786fce7757e3786f4b2460381ee5; merge vs that parent only adds line-budget.mjs / line-budget.test.mjs (T3 already at 9f4708b) and the unified dispatcher. Public exports still re-exported from imports.mjs. node --test scripts/feature-modules/imports.test.mjs = 27/27 pass at d64df22, including Cycle F CLI exit 1 after both collectors are wired.",
+      "TDD skip vs GWT coverage: Cycle 1 RED (ERR_MODULE_NOT_FOUND for ./imports.mjs) is accepted. Cycles A–F tests landed in the same commit as implementation (993b04d), so independent FAIL-before-fix was not shown. Process skip, not a missing Then. All DELIVERABLE GWT hold: deep import cards-update.js fails with FM-RULE-4 + path + specifier (import-wall-rules.mjs:44-54; imports.test.mjs:57-69); index and in-module pass (72-91); cross-feature index pass / describeEvent.ts deep-fail (126-148); one-way card-response.js and components/my-work/MyWorkList.tsx fail (import-wall-rules.mjs:61-67; imports.test.mjs:150-171); composition-root board.routes.js fails (208-218); missing index.ts on disk fails (import-wall-scan.mjs:54-61; imports.test.mjs:220-233); features/work-items/WorkItemsPage.tsx fails (import-wall-scan.mjs:65-75; imports.test.mjs:235-251); routes/cards.ts → ./helpers.js is NOT a wall violation (import-wall-rules.mjs:76-97; imports.test.mjs:115-124). import type, dynamic import(), and export * from deep paths fail (import-specifiers.mjs:75-91; imports.test.mjs:93-113, 311-320).",
+      "KERNEL_IN_WAITING allowlist actually passes: map.mjs:23-30 lists work-item-response.ts, work-items.ts, helpers.ts, vocabulary-response.ts, tracker-item-parsers.ts, and client/src/lib/workItemMutations.ts. isAllowlistedKernelInWaiting strips extensions so leftover orchestrator specifiers match (import-paths.mjs:142-145). Cycle C asserts zero violations for all six, including features/board → ../../lib/workItemMutations.ts (imports.test.mjs:173-205).",
+      "Must-not type-folder-to-type-folder: routes/cards.ts importing ./helpers.js is unclassified (not modules/features, importer not a module) and returns [] (import-wall-rules.mjs:76-97; imports.test.mjs:115-124).",
+      "Range 9f4708b..d64df22 is T4-in-scope plus the unified dispatcher: imports.mjs, imports.test.mjs, check-feature-modules.mjs, plus named domain-scoped siblings mandated by cycle-1 Important (import-specifiers.mjs, import-paths.mjs, import-wall-rules.mjs, import-wall-scan.mjs). map.mjs unmodified because KERNEL_IN_WAITING already exists. No empty index stubs (checkMissingModuleIndexes skips empty trees, import-wall-scan.mjs:55). No real features/work-items/ product module — only a temp fixture in the test. Commit 993b04d is feat(architecture): enforce feature-module public API imports."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Unify is additive, not a wholesale rewrite: T3 line-budget collector kept, T4 import collector kept, placement kept. check-feature-modules.mjs is 72 lines. Cycle F still exits 1 with FM-RULE-4 after the merge (imports.test.mjs:344-371).",
+      "Cycle-1 Important heuristics still cleared at merge: imports.mjs is a 14-line re-export; siblings are import-specifiers.mjs 119, import-paths.mjs 161, import-wall-rules.mjs 98, import-wall-scan.mjs 120 — all ≤~300. Longest function in the T4 siblings is checkSpecifier at 42 lines (import-wall-rules.mjs:29-70); extractImportSpecifiers is 23 lines (import-specifiers.mjs:97-119).",
+      "QUALITY BAR must-haves for specifier forms: import type, import(), and export * from non-index module paths are extracted and flagged (import-specifiers.mjs:75-91; import-wall-rules.mjs:44-54; tests 93-113, 311-320).",
+      "Public API preserved: checkImports / collectImportViolations / extractImportSpecifiers / rule ids re-exported from imports.mjs. CLI still walks SCAN_ROOTS for import walls (not git-diff-only) and exits 1 (check-feature-modules.mjs:45; import-wall-scan.mjs:104-120; Cycle F). 27 tests still pass. No features/work-items product module; routes/helpers.js is not a wall fail.",
+      "No 3× identical logic in T4 scope; Cycle C allowlist is a loop, not copy-paste. TS_SOURCE appears twice in new siblings, not three. Rule of three clear. Implementation commit 993b04d is conventional feat(architecture); refactor 0519e36 is conventional refactor(architecture)."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Cycles A–F were not independently observed RED; tests were added with implementation in one commit (993b04d). Process observation only; GWT coverage remains intact (same classification as T2). Cycle 1 failing-test step was not skipped. Merge re-audit did not change this.",
+        "location": "scripts/feature-modules/imports.test.mjs:72-373"
+      },
+      {
+        "severity": "Minor",
+        "description": "imports.test.mjs is 373 lines. Packet pins a single test file for all cycles and spec Rule 3 excludes tests from the 300-line ceiling — observation only, not a split requirement.",
+        "location": "scripts/feature-modules/imports.test.mjs:1-373"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "d64df223969d892ccbb9ea4b20995e34fab81cfe"
+}
