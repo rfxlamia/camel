@@ -99,13 +99,10 @@ function throwFmRule5GitError(messageBody, result) {
 }
 
 /**
- * Parse `git diff --name-status` / `--find-renames` text (no git spawn).
  * @param {string} output
- * @param {{ baseRef?: string }} [options]
+ * @returns {{ new: string[], modified: string[], renamed: RenameEntry[], copied: CopyEntry[], deleted: string[] }}
  */
-export function parseNameStatusOutput(output, options = {}) {
-	const baseRef = options.baseRef ?? "origin/main";
-
+function collectNameStatusBuckets(output) {
 	/** @type {string[]} */
 	const newFiles = [];
 	/** @type {string[]} */
@@ -152,19 +149,26 @@ export function parseNameStatusOutput(output, options = {}) {
 		else if (status === "M") modified.push(path);
 	}
 
+	return { new: newFiles, modified, renamed, copied, deleted };
+}
+
+/**
+ * Parse `git diff --name-status` / `--find-renames` text (no git spawn).
+ * @param {string} output
+ * @param {{ baseRef?: string }} [options]
+ */
+export function parseNameStatusOutput(output, options = {}) {
+	const baseRef = options.baseRef ?? "origin/main";
+	const buckets = collectNameStatusBuckets(output);
+
 	return {
 		baseRef,
-		new: newFiles,
-		modified,
-		renamed,
-		copied,
-		deleted,
-		sourceFiles: assembleSourceFilePaths({
-			new: newFiles,
-			modified,
-			renamed,
-			copied,
-		}),
+		new: buckets.new,
+		modified: buckets.modified,
+		renamed: buckets.renamed,
+		copied: buckets.copied,
+		deleted: buckets.deleted,
+		sourceFiles: assembleSourceFilePaths(buckets),
 	};
 }
 
