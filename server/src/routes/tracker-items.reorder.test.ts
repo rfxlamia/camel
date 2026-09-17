@@ -84,7 +84,7 @@ vi.mock("../realtime.js", () => ({
 vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
-import { workItemsRouter } from "./work-items.js";
+import { workItemsRouter } from "../lib/work-items.js";
 
 const app = express();
 app.use(express.json());
