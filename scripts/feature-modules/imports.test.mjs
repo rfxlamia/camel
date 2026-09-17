@@ -193,14 +193,6 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		},
 		{
 			file: "server/src/modules/board/x.ts",
-			spec: `import { p } from "../../routes/tracker-item-parsers.js";\n`,
-		},
-		{
-			file: "server/src/modules/board/x.ts",
-			spec: `import { v } from "../../routes/vocabulary-response.ts";\n`,
-		},
-		{
-			file: "server/src/modules/board/x.ts",
 			spec: `import { w } from "../../routes/work-items.ts";\n`,
 		},
 		{
@@ -213,6 +205,25 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		it(`allows kernel-in-waiting import for ${file}`, () => {
 			const violations = checkImports({ filePath: file, source: spec, map });
 			assert.deepEqual(violations, []);
+		});
+	}
+
+	const extractedKernel = [
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { p } from "../../routes/tracker-item-parsers.js";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { v } from "../../routes/vocabulary-response.js";\n`,
+		},
+	];
+
+	for (const { file, spec } of extractedKernel) {
+		it(`flags leftover routes import after kernel extract for ${spec.trim()}`, () => {
+			const violations = checkImports({ filePath: file, source: spec, map });
+			assert.equal(violations.length, 1);
+			assert.match(violations[0], new RegExp(ONE_WAY_RULE_ID));
 		});
 	}
 });

@@ -11,7 +11,7 @@ import {
 	loadCardLabelsForCards,
 } from "./card-response.js";
 import { getHumanColumns, type HumanColumn } from "./helpers.js";
-import type { VocabularyRow } from "./vocabulary-response.js";
+import type { VocabularyRow } from "../lib/vocabulary-response.js";
 
 type CardRow = CardResponseRow;
 

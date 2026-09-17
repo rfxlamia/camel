@@ -42,7 +42,5 @@ export const KERNEL_IN_WAITING = [
 	"server/src/routes/work-item-response.ts",
 	"server/src/routes/work-items.ts",
 	"server/src/routes/helpers.ts",
-	"server/src/routes/vocabulary-response.ts",
-	"server/src/routes/tracker-item-parsers.ts",
 	"client/src/lib/workItemMutations.ts",
 ];
