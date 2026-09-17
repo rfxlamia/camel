@@ -165,10 +165,27 @@ describe("Cycle Map — map data (unit)", () => {
 			existsSync(join(repoRoot, "server/src/modules/tracker/index.ts")),
 			"expected server/src/modules/tracker/index.ts",
 		);
-		assert.ok(
-			!existsSync(join(repoRoot, "server/src/routes/tracker-items.ts")),
-			"expected leftover server/src/routes/tracker-items.ts to be gone",
-		);
+		for (const name of [
+			"tracker-items.ts",
+			"tracker-item-create.ts",
+			"tracker-item-update.ts",
+			"tracker-item-read.ts",
+			"tracker-item-delete.ts",
+			"tracker-item-reorder.ts",
+			"tracker-item-route-helpers.ts",
+			"tracker-projects.ts",
+			"tracker-phases.ts",
+			"tracker-vocabularies.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/tracker/${name}`)),
+				`expected server/src/modules/tracker/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
 	});
 });
 
