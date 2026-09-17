@@ -8,7 +8,7 @@ import type {
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../../types";
-import { PriorityGlyph, StatusGlyph, statusGlyphSpec } from "./TrackerGlyphs";
+import { PriorityGlyph, StatusGlyph, statusGlyphSpec } from "../../shared/TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,

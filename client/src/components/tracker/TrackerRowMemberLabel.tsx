@@ -9,7 +9,7 @@ import {
 	AvatarStack,
 	LabelDot,
 	LabelDotCluster,
-} from "./TrackerGlyphs";
+} from "../../shared/TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,

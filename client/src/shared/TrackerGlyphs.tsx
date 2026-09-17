@@ -1,4 +1,4 @@
-import type { TrackerStatusCategory, TrackerVocabulary } from "../../types";
+import type { TrackerStatusCategory, TrackerVocabulary } from "../types";
 
 /**
  * Workflow glyphs derived from vocabulary category — a status renders as a ring

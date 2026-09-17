@@ -7,7 +7,7 @@ import {
 	sortStatusesByPosition,
 } from "../shared/trackerUtils";
 import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../types";
-import { LabelDot, PriorityGlyph, priorityBars } from "./tracker/TrackerGlyphs";
+import { LabelDot, PriorityGlyph, priorityBars } from "../shared/TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,

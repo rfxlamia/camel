@@ -1,6 +1,6 @@
 import type { TrackerEvent } from "../../types";
 import { formatRelativeTime } from "../../types";
-import { Avatar } from "./TrackerGlyphs";
+import { Avatar } from "../../shared/TrackerGlyphs";
 
 /**
  * Server-side field names as they arrive in `payload.changed`, phrased for a

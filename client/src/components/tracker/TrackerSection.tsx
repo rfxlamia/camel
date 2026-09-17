@@ -11,7 +11,7 @@ import {
 	priorityBars,
 	StatusGlyph,
 	statusGlyphSpec,
-} from "./TrackerGlyphs";
+} from "../../shared/TrackerGlyphs";
 import TrackerRow from "./TrackerRow";
 import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
 

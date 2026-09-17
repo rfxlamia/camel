@@ -10,7 +10,7 @@ import {
 	LabelDot,
 	PriorityGlyph,
 	priorityBars,
-} from "./TrackerGlyphs";
+} from "../../shared/TrackerGlyphs";
 import type { PickerOption } from "./TrackerPropertyPicker";
 
 export interface TrackerRowPickerContext {

@@ -7,7 +7,7 @@ import type {
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../../types";
-import { Avatar, LabelDot, PriorityGlyph } from "./TrackerGlyphs";
+import { Avatar, LabelDot, PriorityGlyph } from "../../shared/TrackerGlyphs";
 import { TrackerPropertyPicker } from "./TrackerPropertyPicker";
 import {
 	TrackerRowDatePopover,
