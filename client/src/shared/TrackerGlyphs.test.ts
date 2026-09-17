@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TrackerVocabulary } from "../../types";
+import type { TrackerVocabulary } from "../types";
 import { priorityBars, statusGlyphSpec } from "./TrackerGlyphs";
 
 function statusVocab(

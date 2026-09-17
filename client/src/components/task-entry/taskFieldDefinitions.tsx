@@ -12,7 +12,7 @@ import {
 	priorityBars,
 	StatusGlyph,
 	statusGlyphSpec,
-} from "../tracker/TrackerGlyphs";
+} from "../../shared/TrackerGlyphs";
 import type {
 	TaskMetadataCatalogEntry,
 	TaskMetadataCatalogKey,

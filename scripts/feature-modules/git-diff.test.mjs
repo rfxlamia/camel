@@ -148,6 +148,16 @@ describe("Cycle Map — map data (unit)", () => {
 			);
 		}
 		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/TrackerGlyphs.tsx")),
+			"expected kernel home client/src/shared/TrackerGlyphs.tsx",
+		);
+		assert.ok(
+			!existsSync(
+				join(repoRoot, "client/src/components/tracker/TrackerGlyphs.tsx"),
+			),
+			"expected leftover client/src/components/tracker/TrackerGlyphs.tsx to be gone",
+		);
+		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
 		assert.ok(

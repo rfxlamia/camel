@@ -13,7 +13,7 @@ import {
 	StatusGlyph,
 	priorityBars,
 	statusGlyphSpec,
-} from "./TrackerGlyphs";
+} from "../../shared/TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
