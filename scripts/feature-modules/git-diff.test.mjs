@@ -206,6 +206,10 @@ describe("Cycle Map — map data (unit)", () => {
 			"TrackerProjectHeader.tsx",
 			"TrackerProjectCreateModal.tsx",
 			"TrackerTabs.tsx",
+			"TrackerChangelog.tsx",
+			"TrackerDateFields.tsx",
+			"TrackerProperties.tsx",
+			"TrackerPhaseEditor.tsx",
 		]) {
 			assert.ok(
 				existsSync(join(repoRoot, `client/src/features/tracker/${name}`)),
