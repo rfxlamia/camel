@@ -128,10 +128,10 @@ describe("Cycle Map — map data (unit)", () => {
 		);
 		assert.ok(map.KERNEL_IN_WAITING.some((p) => p.endsWith("helpers.ts")));
 		assert.ok(
-			map.KERNEL_IN_WAITING.some((p) => p.endsWith("vocabulary-response.ts")),
+			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("vocabulary-response.ts")),
 		);
 		assert.ok(
-			map.KERNEL_IN_WAITING.some((p) => p.endsWith("tracker-item-parsers.ts")),
+			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("tracker-item-parsers.ts")),
 		);
 	});
 });

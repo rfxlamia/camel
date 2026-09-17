@@ -1,4 +1,4 @@
-// server/src/routes/tracker-item-parsers.test.ts
+// server/src/lib/tracker-item-parsers.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockExecuteTakeFirst } = vi.hoisted(() => ({

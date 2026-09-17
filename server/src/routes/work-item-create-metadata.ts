@@ -4,7 +4,7 @@ import {
 	parseLabelIds,
 	parsePriorityId,
 	parseProjectPhase,
-} from "./tracker-item-parsers.js";
+} from "../lib/tracker-item-parsers.js";
 
 export type TaskCreateField =
 	| "statusId"

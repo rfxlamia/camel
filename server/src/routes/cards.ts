@@ -44,7 +44,7 @@ import {
 	parseCardProjectPhase,
 	parseLabelIds,
 	parsePriorityId,
-} from "./tracker-item-parsers.js";
+} from "../lib/tracker-item-parsers.js";
 
 export const cardsRouter = Router({ mergeParams: true });
 

@@ -97,7 +97,7 @@ vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 const mockParseProjectPhase = vi.fn();
 const mockParseDateRange = vi.fn();
-vi.mock("./tracker-item-parsers.js", () => ({
+vi.mock("../lib/tracker-item-parsers.js", () => ({
 	parseProjectPhase: (...args: unknown[]) => mockParseProjectPhase(...args),
 	parseDateRange: (...args: unknown[]) => mockParseDateRange(...args),
 	parseAssigneeIds: vi.fn().mockResolvedValue([]),

@@ -21,7 +21,7 @@ import {
 	loadTrackerAssigneesForItems,
 	type TrackerItemAssignee,
 } from "./tracker-assignees.js";
-import type { VocabularyRow } from "./vocabulary-response.js";
+import type { VocabularyRow } from "../lib/vocabulary-response.js";
 import { isTerminalMyWorkStatus } from "./my-work-response-serialization.js";
 
 async function loadTrackerLabelsForItems(
