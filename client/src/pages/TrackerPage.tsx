@@ -42,7 +42,7 @@ import type {
 import {
 	updateWorkItem,
 	updateWorkItemStatus,
-} from "../lib/workItemMutations";
+} from "../shared/workItemMutations";
 
 const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 

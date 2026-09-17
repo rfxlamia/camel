@@ -38,6 +38,4 @@ export const CLIENT_KERNEL_PREFIXES = [
  * Kernel files still under type-folders; modules may import until extracted (shrinking allowlist).
  * POSIX paths relative to repo root.
  */
-export const KERNEL_IN_WAITING = [
-	"client/src/lib/workItemMutations.ts",
-];
+export const KERNEL_IN_WAITING = [];

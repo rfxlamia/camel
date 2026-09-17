@@ -1,4 +1,4 @@
 server/src/lib/work-item-response.ts @rfxlamia
-client/src/lib/workItemMutations.ts @rfxlamia
+client/src/shared/workItemMutations.ts @rfxlamia
 server/src/routes/tracker-items.ts @rfxlamia
 server/src/lib/work-items.ts @rfxlamia

@@ -4,7 +4,7 @@ import {
 	getMyWorkMutationSnapshot,
 	myWorkMutationIdentity,
 	subscribeToMyWorkMutations,
-} from "../../lib/workItemMutations";
+} from "../../shared/workItemMutations";
 import type { MyWorkItem } from "../../types/myWork";
 import {
 	DetailSheetBody,

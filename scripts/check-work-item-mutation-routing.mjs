@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 
 const ROOT = "client/src";
 const ALLOWLIST = new Set([
-	"client/src/lib/workItemMutations.ts",
+	"client/src/shared/workItemMutations.ts",
 	"client/src/api.ts",
 	"client/src/context/BoardContext.tsx",
 ]);

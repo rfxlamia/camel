@@ -8,7 +8,7 @@ import {
 	beginMyWorkMutation,
 	resetMyWorkMutationsForTests,
 	settleMyWorkMutation,
-} from "./workItemMutations";
+} from "../shared/workItemMutations";
 
 afterEach(() => resetMyWorkMutationsForTests());
 

@@ -4,7 +4,7 @@ import {
 	type MyWorkMutationSnapshot,
 	mergeMyWorkMutationResult,
 	settleMyWorkMutation,
-} from "../../lib/workItemMutations";
+} from "../../shared/workItemMutations";
 import type { MyWorkItem } from "../../types/myWork";
 
 export type MyWorkDoneMutation = (

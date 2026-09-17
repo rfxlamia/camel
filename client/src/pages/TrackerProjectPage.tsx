@@ -14,7 +14,7 @@ import { useBoard } from "../context/BoardContext";
 import { useShowToast } from "../context/ToastContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { sortStatusesByPosition } from "../lib/trackerUtils";
-import { updateWorkItemStatus, reorderWorkItem } from "../lib/workItemMutations";
+import { updateWorkItemStatus, reorderWorkItem } from "../shared/workItemMutations";
 import type {
 	TrackerPhase,
 	TrackerProject,

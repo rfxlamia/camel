@@ -22,7 +22,7 @@ import AuthPage from "../components/AuthPage";
 import {
 	beginMyWorkMutation,
 	resetMyWorkMutationsForTests,
-} from "../lib/workItemMutations";
+} from "../shared/workItemMutations";
 import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 
 const {

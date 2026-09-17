@@ -5,7 +5,7 @@ import {
 	type MyWorkMutationSnapshot,
 	myWorkMutationIdentity,
 	subscribeToMyWorkMutations,
-} from "../../lib/workItemMutations";
+} from "../../shared/workItemMutations";
 import type { MyWorkItem, MyWorkScope } from "../../types/myWork";
 import MyWorkDoneAction, {
 	type MyWorkDoneActionProps,

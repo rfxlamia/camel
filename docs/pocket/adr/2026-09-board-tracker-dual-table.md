@@ -92,5 +92,5 @@ Server-side agent routes that write directly to `cards` are **not** covered by t
 ## References
 
 - `server/src/lib/work-item-response.ts` — merge layer
-- `client/src/lib/workItemMutations.ts` — client mutation router
+- `client/src/shared/workItemMutations.ts` — client mutation router
 - `server/src/core/board-card-status-change.ts` — hybrid reverse
