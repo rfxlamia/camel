@@ -4,7 +4,7 @@ import { generateRandomPastelBorder } from "../core/pastelColor.js";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
 
 const VOCAB_KINDS = ["status", "priority", "label"] as const;
 type VocabKind = (typeof VOCAB_KINDS)[number];

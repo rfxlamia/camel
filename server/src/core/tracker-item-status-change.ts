@@ -1,7 +1,7 @@
 import { type RawBuilder, sql } from "kysely";
 import type { AuthUser } from "../auth.js";
 import type { DBExecutor } from "../db/kysely.js";
-import { recordTrackerActivity } from "../routes/tracker-activity.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
 
 export type TrackerItemStatusChangeResult =
 	| { kind: "not_found" }

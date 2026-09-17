@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
-import { getUnifiedWorkspaceActivity } from "./work-item-events.js";
+import { getUnifiedWorkspaceActivity } from "../lib/work-item-events.js";
 
 function activitySelect() {
 	return db

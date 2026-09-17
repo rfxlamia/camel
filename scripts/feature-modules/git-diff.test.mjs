@@ -145,6 +145,22 @@ describe("Cycle Map — map data (unit)", () => {
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("tracker-item-parsers.ts")),
 		);
+		for (const name of [
+			"tracker-assignees.ts",
+			"tracker-activity.ts",
+			"workspace-mutation-lock.ts",
+			"work-item-create-metadata.ts",
+			"work-item-events.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/lib/${name}`)),
+				`expected kernel home server/src/lib/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
 	});
 });
 

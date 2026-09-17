@@ -4,7 +4,7 @@ import { sql } from "kysely";
 import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
-} from "../lib/work-item-response.js";
+} from "./work-item-response.js";
 
 export type WorkItemEvent = {
 	id: number;

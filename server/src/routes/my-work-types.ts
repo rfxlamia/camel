@@ -5,7 +5,7 @@ import type {
 } from "../core/my-work-mark-done.js";
 import type { DBExecutor } from "../db/kysely.js";
 import type { CardAssignee } from "./card-assignees.js";
-import type { TrackerItemAssignee } from "./tracker-assignees.js";
+import type { TrackerItemAssignee } from "../lib/tracker-assignees.js";
 import type { VocabularyRow } from "../lib/vocabulary-response.js";
 import type { BoardWorkItemRow, TrackerItemRow } from "../lib/work-item-response.js";
 

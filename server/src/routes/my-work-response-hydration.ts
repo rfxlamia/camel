@@ -20,7 +20,7 @@ import type {
 import {
 	loadTrackerAssigneesForItems,
 	type TrackerItemAssignee,
-} from "./tracker-assignees.js";
+} from "../lib/tracker-assignees.js";
 import type { VocabularyRow } from "../lib/vocabulary-response.js";
 import { isTerminalMyWorkStatus } from "./my-work-response-serialization.js";
 

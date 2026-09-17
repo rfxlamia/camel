@@ -24,8 +24,8 @@ import { recordActivity } from "../lib/helpers.js";
 import {
 	type NormalizedTaskCreateMetadata,
 	validateTaskCreateMetadata,
-} from "./work-item-create-metadata.js";
-import { lockTaskCreateReferences } from "./workspace-mutation-lock.js";
+} from "../lib/work-item-create-metadata.js";
+import { lockTaskCreateReferences } from "../lib/workspace-mutation-lock.js";
 
 type CreateBody = Record<string, unknown>;
 type UploadedFile = Express.Multer.File;

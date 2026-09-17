@@ -4,7 +4,7 @@ import { neighborsAt, positionBetween, rebalance } from "../core/position.js";
 import { formatKey, parseKeyFromUrl } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
 import {
 	routeKeyParam,
 	workspacePrefix,

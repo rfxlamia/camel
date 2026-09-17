@@ -114,7 +114,7 @@ const targetInputs = {
 };
 
 const mockRecordTrackerActivity = vi.fn();
-vi.mock("../routes/tracker-activity.js", () => ({
+vi.mock("../lib/tracker-activity.js", () => ({
 	recordTrackerActivity: (...args: unknown[]) =>
 		mockRecordTrackerActivity(...args),
 }));

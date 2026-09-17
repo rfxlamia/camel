@@ -4,7 +4,7 @@ import { clearPresence, publishEvent } from "../realtime.js";
 import type { RecordFocusActivity } from "../routes/focus-session.js";
 import { finishActiveFocusSessionForRemoval } from "../routes/focus-session-membership.js";
 import { createFocusSessionRepo } from "../routes/focus-session-repo.js";
-import { lockWorkspaceMutation } from "../routes/workspace-mutation-lock.js";
+import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
 // ---- Workspace list serialization -------------------------------------------
 

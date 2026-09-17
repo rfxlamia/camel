@@ -73,7 +73,7 @@ vi.mock("../middleware/workspace.js", () => ({
 		next();
 	},
 }));
-vi.mock("./tracker-assignees.js", () => ({
+vi.mock("../lib/tracker-assignees.js", () => ({
 	loadTrackerAssigneesForItems: vi.fn().mockResolvedValue(new Map()),
 	syncTrackerItemAssignees: vi.fn(),
 }));
@@ -81,7 +81,7 @@ vi.mock("../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
 import { workItemsRouter } from "../lib/work-items.js";

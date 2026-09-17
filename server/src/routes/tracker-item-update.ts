@@ -12,8 +12,8 @@ import { formatKey, parseKeyFromUrl } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
 import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
-import { syncTrackerItemAssignees } from "./tracker-assignees.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
+import { syncTrackerItemAssignees } from "../lib/tracker-assignees.js";
 import {
 	parseAssigneeIds,
 	parseDateRange,

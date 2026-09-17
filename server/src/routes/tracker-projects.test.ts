@@ -107,11 +107,11 @@ vi.mock("../middleware/workspace.js", () => ({
 }));
 vi.mock("../realtime.js", () => ({ publishEvent: vi.fn() }));
 vi.mock("../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
-vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { publishEvent } from "../realtime.js";
 import { recordActivity } from "../lib/helpers.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
 import { trackerProjectsRouter } from "./tracker-projects.js";
 
 const app = express();

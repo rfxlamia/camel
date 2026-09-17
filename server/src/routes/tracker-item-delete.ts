@@ -3,7 +3,7 @@ import { sql } from "kysely";
 import { parseKeyFromUrl } from "../core/tracker-key.js";
 import { db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
 import { routeKeyParam } from "./tracker-item-route-helpers.js";
 import {
 	findBoardCardByKeyNumber,
