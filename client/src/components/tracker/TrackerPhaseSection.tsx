@@ -16,7 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { formatDueDate } from "../../lib/boardViewUtils";
+import { formatDueDate } from "../../shared/boardViewUtils";
 import {
 	isPhaseOverdue,
 	isTaskOverdue,

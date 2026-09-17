@@ -7,7 +7,7 @@ import {
 	formatDueDate,
 	isCardDone,
 	isDueOverdue,
-} from "../lib/boardViewUtils";
+} from "../shared/boardViewUtils";
 import { orderCardAttachments } from "../lib/cardAttachments";
 import type { Card } from "../types";
 

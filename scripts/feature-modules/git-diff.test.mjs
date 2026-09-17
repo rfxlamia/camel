@@ -179,6 +179,14 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover client/src/components/tracker/TrackerPropertyPicker.tsx to be gone",
 		);
 		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/boardViewUtils.ts")),
+			"expected kernel home client/src/shared/boardViewUtils.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/boardViewUtils.ts")),
+			"expected leftover client/src/lib/boardViewUtils.ts to be gone",
+		);
+		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
 		assert.ok(

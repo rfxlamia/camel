@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { formatDueDate } from "../../lib/boardViewUtils";
+import { formatDueDate } from "../../shared/boardViewUtils";
 import {
 	deriveBounds,
 	isProjectOverdue,

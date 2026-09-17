@@ -1,5 +1,5 @@
 import type { TrackerItem, TrackerPhase, TrackerProject } from "../types";
-import { todayISODate } from "../lib/boardViewUtils";
+import { todayISODate } from "./boardViewUtils";
 
 export type RollupResult =
 	| { kind: "percent"; completed: number; total: number; ratio: number }
