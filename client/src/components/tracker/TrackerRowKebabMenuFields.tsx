@@ -1,6 +1,6 @@
 import { Folder, Signpost, Tag, UserRound } from "lucide-react";
 import type { RefObject } from "react";
-import { NO_PRIORITY } from "../../lib/trackerUtils";
+import { NO_PRIORITY } from "../../shared/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerProject,

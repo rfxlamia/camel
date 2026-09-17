@@ -5,7 +5,7 @@ import {
 	NO_PRIORITY,
 	resolveToggle,
 	sortStatusesByPosition,
-} from "../lib/trackerUtils";
+} from "../shared/trackerUtils";
 import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../types";
 import { LabelDot, PriorityGlyph, priorityBars } from "./tracker/TrackerGlyphs";
 import {

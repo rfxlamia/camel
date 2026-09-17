@@ -1,7 +1,7 @@
 import { Folder, Signpost } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatDueDate, isDueOverdue } from "../../lib/boardViewUtils";
-import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../shared/trackerUtils";
 import type {
 	WorkItem,
 	TrackerProject,

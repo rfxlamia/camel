@@ -1,4 +1,4 @@
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import { sortStatusesByPosition } from "../../shared/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerVocabulary,

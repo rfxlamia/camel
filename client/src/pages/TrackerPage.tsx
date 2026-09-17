@@ -28,7 +28,7 @@ import {
 	statusGroupKey,
 	TRACKER_GROUP_BY_LABELS,
 	type TrackerGroupBy,
-} from "../lib/trackerUtils";
+} from "../shared/trackerUtils";
 import {
 	readTrackerGroupBy,
 	writeTrackerGroupBy,

@@ -125,6 +125,14 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "client/src/lib/workItemMutations.ts")),
 		);
 		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/trackerUtils.ts")),
+			"expected kernel home client/src/shared/trackerUtils.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/trackerUtils.ts")),
+			"expected leftover client/src/lib/trackerUtils.ts to be gone",
+		);
+		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
 		assert.ok(

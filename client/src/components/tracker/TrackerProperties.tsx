@@ -1,6 +1,6 @@
 import { Plus, Tag, UserRound } from "lucide-react";
 import { useState } from "react";
-import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../shared/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerVocabulary,

@@ -1,5 +1,5 @@
 import { ChevronRight, Folder, Plus } from "lucide-react";
-import type { TrackerGroup } from "../../lib/trackerUtils";
+import type { TrackerGroup } from "../../shared/trackerUtils";
 import type {
 	WorkItem,
 	TrackerProject,

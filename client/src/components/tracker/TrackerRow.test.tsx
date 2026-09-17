@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrackerGroup } from "../../lib/trackerUtils";
+import type { TrackerGroup } from "../../shared/trackerUtils";
 import type {
 	TrackerPhase,
 	TrackerProject,
