@@ -138,26 +138,32 @@ function gitShowText(rootDir, objectRef, path) {
 }
 
 /**
+ * Rename-aware unified hunks for 300-on-touch.
+ * Without `-M`, a git mv of an oversized file looks like a full-file add+delete.
+ *
  * @param {string} rootDir
  * @param {string} mergeBase
  * @param {string} path
  * @param {string} [oldPath]
  */
 function gitDiffHunks(rootDir, mergeBase, path, oldPath) {
-	/** @type {string[]} */
-	const diffPaths = oldPath ? [path, oldPath] : [path];
-	/** @type {string[]} */
-	const hunks = [];
-	for (const diffPath of diffPaths) {
+	if (oldPath && oldPath !== path) {
 		const result = spawnSync(
 			"git",
-			["diff", "-U0", mergeBase, "HEAD", "--", diffPath],
+			["diff", "-M", "-U0", mergeBase, "HEAD", "--", oldPath, path],
 			{ cwd: rootDir, encoding: "utf8" },
 		);
-		if (result.status !== 0) continue;
-		if (result.stdout) hunks.push(result.stdout);
+		if (result.status !== 0 || !result.stdout) return "";
+		return result.stdout;
 	}
-	return hunks.join("\n");
+
+	const result = spawnSync(
+		"git",
+		["diff", "-U0", mergeBase, "HEAD", "--", path],
+		{ cwd: rootDir, encoding: "utf8" },
+	);
+	if (result.status !== 0) return "";
+	return result.stdout;
 }
 
 /**

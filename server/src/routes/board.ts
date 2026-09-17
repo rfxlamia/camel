@@ -10,7 +10,7 @@ import {
 	type CardResponseRow,
 	loadCardLabelsForCards,
 } from "./card-response.js";
-import { getHumanColumns, type HumanColumn } from "./helpers.js";
+import { getHumanColumns, type HumanColumn } from "../lib/helpers.js";
 import type { VocabularyRow } from "../lib/vocabulary-response.js";
 
 type CardRow = CardResponseRow;

@@ -2,12 +2,12 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Single resettable factory for ./helpers.js — Tasks 6 and 7 extend THIS
+// Single resettable factory for ../lib/helpers.js — Tasks 6 and 7 extend THIS
 // mock (vi.mock allows exactly one factory per module path per file; never
 // redeclare it when those tasks add their describes to this file).
 const mockLookupMembership = vi.fn();
 const mockRecordActivity = vi.fn();
-vi.mock("./helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	lookupMembership: (...args: unknown[]) => mockLookupMembership(...args),
 	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
 }));

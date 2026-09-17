@@ -39,7 +39,7 @@ import {
 	lookupMembership,
 	parseWorkspaceId,
 	recordActivity,
-} from "./helpers.js";
+} from "../lib/helpers.js";
 import {
 	parseCardProjectPhase,
 	parseLabelIds,

@@ -11,7 +11,7 @@ import {
 	loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort,
 } from "./card-attachment-cleanup.js";
-import { lookupMembership, serializeWorkspaceList } from "./helpers.js";
+import { lookupMembership, serializeWorkspaceList } from "../lib/helpers.js";
 import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 import { checkCanEditSettings } from "./settings.js";
 

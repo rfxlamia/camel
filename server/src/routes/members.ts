@@ -5,7 +5,7 @@ import {
 	checkActorCanManage,
 	lookupMembership,
 	workspaceAccessService,
-} from "./helpers.js";
+} from "../lib/helpers.js";
 
 export const membersRouter = Router({ mergeParams: true });
 

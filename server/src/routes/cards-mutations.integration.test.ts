@@ -60,7 +60,7 @@ import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
-import * as routeHelpers from "./helpers.js";
+import * as routeHelpers from "../lib/helpers.js";
 
 /** Isolated from routes.integration.test.ts (workspace 1) and
  * columns.batch.integration.test.ts (workspace 99). */

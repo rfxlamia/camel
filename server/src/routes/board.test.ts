@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBoardResponse } from "./board.js";
-import type { HumanColumn } from "./helpers.js";
+import type { HumanColumn } from "../lib/helpers.js";
 
 function makeColumn(
 	overrides: Partial<HumanColumn> & { id: number },

@@ -24,7 +24,7 @@ import {
 	type FocusSessionRow,
 	type FocusSessionUpdatePatch,
 } from "./focus-session-repo.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 
 export type FocusAuditAction =
 	| "focus"

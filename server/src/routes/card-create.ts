@@ -20,7 +20,7 @@ import {
 import { addCardAssignee } from "./card-assignees.js";
 import { hydrateCardResponses } from "./card-response.js";
 import { selectFullCard } from "./cards.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 import {
 	type NormalizedTaskCreateMetadata,
 	validateTaskCreateMetadata,

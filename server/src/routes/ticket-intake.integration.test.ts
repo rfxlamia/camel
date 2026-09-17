@@ -26,8 +26,8 @@ vi.mock("../config.js", () => ({
 	},
 }));
 
-vi.mock("./helpers.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("./helpers.js")>();
+vi.mock("../lib/helpers.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../lib/helpers.js")>();
 	return {
 		...actual,
 		lookupMembership: vi.fn().mockResolvedValue("member"),

@@ -22,7 +22,7 @@ vi.mock("../lib/attachment-storage.js", () => ({
 vi.mock("../realtime.js", () => ({
 	publishEvent: mocks.publishEvent,
 }));
-vi.mock("./helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	recordActivity: mocks.recordActivity,
 }));
 vi.mock("./card-attachment-cleanup.js", () => ({

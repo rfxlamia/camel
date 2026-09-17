@@ -188,10 +188,6 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			spec: `import { y } from "../../routes/work-item-response.js";\n`,
 		},
 		{
-			file: "server/src/modules/board/x.ts",
-			spec: `import { h } from "../../routes/helpers.js";\n`,
-		},
-		{
 			file: "client/src/features/board/x.ts",
 			spec: `import { m } from "../../lib/workItemMutations.ts";\n`,
 		},
@@ -216,6 +212,10 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		{
 			file: "server/src/modules/board/x.ts",
 			spec: `import { w } from "../../routes/work-items.ts";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { h } from "../../routes/helpers.js";\n`,
 		},
 	];
 

@@ -14,7 +14,7 @@ import {
 	deleteColumnWithStatusRemap,
 	updateColumnWithIsDoneRemap,
 } from "./column-is-done-remap.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 
 const RETURNING_COLUMNS = [
 	"id",

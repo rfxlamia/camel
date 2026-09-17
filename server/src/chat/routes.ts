@@ -18,7 +18,7 @@ import { checkChatLimit } from "../agent/ticket-intake/rate-limits.js";
 import { requireAuth } from "../auth.js";
 import type { Json } from "../db/types.js";
 import { db } from "../db/kysely.js";
-import { lookupMembership } from "../routes/helpers.js";
+import { lookupMembership } from "../lib/helpers.js";
 import { estimateContextTokens, runChatTurn } from "./run-chat-turn.js";
 import { createChatService } from "./service.js";
 import { setStreamHeaders, writeStreamEvent } from "./stream-protocol.js";

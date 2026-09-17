@@ -52,7 +52,7 @@ vi.mock("../auth.js", async (importOriginal) => {
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
-import { workspaceAccessService } from "./helpers.js";
+import { workspaceAccessService } from "../lib/helpers.js";
 import * as trackerActivity from "./tracker-activity.js";
 
 const recordSpy = vi.spyOn(trackerActivity, "recordTrackerActivity");

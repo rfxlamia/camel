@@ -23,7 +23,7 @@ import {
 import { executeWithRetry } from "../agent/ticket-intake/retry.js";
 import { db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
-import { lookupMembership, recordActivity } from "./helpers.js";
+import { lookupMembership, recordActivity } from "../lib/helpers.js";
 
 export const ticketIntakeRouter = Router();
 

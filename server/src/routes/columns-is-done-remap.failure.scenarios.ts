@@ -15,7 +15,7 @@ import {
 	trackerEventCount,
 	WORKSPACE_ID,
 } from "./columns-is-done-remap.test-support.js";
-import * as routeHelpers from "./helpers.js";
+import * as routeHelpers from "../lib/helpers.js";
 
 installDatabaseHooks();
 
