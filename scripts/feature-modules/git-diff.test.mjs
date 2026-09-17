@@ -195,6 +195,24 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover client/src/lib/taskCreateContracts.ts to be gone",
 		);
 		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/tracker/index.ts")),
+			"expected features/tracker public API client/src/features/tracker/index.ts",
+		);
+		for (const name of [
+			"TrackerProgressBar.tsx",
+			"TrackerProjectCard.tsx",
+			"TrackerProjectsTab.tsx",
+			"TrackerConfirmDialog.tsx",
+			"TrackerProjectHeader.tsx",
+			"TrackerProjectCreateModal.tsx",
+			"TrackerTabs.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/tracker/${name}`)),
+				`expected features/tracker home client/src/features/tracker/${name}`,
+			);
+		}
+		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
 		assert.ok(
