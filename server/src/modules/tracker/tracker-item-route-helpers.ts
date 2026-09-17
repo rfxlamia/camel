@@ -1,12 +1,12 @@
-import { derivePrefix } from "../core/tracker-key.js";
-import { type DBExecutor } from "../db/kysely.js";
+import { derivePrefix } from "../../core/tracker-key.js";
+import { type DBExecutor } from "../../db/kysely.js";
 import {
 	type BoardWorkItemRow,
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
 	hydrateBoardWorkItems,
 	hydrateTrackerWorkItems,
-} from "../lib/work-item-response.js";
+} from "../../lib/work-item-response.js";
 
 export function routeKeyParam(raw: string | string[]): string {
 	return Array.isArray(raw) ? (raw[0] ?? "") : raw;

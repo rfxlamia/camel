@@ -1,4 +1,4 @@
-// server/src/routes/tracker-projects.test.ts
+// server/src/modules/tracker/tracker-projects.test.ts
 //
 // The position-read race is simulated with a promise-chain "row lock": each
 // transaction awaits the previous one before its callback runs, mirroring
@@ -92,26 +92,26 @@ const mockSelectFrom = vi.fn();
 const mockUpdateTable = vi.fn();
 const mockTransaction = vi.fn();
 
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: {
 		selectFrom: (...args: unknown[]) => mockSelectFrom(...args),
 		updateTable: (...args: unknown[]) => mockUpdateTable(...args),
 		transaction: (...args: unknown[]) => mockTransaction(...args),
 	},
 }));
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (req: any, _res: any, next: any) => {
 		req.workspace = { workspaceId: 7, role: "member" };
 		next();
 	},
 }));
-vi.mock("../realtime.js", () => ({ publishEvent: vi.fn() }));
-vi.mock("../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
-vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../realtime.js", () => ({ publishEvent: vi.fn() }));
+vi.mock("../../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
+vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
-import { publishEvent } from "../realtime.js";
-import { recordActivity } from "../lib/helpers.js";
-import { recordTrackerActivity } from "../lib/tracker-activity.js";
+import { publishEvent } from "../../realtime.js";
+import { recordActivity } from "../../lib/helpers.js";
+import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { trackerProjectsRouter } from "./tracker-projects.js";
 
 const app = express();

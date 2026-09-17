@@ -1,17 +1,17 @@
 import type { Request, Response } from "express";
-import { formatKey, parseKeyFromUrl } from "../core/tracker-key.js";
+import { formatKey, parseKeyFromUrl } from "../../core/tracker-key.js";
 import {
 	recordListDuration,
 	WORK_ITEMS_LIST_THRESHOLD_MS,
-} from "../core/work-item-latency.js";
-import { db } from "../db/kysely.js";
+} from "../../core/work-item-latency.js";
+import { db } from "../../db/kysely.js";
 import {
 	resolveWorkItemByKey,
 	routeKeyParam,
 	workspacePrefix,
 } from "./tracker-item-route-helpers.js";
-import { getWorkItemEvents } from "../lib/work-item-events.js";
-import { listMergedWorkItems } from "../lib/work-item-response.js";
+import { getWorkItemEvents } from "../../lib/work-item-events.js";
+import { listMergedWorkItems } from "../../lib/work-item-response.js";
 
 export async function listTrackerItemsHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;

@@ -1,6 +1,6 @@
-// server/src/routes/tracker-items.integration.test.ts
+// server/src/modules/tracker/tracker-items.integration.test.ts
 // Requires PostgreSQL. Gated: RUN_INTEGRATION=1
-// Run: RUN_INTEGRATION=1 npm run test -- server/src/routes/tracker-items.integration.test.ts
+// Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/tracker/tracker-items.integration.test.ts
 import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
@@ -20,12 +20,12 @@ const { mockPublishEvent, mockCurrentUser } = vi.hoisted(() => ({
 	mockCurrentUser: { id: 1, username: "testuser", displayName: "Test User" },
 }));
 
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
 
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: mockPublishEvent,
 	clearPresence: vi.fn().mockResolvedValue(undefined),
 	heartbeat: vi.fn(),
@@ -38,8 +38,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresencePattern: vi.fn(),
 }));
 
-vi.mock("../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {
@@ -49,11 +49,11 @@ vi.mock("../auth.js", async (importOriginal) => {
 	};
 });
 
-import { pool } from "../db/pool.js";
-import { createErrorHandler } from "../middleware/error-handler.js";
-import { api } from "../routes.js";
-import { workspaceAccessService } from "../lib/helpers.js";
-import * as trackerActivity from "../lib/tracker-activity.js";
+import { pool } from "../../db/pool.js";
+import { createErrorHandler } from "../../middleware/error-handler.js";
+import { api } from "../../routes.js";
+import { workspaceAccessService } from "../../lib/helpers.js";
+import * as trackerActivity from "../../lib/tracker-activity.js";
 
 const recordSpy = vi.spyOn(trackerActivity, "recordTrackerActivity");
 

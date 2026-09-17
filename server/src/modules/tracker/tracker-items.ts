@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { createTrackerItemHandler } from "./tracker-item-create.js";
 import { deleteTrackerItemHandler } from "./tracker-item-delete.js";
 import {

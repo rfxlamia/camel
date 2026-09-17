@@ -51,7 +51,7 @@ vi.mock("./tracker-assignees.js", () => ({
 }));
 vi.mock("../events.js", () => ({ domainBus: { emit: vi.fn() }, EVENTS: {} }));
 
-import { trackerItemsRouter } from "../routes/tracker-items.js";
+import { trackerItemsRouter } from "../modules/tracker/index.js";
 import { workItemsRouter } from "./work-items.js";
 
 function createApp(router: express.Router) {

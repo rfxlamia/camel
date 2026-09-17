@@ -18,10 +18,12 @@ import { createMyWorkPreAuthObservabilityMiddleware } from "./routes/my-work-rou
 import { myWorkRouter } from "./routes/my-work.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
-import { trackerItemsRouter } from "./routes/tracker-items.js";
-import { trackerPhasesRouter } from "./routes/tracker-phases.js";
-import { trackerProjectsRouter } from "./routes/tracker-projects.js";
-import { trackerVocabulariesRouter } from "./routes/tracker-vocabularies.js";
+import {
+	trackerItemsRouter,
+	trackerPhasesRouter,
+	trackerProjectsRouter,
+	trackerVocabulariesRouter,
+} from "./modules/tracker/index.js";
 import { workItemsRouter } from "./lib/work-items.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 

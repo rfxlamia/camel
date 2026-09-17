@@ -9,11 +9,11 @@ const { mockPublishEvent, mockCurrentUser } = vi.hoisted(() => ({
 	mockCurrentUser: { id: 20410, username: "t7-actor", displayName: "T7 Actor" },
 }));
 
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: mockPublishEvent,
 	clearPresence: vi.fn(),
 	heartbeat: vi.fn(),
@@ -25,8 +25,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresenceKey: vi.fn(),
 	workspacePresencePattern: vi.fn(),
 }));
-vi.mock("../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {
@@ -36,9 +36,9 @@ vi.mock("../auth.js", async (importOriginal) => {
 	};
 });
 
-import { pool } from "../db/pool.js";
-import { createErrorHandler } from "../middleware/error-handler.js";
-import { api } from "../routes.js";
+import { pool } from "../../db/pool.js";
+import { createErrorHandler } from "../../middleware/error-handler.js";
+import { api } from "../../routes.js";
 
 const WORKSPACE_ID = 2041;
 const OTHER_WORKSPACE_ID = 2042;
