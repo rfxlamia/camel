@@ -1,4 +1,4 @@
-// server/src/routes/tracker-items.write.test.ts
+// server/src/modules/tracker/tracker-items.write.test.ts
 //
 // parseProjectPhase/parseDateRange are unit-tested against real DB lookups
 // in tracker-item-parsers.test.ts (T5) — here they are mocked so this file
@@ -7,7 +7,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { POSITION_GAP } from "../core/position.js";
+import { POSITION_GAP } from "../../core/position.js";
 
 function chainable(result: unknown) {
 	const b: any = {};
@@ -73,31 +73,31 @@ function makeTrx() {
 const mockSelectFrom = vi.fn();
 const mockTransaction = vi.fn();
 
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: {
 		selectFrom: (...args: unknown[]) => mockSelectFrom(...args),
 		transaction: (...args: unknown[]) => mockTransaction(...args),
 	},
 }));
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (req: any, _res: any, next: any) => {
 		req.workspace = { workspaceId: 7, role: "member" };
 		next();
 	},
 }));
-vi.mock("../lib/tracker-assignees.js", () => ({
+vi.mock("../../lib/tracker-assignees.js", () => ({
 	loadTrackerAssigneesForItems: vi.fn().mockResolvedValue(new Map()),
 	syncTrackerItemAssignees: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 const mockParseProjectPhase = vi.fn();
 const mockParseDateRange = vi.fn();
-vi.mock("../lib/tracker-item-parsers.js", () => ({
+vi.mock("../../lib/tracker-item-parsers.js", () => ({
 	parseProjectPhase: (...args: unknown[]) => mockParseProjectPhase(...args),
 	parseDateRange: (...args: unknown[]) => mockParseDateRange(...args),
 	parseAssigneeIds: vi.fn().mockResolvedValue([]),
@@ -105,7 +105,7 @@ vi.mock("../lib/tracker-item-parsers.js", () => ({
 }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
-import { workItemsRouter } from "../lib/work-items.js";
+import { workItemsRouter } from "../../lib/work-items.js";
 
 function createApp(router: express.Router) {
 	const created = express();

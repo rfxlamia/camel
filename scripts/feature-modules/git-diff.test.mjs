@@ -161,6 +161,14 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/tracker/index.ts")),
+			"expected server/src/modules/tracker/index.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/routes/tracker-items.ts")),
+			"expected leftover server/src/routes/tracker-items.ts to be gone",
+		);
 	});
 });
 

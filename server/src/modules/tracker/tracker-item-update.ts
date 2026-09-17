@@ -1,25 +1,25 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
-import { applyBoardCardStatusChange } from "../core/board-card-status-change.js";
-import { diffIds } from "../core/diff-ids.js";
-import { positionBetween } from "../core/position.js";
+import { applyBoardCardStatusChange } from "../../core/board-card-status-change.js";
+import { diffIds } from "../../core/diff-ids.js";
+import { positionBetween } from "../../core/position.js";
 import {
 	applyTrackerItemStatusChange,
 	completedAtForTrackerCategory,
 	getTrackerStatusCategory,
-} from "../core/tracker-item-status-change.js";
-import { formatKey, parseKeyFromUrl } from "../core/tracker-key.js";
-import { type DBExecutor, db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
-import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "../lib/tracker-activity.js";
-import { syncTrackerItemAssignees } from "../lib/tracker-assignees.js";
+} from "../../core/tracker-item-status-change.js";
+import { formatKey, parseKeyFromUrl } from "../../core/tracker-key.js";
+import { type DBExecutor, db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
+import { publishEvent } from "../../realtime.js";
+import { recordTrackerActivity } from "../../lib/tracker-activity.js";
+import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
 import {
 	parseAssigneeIds,
 	parseDateRange,
 	parseLabelIds,
 	parseProjectPhase,
-} from "../lib/tracker-item-parsers.js";
+} from "../../lib/tracker-item-parsers.js";
 import {
 	resolveWorkItemByKey,
 	routeKeyParam,
@@ -29,7 +29,7 @@ import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
 	hydrateMutationItem,
-} from "../lib/work-item-response.js";
+} from "../../lib/work-item-response.js";
 
 async function getTrackerItemLabelIds(
 	dbExec: DBExecutor,

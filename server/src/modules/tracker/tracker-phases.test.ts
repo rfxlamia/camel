@@ -1,8 +1,8 @@
-// server/src/routes/tracker-phases.test.ts
+// server/src/modules/tracker/tracker-phases.test.ts
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { POSITION_GAP } from "../core/position.js";
+import { POSITION_GAP } from "../../core/position.js";
 
 const orchestrationLog: string[] = [];
 
@@ -127,29 +127,29 @@ const mockSelectFrom = vi.fn();
 const mockUpdateTable = vi.fn();
 const mockTransaction = vi.fn();
 
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: {
 		selectFrom: (...args: unknown[]) => mockSelectFrom(...args),
 		updateTable: (...args: unknown[]) => mockUpdateTable(...args),
 		transaction: (...args: unknown[]) => mockTransaction(...args),
 	},
 }));
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (req: any, _res: any, next: any) => {
 		req.workspace = { workspaceId: 7, role: "member" };
 		next();
 	},
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
-vi.mock("../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
+vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
 
-import { publishEvent } from "../realtime.js";
-import { recordActivity } from "../lib/helpers.js";
-import { recordTrackerActivity } from "../lib/tracker-activity.js";
+import { publishEvent } from "../../realtime.js";
+import { recordActivity } from "../../lib/helpers.js";
+import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { trackerPhasesRouter } from "./tracker-phases.js";
 
 const app = express();

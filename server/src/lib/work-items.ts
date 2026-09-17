@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { trackerItemsRouter } from "../routes/tracker-items.js";
+import { trackerItemsRouter } from "../modules/tracker/index.js";
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation

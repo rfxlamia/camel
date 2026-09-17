@@ -1,14 +1,14 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
-import { parseKeyFromUrl } from "../core/tracker-key.js";
-import { db } from "../db/kysely.js";
-import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "../lib/tracker-activity.js";
+import { parseKeyFromUrl } from "../../core/tracker-key.js";
+import { db } from "../../db/kysely.js";
+import { publishEvent } from "../../realtime.js";
+import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { routeKeyParam } from "./tracker-item-route-helpers.js";
 import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
-} from "../lib/work-item-response.js";
+} from "../../lib/work-item-response.js";
 
 export async function deleteTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;

@@ -17,20 +17,20 @@ function chain(result: unknown) {
 }
 
 const mockSelectFrom = vi.fn();
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: { selectFrom: (...args: unknown[]) => mockSelectFrom(...args) },
 }));
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (req: any, _res: any, next: any) => {
 		req.workspace = { workspaceId: 7, role: "member" };
 		next();
 	},
 }));
-vi.mock("../lib/tracker-assignees.js", () => ({
+vi.mock("../../lib/tracker-assignees.js", () => ({
 	loadTrackerAssigneesForItems: vi.fn().mockResolvedValue(new Map()),
 	syncTrackerItemAssignees: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 	heartbeat: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock("../realtime.js", () => ({
 	workspacePresenceKey: vi.fn(),
 	workspacePresencePattern: vi.fn(),
 }));
-vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
 

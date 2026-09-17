@@ -1,24 +1,24 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
-import type { AuthUser } from "../auth.js";
-import { positionBetween } from "../core/position.js";
-import { derivePrefix, formatKey } from "../core/tracker-key.js";
-import { type DBExecutor, db } from "../db/kysely.js";
-import { publishEvent } from "../realtime.js";
-import { recordTrackerActivity } from "../lib/tracker-activity.js";
-import { syncTrackerItemAssignees } from "../lib/tracker-assignees.js";
-import { parseDateRange } from "../lib/tracker-item-parsers.js";
+import type { AuthUser } from "../../auth.js";
+import { positionBetween } from "../../core/position.js";
+import { derivePrefix, formatKey } from "../../core/tracker-key.js";
+import { type DBExecutor, db } from "../../db/kysely.js";
+import { publishEvent } from "../../realtime.js";
+import { recordTrackerActivity } from "../../lib/tracker-activity.js";
+import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
+import { parseDateRange } from "../../lib/tracker-item-parsers.js";
 import {
 	type NormalizedTaskCreateMetadata,
 	type TaskCreateFieldErrors,
 	validateTaskCreateMetadata,
-} from "../lib/work-item-create-metadata.js";
+} from "../../lib/work-item-create-metadata.js";
 import {
 	findTrackerItemByKeyNumber,
 	hydrateTrackerWorkItems,
 	legacyTrackerItemResponse,
-} from "../lib/work-item-response.js";
-import { lockTaskCreateReferences } from "../lib/workspace-mutation-lock.js";
+} from "../../lib/work-item-response.js";
+import { lockTaskCreateReferences } from "../../lib/workspace-mutation-lock.js";
 
 async function workspacePrefix(
 	dbExec: DBExecutor,
