@@ -7,7 +7,7 @@ import { type DBExecutor, db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import { syncTrackerItemAssignees } from "./tracker-assignees.js";
-import { parseDateRange } from "./tracker-item-parsers.js";
+import { parseDateRange } from "../lib/tracker-item-parsers.js";
 import {
 	type NormalizedTaskCreateMetadata,
 	type TaskCreateFieldErrors,

@@ -11,7 +11,7 @@ import {
 import {
 	serializeVocabulary,
 	type VocabularyRow,
-} from "./vocabulary-response.js";
+} from "../lib/vocabulary-response.js";
 
 export type CardResponseVocabulary = VocabularyRow;
 
