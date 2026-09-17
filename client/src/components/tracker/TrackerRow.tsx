@@ -12,7 +12,7 @@ import { PriorityGlyph, StatusGlyph, statusGlyphSpec } from "../../shared/Tracke
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "./TrackerPropertyPicker";
+} from "../../shared/TrackerPropertyPicker";
 import {
 	TrackerRowDatePopover,
 	type TrackerRowDatePopoverHandle,

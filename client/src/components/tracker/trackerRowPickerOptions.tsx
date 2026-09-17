@@ -11,7 +11,7 @@ import {
 	PriorityGlyph,
 	priorityBars,
 } from "../../shared/TrackerGlyphs";
-import type { PickerOption } from "./TrackerPropertyPicker";
+import type { PickerOption } from "../../shared/TrackerPropertyPicker";
 
 export interface TrackerRowPickerContext {
 	item: TrackerItem;

@@ -11,7 +11,7 @@ import { LabelDot, PriorityGlyph, priorityBars } from "../shared/TrackerGlyphs";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "./tracker/TrackerPropertyPicker";
+} from "../shared/TrackerPropertyPicker";
 
 type PickerName = "priority" | "labels" | "project" | "phase";
 type LoadState = "loading" | "ready" | "error";
