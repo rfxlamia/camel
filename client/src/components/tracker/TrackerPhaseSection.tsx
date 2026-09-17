@@ -22,7 +22,7 @@ import {
 	isTaskOverdue,
 	rollup,
 	sectionBounds,
-} from "../../lib/trackerRollup";
+} from "../../shared/trackerRollup";
 import type { TrackerPhase, TrackerVocabulary, WorkItem } from "../../types";
 import TrackerProgressBar from "./TrackerProgressBar";
 import TrackerRow from "./TrackerRow";

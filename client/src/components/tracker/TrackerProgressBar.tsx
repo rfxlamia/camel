@@ -1,4 +1,4 @@
-import type { RollupResult } from "../../lib/trackerRollup";
+import type { RollupResult } from "../../shared/trackerRollup";
 
 interface Props {
 	rollup: RollupResult;

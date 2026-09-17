@@ -22,7 +22,7 @@ import TrackerProperties, {
 import { useBoard } from "../context/BoardContext";
 import { useShowToast } from "../context/ToastContext";
 import { useWorkspace } from "../context/WorkspaceContext";
-import { isTaskOverdue } from "../lib/trackerRollup";
+import { isTaskOverdue } from "../shared/trackerRollup";
 import { resolveToggle } from "../shared/trackerUtils";
 import type {
 	TrackerEvent,
