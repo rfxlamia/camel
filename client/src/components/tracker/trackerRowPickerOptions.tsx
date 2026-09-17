@@ -1,4 +1,4 @@
-import { sortStatusesByPosition, formatDateRange, NO_PRIORITY } from "../../lib/trackerUtils";
+import { sortStatusesByPosition, formatDateRange, NO_PRIORITY } from "../../shared/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerProject,

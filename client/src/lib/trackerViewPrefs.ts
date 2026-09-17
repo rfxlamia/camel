@@ -1,4 +1,4 @@
-import type { TrackerGroupBy } from "./trackerUtils";
+import type { TrackerGroupBy } from "../shared/trackerUtils";
 
 export const TRACKER_GROUP_BY_STORAGE_KEY = "trackerGroupByWorkspace";
 

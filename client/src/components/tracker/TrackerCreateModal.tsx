@@ -2,7 +2,7 @@ import { ListTodo, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
 import type { TaskCreateFieldErrors } from "../../lib/taskCreateContracts";
-import { sortStatusesByPosition } from "../../lib/trackerUtils";
+import { sortStatusesByPosition } from "../../shared/trackerUtils";
 import type {
 	TrackerProject,
 	TrackerVocabulary,

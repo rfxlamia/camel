@@ -1,6 +1,6 @@
 import { Folder, Signpost, Tag, UserRound } from "lucide-react";
 import { useMemo } from "react";
-import { NO_PRIORITY, sortStatusesByPosition } from "../../lib/trackerUtils";
+import { NO_PRIORITY, sortStatusesByPosition } from "../../shared/trackerUtils";
 import type {
 	TrackerProject,
 	TrackerVocabulary,
