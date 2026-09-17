@@ -17,8 +17,8 @@ import type { TrackerAuxiliaryLoadState } from "../components/tracker/trackerAux
 import { useBoard } from "../context/BoardContext";
 import { useShowToast } from "../context/ToastContext";
 import { useWorkspace } from "../context/WorkspaceContext";
-import { createItemMutationQueue } from "../lib/trackerItemMutationQueue";
-import { partitionTrackerSearch } from "../lib/trackerSearch";
+import { createItemMutationQueue } from "../shared/trackerItemMutationQueue";
+import { partitionTrackerSearch } from "../shared/trackerSearch";
 import {
 	groupItems,
 	priorityGroupKey,
@@ -32,7 +32,7 @@ import {
 import {
 	readTrackerGroupBy,
 	writeTrackerGroupBy,
-} from "../lib/trackerViewPrefs";
+} from "../shared/trackerViewPrefs";
 import type {
 	WorkItem,
 	TrackerProject,

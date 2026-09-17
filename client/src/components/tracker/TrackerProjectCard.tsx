@@ -4,7 +4,7 @@ import {
 	deriveBounds,
 	isProjectOverdue,
 	rollup,
-} from "../../lib/trackerRollup";
+} from "../../shared/trackerRollup";
 import type { TrackerItem, TrackerProject } from "../../types";
 import TrackerProgressBar from "./TrackerProgressBar";
 

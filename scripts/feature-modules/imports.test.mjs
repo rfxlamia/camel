@@ -235,6 +235,22 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			file: "client/src/features/board/x.ts",
 			spec: `import { u } from "../../lib/trackerUtils.ts";\n`,
 		},
+		{
+			file: "client/src/features/board/x.ts",
+			spec: `import { r } from "../../lib/trackerRollup.ts";\n`,
+		},
+		{
+			file: "client/src/features/board/x.ts",
+			spec: `import { s } from "../../lib/trackerSearch.ts";\n`,
+		},
+		{
+			file: "client/src/features/board/x.ts",
+			spec: `import { v } from "../../lib/trackerViewPrefs.ts";\n`,
+		},
+		{
+			file: "client/src/features/board/x.ts",
+			spec: `import { q } from "../../lib/trackerItemMutationQueue.ts";\n`,
+		},
 	];
 
 	for (const { file, spec } of extractedKernel) {

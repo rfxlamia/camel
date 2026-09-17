@@ -132,6 +132,21 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "client/src/lib/trackerUtils.ts")),
 			"expected leftover client/src/lib/trackerUtils.ts to be gone",
 		);
+		for (const name of [
+			"trackerRollup.ts",
+			"trackerSearch.ts",
+			"trackerViewPrefs.ts",
+			"trackerItemMutationQueue.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/shared/${name}`)),
+				`expected kernel home client/src/shared/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected leftover client/src/lib/${name} to be gone`,
+			);
+		}
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
