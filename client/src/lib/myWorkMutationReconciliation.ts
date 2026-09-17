@@ -2,7 +2,7 @@ import {
 	getMyWorkMutationSnapshot,
 	myWorkMutationIdentity,
 	reconcileMyWorkMutationSnapshot,
-} from "./workItemMutations";
+} from "../shared/workItemMutations";
 import { isActiveMyWorkItem } from "./myWorkStatus";
 import type { MyWorkItem, MyWorkScope } from "../types/myWork";
 

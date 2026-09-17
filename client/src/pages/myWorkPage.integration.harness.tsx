@@ -25,7 +25,7 @@ import { ToastProvider, useToastState } from "../context/ToastContext";
 import { useWorkspace, WorkspaceProvider } from "../context/WorkspaceContext";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
 import { sourceItem } from "../lib/myWorkTestSupport";
-import { resetMyWorkMutationsForTests } from "../lib/workItemMutations";
+import { resetMyWorkMutationsForTests } from "../shared/workItemMutations";
 import type { User, Workspace } from "../types";
 import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 import MyWorkPage from "./MyWorkPage";

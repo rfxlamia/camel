@@ -117,8 +117,12 @@ describe("Cycle Map — map data (unit)", () => {
 		];
 		assert.deepEqual([...map.FEATURES].sort(), [...expectedFeatures].sort());
 		assert.deepEqual(map.SCAN_ROOTS, ["client/src", "server/src"]);
+		assert.deepEqual(map.KERNEL_IN_WAITING, []);
 		assert.ok(
-			map.KERNEL_IN_WAITING.includes("client/src/lib/workItemMutations.ts"),
+			existsSync(join(repoRoot, "client/src/shared/workItemMutations.ts")),
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/workItemMutations.ts")),
 		);
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),

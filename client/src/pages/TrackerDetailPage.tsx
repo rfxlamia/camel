@@ -31,7 +31,7 @@ import type {
 	WorkItem,
 	WorkspaceMember,
 } from "../types";
-import { updateWorkItem, updateWorkItemStatus } from "../lib/workItemMutations";
+import { updateWorkItem, updateWorkItemStatus } from "../shared/workItemMutations";
 
 type ItemPropertyPatch = PropertyPatch & {
 	projectId?: number;

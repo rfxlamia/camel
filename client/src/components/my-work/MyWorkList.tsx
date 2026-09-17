@@ -5,7 +5,7 @@ import { projectMyWorkListItems } from "../../lib/myWorkMutationReconciliation";
 import {
 	getMyWorkMutationRevision,
 	subscribeToMyWorkMutations,
-} from "../../lib/workItemMutations";
+} from "../../shared/workItemMutations";
 import {
 	deriveMyWorkGroups,
 	type MyWorkStatusGroup,

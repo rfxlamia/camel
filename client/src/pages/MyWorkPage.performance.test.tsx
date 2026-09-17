@@ -9,7 +9,7 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "../api";
-import { resetMyWorkMutationsForTests } from "../lib/workItemMutations";
+import { resetMyWorkMutationsForTests } from "../shared/workItemMutations";
 import type { MyWorkItem } from "../types/myWork";
 import MyWorkPage from "./MyWorkPage";
 

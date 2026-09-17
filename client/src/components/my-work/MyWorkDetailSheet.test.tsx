@@ -16,7 +16,7 @@ import {
 	useNavigate,
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetMyWorkMutationsForTests } from "../../lib/workItemMutations";
+import { resetMyWorkMutationsForTests } from "../../shared/workItemMutations";
 import type { User } from "../../types";
 import type { MyWorkItem, MyWorkListResponse } from "../../types/myWork";
 
