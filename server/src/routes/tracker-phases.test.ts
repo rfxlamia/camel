@@ -144,12 +144,12 @@ vi.mock("../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 vi.mock("../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
 
 import { publishEvent } from "../realtime.js";
 import { recordActivity } from "../lib/helpers.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
 import { trackerPhasesRouter } from "./tracker-phases.js";
 
 const app = express();

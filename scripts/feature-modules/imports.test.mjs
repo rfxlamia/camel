@@ -207,6 +207,26 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			file: "client/src/features/board/x.ts",
 			spec: `import { m } from "../../lib/workItemMutations.ts";\n`,
 		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { a } from "../../routes/tracker-assignees.js";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { t } from "../../routes/tracker-activity.js";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { l } from "../../routes/workspace-mutation-lock.js";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { c } from "../../routes/work-item-create-metadata.js";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { e } from "../../routes/work-item-events.js";\n`,
+		},
 	];
 
 	for (const { file, spec } of extractedKernel) {

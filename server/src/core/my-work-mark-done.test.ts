@@ -20,7 +20,7 @@ vi.mock("../realtime.js", () => ({
 vi.mock("../lib/helpers.js", () => ({
 	recordActivity: (...args: unknown[]) => mockRecordCardActivity(...args),
 }));
-vi.mock("../routes/tracker-activity.js", () => ({
+vi.mock("../lib/tracker-activity.js", () => ({
 	recordTrackerActivity: (...args: unknown[]) =>
 		mockRecordTrackerActivity(...args),
 }));

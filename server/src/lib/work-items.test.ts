@@ -34,7 +34,7 @@ vi.mock("./work-item-response.js", () => ({
 	hydrateTrackerWorkItems: (...args: unknown[]) =>
 		mockHydrateTrackerWorkItems(...args),
 }));
-vi.mock("../routes/work-item-events.js", () => ({
+vi.mock("./work-item-events.js", () => ({
 	getWorkItemEvents: (...args: unknown[]) => mockGetWorkItemEvents(...args),
 }));
 vi.mock("../realtime.js", async (importOriginal) => {
@@ -44,8 +44,8 @@ vi.mock("../realtime.js", async (importOriginal) => {
 		publishEvent: vi.fn(),
 	};
 });
-vi.mock("../routes/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
-vi.mock("../routes/tracker-assignees.js", () => ({
+vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("./tracker-assignees.js", () => ({
 	loadTrackerAssigneesForItems: vi.fn(),
 	syncTrackerItemAssignees: vi.fn(),
 }));

@@ -10,7 +10,7 @@ import {
 	routeKeyParam,
 	workspacePrefix,
 } from "./tracker-item-route-helpers.js";
-import { getWorkItemEvents } from "./work-item-events.js";
+import { getWorkItemEvents } from "../lib/work-item-events.js";
 import { listMergedWorkItems } from "../lib/work-item-response.js";
 
 export async function listTrackerItemsHandler(req: Request, res: Response) {

@@ -6,8 +6,8 @@ import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
 import { recordActivity } from "../lib/helpers.js";
-import { recordTrackerActivity } from "./tracker-activity.js";
-import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
+import { recordTrackerActivity } from "../lib/tracker-activity.js";
+import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
 
 const PROJECT_COLUMNS = [
 	"id",

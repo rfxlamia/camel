@@ -10,7 +10,7 @@ import { computeCardUpdatedAt, loadCardLabelsForCards } from "../routes/card-res
 import {
 	loadTrackerAssigneesForItems,
 	type TrackerItemAssignee,
-} from "../routes/tracker-assignees.js";
+} from "./tracker-assignees.js";
 import {
 	serializeVocabulary,
 	type VocabularyRow,

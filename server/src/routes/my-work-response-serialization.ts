@@ -12,7 +12,7 @@ import type {
 	MyWorkTrackerRow,
 	MyWorkWorkspace,
 } from "./my-work-types.js";
-import type { TrackerItemAssignee } from "./tracker-assignees.js";
+import type { TrackerItemAssignee } from "../lib/tracker-assignees.js";
 import type { VocabularyRow } from "../lib/vocabulary-response.js";
 import {
 	serializeBoardWorkItem,

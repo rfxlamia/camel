@@ -6,7 +6,7 @@ import {
 	getAttachmentStorage,
 } from "../lib/attachment-storage.js";
 import { recordActivity } from "../lib/helpers.js";
-import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
+import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
 
 type UploadedFile = Express.Multer.File;
 export type PreparedAttachment = {

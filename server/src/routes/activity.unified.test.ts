@@ -8,7 +8,7 @@ vi.mock("../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (_req: unknown, _res: unknown, next: () => void) =>
 		next(),
 }));
-vi.mock("./work-item-events.js", () => ({
+vi.mock("../lib/work-item-events.js", () => ({
 	getUnifiedWorkspaceActivity: (...args: unknown[]) =>
 		mockGetUnifiedWorkspaceActivity(...args),
 }));

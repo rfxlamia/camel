@@ -31,7 +31,7 @@ import {
 	loadAttachmentPairsForAgentBoard,
 	removeAttachmentPairsBestEffort,
 } from "../routes/card-attachment-cleanup.js";
-import { lockWorkspaceMutation } from "../routes/workspace-mutation-lock.js";
+import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,

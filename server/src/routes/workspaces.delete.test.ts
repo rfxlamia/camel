@@ -27,7 +27,7 @@ vi.mock("../lib/helpers.js", () => ({
 	serializeWorkspaceList: vi.fn(),
 	recordActivity: mocks.recordActivity,
 }));
-vi.mock("./workspace-mutation-lock.js", () => ({
+vi.mock("../lib/workspace-mutation-lock.js", () => ({
 	lockWorkspaceMutation: mocks.lockWorkspaceMutation,
 }));
 vi.mock("./card-attachment-cleanup.js", () => ({
