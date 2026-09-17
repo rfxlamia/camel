@@ -5,7 +5,7 @@ import {
 	formatDueDate,
 	isCardDone,
 	isDueOverdue,
-} from "../lib/boardViewUtils";
+} from "../shared/boardViewUtils";
 import { columnColorPreviewStyle } from "../lib/columnColorUtils";
 import type { Card, Column } from "../types";
 import {

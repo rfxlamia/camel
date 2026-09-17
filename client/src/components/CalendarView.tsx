@@ -18,7 +18,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import type { SaveCardResult } from "../context/BoardContext";
-import { isDueOverdue } from "../lib/boardViewUtils";
+import { isDueOverdue } from "../shared/boardViewUtils";
 import { buildMonthGrid, type CalendarGridCell } from "../lib/calendarGrid";
 import type { Card, Column } from "../types";
 import CalendarConflictNotice from "./CalendarConflictNotice";

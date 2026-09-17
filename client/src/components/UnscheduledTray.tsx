@@ -1,7 +1,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useMemo } from "react";
 import type { SaveCardResult } from "../context/BoardContext";
-import { isCardDone } from "../lib/boardViewUtils";
+import { isCardDone } from "../shared/boardViewUtils";
 import type { Card, Column } from "../types";
 import CalendarConflictNotice from "./CalendarConflictNotice";
 

@@ -263,6 +263,10 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			file: "client/src/features/board/x.ts",
 			spec: `import { p } from "../../components/tracker/TrackerPropertyPicker.tsx";\n`,
 		},
+		{
+			file: "client/src/features/board/x.ts",
+			spec: `import { b } from "../../lib/boardViewUtils.ts";\n`,
+		},
 	];
 
 	for (const { file, spec } of extractedKernel) {
