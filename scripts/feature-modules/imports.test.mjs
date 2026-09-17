@@ -146,6 +146,18 @@ describe("Cycle B — cross-feature (unit)", () => {
 		assert.match(violations[0], /describeEvent\.ts/);
 	});
 
+	it("flags deep import into features/tracker", () => {
+		const source = `import TrackerTabs from "../../features/tracker/TrackerTabs.tsx";\n`;
+		const violations = checkImports({
+			filePath: "client/src/features/board/x.ts",
+			source,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+		assert.match(violations[0], /TrackerTabs\.tsx/);
+	});
+
 	it("flags nested barrel import as a deep import from outside the module", () => {
 		const source = `import { hidden } from "../activity/internal/index.ts";\n`;
 		const violations = checkImports({
