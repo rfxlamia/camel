@@ -24,13 +24,13 @@ vi.mock("../../api", () => ({
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
-		fieldErrors?: import("../../lib/taskCreateContracts").TaskCreateFieldErrors;
+		fieldErrors?: import("../../shared/taskCreateContracts").TaskCreateFieldErrors;
 		constructor(
 			message: string,
 			status: number,
 			_code?: string,
 			_retryAfterMs?: number,
-			fieldErrors?: import("../../lib/taskCreateContracts").TaskCreateFieldErrors,
+			fieldErrors?: import("../../shared/taskCreateContracts").TaskCreateFieldErrors,
 		) {
 			super(message);
 			this.status = status;

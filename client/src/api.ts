@@ -5,7 +5,7 @@ import type {
 	BoardCreatePayload,
 	TaskCreateFieldErrors,
 	TrackerCreatePayload,
-} from "./lib/taskCreateContracts";
+} from "./shared/taskCreateContracts";
 import type {
 	ActivityEvent,
 	AgentArtifact,

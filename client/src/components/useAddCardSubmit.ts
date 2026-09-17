@@ -10,7 +10,7 @@ import { ApiError } from "../api";
 import type {
 	BoardCreatePayload,
 	TaskCreateFieldErrors,
-} from "../lib/taskCreateContracts";
+} from "../shared/taskCreateContracts";
 import {
 	buildBoardPayload,
 	markStagedUploadFailure,

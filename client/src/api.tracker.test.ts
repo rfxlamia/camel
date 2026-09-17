@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { TaskCreateFieldErrors } from "./lib/taskCreateContracts";
+import type { TaskCreateFieldErrors } from "./shared/taskCreateContracts";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);

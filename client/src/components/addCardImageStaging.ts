@@ -1,6 +1,6 @@
 import { ApiError } from "../api";
 import type { PreparedImagePair } from "../lib/imageAttachments";
-import type { BoardCreatePayload } from "../lib/taskCreateContracts";
+import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import {
 	createInitialTaskMetadataDraft,
 	selectTaskMetadataPayload,
