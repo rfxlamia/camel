@@ -25,7 +25,7 @@ vi.mock("../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (_req: unknown, _res: unknown, next: () => void) =>
 		next(),
 }));
-vi.mock("./work-item-response.js", () => ({
+vi.mock("../routes/work-item-response.js", () => ({
 	listMergedWorkItems: (...args: unknown[]) => mockListMergedWorkItems(...args),
 	findBoardCardByKeyNumber: vi.fn(),
 	findTrackerItemByKeyNumber: (...args: unknown[]) =>
@@ -34,7 +34,7 @@ vi.mock("./work-item-response.js", () => ({
 	hydrateTrackerWorkItems: (...args: unknown[]) =>
 		mockHydrateTrackerWorkItems(...args),
 }));
-vi.mock("./work-item-events.js", () => ({
+vi.mock("../routes/work-item-events.js", () => ({
 	getWorkItemEvents: (...args: unknown[]) => mockGetWorkItemEvents(...args),
 }));
 vi.mock("../realtime.js", async (importOriginal) => {
@@ -44,14 +44,14 @@ vi.mock("../realtime.js", async (importOriginal) => {
 		publishEvent: vi.fn(),
 	};
 });
-vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
-vi.mock("./tracker-assignees.js", () => ({
+vi.mock("../routes/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../routes/tracker-assignees.js", () => ({
 	loadTrackerAssigneesForItems: vi.fn(),
 	syncTrackerItemAssignees: vi.fn(),
 }));
 vi.mock("../events.js", () => ({ domainBus: { emit: vi.fn() }, EVENTS: {} }));
 
-import { trackerItemsRouter } from "./tracker-items.js";
+import { trackerItemsRouter } from "../routes/tracker-items.js";
 import { workItemsRouter } from "./work-items.js";
 
 function createApp(router: express.Router) {

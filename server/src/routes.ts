@@ -22,7 +22,7 @@ import { trackerItemsRouter } from "./routes/tracker-items.js";
 import { trackerPhasesRouter } from "./routes/tracker-phases.js";
 import { trackerProjectsRouter } from "./routes/tracker-projects.js";
 import { trackerVocabulariesRouter } from "./routes/tracker-vocabularies.js";
-import { workItemsRouter } from "./routes/work-items.js";
+import { workItemsRouter } from "./lib/work-items.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility

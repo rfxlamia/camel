@@ -105,7 +105,7 @@ vi.mock("./tracker-item-parsers.js", () => ({
 }));
 
 import { trackerItemsRouter } from "./tracker-items.js";
-import { workItemsRouter } from "./work-items.js";
+import { workItemsRouter } from "../lib/work-items.js";
 
 function createApp(router: express.Router) {
 	const created = express();

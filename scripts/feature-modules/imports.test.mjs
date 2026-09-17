@@ -200,10 +200,6 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			spec: `import { v } from "../../routes/vocabulary-response.ts";\n`,
 		},
 		{
-			file: "server/src/modules/board/x.ts",
-			spec: `import { w } from "../../routes/work-items.ts";\n`,
-		},
-		{
 			file: "client/src/features/board/x.ts",
 			spec: `import { m } from "../../lib/workItemMutations.ts";\n`,
 		},
@@ -215,6 +211,16 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			assert.deepEqual(violations, []);
 		});
 	}
+
+	it("flags leftover routes import of work-items after kernel extract", () => {
+		const violations = checkImports({
+			filePath: "server/src/modules/board/x.ts",
+			source: `import { w } from "../../routes/work-items.ts";\n`,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(ONE_WAY_RULE_ID));
+	});
 });
 
 describe("Cycle D — composition root, missing index, work-items (unit)", () => {
