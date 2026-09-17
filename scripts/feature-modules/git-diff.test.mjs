@@ -187,6 +187,14 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover client/src/lib/boardViewUtils.ts to be gone",
 		);
 		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/taskCreateContracts.ts")),
+			"expected kernel home client/src/shared/taskCreateContracts.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/taskCreateContracts.ts")),
+			"expected leftover client/src/lib/taskCreateContracts.ts to be gone",
+		);
+		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
 		assert.ok(

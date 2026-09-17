@@ -13,7 +13,7 @@ import {
 	generateSwatchCandidates,
 } from "../lib/columnColorUtils";
 import { resolveColumnAppearance } from "../lib/columnStyleResolver";
-import type { BoardCreatePayload } from "../lib/taskCreateContracts";
+import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
 import AddCard from "./AddCard";

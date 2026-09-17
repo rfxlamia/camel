@@ -28,7 +28,7 @@ import { useShowToast } from "../context/ToastContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { moveCardToColumn, revertCardMove } from "../lib/boardColumnMoves";
 import { WORKSPACE_TEMPLATES } from "../lib/templates";
-import type { BoardCreatePayload } from "../lib/taskCreateContracts";
+import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import type { BoardViewMode } from "../lib/boardViewPrefs";
 import type { WorkspaceTemplate } from "../lib/templates";
 import type { Card, Column } from "../types";

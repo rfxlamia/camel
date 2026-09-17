@@ -1,6 +1,6 @@
 import { Image, Plus } from "lucide-react";
 import { useCallback, useMemo, useReducer, useRef, useState } from "react";
-import type { BoardCreatePayload } from "../lib/taskCreateContracts";
+import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import type { Column } from "../types";
 import { AddCardForm } from "./AddCardForm";
 import { useTaskMetadataCatalogs } from "./task-entry/TaskMetadataCatalogProvider";
