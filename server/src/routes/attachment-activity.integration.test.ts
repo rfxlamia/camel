@@ -9,7 +9,7 @@ import type { AuthUser } from "../auth.js";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 
 const integration = describe.skipIf(!process.env.RUN_INTEGRATION);
 

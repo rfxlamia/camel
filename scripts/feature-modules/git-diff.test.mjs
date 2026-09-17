@@ -126,7 +126,9 @@ describe("Cycle Map — map data (unit)", () => {
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-items.ts")),
 		);
-		assert.ok(map.KERNEL_IN_WAITING.some((p) => p.endsWith("helpers.ts")));
+		assert.ok(
+			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("helpers.ts")),
+		);
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("vocabulary-response.ts")),
 		);

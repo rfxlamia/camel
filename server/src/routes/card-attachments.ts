@@ -12,7 +12,7 @@ import {
 	existingCardMultipartMiddleware,
 	uploadExistingCardAttachments,
 } from "./card-attachment-upload.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 
 export {
 	attachmentOwnershipGuard,

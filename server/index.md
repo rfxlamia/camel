@@ -61,6 +61,12 @@ Express middleware.
 
 - **[workspace.ts](./src/middleware/workspace.ts)** - Verifies workspace membership and attaches role to request
 
+### src/lib/
+
+Server kernel shared code (not a product feature).
+
+- **[helpers.ts](./src/lib/helpers.ts)** - Shared DB helpers: membership checks, capacity, board service factory
+
 ### src/routes/
 
 Route modules extracted from routes.ts.
@@ -69,7 +75,6 @@ Route modules extracted from routes.ts.
 - **[board.ts](./src/routes/board.ts)** - GET board with human columns and cards
 - **[cards.ts](./src/routes/cards.ts)** - CRUD and move for cards; enforces WIP limits and optimistic locking
 - **[columns.ts](./src/routes/columns.ts)** - CRUD for kanban columns with fractional positioning
-- **[helpers.ts](./src/routes/helpers.ts)** - Shared DB helpers: membership checks, capacity, board service factory
 - **[invites.ts](./src/routes/invites.ts)** - Accept and decline workspace invites
 - **[members.ts](./src/routes/members.ts)** - Workspace member list, add, and remove
 - **[metrics.ts](./src/routes/metrics.ts)** - GET flow metrics and 8-bucket weekly history

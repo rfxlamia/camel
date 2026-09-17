@@ -19,7 +19,7 @@ This file provides guidance to agents when working with code in this repository.
 
 **Biome overrides**: Test files can use `noExplicitAny` and empty blocks. React hooks rules (`useExhaustiveDependencies`, `useHookAtTopLevel`) enforced ONLY in `client/src/`.
 
-**Workspace limit**: Hard cap of 10 workspaces per user (enforced in `server/src/routes/helpers.ts` and `client/src/lib/workspaceSwitcher.ts`).
+**Workspace limit**: Hard cap of 10 workspaces per user (enforced in `server/src/lib/helpers.ts` and `client/src/lib/workspaceSwitcher.ts`).
 
 **Real-time degradation**: Redis Pub/Sub → SSE. Gracefully degrades to in-process fan-out if Redis unreachable (not an error state).
 

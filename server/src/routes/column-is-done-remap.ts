@@ -8,7 +8,7 @@ import {
 	loadAttachmentPairsForColumn,
 	removeAttachmentPairsBestEffort,
 } from "./card-attachment-cleanup.js";
-import { getHumanColumns, recordActivity } from "./helpers.js";
+import { getHumanColumns, recordActivity } from "../lib/helpers.js";
 
 const RETURNING_COLUMNS = [
 	"id",

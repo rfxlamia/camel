@@ -514,6 +514,83 @@ describe("Cycle F — hunk producer + CLI grandfather (integration)", () => {
 		});
 	});
 
+	it("passes for a 621-line git mv with specifier-only sibling import edits", () => {
+		withTempGitRepo(".tmp-fm-line-budget-rename-spec-", (dir) => {
+			const fromPath = "server/src/routes/helpers.ts";
+			const toPath = "server/src/lib/helpers.ts";
+			const body = Array.from(
+				{ length: 620 },
+				(_, i) => `export const n${i} = ${i};`,
+			).join("\n");
+			const before = `import { x } from "./focus-session.js";\n${body}\n`;
+			mkdirSync(join(dir, "server/src/routes"), { recursive: true });
+			mkdirSync(join(dir, "server/src/lib"), { recursive: true });
+			writeFileSync(join(dir, fromPath), before);
+			git(dir, ["add", fromPath]);
+			git(dir, ["commit", "-m", "base"]);
+
+			git(dir, ["mv", fromPath, toPath]);
+			writeFileSync(
+				join(dir, toPath),
+				`import { x } from "../routes/focus-session.js";\n${body}\n`,
+			);
+			git(dir, ["add", toPath]);
+			git(dir, ["commit", "-m", "rename specifier"]);
+
+			const baseRef = git(dir, ["rev-parse", "HEAD~1"]);
+			const diff = collectGitDiff(dir, baseRef);
+			const renamed = diff.renamed.find((r) => r.to === toPath);
+			assert.ok(renamed, `expected renamed entry for ${toPath}`);
+			assert.equal(renamed.kind, "rename-with-edit");
+			assert.ok(renamed.similarity < 100);
+
+			const violations = collectLineBudgetViolations({
+				rootDir: dir,
+				baseRef,
+				diff,
+			});
+			assert.deepEqual(violations, []);
+		});
+	});
+
+	it("still reports 300-on-touch for a 621-line git mv that also edits the body", () => {
+		withTempGitRepo(".tmp-fm-line-budget-rename-body-", (dir) => {
+			const fromPath = "server/src/routes/helpers.ts";
+			const toPath = "server/src/lib/helpers.ts";
+			const body = Array.from(
+				{ length: 620 },
+				(_, i) => `export const n${i} = ${i};`,
+			).join("\n");
+			const before = `import { x } from "./focus-session.js";\n${body}\n`;
+			mkdirSync(join(dir, "server/src/routes"), { recursive: true });
+			mkdirSync(join(dir, "server/src/lib"), { recursive: true });
+			writeFileSync(join(dir, fromPath), before);
+			git(dir, ["add", fromPath]);
+			git(dir, ["commit", "-m", "base"]);
+
+			git(dir, ["mv", fromPath, toPath]);
+			writeFileSync(
+				join(dir, toPath),
+				`import { x } from "../routes/focus-session.js";\n${body}\nexport const touched = true;\n`,
+			);
+			git(dir, ["add", toPath]);
+			git(dir, ["commit", "-m", "rename body"]);
+
+			const baseRef = git(dir, ["rev-parse", "HEAD~1"]);
+			const diff = collectGitDiff(dir, baseRef);
+			const renamed = diff.renamed.find((r) => r.to === toPath);
+			assert.ok(renamed, `expected renamed entry for ${toPath}`);
+			assert.equal(renamed.kind, "rename-with-edit");
+
+			const violations = collectLineBudgetViolations({
+				rootDir: dir,
+				baseRef,
+				diff,
+			});
+			expectLineBudgetViolation(toPath, 622)(violations);
+		});
+	});
+
 	it("does not invent a touch for unmodified BoardContext-sized grandfather file", () => {
 		withTempGitRepo(".tmp-fm-line-budget-board-", (dir) => {
 			writeFileSync(join(dir, "README.md"), "# base\n");

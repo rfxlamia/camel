@@ -21,7 +21,7 @@ import { pool } from "../db/pool.js";
 import {
 	createDefaultWorkspaceAccessDeps,
 	createWorkspaceAccessService,
-} from "./helpers.js";
+} from "../lib/helpers.js";
 
 const WORKSPACE_ID = 3;
 const MEMBER_USER_ID = 7;
@@ -51,8 +51,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresencePattern: vi.fn(),
 }));
 
-vi.mock("./helpers.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("./helpers.js")>();
+vi.mock("../lib/helpers.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../lib/helpers.js")>();
 	const deps = actual.createDefaultWorkspaceAccessDeps({
 		now: () => FIXED_NOW,
 	});

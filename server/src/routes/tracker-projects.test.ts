@@ -106,11 +106,11 @@ vi.mock("../middleware/workspace.js", () => ({
 	},
 }));
 vi.mock("../realtime.js", () => ({ publishEvent: vi.fn() }));
-vi.mock("./helpers.js", () => ({ recordActivity: vi.fn() }));
+vi.mock("../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
 vi.mock("./tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
 import { publishEvent } from "../realtime.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import { trackerProjectsRouter } from "./tracker-projects.js";
 

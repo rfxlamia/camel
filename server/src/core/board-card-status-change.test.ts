@@ -24,7 +24,7 @@ function chainable(result: unknown) {
 const mockRecordActivity = vi.fn();
 const mockAddCardAssignee = vi.fn();
 
-vi.mock("../routes/helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
 }));
 vi.mock("../routes/card-assignees.js", () => ({

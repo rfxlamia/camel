@@ -22,7 +22,7 @@ vi.mock("../db/kysely.js", () => ({
 		transaction: () => ({ execute: mocks.transactionExecute }),
 	},
 }));
-vi.mock("./helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	lookupMembership: mocks.lookupMembership,
 	serializeWorkspaceList: vi.fn(),
 	recordActivity: mocks.recordActivity,

@@ -10,7 +10,7 @@ vi.mock("../db/pool.js", () => ({
 }));
 
 // Mock realtime to avoid Redis. requireWorkspaceMember now pulls in
-// routes/helpers.js (shared lookupMembership), which needs publishEvent
+// lib/helpers.js (shared lookupMembership), which needs publishEvent
 // and clearPresence from this module too.
 vi.mock("../realtime.js", () => ({
 	sseHandler: vi.fn((_req: unknown, res: any) => {

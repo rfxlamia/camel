@@ -5,7 +5,7 @@ import { positionBetween } from "../core/position.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import { publishEvent } from "../realtime.js";
-import { recordActivity } from "./helpers.js";
+import { recordActivity } from "../lib/helpers.js";
 import { parseDateRange } from "../lib/tracker-item-parsers.js";
 import { recordTrackerActivity } from "./tracker-activity.js";
 import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";

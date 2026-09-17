@@ -17,7 +17,7 @@ vi.mock("../realtime.js", () => ({
 	publishEvent: (...args: unknown[]) => mockPublishEvent(...args),
 	clearPresence: vi.fn(),
 }));
-vi.mock("../routes/helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	recordActivity: (...args: unknown[]) => mockRecordCardActivity(...args),
 }));
 vi.mock("../routes/tracker-activity.js", () => ({

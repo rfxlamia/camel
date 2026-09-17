@@ -38,9 +38,9 @@ export {
 	type ScopedBoardDeps,
 	serializeWorkspaceList,
 	type WorkspaceAccessDeps,
-} from "./routes/helpers.js";
+} from "./lib/helpers.js";
 
-import { createScopedBoardService } from "./routes/helpers.js";
+import { createScopedBoardService } from "./lib/helpers.js";
 
 export const api = Router();
 

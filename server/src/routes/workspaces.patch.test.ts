@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockLookupMembership = vi.fn();
-vi.mock("./helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	lookupMembership: (...args: unknown[]) => mockLookupMembership(...args),
 	serializeWorkspaceList: vi.fn(),
 }));

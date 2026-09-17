@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockUpdateMemberRole = vi.fn();
 const mockRemoveMember = vi.fn();
 
-vi.mock("./helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	workspaceAccessService: {
 		updateMemberRole: (...args: unknown[]) => mockUpdateMemberRole(...args),
 		removeMember: (...args: unknown[]) => mockRemoveMember(...args),

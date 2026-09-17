@@ -11,7 +11,7 @@ import "dotenv/config";
 import { afterAll, describe, expect, expectTypeOf, it } from "vitest";
 import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
-import { recordActivity } from "../../routes/helpers.js";
+import { recordActivity } from "../../lib/helpers.js";
 import { getTicketHistory } from "./history.js";
 
 describe.skipIf(!process.env.RUN_INTEGRATION)("getTicketHistory", () => {

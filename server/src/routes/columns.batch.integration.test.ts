@@ -53,7 +53,7 @@ import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
-import * as routeHelpers from "./helpers.js";
+import * as routeHelpers from "../lib/helpers.js";
 
 /** Isolated from routes.integration.test.ts (workspace 1). */
 const WORKSPACE_ID = 99;

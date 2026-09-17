@@ -42,7 +42,7 @@ vi.mock("./service.js", () => ({
 	createChatService: () => mockService,
 }));
 
-vi.mock("../routes/helpers.js", () => ({
+vi.mock("../lib/helpers.js", () => ({
 	lookupMembership: vi.fn().mockResolvedValue("member"),
 }));
 

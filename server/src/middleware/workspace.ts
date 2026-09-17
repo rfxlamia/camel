@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { lookupMembership } from "../routes/helpers.js";
+import { lookupMembership } from "../lib/helpers.js";
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation
