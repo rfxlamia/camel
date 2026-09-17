@@ -10,5 +10,36 @@ export { default as TrackerProjectHeader } from "./TrackerProjectHeader";
 export { default as TrackerProjectsTab } from "./TrackerProjectsTab";
 export { default as TrackerProperties } from "./TrackerProperties";
 export type { PropertyPatch } from "./TrackerProperties";
+export {
+	TrackerRowDatePopover,
+	type TrackerRowDatePopoverHandle,
+	type TrackerRowDatePopoverProps,
+} from "./TrackerRowDatePopover";
+export {
+	TrackerRowKebabMenu,
+	type TrackerRowKebabMenuProps,
+} from "./TrackerRowKebabMenu";
+export {
+	TrackerRowKebabMenuFields,
+	type TrackerRowKebabMenuFieldsProps,
+} from "./TrackerRowKebabMenuFields";
+export {
+	TrackerRowKebabTrigger,
+	type TrackerRowKebabTriggerProps,
+} from "./TrackerRowKebabTrigger";
+export { TrackerRowMemberLabelFields } from "./TrackerRowMemberLabel";
+export { default as TrackerRowShell } from "./TrackerRowShell";
 export { default as TrackerTabs } from "./TrackerTabs";
 export type { TrackerTab } from "./TrackerTabs";
+export {
+	type TrackerAuxiliaryLoadState,
+	trackerAuxiliaryMessage,
+} from "./trackerAuxiliaryState";
+export {
+	type KebabActiveField,
+	useTrackerRowKebabMenuChrome,
+} from "./trackerRowKebabMenuChrome";
+export {
+	type TrackerRowPickerContext,
+	buildTrackerRowPickerState,
+} from "./trackerRowPickerOptions";
