@@ -25,7 +25,7 @@ vi.mock("../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (_req: unknown, _res: unknown, next: () => void) =>
 		next(),
 }));
-vi.mock("../routes/work-item-response.js", () => ({
+vi.mock("./work-item-response.js", () => ({
 	listMergedWorkItems: (...args: unknown[]) => mockListMergedWorkItems(...args),
 	findBoardCardByKeyNumber: vi.fn(),
 	findTrackerItemByKeyNumber: (...args: unknown[]) =>

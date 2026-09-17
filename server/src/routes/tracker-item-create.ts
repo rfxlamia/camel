@@ -17,7 +17,7 @@ import {
 	findTrackerItemByKeyNumber,
 	hydrateTrackerWorkItems,
 	legacyTrackerItemResponse,
-} from "./work-item-response.js";
+} from "../lib/work-item-response.js";
 import { lockTaskCreateReferences } from "./workspace-mutation-lock.js";
 
 async function workspacePrefix(

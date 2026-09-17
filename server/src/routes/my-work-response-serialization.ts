@@ -17,7 +17,7 @@ import type { VocabularyRow } from "../lib/vocabulary-response.js";
 import {
 	serializeBoardWorkItem,
 	serializeTrackerWorkItem,
-} from "./work-item-response.js";
+} from "../lib/work-item-response.js";
 
 const STATUS_CATEGORIES = new Set<MyWorkStatusCategory>([
 	"backlog",

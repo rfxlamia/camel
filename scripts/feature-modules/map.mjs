@@ -39,6 +39,5 @@ export const CLIENT_KERNEL_PREFIXES = [
  * POSIX paths relative to repo root.
  */
 export const KERNEL_IN_WAITING = [
-	"server/src/routes/work-item-response.ts",
 	"client/src/lib/workItemMutations.ts",
 ];

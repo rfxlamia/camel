@@ -66,6 +66,7 @@ Express middleware.
 Server kernel shared code (not a product feature).
 
 - **[helpers.ts](./src/lib/helpers.ts)** - Shared DB helpers: membership checks, capacity, board service factory
+- **[work-item-response.ts](./src/lib/work-item-response.ts)** - Dual-table merge/dedup shim for unified work items
 
 ### src/routes/
 

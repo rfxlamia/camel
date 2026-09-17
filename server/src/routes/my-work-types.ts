@@ -7,7 +7,7 @@ import type { DBExecutor } from "../db/kysely.js";
 import type { CardAssignee } from "./card-assignees.js";
 import type { TrackerItemAssignee } from "./tracker-assignees.js";
 import type { VocabularyRow } from "../lib/vocabulary-response.js";
-import type { BoardWorkItemRow, TrackerItemRow } from "./work-item-response.js";
+import type { BoardWorkItemRow, TrackerItemRow } from "../lib/work-item-response.js";
 
 export type MyWorkSource = "board" | "tracker";
 export type MyWorkScope = "active" | "all";
