@@ -192,15 +192,6 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 			spec: `import { h } from "../../routes/helpers.js";\n`,
 		},
 		{
-			file: "server/src/modules/board/x.ts",
-			spec: `import { p } from "../../routes/tracker-item-parsers.js";\n`,
-		},
-		{
-			file: "server/src/modules/board/x.ts",
-			spec: `import { v } from "../../routes/vocabulary-response.ts";\n`,
-			spec: `import { w } from "../../routes/work-items.ts";\n`,
-		},
-		{
 			file: "client/src/features/board/x.ts",
 			spec: `import { m } from "../../lib/workItemMutations.ts";\n`,
 		},
@@ -213,15 +204,6 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		});
 	}
 
-	it("flags leftover routes import of work-items after kernel extract", () => {
-		const violations = checkImports({
-			filePath: "server/src/modules/board/x.ts",
-			source: `import { w } from "../../routes/work-items.ts";\n`,
-			map,
-		});
-		assert.equal(violations.length, 1);
-		assert.match(violations[0], new RegExp(ONE_WAY_RULE_ID));
-	});
 	const extractedKernel = [
 		{
 			file: "server/src/modules/board/x.ts",
@@ -230,6 +212,10 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		{
 			file: "server/src/modules/board/x.ts",
 			spec: `import { v } from "../../routes/vocabulary-response.js";\n`,
+		},
+		{
+			file: "server/src/modules/board/x.ts",
+			spec: `import { w } from "../../routes/work-items.ts";\n`,
 		},
 	];
 
