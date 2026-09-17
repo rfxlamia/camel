@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import {
 	computePopoverPosition,
 	POPOVER_WIDTH,
-} from "../../lib/popoverPlacement";
+} from "../../shared/popoverPlacement";
 import TrackerDateFields from "./TrackerDateFields";
 
 export interface TrackerRowDatePopoverProps {

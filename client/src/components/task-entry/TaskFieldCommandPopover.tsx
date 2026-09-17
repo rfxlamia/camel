@@ -11,7 +11,7 @@ import {
 	computePopoverPosition,
 	POPOVER_WIDTH,
 	type ViewportRect,
-} from "../../lib/popoverPlacement";
+} from "../../shared/popoverPlacement";
 
 export type TaskFieldCatalogState =
 	| "loading"
