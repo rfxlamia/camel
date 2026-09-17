@@ -121,7 +121,13 @@ describe("Cycle Map — map data (unit)", () => {
 			map.KERNEL_IN_WAITING.includes("client/src/lib/workItemMutations.ts"),
 		);
 		assert.ok(
-			map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
+			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/lib/work-item-response.ts")),
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/routes/work-item-response.ts")),
 		);
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-items.ts")),

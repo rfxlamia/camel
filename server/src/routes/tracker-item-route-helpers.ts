@@ -6,7 +6,7 @@ import {
 	findTrackerItemByKeyNumber,
 	hydrateBoardWorkItems,
 	hydrateTrackerWorkItems,
-} from "./work-item-response.js";
+} from "../lib/work-item-response.js";
 
 export function routeKeyParam(raw: string | string[]): string {
 	return Array.isArray(raw) ? (raw[0] ?? "") : raw;

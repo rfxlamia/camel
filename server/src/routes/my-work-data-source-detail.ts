@@ -7,7 +7,7 @@ import type {
 import {
 	selectBoardWorkItemRows,
 	selectTrackerItemRows,
-} from "./work-item-response.js";
+} from "../lib/work-item-response.js";
 
 export async function getMyWorkTrackerRow(
 	executor: DBExecutor,

@@ -29,7 +29,7 @@ import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
 	hydrateMutationItem,
-} from "./work-item-response.js";
+} from "../lib/work-item-response.js";
 
 async function getTrackerItemLabelIds(
 	dbExec: DBExecutor,

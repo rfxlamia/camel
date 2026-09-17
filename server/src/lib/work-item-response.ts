@@ -5,16 +5,16 @@ import type { DBExecutor } from "../db/kysely.js";
 import {
 	type CardAssignee,
 	loadCardAssigneesForCards,
-} from "./card-assignees.js";
-import { computeCardUpdatedAt, loadCardLabelsForCards } from "./card-response.js";
+} from "../routes/card-assignees.js";
+import { computeCardUpdatedAt, loadCardLabelsForCards } from "../routes/card-response.js";
 import {
 	loadTrackerAssigneesForItems,
 	type TrackerItemAssignee,
-} from "./tracker-assignees.js";
+} from "../routes/tracker-assignees.js";
 import {
 	serializeVocabulary,
 	type VocabularyRow,
-} from "../lib/vocabulary-response.js";
+} from "./vocabulary-response.js";
 
 export type WorkItemSource = "board" | "tracker";
 

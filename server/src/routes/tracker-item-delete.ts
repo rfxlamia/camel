@@ -8,7 +8,7 @@ import { routeKeyParam } from "./tracker-item-route-helpers.js";
 import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
-} from "./work-item-response.js";
+} from "../lib/work-item-response.js";
 
 export async function deleteTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
