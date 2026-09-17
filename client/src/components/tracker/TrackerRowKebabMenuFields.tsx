@@ -8,7 +8,7 @@ import type {
 	WorkspaceMember,
 } from "../../types";
 import { Avatar, LabelDot, PriorityGlyph } from "../../shared/TrackerGlyphs";
-import { TrackerPropertyPicker } from "./TrackerPropertyPicker";
+import { TrackerPropertyPicker } from "../../shared/TrackerPropertyPicker";
 import {
 	TrackerRowDatePopover,
 	type TrackerRowDatePopoverHandle,

@@ -13,7 +13,7 @@ import { createPortal } from "react-dom";
 import {
 	computePopoverPosition,
 	POPOVER_WIDTH,
-} from "../../shared/popoverPlacement";
+} from "./popoverPlacement";
 
 export interface PickerOption {
 	id: string;

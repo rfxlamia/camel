@@ -8,7 +8,7 @@ import TrackerProjectsTab from "../components/tracker/TrackerProjectsTab";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "../components/tracker/TrackerPropertyPicker";
+} from "../shared/TrackerPropertyPicker";
 import TrackerSection from "../components/tracker/TrackerSection";
 import TrackerTabs, {
 	type TrackerTab,

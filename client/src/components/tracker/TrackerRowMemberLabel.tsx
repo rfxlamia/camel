@@ -13,7 +13,7 @@ import {
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "./TrackerPropertyPicker";
+} from "../../shared/TrackerPropertyPicker";
 import {
 	type TrackerAuxiliaryLoadState,
 	trackerAuxiliaryMessage,

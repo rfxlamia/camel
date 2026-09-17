@@ -17,7 +17,7 @@ import {
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "./TrackerPropertyPicker";
+} from "../../shared/TrackerPropertyPicker";
 
 export interface PropertyPatch {
 	statusId?: number;

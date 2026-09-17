@@ -15,7 +15,7 @@ import TrackerDateFields from "../components/tracker/TrackerDateFields";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "../components/tracker/TrackerPropertyPicker";
+} from "../shared/TrackerPropertyPicker";
 import TrackerProperties, {
 	type PropertyPatch,
 } from "../components/tracker/TrackerProperties";

@@ -11,7 +11,7 @@ import type { Card, Column } from "../types";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "./tracker/TrackerPropertyPicker";
+} from "../shared/TrackerPropertyPicker";
 
 interface Props {
 	columns: Column[];

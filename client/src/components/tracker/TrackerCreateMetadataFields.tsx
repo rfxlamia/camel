@@ -18,7 +18,7 @@ import {
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
-} from "./TrackerPropertyPicker";
+} from "../../shared/TrackerPropertyPicker";
 
 export type TrackerCreatePickerName =
 	| "status"
