@@ -16,7 +16,7 @@ import {
 	caretOffsetToViewportRect,
 	getTextareaCaretOffset,
 } from "../../lib/caretRect";
-import type { ViewportRect } from "../../lib/popoverPlacement";
+import type { ViewportRect } from "../../shared/popoverPlacement";
 import {
 	isPickerUnavailable,
 	type TaskFieldCatalogState,

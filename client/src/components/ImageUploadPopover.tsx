@@ -13,7 +13,7 @@ import { createPortal } from "react-dom";
 import {
 	computePopoverPosition,
 	type ViewportRect,
-} from "../lib/popoverPlacement";
+} from "../shared/popoverPlacement";
 import { MAX_ATTACHMENT_BYTES } from "../lib/imageAttachments";
 
 const POPOVER_WIDTH = 320;

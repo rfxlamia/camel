@@ -9,7 +9,7 @@ import {
 import {
 	computePopoverPosition,
 	POPOVER_WIDTH,
-} from "../../lib/popoverPlacement";
+} from "../../shared/popoverPlacement";
 import type { TrackerRowDatePopoverHandle } from "./TrackerRowDatePopover";
 
 export type KebabActiveField =

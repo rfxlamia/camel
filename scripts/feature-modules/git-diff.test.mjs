@@ -158,6 +158,14 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover client/src/components/tracker/TrackerGlyphs.tsx to be gone",
 		);
 		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/popoverPlacement.ts")),
+			"expected kernel home client/src/shared/popoverPlacement.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/popoverPlacement.ts")),
+			"expected leftover client/src/lib/popoverPlacement.ts to be gone",
+		);
+		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
 		assert.ok(
