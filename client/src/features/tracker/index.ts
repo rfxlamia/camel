@@ -41,5 +41,9 @@ export {
 } from "./trackerRowKebabMenuChrome";
 export {
 	type TrackerRowPickerContext,
+	buildAssigneeDisplayValue,
+	buildAssigneeOptions,
+	buildLabelDisplayValue,
+	buildLabelOptions,
 	buildTrackerRowPickerState,
 } from "./trackerRowPickerOptions";
