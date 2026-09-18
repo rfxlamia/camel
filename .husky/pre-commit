@@ -7,9 +7,10 @@ if [ -z "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
 	exit 0
 fi
 
-if git status --porcelain | grep -q '^[AMD][MD]'; then
+PARTIAL_STAGED='^[^ ?!][^ ?!]'
+if git status --porcelain | grep -q "$PARTIAL_STAGED"; then
 	echo "ERROR: Partially staged files. Stage or stash the unstaged hunks before commit." >&2
-	git status --porcelain | grep '^[AMD][MD]' >&2
+	git status --porcelain | grep "$PARTIAL_STAGED" >&2
 	exit 1
 fi
 
