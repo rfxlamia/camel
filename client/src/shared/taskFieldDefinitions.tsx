@@ -4,7 +4,7 @@ import type {
 	TrackerProject,
 	TrackerVocabulary,
 	WorkspaceMember,
-} from "../../types";
+} from "../types";
 import {
 	Avatar,
 	LabelDot,
@@ -12,7 +12,7 @@ import {
 	priorityBars,
 	StatusGlyph,
 	statusGlyphSpec,
-} from "../../shared/TrackerGlyphs";
+} from "./TrackerGlyphs";
 import type {
 	TaskMetadataCatalogEntry,
 	TaskMetadataCatalogKey,

@@ -11,18 +11,18 @@ import type {
 import {
 	getTrackerTaskFieldDefinitions,
 	type TrackerFieldLockContext,
-} from "../task-entry/taskFieldDefinitions";
-import type { TaskMetadataCatalogs } from "../task-entry/TaskMetadataCatalogProvider";
+} from "../../shared/taskFieldDefinitions";
+import type { TaskMetadataCatalogs } from "../../shared/TaskMetadataCatalogProvider";
 import {
 	TaskTitleEditor,
 	type TaskTitleEditorHandle,
-} from "../task-entry/TaskTitleEditor";
+} from "../../shared/TaskTitleEditor";
 import {
 	createInitialTaskMetadataDraft,
 	selectTaskMetadataPayload,
 	taskMetadataReducer,
 	type TaskMetadataProject,
-} from "../task-entry/taskMetadataDraft";
+} from "../../shared/taskMetadataDraft";
 import {
 	TrackerCreateMetadataFields,
 	type TrackerCreatePickerName,

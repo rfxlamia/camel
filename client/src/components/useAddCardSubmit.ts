@@ -17,9 +17,9 @@ import {
 	type StagedImage,
 	uploadFailureMessage,
 } from "./addCardImageStaging";
-import type { TaskTitleEditorHandle } from "./task-entry/TaskTitleEditor";
-import type { TaskFieldCommandDefinition } from "./task-entry/taskFieldDefinitions";
-import type { TaskMetadataDraft } from "./task-entry/taskMetadataDraft";
+import type { TaskTitleEditorHandle } from "../shared/TaskTitleEditor";
+import type { TaskFieldCommandDefinition } from "../shared/taskFieldDefinitions";
+import type { TaskMetadataDraft } from "../shared/taskMetadataDraft";
 
 const CHIP_FIELD_PREFIXES: Partial<
 	Record<keyof TaskCreateFieldErrors, string>

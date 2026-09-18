@@ -22,7 +22,7 @@ import ListView from "../components/ListView";
 import TemplatePicker from "../components/TemplatePicker";
 import TrashZone from "../components/TrashZone";
 import ViewSwitcher from "../components/ViewSwitcher";
-import { TaskMetadataCatalogProvider } from "../components/task-entry/TaskMetadataCatalogProvider";
+import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
 import { useBoard } from "../context/BoardContext";
 import { useShowToast } from "../context/ToastContext";
 import { useWorkspace } from "../context/WorkspaceContext";

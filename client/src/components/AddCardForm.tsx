@@ -6,11 +6,11 @@ import {
 	type TaskFileCommandDefinition,
 	TaskTitleEditor,
 	type TaskTitleEditorHandle,
-} from "./task-entry/TaskTitleEditor";
+} from "../shared/TaskTitleEditor";
 import type {
 	TaskMetadataAction,
 	TaskMetadataDraft,
-} from "./task-entry/taskMetadataDraft";
+} from "../shared/taskMetadataDraft";
 
 interface AddCardFormProps {
 	submitting: boolean;

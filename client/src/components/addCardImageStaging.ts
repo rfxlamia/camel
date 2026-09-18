@@ -4,7 +4,7 @@ import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import {
 	createInitialTaskMetadataDraft,
 	selectTaskMetadataPayload,
-} from "./task-entry/taskMetadataDraft";
+} from "../shared/taskMetadataDraft";
 
 export const STAGE_CAP_MESSAGE = "Max 3 images per card";
 export const UPLOAD_RETRY_MESSAGE = "Upload failed. Try again.";
