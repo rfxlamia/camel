@@ -150,15 +150,20 @@ export function useTrackerCreateModal({
 	useEffect(() => {
 		let cancelled = false;
 		void (async () => {
-			const [labelList, memberList, projectList] = await Promise.all([
-				api.listTrackerVocabularies(workspaceId, "label"),
-				api.getWorkspaceMembers(workspaceId),
-				api.listTrackerProjects(workspaceId),
-			]);
-			if (cancelled) return;
-			setLabels(labelList);
-			setMembers(memberList.members);
-			setProjects(projectList);
+			try {
+				const [labelList, memberList, projectList] = await Promise.all([
+					api.listTrackerVocabularies(workspaceId, "label"),
+					api.getWorkspaceMembers(workspaceId),
+					api.listTrackerProjects(workspaceId),
+				]);
+				if (cancelled) return;
+				setLabels(labelList);
+				setMembers(memberList.members);
+				setProjects(projectList);
+			} catch {
+				if (cancelled) return;
+				setError("Could not load labels, members, or projects. Try again.");
+			}
 		})();
 		return () => {
 			cancelled = true;

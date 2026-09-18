@@ -40,7 +40,11 @@ vi.mock("../../api", () => ({
 }));
 
 import { ApiError } from "../../api";
-import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../../types";
+import type {
+	TrackerPhase,
+	TrackerProject,
+	TrackerVocabulary,
+} from "../../types";
 import TrackerCreateModal from "./TrackerCreateModal";
 
 const statuses: TrackerVocabulary[] = [
@@ -137,7 +141,9 @@ function renderModal() {
 }
 
 function getTitleInput() {
-	return screen.getByRole("combobox", { name: "Item title" }) as HTMLTextAreaElement;
+	return screen.getByRole("combobox", {
+		name: "Item title",
+	}) as HTMLTextAreaElement;
 }
 
 beforeEach(() => {
@@ -164,6 +170,48 @@ afterEach(() => {
 });
 
 describe("TrackerCreateModal", () => {
+	it("focuses the title field on open, traps tab, and restores the opener on close", () => {
+		const opener = document.createElement("button");
+		opener.type = "button";
+		opener.textContent = "New item";
+		document.body.appendChild(opener);
+		opener.focus();
+
+		const { unmount } = render(
+			<TrackerCreateModal
+				workspaceId={7}
+				statuses={statuses}
+				priorities={priorities}
+				onClose={vi.fn()}
+				onCreated={vi.fn()}
+			/>,
+		);
+
+		const title = getTitleInput();
+		expect(document.activeElement).toBe(title);
+
+		const dialog = screen.getByRole("dialog");
+		const focusable = Array.from(
+			dialog.querySelectorAll<HTMLElement>(
+				"button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+			),
+		);
+		const first = focusable[0]!;
+		const last = focusable.at(-1)!;
+
+		last.focus();
+		fireEvent.keyDown(document, { key: "Tab" });
+		expect(document.activeElement).toBe(first);
+
+		first.focus();
+		fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+		expect(document.activeElement).toBe(last);
+
+		unmount();
+		expect(document.activeElement).toBe(opener);
+		opener.remove();
+	});
+
 	it("defaults the status chip to Backlog", async () => {
 		renderModal();
 		expect(
@@ -241,6 +289,44 @@ describe("TrackerCreateModal", () => {
 			await screen.findByText("Could not create the item. Try again."),
 		).toBeTruthy();
 		expect(getTitleInput()).toBeTruthy();
+	});
+
+	it("shows a load error when catalog requests fail", async () => {
+		listTrackerProjects.mockRejectedValueOnce(new Error("network"));
+		renderModal();
+		expect(
+			await screen.findByText(
+				"Could not load labels, members, or projects. Try again.",
+			),
+		).toBeTruthy();
+		expect(screen.queryByText("Project")).toBeNull();
+	});
+
+	it("does not set a load error after unmount", async () => {
+		let rejectProjects: (error: Error) => void = () => {};
+		listTrackerProjects.mockImplementationOnce(
+			() =>
+				new Promise<TrackerProject[]>((_, reject) => {
+					rejectProjects = reject;
+				}),
+		);
+		const { unmount } = render(
+			<TrackerCreateModal
+				workspaceId={7}
+				statuses={statuses}
+				priorities={priorities}
+				onClose={vi.fn()}
+				onCreated={vi.fn()}
+			/>,
+		);
+		unmount();
+		rejectProjects(new Error("network"));
+		await Promise.resolve();
+		expect(
+			screen.queryByText(
+				"Could not load labels, members, or projects. Try again.",
+			),
+		).toBeNull();
 	});
 
 	it("closes the picker after create more resets the draft", async () => {
@@ -413,9 +499,7 @@ describe("TrackerCreateModal tag integration", () => {
 		).toBeTruthy();
 
 		fireEvent.keyDown(document, { key: "Escape" });
-		expect(
-			screen.getByRole("listbox", { name: "Task fields" }),
-		).toBeTruthy();
+		expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy();
 		expect(onClose).not.toHaveBeenCalled();
 
 		fireEvent.keyDown(document, { key: "Escape" });
@@ -428,9 +512,15 @@ describe("TrackerCreateModal tag integration", () => {
 
 	it("Recover from a deleted locked context", async () => {
 		createWorkItem.mockRejectedValueOnce(
-			new ApiError("Project must belong to this workspace.", 400, undefined, undefined, {
-				projectId: "project must belong to this workspace",
-			}),
+			new ApiError(
+				"Project must belong to this workspace.",
+				400,
+				undefined,
+				undefined,
+				{
+					projectId: "project must belong to this workspace",
+				},
+			),
 		);
 		render(
 			<TrackerCreateModal
@@ -495,9 +585,9 @@ describe("TrackerCreateModal tag integration", () => {
 		await waitFor(() => expect(createWorkItem).toHaveBeenCalled());
 
 		await waitFor(() => expect(getTitleInput().value).toBe(""));
-		expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(
-			"",
-		);
+		expect(
+			(screen.getByLabelText("Description") as HTMLTextAreaElement).value,
+		).toBe("");
 		expect(screen.getByRole("button", { name: "In Progress" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Web" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Build" })).toBeTruthy();
@@ -558,11 +648,17 @@ describe("TrackerCreateModal tag integration", () => {
 	it("preserves Tracker draft for every submit failure class", async () => {
 		createWorkItem
 			.mockRejectedValueOnce(
-				new ApiError("Some task fields are invalid", 400, undefined, undefined, {
-					title: "Title is required",
-					assigneeIds: "Assignee is no longer available",
-					priorityId: "Priority is no longer available",
-				}),
+				new ApiError(
+					"Some task fields are invalid",
+					400,
+					undefined,
+					undefined,
+					{
+						title: "Title is required",
+						assigneeIds: "Assignee is no longer available",
+						priorityId: "Priority is no longer available",
+					},
+				),
 			)
 			.mockRejectedValueOnce(new Error("network"))
 			.mockRejectedValueOnce(new ApiError("Server error", 500));
@@ -577,21 +673,25 @@ describe("TrackerCreateModal tag integration", () => {
 		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
 
 		fireEvent.click(screen.getByRole("button", { name: "Create item" }));
-		expect(await screen.findByText("Some task fields are invalid")).toBeTruthy();
+		expect(
+			await screen.findByText("Some task fields are invalid"),
+		).toBeTruthy();
 		expect(title.value).toBe("Failure draft");
-		expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(
-			"Still here",
-		);
+		expect(
+			(screen.getByLabelText("Description") as HTMLTextAreaElement).value,
+		).toBe("Still here");
 		await waitFor(() =>
 			expect(
-				screen.getAllByRole("button", { name: /Priority:\s*High/ })[0].getAttribute(
-					"data-invalid",
-				),
+				screen
+					.getAllByRole("button", { name: /Priority:\s*High/ })[0]
+					.getAttribute("data-invalid"),
 			).toBe("true"),
 		);
 		await waitFor(() =>
 			expect(
-				document.querySelector('[data-field-error]')?.getAttribute("data-field-error"),
+				document
+					.querySelector("[data-field-error]")
+					?.getAttribute("data-field-error"),
 			).toBeTruthy(),
 		);
 
