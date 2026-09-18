@@ -212,6 +212,29 @@ describe("TrackerCreateModal", () => {
 		opener.remove();
 	});
 
+	it("keeps the tab trap when a chip picker is open", async () => {
+		renderModal();
+		fireEvent.click(await screen.findByRole("button", { name: "Backlog" }));
+		expect(screen.getByRole("listbox")).toBeTruthy();
+
+		const dialog = screen.getByRole("dialog");
+		const focusable = Array.from(
+			dialog.querySelectorAll<HTMLElement>(
+				"button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+			),
+		);
+		const first = focusable[0]!;
+		const last = focusable.at(-1)!;
+
+		last.focus();
+		fireEvent.keyDown(document, { key: "Tab" });
+		expect(document.activeElement).toBe(first);
+
+		first.focus();
+		fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+		expect(document.activeElement).toBe(last);
+	});
+
 	it("defaults the status chip to Backlog", async () => {
 		renderModal();
 		expect(

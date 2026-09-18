@@ -63,7 +63,7 @@ export default function TrackerCreateModal(props: TrackerCreateModalProps) {
 
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Tab") return;
-			if (openPicker || titleEditorRef.current?.isCommandOpen()) return;
+			if (titleEditorRef.current?.isCommandOpen()) return;
 
 			const focusable = getDialogFocusableElements(panel);
 			const first = focusable[0];
@@ -83,7 +83,7 @@ export default function TrackerCreateModal(props: TrackerCreateModalProps) {
 
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [openPicker, titleEditorRef]);
+	}, [titleEditorRef]);
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-900/40 p-4 pt-[10vh] backdrop-blur-[2px]">
