@@ -1,4 +1,4 @@
-import type { ViewportRect } from "../shared/popoverPlacement";
+import type { ViewportRect } from "./popoverPlacement";
 
 /**
  * Style properties that affect where a character lands inside a textarea.

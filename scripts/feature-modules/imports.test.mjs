@@ -1,25 +1,19 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
-import { describe, it } from "node:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-
-import * as map from "./map.mjs";
 import {
 	checkImports,
 	checkMissingModuleIndexes,
 	collectImportViolations,
 	DEEP_IMPORT_RULE_ID,
-	ONE_WAY_RULE_ID,
-	MISSING_INDEX_RULE_ID,
 	FORBIDDEN_FEATURE_RULE_ID,
+	MISSING_INDEX_RULE_ID,
+	ONE_WAY_RULE_ID,
 } from "./imports.mjs";
+import * as map from "./map.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const cliScript = join(repoRoot, "scripts/check-feature-modules.mjs");
@@ -285,6 +279,10 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		},
 		{
 			file: "client/src/features/board/x.ts",
+			spec: `import { r } from "../../lib/caretRect.ts";\n`,
+		},
+		{
+			file: "client/src/features/board/x.ts",
 			spec: `import { t } from "../../components/task-entry/TaskTitleEditor.tsx";\n`,
 		},
 		{
@@ -457,7 +455,7 @@ import { ok } from "../modules/board/index.js";
 
 	it("flags dynamic import() inside a template interpolation", () => {
 		const source =
-			"const msg = `loaded ${(await import(\"../modules/board/cards-update.js\")).name}`;\n";
+			'const msg = `loaded ${(await import("../modules/board/cards-update.js")).name}`;\n';
 		const violations = checkImports({
 			filePath: "server/src/routes/cards.ts",
 			source,
@@ -514,7 +512,10 @@ describe("Cycle F — scan scope and CLI exit 1 (integration)", () => {
 				join(dir, "server/src/routes/cards.ts"),
 				`import { updateCard } from "../modules/board/cards-update.js";\n`,
 			);
-			writeFileSync(join(dir, "server/src/modules/board/index.ts"), "export {};\n");
+			writeFileSync(
+				join(dir, "server/src/modules/board/index.ts"),
+				"export {};\n",
+			);
 			git(dir, ["add", "."]);
 			git(dir, ["commit", "-m", "deep import"]);
 
