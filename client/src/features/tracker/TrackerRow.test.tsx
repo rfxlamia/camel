@@ -747,7 +747,9 @@ describe("TrackerRow", () => {
 			renderRow({ item: makeRowItem({ source: "tracker" }) });
 
 			expect(screen.queryByTestId("row-board-badge-CA-1")).toBeNull();
-			expect(screen.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
+			expect(
+				screen.getByRole("button", { name: "Date: Set date" }),
+			).toBeTruthy();
 		});
 	});
 
@@ -797,7 +799,9 @@ describe("TrackerRow", () => {
 		it("passes onDateChange for tracker items", () => {
 			renderSection([makeRowItem({ source: "tracker" })]);
 
-			expect(screen.getByRole("button", { name: "Date: Set date" })).toBeTruthy();
+			expect(
+				screen.getByRole("button", { name: "Date: Set date" }),
+			).toBeTruthy();
 		});
 	});
 });

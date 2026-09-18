@@ -1,11 +1,7 @@
 // client/src/components/tracker/TrackerRowDatePopover.test.tsx — jsdom.
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import {
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrackerRowDatePopover } from "./TrackerRowDatePopover";
 

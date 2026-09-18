@@ -6,22 +6,29 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { useReducer, useState } from "react";
-import {
-	createInitialTaskMetadataDraft,
-	taskMetadataReducer,
-	type TaskMetadataAction,
-	type TaskMetadataDraft,
-} from "../../shared/taskMetadataDraft";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { TaskMetadataCatalogs } from "../../shared/TaskMetadataCatalogProvider";
+import { TaskTitleEditor } from "../../shared/TaskTitleEditor";
 import {
 	getTrackerTaskFieldDefinitions,
 	type TrackerFieldLockContext,
 } from "../../shared/taskFieldDefinitions";
-import type { TaskMetadataCatalogs } from "../../shared/TaskMetadataCatalogProvider";
-import { TaskTitleEditor } from "../../shared/TaskTitleEditor";
-import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../../types";
-import { TrackerCreateMetadataFields, type TrackerCreatePickerName } from "./TrackerCreateMetadataFields";
+import {
+	createInitialTaskMetadataDraft,
+	type TaskMetadataAction,
+	type TaskMetadataDraft,
+	taskMetadataReducer,
+} from "../../shared/taskMetadataDraft";
+import type {
+	TrackerPhase,
+	TrackerProject,
+	TrackerVocabulary,
+} from "../../types";
+import {
+	TrackerCreateMetadataFields,
+	type TrackerCreatePickerName,
+} from "./TrackerCreateMetadataFields";
 
 const statuses: TrackerVocabulary[] = [
 	{ id: 1, kind: "status", name: "Backlog", position: 1024, colour: "#eee" },
@@ -93,7 +100,9 @@ function MetadataHarness({
 		taskMetadataReducer,
 		createInitialTaskMetadataDraft(initialDraft ?? {}),
 	);
-	const [openPicker, setOpenPicker] = useState<TrackerCreatePickerName | null>(null);
+	const [openPicker, setOpenPicker] = useState<TrackerCreatePickerName | null>(
+		null,
+	);
 
 	return (
 		<>
@@ -123,7 +132,9 @@ function MetadataHarness({
 }
 
 function getTitleTextarea() {
-	return screen.getByRole("combobox", { name: "Item title" }) as HTMLTextAreaElement;
+	return screen.getByRole("combobox", {
+		name: "Item title",
+	}) as HTMLTextAreaElement;
 }
 
 afterEach(() => {
@@ -151,9 +162,7 @@ describe("TrackerCreateMetadataFields", () => {
 		fireEvent.click(await screen.findByText("Priority"));
 		fireEvent.click(await screen.findByRole("option", { name: /High/ }));
 		await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
-		expect(
-			screen.getByRole("button", { name: "Priority: High" }),
-		).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Priority: High" })).toBeTruthy();
 	});
 
 	it("Honor a valid project context lock", async () => {
