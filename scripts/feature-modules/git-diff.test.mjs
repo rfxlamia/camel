@@ -7,8 +7,8 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { describe, it } from "node:test";
 import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -67,8 +67,14 @@ describe("Cycle 1 — git-diff parser (unit)", () => {
 	});
 
 	it("defaults merge-base ref to origin/main and accepts override", () => {
-		assert.equal(parseNameStatusOutput("", { baseRef: undefined }).baseRef, "origin/main");
-		assert.equal(parseNameStatusOutput("", { baseRef: "feature/foo" }).baseRef, "feature/foo");
+		assert.equal(
+			parseNameStatusOutput("", { baseRef: undefined }).baseRef,
+			"origin/main",
+		);
+		assert.equal(
+			parseNameStatusOutput("", { baseRef: "feature/foo" }).baseRef,
+			"feature/foo",
+		);
 	});
 
 	it("lists source files excluding deleted and non-ts paths", () => {
@@ -206,9 +212,7 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected kernel home client/src/shared/${name}`,
 			);
 			assert.ok(
-				!existsSync(
-					join(repoRoot, `client/src/components/task-entry/${name}`),
-				),
+				!existsSync(join(repoRoot, `client/src/components/task-entry/${name}`)),
 				`expected leftover client/src/components/task-entry/${name} to be gone`,
 			);
 		}
@@ -253,6 +257,22 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected features/tracker home client/src/features/tracker/${name}`,
 			);
 		}
+		for (const name of [
+			"TrackerCreateModal.test.tsx",
+			"TrackerCreateMetadataFields.test.tsx",
+			"TrackerRow.test.tsx",
+			"TrackerRowDatePopover.test.tsx",
+			"TrackerRowKebabMenu.test.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/tracker/${name}`)),
+				`expected features/tracker test home client/src/features/tracker/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/components/tracker/${name}`)),
+				`expected leftover client/src/components/tracker/${name} to be gone`,
+			);
+		}
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-item-response.ts")),
 		);
@@ -262,12 +282,8 @@ describe("Cycle Map — map data (unit)", () => {
 		assert.ok(
 			!existsSync(join(repoRoot, "server/src/routes/work-item-response.ts")),
 		);
-		assert.ok(
-			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-items.ts")),
-		);
-		assert.ok(
-			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("helpers.ts")),
-		);
+		assert.ok(!map.KERNEL_IN_WAITING.some((p) => p.endsWith("work-items.ts")));
+		assert.ok(!map.KERNEL_IN_WAITING.some((p) => p.endsWith("helpers.ts")));
 		assert.ok(
 			!map.KERNEL_IN_WAITING.some((p) => p.endsWith("vocabulary-response.ts")),
 		);
