@@ -1,7 +1,11 @@
-import { Download, Trash2, X } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CardAttachmentUploadResponse } from "../api";
 import { orderCardAttachments } from "../lib/cardAttachments";
+import {
+	CardAttachmentDeleteDialog,
+	CardAttachmentPreviewDialog,
+} from "../shared/CardAttachmentDialogs";
 import ImageUploadPopover from "../shared/ImageUploadPopover";
 import {
 	MAX_ATTACHMENT_COUNT,
@@ -268,79 +272,20 @@ export default function CardAttachments({
 			/>
 
 			{previewAttachment && (
-				<div
-					role="dialog"
-					aria-modal="true"
-					aria-label="Image preview"
-					className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/80 p-4 motion-reduce:animate-none"
-					onClick={() => setPreviewAttachment(null)}
-				>
-					<div
-						className="relative max-h-[90vh] max-w-4xl rounded-lg bg-white p-3 shadow-lg"
-						onClick={(event) => event.stopPropagation()}
-					>
-						<button
-							ref={lightboxCloseRef}
-							type="button"
-							onClick={() => setPreviewAttachment(null)}
-							className="absolute right-2 top-2 rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							aria-label="Close image preview"
-						>
-							<X size={18} aria-hidden />
-						</button>
-						<img
-							src={previewAttachment.originalUrl}
-							alt={`Attachment ${previewAttachment.id}`}
-							className="max-h-[75vh] w-full object-contain"
-						/>
-						<div className="mt-3 flex justify-end">
-							<a
-								href={previewAttachment.downloadUrl}
-								className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-								aria-label="Download original"
-							>
-								<Download size={14} aria-hidden />
-								Download original
-							</a>
-						</div>
-					</div>
-				</div>
+				<CardAttachmentPreviewDialog
+					attachment={previewAttachment}
+					closeRef={lightboxCloseRef}
+					onClose={() => setPreviewAttachment(null)}
+				/>
 			)}
 
 			{pendingDeleteId !== null && (
-				<div
-					role="dialog"
-					aria-modal="true"
-					aria-label="Confirm attachment delete"
-					className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/50 p-4 motion-reduce:animate-none"
-				>
-					<div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-4 shadow-lg">
-						<h4 className="text-sm font-medium text-neutral-900">
-							Delete this image?
-						</h4>
-						<p className="mt-1 text-sm text-neutral-600">
-							This cannot be undone.
-						</p>
-						<div className="mt-4 flex justify-end gap-2">
-							<button
-								ref={deleteCancelRef}
-								type="button"
-								onClick={() => setPendingDeleteId(null)}
-								className="rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								onClick={() => void confirmDelete()}
-								disabled={deletingId !== null}
-								className="rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50"
-							>
-								Delete
-							</button>
-						</div>
-					</div>
-				</div>
+				<CardAttachmentDeleteDialog
+					cancelRef={deleteCancelRef}
+					deleting={deletingId !== null}
+					onCancel={() => setPendingDeleteId(null)}
+					onConfirm={() => void confirmDelete()}
+				/>
 			)}
 		</>
 	);
