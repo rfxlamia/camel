@@ -1,16 +1,18 @@
 import { Download, X } from "lucide-react";
-import type { RefObject } from "react";
+import type { Ref } from "react";
 import type { CardAttachment } from "../types";
+
+export interface CardAttachmentPreviewDialogProps {
+	attachment: CardAttachment;
+	closeRef: Ref<HTMLButtonElement>;
+	onClose: () => void;
+}
 
 export function CardAttachmentPreviewDialog({
 	attachment,
 	closeRef,
 	onClose,
-}: {
-	attachment: CardAttachment;
-	closeRef: RefObject<HTMLButtonElement>;
-	onClose: () => void;
-}) {
+}: CardAttachmentPreviewDialogProps) {
 	return (
 		<div
 			role="dialog"
@@ -52,17 +54,19 @@ export function CardAttachmentPreviewDialog({
 	);
 }
 
+export interface CardAttachmentDeleteDialogProps {
+	cancelRef: Ref<HTMLButtonElement>;
+	deleting: boolean;
+	onCancel: () => void;
+	onConfirm: () => void;
+}
+
 export function CardAttachmentDeleteDialog({
 	cancelRef,
 	deleting,
 	onCancel,
 	onConfirm,
-}: {
-	cancelRef: RefObject<HTMLButtonElement>;
-	deleting: boolean;
-	onCancel: () => void;
-	onConfirm: () => void;
-}) {
+}: CardAttachmentDeleteDialogProps) {
 	return (
 		<div
 			role="dialog"

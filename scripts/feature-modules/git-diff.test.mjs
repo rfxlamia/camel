@@ -16,6 +16,7 @@ import {
 	parseNameStatusOutput,
 	unquoteGitPath,
 } from "./git-diff.mjs";
+import { countRawLines, LINE_BUDGET_MAX } from "./line-budget.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const cliScript = join(repoRoot, "scripts/check-feature-modules.mjs");
@@ -226,6 +227,40 @@ describe("Cycle Map — map data (unit)", () => {
 			),
 			"expected leftover client/src/components/ImageUploadPopover.tsx to be gone",
 		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/imageAttachments.test.ts")),
+			"expected kernel home client/src/shared/imageAttachments.test.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/imageAttachments.test.ts")),
+			"expected leftover client/src/lib/imageAttachments.test.ts to be gone",
+		);
+		assert.ok(
+			existsSync(
+				join(repoRoot, "client/src/shared/ImageUploadPopover.test.tsx"),
+			),
+			"expected kernel home client/src/shared/ImageUploadPopover.test.tsx",
+		);
+		assert.ok(
+			!existsSync(
+				join(repoRoot, "client/src/components/ImageUploadPopover.test.tsx"),
+			),
+			"expected leftover client/src/components/ImageUploadPopover.test.tsx to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/CardAttachmentDialogs.tsx")),
+			"expected kernel home client/src/shared/CardAttachmentDialogs.tsx",
+		);
+		{
+			const leftoverAttachments = "client/src/components/CardAttachments.tsx";
+			const leftoverAttachmentLines = countRawLines(
+				readFileSync(join(repoRoot, leftoverAttachments), "utf8"),
+			);
+			assert.ok(
+				leftoverAttachmentLines <= LINE_BUDGET_MAX,
+				`expected leftover ${leftoverAttachments} ≤${LINE_BUDGET_MAX} lines after 300-on-touch (got ${leftoverAttachmentLines})`,
+			);
+		}
 		for (const name of [
 			"TaskTitleEditor.tsx",
 			"taskFieldDefinitions.tsx",
