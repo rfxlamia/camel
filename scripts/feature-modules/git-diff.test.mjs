@@ -219,6 +219,9 @@ describe("Cycle Map — map data (unit)", () => {
 			"TrackerRowKebabMenuFields.tsx",
 			"TrackerRowKebabMenu.tsx",
 			"TrackerRowKebabTrigger.tsx",
+			"useTrackerRowOpenPicker.ts",
+			"TrackerRow.tsx",
+			"TrackerSection.tsx",
 		]) {
 			assert.ok(
 				existsSync(join(repoRoot, `client/src/features/tracker/${name}`)),

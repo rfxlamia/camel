@@ -1,4 +1,8 @@
-import { sortStatusesByPosition, formatDateRange, NO_PRIORITY } from "../../shared/trackerUtils";
+import {
+	sortStatusesByPosition,
+	formatDateRange,
+	NO_PRIORITY,
+} from "../../shared/trackerUtils";
 import type {
 	TrackerItem,
 	TrackerProject,
@@ -9,7 +13,9 @@ import {
 	Avatar,
 	LabelDot,
 	PriorityGlyph,
+	StatusGlyph,
 	priorityBars,
+	statusGlyphSpec,
 } from "../../shared/TrackerGlyphs";
 import type { PickerOption } from "../../shared/TrackerPropertyPicker";
 
@@ -19,6 +25,18 @@ export interface TrackerRowPickerContext {
 	priorities: TrackerVocabulary[];
 	labels?: TrackerVocabulary[];
 	members?: WorkspaceMember[];
+}
+
+export function buildTrackerRowStatusOptions(
+	statuses: TrackerVocabulary[],
+	itemStatusId: number,
+): PickerOption[] {
+	return sortStatusesByPosition(statuses).map((status) => ({
+		id: String(status.id),
+		label: status.name,
+		icon: <StatusGlyph spec={statusGlyphSpec(statuses, status.id)} />,
+		selected: status.id === itemStatusId,
+	}));
 }
 
 export function buildAssigneeOptions(
@@ -76,8 +94,7 @@ export function buildTrackerRowPickerState({
 		(p) => p.id === item.phaseId,
 	);
 	const dateLabel =
-		formatDateRange(item.startDate ?? null, item.endDate ?? null) ??
-		"Set date";
+		formatDateRange(item.startDate ?? null, item.endDate ?? null) ?? "Set date";
 	const projectLabel = selectedProject?.name ?? "Set project";
 	const phaseLabel = selectedPhase?.name ?? "Set phase";
 
