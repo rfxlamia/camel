@@ -283,6 +283,14 @@ describe("Cycle C — one-way vs kernel allowlist (unit)", () => {
 		},
 		{
 			file: "client/src/features/board/x.ts",
+			spec: `import { i } from "../../lib/imageAttachments.ts";\n`,
+		},
+		{
+			file: "client/src/features/board/x.ts",
+			spec: `import { p } from "../../components/ImageUploadPopover.tsx";\n`,
+		},
+		{
+			file: "client/src/features/board/x.ts",
 			spec: `import { t } from "../../components/task-entry/TaskTitleEditor.tsx";\n`,
 		},
 		{

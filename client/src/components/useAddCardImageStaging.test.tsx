@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
 	ImagePreparationResult,
 	PreparedImagePair,
-} from "../lib/imageAttachments";
+} from "../shared/imageAttachments";
 
 const prepareImageAttachment = vi.fn();
-vi.mock("../lib/imageAttachments", () => ({
+vi.mock("../shared/imageAttachments", () => ({
 	MAX_ATTACHMENT_COUNT: 3,
 	prepareImageAttachment: (...args: unknown[]) =>
 		prepareImageAttachment(...args),

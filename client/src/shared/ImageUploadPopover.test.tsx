@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import ImageUploadPopover from "./ImageUploadPopover";
 
 describe("ImageUploadPopover", () => {

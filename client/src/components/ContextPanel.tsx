@@ -8,7 +8,6 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router";
 import { api, type TicketHistoryEntry } from "../api";
-import type { PreparedImagePair } from "../lib/imageAttachments";
 import { type SaveCardResult, useBoard } from "../context/BoardContext";
 import { useShowToast } from "../context/ToastContext";
 import { useWorkspace } from "../context/WorkspaceContext";
@@ -19,11 +18,12 @@ import {
 	getMissingCardRedirect,
 	parseCardId,
 } from "../lib/cardPanel";
+import type { PreparedImagePair } from "../shared/imageAttachments";
 import type { ActivityEvent, Card, WorkspaceMember } from "../types";
 import { formatRelativeTime } from "../types";
 import { AssigneePicker } from "./AssigneePicker";
-import CardAttachments from "./CardAttachments";
 import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
+import CardAttachments from "./CardAttachments";
 import FocusEntryButton from "./FocusEntryButton";
 import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
 

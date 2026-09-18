@@ -2,13 +2,13 @@ import { Download, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CardAttachmentUploadResponse } from "../api";
 import { orderCardAttachments } from "../lib/cardAttachments";
+import ImageUploadPopover from "../shared/ImageUploadPopover";
 import {
 	MAX_ATTACHMENT_COUNT,
-	prepareImageAttachment,
 	type PreparedImagePair,
-} from "../lib/imageAttachments";
+	prepareImageAttachment,
+} from "../shared/imageAttachments";
 import type { Card, CardAttachment } from "../types";
-import ImageUploadPopover from "./ImageUploadPopover";
 
 export interface CardAttachmentsProps {
 	card: Card;

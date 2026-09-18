@@ -10,12 +10,12 @@ import {
 	useRef,
 	useState,
 } from "react";
-import ImageUploadPopover from "../components/ImageUploadPopover";
 import {
 	type CaretOffset,
 	caretOffsetToViewportRect,
 	getTextareaCaretOffset,
 } from "./caretRect";
+import ImageUploadPopover from "./ImageUploadPopover";
 import type { ViewportRect } from "./popoverPlacement";
 import {
 	isPickerUnavailable,
