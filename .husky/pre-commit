@@ -1,10 +1,16 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 set -e
 
 echo "🔍 Checking staged files..."
 if [ -z "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
 	echo "✓ Nothing staged, skipping"
 	exit 0
+fi
+
+if git status --porcelain | grep -q '^[AMD][MD]'; then
+	echo "ERROR: Partially staged files. Stage or stash the unstaged hunks before commit." >&2
+	git status --porcelain | grep '^[AMD][MD]' >&2
+	exit 1
 fi
 
 set +e
@@ -19,6 +25,6 @@ if [ $STATUS -ne 0 ]; then
 	fi
 	exit $STATUS
 fi
-git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 -r git add --
+git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 git add --
 
 echo "✓ Pre-commit passed (staged-only)"

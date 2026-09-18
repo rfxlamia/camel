@@ -70,7 +70,7 @@ This file provides guidance to agents when working with code in this repository.
 ### Conventions
 
 - **Biome** for lint + format (not ESLint/Prettier)
-- **Husky** git hooks: commit runs `biome check --write --staged` only; push runs full typecheck + fast guards with vitest `--changed` vs merge-base (full on fallback), full suite authoritative in CI
+- **Husky** git hooks: commit runs `biome check --write --staged` on fully staged files only (rejects partial staging; BSD-safe `xargs`); push resolves `origin/main` first, then typecheck + guards (`check:feature-modules` skipped if that ref is missing) with vitest `--changed --passWithNoTests` vs merge-base (full on fallback), full suite authoritative in CI
 - **Conventional commits**: feat/fix/refactor/test scopes
 - **NodeNext ESM** on server: `.js` extensions required in imports
 - **Bundler resolution** on client: no extensions
