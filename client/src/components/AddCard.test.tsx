@@ -7,7 +7,8 @@ import {
 	waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IMAGE_VALIDATION_MESSAGES } from "../lib/imageAttachments";
+import { IMAGE_VALIDATION_MESSAGES } from "../shared/imageAttachments";
+import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
 import type {
 	Column,
 	TrackerProject,
@@ -15,7 +16,6 @@ import type {
 	WorkspaceMember,
 } from "../types";
 import AddCard from "./AddCard";
-import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
 
 const {
 	mockGetWorkspaceMembers,
@@ -29,9 +29,9 @@ const {
 	mockPrepareImageAttachment: vi.fn(),
 }));
 
-vi.mock("../lib/imageAttachments", async (importOriginal) => {
+vi.mock("../shared/imageAttachments", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../lib/imageAttachments")>();
+		await importOriginal<typeof import("../shared/imageAttachments")>();
 	return {
 		...actual,
 		prepareImageAttachment: (

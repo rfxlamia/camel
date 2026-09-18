@@ -52,7 +52,7 @@ vi.mock("../api", () => ({
 }));
 
 const prepareImageAttachment = vi.fn();
-vi.mock("../lib/imageAttachments", () => ({
+vi.mock("../shared/imageAttachments", () => ({
 	MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024,
 	MAX_ATTACHMENT_COUNT: 3,
 	prepareImageAttachment: (...args: unknown[]) =>

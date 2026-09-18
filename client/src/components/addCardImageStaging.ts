@@ -1,5 +1,5 @@
 import { ApiError } from "../api";
-import type { PreparedImagePair } from "../lib/imageAttachments";
+import type { PreparedImagePair } from "../shared/imageAttachments";
 import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import {
 	createInitialTaskMetadataDraft,

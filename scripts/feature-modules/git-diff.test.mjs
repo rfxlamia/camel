@@ -208,6 +208,24 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "client/src/lib/caretRect.ts")),
 			"expected leftover client/src/lib/caretRect.ts to be gone",
 		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/imageAttachments.ts")),
+			"expected kernel home client/src/shared/imageAttachments.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/imageAttachments.ts")),
+			"expected leftover client/src/lib/imageAttachments.ts to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/ImageUploadPopover.tsx")),
+			"expected kernel home client/src/shared/ImageUploadPopover.tsx",
+		);
+		assert.ok(
+			!existsSync(
+				join(repoRoot, "client/src/components/ImageUploadPopover.tsx"),
+			),
+			"expected leftover client/src/components/ImageUploadPopover.tsx to be gone",
+		);
 		for (const name of [
 			"TaskTitleEditor.tsx",
 			"taskFieldDefinitions.tsx",

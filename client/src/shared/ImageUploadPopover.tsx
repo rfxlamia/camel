@@ -10,11 +10,8 @@ import {
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-	computePopoverPosition,
-	type ViewportRect,
-} from "../shared/popoverPlacement";
-import { MAX_ATTACHMENT_BYTES } from "../lib/imageAttachments";
+import { MAX_ATTACHMENT_BYTES } from "./imageAttachments";
+import { computePopoverPosition, type ViewportRect } from "./popoverPlacement";
 
 const POPOVER_WIDTH = 320;
 const POPOVER_HEIGHT = 250;
@@ -193,9 +190,12 @@ export default function ImageUploadPopover({
 		>
 			<div className="flex items-start justify-between gap-3 px-1 pb-2">
 				<div>
-					<h2 className="text-base font-semibold text-neutral-900">Upload images</h2>
+					<h2 className="text-base font-semibold text-neutral-900">
+						Upload images
+					</h2>
 					<p className="mt-0.5 text-xs text-neutral-600">
-						{imageDescription(accept)} up to {MAX_ATTACHMENT_BYTES / 1024 / 1024}MB
+						{imageDescription(accept)} up to{" "}
+						{MAX_ATTACHMENT_BYTES / 1024 / 1024}MB
 					</p>
 				</div>
 				<button
@@ -211,7 +211,9 @@ export default function ImageUploadPopover({
 				<div className="mx-auto flex w-fit rounded-lg bg-primary-100 p-3 text-primary-700">
 					<Image size={28} strokeWidth={1.8} aria-hidden />
 				</div>
-				<p className="mt-3 text-sm text-neutral-700">Choose from your computer</p>
+				<p className="mt-3 text-sm text-neutral-700">
+					Choose from your computer
+				</p>
 				<input
 					ref={fileInputRef}
 					type="file"

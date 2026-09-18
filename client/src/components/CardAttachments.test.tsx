@@ -8,16 +8,16 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Card, CardAttachment } from "../types";
 import {
 	MAX_ATTACHMENT_COUNT,
 	type PreparedImagePair,
-} from "../lib/imageAttachments";
+} from "../shared/imageAttachments";
+import type { Card, CardAttachment } from "../types";
 
 const mockPrepareImageAttachment = vi.fn();
-vi.mock("../lib/imageAttachments", async (importOriginal) => {
+vi.mock("../shared/imageAttachments", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../lib/imageAttachments")>();
+		await importOriginal<typeof import("../shared/imageAttachments")>();
 	return {
 		...actual,
 		prepareImageAttachment: (...args: unknown[]) =>

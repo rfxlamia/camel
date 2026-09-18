@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	MAX_ATTACHMENT_COUNT,
 	prepareImageAttachment,
-} from "../lib/imageAttachments";
+} from "../shared/imageAttachments";
 import {
 	countStagedSlots,
 	createStageId,
