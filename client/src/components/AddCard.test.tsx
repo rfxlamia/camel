@@ -15,7 +15,7 @@ import type {
 	WorkspaceMember,
 } from "../types";
 import AddCard from "./AddCard";
-import { TaskMetadataCatalogProvider } from "./task-entry/TaskMetadataCatalogProvider";
+import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
 
 const {
 	mockGetWorkspaceMembers,

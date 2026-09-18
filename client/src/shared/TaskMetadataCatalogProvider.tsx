@@ -8,8 +8,8 @@ import {
 	useState,
 	type ReactNode,
 } from "react";
-import { api } from "../../api";
-import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../../types";
+import { api } from "../api";
+import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 
 export type TaskMetadataCatalogKey =
 	| "assignee"

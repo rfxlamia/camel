@@ -13,13 +13,13 @@ import {
 	taskMetadataReducer,
 	type TaskMetadataAction,
 	type TaskMetadataDraft,
-} from "../task-entry/taskMetadataDraft";
+} from "../../shared/taskMetadataDraft";
 import {
 	getTrackerTaskFieldDefinitions,
 	type TrackerFieldLockContext,
-} from "../task-entry/taskFieldDefinitions";
-import type { TaskMetadataCatalogs } from "../task-entry/TaskMetadataCatalogProvider";
-import { TaskTitleEditor } from "../task-entry/TaskTitleEditor";
+} from "../../shared/taskFieldDefinitions";
+import type { TaskMetadataCatalogs } from "../../shared/TaskMetadataCatalogProvider";
+import { TaskTitleEditor } from "../../shared/TaskTitleEditor";
 import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../../types";
 import { TrackerCreateMetadataFields, type TrackerCreatePickerName } from "./TrackerCreateMetadataFields";
 

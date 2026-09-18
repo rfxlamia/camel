@@ -6,7 +6,7 @@ import type {
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../../types";
-import type { TaskMetadataAction, TaskMetadataDraft } from "../task-entry/taskMetadataDraft";
+import type { TaskMetadataAction, TaskMetadataDraft } from "../../shared/taskMetadataDraft";
 import {
 	Avatar,
 	LabelDot,

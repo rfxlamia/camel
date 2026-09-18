@@ -64,7 +64,7 @@ vi.mock("../lib/columnColorUtils", async (importOriginal) => {
 import { generateSwatchCandidates } from "../lib/columnColorUtils";
 import type { Column, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 import ColumnView from "./ColumnView";
-import { TaskMetadataCatalogProvider } from "./task-entry/TaskMetadataCatalogProvider";
+import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
 
 const members: WorkspaceMember[] = [
 	{ userId: 1, username: "rafi", displayName: "Rafi", role: "member" },

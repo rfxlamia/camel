@@ -1,4 +1,4 @@
-// client/src/components/task-entry/TaskTitleEditor.test.tsx — jsdom.
+// client/src/shared/TaskTitleEditor.test.tsx — jsdom.
 import {
 	cleanup,
 	fireEvent,

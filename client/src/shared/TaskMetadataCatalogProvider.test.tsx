@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../../types";
+import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 import {
 	TaskMetadataCatalogProvider,
 	useTaskMetadataCatalogs,
@@ -18,7 +18,7 @@ const {
 	mockListTrackerProjects: vi.fn(),
 }));
 
-vi.mock("../../api", () => ({
+vi.mock("../api", () => ({
 	api: {
 		getWorkspaceMembers: (...args: unknown[]) => mockGetWorkspaceMembers(...args),
 		listTrackerVocabularies: (...args: unknown[]) =>

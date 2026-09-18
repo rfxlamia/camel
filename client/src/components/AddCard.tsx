@@ -3,16 +3,16 @@ import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import type { BoardCreatePayload } from "../shared/taskCreateContracts";
 import type { Column } from "../types";
 import { AddCardForm } from "./AddCardForm";
-import { useTaskMetadataCatalogs } from "./task-entry/TaskMetadataCatalogProvider";
+import { useTaskMetadataCatalogs } from "../shared/TaskMetadataCatalogProvider";
 import {
 	type TaskFileCommandDefinition,
 	type TaskTitleEditorHandle,
-} from "./task-entry/TaskTitleEditor";
-import { getBoardTaskFieldDefinitions } from "./task-entry/taskFieldDefinitions";
+} from "../shared/TaskTitleEditor";
+import { getBoardTaskFieldDefinitions } from "../shared/taskFieldDefinitions";
 import {
 	createInitialTaskMetadataDraft,
 	taskMetadataReducer,
-} from "./task-entry/taskMetadataDraft";
+} from "../shared/taskMetadataDraft";
 import { useAddCardImageStaging } from "./useAddCardImageStaging";
 import { useAddCardSubmit } from "./useAddCardSubmit";
 

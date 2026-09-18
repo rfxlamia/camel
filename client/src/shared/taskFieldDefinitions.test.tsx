@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../../types";
+import type { TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 import {
 	getBoardTaskFieldDefinitions,
 	getTrackerTaskFieldDefinitions,

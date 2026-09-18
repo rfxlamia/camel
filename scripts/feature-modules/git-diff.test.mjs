@@ -194,6 +194,24 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "client/src/lib/taskCreateContracts.ts")),
 			"expected leftover client/src/lib/taskCreateContracts.ts to be gone",
 		);
+		for (const name of [
+			"TaskTitleEditor.tsx",
+			"taskFieldDefinitions.tsx",
+			"taskMetadataDraft.ts",
+			"TaskFieldCommandPopover.tsx",
+			"TaskMetadataCatalogProvider.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/shared/${name}`)),
+				`expected kernel home client/src/shared/${name}`,
+			);
+			assert.ok(
+				!existsSync(
+					join(repoRoot, `client/src/components/task-entry/${name}`),
+				),
+				`expected leftover client/src/components/task-entry/${name} to be gone`,
+			);
+		}
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/features/tracker/index.ts")),
 			"expected features/tracker public API client/src/features/tracker/index.ts",
