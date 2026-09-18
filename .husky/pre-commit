@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
 set -e
 
-echo "🔍 Running lint..."
-npm run lint
+echo "🔍 Checking staged files..."
+if [ -z "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
+	echo "✓ Nothing staged, skipping"
+	exit 0
+fi
 
-echo "🔎 Running typecheck..."
-npm run typecheck
+set +e
+OUTPUT=$(./node_modules/.bin/biome check --write --staged 2>&1)
+STATUS=$?
+set -e
+echo "$OUTPUT"
+if [ $STATUS -ne 0 ]; then
+	if echo "$OUTPUT" | grep -q "No files were processed"; then
+		echo "ℹ No Biome-processable files staged, skipping"
+		exit 0
+	fi
+	exit $STATUS
+fi
+git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 -r git add --
 
-echo "✓ Pre-commit passed"
+echo "✓ Pre-commit passed (staged-only)"

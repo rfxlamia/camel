@@ -1,13 +1,27 @@
 #!/usr/bin/env bash
 set -e
 
-echo "🔍 Running lint..."
-npm run lint
-
-echo "🔎 Running typecheck..."
+echo "🔎 Running typecheck (full)..."
 npm run typecheck
 
-echo "🧪 Running tests..."
-npm test
+echo "🛡 Running fast guards (full)..."
+npm run check:mutation-routing
+npm run check:feature-modules
+npm run test:feature-modules
+
+if BASE=$(git merge-base HEAD origin/main 2>/dev/null) && [ -n "$BASE" ]; then
+	HEAD_SHA=$(git rev-parse HEAD)
+	if [ "$BASE" = "$HEAD_SHA" ]; then
+		echo "⚠️ merge-base == HEAD (pushing main or up-to-date) — running full tests..."
+		npm test
+	else
+		echo "🧪 Running changed tests vs $BASE (best-effort; CI is authoritative)..."
+		npm run test --workspace=server -- --changed="$BASE"
+		npm run test --workspace=client -- --changed="$BASE"
+	fi
+else
+	echo "⚠️ origin/main unavailable — running full tests..."
+	npm test
+fi
 
 echo "✓ Pre-push passed"
