@@ -1,23 +1,34 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 set -e
+
+HEAD_SHA=$(git rev-parse HEAD)
+if BASE=$(git merge-base HEAD origin/main 2>/dev/null) && [ -n "$BASE" ]; then
+	HAS_ORIGIN_MAIN=1
+else
+	HAS_ORIGIN_MAIN=0
+	BASE=""
+fi
 
 echo "🔎 Running typecheck (full)..."
 npm run typecheck
 
 echo "🛡 Running fast guards (full)..."
 npm run check:mutation-routing
-npm run check:feature-modules
+if [ "$HAS_ORIGIN_MAIN" -eq 1 ]; then
+	npm run check:feature-modules
+else
+	echo "⚠️ origin/main unavailable — skipping check:feature-modules"
+fi
 npm run test:feature-modules
 
-if BASE=$(git merge-base HEAD origin/main 2>/dev/null) && [ -n "$BASE" ]; then
-	HEAD_SHA=$(git rev-parse HEAD)
+if [ "$HAS_ORIGIN_MAIN" -eq 1 ]; then
 	if [ "$BASE" = "$HEAD_SHA" ]; then
 		echo "⚠️ merge-base == HEAD (pushing main or up-to-date) — running full tests..."
 		npm test
 	else
 		echo "🧪 Running changed tests vs $BASE (best-effort; CI is authoritative)..."
-		npm run test --workspace=server -- --changed="$BASE"
-		npm run test --workspace=client -- --changed="$BASE"
+		npm run test --workspace=server -- --changed="$BASE" --passWithNoTests
+		npm run test --workspace=client -- --changed="$BASE" --passWithNoTests
 	fi
 else
 	echo "⚠️ origin/main unavailable — running full tests..."
