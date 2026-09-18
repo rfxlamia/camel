@@ -5,4 +5,5 @@ export {
 	buildLabelDisplayValue,
 	buildLabelOptions,
 	buildTrackerRowPickerState,
+	buildTrackerRowStatusOptions,
 } from "../../features/tracker";

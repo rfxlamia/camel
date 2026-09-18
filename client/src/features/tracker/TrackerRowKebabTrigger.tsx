@@ -7,17 +7,7 @@ import type {
 } from "../../types";
 import { TrackerRowKebabMenu } from "./TrackerRowKebabMenu";
 import type { TrackerAuxiliaryLoadState } from "./trackerAuxiliaryState";
-
-type OpenPicker =
-	| "date"
-	| "status"
-	| "priority"
-	| "project"
-	| "phase"
-	| "assignees"
-	| "labels"
-	| "kebab"
-	| null;
+import type { OpenPicker } from "./useTrackerRowOpenPicker";
 
 export interface TrackerRowKebabTriggerProps {
 	item: TrackerItem;
