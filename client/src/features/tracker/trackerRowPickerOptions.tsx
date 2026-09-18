@@ -21,6 +21,49 @@ export interface TrackerRowPickerContext {
 	members?: WorkspaceMember[];
 }
 
+export function buildAssigneeOptions(
+	members: WorkspaceMember[] | undefined,
+	item: TrackerItem,
+): PickerOption[] {
+	const assigneeIds = item.assignees.map((a) => a.id);
+	return (
+		members?.map((m) => ({
+			id: String(m.userId),
+			label: m.displayName,
+			hint: `@${m.username}`,
+			selected: assigneeIds.includes(m.userId),
+			icon: <Avatar name={m.displayName} />,
+		})) ?? []
+	);
+}
+
+export function buildAssigneeDisplayValue(
+	item: TrackerItem,
+): string | undefined {
+	if (item.assignees.length === 0) return undefined;
+	if (item.assignees.length === 1) return item.assignees[0].displayName;
+	return `${item.assignees[0].displayName} +${item.assignees.length - 1}`;
+}
+
+export function buildLabelOptions(
+	labels: TrackerVocabulary[] | undefined,
+	item: TrackerItem,
+): PickerOption[] {
+	const orderedLabels = labels ? sortStatusesByPosition(labels) : [];
+	return orderedLabels.map((l) => ({
+		id: String(l.id),
+		label: l.name,
+		selected: item.labels.some((label) => label.id === l.id),
+		icon: <LabelDot colour={l.colour} />,
+	}));
+}
+
+export function buildLabelDisplayValue(item: TrackerItem): string | undefined {
+	if (item.labels.length === 0) return undefined;
+	if (item.labels.length === 1) return item.labels[0].name;
+	return `${item.labels[0].name} +${item.labels.length - 1}`;
+}
+
 export function buildTrackerRowPickerState({
 	item,
 	projects,
@@ -79,38 +122,6 @@ export function buildTrackerRowPickerState({
 		})),
 	];
 
-	const assigneeIds = item.assignees.map((a) => a.id);
-	const assigneeOptions: PickerOption[] =
-		members?.map((m) => ({
-			id: String(m.userId),
-			label: m.displayName,
-			hint: `@${m.username}`,
-			selected: assigneeIds.includes(m.userId),
-			icon: <Avatar name={m.displayName} />,
-		})) ?? [];
-
-	const assigneeValue =
-		item.assignees.length === 0
-			? undefined
-			: item.assignees.length === 1
-				? item.assignees[0].displayName
-				: `${item.assignees[0].displayName} +${item.assignees.length - 1}`;
-
-	const orderedLabels = labels ? sortStatusesByPosition(labels) : [];
-	const labelOptions: PickerOption[] = orderedLabels.map((l) => ({
-		id: String(l.id),
-		label: l.name,
-		selected: item.labels.some((label) => label.id === l.id),
-		icon: <LabelDot colour={l.colour} />,
-	}));
-
-	const labelValue =
-		item.labels.length === 0
-			? undefined
-			: item.labels.length === 1
-				? item.labels[0].name
-				: `${item.labels[0].name} +${item.labels.length - 1}`;
-
 	return {
 		selectedProject,
 		selectedPhase,
@@ -122,9 +133,9 @@ export function buildTrackerRowPickerState({
 		projectOptions,
 		phaseOptions,
 		priorityOptions,
-		assigneeOptions,
-		assigneeValue,
-		labelOptions,
-		labelValue,
+		assigneeOptions: buildAssigneeOptions(members, item),
+		assigneeValue: buildAssigneeDisplayValue(item),
+		labelOptions: buildLabelOptions(labels, item),
+		labelValue: buildLabelDisplayValue(item),
 	};
 }
