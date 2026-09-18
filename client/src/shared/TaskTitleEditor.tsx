@@ -15,7 +15,7 @@ import {
 	type CaretOffset,
 	caretOffsetToViewportRect,
 	getTextareaCaretOffset,
-} from "../lib/caretRect";
+} from "./caretRect";
 import type { ViewportRect } from "./popoverPlacement";
 import {
 	isPickerUnavailable,

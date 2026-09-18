@@ -200,6 +200,14 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "client/src/lib/taskCreateContracts.ts")),
 			"expected leftover client/src/lib/taskCreateContracts.ts to be gone",
 		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/caretRect.ts")),
+			"expected kernel home client/src/shared/caretRect.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/lib/caretRect.ts")),
+			"expected leftover client/src/lib/caretRect.ts to be gone",
+		);
 		for (const name of [
 			"TaskTitleEditor.tsx",
 			"taskFieldDefinitions.tsx",
