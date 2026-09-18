@@ -1,10 +1,20 @@
 import { ListTodo, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { TaskTitleEditor } from "../../shared/TaskTitleEditor";
 import { TrackerCreateMetadataFields } from "./TrackerCreateMetadataFields";
 import {
 	type TrackerCreateModalProps,
 	useTrackerCreateModal,
 } from "./useTrackerCreateModal";
+
+const DIALOG_FOCUSABLE_SELECTOR =
+	"button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
+function getDialogFocusableElements(panel: HTMLElement): HTMLElement[] {
+	return Array.from(
+		panel.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR),
+	);
+}
 
 export default function TrackerCreateModal(props: TrackerCreateModalProps) {
 	const {
@@ -33,6 +43,47 @@ export default function TrackerCreateModal(props: TrackerCreateModalProps) {
 		handleSubmit,
 		titleFilled,
 	} = useTrackerCreateModal(props);
+	const panelRef = useRef<HTMLDivElement>(null);
+	const openerRef = useRef<HTMLElement | null>(null);
+
+	useEffect(() => {
+		const active = document.activeElement;
+		if (active instanceof HTMLElement) openerRef.current = active;
+		panelRef.current?.querySelector<HTMLElement>("textarea")?.focus();
+		return () => {
+			const opener = openerRef.current;
+			openerRef.current = null;
+			if (opener?.isConnected) opener.focus();
+		};
+	}, []);
+
+	useEffect(() => {
+		const panel = panelRef.current;
+		if (!panel) return;
+
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Tab") return;
+			if (openPicker || titleEditorRef.current?.isCommandOpen()) return;
+
+			const focusable = getDialogFocusableElements(panel);
+			const first = focusable[0];
+			const last = focusable.at(-1);
+			if (!first || !last) return;
+
+			if (event.shiftKey) {
+				if (document.activeElement === first) {
+					event.preventDefault();
+					last.focus();
+				}
+			} else if (document.activeElement === last) {
+				event.preventDefault();
+				first.focus();
+			}
+		};
+
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, [openPicker, titleEditorRef]);
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-900/40 p-4 pt-[10vh] backdrop-blur-[2px]">
@@ -43,6 +94,7 @@ export default function TrackerCreateModal(props: TrackerCreateModalProps) {
 				aria-hidden
 			/>
 			<div
+				ref={panelRef}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="tracker-create-title"
