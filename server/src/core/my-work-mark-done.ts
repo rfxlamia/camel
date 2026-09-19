@@ -2,7 +2,7 @@ import type { Selectable } from "kysely";
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import type { Cards, TrackerItems } from "../db/types.js";
-import type { MyWorkSource } from "../routes/my-work-types.js";
+import type { MyWorkSource } from "../modules/my-work/index.js";
 import { applyBoardCardStatusChange } from "./board-card-status-change.js";
 import { resolveMyWorkDoneTarget } from "./my-work-done-target.js";
 import { applyTrackerItemStatusChange } from "./tracker-item-status-change.js";

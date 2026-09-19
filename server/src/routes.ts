@@ -1,7 +1,19 @@
 import { Router } from "express";
 import { requireAuth } from "./auth.js";
 import { config } from "./config.js";
+import { myWorkObservability } from "./core/my-work-observability.js";
+import { workItemsRouter } from "./lib/work-items.js";
 import { requireEmailVerified } from "./middleware/email-gate.js";
+import {
+	createMyWorkPreAuthObservabilityMiddleware,
+	myWorkRouter,
+} from "./modules/my-work/index.js";
+import {
+	trackerItemsRouter,
+	trackerPhasesRouter,
+	trackerProjectsRouter,
+	trackerVocabulariesRouter,
+} from "./modules/tracker/index.js";
 import { notificationsRouter } from "./notifications/router.js";
 import { activityRouter } from "./routes/activity.js";
 import { boardRouter } from "./routes/board.js";
@@ -13,18 +25,8 @@ import { focusSessionRouter } from "./routes/focus-session.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { metricsRouter } from "./routes/metrics.js";
-import { myWorkObservability } from "./core/my-work-observability.js";
-import { createMyWorkPreAuthObservabilityMiddleware } from "./routes/my-work-router.js";
-import { myWorkRouter } from "./routes/my-work.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
-import {
-	trackerItemsRouter,
-	trackerPhasesRouter,
-	trackerProjectsRouter,
-	trackerVocabulariesRouter,
-} from "./modules/tracker/index.js";
-import { workItemsRouter } from "./lib/work-items.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility

@@ -382,15 +382,129 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
-		for (const name of [
-			"board.ts",
-			"cards.ts",
-			"card-create.ts",
-			"my-work.ts",
-		]) {
+		for (const name of ["board.ts", "cards.ts", "card-create.ts"]) {
 			assert.ok(
 				existsSync(join(repoRoot, `server/src/routes/${name}`)),
-				`expected board/my-work product router server/src/routes/${name} to remain`,
+				`expected board product router server/src/routes/${name} to remain`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/my-work/index.ts")),
+			"expected features/my-work public API client/src/features/my-work/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/my-work/index.ts")),
+			"expected server/src/modules/my-work/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/MyWorkPage.tsx")),
+			"expected MyWorkPage to remain under client/src/pages/MyWorkPage.tsx",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/features/chat")),
+			"expected client/src/features/chat/ to not exist yet",
+		);
+		for (const name of [
+			"MyWorkDetailContent.tsx",
+			"MyWorkDetailSheet.tsx",
+			"MyWorkDetailSheetFrame.tsx",
+			"MyWorkDoneAction.tsx",
+			"MyWorkDoneActionView.tsx",
+			"MyWorkList.tsx",
+			"MyWorkPageView.tsx",
+			"MyWorkRow.tsx",
+			"MyWorkRowParts.tsx",
+			"MyWorkToolbar.tsx",
+			"MyWorkToolbarParts.tsx",
+			"myWorkDataLoader.ts",
+			"myWorkDoneActionState.ts",
+			"useDelayedLoading.ts",
+			"useMyWorkData.ts",
+			"useMyWorkDoneAction.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/my-work/${name}`)),
+				`expected features/my-work home client/src/features/my-work/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/components/my-work/${name}`)),
+				`expected leftover client/src/components/my-work/${name} to be gone`,
+			);
+		}
+		for (const name of [
+			"MyWorkDoneAction.test.tsx",
+			"MyWorkRow.test.tsx",
+			"myWorkDataLoader.test.ts",
+			"useDelayedLoading.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/my-work/${name}`)),
+				`expected features/my-work test home client/src/features/my-work/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/components/my-work/${name}`)),
+				`expected leftover client/src/components/my-work/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/MyWorkDetailSheet.test.tsx")),
+			"expected MyWorkDetailSheet.test.tsx under client/src/pages/",
+		);
+		assert.ok(
+			!existsSync(
+				join(
+					repoRoot,
+					"client/src/components/my-work/MyWorkDetailSheet.test.tsx",
+				),
+			),
+			"expected leftover client/src/components/my-work/MyWorkDetailSheet.test.tsx to be gone",
+		);
+		for (const name of [
+			"myWorkMutationReconciliation.ts",
+			"myWorkMutationReconciliation.test.ts",
+			"myWorkNavigation.ts",
+			"myWorkOrdering.test.ts",
+			"myWorkOrdering.ts",
+			"myWorkSearch.test.ts",
+			"myWorkSearch.ts",
+			"myWorkSourceNavigation.ts",
+			"myWorkStatus.ts",
+			"myWorkTestSupport.ts",
+			"myWorkUtils.test.ts",
+			"myWorkUtils.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/my-work/${name}`)),
+				`expected features/my-work home client/src/features/my-work/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected leftover client/src/lib/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/my-work/myWork.ts")),
+			"expected client/src/features/my-work/myWork.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/api/myWork.ts")),
+			"expected leftover client/src/api/myWork.ts to be gone",
+		);
+		for (const name of [
+			"my-work.ts",
+			"my-work-router.ts",
+			"my-work-service.ts",
+			"my-work-data-source.ts",
+			"my-work-query-parser.ts",
+			"my-work-types.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/my-work/${name}`)),
+				`expected server/src/modules/my-work/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
 		assert.ok(

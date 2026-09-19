@@ -1,9 +1,6 @@
 import { dirname } from "node:path";
 
-import {
-	CLIENT_KERNEL_PREFIXES,
-	SERVER_KERNEL_PREFIXES,
-} from "./map.mjs";
+import { CLIENT_KERNEL_PREFIXES, SERVER_KERNEL_PREFIXES } from "./map.mjs";
 
 export { CLIENT_KERNEL_PREFIXES, SERVER_KERNEL_PREFIXES };
 
@@ -22,6 +19,21 @@ export const LEGACY_FEATURE_PREFIXES = [
 ];
 
 export const FORBIDDEN_PRODUCT_FEATURES = new Set(["work-items"]);
+
+/**
+ * Hub→pure-leaf edges that prevent hub↔barrel cycles; leaf must keep zero runtime imports.
+ * Each entry is an { importer, target } POSIX pair without extension.
+ * E.g. client/src/api.ts must use the pure factory leaf ./features/my-work/myWork
+ * (type-only imports) — never the barrel — because the barrel transitively imports
+ * the hub back (myWorkNavigation, myWorkDataLoader, workItemMutations), and the cycle
+ * splits the module identity under vi.mock (see T4 intake investigation).
+ */
+export const HUB_TO_LEAF_ALLOWLIST = [
+	{
+		importer: "client/src/api.ts",
+		target: "client/src/features/my-work/myWork",
+	},
+];
 
 /**
  * @param {string} path POSIX path
@@ -89,7 +101,12 @@ export function parseFeatureModuleTarget(path) {
 	if (server) {
 		const rest = server[3];
 		if (!rest || rest === "index") {
-			return { side: "server", feature: server[2], deep: false, root: server[1] };
+			return {
+				side: "server",
+				feature: server[2],
+				deep: false,
+				root: server[1],
+			};
 		}
 		return { side: "server", feature: server[2], deep: true, root: server[1] };
 	}
@@ -97,7 +114,12 @@ export function parseFeatureModuleTarget(path) {
 	if (client) {
 		const rest = client[3];
 		if (!rest || rest === "index") {
-			return { side: "client", feature: client[2], deep: false, root: client[1] };
+			return {
+				side: "client",
+				feature: client[2],
+				deep: false,
+				root: client[1],
+			};
 		}
 		return { side: "client", feature: client[2], deep: true, root: client[1] };
 	}

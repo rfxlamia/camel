@@ -1,11 +1,11 @@
-import { createMyWorkApi } from "./api/myWork";
+import { createMyWorkApi } from "./features/my-work/myWork";
 import type { TemplateColumn } from "./lib/templates";
-import { publishAutoError } from "./shared/ticketIntakeBus";
 import type {
 	BoardCreatePayload,
 	TaskCreateFieldErrors,
 	TrackerCreatePayload,
 } from "./shared/taskCreateContracts";
+import { publishAutoError } from "./shared/ticketIntakeBus";
 import type {
 	ActivityEvent,
 	AgentArtifact,
@@ -18,24 +18,24 @@ import type {
 	ChatThread,
 	Column,
 	FlowMetrics,
+	FocusSession,
+	FocusSessionGetResponse,
 	MetricsHistoryBucket,
 	NotificationsResponse,
 	PresenceUser,
 	SettingsMap,
-	User,
 	TrackerEvent,
 	TrackerItem,
-	WorkItem,
 	TrackerPhase,
 	TrackerProject,
 	TrackerVocabulary,
 	TrackerVocabularyKind,
+	User,
+	WorkItem,
+	WorkItemSource,
 	Workspace,
 	WorkspaceListResponse,
 	WorkspaceMember,
-	FocusSession,
-	FocusSessionGetResponse,
-	WorkItemSource,
 } from "./types";
 
 class ApiError extends Error {
