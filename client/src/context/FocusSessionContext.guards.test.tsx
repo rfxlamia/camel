@@ -160,7 +160,7 @@ function createWrapper() {
 	};
 }
 
-vi.mock("./WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => ({
 		activeWorkspaceId,
 		user: testUser,
@@ -169,7 +169,7 @@ vi.mock("./WorkspaceContext", () => ({
 	}),
 }));
 
-vi.mock("./ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
