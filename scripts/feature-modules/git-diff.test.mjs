@@ -535,6 +535,30 @@ describe("Cycle Map — map data (unit)", () => {
 			);
 		}
 	});
+
+	it("Auth screens become page orchestrators", () => {
+		for (const name of [
+			"AuthPage.tsx",
+			"AuthPage.test.tsx",
+			"EmailGatePage.tsx",
+			"EmailGatePage.test.tsx",
+			"PickUsernamePage.tsx",
+			"PickUsernamePage.test.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/pages/${name}`)),
+				`expected page home client/src/pages/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/components/${name}`)),
+				`expected leftover client/src/components/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/features/auth")),
+			"expected client/src/features/auth/ to not exist yet",
+		);
+	});
 });
 
 describe("Cycle A — stub CLI (integration)", () => {

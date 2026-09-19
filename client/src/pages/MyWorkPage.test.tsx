@@ -18,12 +18,12 @@ import {
 	useNavigate,
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AuthPage from "../components/AuthPage";
 import type { MyWorkItem, MyWorkListResponse } from "../shared/myWorkTypes";
 import {
 	beginMyWorkMutation,
 	resetMyWorkMutationsForTests,
 } from "../shared/workItemMutations";
+import AuthPage from "./AuthPage";
 
 const {
 	mockListMyWork,
