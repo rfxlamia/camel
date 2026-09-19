@@ -125,6 +125,7 @@ function setupApiMocks() {
 	mockFocusGetConfig.mockResolvedValue({ enabled: true });
 }
 
+import { PresenceProvider } from "../shared/PresenceContext";
 import {
 	ToastProvider,
 	useShowToast,
@@ -136,7 +137,6 @@ import {
 	FOCUS_LOADING_TOAST,
 } from "../shared/workspaceSwitcher";
 import { BoardProvider, useBoard } from "./BoardContext";
-import { PresenceProvider } from "./PresenceContext";
 
 function FocusGuardProbe() {
 	const {

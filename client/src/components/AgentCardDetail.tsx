@@ -17,7 +17,7 @@ import {
 	pickToolTraceForColumn,
 } from "../shared/toolTrace";
 import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
-import { ToolTrace } from "./ToolTrace";
+import { ToolTrace } from "../shared/ToolTraceView";
 
 interface AgentCardDetailProps {
 	column: AgentColumn;

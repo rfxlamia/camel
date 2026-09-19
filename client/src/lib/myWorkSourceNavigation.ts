@@ -6,7 +6,7 @@ import {
 	getSwitchAttemptState,
 	type SwitchAttemptInput,
 	type SwitchAttemptState,
-} from "./workspaceSwitcher";
+} from "../shared/workspaceSwitcher";
 
 export interface MyWorkSourceNavigation {
 	to: string;

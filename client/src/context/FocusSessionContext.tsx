@@ -15,10 +15,10 @@ import {
 	membershipRemovalTargetsUser,
 	TASK_MISSING_TOAST,
 } from "../lib/focusGuards";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { FocusSession, WorkItemSource } from "../types";
 import { useBoard } from "./BoardContext";
-import { useShowToast } from "./ToastContext";
-import { useWorkspace } from "./WorkspaceContext";
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ToolTrace } from "./ToolTrace.tsx";
+import { ToolTrace } from "./ToolTraceView";
 import { deriveToolTrace } from "./toolTrace";
 
 describe("ToolTrace", () => {

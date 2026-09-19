@@ -153,10 +153,10 @@ async function advanceRefreshDebounce() {
 	});
 }
 
+import { PresenceProvider } from "../shared/PresenceContext";
 import { ToastProvider, useToastState } from "../shared/ToastContext";
 import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider, useBoard } from "./BoardContext";
-import { PresenceProvider } from "./PresenceContext";
 
 function Providers({ children }: { children: React.ReactNode }) {
 	return (
