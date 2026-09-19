@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { deriveToolTrace } from "../lib/toolTrace";
-import { ToolTrace } from "./ToolTrace";
+import { ToolTrace } from "./ToolTrace.tsx";
+import { deriveToolTrace } from "./toolTrace";
 
 describe("ToolTrace", () => {
 	it("renders collapsed by default with a one-line summary", () => {

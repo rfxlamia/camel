@@ -1,6 +1,6 @@
 import { createMyWorkApi } from "./api/myWork";
 import type { TemplateColumn } from "./lib/templates";
-import { publishAutoError } from "./lib/ticketIntakeBus";
+import { publishAutoError } from "./shared/ticketIntakeBus";
 import type {
 	BoardCreatePayload,
 	TaskCreateFieldErrors,

@@ -12,7 +12,7 @@ import type { Dispatch, SetStateAction } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { FollowUpMessage } from "../../lib/agentFollowUp";
-import type { QueueState } from "../../lib/agentQueue";
+import type { QueueState } from "../../shared/agentQueue";
 import type { AgentArtifact, AgentBoard, AgentEvent } from "../../types";
 import ArtifactCard from "../ArtifactCard";
 

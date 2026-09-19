@@ -140,12 +140,10 @@ describe("useTicketIntakeChat integration — SSE submit-result to PreviewScreen
 
 	async function renderChatPanel() {
 		const { BoardProvider } = await import("../context/BoardContext");
-		const { PresenceProvider } = await import("../context/PresenceContext");
-		const { ToastProvider } = await import("../context/ToastContext");
-		const { WorkspaceProvider } = await import("../context/WorkspaceContext");
-		const { ChatPanel } = await import(
-			"../components/ticketIntake/ChatPanel"
-		);
+		const { PresenceProvider } = await import("./PresenceContext");
+		const { ToastProvider } = await import("./ToastContext");
+		const { WorkspaceProvider } = await import("./WorkspaceContext");
+		const { ChatPanel } = await import("./TicketIntakeChatPanel");
 		render(
 			<ToastProvider>
 				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
@@ -232,9 +230,7 @@ describe("useTicketIntakeChat integration — SSE submit-result to PreviewScreen
 		});
 
 		await waitFor(() => {
-			expect(
-				screen.getByText(/We could not create the issue/i),
-			).toBeTruthy();
+			expect(screen.getByText(/We could not create the issue/i)).toBeTruthy();
 		});
 		expect(screen.getByRole("button", { name: /^resubmit$/i })).toBeTruthy();
 	});

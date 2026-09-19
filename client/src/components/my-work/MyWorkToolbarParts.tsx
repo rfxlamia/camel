@@ -1,6 +1,6 @@
 import { RefreshCw, Search, SlidersHorizontal } from "lucide-react";
+import type { MyWorkScope, MyWorkWorkspace } from "../../shared/myWorkTypes";
 import type { WorkItemSource } from "../../types";
-import type { MyWorkScope, MyWorkWorkspace } from "../../types/myWork";
 
 export interface MyWorkToolbarProps {
 	scope: MyWorkScope;

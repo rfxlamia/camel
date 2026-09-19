@@ -20,14 +20,14 @@ import {
 	resetRequestBoundaryForTests,
 } from "../api";
 import { BoardProvider } from "../context/BoardContext";
-import { PresenceProvider } from "../context/PresenceContext";
-import { ToastProvider, useToastState } from "../context/ToastContext";
-import { useWorkspace, WorkspaceProvider } from "../context/WorkspaceContext";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
 import { sourceItem } from "../lib/myWorkTestSupport";
+import type { MyWorkItem, MyWorkListResponse } from "../shared/myWorkTypes";
+import { PresenceProvider } from "../shared/PresenceContext";
+import { ToastProvider, useToastState } from "../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import { resetMyWorkMutationsForTests } from "../shared/workItemMutations";
 import type { User, Workspace } from "../types";
-import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 import MyWorkPage from "./MyWorkPage";
 
 export type FetchHandler = (

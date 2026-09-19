@@ -19,11 +19,11 @@ import {
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AuthPage from "../components/AuthPage";
+import type { MyWorkItem, MyWorkListResponse } from "../shared/myWorkTypes";
 import {
 	beginMyWorkMutation,
 	resetMyWorkMutationsForTests,
 } from "../shared/workItemMutations";
-import type { MyWorkItem, MyWorkListResponse } from "../types/myWork";
 
 const {
 	mockListMyWork,
@@ -64,7 +64,7 @@ vi.mock("../api", () => ({
 	ApiError: MockApiError,
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 

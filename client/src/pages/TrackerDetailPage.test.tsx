@@ -59,11 +59,11 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
@@ -269,9 +269,9 @@ describe("TrackerDetailPage", () => {
 			| ((e: { type: string; trackerItemId?: number }) => void)
 			| undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			refreshTrackerList: vi.fn(),
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -336,9 +336,9 @@ describe("TrackerDetailPage", () => {
 			version: 3,
 		});
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			refreshTrackerList: vi.fn(),
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -360,9 +360,9 @@ describe("TrackerDetailPage", () => {
 			| ((e: { type: string; payload?: unknown }) => void)
 			| undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			refreshTrackerList,
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -488,9 +488,9 @@ describe("TrackerDetailPage", () => {
 			| ((e: { type: string; trackerItemId?: number }) => void)
 			| undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			refreshTrackerList: vi.fn(),
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
@@ -577,9 +577,19 @@ describe("TrackerDetailPage dates and project/phase pickers", () => {
 
 	it("resets the phase selection when a different project is picked", async () => {
 		mockUpdateTrackerItem
-			.mockResolvedValueOnce({ ...item, projectId: 1, phaseId: null, version: 2 })
+			.mockResolvedValueOnce({
+				...item,
+				projectId: 1,
+				phaseId: null,
+				version: 2,
+			})
 			.mockResolvedValueOnce({ ...item, projectId: 1, phaseId: 9, version: 3 })
-			.mockResolvedValueOnce({ ...item, projectId: 2, phaseId: null, version: 4 });
+			.mockResolvedValueOnce({
+				...item,
+				projectId: 2,
+				phaseId: null,
+				version: 4,
+			});
 		render(<TrackerDetailPage />);
 		await waitFor(() => screen.getByDisplayValue("Workspace Rename"));
 

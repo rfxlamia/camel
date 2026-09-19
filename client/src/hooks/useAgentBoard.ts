@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
 import { useBoard } from "../context/BoardContext";
-import { useShowToast } from "../context/ToastContext";
-import { useWorkspace } from "../context/WorkspaceContext";
 import { shouldRefetchBoardOnTerminalEvent } from "../lib/agentBoardSync";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { AgentArtifact, AgentBoard } from "../types";
 
 export function useAgentBoard() {

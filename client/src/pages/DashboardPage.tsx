@@ -22,10 +22,10 @@ import {
 	YAxis,
 } from "recharts";
 import { api } from "../api";
-import EmptyState from "../components/EmptyState";
-import PageHeader from "../components/PageHeader";
 import { useBoard } from "../context/BoardContext";
-import { useWorkspace } from "../context/WorkspaceContext";
+import EmptyState from "../shared/EmptyState";
+import PageHeader from "../shared/PageHeader";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { MetricsHistoryBucket } from "../types";
 import { formatDuration, formatRelativeTime } from "../types";
 import { describeEvent } from "./ActivityPage";

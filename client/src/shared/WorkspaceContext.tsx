@@ -18,7 +18,7 @@ import {
 	clearSavedWorkspaceId,
 	persistWorkspaceId,
 	readSavedWorkspaceId,
-} from "../lib/workspaceSelection";
+} from "../shared/workspaceSelection";
 import {
 	applyCreatedWorkspaceSelection,
 	FOCUS_BLOCKED_TOAST,
@@ -26,7 +26,7 @@ import {
 	getSwitchAttemptState,
 	persistRemindedInviteIds,
 	readRemindedInviteIds,
-} from "../lib/workspaceSwitcher";
+} from "../shared/workspaceSwitcher";
 import type {
 	SettingsMap,
 	SwitchConfirmState,

@@ -16,9 +16,9 @@ import {
 	useNavigate,
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MyWorkItem, MyWorkListResponse } from "../../shared/myWorkTypes";
 import { resetMyWorkMutationsForTests } from "../../shared/workItemMutations";
 import type { User } from "../../types";
-import type { MyWorkItem, MyWorkListResponse } from "../../types/myWork";
 
 const {
 	mockListActive,
@@ -96,17 +96,14 @@ vi.mock("./useDelayedLoading", () => ({
 }));
 
 import { BoardProvider } from "../../context/BoardContext";
-import { PresenceProvider } from "../../context/PresenceContext";
-import { ToastProvider } from "../../context/ToastContext";
-import {
-	useWorkspace,
-	WorkspaceProvider,
-} from "../../context/WorkspaceContext";
 import { MobileNav } from "../../layout/sidebar/MobileNav";
 import Sidebar from "../../layout/sidebar/Sidebar";
 import { WorkspaceOverlays } from "../../layout/sidebar/WorkspaceModals";
 import { WorkspaceSwitcher } from "../../layout/sidebar/WorkspaceSwitcher";
 import MyWorkPage from "../../pages/MyWorkPage";
+import { PresenceProvider } from "../../shared/PresenceContext";
+import { ToastProvider } from "../../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../../shared/WorkspaceContext";
 
 function makeItem(
 	overrides: Partial<MyWorkItem> & { id: number; key: string },

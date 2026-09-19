@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import LogoCropper from "../components/LogoCropper";
 import ManageMembersSection from "../components/settings/ManageMembersSection";
-import { useShowToast } from "../context/ToastContext";
-import { useWorkspace } from "../context/WorkspaceContext";
 import {
 	canEditWorkspaceSettings,
 	getWorkspaceDangerZoneState,
@@ -11,6 +9,8 @@ import {
 	validateUnsavedChanges,
 	validateWorkspaceName,
 } from "../lib/settingsValidation";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 
 /** Collapsible section following creative-brief design tokens */
 function SettingsSection({

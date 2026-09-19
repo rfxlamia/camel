@@ -37,11 +37,11 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => showToast,
 }));
 
@@ -81,17 +81,22 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../components/LoadingCamel", () => ({
+vi.mock("../shared/LoadingCamel", () => ({
 	default: () => <div data-testid="loading-camel" />,
 }));
-vi.mock("../components/SuccessAnimation", () => ({
+vi.mock("../shared/SuccessAnimation", () => ({
 	default: () => <div data-testid="success-animation" />,
 }));
 
-import { ApiError } from "../api";
-import BoardPage from "./BoardPage";
-import type { Column, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
 import type { SetStateAction } from "react";
+import { ApiError } from "../api";
+import type {
+	Column,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../types";
+import BoardPage from "./BoardPage";
 
 function makeListBoardValue(
 	columns: Column[],
@@ -184,8 +189,9 @@ beforeEach(() => {
 			{ userId: 1, username: "rafi", displayName: "Rafi", role: "member" },
 		] satisfies WorkspaceMember[],
 	});
-	mockListTrackerVocabularies.mockReset().mockImplementation(
-		(_workspaceId: number, kind: string) => {
+	mockListTrackerVocabularies
+		.mockReset()
+		.mockImplementation((_workspaceId: number, kind: string) => {
 			if (kind === "priority") {
 				return Promise.resolve([
 					{
@@ -199,8 +205,7 @@ beforeEach(() => {
 			}
 			if (kind === "label") return Promise.resolve([]);
 			return Promise.resolve([]);
-		},
-	);
+		});
 	mockListTrackerProjects.mockReset().mockResolvedValue([
 		{
 			id: 1,
@@ -212,20 +217,21 @@ beforeEach(() => {
 			phases: [],
 		},
 	] satisfies TrackerProject[]);
-	stubBoardPageContexts({
-
-		columns: [],
-		setColumns: vi.fn(),
-		loadError: false,
-		refresh,
-		cancelScheduledRefresh: vi.fn(),
-		deleteCard: vi.fn(),
-	
-	}, {
-		activeWorkspaceId: 7,
-		boardViewMode: "board",
-		setBoardViewMode: vi.fn(),
-	});
+	stubBoardPageContexts(
+		{
+			columns: [],
+			setColumns: vi.fn(),
+			loadError: false,
+			refresh,
+			cancelScheduledRefresh: vi.fn(),
+			deleteCard: vi.fn(),
+		},
+		{
+			activeWorkspaceId: 7,
+			boardViewMode: "board",
+			setBoardViewMode: vi.fn(),
+		},
+	);
 });
 afterEach(() => {
 	cleanup();
@@ -236,9 +242,7 @@ describe("BoardPage empty-board template picker", () => {
 	it("renders the TemplatePicker on an empty board (not the bare AddColumn empty state)", () => {
 		render(<BoardPage />);
 		expect(screen.getByText("Software Dev")).toBeTruthy();
-		expect(
-			screen.queryByRole("button", { name: /^add column$/i }),
-		).toBeNull();
+		expect(screen.queryByRole("button", { name: /^add column$/i })).toBeNull();
 	});
 
 	it("on a 409 apply, silently refetches and shows no error toast", async () => {
@@ -268,9 +272,7 @@ describe("BoardPage empty-board template picker", () => {
 		fireEvent.click(
 			screen.getByRole("button", { name: /start blank instead/i }),
 		);
-		expect(
-			screen.getByRole("button", { name: /^add column$/i }),
-		).toBeTruthy();
+		expect(screen.getByRole("button", { name: /^add column$/i })).toBeTruthy();
 		expect(applyTemplate).not.toHaveBeenCalled();
 	});
 });
@@ -320,21 +322,22 @@ const listColumns = [
 describe("BoardPage list view column change", () => {
 	it("moves a card via the list status picker", async () => {
 		const setColumns = vi.fn();
-		stubBoardPageContexts({
-
-			columns: listColumns,
-			setColumns,
-			loadError: false,
-			refresh,
-			cancelScheduledRefresh: vi.fn(),
-			deleteCard: vi.fn(),
-			saveCard: vi.fn(),
-		
-	}, {
-		activeWorkspaceId: 7,
-		boardViewMode: "list",
-		setBoardViewMode: vi.fn(),
-	});
+		stubBoardPageContexts(
+			{
+				columns: listColumns,
+				setColumns,
+				loadError: false,
+				refresh,
+				cancelScheduledRefresh: vi.fn(),
+				deleteCard: vi.fn(),
+				saveCard: vi.fn(),
+			},
+			{
+				activeWorkspaceId: 7,
+				boardViewMode: "list",
+				setBoardViewMode: vi.fn(),
+			},
+		);
 		render(<BoardPage />);
 		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
@@ -352,21 +355,22 @@ describe("BoardPage list view column change", () => {
 	it("rolls back and shows an error toast when moveCard fails", async () => {
 		moveCard.mockRejectedValueOnce(new Error("network down"));
 		const setColumns = vi.fn();
-		stubBoardPageContexts({
-
-			columns: listColumns,
-			setColumns,
-			loadError: false,
-			refresh,
-			cancelScheduledRefresh: vi.fn(),
-			deleteCard: vi.fn(),
-			saveCard: vi.fn(),
-		
-	}, {
-		activeWorkspaceId: 7,
-		boardViewMode: "list",
-		setBoardViewMode: vi.fn(),
-	});
+		stubBoardPageContexts(
+			{
+				columns: listColumns,
+				setColumns,
+				loadError: false,
+				refresh,
+				cancelScheduledRefresh: vi.fn(),
+				deleteCard: vi.fn(),
+				saveCard: vi.fn(),
+			},
+			{
+				activeWorkspaceId: 7,
+				boardViewMode: "list",
+				setBoardViewMode: vi.fn(),
+			},
+		);
 		render(<BoardPage />);
 		fireEvent.click(screen.getByLabelText("To Do, Ship feature"));
 		fireEvent.click(screen.getByRole("option", { name: /In Progress/ }));
@@ -602,25 +606,23 @@ const boardColumns: Column[] = [
 	},
 ];
 
-function renderBoardView(
-	columns: Column[] = boardColumns,
-	workspaceId = 7,
-) {
-	stubBoardPageContexts({
-
-		columns,
-		setColumns: vi.fn(),
-		loadError: false,
-		refresh,
-		cancelScheduledRefresh: vi.fn(),
-		deleteCard: vi.fn(),
-		saveCard: vi.fn(),
-	
-	}, {
-		activeWorkspaceId: workspaceId,
-		boardViewMode: "board",
-		setBoardViewMode: vi.fn(),
-	});
+function renderBoardView(columns: Column[] = boardColumns, workspaceId = 7) {
+	stubBoardPageContexts(
+		{
+			columns,
+			setColumns: vi.fn(),
+			loadError: false,
+			refresh,
+			cancelScheduledRefresh: vi.fn(),
+			deleteCard: vi.fn(),
+			saveCard: vi.fn(),
+		},
+		{
+			activeWorkspaceId: workspaceId,
+			boardViewMode: "board",
+			setBoardViewMode: vi.fn(),
+		},
+	);
 	return render(<BoardPage />);
 }
 
@@ -677,7 +679,9 @@ describe("BoardPage Add Card integration", () => {
 		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
 		const textarea = getTitleTextarea();
 		fireEvent.change(textarea, { target: { value: "Sync test" } });
-		fireEvent.click(screen.getAllByRole("button", { name: /add to board/i })[0]!);
+		fireEvent.click(
+			screen.getAllByRole("button", { name: /add to board/i })[0]!,
+		);
 
 		await waitFor(() => expect(createCard).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
@@ -685,37 +689,42 @@ describe("BoardPage Add Card integration", () => {
 		expect(
 			showToast.mock.calls.some((call) => String(call[0]).includes("refresh")),
 		).toBe(true);
-		expect(
-			screen.queryByRole("combobox", { name: "Task title" }),
-		).toBeNull();
+		expect(screen.queryByRole("combobox", { name: "Task title" })).toBeNull();
 	});
 
 	it("mounts one catalog provider per Board workspace", async () => {
 		const view = renderBoardView();
-		await waitFor(() => expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(1),
+		);
 		expect(mockListTrackerProjects).toHaveBeenCalledTimes(1);
 		expect(
-			mockListTrackerVocabularies.mock.calls.filter(([, kind]) => kind === "priority"),
+			mockListTrackerVocabularies.mock.calls.filter(
+				([, kind]) => kind === "priority",
+			),
 		).toHaveLength(1);
 
-		stubBoardPageContexts({
-
-			columns: boardColumns,
-			setColumns: vi.fn(),
-			loadError: false,
-			refresh,
-			cancelScheduledRefresh: vi.fn(),
-			deleteCard: vi.fn(),
-			saveCard: vi.fn(),
-		
-	}, {
-		activeWorkspaceId: 9,
-		boardViewMode: "board",
-		setBoardViewMode: vi.fn(),
-	});
+		stubBoardPageContexts(
+			{
+				columns: boardColumns,
+				setColumns: vi.fn(),
+				loadError: false,
+				refresh,
+				cancelScheduledRefresh: vi.fn(),
+				deleteCard: vi.fn(),
+				saveCard: vi.fn(),
+			},
+			{
+				activeWorkspaceId: 9,
+				boardViewMode: "board",
+				setBoardViewMode: vi.fn(),
+			},
+		);
 		view.rerender(<BoardPage />);
 
-		await waitFor(() => expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(mockGetWorkspaceMembers).toHaveBeenCalledTimes(2),
+		);
 		expect(mockGetWorkspaceMembers).toHaveBeenNthCalledWith(1, 7);
 		expect(mockGetWorkspaceMembers).toHaveBeenNthCalledWith(2, 9);
 		expect(mockListTrackerProjects).toHaveBeenCalledTimes(2);
@@ -737,7 +746,9 @@ describe("BoardPage Add Card integration", () => {
 
 		const textarea = getTitleTextarea();
 		fireEvent.change(textarea, { target: { value: "Keep draft" } });
-		fireEvent.click(screen.getAllByRole("button", { name: /add to board/i })[0]!);
+		fireEvent.click(
+			screen.getAllByRole("button", { name: /add to board/i })[0]!,
+		);
 
 		await waitFor(() => expect(createCard).toHaveBeenCalledTimes(1));
 		expect(screen.getByRole("combobox", { name: "Task title" })).toBeTruthy();

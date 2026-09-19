@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
-vi.mock("../../context/BoardContext", () => ({
+vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
-vi.mock("../../context/WorkspaceContext", () => ({
+vi.mock("./WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
-vi.mock("../../hooks/useTicketIntakeChat", () => ({
+vi.mock("./useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => ({
 		messages: [],
 		sendMessage: vi.fn(),

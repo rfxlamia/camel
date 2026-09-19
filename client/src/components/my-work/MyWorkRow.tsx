@@ -1,12 +1,12 @@
 import { useSyncExternalStore } from "react";
 import { useInRouterContext, useSearchParams } from "react-router";
+import type { MyWorkItem, MyWorkScope } from "../../shared/myWorkTypes";
 import {
 	getMyWorkMutationSnapshot,
 	type MyWorkMutationSnapshot,
 	myWorkMutationIdentity,
 	subscribeToMyWorkMutations,
 } from "../../shared/workItemMutations";
-import type { MyWorkItem, MyWorkScope } from "../../types/myWork";
 import MyWorkDoneAction, {
 	type MyWorkDoneActionProps,
 } from "./MyWorkDoneAction";

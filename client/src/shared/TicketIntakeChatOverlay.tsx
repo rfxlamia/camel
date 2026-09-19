@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
-import type { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
-import { ChatPanel } from "./ChatPanel";
+import { ChatPanel } from "./TicketIntakeChatPanel";
+import type { useTicketIntakeChat } from "./useTicketIntakeChat";
 
 type TicketIntakeChat = ReturnType<typeof useTicketIntakeChat>;
 

@@ -1,5 +1,5 @@
 import Fuse from "fuse.js";
-import type { MyWorkItem } from "../types/myWork";
+import type { MyWorkItem } from "../shared/myWorkTypes";
 
 export const MY_WORK_PAGE_SIZE = 50;
 

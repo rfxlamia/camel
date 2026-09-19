@@ -78,6 +78,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 	const value = useMemo(() => ({ presence }), [presence]);
 
 	return (
-		<PresenceContext.Provider value={value}>{children}</PresenceContext.Provider>
+		<PresenceContext.Provider value={value}>
+			{children}
+		</PresenceContext.Provider>
 	);
 }

@@ -17,7 +17,7 @@ import type {
 	MyWorkItem,
 	MyWorkListResponse,
 	MyWorkWorkspace,
-} from "../../types/myWork";
+} from "../../shared/myWorkTypes";
 
 export interface AllPageCache {
 	key: string;

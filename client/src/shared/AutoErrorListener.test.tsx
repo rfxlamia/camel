@@ -1,22 +1,22 @@
 // @vitest-environment jsdom
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { publishAutoError } from "../../lib/ticketIntakeBus";
+import { publishAutoError } from "./ticketIntakeBus";
 
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
 const mockOpen = vi.fn();
 const mockConfirm = vi.fn();
 
-vi.mock("../../context/BoardContext", () => ({
+vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("../../context/WorkspaceContext", () => ({
+vi.mock("./WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../../hooks/useTicketIntakeChat", () => ({
+vi.mock("./useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => ({
 		open: mockOpen,
 		confirm: mockConfirm,

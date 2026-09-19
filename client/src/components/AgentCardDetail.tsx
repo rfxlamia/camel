@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { useBoard } from "../context/BoardContext";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import {
 	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
@@ -15,7 +15,7 @@ import {
 	deriveToolTrace,
 	hasLiveToolActivityForColumn,
 	pickToolTraceForColumn,
-} from "../lib/toolTrace";
+} from "../shared/toolTrace";
 import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
 import { ToolTrace } from "./ToolTrace";
 

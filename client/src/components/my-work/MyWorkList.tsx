@@ -1,16 +1,16 @@
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useSyncExternalStore } from "react";
-import { useWorkspace } from "../../context/WorkspaceContext";
 import { projectMyWorkListItems } from "../../lib/myWorkMutationReconciliation";
-import {
-	getMyWorkMutationRevision,
-	subscribeToMyWorkMutations,
-} from "../../shared/workItemMutations";
 import {
 	deriveMyWorkGroups,
 	type MyWorkStatusGroup,
 } from "../../lib/myWorkStatus";
-import type { MyWorkItem, MyWorkScope } from "../../types/myWork";
+import type { MyWorkItem, MyWorkScope } from "../../shared/myWorkTypes";
+import { useWorkspace } from "../../shared/WorkspaceContext";
+import {
+	getMyWorkMutationRevision,
+	subscribeToMyWorkMutations,
+} from "../../shared/workItemMutations";
 import MyWorkRow from "./MyWorkRow";
 
 export function SessionErrorState() {

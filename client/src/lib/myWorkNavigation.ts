@@ -7,7 +7,7 @@ import {
 	useState,
 } from "react";
 import { api } from "../api";
-import type { MyWorkIdentity, MyWorkItem } from "../types/myWork";
+import type { MyWorkIdentity, MyWorkItem } from "../shared/myWorkTypes";
 
 export interface MyWorkDetailSelection extends MyWorkIdentity {}
 

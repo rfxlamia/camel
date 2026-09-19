@@ -1,11 +1,11 @@
 import { Check, ChevronDown, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
 import {
 	getInvitePopoverState,
 	getSwitchAttemptState,
 	workspaceInitials,
-} from "../../lib/workspaceSwitcher";
+} from "../../shared/workspaceSwitcher";
 import type { Workspace, WorkspaceInvite } from "../../types";
 import { PopoverShell } from "./shared";
 

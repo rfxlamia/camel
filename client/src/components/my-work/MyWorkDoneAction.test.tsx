@@ -9,8 +9,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sourceItem } from "../../lib/myWorkTestSupport";
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 import { resetMyWorkMutationsForTests } from "../../shared/workItemMutations";
-import type { MyWorkItem } from "../../types/myWork";
 import MyWorkDoneAction from "./MyWorkDoneAction";
 import MyWorkRow from "./MyWorkRow";
 

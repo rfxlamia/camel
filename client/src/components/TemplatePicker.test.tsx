@@ -4,10 +4,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./LoadingCamel", () => ({
+vi.mock("../shared/LoadingCamel", () => ({
 	default: () => <div data-testid="loading-camel" />,
 }));
-vi.mock("./SuccessAnimation", () => ({
+vi.mock("../shared/SuccessAnimation", () => ({
 	default: () => <div data-testid="success-animation" />,
 }));
 

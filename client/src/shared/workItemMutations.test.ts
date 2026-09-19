@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import type { MyWorkItem } from "../shared/myWorkTypes";
 import type { WorkItem } from "../types";
-import type { MyWorkItem } from "../types/myWork";
 import {
 	markWorkItemDone,
 	reorderWorkItem,

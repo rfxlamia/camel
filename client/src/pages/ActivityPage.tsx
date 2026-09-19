@@ -1,8 +1,8 @@
 import { Activity as ActivityIcon, ArrowRight } from "lucide-react";
 import { Link } from "react-router";
-import EmptyState from "../components/EmptyState";
-import PageHeader from "../components/PageHeader";
 import { useBoard } from "../context/BoardContext";
+import EmptyState from "../shared/EmptyState";
+import PageHeader from "../shared/PageHeader";
 import type { ActivityEvent } from "../types";
 import { formatRelativeTime } from "../types";
 

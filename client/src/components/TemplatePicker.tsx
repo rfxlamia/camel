@@ -4,8 +4,8 @@ import {
 	COLUMN_STYLES,
 } from "../lib/columnColors";
 import type { TemplateColumn, WorkspaceTemplate } from "../lib/templates";
-import LoadingCamel from "./LoadingCamel";
-import SuccessAnimation from "./SuccessAnimation";
+import LoadingCamel from "../shared/LoadingCamel";
+import SuccessAnimation from "../shared/SuccessAnimation";
 
 type TemplatePickerProps = {
 	templates: WorkspaceTemplate[];

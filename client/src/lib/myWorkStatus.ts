@@ -1,4 +1,4 @@
-import type { MyWorkItem, MyWorkScope } from "../types/myWork";
+import type { MyWorkItem, MyWorkScope } from "../shared/myWorkTypes";
 
 export type MyWorkStatusGroup =
 	| "backlog"

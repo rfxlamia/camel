@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useBoard } from "../../context/BoardContext";
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
+import { useBoard } from "../context/BoardContext";
 import { ticketIntakeInputClass } from "./inputClass";
 import { PreviewScreen } from "./PreviewScreen";
+import { useTicketIntakeChat } from "./useTicketIntakeChat";
+import { useWorkspace } from "./WorkspaceContext";
 
 interface ChatPanelProps {
 	onClose: () => void;

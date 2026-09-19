@@ -1,10 +1,5 @@
 // client/src/components/ColumnView.test.tsx — jsdom; no jest-dom (see TemplatePicker.test.tsx)
-import {
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@dnd-kit/core", () => ({
@@ -17,7 +12,7 @@ vi.mock("@dnd-kit/sortable", () => ({
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => ({}),
 }));
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => ({ activeWorkspaceId: null }),
 }));
 const {
@@ -62,9 +57,14 @@ vi.mock("../lib/columnColorUtils", async (importOriginal) => {
 });
 
 import { generateSwatchCandidates } from "../lib/columnColorUtils";
-import type { Column, TrackerProject, TrackerVocabulary, WorkspaceMember } from "../types";
-import ColumnView from "./ColumnView";
 import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
+import type {
+	Column,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../types";
+import ColumnView from "./ColumnView";
 
 const members: WorkspaceMember[] = [
 	{ userId: 1, username: "rafi", displayName: "Rafi", role: "member" },
@@ -166,7 +166,9 @@ describe("Add card @ command popover", () => {
 		renderColumn();
 
 		fireEvent.click(screen.getByRole("button", { name: /add card/i }));
-		const textarea = await screen.findByRole("combobox", { name: "Task title" });
+		const textarea = await screen.findByRole("combobox", {
+			name: "Task title",
+		});
 		fireEvent.change(textarea, { target: { value: "buat laporan " } });
 		fireEvent.keyDown(textarea, { key: "@" });
 

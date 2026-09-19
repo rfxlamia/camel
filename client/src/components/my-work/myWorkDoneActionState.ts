@@ -1,3 +1,4 @@
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 import {
 	beginMyWorkMutation,
 	getMyWorkMutationSnapshot,
@@ -5,7 +6,6 @@ import {
 	mergeMyWorkMutationResult,
 	settleMyWorkMutation,
 } from "../../shared/workItemMutations";
-import type { MyWorkItem } from "../../types/myWork";
 
 export type MyWorkDoneMutation = (
 	workspaceId: number,

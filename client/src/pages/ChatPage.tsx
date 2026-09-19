@@ -4,7 +4,7 @@ import { Navigate, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { ChatRuntimeProvider } from "../chat/ChatRuntimeProvider";
 import { ChatPanel } from "../chat/ui";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { ChatThread } from "../types";
 
 export default function ChatPage() {

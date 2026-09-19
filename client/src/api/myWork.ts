@@ -1,10 +1,10 @@
-import type { WorkItemSource } from "../types";
 import type {
 	MyWorkDetailResponse,
 	MyWorkListRequest,
 	MyWorkListResponse,
 	MyWorkMarkDoneResponse,
-} from "../types/myWork";
+} from "../shared/myWorkTypes";
+import type { WorkItemSource } from "../types";
 
 export type MyWorkRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 

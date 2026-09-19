@@ -2,8 +2,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ToolTrace } from "../../shared/ToolTrace";
 import type { ChatAttachment, ToolTraceItem } from "../../types";
-import { ToolTrace } from "../ToolTrace";
 import { ChatAttachment as ChatAttachmentLink } from "./ChatAttachment";
 import { ChatErrorBubble } from "./ChatErrorBubble";
 
@@ -182,10 +182,7 @@ export function ChatMessage({
 				{attachments.length > 0 && (
 					<div className="flex flex-wrap gap-2">
 						{attachments.map((attachment) => (
-							<ChatAttachmentLink
-								key={attachment.id}
-								attachment={attachment}
-							/>
+							<ChatAttachmentLink key={attachment.id} attachment={attachment} />
 						))}
 					</div>
 				)}

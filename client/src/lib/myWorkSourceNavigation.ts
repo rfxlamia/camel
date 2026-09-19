@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useWorkspace } from "../context/WorkspaceContext";
-import type { MyWorkItem } from "../types/myWork";
+import type { MyWorkItem } from "../shared/myWorkTypes";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import {
 	getSwitchAttemptState,
 	type SwitchAttemptInput,

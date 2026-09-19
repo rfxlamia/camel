@@ -1,11 +1,11 @@
 import { X } from "lucide-react";
 import { type RefObject, useSyncExternalStore } from "react";
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 import {
 	getMyWorkMutationSnapshot,
 	myWorkMutationIdentity,
 	subscribeToMyWorkMutations,
 } from "../../shared/workItemMutations";
-import type { MyWorkItem } from "../../types/myWork";
 import {
 	DetailSheetBody,
 	type DetailSheetBodyProps,

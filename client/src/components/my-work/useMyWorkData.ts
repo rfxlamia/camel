@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type MyWorkViewState } from "../../lib/myWorkUtils";
-import type { MyWorkItem, MyWorkWorkspace } from "../../types/myWork";
+import type { MyWorkItem, MyWorkWorkspace } from "../../shared/myWorkTypes";
 import {
 	type AllPageCache,
 	activeLoadedPage,

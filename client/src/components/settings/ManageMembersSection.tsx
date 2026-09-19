@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
+import type { ToastType } from "../../shared/ToastContext";
 import { initials } from "../../shared/TrackerGlyphs";
-import type { ToastType } from "../../context/ToastContext";
 import type { WorkspaceMember, WorkspaceRole } from "../../types";
 
 function roleLabel(role: WorkspaceRole): string {
@@ -37,8 +37,7 @@ export default function ManageMembersSection({
 	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
 	const isFirstLoad = useRef(true);
 
-	const canRemove =
-		currentUserRole === "admin" || currentUserRole === "owner";
+	const canRemove = currentUserRole === "admin" || currentUserRole === "owner";
 	const canChangeRole = currentUserRole === "owner";
 
 	const loadMembers = useCallback(async () => {
@@ -79,7 +78,10 @@ export default function ManageMembersSection({
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [pendingRemove]);
 
-	async function handleRoleChange(member: WorkspaceMember, role: "admin" | "member") {
+	async function handleRoleChange(
+		member: WorkspaceMember,
+		role: "admin" | "member",
+	) {
 		if (role === member.role) return;
 		setRoleUpdatingId(member.userId);
 		try {
@@ -94,7 +96,9 @@ export default function ManageMembersSection({
 			showToast("Role updated", "success");
 		} catch (err: unknown) {
 			const msg =
-				err instanceof ApiError ? err.message : "Couldn't update role. Try again.";
+				err instanceof ApiError
+					? err.message
+					: "Couldn't update role. Try again.";
 			showToast(msg, "error");
 		} finally {
 			setRoleUpdatingId(null);
@@ -164,10 +168,8 @@ export default function ManageMembersSection({
 				{members.map((member) => {
 					const isSelf = member.userId === currentUserId;
 					const isOwnerRow = member.role === "owner";
-					const showRemove =
-						canRemove && !isSelf && !isOwnerRow;
-					const showRoleDropdown =
-						canChangeRole && !isOwnerRow;
+					const showRemove = canRemove && !isSelf && !isOwnerRow;
+					const showRoleDropdown = canChangeRole && !isOwnerRow;
 
 					return (
 						<li

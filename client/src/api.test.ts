@@ -1,11 +1,11 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock fetch globally for API tests
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 const mockPublishAutoError = vi.fn();
-vi.mock("./lib/ticketIntakeBus", () => ({
+vi.mock("./shared/ticketIntakeBus", () => ({
 	publishAutoError: (...args: unknown[]) => mockPublishAutoError(...args),
 }));
 
@@ -959,8 +959,7 @@ describe("card attachment API methods", () => {
 							id: 9,
 							thumbnailUrl:
 								"/api/workspaces/7/cards/42/attachments/9/thumbnail",
-							originalUrl:
-								"/api/workspaces/7/cards/42/attachments/9/original",
+							originalUrl: "/api/workspaces/7/cards/42/attachments/9/original",
 							downloadUrl:
 								"/api/workspaces/7/cards/42/attachments/9/original/download",
 							mimeType: "image/png",

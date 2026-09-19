@@ -10,9 +10,9 @@ import {
 	useState,
 } from "react";
 import { ApiError, api } from "../api";
-import type { TicketIntakeResultEvent } from "../hooks/useTicketIntakeChat";
+import type { TicketIntakeResultEvent } from "../shared/useTicketIntakeChat";
 import { shouldClearOnWorkspaceChange } from "../lib/agentStream";
-import { getRemovalRedirect } from "../lib/workspaceSelection";
+import { getRemovalRedirect } from "../shared/workspaceSelection";
 import type {
 	ActivityEvent,
 	AgentEvent,

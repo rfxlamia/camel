@@ -5,12 +5,12 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useWorkspace } from "../../context/WorkspaceContext";
 import {
 	type MyWorkDetailSelection,
 	useMyWorkDetailState,
 } from "../../lib/myWorkNavigation";
 import { useMyWorkSourceNavigation } from "../../lib/myWorkSourceNavigation";
+import { useWorkspace } from "../../shared/WorkspaceContext";
 import { MyWorkDetailSheetFrame } from "./MyWorkDetailSheetFrame";
 
 export interface MyWorkDetailSheetProps {
