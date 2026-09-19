@@ -24,7 +24,7 @@ import {
 	getCardAssigneeIds,
 	loadCardAssigneesForCards,
 	syncCardAssignees,
-} from "./card-assignees.js";
+} from "../lib/card-assignees.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 import { createCard } from "./card-create.js";
 import { cardCreateMultipartMiddleware } from "./card-create-multipart.js";
@@ -33,7 +33,7 @@ import {
 	buildCardResponse,
 	type CardResponseRow,
 	loadCardLabelsForCards,
-} from "./card-response.js";
+} from "../lib/card-response.js";
 import {
 	createScopedBoardService,
 	lookupMembership,

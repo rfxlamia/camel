@@ -4,12 +4,12 @@ import { db } from "../db/kysely.js";
 import { requireWorkspaceMember } from "../middleware/workspace.js";
 import type { CardAttachmentResponse } from "./attachment-response.js";
 import { loadCardAttachmentsForCards } from "./attachment-response.js";
-import { loadCardAssigneesForCards } from "./card-assignees.js";
+import { loadCardAssigneesForCards } from "../lib/card-assignees.js";
 import {
 	buildCardResponse,
 	type CardResponseRow,
 	loadCardLabelsForCards,
-} from "./card-response.js";
+} from "../lib/card-response.js";
 import { getHumanColumns, type HumanColumn } from "../lib/helpers.js";
 import type { VocabularyRow } from "../lib/vocabulary-response.js";
 
