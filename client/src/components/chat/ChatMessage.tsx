@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ToolTrace } from "../../shared/ToolTrace";
+import { ToolTrace } from "../../shared/ToolTraceView";
 import type { ChatAttachment, ToolTraceItem } from "../../types";
 import { ChatAttachment as ChatAttachmentLink } from "./ChatAttachment";
 import { ChatErrorBubble } from "./ChatErrorBubble";

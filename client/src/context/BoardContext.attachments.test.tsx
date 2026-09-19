@@ -140,10 +140,10 @@ async function advanceRefreshDebounce() {
 	});
 }
 
+import { PresenceProvider } from "../shared/PresenceContext";
 import { ToastProvider } from "../shared/ToastContext";
 import { WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider, useBoard } from "./BoardContext";
-import { PresenceProvider } from "./PresenceContext";
 
 async function renderBoard(children: React.ReactNode) {
 	await act(async () => {

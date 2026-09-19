@@ -121,10 +121,10 @@ function setupApiMocks() {
 	mockGetPresence.mockResolvedValue({ users: [] });
 }
 
+import { PresenceProvider } from "../shared/PresenceContext";
 import { ToastProvider } from "../shared/ToastContext";
 import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider } from "./BoardContext";
-import { PresenceProvider } from "./PresenceContext";
 
 function ViewModeProbe() {
 	const { boardViewMode, switchWorkspace, setBoardViewMode } = useWorkspace();

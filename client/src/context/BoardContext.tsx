@@ -20,8 +20,8 @@ import type {
 	FlowMetrics,
 	User,
 } from "../types";
-import { useShowToast } from "./ToastContext";
-import { useWorkspace } from "./WorkspaceContext";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 
 /** Trailing debounce for SSE-triggered refreshes. Chosen to coalesce burst
  *  events (e.g. own mutation + its echo) without noticeable UI lag. */
