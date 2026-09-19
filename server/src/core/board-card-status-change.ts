@@ -10,7 +10,7 @@ import { checkWipLimit } from "./wip.js";
 import type { DBExecutor } from "../db/kysely.js";
 import type { AuthUser } from "../auth.js";
 import { recordActivity } from "../lib/helpers.js";
-import { addCardAssignee } from "../routes/card-assignees.js";
+import { addCardAssignee } from "../lib/card-assignees.js";
 
 export type BoardCardStatusChangeResult =
 	| { kind: "not_found" }

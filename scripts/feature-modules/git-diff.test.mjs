@@ -367,6 +367,32 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
+		for (const name of [
+			"card-assignees.ts",
+			"card-response.ts",
+			"card-response.test.ts",
+			"card-response.integration.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/lib/${name}`)),
+				`expected kernel home server/src/lib/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
+		for (const name of [
+			"board.ts",
+			"cards.ts",
+			"card-create.ts",
+			"my-work.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected board/my-work product router server/src/routes/${name} to remain`,
+			);
+		}
 		assert.ok(
 			existsSync(join(repoRoot, "server/src/modules/tracker/index.ts")),
 			"expected server/src/modules/tracker/index.ts",

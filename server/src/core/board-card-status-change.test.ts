@@ -27,7 +27,7 @@ const mockAddCardAssignee = vi.fn();
 vi.mock("../lib/helpers.js", () => ({
 	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
 }));
-vi.mock("../routes/card-assignees.js", () => ({
+vi.mock("../lib/card-assignees.js", () => ({
 	addCardAssignee: (...args: unknown[]) => mockAddCardAssignee(...args),
 }));
 

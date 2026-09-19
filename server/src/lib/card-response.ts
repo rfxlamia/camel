@@ -3,7 +3,7 @@ import type { DBExecutor } from "../db/kysely.js";
 import {
 	type CardAttachmentResponse,
 	loadCardAttachmentsForCards,
-} from "./attachment-response.js";
+} from "../routes/attachment-response.js";
 import {
 	type CardAssignee,
 	loadCardAssigneesForCards,
@@ -11,7 +11,7 @@ import {
 import {
 	serializeVocabulary,
 	type VocabularyRow,
-} from "../lib/vocabulary-response.js";
+} from "./vocabulary-response.js";
 
 export type CardResponseVocabulary = VocabularyRow;
 

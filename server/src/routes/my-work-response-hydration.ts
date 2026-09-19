@@ -7,8 +7,8 @@ import type {
 import {
 	type CardAssignee,
 	loadCardAssigneesForCards,
-} from "./card-assignees.js";
-import { loadCardLabelsForCards } from "./card-response.js";
+} from "../lib/card-assignees.js";
+import { loadCardLabelsForCards } from "../lib/card-response.js";
 import { serializeMyWorkCandidate } from "./my-work-response-serialization.js";
 import type {
 	MyWorkBoardRow,

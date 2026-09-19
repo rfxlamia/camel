@@ -1,7 +1,7 @@
 import { resolveMyWorkDoneTarget } from "../core/my-work-done-target.js";
 import type { MyWorkDoneTargetInputs } from "../core/my-work-done-target.js";
 import { derivePrefix } from "../core/tracker-key.js";
-import type { CardAssignee } from "./card-assignees.js";
+import type { CardAssignee } from "../lib/card-assignees.js";
 import type {
 	MyWorkAssignee,
 	MyWorkBoardRow,
