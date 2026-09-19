@@ -1,17 +1,15 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
-import { MyWorkPageView } from "../components/my-work/MyWorkPageView";
-import { useMyWorkData } from "../components/my-work/useMyWorkData";
 import {
+	MyWorkPageView,
+	type MyWorkViewState,
 	parseMyWorkDetailState,
-	withMyWorkDetail,
-	withoutMyWorkDetail,
-} from "../lib/myWorkNavigation";
-import type { MyWorkViewState } from "../lib/myWorkUtils";
-import {
 	parseMyWorkViewState,
 	serializeMyWorkViewState,
-} from "../lib/myWorkUtils";
+	useMyWorkData,
+	withMyWorkDetail,
+	withoutMyWorkDetail,
+} from "../features/my-work";
 import type { MyWorkItem } from "../shared/myWorkTypes";
 
 type SearchParamSetter = ReturnType<typeof useSearchParams>[1];

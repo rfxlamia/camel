@@ -3,11 +3,11 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DBExecutor } from "../db/kysely.js";
 import { domainBus, EVENTS } from "../events.js";
-import { createMyWorkRouter } from "../routes/my-work-router.js";
-import type {
-	MyWorkSerializedItem,
-	MyWorkServiceLike,
-} from "../routes/my-work-types.js";
+import {
+	createMyWorkRouter,
+	type MyWorkSerializedItem,
+	type MyWorkServiceLike,
+} from "../modules/my-work/index.js";
 import { createMyWorkMarkDoneService } from "./my-work-mark-done.js";
 
 const mockPublishEvent = vi.hoisted(() => vi.fn());

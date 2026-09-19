@@ -7,15 +7,15 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { describe, it } from "node:test";
 import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { collectGitDiff } from "./git-diff.mjs";
 import {
-	LINE_BUDGET_RULE_ID,
 	checkLineBudget,
 	collectLineBudgetViolations,
+	LINE_BUDGET_RULE_ID,
 } from "./line-budget.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -26,9 +26,10 @@ const cliScript = join(repoRoot, "scripts/check-feature-modules.mjs");
  * @param {boolean} [trailingNewline]
  */
 function makeLines(n, trailingNewline = false) {
-	const body = Array.from({ length: n }, (_, i) => `const line${i} = ${i};`).join(
-		"\n",
-	);
+	const body = Array.from(
+		{ length: n },
+		(_, i) => `const line${i} = ${i};`,
+	).join("\n");
 	return trailingNewline ? `${body}\n` : body;
 }
 
@@ -50,7 +51,12 @@ function handlerBodyHunk() {
 function expectLineBudgetViolation(path, lineCount) {
 	return (violations) => {
 		assert.equal(violations.length, 1, violations.join("; "));
-		assert.match(violations[0], new RegExp(`^${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: ${LINE_BUDGET_RULE_ID}:`));
+		assert.match(
+			violations[0],
+			new RegExp(
+				`^${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: ${LINE_BUDGET_RULE_ID}:`,
+			),
+		);
 		assert.match(violations[0], new RegExp(String(lineCount)));
 	};
 }
@@ -255,6 +261,80 @@ describe("Cycle D — non-touches (unit)", () => {
 		});
 
 		assert.deepEqual(violations, []);
+	});
+});
+
+describe("Cycle H — import reorder (unit)", () => {
+	it("passes for reorder-only import hunks on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,2 +1,2 @@",
+			'-import { b } from "./b.js";',
+			'-import { a } from "./a.js";',
+			'+import { a } from "./a.js";',
+			'+import { b } from "./b.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("passes for reorder plus specifier-swap hunks on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,2 +1,2 @@",
+			'-import { b } from "./old.js";',
+			'-import { a } from "./a.js";',
+			'+import { a } from "./a.js";',
+			'+import { b } from "./new.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("treats reordered imports with a binding change as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,2 +1,2 @@",
+			'-import { b } from "./b.js";',
+			'-import { a } from "./a.js";',
+			'+import { a } from "./a.js";',
+			'+import { c } from "./b.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
 	});
 });
 

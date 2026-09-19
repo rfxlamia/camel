@@ -20,8 +20,8 @@ import {
 	resetRequestBoundaryForTests,
 } from "../api";
 import { BoardProvider } from "../context/BoardContext";
+import { sourceItem } from "../features/my-work";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
-import { sourceItem } from "../lib/myWorkTestSupport";
 import type { MyWorkItem, MyWorkListResponse } from "../shared/myWorkTypes";
 import { PresenceProvider } from "../shared/PresenceContext";
 import { ToastProvider, useToastState } from "../shared/ToastContext";

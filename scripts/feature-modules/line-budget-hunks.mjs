@@ -91,8 +91,13 @@ function isImportSpecifierOnlyHunks(hunks) {
 	const changed = [...removed, ...added];
 	if (changed.length === 0) return true;
 	if (!changed.every(isImportRelatedLine)) return false;
+	// Sort stripped lines so a pure reorder stays trivial: biome
+	// organizeImports force-reorders imports on amend.
 	const fingerprint = (lines) =>
-		collapseWhitespace(stripQuotedModuleSpecifiers(lines.join("\n")));
+		lines
+			.map((line) => collapseWhitespace(stripQuotedModuleSpecifiers(line)))
+			.sort()
+			.join("\n");
 	return fingerprint(removed) === fingerprint(added);
 }
 

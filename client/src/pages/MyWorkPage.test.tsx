@@ -68,11 +68,8 @@ vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../components/my-work/useDelayedLoading", async (importOriginal) => {
-	const actual =
-		await importOriginal<
-			typeof import("../components/my-work/useDelayedLoading")
-		>();
+vi.mock("../features/my-work", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/my-work")>();
 	return {
 		...actual,
 		useDelayedLoading: (loading: boolean) => {

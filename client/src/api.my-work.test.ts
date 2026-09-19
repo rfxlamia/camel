@@ -4,7 +4,7 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "./api";
-import { searchMyWorkCandidates } from "./lib/myWorkSearch";
+import { searchMyWorkCandidates } from "./features/my-work";
 import type {
 	MyWorkItem,
 	MyWorkListResponse,

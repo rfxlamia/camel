@@ -163,6 +163,27 @@ describe("Cycle B — cross-feature (unit)", () => {
 		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
 		assert.match(violations[0], /internal\/index/);
 	});
+
+	it("allows the allowlisted hub-to-leaf import but still flags other deep imports", () => {
+		const allowlisted = `import { createMyWorkApi } from "./features/my-work/myWork";\n`;
+		assert.deepEqual(
+			checkImports({
+				filePath: "client/src/api.ts",
+				source: allowlisted,
+				map,
+			}),
+			[],
+		);
+
+		const nonAllowlisted = `import { x } from "./features/my-work/myWorkUtils.ts";\n`;
+		const violations = checkImports({
+			filePath: "client/src/api.ts",
+			source: nonAllowlisted,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+	});
 });
 
 describe("Cycle C — one-way vs kernel allowlist (unit)", () => {

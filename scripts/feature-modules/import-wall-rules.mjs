@@ -1,17 +1,19 @@
-import { KERNEL_IN_WAITING } from "./map.mjs";
 import {
 	classifyModuleTarget,
-	fileDir,
 	FORBIDDEN_PRODUCT_FEATURES,
+	fileDir,
+	HUB_TO_LEAF_ALLOWLIST,
 	isAllowlistedKernelInWaiting,
 	isIndexImport,
 	isKernelPath,
 	isLegacyFeaturePath,
 	parseImporterFeature,
 	resolveRelativeSpecifier,
+	stripExtension,
 	toPosix,
 } from "./import-paths.mjs";
 import { extractImportSpecifiers } from "./import-specifiers.mjs";
+import { KERNEL_IN_WAITING } from "./map.mjs";
 
 export const DEEP_IMPORT_RULE_ID = "FM-RULE-4";
 export const ONE_WAY_RULE_ID = "FM-RULE-4";
@@ -47,7 +49,17 @@ function checkSpecifier({ filePath, specifier, resolved, mapConfig }) {
 			importerFeature.side === target.side &&
 			importerFeature.feature === target.feature;
 
-		if (!sameModule && !isIndexImport(resolved, target.root)) {
+		const hubToLeafAllowlisted = HUB_TO_LEAF_ALLOWLIST.some(
+			(entry) =>
+				toPosix(filePath) === entry.importer &&
+				stripExtension(resolved) === stripExtension(entry.target),
+		);
+
+		if (
+			!sameModule &&
+			!hubToLeafAllowlisted &&
+			!isIndexImport(resolved, target.root)
+		) {
 			violations.push(
 				`${filePath}: ${DEEP_IMPORT_RULE_ID}: deep import into feature module "${target.feature}" must use index.ts (${specifier})`,
 			);
