@@ -28,8 +28,8 @@ vi.mock("../api", () => ({
 		listTrackerProjects: (...a: unknown[]) => mockListTrackerProjects(...a),
 	},
 }));
-vi.mock("../components/LoadingCamel", () => ({ default: () => null }));
-vi.mock("../components/SuccessAnimation", () => ({ default: () => null }));
+vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
+vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
 vi.mock("../components/ListView", () => ({
 	default: () => <div data-testid="list-view" />,
 }));
@@ -39,10 +39,10 @@ vi.mock("../components/CalendarView", () => ({
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => vi.fn(),
 }));
 

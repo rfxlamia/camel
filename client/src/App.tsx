@@ -4,18 +4,18 @@ import { api } from "./api";
 import AuthPage from "./components/AuthPage";
 import ContextPanel from "./components/ContextPanel";
 import EmailGatePage from "./components/EmailGatePage";
-import LoadingCamel from "./components/LoadingCamel";
 import PickUsernamePage from "./components/PickUsernamePage";
 import { BoardProvider } from "./context/BoardContext";
 import { FocusSessionProvider } from "./context/FocusSessionContext";
-import { PresenceProvider } from "./context/PresenceContext";
-import { ToastProvider } from "./context/ToastContext";
-import { useWorkspace, WorkspaceProvider } from "./context/WorkspaceContext";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import BoardPage from "./pages/BoardPage";
 import LandingPage from "./pages/LandingPage";
 import SettingsPage from "./pages/SettingsPage";
+import LoadingCamel from "./shared/LoadingCamel";
+import { PresenceProvider } from "./shared/PresenceContext";
+import { ToastProvider } from "./shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./shared/WorkspaceContext";
 import type { User } from "./types";
 
 // Only show the loading UI if loading takes longer than this threshold.

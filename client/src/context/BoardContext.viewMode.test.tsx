@@ -43,7 +43,7 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", () => ({
+vi.mock("../shared/workspaceSelection", () => ({
 	chooseInitialWorkspace: ({
 		workspaces,
 		savedWorkspaceId,
@@ -96,8 +96,20 @@ const testUser: User = {
 function setupApiMocks() {
 	mockGetWorkspaces.mockResolvedValue({
 		workspaces: [
-			{ id: 7, name: "Workspace A", role: "member", isPersonal: false, memberCount: 2 },
-			{ id: 9, name: "Workspace B", role: "member", isPersonal: false, memberCount: 3 },
+			{
+				id: 7,
+				name: "Workspace A",
+				role: "member",
+				isPersonal: false,
+				memberCount: 2,
+			},
+			{
+				id: 9,
+				name: "Workspace B",
+				role: "member",
+				isPersonal: false,
+				memberCount: 3,
+			},
 		],
 		invites: [],
 	});
@@ -109,20 +121,28 @@ function setupApiMocks() {
 	mockGetPresence.mockResolvedValue({ users: [] });
 }
 
+import { ToastProvider } from "../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider } from "./BoardContext";
 import { PresenceProvider } from "./PresenceContext";
-import { ToastProvider } from "./ToastContext";
-import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 
 function ViewModeProbe() {
 	const { boardViewMode, switchWorkspace, setBoardViewMode } = useWorkspace();
 	return (
 		<>
 			<span data-testid="view-mode">{boardViewMode}</span>
-			<button type="button" data-testid="switch-to-9" onClick={() => switchWorkspace(9)}>
+			<button
+				type="button"
+				data-testid="switch-to-9"
+				onClick={() => switchWorkspace(9)}
+			>
 				Switch to B
 			</button>
-			<button type="button" data-testid="set-calendar" onClick={() => setBoardViewMode("calendar")}>
+			<button
+				type="button"
+				data-testid="set-calendar"
+				onClick={() => setBoardViewMode("calendar")}
+			>
 				Set calendar
 			</button>
 		</>
@@ -195,9 +215,11 @@ describe("BoardContext view mode", () => {
 
 	it("falls back to board when localStorage read fails on workspace switch", async () => {
 		writeBoardViewMode(9, "calendar");
-		const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-			throw new Error("blocked");
-		});
+		const getItem = vi
+			.spyOn(Storage.prototype, "getItem")
+			.mockImplementation(() => {
+				throw new Error("blocked");
+			});
 		await renderBoard();
 		await act(async () => {
 			fireEvent.click(screen.getByTestId("switch-to-9"));

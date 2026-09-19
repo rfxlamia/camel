@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockListThreads = vi.fn();
@@ -34,14 +40,16 @@ vi.mock("../chat/ui", () => ({
 	),
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => ({ activeWorkspaceId: 7 }),
 }));
 
 describe("ChatPage", () => {
 	beforeEach(() => {
 		mockThreadId = "1";
-		mockListThreads.mockResolvedValue([{ id: 1, title: "Untitled", messageCount: 0 }]);
+		mockListThreads.mockResolvedValue([
+			{ id: 1, title: "Untitled", messageCount: 0 },
+		]);
 		mockCreateThread.mockResolvedValue({ id: 2, title: "Untitled" });
 		mockDeleteThread.mockResolvedValue(undefined);
 	});
@@ -66,7 +74,9 @@ describe("ChatPage", () => {
 	});
 
 	it("shows confirm dialog before deleting non-empty thread", async () => {
-		mockListThreads.mockResolvedValue([{ id: 5, title: "Budget", messageCount: 3 }]);
+		mockListThreads.mockResolvedValue([
+			{ id: 5, title: "Budget", messageCount: 3 },
+		]);
 		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 		const { default: ChatPage } = await import("./ChatPage");
 		render(<ChatPage />);

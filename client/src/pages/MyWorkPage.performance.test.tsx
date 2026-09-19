@@ -9,8 +9,8 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "../api";
+import type { MyWorkItem } from "../shared/myWorkTypes";
 import { resetMyWorkMutationsForTests } from "../shared/workItemMutations";
-import type { MyWorkItem } from "../types/myWork";
 import MyWorkPage from "./MyWorkPage";
 
 function makeReadyItem(): MyWorkItem {

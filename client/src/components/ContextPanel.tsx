@@ -9,9 +9,9 @@ import {
 import { useNavigate, useParams } from "react-router";
 import { api, type TicketHistoryEntry } from "../api";
 import { type SaveCardResult, useBoard } from "../context/BoardContext";
-import { useShowToast } from "../context/ToastContext";
-import { useWorkspace } from "../context/WorkspaceContext";
-import { useTicketIntakeChat } from "../hooks/useTicketIntakeChat";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
+import { useTicketIntakeChat } from "../shared/useTicketIntakeChat";
 import {
 	describeCardEvent,
 	findCardInColumns,
@@ -25,7 +25,7 @@ import { AssigneePicker } from "./AssigneePicker";
 import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
 import CardAttachments from "./CardAttachments";
 import FocusEntryButton from "./FocusEntryButton";
-import { TicketIntakeChatOverlay } from "./ticketIntake/TicketIntakeChatOverlay";
+import { TicketIntakeChatOverlay } from "../shared/TicketIntakeChatOverlay";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";

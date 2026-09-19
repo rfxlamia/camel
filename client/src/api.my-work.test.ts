@@ -9,7 +9,7 @@ import type {
 	MyWorkItem,
 	MyWorkListResponse,
 	MyWorkWorkspace,
-} from "./types/myWork";
+} from "./shared/myWorkTypes";
 
 const fakeFetch = vi.fn<typeof fetch>();
 

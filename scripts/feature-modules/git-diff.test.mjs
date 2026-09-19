@@ -393,6 +393,122 @@ describe("Cycle Map — map data (unit)", () => {
 			);
 		}
 	});
+
+	it("Chrome extract retargets every importer", () => {
+		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/context/BoardContext.tsx")),
+			"BoardContext must remain under context/, not shared/",
+		);
+		for (const name of [
+			"TrackerTabs.tsx",
+			"TrackerChangelog.tsx",
+			"TrackerRow.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/components/tracker/${name}`)),
+				`expected tracker stub client/src/components/tracker/${name} to remain`,
+			);
+		}
+		const chromeHomes = [
+			"PageHeader.tsx",
+			"EmptyState.tsx",
+			"LoadingCamel.tsx",
+			"Toast.tsx",
+			"Toast.test.tsx",
+			"PresenceBar.tsx",
+			"SuccessAnimation.tsx",
+			"ToolTrace.tsx",
+			"ToolTrace.test.tsx",
+			"ToastContext.tsx",
+			"ToastContext.test.tsx",
+			"PresenceContext.tsx",
+			"PresenceContext.test.tsx",
+			"title.ts",
+			"title.test.ts",
+			"toolTrace.ts",
+			"toolTrace.test.ts",
+			"myWorkTypes.ts",
+			"WorkspaceContext.tsx",
+			"WorkspaceContext.test.tsx",
+			"workspaceSelection.ts",
+			"workspaceSelection.test.ts",
+			"workspaceSwitcher.ts",
+			"workspaceSwitcher.test.ts",
+			"FloatingChatButton.tsx",
+			"TicketIntakeChatOverlay.tsx",
+			"PreviewScreen.tsx",
+			"inputClass.ts",
+			"AutoErrorListener.tsx",
+			"TicketIntakeChatPanel.tsx",
+			"TicketIntakeChatPanel.test.tsx",
+			"useTicketIntakeChat.ts",
+			"useTicketIntakeChat.test.ts",
+			"useTicketIntakeChat.integration.test.tsx",
+			"PreviewScreen.test.tsx",
+			"FloatingChatButton.test.tsx",
+			"AutoErrorListener.test.tsx",
+			"ticketIntakeBus.ts",
+			"ticketIntakeBus.test.ts",
+			"agentQueue.ts",
+			"agentQueue.test.ts",
+		];
+		for (const name of chromeHomes) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/shared/${name}`)),
+				`expected kernel home client/src/shared/${name}`,
+			);
+		}
+		const chromeLeftovers = [
+			"client/src/components/PageHeader.tsx",
+			"client/src/components/EmptyState.tsx",
+			"client/src/components/LoadingCamel.tsx",
+			"client/src/components/Toast.tsx",
+			"client/src/components/Toast.test.tsx",
+			"client/src/components/PresenceBar.tsx",
+			"client/src/components/SuccessAnimation.tsx",
+			"client/src/components/ToolTrace.tsx",
+			"client/src/components/ToolTrace.test.tsx",
+			"client/src/context/ToastContext.tsx",
+			"client/src/context/ToastContext.test.tsx",
+			"client/src/context/PresenceContext.tsx",
+			"client/src/context/PresenceContext.test.tsx",
+			"client/src/context/WorkspaceContext.tsx",
+			"client/src/context/WorkspaceContext.test.tsx",
+			"client/src/lib/title.ts",
+			"client/src/lib/title.test.ts",
+			"client/src/lib/toolTrace.ts",
+			"client/src/lib/toolTrace.test.ts",
+			"client/src/lib/workspaceSelection.ts",
+			"client/src/lib/workspaceSelection.test.ts",
+			"client/src/lib/workspaceSwitcher.ts",
+			"client/src/lib/workspaceSwitcher.test.ts",
+			"client/src/lib/ticketIntakeBus.ts",
+			"client/src/lib/ticketIntakeBus.test.ts",
+			"client/src/lib/agentQueue.ts",
+			"client/src/lib/agentQueue.test.ts",
+			"client/src/types/myWork.ts",
+			"client/src/hooks/useTicketIntakeChat.ts",
+			"client/src/hooks/useTicketIntakeChat.test.ts",
+			"client/src/hooks/useTicketIntakeChat.integration.test.tsx",
+			"client/src/components/ticketIntake/FloatingChatButton.tsx",
+			"client/src/components/ticketIntake/TicketIntakeChatOverlay.tsx",
+			"client/src/components/ticketIntake/PreviewScreen.tsx",
+			"client/src/components/ticketIntake/inputClass.ts",
+			"client/src/components/ticketIntake/AutoErrorListener.tsx",
+			"client/src/components/ticketIntake/ChatPanel.tsx",
+			"client/src/components/ticketIntake/ChatPanel.test.tsx",
+			"client/src/components/ticketIntake/PreviewScreen.test.tsx",
+			"client/src/components/ticketIntake/FloatingChatButton.test.tsx",
+			"client/src/components/ticketIntake/AutoErrorListener.test.tsx",
+		];
+		for (const path of chromeLeftovers) {
+			assert.ok(
+				!existsSync(join(repoRoot, path)),
+				`expected leftover ${path} to be gone`,
+			);
+		}
+	});
 });
 
 describe("Cycle A — stub CLI (integration)", () => {

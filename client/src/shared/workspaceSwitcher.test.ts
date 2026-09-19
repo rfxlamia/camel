@@ -98,7 +98,6 @@ describe("workspace switcher state", () => {
 			],
 		});
 	});
-
 });
 
 describe("workspace client integration plan", () => {

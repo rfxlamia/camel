@@ -16,10 +16,10 @@ const mockShowToast = vi.fn();
 vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
@@ -59,7 +59,7 @@ vi.mock("../shared/imageAttachments", () => ({
 		prepareImageAttachment(...args),
 }));
 
-vi.mock("../hooks/useTicketIntakeChat", () => ({
+vi.mock("../shared/useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => ({
 		open: vi.fn(),
 		close: vi.fn(),

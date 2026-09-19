@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-import {
-	act,
-	cleanup,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card, CardAttachment, Column, User } from "../types";
 
@@ -28,8 +22,7 @@ vi.mock("../api", () => ({
 		getSettings: (...a: unknown[]) => mockGetSettings(...a),
 		heartbeat: (...a: unknown[]) => mockHeartbeat(...a),
 		getPresence: (...a: unknown[]) => mockGetPresence(...a),
-		uploadCardAttachments: (...a: unknown[]) =>
-			mockUploadCardAttachments(...a),
+		uploadCardAttachments: (...a: unknown[]) => mockUploadCardAttachments(...a),
 		deleteCardAttachment: (...a: unknown[]) => mockDeleteCardAttachment(...a),
 		ticketIntake: {
 			getConfig: vi.fn().mockResolvedValue({ enabled: false }),
@@ -47,9 +40,9 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", async (importOriginal) => {
+vi.mock("../shared/workspaceSelection", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../lib/workspaceSelection")>();
+		await importOriginal<typeof import("../shared/workspaceSelection")>();
 	return {
 		...actual,
 		chooseInitialWorkspace: ({
@@ -96,9 +89,9 @@ vi.stubGlobal("EventSource", MockEventSource);
 
 import { api } from "../api";
 import { BoardProvider, useBoard } from "../context/BoardContext";
-import { PresenceProvider } from "../context/PresenceContext";
-import { ToastProvider } from "../context/ToastContext";
-import { useWorkspace, WorkspaceProvider } from "../context/WorkspaceContext";
+import { PresenceProvider } from "../shared/PresenceContext";
+import { ToastProvider } from "../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import CardAttachments from "./CardAttachments";
 
 const testUser: User = {
@@ -208,7 +201,9 @@ async function advanceRefreshDebounce() {
 function BoardCardAttachmentsProbe() {
 	const { columns, refresh, cancelScheduledRefresh } = useBoard();
 	const { activeWorkspaceId } = useWorkspace();
-	const card = columns?.flatMap((column) => column.cards).find((c) => c.id === 42);
+	const card = columns
+		?.flatMap((column) => column.cards)
+		.find((c) => c.id === 42);
 	if (!card || activeWorkspaceId === null) return null;
 
 	return (
@@ -255,14 +250,14 @@ describe("CardAttachments SSE gallery refresh", () => {
 		await act(async () => {
 			render(
 				<ToastProvider>
-				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
-					<PresenceProvider>
-						<BoardProvider>
-							<BoardCardAttachmentsProbe />
-						</BoardProvider>
-					</PresenceProvider>
-				</WorkspaceProvider>
-			</ToastProvider>,
+					<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
+						<PresenceProvider>
+							<BoardProvider>
+								<BoardCardAttachmentsProbe />
+							</BoardProvider>
+						</PresenceProvider>
+					</WorkspaceProvider>
+				</ToastProvider>,
 			);
 		});
 
@@ -273,11 +268,7 @@ describe("CardAttachments SSE gallery refresh", () => {
 
 		mockGetBoard.mockResolvedValueOnce({
 			columns: columnsWith(
-				makeCard([
-					makeAttachment(1),
-					makeAttachment(2),
-					makeAttachment(3),
-				]),
+				makeCard([makeAttachment(1), makeAttachment(2), makeAttachment(3)]),
 			),
 		});
 

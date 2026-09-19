@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { useBoard } from "../../context/BoardContext";
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
-import type { AutoErrorDetail } from "../../lib/ticketIntakeBus";
-import { subscribeAutoError } from "../../lib/ticketIntakeBus";
+import { useBoard } from "../context/BoardContext";
 import { TicketIntakeChatOverlay } from "./TicketIntakeChatOverlay";
+import type { AutoErrorDetail } from "./ticketIntakeBus";
+import { subscribeAutoError } from "./ticketIntakeBus";
+import { useTicketIntakeChat } from "./useTicketIntakeChat";
+import { useWorkspace } from "./WorkspaceContext";
 
 function autoErrorDetailToPrefill(detail: AutoErrorDetail) {
 	return {

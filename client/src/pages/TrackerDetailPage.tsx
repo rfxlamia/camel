@@ -20,8 +20,8 @@ import TrackerProperties, {
 	type PropertyPatch,
 } from "../components/tracker/TrackerProperties";
 import { useBoard } from "../context/BoardContext";
-import { useShowToast } from "../context/ToastContext";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import { isTaskOverdue } from "../shared/trackerRollup";
 import { resolveToggle } from "../shared/trackerUtils";
 import type {

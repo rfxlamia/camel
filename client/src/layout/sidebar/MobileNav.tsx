@@ -1,7 +1,7 @@
 import { LogOut, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";
 import { SignOutPopover } from "./SignOutPopover";

@@ -77,11 +77,11 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
@@ -182,9 +182,7 @@ const labels: TrackerVocabulary[] = [
 	},
 ];
 
-function makeItem(
-	overrides: Partial<WorkItem> & { id: number },
-): WorkItem {
+function makeItem(overrides: Partial<WorkItem> & { id: number }): WorkItem {
 	return {
 		key: "CA-1",
 		title: "Workspace Rename",
@@ -816,9 +814,9 @@ describe("TrackerPage", () => {
 	it("keeps rows on screen while an SSE-triggered refresh is in flight", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
@@ -844,9 +842,9 @@ describe("TrackerPage", () => {
 	it("does not let a stale SSE refresh overwrite newer item state", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
@@ -993,9 +991,9 @@ describe("TrackerPage", () => {
 			  }) => void)
 			| undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: typeof sseHandler) => {
 				sseHandler = cb;
 				return () => {};
@@ -1015,9 +1013,9 @@ describe("TrackerPage", () => {
 			| ((e: { type: string; payload?: unknown }) => void)
 			| undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (
 				cb: (e: { type: string; payload?: unknown }) => void,
 			) => {
@@ -1442,9 +1440,7 @@ describe("TrackerPage", () => {
 					"warning",
 				),
 			);
-			await waitFor(() =>
-				expect(mockListWorkItems).toHaveBeenCalledTimes(2),
-			);
+			await waitFor(() => expect(mockListWorkItems).toHaveBeenCalledTimes(2));
 			await waitFor(() =>
 				expect(mockUpdateWorkItem).toHaveBeenLastCalledWith(7, "CA-1", {
 					assigneeIds: [7, 10, 9],
@@ -1589,9 +1585,9 @@ describe("TrackerPage items tab", () => {
 	it("keeps rows on screen when a background refresh fails", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
@@ -2306,9 +2302,9 @@ describe("TrackerPage projects", () => {
 	it("reloads and shows the card on tracker.project.created without a manual refresh", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
@@ -2327,9 +2323,9 @@ describe("TrackerPage projects", () => {
 	it("drops the card and the item's chip on tracker.project.deleted", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
@@ -2374,9 +2370,9 @@ describe("TrackerPage projects", () => {
 	it("keeps the projects tab mounted when items are empty during a refresh", async () => {
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};
@@ -2486,9 +2482,9 @@ describe("TrackerPage projects", () => {
 		it("ignores stale labels and members from an older load sequence", async () => {
 			let refreshCallback: (() => void) | undefined;
 			mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+				activeWorkspaceId: 7,
+			});
+			mockUseBoard.mockReturnValue({
 				subscribeTrackerEvents: vi.fn(() => () => {}),
 				registerRefreshTrackerList: vi.fn((cb: (() => void) | null) => {
 					refreshCallback = cb ?? undefined;
@@ -2706,9 +2702,9 @@ describe("TrackerPage projects", () => {
 			});
 
 			mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+				activeWorkspaceId: 7,
+			});
+			mockUseBoard.mockReturnValue({
 				subscribeTrackerEvents: vi.fn(() => () => {}),
 				registerRefreshTrackerList: vi.fn(),
 				refreshTrackerList: vi.fn(),
@@ -2718,9 +2714,9 @@ describe("TrackerPage projects", () => {
 			await waitFor(() => screen.getByText("CA-1"));
 
 			mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 8,
-	});
-	mockUseBoard.mockReturnValue({
+				activeWorkspaceId: 8,
+			});
+			mockUseBoard.mockReturnValue({
 				subscribeTrackerEvents: vi.fn(() => () => {}),
 				registerRefreshTrackerList: vi.fn(),
 				refreshTrackerList: vi.fn(),
@@ -2788,9 +2784,9 @@ describe("TrackerPage projects", () => {
 			);
 		let sseHandler: ((e: { type: string }) => void) | undefined;
 		mockUseWorkspace.mockReturnValue({
-		activeWorkspaceId: 7,
-	});
-	mockUseBoard.mockReturnValue({
+			activeWorkspaceId: 7,
+		});
+		mockUseBoard.mockReturnValue({
 			subscribeTrackerEvents: (cb: (e: { type: string }) => void) => {
 				sseHandler = cb;
 				return () => {};

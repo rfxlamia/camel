@@ -1,4 +1,4 @@
-import type { MyWorkItem } from "../types/myWork";
+import type { MyWorkItem } from "../shared/myWorkTypes";
 
 export function item(
 	id: number,

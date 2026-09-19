@@ -41,11 +41,11 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => stableShowToast,
 }));
 
@@ -73,10 +73,10 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../components/LoadingCamel", () => ({
+vi.mock("../shared/LoadingCamel", () => ({
 	default: () => <div data-testid="loading-camel" />,
 }));
-vi.mock("../components/SuccessAnimation", () => ({
+vi.mock("../shared/SuccessAnimation", () => ({
 	default: () => <div data-testid="success-animation" />,
 }));
 

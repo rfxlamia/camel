@@ -3,15 +3,15 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockUseTicketIntakeChat = vi.fn();
-vi.mock("../../hooks/useTicketIntakeChat", () => ({
+vi.mock("./useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => mockUseTicketIntakeChat(),
 }));
-vi.mock("../../context/BoardContext", () => ({
+vi.mock("../context/BoardContext", () => ({
 	useBoard: () => ({
 		ticketIntakeEvents: [],
 	}),
 }));
-vi.mock("../../context/WorkspaceContext", () => ({
+vi.mock("./WorkspaceContext", () => ({
 	useWorkspace: () => ({
 		activeWorkspaceId: 1,
 	}),
@@ -20,7 +20,7 @@ vi.mock("./PreviewScreen", () => ({
 	PreviewScreen: () => <div data-testid="preview-screen" />,
 }));
 
-import { ChatPanel } from "./ChatPanel";
+import { ChatPanel } from "./TicketIntakeChatPanel";
 
 describe("ChatPanel", () => {
 	afterEach(cleanup);

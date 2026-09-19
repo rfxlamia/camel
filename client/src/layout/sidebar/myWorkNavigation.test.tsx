@@ -14,7 +14,7 @@ const { mockUseWorkspace, mockUseNotificationsContext } = vi.hoisted(() => ({
 	mockUseNotificationsContext: vi.fn(),
 }));
 
-vi.mock("../../context/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 

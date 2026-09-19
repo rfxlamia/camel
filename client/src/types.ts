@@ -531,4 +531,4 @@ export interface AgentEvent {
 	attempt?: number;
 }
 
-export type * from "./types/myWork";
+export type * from "./shared/myWorkTypes";

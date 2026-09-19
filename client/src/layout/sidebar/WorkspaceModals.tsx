@@ -1,6 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
 import type { WorkspaceInvite } from "../../types";
 import { inputClass } from "./shared";
 import {

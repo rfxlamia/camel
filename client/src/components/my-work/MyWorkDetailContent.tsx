@@ -3,7 +3,7 @@ import {
 	type MyWorkDetailState,
 	myWorkDetailErrorMessage,
 } from "../../lib/myWorkNavigation";
-import type { MyWorkItem } from "../../types/myWork";
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 import MyWorkDoneAction from "./MyWorkDoneAction";
 import { createRowView, formatDueDate } from "./MyWorkRowParts";
 

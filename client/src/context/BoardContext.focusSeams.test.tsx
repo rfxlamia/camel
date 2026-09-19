@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-import {
-	act,
-	cleanup,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../types";
 
@@ -43,9 +37,9 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", async (importOriginal) => {
+vi.mock("../shared/workspaceSelection", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../lib/workspaceSelection")>();
+		await importOriginal<typeof import("../shared/workspaceSelection")>();
 	return {
 		...actual,
 		chooseInitialWorkspace: ({
@@ -159,10 +153,10 @@ async function advanceRefreshDebounce() {
 	});
 }
 
+import { ToastProvider, useToastState } from "../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider, useBoard } from "./BoardContext";
 import { PresenceProvider } from "./PresenceContext";
-import { ToastProvider, useToastState } from "./ToastContext";
-import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 
 function Providers({ children }: { children: React.ReactNode }) {
 	return (

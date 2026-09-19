@@ -1,10 +1,10 @@
+import type { MyWorkItem, MyWorkScope } from "../shared/myWorkTypes";
 import {
 	getMyWorkMutationSnapshot,
 	myWorkMutationIdentity,
 	reconcileMyWorkMutationSnapshot,
 } from "../shared/workItemMutations";
 import { isActiveMyWorkItem } from "./myWorkStatus";
-import type { MyWorkItem, MyWorkScope } from "../types/myWork";
 
 /** Drop stale mutation overlays once a fresher authoritative row is available. */
 export function reconcileMyWorkMutations(
@@ -42,9 +42,7 @@ export function projectMyWorkListItems(
 			continue;
 		}
 		projected.push(
-			scope === "all" && snapshot?.status === "success"
-				? snapshot.item
-				: item,
+			scope === "all" && snapshot?.status === "success" ? snapshot.item : item,
 		);
 	}
 	return projected;

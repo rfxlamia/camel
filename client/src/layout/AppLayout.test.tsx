@@ -11,29 +11,29 @@ const { mockUseWorkspace, mockUsePresence, mockUseToastState } = vi.hoisted(
 	}),
 );
 
-vi.mock("../components/PresenceBar", () => ({
+vi.mock("../shared/PresenceBar", () => ({
 	default: () => null,
 }));
-vi.mock("../components/ticketIntake/AutoErrorListener", () => ({
+vi.mock("../shared/AutoErrorListener", () => ({
 	AutoErrorListener: () => null,
 }));
-vi.mock("../components/ticketIntake/FloatingChatButton", () => ({
+vi.mock("../shared/FloatingChatButton", () => ({
 	FloatingChatButton: () => (
 		<button type="button" data-testid="floating-chat-button">
 			Report issue
 		</button>
 	),
 }));
-vi.mock("../components/Toast", () => ({
+vi.mock("../shared/Toast", () => ({
 	default: () => null,
 }));
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
-vi.mock("../context/PresenceContext", () => ({
+vi.mock("../shared/PresenceContext", () => ({
 	usePresence: () => mockUsePresence(),
 }));
-vi.mock("../context/ToastContext", () => ({
+vi.mock("../shared/ToastContext", () => ({
 	useToastState: () => mockUseToastState(),
 }));
 vi.mock("../context/NotificationsContext", () => ({

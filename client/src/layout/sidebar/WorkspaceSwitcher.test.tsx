@@ -15,13 +15,13 @@ const {
 	mockAttemptSwitchWorkspace: vi.fn(),
 }));
 
-vi.mock("../../context/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../../lib/workspaceSwitcher", async (importOriginal) => {
+vi.mock("../../shared/workspaceSwitcher", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../../lib/workspaceSwitcher")>();
+		await importOriginal<typeof import("../../shared/workspaceSwitcher")>();
 	return {
 		...actual,
 		getSwitchAttemptState: (...args: unknown[]) =>

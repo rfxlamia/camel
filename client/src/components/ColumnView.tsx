@@ -6,7 +6,6 @@ import {
 import { Settings2, Shuffle, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { useWorkspace } from "../context/WorkspaceContext";
 import { COLOR_LABELS, type ColumnColor } from "../lib/columnColors";
 import {
 	columnColorPreviewStyle,
@@ -14,6 +13,7 @@ import {
 } from "../lib/columnColorUtils";
 import { resolveColumnAppearance } from "../lib/columnStyleResolver";
 import type { BoardCreatePayload } from "../shared/taskCreateContracts";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { Card, Column, WorkspaceMember } from "../types";
 import { wipStatus } from "../types";
 import AddCard from "./AddCard";

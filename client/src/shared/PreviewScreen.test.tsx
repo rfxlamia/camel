@@ -29,7 +29,11 @@ describe("PreviewScreen — edit, confirm-blocked, read-only type badge", () => 
 		const onConfirm = vi.fn();
 		render(
 			<PreviewScreen
-				draft={{ title: "Drag-drop breaks", description: "original", type: "Bug" }}
+				draft={{
+					title: "Drag-drop breaks",
+					description: "original",
+					type: "Bug",
+				}}
 				onConfirm={onConfirm}
 				submitState={{ status: "idle" }}
 			/>,

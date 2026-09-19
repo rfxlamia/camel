@@ -5,7 +5,7 @@ import { api } from "../api";
 import FocusTimer from "../components/FocusTimer";
 import { useBoard } from "../context/BoardContext";
 import { useFocusSession } from "../context/FocusSessionContext";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { FocusSession } from "../types";
 
 const TASK_LOAD_ERROR =

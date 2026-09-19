@@ -7,7 +7,7 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MyWorkItem } from "../../types/myWork";
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 import MyWorkRow from "./MyWorkRow";
 
 function makeItem(

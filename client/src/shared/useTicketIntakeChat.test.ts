@@ -295,7 +295,9 @@ describe("useTicketIntakeChat — submit lifecycle and SSE consumption", () => {
 			await result.current.confirm();
 		});
 
-		expect(result.current.submitState).toMatchObject({ status: "rate_limited" });
+		expect(result.current.submitState).toMatchObject({
+			status: "rate_limited",
+		});
 	});
 
 	it("consumes ticket_intake.submit_result success from ticketIntakeEvents", async () => {

@@ -46,7 +46,7 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", () => ({
+vi.mock("../shared/workspaceSelection", () => ({
 	chooseInitialWorkspace: ({
 		workspaces,
 		savedWorkspaceId,
@@ -125,14 +125,18 @@ function setupApiMocks() {
 	mockFocusGetConfig.mockResolvedValue({ enabled: true });
 }
 
-import { BoardProvider, useBoard } from "./BoardContext";
-import { PresenceProvider } from "./PresenceContext";
-import { ToastProvider, useShowToast, useToastState } from "./ToastContext";
-import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
+import {
+	ToastProvider,
+	useShowToast,
+	useToastState,
+} from "../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import {
 	FOCUS_BLOCKED_TOAST,
 	FOCUS_LOADING_TOAST,
-} from "../lib/workspaceSwitcher";
+} from "../shared/workspaceSwitcher";
+import { BoardProvider, useBoard } from "./BoardContext";
+import { PresenceProvider } from "./PresenceContext";
 
 function FocusGuardProbe() {
 	const {

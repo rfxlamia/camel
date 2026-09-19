@@ -15,8 +15,8 @@ import TrackerTabs, {
 } from "../components/tracker/TrackerTabs";
 import type { TrackerAuxiliaryLoadState } from "../components/tracker/trackerAuxiliaryState";
 import { useBoard } from "../context/BoardContext";
-import { useShowToast } from "../context/ToastContext";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import { createItemMutationQueue } from "../shared/trackerItemMutationQueue";
 import { partitionTrackerSearch } from "../shared/trackerSearch";
 import {

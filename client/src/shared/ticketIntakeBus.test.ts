@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	type AutoErrorDetail,
 	publishAutoError,
 	subscribeAutoError,
-	type AutoErrorDetail,
 } from "./ticketIntakeBus";
 
 describe("ticketIntakeBus", () => {

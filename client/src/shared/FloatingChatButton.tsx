@@ -1,8 +1,8 @@
 import { MessageSquarePlus } from "lucide-react";
-import { useBoard } from "../../context/BoardContext";
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { useTicketIntakeChat } from "../../hooks/useTicketIntakeChat";
+import { useBoard } from "../context/BoardContext";
 import { TicketIntakeChatOverlay } from "./TicketIntakeChatOverlay";
+import { useTicketIntakeChat } from "./useTicketIntakeChat";
+import { useWorkspace } from "./WorkspaceContext";
 
 export function FloatingChatButton() {
 	const { activeWorkspaceId, ticketIntakeEnabled } = useWorkspace();
@@ -26,10 +26,7 @@ export function FloatingChatButton() {
 				<MessageSquarePlus size={22} aria-hidden />
 			</button>
 
-			<TicketIntakeChatOverlay
-				chat={chat}
-				onClose={chat.close}
-			/>
+			<TicketIntakeChatOverlay chat={chat} onClose={chat.close} />
 		</>
 	);
 }

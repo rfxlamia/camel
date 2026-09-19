@@ -6,7 +6,7 @@ import {
 	type QueueState,
 	submit as queueSubmit,
 	settle,
-} from "../lib/agentQueue";
+} from "../shared/agentQueue";
 import type {
 	ChatAttachment,
 	ChatMessage as ApiChatMessage,

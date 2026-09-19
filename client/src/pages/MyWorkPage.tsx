@@ -1,18 +1,18 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
+import { MyWorkPageView } from "../components/my-work/MyWorkPageView";
+import { useMyWorkData } from "../components/my-work/useMyWorkData";
 import {
 	parseMyWorkDetailState,
 	withMyWorkDetail,
 	withoutMyWorkDetail,
 } from "../lib/myWorkNavigation";
+import type { MyWorkViewState } from "../lib/myWorkUtils";
 import {
 	parseMyWorkViewState,
 	serializeMyWorkViewState,
 } from "../lib/myWorkUtils";
-import type { MyWorkViewState } from "../lib/myWorkUtils";
-import { MyWorkPageView } from "../components/my-work/MyWorkPageView";
-import { useMyWorkData } from "../components/my-work/useMyWorkData";
-import type { MyWorkItem } from "../types/myWork";
+import type { MyWorkItem } from "../shared/myWorkTypes";
 
 type SearchParamSetter = ReturnType<typeof useSearchParams>[1];
 
@@ -61,9 +61,7 @@ export default function MyWorkPage() {
 			updateView={updateView}
 			handlePageChange={handlePageChange}
 			onRefresh={() => void loadData({ fresh: true, refreshDetail: true })}
-			onListRefresh={() =>
-				void loadData({ fresh: true, refreshDetail: false })
-			}
+			onListRefresh={() => void loadData({ fresh: true, refreshDetail: false })}
 			onRetry={() => void loadData({ fresh: true, refreshDetail: true })}
 			onSelect={openDetail}
 			onCloseDetail={closeDetail}

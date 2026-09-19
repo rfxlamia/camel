@@ -5,10 +5,10 @@ import AgentBoardHeader from "../components/agent/AgentBoardHeader";
 import AgentBoardVisual from "../components/agent/AgentBoardVisual";
 import AgentChatPanel from "../components/agent/AgentChatPanel";
 import AgentComposer from "../components/agent/AgentComposer";
-import LoadingCamel from "../components/LoadingCamel";
 import { useBoard } from "../context/BoardContext";
 import { useAgentBoard } from "../hooks/useAgentBoard";
 import { useAgentChat } from "../hooks/useAgentChat";
+import LoadingCamel from "../shared/LoadingCamel";
 import type { AgentColumn } from "../types";
 
 export default function AgentPage() {

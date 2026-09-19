@@ -1,7 +1,7 @@
 // Client mutation router for unified work items — see docs/pocket/adr/2026-09-board-tracker-dual-table.md (#103).
 import { api } from "../api";
+import type { MyWorkItem } from "../shared/myWorkTypes";
 import type { TrackerItem, WorkItem } from "../types";
-import type { MyWorkItem } from "../types/myWork";
 
 type TrackerItemPatch = Parameters<typeof api.updateWorkItem>[2];
 type CardPatch = Parameters<typeof api.updateCard>[2];

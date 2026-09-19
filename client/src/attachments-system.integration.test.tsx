@@ -1,23 +1,17 @@
 // @vitest-environment jsdom
-import {
-	act,
-	cleanup,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Card, CardAttachment, Column, User } from "./types";
 import {
+	type AttachmentViewerHarness,
 	advanceRefreshDebounce,
 	createAttachmentViewerHarness,
 	emitAttachmentAddedEvent,
-	type AttachmentViewerHarness,
 } from "./attachments-system.harness";
+import type { Card, CardAttachment, Column, User } from "./types";
 
-vi.mock("./lib/workspaceSelection", async (importOriginal) => {
+vi.mock("./shared/workspaceSelection", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("./lib/workspaceSelection")>();
+		await importOriginal<typeof import("./shared/workspaceSelection")>();
 	return {
 		...actual,
 		chooseInitialWorkspace: ({
@@ -49,11 +43,11 @@ vi.mock("./lib/workspaceSelection", async (importOriginal) => {
 	};
 });
 
-import { BoardProvider, useBoard } from "./context/BoardContext";
-import { PresenceProvider } from "./context/PresenceContext";
-import { ToastProvider } from "./context/ToastContext";
-import { useWorkspace, WorkspaceProvider } from "./context/WorkspaceContext";
 import CardAttachments from "./components/CardAttachments";
+import { BoardProvider, useBoard } from "./context/BoardContext";
+import { PresenceProvider } from "./shared/PresenceContext";
+import { ToastProvider } from "./shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "./shared/WorkspaceContext";
 
 const viewerUser: User = {
 	id: 1,
@@ -124,7 +118,9 @@ describe("attachment viewer system contract", () => {
 	function BoardCardAttachmentsSurface() {
 		const { columns } = useBoard();
 		const { activeWorkspaceId } = useWorkspace();
-		const card = columns?.flatMap((column) => column.cards).find((c) => c.id === 42);
+		const card = columns
+			?.flatMap((column) => column.cards)
+			.find((c) => c.id === 42);
 		if (!card || activeWorkspaceId === null) return null;
 
 		return (
@@ -133,7 +129,9 @@ describe("attachment viewer system contract", () => {
 				workspaceId={activeWorkspaceId}
 				onUpload={async (pairs) => {
 					uploadSpy(pairs);
-					throw new Error("upload callback must not run in viewer refresh test");
+					throw new Error(
+						"upload callback must not run in viewer refresh test",
+					);
 				}}
 			/>
 		);
@@ -164,14 +162,14 @@ describe("attachment viewer system contract", () => {
 		await act(async () => {
 			render(
 				<ToastProvider>
-				<WorkspaceProvider user={viewerUser} onSignedOut={vi.fn()}>
-					<PresenceProvider>
-						<BoardProvider>
-							<BoardCardAttachmentsSurface />
-						</BoardProvider>
-					</PresenceProvider>
-				</WorkspaceProvider>
-			</ToastProvider>,
+					<WorkspaceProvider user={viewerUser} onSignedOut={vi.fn()}>
+						<PresenceProvider>
+							<BoardProvider>
+								<BoardCardAttachmentsSurface />
+							</BoardProvider>
+						</PresenceProvider>
+					</WorkspaceProvider>
+				</ToastProvider>,
 			);
 		});
 
@@ -193,7 +191,9 @@ describe("attachment viewer system contract", () => {
 		});
 		await advanceRefreshDebounce();
 
-		await waitFor(() => expect(harness.getBoardCallCount()).toBeGreaterThanOrEqual(2));
+		await waitFor(() =>
+			expect(harness.getBoardCallCount()).toBeGreaterThanOrEqual(2),
+		);
 		await waitFor(() => expect(screen.getByText("2/3")).toBeTruthy());
 		expect(
 			screen.getByRole("button", { name: "View attachment 2" }),

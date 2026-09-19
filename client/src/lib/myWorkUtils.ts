@@ -1,6 +1,12 @@
+import type { MyWorkScope } from "../shared/myWorkTypes";
 import type { WorkItemSource } from "../types";
-import type { MyWorkScope } from "../types/myWork";
 
+export {
+	isMyWorkItemOverdue,
+	orderMyWorkItems,
+} from "./myWorkOrdering";
+export type { MyWorkPage } from "./myWorkSearch";
+export { MY_WORK_PAGE_SIZE, paginateMyWorkItems } from "./myWorkSearch";
 export type {
 	MyWorkGroupMap,
 	MyWorkStatusGroup,
@@ -11,13 +17,6 @@ export {
 	isActiveMyWorkItem,
 	normalizeMyWorkStatus,
 } from "./myWorkStatus";
-export {
-	isMyWorkItemOverdue,
-	orderMyWorkItems,
-} from "./myWorkOrdering";
-
-export type { MyWorkPage } from "./myWorkSearch";
-export { MY_WORK_PAGE_SIZE, paginateMyWorkItems } from "./myWorkSearch";
 
 export interface MyWorkViewState {
 	scope: MyWorkScope;

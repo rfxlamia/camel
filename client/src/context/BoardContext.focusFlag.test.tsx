@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-import {
-	act,
-	cleanup,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../types";
 
@@ -43,7 +37,7 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", () => ({
+vi.mock("../shared/workspaceSelection", () => ({
 	chooseInitialWorkspace: ({
 		workspaces,
 		savedWorkspaceId,
@@ -114,10 +108,10 @@ function setupApiMocks() {
 	mockGetPresence.mockResolvedValue({ users: [] });
 }
 
+import { ToastProvider } from "../shared/ToastContext";
+import { useWorkspace, WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider } from "./BoardContext";
 import { PresenceProvider } from "./PresenceContext";
-import { ToastProvider } from "./ToastContext";
-import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 
 function FocusFlagProbe() {
 	const { focusModeEnabled } = useWorkspace();

@@ -11,8 +11,8 @@ import TrackerPhaseEditor, {
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../context/BoardContext";
-import { useShowToast } from "../context/ToastContext";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useShowToast } from "../shared/ToastContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import { sortStatusesByPosition } from "../shared/trackerUtils";
 import { updateWorkItemStatus, reorderWorkItem } from "../shared/workItemMutations";
 import type {

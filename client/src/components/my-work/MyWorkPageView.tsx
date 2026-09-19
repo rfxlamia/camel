@@ -2,7 +2,7 @@ import { ClipboardList, RotateCcw } from "lucide-react";
 import type { MyWorkDetailSelection } from "../../lib/myWorkNavigation";
 import type { MyWorkViewState } from "../../lib/myWorkUtils";
 import type { WorkItemSource } from "../../types";
-import type { MyWorkItem, MyWorkWorkspace } from "../../types/myWork";
+import type { MyWorkItem, MyWorkWorkspace } from "../../shared/myWorkTypes";
 import MyWorkDetailSheet from "./MyWorkDetailSheet";
 import MyWorkList, { SessionErrorState } from "./MyWorkList";
 import MyWorkToolbar from "./MyWorkToolbar";

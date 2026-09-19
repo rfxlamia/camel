@@ -1,10 +1,5 @@
 // @vitest-environment jsdom
-import {
-	act,
-	cleanup,
-	render,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../types";
@@ -42,9 +37,9 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", async (importOriginal) => {
+vi.mock("../shared/workspaceSelection", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../lib/workspaceSelection")>();
+		await importOriginal<typeof import("../shared/workspaceSelection")>();
 	return {
 		...actual,
 		chooseInitialWorkspace: ({
@@ -145,10 +140,10 @@ async function advanceRefreshDebounce() {
 	});
 }
 
+import { ToastProvider } from "../shared/ToastContext";
+import { WorkspaceProvider } from "../shared/WorkspaceContext";
 import { BoardProvider, useBoard } from "./BoardContext";
 import { PresenceProvider } from "./PresenceContext";
-import { ToastProvider } from "./ToastContext";
-import { WorkspaceProvider } from "./WorkspaceContext";
 
 async function renderBoard(children: React.ReactNode) {
 	await act(async () => {
@@ -156,9 +151,7 @@ async function renderBoard(children: React.ReactNode) {
 			<ToastProvider>
 				<WorkspaceProvider user={testUser} onSignedOut={vi.fn()}>
 					<PresenceProvider>
-						<BoardProvider>
-							{children}
-						</BoardProvider>
+						<BoardProvider>{children}</BoardProvider>
 					</PresenceProvider>
 				</WorkspaceProvider>
 			</ToastProvider>,

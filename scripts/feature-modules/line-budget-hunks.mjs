@@ -51,6 +51,7 @@ function isImportOrExportFromLine(line) {
 		/^import\s*\(/.test(trimmed) ||
 		/^export\s+\{/.test(trimmed) ||
 		/^export\s+\*\s+from\s/.test(trimmed) ||
+		/^export\s+type\s+\*\s+from\s/.test(trimmed) ||
 		/^export\s+type\s+\{/.test(trimmed)
 	);
 }

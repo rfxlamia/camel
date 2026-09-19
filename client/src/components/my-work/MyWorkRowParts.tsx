@@ -12,7 +12,7 @@ import {
 	type MyWorkStatusGroup,
 	normalizeMyWorkStatus,
 } from "../../lib/myWorkStatus";
-import type { MyWorkItem } from "../../types/myWork";
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 
 export type StatusMetadata = (typeof STATUS_META)[MyWorkStatusGroup];
 

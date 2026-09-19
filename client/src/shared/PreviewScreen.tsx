@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TicketIntakeDraft } from "../../api";
+import type { TicketIntakeDraft } from "../api";
 import { ticketIntakeInputClass } from "./inputClass";
 
 export type PreviewSubmitState = {
@@ -91,7 +91,10 @@ export function PreviewScreen({
 			)}
 
 			<div>
-				<label htmlFor="ticket-preview-title" className="text-sm text-neutral-600">
+				<label
+					htmlFor="ticket-preview-title"
+					className="text-sm text-neutral-600"
+				>
 					Title
 				</label>
 				<input

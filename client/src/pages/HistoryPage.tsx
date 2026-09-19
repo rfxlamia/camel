@@ -9,7 +9,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api } from "../api";
-import { useWorkspace } from "../context/WorkspaceContext";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { AgentBoard } from "../types";
 import { formatRelativeTime, templateName } from "../types";
 

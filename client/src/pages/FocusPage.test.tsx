@@ -44,7 +44,7 @@ vi.mock("../context/BoardContext", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 
-vi.mock("../context/WorkspaceContext", () => ({
+vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 

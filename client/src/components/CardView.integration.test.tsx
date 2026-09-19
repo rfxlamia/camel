@@ -1,16 +1,10 @@
 // @vitest-environment jsdom
-import {
-	act,
-	cleanup,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BoardProvider, useBoard } from "../context/BoardContext";
-import { PresenceProvider } from "../context/PresenceContext";
-import { WorkspaceProvider } from "../context/WorkspaceContext";
-import { ToastProvider } from "../context/ToastContext";
+import { PresenceProvider } from "../shared/PresenceContext";
+import { ToastProvider } from "../shared/ToastContext";
+import { WorkspaceProvider } from "../shared/WorkspaceContext";
 import type { User } from "../types";
 import { CardBody } from "./CardView";
 
@@ -47,9 +41,9 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../lib/workspaceSelection", async (importOriginal) => {
+vi.mock("../shared/workspaceSelection", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../lib/workspaceSelection")>();
+		await importOriginal<typeof import("../shared/workspaceSelection")>();
 	return {
 		...actual,
 		chooseInitialWorkspace: ({
@@ -196,9 +190,7 @@ async function renderHydratedBoard() {
 		);
 	});
 	await waitFor(() => expect(mockGetBoard).toHaveBeenCalled());
-	await waitFor(() =>
-		expect(screen.queryByTestId("board-loading")).toBeNull(),
-	);
+	await waitFor(() => expect(screen.queryByTestId("board-loading")).toBeNull());
 }
 
 describe("CardBody hydrated board cover", () => {

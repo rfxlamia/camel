@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
+import type { MyWorkItem } from "../../shared/myWorkTypes";
 import {
 	getMyWorkMutationSnapshot,
 	type MyWorkMutationSnapshot,
@@ -6,7 +7,6 @@ import {
 	myWorkMutationIdentity,
 	subscribeToMyWorkMutations,
 } from "../../shared/workItemMutations";
-import type { MyWorkItem } from "../../types/myWork";
 import {
 	type ActionState,
 	buildActionController,

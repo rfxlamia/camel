@@ -8,7 +8,7 @@ import {
 	useState,
 } from "react";
 import { api } from "../api";
-import type { ToastType } from "../context/ToastContext";
+import type { ToastType } from "../shared/ToastContext";
 import type { FollowUpMessage } from "../lib/agentFollowUp";
 import { conversationsToFollowUpMessages } from "../lib/agentFollowUp";
 import {
@@ -17,7 +17,7 @@ import {
 	submit as queueSubmit,
 	routeNext,
 	settle,
-} from "../lib/agentQueue";
+} from "../shared/agentQueue";
 import type { AgentBoard, AgentEvent } from "../types";
 
 // ---- Queue reducer (owned by this hook) ----
