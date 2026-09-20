@@ -2,9 +2,9 @@ import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../api";
-import FocusTimer from "../components/FocusTimer";
 import { useBoard } from "../context/BoardContext";
 import { useFocusSession } from "../context/FocusSessionContext";
+import { FocusTimer } from "../features/focus";
 import { useWorkspace } from "../shared/WorkspaceContext";
 import type { FocusSession } from "../types";
 

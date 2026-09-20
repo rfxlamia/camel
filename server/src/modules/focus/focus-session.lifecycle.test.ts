@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuthUser } from "../auth.js";
+import type { AuthUser } from "../../auth.js";
 import type { FocusSessionRow } from "./focus-session-repo.js";
 
 const FIXED_DATE = new Date("2026-09-04T12:00:00.000Z");
@@ -16,8 +16,8 @@ const mockRequireWorkspaceMember = vi.hoisted(() =>
 	vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 );
 
-vi.mock("../config.js", () => ({ config: mockConfig }));
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../config.js", () => ({ config: mockConfig }));
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (...args: unknown[]) =>
 		mockRequireWorkspaceMember(...args),
 }));

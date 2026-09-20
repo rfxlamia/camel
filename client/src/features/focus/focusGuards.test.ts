@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { FocusSession } from "../types";
+import type { FocusSession } from "../../types";
 import {
 	deletionEventTargetsFocusedTask,
 	isActiveFocusSession,
 	membershipRemovalTargetsUser,
 } from "./focusGuards";
 
-function makeBoardSession(
-	overrides: Partial<FocusSession> = {},
-): FocusSession {
+function makeBoardSession(overrides: Partial<FocusSession> = {}): FocusSession {
 	return {
 		id: 1,
 		state: "running",
@@ -48,9 +46,9 @@ describe("isActiveFocusSession", () => {
 	});
 
 	it("returns false for finished session", () => {
-		expect(
-			isActiveFocusSession(makeBoardSession({ state: "finished" })),
-		).toBe(false);
+		expect(isActiveFocusSession(makeBoardSession({ state: "finished" }))).toBe(
+			false,
+		);
 	});
 
 	it("returns true for running session", () => {
@@ -58,9 +56,9 @@ describe("isActiveFocusSession", () => {
 	});
 
 	it("returns true for paused session", () => {
-		expect(
-			isActiveFocusSession(makeBoardSession({ state: "paused" })),
-		).toBe(true);
+		expect(isActiveFocusSession(makeBoardSession({ state: "paused" }))).toBe(
+			true,
+		);
 	});
 });
 

@@ -5,9 +5,9 @@
 //   RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/focus-session.switch.integration.test.ts
 import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
-import { pool } from "../db/pool.js";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
+import { pool } from "../../db/pool.js";
 import {
 	createFocusSessionRepo,
 	type FocusSessionInsertInput,
@@ -92,9 +92,7 @@ async function setupFixtures(): Promise<Fixtures> {
 	return { taskAId, taskBId, sessionAId };
 }
 
-function readyInputForB(
-	taskBId: number,
-): FocusSessionInsertInput {
+function readyInputForB(taskBId: number): FocusSessionInsertInput {
 	return {
 		user_id: USER_ID,
 		workspace_id: WORKSPACE_ID,
@@ -159,7 +157,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(activeRows.rows[0]!.task_id).toBe(taskBId);
 			expect(activeRows.rows[0]!.accumulated_seconds).toBe(0);
 
-			const finishedA = await pool.query<{ state: string; accumulated_seconds: number }>(
+			const finishedA = await pool.query<{
+				state: string;
+				accumulated_seconds: number;
+			}>(
 				"SELECT state, accumulated_seconds FROM focus_sessions WHERE id = $1",
 				[sessionAId],
 			);

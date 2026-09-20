@@ -4,16 +4,17 @@ import {
 	type Response,
 	Router,
 } from "express";
-import type { AuthUser } from "../auth.js";
-import { config } from "../config.js";
+import type { AuthUser } from "../../auth.js";
+import { config } from "../../config.js";
 import {
 	applyAction,
 	type FocusAction,
 	InvalidFocusTransitionError,
-} from "../core/focus-session.js";
-import { db } from "../db/kysely.js";
-import { requireWorkspaceMember } from "../middleware/workspace.js";
-import { publishEvent } from "../realtime.js";
+} from "../../core/focus-session.js";
+import { db } from "../../db/kysely.js";
+import { recordActivity } from "../../lib/helpers.js";
+import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { publishEvent } from "../../realtime.js";
 import {
 	buildReadySessionInput,
 	targetsSameTask,
@@ -24,7 +25,6 @@ import {
 	type FocusSessionRow,
 	type FocusSessionUpdatePatch,
 } from "./focus-session-repo.js";
-import { recordActivity } from "../lib/helpers.js";
 
 export type FocusAuditAction =
 	| "focus"

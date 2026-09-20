@@ -1,5 +1,5 @@
-import { applyAction } from "../core/focus-session.js";
-import type { AuthUser } from "../auth.js";
+import type { AuthUser } from "../../auth.js";
+import { applyAction } from "../../core/focus-session.js";
 import type { RecordFocusActivity } from "./focus-session.js";
 import type { FocusSessionRepo } from "./focus-session-repo.js";
 
