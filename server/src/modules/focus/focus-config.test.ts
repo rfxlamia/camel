@@ -6,9 +6,9 @@ const { mockConfig } = vi.hoisted(() => ({
 	mockConfig: { FOCUS_MODE_ENABLED: "false" as string },
 }));
 
-vi.mock("../config.js", () => ({ config: mockConfig }));
+vi.mock("../../config.js", () => ({ config: mockConfig }));
 
-vi.mock("../auth.js", () => ({
+vi.mock("../../auth.js", () => ({
 	requireAuth: (
 		req: express.Request & { user?: unknown },
 		res: express.Response,

@@ -20,9 +20,9 @@ describe("computeDisplaySeconds", () => {
 	const nowMs = Date.parse("2026-09-04T10:01:30.000Z");
 
 	it("adds elapsed time while running", () => {
-		expect(
-			computeDisplaySeconds(1200, "running", runningSince, nowMs),
-		).toBe(1290);
+		expect(computeDisplaySeconds(1200, "running", runningSince, nowMs)).toBe(
+			1290,
+		);
 	});
 
 	it("returns accumulated seconds when paused or ready", () => {
@@ -32,8 +32,8 @@ describe("computeDisplaySeconds", () => {
 
 	it("clamps to zero when the client clock lags behind runningSince", () => {
 		const laggingNowMs = Date.parse("2026-09-04T09:59:00.000Z");
-		expect(computeDisplaySeconds(0, "running", runningSince, laggingNowMs)).toBe(
-			0,
-		);
+		expect(
+			computeDisplaySeconds(0, "running", runningSince, laggingNowMs),
+		).toBe(0);
 	});
 });

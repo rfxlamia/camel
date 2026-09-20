@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AuthUser } from "../auth.js";
-import type { FocusSessionRepo, FocusSessionRow } from "./focus-session-repo.js";
+import type { AuthUser } from "../../auth.js";
 import { finishActiveFocusSessionForRemoval } from "./focus-session-membership.js";
+import type {
+	FocusSessionRepo,
+	FocusSessionRow,
+} from "./focus-session-repo.js";
 
 const T0 = new Date("2026-09-04T10:00:00.000Z");
 const NOW = new Date(T0.getTime() + 120_000);

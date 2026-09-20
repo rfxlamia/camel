@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 
 export type FocusSessionRow = {
 	id: number;

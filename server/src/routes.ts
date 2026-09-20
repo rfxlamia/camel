@@ -5,6 +5,10 @@ import { myWorkObservability } from "./core/my-work-observability.js";
 import { workItemsRouter } from "./lib/work-items.js";
 import { requireEmailVerified } from "./middleware/email-gate.js";
 import {
+	focusConfigRouter,
+	focusSessionRouter,
+} from "./modules/focus/index.js";
+import {
 	createMyWorkPreAuthObservabilityMiddleware,
 	myWorkRouter,
 } from "./modules/my-work/index.js";
@@ -20,8 +24,6 @@ import { boardRouter } from "./routes/board.js";
 import { cardAttachmentsRouter } from "./routes/card-attachments.js";
 import { cardsRouter } from "./routes/cards.js";
 import { columnsRouter } from "./routes/columns.js";
-import { focusConfigRouter } from "./routes/focus-config.js";
-import { focusSessionRouter } from "./routes/focus-session.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { metricsRouter } from "./routes/metrics.js";

@@ -1,4 +1,4 @@
-import type { FocusSession } from "../types";
+import type { FocusSession } from "../../types";
 
 export const TASK_MISSING_TOAST =
 	"Your focus session ended because the task is no longer available.";

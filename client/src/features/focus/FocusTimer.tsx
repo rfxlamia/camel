@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
-import {
-	computeDisplaySeconds,
-	formatDurationParts,
-} from "../lib/focusDuration";
-import type { FocusSession } from "../types";
+import type { FocusSession } from "../../types";
+import { computeDisplaySeconds, formatDurationParts } from "./focusDuration";
 
 export type FocusTimerProps = {
 	session: FocusSession;

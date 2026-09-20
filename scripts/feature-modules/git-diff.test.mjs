@@ -532,6 +532,80 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/focus/index.ts")),
+			"expected features/focus public API client/src/features/focus/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/focus/index.ts")),
+			"expected server/src/modules/focus/index.ts",
+		);
+		for (const name of [
+			"FocusTimer.tsx",
+			"FocusTimer.test.tsx",
+			"focusDuration.ts",
+			"focusDuration.test.ts",
+			"focusGuards.ts",
+			"focusGuards.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/focus/${name}`)),
+				`expected features/focus home client/src/features/focus/${name}`,
+			);
+		}
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/components/FocusTimer.tsx")),
+			"expected leftover client/src/components/FocusTimer.tsx to be gone",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/components/FocusTimer.test.tsx")),
+			"expected leftover client/src/components/FocusTimer.test.tsx to be gone",
+		);
+		for (const name of [
+			"focusDuration.ts",
+			"focusDuration.test.ts",
+			"focusGuards.ts",
+			"focusGuards.test.ts",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected leftover client/src/lib/${name} to be gone`,
+			);
+		}
+		for (const name of [
+			"focus-session.ts",
+			"focus-session-repo.ts",
+			"focus-session-inputs.ts",
+			"focus-session-membership.ts",
+			"focus-config.ts",
+			"focus-config.test.ts",
+			"focus-session-membership.test.ts",
+			"focus-session.test.ts",
+			"focus-session.lifecycle.test.ts",
+			"focus-session.switch.test.ts",
+			"focus-session.switch.integration.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/focus/${name}`)),
+				`expected server/src/modules/focus/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/components/FocusEntryButton.tsx")),
+			"expected leftover client/src/components/FocusEntryButton.tsx to still exist",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/context/FocusSessionContext.tsx")),
+			"expected leftover client/src/context/FocusSessionContext.tsx to still exist (wave-2)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/FocusPage.tsx")),
+			"expected FocusPage to remain under client/src/pages/FocusPage.tsx",
+		);
 	});
 
 	it("Chrome extract retargets every importer", () => {

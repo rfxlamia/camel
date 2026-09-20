@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FocusSession } from "../types";
+import type { FocusSession } from "../../types";
 import FocusTimer from "./FocusTimer";
 
 const T0 = new Date("2026-09-04T10:00:00.000Z");
