@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 import { createChatService } from "./service.js";
 
 /**
