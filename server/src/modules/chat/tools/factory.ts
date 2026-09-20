@@ -1,13 +1,13 @@
-import type { CardTimestamps } from "../../core/metrics.js";
-import { db } from "../../db/kysely.js";
-import type { Tool } from "../../modules/agent/index.js";
+import type { CardTimestamps } from "../../../core/metrics.js";
+import { db } from "../../../db/kysely.js";
+import type { Tool } from "../../agent/index.js";
 import {
 	type ActivityItem,
 	createToolRegistry,
 	makeQueryBoardData,
 	type ToolRegistry,
 	webSearch,
-} from "../../modules/agent/index.js";
+} from "../../agent/index.js";
 import type { InsertAttachmentParams } from "../types.js";
 import { makeCreateChatFile } from "./createChatFile.js";
 

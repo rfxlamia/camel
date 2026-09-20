@@ -338,6 +338,363 @@ describe("Cycle H — import reorder (unit)", () => {
 	});
 });
 
+describe("Cycle I — intra-line binding order (unit)", () => {
+	it("passes for same-set binding reorder within one import line on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { sql, type Selectable } from "kysely";',
+			'+import { type Selectable, sql } from "kysely";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("treats binding add within one import line as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { sql } from "kysely";',
+			'+import { type Selectable, sql } from "kysely";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("treats binding remove within one import line as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { type Selectable, sql } from "kysely";',
+			'+import { sql } from "kysely";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+});
+
+describe("Cycle J — barrel consolidation (unit)", () => {
+	it("passes when N leaf imports merge into one barrel import with the identical binding set", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -9,1 +9,2 @@",
+			'-import { config } from "../config.js";',
+			'+import { config } from "../../config.js";',
+			'+import type { Tool, ToolEvent } from "../agent/index.js";',
+			"@@ -10,0 +12 @@",
+			"+\tcountSearchResults,",
+			"@@ -14,4 +16,2 @@",
+			'-} from "../agent/prompt-sanitizer.js";',
+			'-import { toAnthropicToolDefs } from "../agent/tools/registry.js";',
+			'-import { countSearchResults } from "../agent/tools/trace.js";',
+			'-import type { Tool, ToolEvent } from "../agent/tools/types.js";',
+			"+\ttoAnthropicToolDefs,",
+			'+} from "../agent/index.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("treats barrel consolidation with a binding add as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,2 +1,1 @@",
+			'-import { a } from "./a.js";',
+			'-import { b } from "./b.js";',
+			'+import { a, b, c } from "./barrel.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("treats barrel consolidation with a binding remove as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,2 +1,1 @@",
+			'-import { a } from "./a.js";',
+			'-import { b } from "./b.js";',
+			'+import { a } from "./barrel.js";',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+});
+
+describe("Cycle K — rewrap/reflow (unit)", () => {
+	it("passes for a rewrap-only hunk with identical tokens on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -42,2 +42,1 @@",
+			"-  const text = userMessageText ??",
+			'-    history.find((m) => m.role === "user")?.content;',
+			'+  const text = userMessageText ?? history.find((m) => m.role === "user")?.content;',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("treats rewrap plus one identifier change as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -42,2 +42,1 @@",
+			"-  const text = userMessageText ??",
+			'-    history.find((m) => m.role === "user")?.content;',
+			'+  const text = userMessageText ?? archive.find((m) => m.role === "user")?.content;',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("treats rewrap plus string-content change as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -42,2 +42,1 @@",
+			"-  const text = userMessageText ??",
+			'-    history.find((m) => m.role === "user")?.content;',
+			'+  const text = userMessageText ?? history.find((m) => m.role === "assistant")?.content;',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("passes for a T8 signature/method-chain/?? rewrap with identical tokens on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -10,7 +10,2 @@",
+			"-  function format(",
+			"-    messages: Item[],",
+			"-  ): string {",
+			"-    return items",
+			"-      .filter((m) => m.ok)",
+			"-      .map((m) => m.label ??",
+			"-        fallback);",
+			"+  function format(messages: Item[]): string {",
+			"+    return items.filter((m) => m.ok).map((m) => m.label ?? fallback);",
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("treats T8 signature/method-chain/?? rewrap with one identifier change as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -10,7 +10,2 @@",
+			"-  function format(",
+			"-    messages: Item[],",
+			"-  ): string {",
+			"-    return items",
+			"-      .filter((m) => m.ok)",
+			"-      .map((m) => m.label ??",
+			"-        fallback);",
+			"+  function format(messages: Item[]): string {",
+			"+    return items.filter((m) => m.ok).map((m) => m.label ?? other);",
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+});
+
+describe("Cycle L — mixed import-retarget plus body-rewrap (unit)", () => {
+	it("passes for a mixed import-retarget plus body-rewrap hunk on a 999-line file", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { x } from "./a.js";',
+			'+import { x } from "./b.js";',
+			"@@ -42,2 +42,1 @@",
+			"-  const text = userMessageText ??",
+			'-    history.find((m) => m.role === "user")?.content;',
+			'+  const text = userMessageText ?? history.find((m) => m.role === "user")?.content;',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		assert.deepEqual(violations, []);
+	});
+
+	it("treats mixed import-retarget plus rewrap with one identifier change as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { x } from "./a.js";',
+			'+import { x } from "./b.js";',
+			"@@ -42,2 +42,1 @@",
+			"-  const text = userMessageText ??",
+			'-    history.find((m) => m.role === "user")?.content;',
+			'+  const text = userMessageText ?? archive.find((m) => m.role === "user")?.content;',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("treats mixed import-retarget plus rewrap with string-content change as a touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+
+		const hunks = [
+			"@@ -1,1 +1,1 @@",
+			'-import { x } from "./a.js";',
+			'+import { x } from "./b.js";',
+			"@@ -42,2 +42,1 @@",
+			"-  const text = userMessageText ??",
+			'-    history.find((m) => m.role === "user")?.content;',
+			'+  const text = userMessageText ?? history.find((m) => m.role === "assistant")?.content;',
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+});
+
 describe("Cycle E — exemption negatives and edges (unit)", () => {
 	it("treats +++/--- source lines inside a hunk as a touch", () => {
 		const path = "server/src/routes/cards.ts";

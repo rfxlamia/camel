@@ -1,4 +1,4 @@
-import type { Json } from "../db/types.js";
+import type { Json } from "../../db/types.js";
 
 export type ChatMessageRole = "user" | "assistant" | "error";
 export type ChatAttachmentFormat = "md" | "txt" | "csv";
