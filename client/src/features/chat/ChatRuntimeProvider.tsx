@@ -1,18 +1,7 @@
-import {
-	AssistantRuntimeProvider,
-	useLocalRuntime,
-} from "@assistant-ui/react";
-import {
-	createContext,
-	useContext,
-	useMemo,
-	type ReactNode,
-} from "react";
-import {
-	useChatStream,
-	type UseChatStreamOptions,
-} from "../hooks/useChatStream";
+import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { createModelAdapter } from "./modelAdapter";
+import { type UseChatStreamOptions, useChatStream } from "./useChatStream";
 
 type ChatStreamContextValue = ReturnType<typeof useChatStream>;
 
@@ -21,7 +10,9 @@ const ChatStreamContext = createContext<ChatStreamContextValue | null>(null);
 export function useChatStreamContext(): ChatStreamContextValue {
 	const ctx = useContext(ChatStreamContext);
 	if (!ctx) {
-		throw new Error("useChatStreamContext must be used within ChatRuntimeProvider");
+		throw new Error(
+			"useChatStreamContext must be used within ChatRuntimeProvider",
+		);
 	}
 	return ctx;
 }
@@ -38,10 +29,7 @@ function ChatThreadRuntime({
 	children,
 }: UseChatStreamOptions & { children: ReactNode }) {
 	const chatStream = useChatStream({ threadId, workspaceId });
-	const adapter = useMemo(
-		() => createModelAdapter(chatStream),
-		[chatStream],
-	);
+	const adapter = useMemo(() => createModelAdapter(chatStream), [chatStream]);
 	const runtime = useLocalRuntime(adapter);
 
 	return (

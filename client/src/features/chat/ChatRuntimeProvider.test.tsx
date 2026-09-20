@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatRuntimeProvider } from "./ChatRuntimeProvider";
 import { ChatPanel } from "./ui";
 
-vi.mock("../hooks/useChatStream", () => ({
+vi.mock("./useChatStream", () => ({
 	useChatStream: () => ({
 		messages: [],
 		retry: vi.fn(),

@@ -1,5 +1,4 @@
-import type { ChatToolEvent } from "../types";
-import type { ToolTraceItem } from "../types";
+import type { ChatToolEvent, ToolTraceItem } from "../../types";
 
 /** Map live chat stream tool_event payloads into ToolTraceItem steps. */
 export function deriveChatToolTrace(events: ChatToolEvent[]): ToolTraceItem[] {
