@@ -4,7 +4,7 @@ import {
 	unstable_useComposerInput,
 } from "@assistant-ui/react";
 import { useEffect } from "react";
-import { ChatMessage } from "../components/chat/ChatMessage";
+import { ChatMessage } from "./ChatMessage";
 import { useChatStreamContext } from "./ChatRuntimeProvider";
 
 function ChatMessageList() {

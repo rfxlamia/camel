@@ -2,8 +2,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { api } from "../api";
-import { ChatRuntimeProvider } from "../chat/ChatRuntimeProvider";
-import { ChatPanel } from "../chat/ui";
+import { ChatPanel, ChatRuntimeProvider } from "../features/chat";
 import { useWorkspace } from "../shared/WorkspaceContext";
 import type { ChatThread } from "../types";
 

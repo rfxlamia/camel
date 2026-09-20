@@ -401,8 +401,61 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected MyWorkPage to remain under client/src/pages/MyWorkPage.tsx",
 		);
 		assert.ok(
-			!existsSync(join(repoRoot, "client/src/features/chat")),
-			"expected client/src/features/chat/ to not exist yet",
+			existsSync(join(repoRoot, "client/src/features/chat/index.ts")),
+			"expected features/chat public API client/src/features/chat/index.ts",
+		);
+		for (const name of [
+			"ChatRuntimeProvider.tsx",
+			"modelAdapter.ts",
+			"threadListAdapter.ts",
+			"ui.tsx",
+			"ChatAttachment.tsx",
+			"ChatErrorBubble.tsx",
+			"ChatMessage.tsx",
+			"useChatStream.ts",
+			"chatToolTrace.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/chat/${name}`)),
+				`expected features/chat home client/src/features/chat/${name}`,
+			);
+		}
+		for (const name of [
+			"ChatRuntimeProvider.test.tsx",
+			"ChatMessage.test.tsx",
+			"useChatStream.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/chat/${name}`)),
+				`expected features/chat test home client/src/features/chat/${name}`,
+			);
+		}
+		for (const name of [
+			"client/src/chat/ChatRuntimeProvider.tsx",
+			"client/src/chat/ChatRuntimeProvider.test.tsx",
+			"client/src/chat/modelAdapter.ts",
+			"client/src/chat/threadListAdapter.ts",
+			"client/src/chat/ui.tsx",
+			"client/src/components/chat/ChatAttachment.tsx",
+			"client/src/components/chat/ChatErrorBubble.tsx",
+			"client/src/components/chat/ChatMessage.tsx",
+			"client/src/components/chat/ChatMessage.test.tsx",
+			"client/src/hooks/useChatStream.ts",
+			"client/src/hooks/useChatStream.test.ts",
+			"client/src/lib/chatToolTrace.ts",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, name)),
+				`expected leftover ${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/chat/routes.ts")),
+			"expected leftover server/src/chat/routes.ts to still exist (server chat is T8)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/ChatPage.tsx")),
+			"expected ChatPage to remain under client/src/pages/ChatPage.tsx",
 		);
 		for (const name of [
 			"MyWorkDetailContent.tsx",

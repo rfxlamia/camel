@@ -31,7 +31,10 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../chat/ui", () => ({
+vi.mock("../features/chat", () => ({
+	ChatRuntimeProvider: ({ children }: { children: React.ReactNode }) => (
+		<>{children}</>
+	),
 	ChatPanel: () => (
 		<div>
 			<div data-testid="chat-thread" />

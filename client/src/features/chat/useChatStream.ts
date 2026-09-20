@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { ApiError, api } from "../api";
-import { deriveChatToolTrace } from "../lib/chatToolTrace";
+import { ApiError, api } from "../../api";
 import {
 	initialQueue,
 	type QueueState,
 	submit as queueSubmit,
 	settle,
-} from "../shared/agentQueue";
+} from "../../shared/agentQueue";
 import type {
 	ChatAttachment,
 	ChatMessage as ApiChatMessage,
@@ -14,7 +13,8 @@ import type {
 	ChatToolEvent,
 	StreamEvent,
 	ToolTraceItem,
-} from "../types";
+} from "../../types";
+import { deriveChatToolTrace } from "./chatToolTrace";
 
 export interface ChatStreamMessage {
 	id?: number;

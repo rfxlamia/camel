@@ -1,6 +1,6 @@
 import type { RemoteThreadListAdapter } from "@assistant-ui/core";
 import { createAssistantStream } from "assistant-stream";
-import { api } from "../api";
+import { api } from "../../api";
 
 export const threadListAdapter: RemoteThreadListAdapter = {
 	async list() {

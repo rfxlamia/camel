@@ -1,11 +1,9 @@
 import type { ChatModelAdapter } from "@assistant-ui/core";
-import type { useChatStream } from "../hooks/useChatStream";
+import type { useChatStream } from "./useChatStream";
 
 type ChatStreamApi = Pick<ReturnType<typeof useChatStream>, "runModelTurn">;
 
-export function createModelAdapter(
-	stream: ChatStreamApi,
-): ChatModelAdapter {
+export function createModelAdapter(stream: ChatStreamApi): ChatModelAdapter {
 	return {
 		async *run({ messages, abortSignal }) {
 			const lastUser = [...messages].reverse().find((m) => m.role === "user");

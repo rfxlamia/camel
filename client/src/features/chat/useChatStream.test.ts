@@ -6,8 +6,8 @@ const mockSendMessage = vi.fn();
 const mockRetryMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
-vi.mock("../api", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../api")>();
+vi.mock("../../api", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../api")>();
 	return {
 		...actual,
 		api: {
@@ -76,9 +76,9 @@ describe("useChatStream", () => {
 			await result.current.retry(42);
 		});
 		expect(mockRetryMessage).toHaveBeenCalledWith(1, 42);
-		expect(result.current.messages.filter((m) => m.role === "user")).toHaveLength(
-			0,
-		);
+		expect(
+			result.current.messages.filter((m) => m.role === "user"),
+		).toHaveLength(0);
 	});
 
 	it("context overflow shows message without retry", async () => {
@@ -101,28 +101,26 @@ describe("useChatStream", () => {
 				'{"type":"done","messageId":99}',
 			]),
 		);
-		mockGetMessages
-			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([
-				{
-					id: 10,
-					role: "user",
-					content: "create a file",
-				},
-				{
-					id: 99,
-					role: "assistant",
-					content: "Here is your file",
-					attachments: [
-						{
-							id: 1,
-							messageId: 99,
-							filename: "report.md",
-							format: "md",
-						},
-					],
-				},
-			]);
+		mockGetMessages.mockResolvedValueOnce([]).mockResolvedValueOnce([
+			{
+				id: 10,
+				role: "user",
+				content: "create a file",
+			},
+			{
+				id: 99,
+				role: "assistant",
+				content: "Here is your file",
+				attachments: [
+					{
+						id: 1,
+						messageId: 99,
+						filename: "report.md",
+						format: "md",
+					},
+				],
+			},
+		]);
 
 		const { useChatStream } = await import("./useChatStream");
 		const { result } = renderHook(() => useChatStream({ threadId: 1 }));
@@ -156,9 +154,7 @@ describe("useChatStream", () => {
 		);
 		mockGetMessages
 			.mockResolvedValueOnce([])
-			.mockResolvedValueOnce([
-				{ id: 5, role: "user", content: "hello" },
-			]);
+			.mockResolvedValueOnce([{ id: 5, role: "user", content: "hello" }]);
 
 		const { useChatStream } = await import("./useChatStream");
 		const { result } = renderHook(() => useChatStream({ threadId: 1 }));
