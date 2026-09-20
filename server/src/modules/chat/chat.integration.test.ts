@@ -2,13 +2,13 @@ import "dotenv/config";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 
 const { mockRunChatTurn } = vi.hoisted(() => ({
 	mockRunChatTurn: vi.fn(),
 }));
 
-vi.mock("../auth.js", () => ({
+vi.mock("../../auth.js", () => ({
 	requireAuth: (
 		req: express.Request,
 		_res: express.Response,
@@ -37,9 +37,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat end-to-end", () => {
 	let threadId: number;
 
 	beforeAll(async () => {
-		const { resetRateLimitsForTesting } = await import(
-			"../modules/agent/index.js"
-		);
+		const { resetRateLimitsForTesting } = await import("../agent/index.js");
 		resetRateLimitsForTesting();
 
 		const user = await db

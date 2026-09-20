@@ -14,15 +14,15 @@
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../config.js";
+import type { Tool, ToolEvent } from "../modules/agent/index.js";
 import {
 	detectPromptInjection,
 	escapeXml,
+	renderSystemPrompt,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
 } from "../modules/agent/index.js";
-import { renderSystemPrompt } from "../modules/agent/index.js";
-import type { Tool, ToolEvent } from "../modules/agent/index.js";
-import { runChatTurn } from "../chat/run-chat-turn.js";
+import { runChatTurn } from "../modules/chat/index.js";
 
 // ---------------------------------------------------------------------------
 // Client singleton — lazy-initialized on first call
