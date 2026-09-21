@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentEvent } from "../types";
+import type { AgentEvent } from "../../types";
 import { deriveColumnState } from "./agentColumnState";
 
 const SLUG = "analysis-specialist";

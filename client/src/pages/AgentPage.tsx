@@ -1,13 +1,15 @@
 import { useCallback, useRef, useState } from "react";
 import { api } from "../api";
 import AgentCardDetail from "../components/AgentCardDetail";
-import AgentBoardHeader from "../components/agent/AgentBoardHeader";
-import AgentBoardVisual from "../components/agent/AgentBoardVisual";
-import AgentChatPanel from "../components/agent/AgentChatPanel";
-import AgentComposer from "../components/agent/AgentComposer";
 import { useBoard } from "../context/BoardContext";
+import {
+	AgentBoardHeader,
+	AgentBoardVisual,
+	AgentChatPanel,
+	AgentComposer,
+	useAgentChat,
+} from "../features/agent";
 import { useAgentBoard } from "../hooks/useAgentBoard";
-import { useAgentChat } from "../hooks/useAgentChat";
 import LoadingCamel from "../shared/LoadingCamel";
 import type { AgentColumn } from "../types";
 

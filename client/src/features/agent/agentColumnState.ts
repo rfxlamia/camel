@@ -1,4 +1,4 @@
-import type { AgentBoard, AgentEvent } from "../types";
+import type { AgentBoard, AgentEvent } from "../../types";
 
 /** Per-column execution state from live SSE events (boardId-scoped). */
 export function deriveColumnState(

@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Tool, ToolEvent } from "../agent/tools/types.js";
+import type { Tool, ToolEvent } from "../modules/agent/index.js";
 
 const mockStream = vi.fn();
 vi.mock("@anthropic-ai/sdk", () => {

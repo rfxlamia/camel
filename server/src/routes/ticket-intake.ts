@@ -5,22 +5,22 @@ import {
 	checkCompleteness,
 	inferTypeFromClassifierAnswer,
 	type TicketExtraction,
-} from "../agent/ticket-intake/completeness.js";
-import { getTicketHistory } from "../agent/ticket-intake/history.js";
+} from "../modules/agent/index.js";
+import { getTicketHistory } from "../modules/agent/index.js";
 import { extractTicketFields } from "../agent/ticket-intake/llm.js";
 import {
 	createLinearComment,
 	createLinearIssue,
 	getLabelId,
 	isTicketIntakeConfigured,
-} from "../agent/ticket-intake/linear-client.js";
+} from "../modules/agent/index.js";
 import {
 	checkChatLimit,
 	peekChatLimit,
 	peekSubmitLimit,
 	recordSubmitSuccess,
-} from "../agent/ticket-intake/rate-limits.js";
-import { executeWithRetry } from "../agent/ticket-intake/retry.js";
+} from "../modules/agent/index.js";
+import { executeWithRetry } from "../modules/agent/index.js";
 import { db } from "../db/kysely.js";
 import { publishEvent } from "../realtime.js";
 import { lookupMembership, recordActivity } from "../lib/helpers.js";

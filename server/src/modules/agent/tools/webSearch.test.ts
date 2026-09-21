@@ -8,7 +8,7 @@ vi.mock("@tavily/core", () => ({
 const mockConfig: Record<string, unknown> = {
 	TAVILY_API_KEY: "test-key",
 };
-vi.mock("../../config.js", () => ({ config: mockConfig }));
+vi.mock("../../../config.js", () => ({ config: mockConfig }));
 
 function makeResults(n: number) {
 	return Array.from({ length: n }, (_, i) => ({

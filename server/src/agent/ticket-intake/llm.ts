@@ -1,8 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "../../config.js";
+import type {
+	TicketExtraction,
+	TicketType,
+} from "../../modules/agent/index.js";
+import { sanitizeUserInput } from "../../modules/agent/index.js";
 import { getClient } from "../llm.js";
-import { sanitizeUserInput } from "../prompt-sanitizer.js";
-import type { TicketExtraction, TicketType } from "./completeness.js";
 
 const MODEL = config.ANTHROPIC_MODEL;
 
@@ -42,8 +45,7 @@ function extractText(response: Anthropic.Message): string {
 function normalizeExtraction(
 	parsed: Partial<TicketExtraction>,
 ): TicketExtraction {
-	const type =
-		parsed.type && VALID_TYPES.has(parsed.type) ? parsed.type : null;
+	const type = parsed.type && VALID_TYPES.has(parsed.type) ? parsed.type : null;
 	return {
 		title: parsed.title ?? null,
 		description: parsed.description ?? null,
@@ -99,9 +101,7 @@ function parseExtractionText(text: string): TicketExtraction {
 		const actualMatch = text.match(
 			/"actual"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|null)/,
 		);
-		const reproMatch = text.match(
-			/"repro"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|null)/,
-		);
+		const reproMatch = text.match(/"repro"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|null)/);
 		const typeMatch = text.match(
 			/"type"\s*:\s*"(Bug|Feature|Improvement)"|null/,
 		);
@@ -116,8 +116,7 @@ function parseExtractionText(text: string): TicketExtraction {
 		) {
 			return normalizeExtraction({
 				title: titleMatch?.[1]?.replace(/\\"/g, '"') ?? null,
-				description:
-					descriptionMatch?.[1]?.replace(/\\"/g, '"') ?? null,
+				description: descriptionMatch?.[1]?.replace(/\\"/g, '"') ?? null,
 				expected: expectedMatch?.[1]?.replace(/\\"/g, '"') ?? null,
 				actual: actualMatch?.[1]?.replace(/\\"/g, '"') ?? null,
 				repro: reproMatch?.[1]?.replace(/\\"/g, '"') ?? null,

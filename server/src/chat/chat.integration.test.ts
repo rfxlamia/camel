@@ -9,7 +9,11 @@ const { mockRunChatTurn } = vi.hoisted(() => ({
 }));
 
 vi.mock("../auth.js", () => ({
-	requireAuth: (req: express.Request, _res: express.Response, next: () => void) => {
+	requireAuth: (
+		req: express.Request,
+		_res: express.Response,
+		next: () => void,
+	) => {
 		(req as express.Request & { userId?: number }).userId = (
 			globalThis as { testUserId?: number }
 		).testUserId;
@@ -34,7 +38,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat end-to-end", () => {
 
 	beforeAll(async () => {
 		const { resetRateLimitsForTesting } = await import(
-			"../agent/ticket-intake/rate-limits.js"
+			"../modules/agent/index.js"
 		);
 		resetRateLimitsForTesting();
 
@@ -115,7 +119,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat end-to-end", () => {
 		const msgsRes = await request(app).get(`/api/chat/threads/${threadId}`);
 		expect(msgsRes.status).toBe(200);
 		expect(
-			msgsRes.body.messages.some((m: { role: string }) => m.role === "assistant"),
+			msgsRes.body.messages.some(
+				(m: { role: string }) => m.role === "assistant",
+			),
 		).toBe(true);
 		const assistant = msgsRes.body.messages.find(
 			(m: { role: string }) => m.role === "assistant",

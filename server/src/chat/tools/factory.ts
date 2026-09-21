@@ -1,15 +1,13 @@
 import type { CardTimestamps } from "../../core/metrics.js";
 import { db } from "../../db/kysely.js";
+import type { Tool } from "../../modules/agent/index.js";
 import {
 	type ActivityItem,
-	makeQueryBoardData,
-} from "../../agent/tools/queryBoardData.js";
-import {
 	createToolRegistry,
+	makeQueryBoardData,
 	type ToolRegistry,
-} from "../../agent/tools/registry.js";
-import type { Tool } from "../../agent/tools/types.js";
-import { webSearch } from "../../agent/tools/webSearch.js";
+	webSearch,
+} from "../../modules/agent/index.js";
 import type { InsertAttachmentParams } from "../types.js";
 import { makeCreateChatFile } from "./createChatFile.js";
 
@@ -77,8 +75,7 @@ async function defaultFetchActivityEvents(
 function makeChatQueryBoardData(ctx: ChatToolFactoryCtx): Tool {
 	const inner = makeQueryBoardData({
 		workspaceId: ctx.workspaceId ?? 0,
-		fetchCardTimestamps:
-			ctx.fetchCardTimestamps ?? defaultFetchCardTimestamps,
+		fetchCardTimestamps: ctx.fetchCardTimestamps ?? defaultFetchCardTimestamps,
 		fetchActivityEvents: ctx.fetchActivityEvents ?? defaultFetchActivityEvents,
 	});
 

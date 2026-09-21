@@ -1,8 +1,8 @@
 import { ChevronRight, XCircle } from "lucide-react";
-import { deriveColumnState } from "../../lib/agentColumnState";
 import LoadingCamel from "../../shared/LoadingCamel";
 import SuccessAnimation from "../../shared/SuccessAnimation";
 import type { AgentBoard, AgentColumn, AgentEvent } from "../../types";
+import { deriveColumnState } from "./agentColumnState";
 
 type ColState = "active" | "done" | "failed" | "pending";
 
