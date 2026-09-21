@@ -7,7 +7,7 @@ import type { AgentColumn } from "../types";
 
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 vi.mock("../shared/WorkspaceContext", () => ({

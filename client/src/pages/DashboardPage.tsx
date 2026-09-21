@@ -22,7 +22,7 @@ import {
 	YAxis,
 } from "recharts";
 import { api } from "../api";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import EmptyState from "../shared/EmptyState";
 import PageHeader from "../shared/PageHeader";
 import { useWorkspace } from "../shared/WorkspaceContext";

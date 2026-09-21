@@ -30,14 +30,10 @@ vi.mock("../api", () => ({
 }));
 vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
 vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
-vi.mock("../components/ListView", () => ({
-	default: () => <div data-testid="list-view" />,
-}));
-vi.mock("../components/CalendarView", () => ({
-	default: () => <div data-testid="calendar-view" />,
-}));
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
+	ListView: () => <div data-testid="list-view" />,
+	CalendarView: () => <div data-testid="calendar-view" />,
 }));
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),

@@ -79,7 +79,7 @@ const mockProjects: TrackerProject[] = [
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
 const mockShowToast = vi.fn();
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 vi.mock("../shared/WorkspaceContext", () => ({

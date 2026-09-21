@@ -12,18 +12,22 @@ import { ApiError, api } from "../api";
 import FocusEntryButton from "../components/FocusEntryButton";
 import TrackerChangelog from "../components/tracker/TrackerChangelog";
 import TrackerDateFields from "../components/tracker/TrackerDateFields";
+import TrackerProperties, {
+	type PropertyPatch,
+} from "../components/tracker/TrackerProperties";
+import { useBoard } from "../features/board";
+import { useShowToast } from "../shared/ToastContext";
 import {
 	type PickerOption,
 	TrackerPropertyPicker,
 } from "../shared/TrackerPropertyPicker";
-import TrackerProperties, {
-	type PropertyPatch,
-} from "../components/tracker/TrackerProperties";
-import { useBoard } from "../context/BoardContext";
-import { useShowToast } from "../shared/ToastContext";
-import { useWorkspace } from "../shared/WorkspaceContext";
 import { isTaskOverdue } from "../shared/trackerRollup";
 import { resolveToggle } from "../shared/trackerUtils";
+import { useWorkspace } from "../shared/WorkspaceContext";
+import {
+	updateWorkItem,
+	updateWorkItemStatus,
+} from "../shared/workItemMutations";
 import type {
 	TrackerEvent,
 	TrackerProject,
@@ -31,7 +35,6 @@ import type {
 	WorkItem,
 	WorkspaceMember,
 } from "../types";
-import { updateWorkItem, updateWorkItemStatus } from "../shared/workItemMutations";
 
 type ItemPropertyPatch = PropertyPatch & {
 	projectId?: number;
@@ -53,7 +56,11 @@ function trackerEventKey(
 	) {
 		return true;
 	}
-	if (event.trackerItemId != null && itemId != null && itemSource === "tracker") {
+	if (
+		event.trackerItemId != null &&
+		itemId != null &&
+		itemSource === "tracker"
+	) {
 		return event.trackerItemId === itemId;
 	}
 	return false;
@@ -87,9 +94,9 @@ export default function TrackerDetailPage() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const [openRailPicker, setOpenRailPicker] = useState<"project" | "phase" | null>(
-		null,
-	);
+	const [openRailPicker, setOpenRailPicker] = useState<
+		"project" | "phase" | null
+	>(null);
 	// The server copy is the draft's baseline, so `item` doubles as it. A
 	// property PATCH or an SSE refresh moves the baseline without touching the
 	// draft — see loadItem.
@@ -419,7 +426,9 @@ export default function TrackerDetailPage() {
 	}
 
 	const selectedProject = projects.find((p) => p.id === item.projectId);
-	const selectedPhase = selectedProject?.phases.find((p) => p.id === item.phaseId);
+	const selectedPhase = selectedProject?.phases.find(
+		(p) => p.id === item.phaseId,
+	);
 	const projectOptions: PickerOption[] = projects.map((p) => ({
 		id: String(p.id),
 		label: p.name,

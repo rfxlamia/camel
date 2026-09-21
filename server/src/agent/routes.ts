@@ -25,13 +25,20 @@ import { requireAuth } from "../auth.js";
 import { allocateCardIdentity } from "../core/allocate-card-identity.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { getAttachmentStorage } from "../lib/attachment-storage.js";
+import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
 import { llmTimeout } from "../middleware/timeout.js";
-import { publishEvent as realPublishEvent } from "../realtime.js";
+import {
+	type AgentBoardServiceDeps,
+	createAgentBoardService,
+	createToolRegistry,
+	mergeToolTraceRows,
+	webSearch,
+} from "../modules/agent/index.js";
 import {
 	loadAttachmentPairsForAgentBoard,
 	removeAttachmentPairsBestEffort,
-} from "../routes/card-attachment-cleanup.js";
-import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
+} from "../modules/board/index.js";
+import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,
@@ -39,13 +46,6 @@ import {
 	executeCard as realExecuteCard,
 	generateClarificationQuestion as realGenerateClarificationQuestion,
 } from "./llm.js";
-import {
-	type AgentBoardServiceDeps,
-	createAgentBoardService,
-} from "../modules/agent/index.js";
-import { createToolRegistry } from "../modules/agent/index.js";
-import { mergeToolTraceRows } from "../modules/agent/index.js";
-import { webSearch } from "../modules/agent/index.js";
 
 export const defaultToolRegistry = createToolRegistry([webSearch]);
 

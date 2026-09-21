@@ -75,7 +75,7 @@ import request from "supertest";
 import { seedTrackerVocabulary } from "./core/tracker-vocabulary-seed.js";
 import { db } from "./db/kysely.js";
 import { pool } from "./db/pool.js";
-import { batchUpdateCardPositions } from "./routes/cards.js";
+import { batchUpdateCardPositions } from "./modules/board/index.js";
 import { api } from "./routes.js";
 
 // ---------------------------------------------------------------------------

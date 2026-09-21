@@ -115,6 +115,47 @@ describe("Cycle A — public API and in-module (unit)", () => {
 		});
 		assert.deepEqual(violations, []);
 	});
+
+	it("allows board index import from leftover pages and contexts", () => {
+		for (const filePath of [
+			"client/src/pages/BoardPage.tsx",
+			"client/src/components/ContextPanel.tsx",
+			"client/src/context/FocusSessionContext.tsx",
+		]) {
+			const violations = checkImports({
+				filePath,
+				source: `import { useBoard } from "../features/board";\n`,
+				map,
+			});
+			assert.deepEqual(violations, [], filePath);
+		}
+	});
+
+	it("flags deep import into features/board/BoardContext from outside", () => {
+		const violations = checkImports({
+			filePath: "client/src/pages/BoardPage.tsx",
+			source: `import { useBoard } from "../features/board/BoardContext";\n`,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
+	});
+
+	it("allows board module index import from leftover server routes", () => {
+		for (const [filePath, source] of [
+			[
+				"server/src/routes/workspaces.ts",
+				`import { removeAttachmentPairsBestEffort } from "../modules/board/index.js";\n`,
+			],
+			[
+				"server/src/agent/routes.ts",
+				`import { removeAttachmentPairsBestEffort } from "../modules/board/index.js";\n`,
+			],
+		]) {
+			const violations = checkImports({ filePath, source, map });
+			assert.deepEqual(violations, [], filePath);
+		}
+	});
 });
 
 describe("Cycle B — cross-feature (unit)", () => {

@@ -14,23 +14,26 @@ import { Columns3, Plus } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Outlet, useNavigate } from "react-router";
 import { ApiError, api } from "../api";
-import { CardBody } from "../components/CardView";
-import CalendarView from "../components/CalendarView";
-import ColumnView from "../components/ColumnView";
+import {
+	type BoardViewMode,
+	CalendarView,
+	CardBody,
+	ColumnView,
+	ListView,
+	moveCardToColumn,
+	revertCardMove,
+	TemplatePicker,
+	TrashZone,
+	useBoard,
+	ViewSwitcher,
+	WORKSPACE_TEMPLATES,
+	type WorkspaceTemplate,
+} from "../features/board";
 import EmptyState from "../shared/EmptyState";
-import ListView from "../components/ListView";
-import TemplatePicker from "../components/TemplatePicker";
-import TrashZone from "../components/TrashZone";
-import ViewSwitcher from "../components/ViewSwitcher";
 import { TaskMetadataCatalogProvider } from "../shared/TaskMetadataCatalogProvider";
-import { useBoard } from "../context/BoardContext";
 import { useShowToast } from "../shared/ToastContext";
-import { useWorkspace } from "../shared/WorkspaceContext";
-import { moveCardToColumn, revertCardMove } from "../lib/boardColumnMoves";
-import { WORKSPACE_TEMPLATES } from "../lib/templates";
 import type { BoardCreatePayload } from "../shared/taskCreateContracts";
-import type { BoardViewMode } from "../lib/boardViewPrefs";
-import type { WorkspaceTemplate } from "../lib/templates";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { Card, Column } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -100,10 +103,7 @@ function BoardToolbar({
 				</>
 			)}
 			<div className="ml-auto flex items-center gap-2">
-				<ViewSwitcher
-					value={boardViewMode}
-					onChange={setBoardViewMode}
-				/>
+				<ViewSwitcher value={boardViewMode} onChange={setBoardViewMode} />
 				{hasColumns &&
 					(s.over > 0 ? (
 						<span className="inline-flex items-center gap-1.5 rounded-md bg-error-100 px-2.5 py-1 text-xs font-medium text-error-900">
@@ -215,11 +215,7 @@ export default function BoardPage() {
 		deleteCard,
 		saveCard,
 	} = useBoard();
-	const {
-		activeWorkspaceId,
-		boardViewMode,
-		setBoardViewMode,
-	} = useWorkspace();
+	const { activeWorkspaceId, boardViewMode, setBoardViewMode } = useWorkspace();
 	const showToast = useShowToast();
 	const navigate = useNavigate();
 	const [activeCard, setActiveCard] = useState<Card | null>(null);
@@ -323,9 +319,8 @@ export default function BoardPage() {
 					queuedColumnRef.current.delete(card.id);
 					const latest = columnsRef.current;
 					const liveCard =
-						latest
-							?.flatMap((col) => col.cards)
-							.find((c) => c.id === card.id) ?? card;
+						latest?.flatMap((col) => col.cards).find((c) => c.id === card.id) ??
+						card;
 					void changeColumn(liveCard, queued);
 				}
 			}

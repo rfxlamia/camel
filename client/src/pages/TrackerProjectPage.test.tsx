@@ -89,7 +89,7 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 

@@ -6,7 +6,7 @@ const mockUseTicketIntakeChat = vi.fn();
 vi.mock("./useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => mockUseTicketIntakeChat(),
 }));
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => ({
 		ticketIntakeEvents: [],
 	}),

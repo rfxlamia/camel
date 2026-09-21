@@ -97,7 +97,7 @@ vi.mock("../features/my-work", async (importOriginal) => {
 	};
 });
 
-import { BoardProvider } from "../context/BoardContext";
+import { BoardProvider } from "../features/board";
 import { MobileNav } from "../layout/sidebar/MobileNav";
 import Sidebar from "../layout/sidebar/Sidebar";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";

@@ -43,8 +43,7 @@ vi.mock("./shared/workspaceSelection", async (importOriginal) => {
 	};
 });
 
-import CardAttachments from "./components/CardAttachments";
-import { BoardProvider, useBoard } from "./context/BoardContext";
+import { BoardProvider, CardAttachments, useBoard } from "./features/board";
 import { PresenceProvider } from "./shared/PresenceContext";
 import { ToastProvider } from "./shared/ToastContext";
 import { useWorkspace, WorkspaceProvider } from "./shared/WorkspaceContext";

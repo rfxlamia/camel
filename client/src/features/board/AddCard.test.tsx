@@ -1,0 +1,699 @@
+// @vitest-environment jsdom
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IMAGE_VALIDATION_MESSAGES } from "../../shared/imageAttachments";
+import { TaskMetadataCatalogProvider } from "../../shared/TaskMetadataCatalogProvider";
+import type {
+	Column,
+	TrackerProject,
+	TrackerVocabulary,
+	WorkspaceMember,
+} from "../../types";
+import AddCard from "./AddCard";
+
+const {
+	mockGetWorkspaceMembers,
+	mockListTrackerVocabularies,
+	mockListTrackerProjects,
+	mockPrepareImageAttachment,
+} = vi.hoisted(() => ({
+	mockGetWorkspaceMembers: vi.fn(),
+	mockListTrackerVocabularies: vi.fn(),
+	mockListTrackerProjects: vi.fn(),
+	mockPrepareImageAttachment: vi.fn(),
+}));
+
+vi.mock("../../shared/imageAttachments", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../../shared/imageAttachments")>();
+	return {
+		...actual,
+		prepareImageAttachment: (
+			...args: Parameters<typeof actual.prepareImageAttachment>
+		) => mockPrepareImageAttachment(...args),
+	};
+});
+
+vi.mock("../../api", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../api")>();
+	return {
+		...actual,
+		api: {
+			getWorkspaceMembers: (...args: unknown[]) =>
+				mockGetWorkspaceMembers(...args),
+			listTrackerVocabularies: (...args: unknown[]) =>
+				mockListTrackerVocabularies(...args),
+			listTrackerProjects: (...args: unknown[]) =>
+				mockListTrackerProjects(...args),
+		},
+	};
+});
+
+const members: WorkspaceMember[] = [
+	{ userId: 1, username: "rafi", displayName: "Rafi", role: "member" },
+	{ userId: 2, username: "maya", displayName: "Maya", role: "member" },
+];
+const priorities: TrackerVocabulary[] = [
+	{ id: 10, kind: "priority", name: "High", position: 1, colour: "#f00" },
+];
+const labels: TrackerVocabulary[] = [
+	{ id: 20, kind: "label", name: "Bug", position: 1, colour: "#00f" },
+];
+const projects: TrackerProject[] = [
+	{
+		id: 1,
+		name: "Web",
+		startDate: null,
+		endDate: null,
+		position: 1,
+		version: 1,
+		phases: [
+			{
+				id: 9,
+				name: "Build",
+				projectId: 1,
+				position: 1,
+				version: 1,
+				subtitle: "",
+				startDate: null,
+				endDate: null,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+			},
+		],
+	},
+];
+
+function makeColumn(overrides: Partial<Column> = {}): Column {
+	return {
+		id: 42,
+		title: "To do",
+		position: 0,
+		wipLimit: null,
+		policy: "",
+		isDone: false,
+		isSignable: false,
+		signableAssigneeId: null,
+		color: null,
+		cards: [],
+		...overrides,
+	};
+}
+
+function mockReadyCatalogs() {
+	mockGetWorkspaceMembers.mockResolvedValue({ members });
+	mockListTrackerVocabularies.mockImplementation(
+		(_workspaceId: number, kind: string) => {
+			if (kind === "priority") return Promise.resolve(priorities);
+			if (kind === "label") return Promise.resolve(labels);
+			return Promise.resolve([]);
+		},
+	);
+	mockListTrackerProjects.mockResolvedValue(projects);
+}
+
+function renderAddCard(
+	onAddCard = vi.fn().mockResolvedValue(undefined),
+	column = makeColumn(),
+) {
+	return render(
+		<TaskMetadataCatalogProvider workspaceId={7}>
+			<AddCard column={column} onAddCard={onAddCard} />
+		</TaskMetadataCatalogProvider>,
+	);
+}
+
+function openAddCard() {
+	fireEvent.click(screen.getByRole("button", { name: /add card/i }));
+}
+
+function getTitleTextarea() {
+	return screen.getByRole("combobox", {
+		name: "Task title",
+	}) as HTMLTextAreaElement;
+}
+
+function mockValidImagePreparation() {
+	mockPrepareImageAttachment.mockImplementation(async (input: Blob) => {
+		const file =
+			input instanceof File
+				? input
+				: new File([input], "pasted.png", { type: input.type });
+		return {
+			kind: "valid" as const,
+			file,
+			original: file,
+			thumbnail: file,
+			prepared: { thumbnail: file, original: file },
+		};
+	});
+}
+
+async function selectImageThroughCommand(
+	filename: string,
+	{ expectChip = true }: { expectChip?: boolean } = {},
+) {
+	const textarea = getTitleTextarea();
+	const baseTitle = textarea.value.replace(/\s+$/, "");
+	fireEvent.change(textarea, {
+		target: { value: baseTitle ? `${baseTitle} ` : "" },
+	});
+	fireEvent.keyDown(textarea, { key: "@" });
+	await waitFor(() =>
+		expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+	);
+	fireEvent.change(textarea, {
+		target: { value: `${baseTitle ? `${baseTitle} ` : ""}@image` },
+	});
+	fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+	const input = document.querySelector(
+		'input[type="file"]',
+	) as HTMLInputElement;
+	expect(input).toBeTruthy();
+	const file = new File(["png"], filename, { type: "image/png" });
+	fireEvent.change(input, { target: { files: [file] } });
+	if (expectChip) {
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: new RegExp(`Image: ${filename}`) }),
+			).toBeTruthy(),
+		);
+	}
+}
+
+async function pickFieldValue(fieldLabel: string, valueLabel: string) {
+	const textarea = getTitleTextarea();
+	const currentTitle = textarea.value.replace(/\s+$/, "");
+	fireEvent.change(textarea, { target: { value: `${currentTitle} ` } });
+	fireEvent.keyDown(textarea, { key: "@" });
+	await waitFor(() =>
+		expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+	);
+
+	const fieldOptions = screen.getAllByRole("option");
+	const fieldIndex = fieldOptions.findIndex((option) =>
+		option.textContent?.includes(fieldLabel),
+	);
+	expect(fieldIndex).toBeGreaterThanOrEqual(0);
+	for (let i = 0; i < fieldIndex; i++) {
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+	}
+	fireEvent.keyDown(textarea, { key: "Enter" });
+
+	await waitFor(() =>
+		expect(
+			screen.getByRole("listbox", { name: `${fieldLabel} options` }),
+		).toBeTruthy(),
+	);
+
+	const valueOptions = screen.getAllByRole("option");
+	const valueIndex = valueOptions.findIndex((option) =>
+		option.textContent?.includes(valueLabel),
+	);
+	expect(valueIndex).toBeGreaterThanOrEqual(0);
+	for (let i = 0; i < valueIndex; i++) {
+		fireEvent.keyDown(textarea, { key: "ArrowDown" });
+	}
+	fireEvent.keyDown(textarea, { key: "Enter" });
+}
+
+describe("AddCard image staging", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockReadyCatalogs();
+		mockValidImagePreparation();
+	});
+
+	afterEach(() => cleanup());
+
+	it("stages an image pasted into the image upload popover", async () => {
+		renderAddCard();
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Paste this" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+		fireEvent.change(textarea, { target: { value: "Paste this @image" } });
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+		const dialog = screen.getByRole("dialog", { name: "Upload images" });
+		const clipboardBlob = new Blob(["png"], { type: "image/png" });
+		fireEvent.paste(dialog, {
+			clipboardData: {
+				items: [
+					{ kind: "file", type: "image/png", getAsFile: () => clipboardBlob },
+				],
+				files: [],
+			},
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Image: pasted.png" }),
+			).toBeTruthy(),
+		);
+		expect(mockPrepareImageAttachment).toHaveBeenCalledWith(clipboardBlob);
+		expect(textarea.value).toBe("Paste this");
+	});
+
+	it("refuses a fourth image while earlier files are still preparing", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		const pendingResolves: Array<
+			(value: Awaited<ReturnType<typeof mockPrepareImageAttachment>>) => void
+		> = [];
+		mockPrepareImageAttachment.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					pendingResolves.push(resolve);
+				}),
+		);
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png", { expectChip: false });
+		await selectImageThroughCommand("two.png", { expectChip: false });
+		await selectImageThroughCommand("three.png", { expectChip: false });
+		await waitFor(() =>
+			expect(screen.getAllByText("Preparing…")).toHaveLength(3),
+		);
+
+		await selectImageThroughCommand("four.png", { expectChip: false });
+
+		expect(screen.getAllByText("Preparing…")).toHaveLength(3);
+		expect(screen.getByText("Max 3 images per card")).toBeTruthy();
+		expect(mockPrepareImageAttachment).toHaveBeenCalledTimes(3);
+		expect(onAddCard).not.toHaveBeenCalled();
+	});
+
+	it("blocks submit while an image is still preparing", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		let resolvePreparation!: (
+			value: Awaited<ReturnType<typeof mockPrepareImageAttachment>>,
+		) => void;
+		mockPrepareImageAttachment.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePreparation = resolve;
+				}),
+		);
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Wait for image" } });
+		await selectImageThroughCommand("pending.png", { expectChip: false });
+		await waitFor(() => expect(screen.getByText("Preparing…")).toBeTruthy());
+
+		const submit = screen.getByRole("button", { name: /add to board/i });
+		expect((submit as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(submit);
+		expect(onAddCard).not.toHaveBeenCalled();
+
+		const file = new File(["png"], "pending.png", { type: "image/png" });
+		resolvePreparation({
+			kind: "valid",
+			file,
+			original: file,
+			thumbnail: file,
+			prepared: { thumbnail: file, original: file },
+		});
+		await waitFor(() =>
+			expect(
+				(
+					screen.getByRole("button", {
+						name: /add to board/i,
+					}) as HTMLButtonElement
+				).disabled,
+			).toBe(false),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+	});
+
+	it("does not resurrect an image after cancelling while it is preparing", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		let resolvePreparation!: (
+			value: Awaited<ReturnType<typeof mockPrepareImageAttachment>>,
+		) => void;
+		mockPrepareImageAttachment.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePreparation = resolve;
+				}),
+		);
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+		await selectImageThroughCommand("cancelled.png", { expectChip: false });
+		await waitFor(() => expect(screen.getByText("Preparing…")).toBeTruthy());
+
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy();
+
+		const file = new File(["png"], "cancelled.png", { type: "image/png" });
+		resolvePreparation({
+			kind: "valid",
+			file,
+			original: file,
+			thumbnail: file,
+			prepared: { thumbnail: file, original: file },
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /add card/i }));
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+		expect(
+			screen.queryByRole("button", { name: /Image: cancelled\.png/ }),
+		).toBeNull();
+	});
+
+	it("refuses a fourth image with Max 3 images per card", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png");
+		await selectImageThroughCommand("two.png");
+		await selectImageThroughCommand("three.png");
+		expect(screen.getAllByRole("button", { name: /^Image:/ })).toHaveLength(3);
+
+		await selectImageThroughCommand("four.png", { expectChip: false });
+
+		expect(screen.getAllByRole("button", { name: /^Image:/ })).toHaveLength(3);
+		expect(screen.getByText("Max 3 images per card")).toBeTruthy();
+		expect(mockPrepareImageAttachment).toHaveBeenCalledTimes(3);
+		expect(onAddCard).not.toHaveBeenCalled();
+	});
+
+	it("blocks submit when a staged image fails validation", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		const oversized = new File([new Uint8Array(15 * 1024 * 1024)], "big.png", {
+			type: "image/png",
+		});
+		mockPrepareImageAttachment.mockResolvedValueOnce({
+			kind: "invalid",
+			file: oversized,
+			original: oversized,
+			error: IMAGE_VALIDATION_MESSAGES.tooLarge,
+		});
+
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Keep title" } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+		fireEvent.change(textarea, { target: { value: "Keep title @image" } });
+		fireEvent.click(screen.getByRole("option", { name: "Image" }));
+		const input = document.querySelector(
+			'input[type="file"]',
+		) as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [oversized] } });
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", {
+					name: `Image: big.png. ${IMAGE_VALIDATION_MESSAGES.tooLarge}`,
+				}),
+			).toBeTruthy(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		expect(onAddCard).not.toHaveBeenCalled();
+		expect(textarea.value).toBe("Keep title");
+		expect(textarea.disabled).toBe(false);
+	});
+
+	it("shows loading while create is pending and closes only after success", async () => {
+		let resolveCreate: (() => void) | undefined;
+		const onAddCard = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveCreate = resolve;
+				}),
+		);
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png");
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Ship with image" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(onAddCard).toHaveBeenCalledWith(
+			expect.objectContaining({
+				attachments: [
+					expect.objectContaining({
+						thumbnail: expect.any(File),
+						original: expect.any(File),
+					}),
+				],
+			}),
+		);
+		expect(screen.queryByRole("combobox", { name: "Task title" })).toBeNull();
+		expect(screen.getByText("Adding card…")).toBeTruthy();
+		expect(screen.queryByRole("button", { name: /add to board/i })).toBeNull();
+
+		resolveCreate?.();
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy(),
+		);
+		expect(screen.queryByRole("button", { name: /^Image:/ })).toBeNull();
+	});
+
+	it("restores editable state with retryable chip after upload failure", async () => {
+		const onAddCard = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("network down"))
+			.mockResolvedValueOnce(undefined);
+		renderAddCard(onAddCard);
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await selectImageThroughCommand("one.png");
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Retry upload" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: /Retry Image: one.png/i }),
+			).toBeTruthy(),
+		);
+		expect(textarea.value).toBe("Retry upload");
+		expect(screen.getByRole("button", { name: /add to board/i })).toBeTruthy();
+
+		fireEvent.click(
+			screen.getByRole("button", { name: /Retry Image: one.png/i }),
+		);
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: /add card/i })).toBeTruthy(),
+		);
+	});
+});
+
+describe("AddCard", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockReadyCatalogs();
+	});
+
+	afterEach(() => cleanup());
+
+	it("renders the Image command with a decorative image icon", async () => {
+		renderAddCard();
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Attach " } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+
+		const imageOption = screen.getByRole("option", { name: "Image" });
+		const icon = imageOption.querySelector("svg");
+		expect(icon).toBeTruthy();
+		expect(icon?.getAttribute("aria-hidden")).toBe("true");
+		expect(icon?.getAttribute("width")).toBe("14");
+		expect(icon?.getAttribute("height")).toBe("14");
+		expect(icon?.classList.contains("shrink-0")).toBe(true);
+		expect(icon?.classList.contains("text-neutral-500")).toBe(true);
+	});
+
+	it("Preserve the originating Board column", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login " } });
+		fireEvent.keyDown(textarea, { key: "@" });
+		await waitFor(() =>
+			expect(screen.getByRole("listbox", { name: "Task fields" })).toBeTruthy(),
+		);
+
+		expect(screen.queryByRole("option", { name: "Status" })).toBeNull();
+		expect(screen.queryByRole("option", { name: "Column" })).toBeNull();
+
+		fireEvent.change(textarea, { target: { value: "Ship it" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(onAddCard).toHaveBeenCalledWith(
+			expect.objectContaining({ columnId: 42, title: "Ship it" }),
+		);
+	});
+
+	it("Submit Board with Enter outside a popover", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Ready to ship" } });
+		fireEvent.keyDown(textarea, { key: "Enter" });
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(onAddCard).toHaveBeenCalledWith(
+			expect.objectContaining({ columnId: 42, title: "Ready to ship" }),
+		);
+	});
+
+	it("Preserve the draft on any submit failure", async () => {
+		const onAddCard = vi.fn().mockRejectedValue(new Error("create failed"));
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await pickFieldValue("Assignee", "Rafi");
+		await pickFieldValue("Priority", "High");
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Keep me" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(screen.getByRole("combobox", { name: "Task title" })).toBeTruthy();
+		expect(textarea.value).toBe("Keep me");
+		expect(screen.getByRole("button", { name: "Assignee: Rafi" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Priority: High" })).toBeTruthy();
+	});
+
+	it("Prevent an in-flight duplicate submit", async () => {
+		let resolveCreate: (() => void) | undefined;
+		const onAddCard = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveCreate = resolve;
+				}),
+		);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "One shot" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(screen.queryByRole("button", { name: /add to board/i })).toBeNull();
+		expect(screen.getByText("Adding card…")).toBeTruthy();
+
+		resolveCreate?.();
+		await waitFor(() =>
+			expect(screen.queryByRole("combobox", { name: "Task title" })).toBeNull(),
+		);
+	});
+
+	it("Retry after a failed request", async () => {
+		const onAddCard = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("temporary"))
+			.mockResolvedValueOnce(undefined);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Retry me" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: /add to board/i }),
+			).toBeTruthy(),
+		);
+		expect(textarea.value).toBe("Retry me");
+
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(2));
+		expect(screen.queryByRole("combobox", { name: "Task title" })).toBeNull();
+	});
+
+	it("assembles the full Board metadata callback payload", async () => {
+		const onAddCard = vi.fn().mockResolvedValue(undefined);
+		renderAddCard(onAddCard);
+
+		openAddCard();
+		await waitFor(() => expect(getTitleTextarea()).toBeTruthy());
+
+		await pickFieldValue("Assignee", "Rafi");
+		await pickFieldValue("Priority", "High");
+		await pickFieldValue("Labels", "Bug");
+		await pickFieldValue("Project", "Web");
+		await pickFieldValue("Phase", "Build");
+
+		const textarea = getTitleTextarea();
+		fireEvent.change(textarea, { target: { value: "Fix login" } });
+		fireEvent.click(screen.getByRole("button", { name: /add to board/i }));
+
+		await waitFor(() => expect(onAddCard).toHaveBeenCalledTimes(1));
+		expect(onAddCard).toHaveBeenCalledWith({
+			columnId: 42,
+			title: "Fix login",
+			assigneeIds: [1],
+			priorityId: 10,
+			labelIds: [20],
+			projectId: 1,
+			phaseId: 9,
+		});
+		expect(onAddCard.mock.calls[0]?.[0]).not.toHaveProperty("statusId");
+	});
+});
