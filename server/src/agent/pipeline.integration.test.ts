@@ -1,10 +1,12 @@
 import "dotenv/config";
 import { describe, expect, it, vi } from "vitest";
 import type { CardTimestamps } from "../core/metrics.js";
+import type { ColumnInfo } from "../modules/agent/index.js";
+import {
+	createAgentBoardService,
+	getTemplate,
+} from "../modules/agent/index.js";
 import { executeCard as realExecuteCard } from "./llm.js";
-import type { ColumnInfo } from "./service.js";
-import { createAgentBoardService } from "./service.js";
-import { getTemplate } from "./templates.js";
 
 const INTENT = "Explain quantum computing to a business executive";
 

@@ -51,24 +51,29 @@ vi.mock("../lib/helpers.js", async (importOriginal) => {
 	};
 });
 
-vi.mock("../agent/ticket-intake/history.js", () => ({
-	getTicketHistory: vi.fn(
-		async (_db: unknown, workspaceId: number, cardId: number) =>
-			cardEvents
-				.filter(
-					(r) =>
-						r.workspace_id === workspaceId &&
-						r.card_id === cardId &&
-						r.event_type === "linear_ticket_created",
-				)
-				.sort((a, b) => b.created_at.localeCompare(a.created_at))
-				.map((r) => ({
-					title: (r.payload as { title?: string }).title ?? "",
-					issueUrl: (r.payload as { issueUrl?: string }).issueUrl ?? "",
-					createdAt: r.created_at,
-				})),
-	),
-}));
+vi.mock("../modules/agent/index.js", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../modules/agent/index.js")>();
+	return {
+		...actual,
+		getTicketHistory: vi.fn(
+			async (_db: unknown, workspaceId: number, cardId: number) =>
+				cardEvents
+					.filter(
+						(r) =>
+							r.workspace_id === workspaceId &&
+							r.card_id === cardId &&
+							r.event_type === "linear_ticket_created",
+					)
+					.sort((a, b) => b.created_at.localeCompare(a.created_at))
+					.map((r) => ({
+						title: (r.payload as { title?: string }).title ?? "",
+						issueUrl: (r.payload as { issueUrl?: string }).issueUrl ?? "",
+						createdAt: r.created_at,
+					})),
+		),
+	};
+});
 
 vi.mock("../auth.js", () => ({
 	requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -121,7 +126,7 @@ describe("ticket-intake end-to-end: card-context submit → history", () => {
 		mockAnthropicCreate.mockReset();
 		mockLinearFetch.mockReset();
 		const { resetRateLimitsForTesting } = await import(
-			"../agent/ticket-intake/rate-limits.js"
+			"../modules/agent/index.js"
 		);
 		resetRateLimitsForTesting();
 		const { ticketIntakeRouter } = await import("./ticket-intake.js");
@@ -156,14 +161,12 @@ describe("ticket-intake end-to-end: card-context submit → history", () => {
 			],
 		});
 
-		await request(app)
-			.post("/api/workspaces/1/ticket-intake/chat")
-			.send({
-				message: "Fix login redirect keeps looping",
-				isFirstTurn: true,
-				autoError: false,
-				cardId: 42,
-			});
+		await request(app).post("/api/workspaces/1/ticket-intake/chat").send({
+			message: "Fix login redirect keeps looping",
+			isFirstTurn: true,
+			autoError: false,
+			cardId: 42,
+		});
 
 		mockLinearFetch
 			.mockResolvedValueOnce({
@@ -201,7 +204,8 @@ describe("ticket-intake end-to-end: card-context submit → history", () => {
 			.mockResolvedValueOnce({
 				ok: true,
 				status: 200,
-				json: () => Promise.resolve({ data: { commentCreate: { success: true } } }),
+				json: () =>
+					Promise.resolve({ data: { commentCreate: { success: true } } }),
 			});
 
 		const submitRes = await submitAndWaitForBackground(app, {

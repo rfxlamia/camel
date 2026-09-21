@@ -82,7 +82,7 @@ vi.mock("../shared/SuccessAnimation", () => ({
 
 // ArtifactCard is verified in isolation in T6; stub it to a sentinel so this
 // test asserts only that AgentPage renders it (or not) on the right transition.
-vi.mock("../components/ArtifactCard", () => ({
+vi.mock("../features/agent/ArtifactCard", () => ({
 	default: ({ artifact }: { artifact: { filename: string } }) => (
 		<div data-testid="artifact-card">{artifact.filename}</div>
 	),

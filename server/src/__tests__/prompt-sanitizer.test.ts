@@ -15,7 +15,7 @@ import {
 	escapeXml,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "../agent/prompt-sanitizer.js";
+} from "../modules/agent/index.js";
 
 describe("detectPromptInjection", () => {
 	it("should detect instruction override attempts", () => {

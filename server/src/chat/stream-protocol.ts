@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import type { ToolEvent } from "../agent/tools/types.js";
+import type { ToolEvent } from "../modules/agent/index.js";
 
 export type StreamEvent =
 	| { type: "token"; text: string }

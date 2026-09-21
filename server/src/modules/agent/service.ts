@@ -8,7 +8,7 @@
  * NOT card_events — human Activity Feed must stay clean.
  */
 
-import type { CardTimestamps } from "../core/metrics.js";
+import type { CardTimestamps } from "../../core/metrics.js";
 import {
 	deriveFilename,
 	extractRevisedDocument,

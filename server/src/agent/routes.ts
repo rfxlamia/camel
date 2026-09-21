@@ -42,10 +42,10 @@ import {
 import {
 	type AgentBoardServiceDeps,
 	createAgentBoardService,
-} from "./service.js";
-import { createToolRegistry } from "./tools/registry.js";
-import { mergeToolTraceRows } from "./tools/trace.js";
-import { webSearch } from "./tools/webSearch.js";
+} from "../modules/agent/index.js";
+import { createToolRegistry } from "../modules/agent/index.js";
+import { mergeToolTraceRows } from "../modules/agent/index.js";
+import { webSearch } from "../modules/agent/index.js";
 
 export const defaultToolRegistry = createToolRegistry([webSearch]);
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { checkCompleteness, inferTypeFromClassifierAnswer } from "./completeness.js";
+import {
+	checkCompleteness,
+	inferTypeFromClassifierAnswer,
+} from "./completeness.js";
 
 describe("checkCompleteness", () => {
 	it("returns ready:true when all required fields are present", () => {
