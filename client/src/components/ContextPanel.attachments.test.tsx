@@ -13,9 +13,13 @@ import type { Card, CardAttachment, Column } from "../types";
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
 const mockShowToast = vi.fn();
-vi.mock("../features/board", () => ({
-	useBoard: () => mockUseBoard(),
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));

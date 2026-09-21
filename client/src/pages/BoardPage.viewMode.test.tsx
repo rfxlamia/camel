@@ -30,11 +30,15 @@ vi.mock("../api", () => ({
 }));
 vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
 vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
-vi.mock("../features/board", () => ({
-	useBoard: () => mockUseBoard(),
-	ListView: () => <div data-testid="list-view" />,
-	CalendarView: () => <div data-testid="calendar-view" />,
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+		ListView: () => <div data-testid="list-view" />,
+		CalendarView: () => <div data-testid="calendar-view" />,
+	};
+});
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));

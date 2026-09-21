@@ -173,61 +173,65 @@ vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
-vi.mock("../features/board", () => ({
-	useBoard: () => ({
-		subscribeFocusEvents: (
-			handler: (event: {
-				type: "focus_session.updated";
-				userId: number;
-				workspaceId: number;
-				payload: { session: FocusSession | null };
-			}) => void,
-		) => {
-			focusEventHandlers.add(handler);
-			return () => {
-				focusEventHandlers.delete(handler);
-			};
-		},
-		subscribeCardEvents: (
-			handler: (event: {
-				type: string;
-				actor: User;
-				cardId: number;
-				payload?: unknown;
-			}) => void,
-		) => {
-			cardEventHandlers.add(handler);
-			return () => {
-				cardEventHandlers.delete(handler);
-			};
-		},
-		subscribeTrackerEvents: (
-			handler: (event: {
-				type: string;
-				payload?: unknown;
-				trackerItemId?: number;
-			}) => void,
-		) => {
-			trackerEventHandlers.add(handler);
-			return () => {
-				trackerEventHandlers.delete(handler);
-			};
-		},
-		subscribeMembershipEvents: (
-			handler: (event: {
-				type: "membership.removed";
-				userId: number;
-				workspaceId: number;
-				workspaceName: string;
-			}) => void,
-		) => {
-			membershipEventHandlers.add(handler);
-			return () => {
-				membershipEventHandlers.delete(handler);
-			};
-		},
-	}),
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => ({
+			subscribeFocusEvents: (
+				handler: (event: {
+					type: "focus_session.updated";
+					userId: number;
+					workspaceId: number;
+					payload: { session: FocusSession | null };
+				}) => void,
+			) => {
+				focusEventHandlers.add(handler);
+				return () => {
+					focusEventHandlers.delete(handler);
+				};
+			},
+			subscribeCardEvents: (
+				handler: (event: {
+					type: string;
+					actor: User;
+					cardId: number;
+					payload?: unknown;
+				}) => void,
+			) => {
+				cardEventHandlers.add(handler);
+				return () => {
+					cardEventHandlers.delete(handler);
+				};
+			},
+			subscribeTrackerEvents: (
+				handler: (event: {
+					type: string;
+					payload?: unknown;
+					trackerItemId?: number;
+				}) => void,
+			) => {
+				trackerEventHandlers.add(handler);
+				return () => {
+					trackerEventHandlers.delete(handler);
+				};
+			},
+			subscribeMembershipEvents: (
+				handler: (event: {
+					type: "membership.removed";
+					userId: number;
+					workspaceId: number;
+					workspaceName: string;
+				}) => void,
+			) => {
+				membershipEventHandlers.add(handler);
+				return () => {
+					membershipEventHandlers.delete(handler);
+				};
+			},
+		}),
+	};
+});
 
 async function loadSession(session: FocusSession) {
 	mockFocusGet.mockResolvedValue({ session });
