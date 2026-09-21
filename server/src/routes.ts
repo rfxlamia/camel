@@ -5,6 +5,13 @@ import { myWorkObservability } from "./core/my-work-observability.js";
 import { workItemsRouter } from "./lib/work-items.js";
 import { requireEmailVerified } from "./middleware/email-gate.js";
 import {
+	boardRouter,
+	cardAttachmentsRouter,
+	cardsRouter,
+	columnsRouter,
+	metricsRouter,
+} from "./modules/board/index.js";
+import {
 	focusConfigRouter,
 	focusSessionRouter,
 } from "./modules/focus/index.js";
@@ -20,13 +27,8 @@ import {
 } from "./modules/tracker/index.js";
 import { notificationsRouter } from "./notifications/router.js";
 import { activityRouter } from "./routes/activity.js";
-import { boardRouter } from "./routes/board.js";
-import { cardAttachmentsRouter } from "./routes/card-attachments.js";
-import { cardsRouter } from "./routes/cards.js";
-import { columnsRouter } from "./routes/columns.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
-import { metricsRouter } from "./routes/metrics.js";
 import { presenceRouter } from "./routes/presence.js";
 import { settingsRouter } from "./routes/settings.js";
 import { workspacesRouter } from "./routes/workspaces.js";

@@ -5,18 +5,17 @@ import { ApiError, api } from "../api";
 import TrackerCreateModal from "../components/tracker/TrackerCreateModal";
 import TrackerProjectCreateModal from "../components/tracker/TrackerProjectCreateModal";
 import TrackerProjectsTab from "../components/tracker/TrackerProjectsTab";
-import {
-	type PickerOption,
-	TrackerPropertyPicker,
-} from "../shared/TrackerPropertyPicker";
 import TrackerSection from "../components/tracker/TrackerSection";
 import TrackerTabs, {
 	type TrackerTab,
 } from "../components/tracker/TrackerTabs";
 import type { TrackerAuxiliaryLoadState } from "../components/tracker/trackerAuxiliaryState";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import { useShowToast } from "../shared/ToastContext";
-import { useWorkspace } from "../shared/WorkspaceContext";
+import {
+	type PickerOption,
+	TrackerPropertyPicker,
+} from "../shared/TrackerPropertyPicker";
 import { createItemMutationQueue } from "../shared/trackerItemMutationQueue";
 import { partitionTrackerSearch } from "../shared/trackerSearch";
 import {
@@ -33,16 +32,17 @@ import {
 	readTrackerGroupBy,
 	writeTrackerGroupBy,
 } from "../shared/trackerViewPrefs";
-import type {
-	WorkItem,
-	TrackerProject,
-	TrackerVocabulary,
-	WorkspaceMember,
-} from "../types";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import {
 	updateWorkItem,
 	updateWorkItemStatus,
 } from "../shared/workItemMutations";
+import type {
+	TrackerProject,
+	TrackerVocabulary,
+	WorkItem,
+	WorkspaceMember,
+} from "../types";
 
 const GROUP_BY_ORDER: TrackerGroupBy[] = ["status", "project", "priority"];
 

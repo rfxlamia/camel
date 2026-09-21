@@ -3,7 +3,7 @@ import type { DBExecutor } from "../db/kysely.js";
 import {
 	type CardAttachmentResponse,
 	loadCardAttachmentsForCards,
-} from "../routes/attachment-response.js";
+} from "../modules/board/index.js";
 import {
 	type CardAssignee,
 	loadCardAssigneesForCards,

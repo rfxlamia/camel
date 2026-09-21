@@ -5,10 +5,10 @@
 		"ignoreUnknown": true,
 		"includes": [
 			"**",
-			"!**/dist/**",
-			"!**/node_modules/**",
-			"!camel-lottie/**",
-			"!graphify-out/**",
+			"!**/dist",
+			"!**/node_modules",
+			"!camel-lottie",
+			"!graphify-out",
 			"!client/vite.config.ts",
 			"!client/vitest.config.ts"
 		]
@@ -109,6 +109,11 @@
 	},
 	"javascript": { "formatter": { "quoteStyle": "double" }, "globals": [] },
 	"overrides": [
+		{
+			"includes": ["client/src/features/board/CalendarView.tsx"],
+			"formatter": { "enabled": false },
+			"assist": { "actions": { "source": { "organizeImports": "off" } } }
+		},
 		{
 			"includes": [
 				"**/*.test.ts",

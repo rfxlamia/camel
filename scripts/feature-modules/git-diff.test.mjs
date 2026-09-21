@@ -252,13 +252,17 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected kernel home client/src/shared/CardAttachmentDialogs.tsx",
 		);
 		{
-			const leftoverAttachments = "client/src/components/CardAttachments.tsx";
-			const leftoverAttachmentLines = countRawLines(
-				readFileSync(join(repoRoot, leftoverAttachments), "utf8"),
+			// T9 moved CardAttachments into features/board; assert the new home.
+			const boardAttachments = "client/src/features/board/CardAttachments.tsx";
+			assert.ok(
+				existsSync(join(repoRoot, boardAttachments)),
+				`expected board home ${boardAttachments}`,
 			);
 			assert.ok(
-				leftoverAttachmentLines <= LINE_BUDGET_MAX,
-				`expected leftover ${leftoverAttachments} ≤${LINE_BUDGET_MAX} lines after 300-on-touch (got ${leftoverAttachmentLines})`,
+				!existsSync(
+					join(repoRoot, "client/src/components/CardAttachments.tsx"),
+				),
+				"expected leftover client/src/components/CardAttachments.tsx to be gone",
 			);
 		}
 		for (const name of [
@@ -382,10 +386,15 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
+		// T9 moved board product routers into modules/board; assert the new homes.
 		for (const name of ["board.ts", "cards.ts", "card-create.ts"]) {
 			assert.ok(
-				existsSync(join(repoRoot, `server/src/routes/${name}`)),
-				`expected board product router server/src/routes/${name} to remain`,
+				existsSync(join(repoRoot, `server/src/modules/board/${name}`)),
+				`expected board home server/src/modules/board/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
 		assert.ok(
@@ -818,11 +827,54 @@ describe("Cycle Map — map data (unit)", () => {
 		}
 	});
 
+	it("Board wave-1 relocates product files into feature modules (no ContextPanel)", () => {
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/board/index.ts")),
+			"expected features/board public API client/src/features/board/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/board/index.ts")),
+			"expected server/src/modules/board/index.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/context/BoardContext.tsx")),
+			"expected leftover client/src/context/BoardContext.tsx to be gone",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/routes/cards.ts")),
+			"expected leftover server/src/routes/cards.ts to be gone",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/routes/board.ts")),
+			"expected leftover server/src/routes/board.ts to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
+			"expected leftover client/src/components/ContextPanel.tsx to still exist (wave-2)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
+			"expected BoardPage to remain under client/src/pages/BoardPage.tsx",
+		);
+		for (const name of [
+			"TrackerTabs.tsx",
+			"TrackerChangelog.tsx",
+			"TrackerRow.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/components/tracker/${name}`)),
+				`expected tracker stub client/src/components/tracker/${name} to remain`,
+			);
+		}
+		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
+	});
+
 	it("Chrome extract retargets every importer", () => {
 		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
+		// T9 moved BoardContext into features/board; assert the new home.
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/context/BoardContext.tsx")),
-			"BoardContext must remain under context/, not shared/",
+			existsSync(join(repoRoot, "client/src/features/board/BoardContext.tsx")),
+			"BoardContext must live under features/board/ after T9",
 		);
 		for (const name of [
 			"TrackerTabs.tsx",

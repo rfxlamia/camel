@@ -139,7 +139,7 @@ describe("useTicketIntakeChat integration — SSE submit-result to PreviewScreen
 	});
 
 	async function renderChatPanel() {
-		const { BoardProvider } = await import("../context/BoardContext");
+		const { BoardProvider } = await import("../features/board");
 		const { PresenceProvider } = await import("./PresenceContext");
 		const { ToastProvider } = await import("./ToastContext");
 		const { WorkspaceProvider } = await import("./WorkspaceContext");
