@@ -8,9 +8,13 @@ const mockUseWorkspace = vi.fn();
 const mockOpen = vi.fn();
 const mockConfirm = vi.fn();
 
-vi.mock("../features/board", () => ({
-	useBoard: () => mockUseBoard(),
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
 
 vi.mock("./WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
