@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 vi.mock("./WorkspaceContext", () => ({

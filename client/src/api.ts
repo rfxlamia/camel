@@ -1,5 +1,5 @@
+import type { TemplateColumn } from "./features/board";
 import { createMyWorkApi } from "./features/my-work/myWork";
-import type { TemplateColumn } from "./lib/templates";
 import type {
 	BoardCreatePayload,
 	TaskCreateFieldErrors,

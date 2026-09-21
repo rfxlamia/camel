@@ -173,7 +173,7 @@ vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
-vi.mock("./BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => ({
 		subscribeFocusEvents: (
 			handler: (event: {

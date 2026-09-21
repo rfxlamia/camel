@@ -33,7 +33,7 @@ const {
 	mockListTrackerProjects: vi.fn(),
 }));
 
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 

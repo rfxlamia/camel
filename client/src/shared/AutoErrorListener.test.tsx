@@ -8,7 +8,7 @@ const mockUseWorkspace = vi.fn();
 const mockOpen = vi.fn();
 const mockConfirm = vi.fn();
 
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 

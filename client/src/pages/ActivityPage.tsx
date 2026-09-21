@@ -1,6 +1,6 @@
 import { Activity as ActivityIcon, ArrowRight } from "lucide-react";
 import { Link } from "react-router";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import EmptyState from "../shared/EmptyState";
 import PageHeader from "../shared/PageHeader";
 import type { ActivityEvent } from "../types";

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import { TicketIntakeChatOverlay } from "./TicketIntakeChatOverlay";
 import type { AutoErrorDetail } from "./ticketIntakeBus";
 import { subscribeAutoError } from "./ticketIntakeBus";

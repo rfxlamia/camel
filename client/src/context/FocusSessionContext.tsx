@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import { ApiError, api } from "../api";
+import { useBoard } from "../features/board";
 import {
 	ACCESS_REVOKED_TOAST,
 	deletionEventTargetsFocusedTask,
@@ -18,7 +19,6 @@ import {
 import { useShowToast } from "../shared/ToastContext";
 import { useWorkspace } from "../shared/WorkspaceContext";
 import type { FocusSession, WorkItemSource } from "../types";
-import { useBoard } from "./BoardContext";
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;

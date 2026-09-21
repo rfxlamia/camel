@@ -3,16 +3,16 @@ import { sql } from "kysely";
 import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
 import { db } from "../db/kysely.js";
 import {
-	getAttachmentStorage,
 	type AttachmentPair,
+	getAttachmentStorage,
 } from "../lib/attachment-storage.js";
-import { validateWorkspaceName } from "../validators/input-length.js";
+import { lookupMembership, serializeWorkspaceList } from "../lib/helpers.js";
+import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
 import {
 	loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort,
-} from "./card-attachment-cleanup.js";
-import { lookupMembership, serializeWorkspaceList } from "../lib/helpers.js";
-import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
+} from "../modules/board/index.js";
+import { validateWorkspaceName } from "../validators/input-length.js";
 import { checkCanEditSettings } from "./settings.js";
 
 export const workspacesRouter = Router({ mergeParams: true });

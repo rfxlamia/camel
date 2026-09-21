@@ -40,7 +40,7 @@ vi.mock("../context/FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),
 }));
 
-vi.mock("../context/BoardContext", () => ({
+vi.mock("../features/board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
 

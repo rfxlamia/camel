@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError, api } from "../api";
-import { useBoard } from "../context/BoardContext";
 import { shouldRefetchBoardOnTerminalEvent } from "../lib/agentBoardSync";
+import { useBoard } from "../features/board";
 import { useShowToast } from "../shared/ToastContext";
 import { useWorkspace } from "../shared/WorkspaceContext";
 import type { AgentArtifact, AgentBoard } from "../types";

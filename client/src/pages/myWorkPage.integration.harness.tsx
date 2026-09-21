@@ -19,7 +19,7 @@ import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,
 } from "../api";
-import { BoardProvider } from "../context/BoardContext";
+import { BoardProvider } from "../features/board";
 import { sourceItem } from "../features/my-work";
 import { WorkspaceOverlays } from "../layout/sidebar/WorkspaceModals";
 import type { MyWorkItem, MyWorkListResponse } from "../shared/myWorkTypes";

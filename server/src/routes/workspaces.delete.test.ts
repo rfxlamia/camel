@@ -30,7 +30,7 @@ vi.mock("../lib/helpers.js", () => ({
 vi.mock("../lib/workspace-mutation-lock.js", () => ({
 	lockWorkspaceMutation: mocks.lockWorkspaceMutation,
 }));
-vi.mock("./card-attachment-cleanup.js", () => ({
+vi.mock("../modules/board/index.js", () => ({
 	loadAttachmentPairsForWorkspace: mocks.loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort: mocks.removeAttachmentPairsBestEffort,
 }));

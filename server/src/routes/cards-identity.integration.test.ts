@@ -10,11 +10,11 @@ const { mockPublishEvent, mockTestUser } = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: mockPublishEvent,
 	clearPresence: vi.fn(),
 	heartbeat: vi.fn(),
@@ -26,8 +26,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresenceKey: vi.fn(),
 	workspacePresencePattern: vi.fn(),
 }));
-vi.mock("../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {
@@ -42,9 +42,9 @@ import express from "express";
 import request from "supertest";
 import { createAgentRouter } from "../agent/routes.js";
 import { pool } from "../db/pool.js";
-import { registerAgentAndSeedTests } from "./cards-identity.integration.helpers.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
+import { registerAgentAndSeedTests } from "./cards-identity.integration.helpers.js";
 
 const WORKSPACE_ID = 995;
 
@@ -251,10 +251,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			await addColumn("In Progress", 3072);
 			const review = await addColumn("In Review", 4096);
 			await addColumn("Done", 5120, true);
-			await pool.query(
-				"UPDATE columns SET wip_limit = 1 WHERE id = $1",
-				[review],
-			);
+			await pool.query("UPDATE columns SET wip_limit = 1 WHERE id = $1", [
+				review,
+			]);
 
 			const created = await request(app)
 				.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
@@ -350,10 +349,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			).toBe(inProgressStatusId);
 		});
 
-		it(
-			"updates agent-board card status using board_id sibling geometry",
-			{ timeout: 120_000 },
-			async () => {
+		it("updates agent-board card status using board_id sibling geometry", {
+			timeout: 120_000,
+		}, async () => {
 			const agentIntent = "prepare a research report";
 			const created = await request(app)
 				.post(`/api/workspaces/${WORKSPACE_ID}/agent/boards`)

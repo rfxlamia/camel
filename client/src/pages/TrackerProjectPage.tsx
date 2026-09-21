@@ -10,11 +10,14 @@ import TrackerPhaseEditor, {
 } from "../components/tracker/TrackerPhaseEditor";
 import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import { useShowToast } from "../shared/ToastContext";
-import { useWorkspace } from "../shared/WorkspaceContext";
 import { sortStatusesByPosition } from "../shared/trackerUtils";
-import { updateWorkItemStatus, reorderWorkItem } from "../shared/workItemMutations";
+import { useWorkspace } from "../shared/WorkspaceContext";
+import {
+	reorderWorkItem,
+	updateWorkItemStatus,
+} from "../shared/workItemMutations";
 import type {
 	TrackerPhase,
 	TrackerProject,
