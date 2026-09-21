@@ -13,8 +13,8 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import express, { type Request, Router } from "express";
-import type { ToolEvent } from "../agent/tools/types.js";
-import { checkChatLimit } from "../agent/ticket-intake/rate-limits.js";
+import type { ToolEvent } from "../modules/agent/index.js";
+import { checkChatLimit } from "../modules/agent/index.js";
 import { requireAuth } from "../auth.js";
 import type { Json } from "../db/types.js";
 import { db } from "../db/kysely.js";

@@ -659,6 +659,155 @@ describe("Cycle Map — map data (unit)", () => {
 			existsSync(join(repoRoot, "client/src/pages/FocusPage.tsx")),
 			"expected FocusPage to remain under client/src/pages/FocusPage.tsx",
 		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/agent/index.ts")),
+			"expected server/src/modules/agent/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/agent/index.ts")),
+			"expected features/agent public API client/src/features/agent/index.ts",
+		);
+		for (const name of [
+			"AgentBoardHeader.tsx",
+			"AgentBoardVisual.tsx",
+			"AgentChatPanel.tsx",
+			"AgentComposer.tsx",
+			"ArtifactCard.tsx",
+			"ArtifactCard.test.tsx",
+			"useAgentChat.ts",
+			"agentColumnState.ts",
+			"agentColumnState.test.ts",
+			"agentFollowUp.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
+				`expected features/agent home client/src/features/agent/${name}`,
+			);
+		}
+		for (const name of [
+			"agentStream.ts",
+			"agentStream.test.ts",
+			"agentBoardSync.ts",
+			"agentBoardSync.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected wave-2 leftover client/src/lib/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
+				`expected wave-2 helper ${name} not to be in features/agent/ yet`,
+			);
+		}
+		for (const name of [
+			"artifact.ts",
+			"artifact.test.ts",
+			"prompt-sanitizer.ts",
+			"service.ts",
+			"service.test.ts",
+			"templates.ts",
+			"templates.test.ts",
+			"ticket-intake/completeness.ts",
+			"ticket-intake/completeness.test.ts",
+			"ticket-intake/history.ts",
+			"ticket-intake/history.test.ts",
+			"ticket-intake/linear-client.ts",
+			"ticket-intake/linear-client.test.ts",
+			"ticket-intake/rate-limits.ts",
+			"ticket-intake/rate-limits.test.ts",
+			"ticket-intake/retry.ts",
+			"ticket-intake/retry.test.ts",
+			"tools/createFile.ts",
+			"tools/createFile.test.ts",
+			"tools/queryBoardData.ts",
+			"tools/queryBoardData.test.ts",
+			"tools/registry.ts",
+			"tools/registry.test.ts",
+			"tools/trace.ts",
+			"tools/trace.test.ts",
+			"tools/types.ts",
+			"tools/webSearch.ts",
+			"tools/webSearch.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/agent/${name}`)),
+				`expected server/src/modules/agent/${name}`,
+			);
+		}
+		for (const name of [
+			"server/src/agent/service.ts",
+			"client/src/components/ArtifactCard.tsx",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, name)),
+				`expected leftover ${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/routes/ticket-intake.ts")),
+			"expected leftover server/src/routes/ticket-intake.ts to still exist (imports leftover ticket-intake/llm.ts)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/agent/llm.ts")),
+			"expected leftover server/src/agent/llm.ts to still exist (llm cluster is wave-2)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/agent/routes.ts")),
+			"expected leftover server/src/agent/routes.ts to still exist (llm cluster is wave-2)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/components/AgentCardDetail.tsx")),
+			"expected leftover client/src/components/AgentCardDetail.tsx to still exist (wave-2)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/hooks/useAgentBoard.ts")),
+			"expected leftover client/src/hooks/useAgentBoard.ts to still exist (wave-2)",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/AgentPage.tsx")),
+			"expected AgentPage to remain under client/src/pages/AgentPage.tsx",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/HistoryPage.tsx")),
+			"expected HistoryPage to remain under client/src/pages/HistoryPage.tsx",
+		);
+		assert.equal(
+			readFileSync(
+				join(repoRoot, "client/src/features/agent/index.ts"),
+				"utf8",
+			).trim(),
+			[
+				'export { default as AgentBoardHeader } from "./AgentBoardHeader";',
+				'export { default as AgentBoardVisual } from "./AgentBoardVisual";',
+				'export { default as AgentChatPanel } from "./AgentChatPanel";',
+				'export { default as AgentComposer } from "./AgentComposer";',
+				'export { useAgentChat } from "./useAgentChat";',
+			].join("\n"),
+			"agent index must expose only AgentPage's public API",
+		);
+		assert.doesNotMatch(
+			readFileSync(join(repoRoot, "client/vitest.config.ts"), "utf8"),
+			/setupFiles/,
+			"T7 must not add a global Vitest setup file",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/shared/test-setup.ts")),
+			"T7 must not add a global Lottie test setup",
+		);
+		const importPathRules = readFileSync(
+			join(repoRoot, "scripts/feature-modules/import-paths.mjs"),
+			"utf8",
+		);
+		for (const target of [
+			"client/src/features/agent/agentStream",
+			"client/src/features/agent/agentBoardSync",
+		]) {
+			assert.doesNotMatch(
+				importPathRules,
+				new RegExp(target.replaceAll("/", "\\\\/")),
+				`agent target must not be allowlisted: ${target}`,
+			);
+		}
 	});
 
 	it("Chrome extract retargets every importer", () => {

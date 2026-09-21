@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CardTimestamps } from "../../core/metrics.js";
+import type { CardTimestamps } from "../../../core/metrics.js";
 import { makeQueryBoardData } from "./queryBoardData.js";
 
 // Fixed clock so windowed metrics + weekly buckets are deterministic.

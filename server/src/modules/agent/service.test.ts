@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db/kysely.js";
-import { getHumanColumns } from "../routes.js";
+import { db } from "../../db/kysely.js";
+import { getHumanColumns } from "../../routes.js";
 import type { AgentBoardServiceDeps, ColumnInfo } from "./service.js";
 import { createAgentBoardService } from "./service.js";
 import { createToolRegistry } from "./tools/registry.js";
@@ -41,7 +41,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("board isolation", () => {
 			.executeTakeFirstOrThrow();
 		const humanColumn = await db
 			.insertInto("columns")
-			.values({ title: "Human Column", position: 1000, workspace_id: workspace.id })
+			.values({
+				title: "Human Column",
+				position: 1000,
+				workspace_id: workspace.id,
+			})
 			.returning("id")
 			.executeTakeFirstOrThrow();
 		const agentColumn = await db
@@ -60,9 +64,15 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("board isolation", () => {
 			expect(result.map((c) => c.id)).toEqual([humanColumn.id]);
 			expect(result.map((c) => c.id)).not.toContain(agentColumn.id);
 		} finally {
-			await db.deleteFrom("columns").where("id", "in", [humanColumn.id, agentColumn.id]).execute();
+			await db
+				.deleteFrom("columns")
+				.where("id", "in", [humanColumn.id, agentColumn.id])
+				.execute();
 			await db.deleteFrom("agent_boards").where("id", "=", board.id).execute();
-			await db.deleteFrom("workspaces").where("id", "=", workspace.id).execute();
+			await db
+				.deleteFrom("workspaces")
+				.where("id", "=", workspace.id)
+				.execute();
 			await db.deleteFrom("users").where("id", "=", user.id).execute();
 		}
 	});

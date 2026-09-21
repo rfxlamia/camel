@@ -5,7 +5,7 @@
  * Feature-gated via optional LINEAR_API_KEY / LINEAR_TEAM_ID in config.
  */
 
-import { config } from "../../config.js";
+import { config } from "../../../config.js";
 
 export const LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql";
 
@@ -33,7 +33,10 @@ interface GraphQLResponse<T> {
 function resolveApiKey(deps?: LinearClientDeps): string {
 	const apiKey = deps?.apiKey ?? config.LINEAR_API_KEY;
 	if (!apiKey) {
-		throw new LinearApiError("Linear API is not configured (LINEAR_API_KEY unset)", 503);
+		throw new LinearApiError(
+			"Linear API is not configured (LINEAR_API_KEY unset)",
+			503,
+		);
 	}
 	return apiKey;
 }
@@ -41,7 +44,10 @@ function resolveApiKey(deps?: LinearClientDeps): string {
 function resolveTeamId(deps?: LinearClientDeps): string {
 	const teamId = deps?.teamId ?? config.LINEAR_TEAM_ID;
 	if (!teamId) {
-		throw new LinearApiError("Linear API is not configured (LINEAR_TEAM_ID unset)", 503);
+		throw new LinearApiError(
+			"Linear API is not configured (LINEAR_TEAM_ID unset)",
+			503,
+		);
 	}
 	return teamId;
 }
@@ -96,7 +102,9 @@ export interface CreateLinearIssueResult {
 }
 
 export function isTicketIntakeConfigured(): boolean {
-	return Boolean(config.LINEAR_API_KEY?.trim() && config.LINEAR_TEAM_ID?.trim());
+	return Boolean(
+		config.LINEAR_API_KEY?.trim() && config.LINEAR_TEAM_ID?.trim(),
+	);
 }
 
 const ISSUE_CREATE_MUTATION = `
@@ -179,7 +187,10 @@ export async function createLinearComment(
 	);
 
 	if (!data.commentCreate.success) {
-		throw new LinearApiError("Linear commentCreate returned success=false", 502);
+		throw new LinearApiError(
+			"Linear commentCreate returned success=false",
+			502,
+		);
 	}
 }
 

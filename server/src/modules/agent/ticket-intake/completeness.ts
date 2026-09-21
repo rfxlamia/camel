@@ -19,9 +19,7 @@ function isPresent(value: string | null | undefined): boolean {
 	return typeof value === "string" && value.trim().length > 0;
 }
 
-export function inferTypeFromClassifierAnswer(
-	text: string,
-): TicketType | null {
+export function inferTypeFromClassifierAnswer(text: string): TicketType | null {
 	const normalized = text.trim().toLowerCase();
 	if (/\bbug(s)?\b/.test(normalized)) return "Bug";
 	if (/\bfeature(s)?\b/.test(normalized)) return "Feature";
@@ -39,7 +37,10 @@ function questionForMissingFields(
 	) {
 		return "What did you expect to happen, and what actually happened instead?";
 	}
-	if (missingFields.includes("title") && missingFields.includes("description")) {
+	if (
+		missingFields.includes("title") &&
+		missingFields.includes("description")
+	) {
 		return "Could you give this issue a short title and describe what happened?";
 	}
 	if (missingFields.includes("title")) {
@@ -51,7 +52,9 @@ function questionForMissingFields(
 	return "Could you share a bit more detail so we can draft the ticket?";
 }
 
-export function checkCompleteness(fields: TicketExtraction): CompletenessResult {
+export function checkCompleteness(
+	fields: TicketExtraction,
+): CompletenessResult {
 	const missingFields: string[] = [];
 
 	if (!isPresent(fields.title)) missingFields.push("title");

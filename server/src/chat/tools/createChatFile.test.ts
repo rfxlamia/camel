@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MAX_ARTIFACT_BYTES } from "../../agent/artifact.js";
 import { db } from "../../db/kysely.js";
+import { MAX_ARTIFACT_BYTES } from "../../modules/agent/index.js";
 import { createChatService } from "../service.js";
 import { makeCreateChatFile } from "./createChatFile.js";
 
@@ -42,8 +42,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("createChatFile", () => {
 	it("inserts chat_attachments row with LLM-supplied md content", async () => {
 		const tool = makeCreateChatFile({
 			messageId,
-			insertAttachment: (row) =>
-				service.insertAttachment({ ...row, userId }),
+			insertAttachment: (row) => service.insertAttachment({ ...row, userId }),
 		});
 		const result = await tool.execute({
 			filename: "report.md",

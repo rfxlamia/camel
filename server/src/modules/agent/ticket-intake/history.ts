@@ -1,4 +1,4 @@
-import type { DBExecutor } from "../../db/kysely.js";
+import type { DBExecutor } from "../../../db/kysely.js";
 
 export type TicketHistoryEntry = {
 	title: string;

@@ -19,9 +19,9 @@ import {
 	escapeXml,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "./prompt-sanitizer.js";
-import { renderSystemPrompt } from "./templates.js";
-import type { Tool, ToolEvent } from "./tools/types.js";
+} from "../modules/agent/index.js";
+import { renderSystemPrompt } from "../modules/agent/index.js";
+import type { Tool, ToolEvent } from "../modules/agent/index.js";
 import { runChatTurn } from "../chat/run-chat-turn.js";
 
 // ---------------------------------------------------------------------------

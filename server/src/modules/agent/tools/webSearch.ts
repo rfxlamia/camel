@@ -1,5 +1,5 @@
 import { tavily } from "@tavily/core";
-import { config } from "../../config.js";
+import { config } from "../../../config.js";
 import type { Tool, ToolResult } from "./types.js";
 
 const MAX_RESULTS = 10;

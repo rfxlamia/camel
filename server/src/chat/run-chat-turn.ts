@@ -11,10 +11,10 @@ import {
 	createSafeSystemPrompt,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "../agent/prompt-sanitizer.js";
-import { toAnthropicToolDefs } from "../agent/tools/registry.js";
-import { countSearchResults } from "../agent/tools/trace.js";
-import type { Tool, ToolEvent } from "../agent/tools/types.js";
+} from "../modules/agent/index.js";
+import { toAnthropicToolDefs } from "../modules/agent/index.js";
+import { countSearchResults } from "../modules/agent/index.js";
+import type { Tool, ToolEvent } from "../modules/agent/index.js";
 
 // ---------------------------------------------------------------------------
 // Client + token budgets (mirrors agent/llm.ts — kept in sync)

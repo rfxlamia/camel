@@ -2,7 +2,7 @@ import {
 	type CardTimestamps,
 	computeFlowMetrics,
 	computeMetricsHistory,
-} from "../../core/metrics.js";
+} from "../../../core/metrics.js";
 import type { Tool, ToolResult } from "./types.js";
 
 export interface ActivityItem {

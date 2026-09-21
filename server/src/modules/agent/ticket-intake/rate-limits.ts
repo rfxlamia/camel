@@ -1,4 +1,4 @@
-import { InMemoryRateLimiter } from "../../lib/in-memory-rate-limiter.js";
+import { InMemoryRateLimiter } from "../../../lib/in-memory-rate-limiter.js";
 
 const SUBMIT_WINDOW_MS = 5 * 60 * 1000;
 const CHAT_WINDOW_MS = 10 * 1000;
@@ -30,7 +30,9 @@ export async function peekSubmitLimit(
 	const peek = await submitLimiter.peek(String(userId));
 	return {
 		isLocked: peek.isLocked || peek.remainingAttempts <= 0,
-		...(peek.retryAfterMs !== undefined ? { retryAfterMs: peek.retryAfterMs } : {}),
+		...(peek.retryAfterMs !== undefined
+			? { retryAfterMs: peek.retryAfterMs }
+			: {}),
 	};
 }
 
@@ -40,7 +42,9 @@ export async function peekChatLimit(
 	const peek = await chatLimiter.peek(String(userId));
 	return {
 		isLocked: peek.remainingAttempts <= 0,
-		...(peek.retryAfterMs !== undefined ? { retryAfterMs: peek.retryAfterMs } : {}),
+		...(peek.retryAfterMs !== undefined
+			? { retryAfterMs: peek.retryAfterMs }
+			: {}),
 	};
 }
 

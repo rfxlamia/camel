@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../config.js", () => ({
+vi.mock("../../../config.js", () => ({
 	config: {
 		LINEAR_API_KEY: "test-linear-key",
 		LINEAR_TEAM_ID: "team-123",
@@ -16,10 +16,7 @@ import {
 
 const LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql";
 
-function mockFetchResponse(
-	status: number,
-	body: unknown,
-): Response {
+function mockFetchResponse(status: number, body: unknown): Response {
 	return {
 		ok: status >= 200 && status < 300,
 		status,

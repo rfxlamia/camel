@@ -2,7 +2,7 @@ import { Download, FileText, X } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AgentArtifact } from "../types";
+import type { AgentArtifact } from "../../types";
 
 interface ArtifactCardProps {
 	artifact: AgentArtifact;

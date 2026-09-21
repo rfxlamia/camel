@@ -18,24 +18,49 @@ const mockCheckChatLimit = vi.fn().mockResolvedValue({ isLocked: false });
 const mockPeekChatLimit = vi.fn().mockResolvedValue({ isLocked: false });
 const mockPeekSubmitLimit = vi.fn();
 const mockRecordSubmitSuccess = vi.fn();
-vi.mock("../agent/ticket-intake/rate-limits.js", () => ({
+const mockCreateLinearIssue = vi.fn();
+const mockCreateLinearComment = vi.fn();
+const mockGetLabelId = vi.fn().mockResolvedValue("label-bug-id");
+const mockIsTicketIntakeConfigured = vi.fn().mockReturnValue(true);
+const mockExtractTicketFields = vi.fn();
+
+const mockGetTicketHistory = vi.fn();
+const mockCheckCompleteness = vi.fn(
+	(extraction: { title: string; expected: string; actual: string }) => {
+		if (!extraction.title) {
+			return {
+				ready: false,
+				missingFields: ["title"],
+				question: "What's a short title?",
+			};
+		}
+		if (!extraction.expected || !extraction.actual) {
+			return {
+				ready: false,
+				missingFields: ["expected", "actual"],
+				question: "What did you expect vs. what actually happened?",
+			};
+		}
+		return { ready: true };
+	},
+);
+const mockInferTypeFromClassifierAnswer = (text: string) => {
+	const normalized = text.trim().toLowerCase();
+	if (/\bbug(s)?\b/.test(normalized)) return "Bug";
+	if (/\bfeature(s)?\b/.test(normalized)) return "Feature";
+	if (/\bimprovement(s)?\b/.test(normalized)) return "Improvement";
+	return null;
+};
+vi.mock("../modules/agent/index.js", () => ({
 	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
 	peekChatLimit: (...args: unknown[]) => mockPeekChatLimit(...args),
 	peekSubmitLimit: (...args: unknown[]) => mockPeekSubmitLimit(...args),
 	recordSubmitSuccess: (...args: unknown[]) => mockRecordSubmitSuccess(...args),
-}));
-vi.mock("../realtime.js", () => ({
-	publishEvent: vi.fn().mockResolvedValue(undefined),
-}));
-const mockCreateLinearIssue = vi.fn();
-const mockCreateLinearComment = vi.fn();
-vi.mock("../agent/ticket-intake/linear-client.js", () => ({
 	createLinearIssue: (...args: unknown[]) => mockCreateLinearIssue(...args),
 	createLinearComment: (...args: unknown[]) => mockCreateLinearComment(...args),
-	getLabelId: vi.fn().mockResolvedValue("label-bug-id"),
-	isTicketIntakeConfigured: vi.fn().mockReturnValue(true),
-}));
-vi.mock("../agent/ticket-intake/retry.js", () => ({
+	getLabelId: (...args: unknown[]) => mockGetLabelId(...args),
+	isTicketIntakeConfigured: (...args: unknown[]) =>
+		mockIsTicketIntakeConfigured(...args),
 	executeWithRetry: async (
 		op: () => Promise<unknown>,
 		opts: { maxAttempts: number },
@@ -53,43 +78,19 @@ vi.mock("../agent/ticket-intake/retry.js", () => ({
 			}
 		}
 	},
-}));
-const mockExtractTicketFields = vi.fn();
-vi.mock("../agent/ticket-intake/llm.js", () => ({
-	extractTicketFields: (...args: unknown[]) =>
-		mockExtractTicketFields(...args),
-}));
-const mockGetTicketHistory = vi.fn();
-vi.mock("../agent/ticket-intake/history.js", () => ({
 	getTicketHistory: (...args: unknown[]) => mockGetTicketHistory(...args),
+	checkCompleteness: (...args: unknown[]) => mockCheckCompleteness(...args),
+	inferTypeFromClassifierAnswer: (...args: unknown[]) =>
+		mockInferTypeFromClassifierAnswer(...args),
 }));
-vi.mock("../agent/ticket-intake/completeness.js", () => ({
-	checkCompleteness: vi.fn(
-		(extraction: { title: string; expected: string; actual: string }) => {
-			if (!extraction.title) {
-				return {
-					ready: false,
-					missingFields: ["title"],
-					question: "What's a short title?",
-				};
-			}
-			if (!extraction.expected || !extraction.actual) {
-				return {
-					ready: false,
-					missingFields: ["expected", "actual"],
-					question: "What did you expect vs. what actually happened?",
-				};
-			}
-			return { ready: true };
-		},
-	),
-	inferTypeFromClassifierAnswer: (text: string) => {
-		const normalized = text.trim().toLowerCase();
-		if (/\bbug(s)?\b/.test(normalized)) return "Bug";
-		if (/\bfeature(s)?\b/.test(normalized)) return "Feature";
-		if (/\bimprovement(s)?\b/.test(normalized)) return "Improvement";
-		return null;
-	},
+vi.mock("../realtime.js", () => ({
+	publishEvent: vi.fn().mockResolvedValue(undefined),
+}));
+// ticket-intake/llm.ts stays leftover (llm cluster, wave-2): the route imports
+// extractTicketFields from it directly, so mock it directly — the barrel mock
+// above cannot cover a path the barrel does not re-export.
+vi.mock("../agent/ticket-intake/llm.js", () => ({
+	extractTicketFields: (...args: unknown[]) => mockExtractTicketFields(...args),
 }));
 
 import { publishEvent } from "../realtime.js";
@@ -129,7 +130,11 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 
 		const res = await request(app)
 			.post("/api/workspaces/1/ticket-intake/chat")
-			.send({ message: "kanban-nya aneh", isFirstTurn: true, autoError: false });
+			.send({
+				message: "kanban-nya aneh",
+				isFirstTurn: true,
+				autoError: false,
+			});
 
 		expect(res.status).toBe(200);
 		expect(res.body.ready).toBe(false);
@@ -186,7 +191,11 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 
 		const res = await request(app)
 			.post("/api/workspaces/1/ticket-intake/chat")
-			.send({ message: "kanban-nya aneh", isFirstTurn: true, autoError: false });
+			.send({
+				message: "kanban-nya aneh",
+				isFirstTurn: true,
+				autoError: false,
+			});
 
 		expect(res.status).toBe(404);
 		expect(res.body.draft).toBeUndefined();

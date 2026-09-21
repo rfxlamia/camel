@@ -22,12 +22,21 @@ const mockService = {
 	insertAttachment: vi.fn(),
 };
 
-vi.mock("../agent/ticket-intake/rate-limits.js", () => ({
-	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
-}));
+vi.mock("../modules/agent/index.js", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../modules/agent/index.js")>();
+	return {
+		...actual,
+		checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
+	};
+});
 
 vi.mock("../auth.js", () => ({
-	requireAuth: (req: express.Request, _res: express.Response, next: () => void) => {
+	requireAuth: (
+		req: express.Request,
+		_res: express.Response,
+		next: () => void,
+	) => {
 		(req as express.Request & { userId?: number }).userId = 1;
 		next();
 	},
