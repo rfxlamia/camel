@@ -10,7 +10,8 @@ export { isNonTrivialTouch } from "./line-budget-hunks.mjs";
 export const LINE_BUDGET_RULE_ID = "FM-RULE-3";
 export const LINE_BUDGET_MAX = 300;
 
-const TEST_FILE = /\.(test|integration\.test)\.(ts|tsx)$|test-support/i;
+const TEST_FILE =
+	/\.(test|integration\.test)\.(ts|tsx)$|test-support/i;
 const GENERATED_FILE = /\.generated\.(ts|tsx)$/i;
 const GENERATED_DIR = /\/generated\//;
 
@@ -108,10 +109,11 @@ export function checkLineBudget({
  * @param {string} baseRef
  */
 function resolveMergeBase(rootDir, baseRef) {
-	const result = spawnSync("git", ["merge-base", "HEAD", baseRef], {
-		cwd: rootDir,
-		encoding: "utf8",
-	});
+	const result = spawnSync(
+		"git",
+		["merge-base", "HEAD", baseRef],
+		{ cwd: rootDir, encoding: "utf8" },
+	);
 	if (result.status !== 0) {
 		throw new Error(
 			`FM-RULE-5: cannot compute merge-base for "${baseRef}" (${(result.stderr || result.stdout).trim()})`,
@@ -126,10 +128,11 @@ function resolveMergeBase(rootDir, baseRef) {
  * @param {string} path
  */
 function gitShowText(rootDir, objectRef, path) {
-	const result = spawnSync("git", ["show", `${objectRef}:${path}`], {
-		cwd: rootDir,
-		encoding: "utf8",
-	});
+	const result = spawnSync(
+		"git",
+		["show", `${objectRef}:${path}`],
+		{ cwd: rootDir, encoding: "utf8" },
+	);
 	if (result.status !== 0) return "";
 	return result.stdout;
 }
@@ -147,7 +150,7 @@ function gitDiffHunks(rootDir, mergeBase, path, oldPath) {
 	if (oldPath && oldPath !== path) {
 		const result = spawnSync(
 			"git",
-			["diff", "-M", "-U3", mergeBase, "HEAD", "--", oldPath, path],
+			["diff", "-M", "-U0", mergeBase, "HEAD", "--", oldPath, path],
 			{ cwd: rootDir, encoding: "utf8" },
 		);
 		if (result.status !== 0 || !result.stdout) return "";
@@ -156,7 +159,7 @@ function gitDiffHunks(rootDir, mergeBase, path, oldPath) {
 
 	const result = spawnSync(
 		"git",
-		["diff", "-U3", mergeBase, "HEAD", "--", path],
+		["diff", "-U0", mergeBase, "HEAD", "--", path],
 		{ cwd: rootDir, encoding: "utf8" },
 	);
 	if (result.status !== 0) return "";
@@ -210,7 +213,8 @@ export function collectLineBudgetViolations({ rootDir, baseRef, diff }) {
 
 	for (const entry of diff.renamed) {
 		if (!isSourceFile(entry.to)) continue;
-		const renameKind = entry.kind === "rename" ? "rename" : "rename-with-edit";
+		const renameKind =
+			entry.kind === "rename" ? "rename" : "rename-with-edit";
 		violations.push(
 			...checkLineBudget({
 				path: entry.to,
@@ -225,7 +229,8 @@ export function collectLineBudgetViolations({ rootDir, baseRef, diff }) {
 
 	for (const entry of diff.copied) {
 		if (!isSourceFile(entry.to)) continue;
-		const renameKind = entry.similarity === 100 ? "rename" : "rename-with-edit";
+		const renameKind =
+			entry.similarity === 100 ? "rename" : "rename-with-edit";
 		violations.push(
 			...checkLineBudget({
 				path: entry.to,

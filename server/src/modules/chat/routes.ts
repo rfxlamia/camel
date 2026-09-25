@@ -13,12 +13,12 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import express, { type Request, Router } from "express";
-import { requireAuth } from "../../auth.js";
-import { db } from "../../db/kysely.js";
-import type { Json } from "../../db/types.js";
-import { lookupMembership } from "../../lib/helpers.js";
 import type { ToolEvent } from "../agent/index.js";
 import { checkChatLimit } from "../agent/index.js";
+import { requireAuth } from "../../auth.js";
+import type { Json } from "../../db/types.js";
+import { db } from "../../db/kysely.js";
+import { lookupMembership } from "../../lib/helpers.js";
 import { estimateContextTokens, runChatTurn } from "./run-chat-turn.js";
 import { createChatService } from "./service.js";
 import { setStreamHeaders, writeStreamEvent } from "./stream-protocol.js";
@@ -85,9 +85,7 @@ function getUserId(req: Request): number {
 	throw new Error("unauthenticated");
 }
 
-function buildAnthropicMessages(
-	messages: ChatMessage[],
-): Anthropic.MessageParam[] {
+function buildAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageParam[] {
 	return messages
 		.filter((m) => m.role === "user" || m.role === "assistant")
 		.map((m) => ({
@@ -265,9 +263,7 @@ export function createChatRouter(): Router {
 	router.get("/api/chat/attachments/:id", requireAuth, async (req, res) => {
 		const attachmentId = Number(req.params.id);
 		if (!Number.isInteger(attachmentId)) {
-			return res
-				.status(400)
-				.json({ error: "attachment id must be an integer" });
+			return res.status(400).json({ error: "attachment id must be an integer" });
 		}
 
 		try {
@@ -448,7 +444,8 @@ export function createChatRouter(): Router {
 					});
 
 					const firstUserMessage =
-						userMessageText ?? history.find((m) => m.role === "user")?.content;
+						userMessageText ??
+						history.find((m) => m.role === "user")?.content;
 					if (firstUserMessage && thread.title === "Untitled") {
 						await service.autoTitleThread(userId, threadId, firstUserMessage);
 					}

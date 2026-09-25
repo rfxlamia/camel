@@ -23,7 +23,8 @@ const mockService = {
 };
 
 vi.mock("../agent/index.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../agent/index.js")>();
+	const actual =
+		await importOriginal<typeof import("../agent/index.js")>();
 	return {
 		...actual,
 		checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),

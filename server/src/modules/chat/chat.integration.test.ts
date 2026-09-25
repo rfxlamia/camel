@@ -37,7 +37,9 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat end-to-end", () => {
 	let threadId: number;
 
 	beforeAll(async () => {
-		const { resetRateLimitsForTesting } = await import("../agent/index.js");
+		const { resetRateLimitsForTesting } = await import(
+			"../agent/index.js"
+		);
 		resetRateLimitsForTesting();
 
 		const user = await db
