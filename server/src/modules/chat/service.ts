@@ -1,4 +1,4 @@
-import { type Selectable, sql } from "kysely";
+import { sql, type Selectable } from "kysely";
 import type { DBExecutor } from "../../db/kysely.js";
 import type {
 	ChatAttachments,
