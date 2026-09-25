@@ -701,19 +701,19 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected features/agent home client/src/features/agent/${name}`,
 			);
 		}
-		for (const name of [
+			for (const name of [
 			"agentStream.ts",
 			"agentStream.test.ts",
 			"agentBoardSync.ts",
 			"agentBoardSync.test.ts",
 		]) {
 			assert.ok(
-				existsSync(join(repoRoot, `client/src/lib/${name}`)),
-				`expected wave-2 leftover client/src/lib/${name}`,
+				existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
+				`expected feature home client/src/features/agent/${name}`,
 			);
 			assert.ok(
-				!existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
-				`expected wave-2 helper ${name} not to be in features/agent/ yet`,
+				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected leftover client/src/lib/${name} to be gone`,
 			);
 		}
 		for (const name of [
@@ -799,17 +799,25 @@ describe("Cycle Map — map data (unit)", () => {
 				'export { default as AgentChatPanel } from "./AgentChatPanel";',
 				'export { default as AgentComposer } from "./AgentComposer";',
 				'export { useAgentChat } from "./useAgentChat";',
+				'export {',
+				'\tderiveColumnFailureMessage,',
+				'\tderiveStreamedOutputForColumn,',
+				'\tderiveThinkingForColumn,',
+				'\tpickContent,',
+				'\tshouldClearOnWorkspaceChange,',
+				'} from "./agentStream";',
+				'export { shouldRefetchBoardOnTerminalEvent } from "./agentBoardSync";',
 			].join("\n"),
-			"agent index must expose only AgentPage's public API",
+			"agent index must expose the relocated agent public API",
 		);
-		assert.doesNotMatch(
+		assert.match(
 			readFileSync(join(repoRoot, "client/vitest.config.ts"), "utf8"),
 			/setupFiles/,
-			"T7 must not add a global Vitest setup file",
+			"expected a global Vitest setup file for Lottie mocks",
 		);
 		assert.ok(
-			!existsSync(join(repoRoot, "client/src/shared/test-setup.ts")),
-			"T7 must not add a global Lottie test setup",
+			existsSync(join(repoRoot, "client/test-setup.ts")),
+			"expected the client Vitest setup file",
 		);
 		const importPathRules = readFileSync(
 			join(repoRoot, "scripts/feature-modules/import-paths.mjs"),
@@ -849,12 +857,20 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover server/src/routes/board.ts to be gone",
 		);
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
-			"expected leftover client/src/components/ContextPanel.tsx to still exist (wave-2)",
+			existsSync(join(repoRoot, "client/src/features/board/ContextPanel.tsx")),
+			"expected ContextPanel home client/src/features/board/ContextPanel.tsx",
 		);
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
-			"expected BoardPage to remain under client/src/pages/BoardPage.tsx",
+			!existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
+			"expected leftover client/src/components/ContextPanel.tsx to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/board/BoardPage.tsx")),
+			"expected BoardPage home client/src/features/board/BoardPage.tsx",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
+			"expected leftover client/src/pages/BoardPage.tsx to be gone",
 		);
 		for (const name of [
 			"TrackerTabs.tsx",

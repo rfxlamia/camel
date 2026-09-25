@@ -2,24 +2,16 @@ import { Folder, Plus, Signpost, Tag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api";
 import {
-	LabelDot,
-	PriorityGlyph,
-	priorityBars,
-} from "../../shared/TrackerGlyphs";
-import {
-	type PickerOption,
-	TrackerPropertyPicker,
-} from "../../shared/TrackerPropertyPicker";
-import {
 	NO_PRIORITY,
 	resolveToggle,
 	sortStatusesByPosition,
 } from "../../shared/trackerUtils";
-import type {
-	TrackerPhase,
-	TrackerProject,
-	TrackerVocabulary,
-} from "../../types";
+import type { TrackerPhase, TrackerProject, TrackerVocabulary } from "../../types";
+import { LabelDot, PriorityGlyph, priorityBars } from "../../shared/TrackerGlyphs";
+import {
+	type PickerOption,
+	TrackerPropertyPicker,
+} from "../../shared/TrackerPropertyPicker";
 
 type PickerName = "priority" | "labels" | "project" | "phase";
 type LoadState = "loading" | "ready" | "error";

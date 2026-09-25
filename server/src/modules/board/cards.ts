@@ -1,15 +1,8 @@
 import { Router } from "express";
 import { sql } from "kysely";
 import type { AuthUser } from "../../auth.js";
-import {
-	mapColumnSlots,
-	statusIdForSlot,
-} from "../../core/column-status-map.js";
-import {
-	neighborsAt,
-	positionBetween,
-	rebalance,
-} from "../../core/position.js";
+import { mapColumnSlots, statusIdForSlot } from "../../core/column-status-map.js";
+import { neighborsAt, positionBetween, rebalance } from "../../core/position.js";
 import { derivePrefix, formatKey } from "../../core/tracker-key.js";
 import { checkWipLimit } from "../../core/wip.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
@@ -18,12 +11,24 @@ import {
 	type AttachmentPair,
 	getAttachmentStorage,
 } from "../../lib/attachment-storage.js";
+import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { publishEvent } from "../../realtime.js";
+import {
+	validateCardDescription,
+	validateCardTitle,
+	validateDueDate,
+} from "../../validators/input-length.js";
+import { loadCardAttachmentsForCards } from "./attachment-response.js";
 import {
 	addCardAssignee,
 	getCardAssigneeIds,
 	loadCardAssigneesForCards,
 	syncCardAssignees,
 } from "../../lib/card-assignees.js";
+import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
+import { createCard } from "./card-create.js";
+import { cardCreateMultipartMiddleware } from "./card-create-multipart.js";
+import { syncCardLabels } from "./card-labels.js";
 import {
 	buildCardResponse,
 	type CardResponseRow,
@@ -40,18 +45,6 @@ import {
 	parseLabelIds,
 	parsePriorityId,
 } from "../../lib/tracker-item-parsers.js";
-import { requireWorkspaceMember } from "../../middleware/workspace.js";
-import { publishEvent } from "../../realtime.js";
-import {
-	validateCardDescription,
-	validateCardTitle,
-	validateDueDate,
-} from "../../validators/input-length.js";
-import { loadCardAttachmentsForCards } from "./attachment-response.js";
-import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
-import { createCard } from "./card-create.js";
-import { cardCreateMultipartMiddleware } from "./card-create-multipart.js";
-import { syncCardLabels } from "./card-labels.js";
 
 export const cardsRouter = Router({ mergeParams: true });
 

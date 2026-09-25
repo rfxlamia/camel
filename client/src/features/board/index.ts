@@ -14,6 +14,13 @@ export {
 } from "./addCardImageStaging";
 export { default as BoardCardTaxonomyFields } from "./BoardCardTaxonomyFields";
 export {
+	BOARD_VIEW_STORAGE_KEY,
+	type BoardViewMode,
+	readBoardViewMode,
+	writeBoardViewMode,
+} from "./boardViewPrefs";
+export { default as BoardPage } from "./BoardPage";
+export {
 	BoardProvider,
 	type CardEventHandler,
 	type FocusEventHandler,
@@ -23,16 +30,11 @@ export {
 	useBoard,
 } from "./BoardContext";
 export { moveCardToColumn, revertCardMove } from "./boardColumnMoves";
-export {
-	BOARD_VIEW_STORAGE_KEY,
-	type BoardViewMode,
-	readBoardViewMode,
-	writeBoardViewMode,
-} from "./boardViewPrefs";
 export { default as CalendarConflictNotice } from "./CalendarConflictNotice";
 export { default as CalendarDayModal } from "./CalendarDayModal";
 export { default as CalendarView } from "./CalendarView";
 export { default as CardAttachments } from "./CardAttachments";
+export { default as ContextPanel } from "./ContextPanel";
 export { CardBody, default as CardView } from "./CardView";
 export { default as ColumnView } from "./ColumnView";
 export { buildMonthGrid, type CalendarGridCell } from "./calendarGrid";

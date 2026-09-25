@@ -12,7 +12,7 @@ import {
 	type BoardViewMode,
 	readBoardViewMode,
 	writeBoardViewMode,
-} from "../features/board";
+} from "./boardViewPrefs";
 import {
 	chooseInitialWorkspace,
 	clearSavedWorkspaceId,

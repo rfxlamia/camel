@@ -7,16 +7,22 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { addMonths, format, isToday, startOfMonth, subMonths } from "date-fns";
+import {
+	addMonths,
+	format,
+	isToday,
+	startOfMonth,
+	subMonths,
+} from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { isDueOverdue } from "../../shared/boardViewUtils";
-import type { Card, Column } from "../../types";
 import type { SaveCardResult } from "./BoardContext";
+import { isDueOverdue } from "../../shared/boardViewUtils";
+import { buildMonthGrid, type CalendarGridCell } from "./calendarGrid";
+import type { Card, Column } from "../../types";
 import CalendarConflictNotice from "./CalendarConflictNotice";
 import CalendarDayModal from "./CalendarDayModal";
-import { buildMonthGrid, type CalendarGridCell } from "./calendarGrid";
 import UnscheduledTray from "./UnscheduledTray";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
