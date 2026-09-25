@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = "client/src";
 const ALLOWLIST = new Set([
 	"client/src/shared/workItemMutations.ts",
 	"client/src/api.ts",
-	"client/src/context/BoardContext.tsx",
+	"client/src/features/board/BoardContext.tsx",
 ]);
 const FORBIDDEN = /\bapi\.(updateWorkItem|updateTrackerItem|updateCard)\b/;
 

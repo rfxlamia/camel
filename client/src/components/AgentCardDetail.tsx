@@ -3,21 +3,21 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
-import { useBoard } from "../context/BoardContext";
-import { useWorkspace } from "../shared/WorkspaceContext";
 import {
 	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
 	deriveThinkingForColumn,
 	pickContent,
-} from "../lib/agentStream";
+} from "../features/agent";
+import { useBoard } from "../features/board";
+import { ToolTrace } from "../shared/ToolTraceView";
 import {
 	deriveToolTrace,
 	hasLiveToolActivityForColumn,
 	pickToolTraceForColumn,
 } from "../shared/toolTrace";
+import { useWorkspace } from "../shared/WorkspaceContext";
 import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
-import { ToolTrace } from "../shared/ToolTraceView";
 
 interface AgentCardDetailProps {
 	column: AgentColumn;

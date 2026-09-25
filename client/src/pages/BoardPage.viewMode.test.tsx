@@ -30,14 +30,27 @@ vi.mock("../api", () => ({
 }));
 vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
 vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
-vi.mock("../components/ListView", () => ({
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+		ListView: () => <div data-testid="list-view" />,
+		CalendarView: () => <div data-testid="calendar-view" />,
+	};
+});
+vi.mock("../features/board/BoardContext", async (importOriginal) => {
+	const actual = (await importOriginal()) as Record<string, unknown>;
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
+vi.mock("../features/board/ListView", () => ({
 	default: () => <div data-testid="list-view" />,
 }));
-vi.mock("../components/CalendarView", () => ({
+vi.mock("../features/board/CalendarView", () => ({
 	default: () => <div data-testid="calendar-view" />,
-}));
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
 }));
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
@@ -46,7 +59,7 @@ vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => vi.fn(),
 }));
 
-import BoardPage from "./BoardPage";
+import { BoardPage } from "../features/board";
 
 const boardColumns = [
 	{

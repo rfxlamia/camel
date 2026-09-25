@@ -3,3 +3,11 @@ export { default as AgentBoardVisual } from "./AgentBoardVisual";
 export { default as AgentChatPanel } from "./AgentChatPanel";
 export { default as AgentComposer } from "./AgentComposer";
 export { useAgentChat } from "./useAgentChat";
+export {
+	deriveColumnFailureMessage,
+	deriveStreamedOutputForColumn,
+	deriveThinkingForColumn,
+	pickContent,
+	shouldClearOnWorkspaceChange,
+} from "./agentStream";
+export { shouldRefetchBoardOnTerminalEvent } from "./agentBoardSync";

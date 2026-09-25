@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import { ticketIntakeInputClass } from "./inputClass";
 import { PreviewScreen } from "./PreviewScreen";
 import { useTicketIntakeChat } from "./useTicketIntakeChat";

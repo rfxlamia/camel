@@ -1,5 +1,5 @@
 import { MessageSquarePlus } from "lucide-react";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import { TicketIntakeChatOverlay } from "./TicketIntakeChatOverlay";
 import { useTicketIntakeChat } from "./useTicketIntakeChat";
 import { useWorkspace } from "./WorkspaceContext";

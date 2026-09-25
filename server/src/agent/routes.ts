@@ -30,7 +30,7 @@ import { publishEvent as realPublishEvent } from "../realtime.js";
 import {
 	loadAttachmentPairsForAgentBoard,
 	removeAttachmentPairsBestEffort,
-} from "../routes/card-attachment-cleanup.js";
+} from "../modules/board/index.js";
 import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,

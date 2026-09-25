@@ -19,7 +19,7 @@ import {
 import TrackerProperties, {
 	type PropertyPatch,
 } from "../components/tracker/TrackerProperties";
-import { useBoard } from "../context/BoardContext";
+import { useBoard } from "../features/board";
 import { useShowToast } from "../shared/ToastContext";
 import { useWorkspace } from "../shared/WorkspaceContext";
 import { isTaskOverdue } from "../shared/trackerRollup";

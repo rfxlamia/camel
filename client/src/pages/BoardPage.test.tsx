@@ -33,10 +33,21 @@ const {
 	mockListTrackerProjects: vi.fn(),
 }));
 
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
 
+vi.mock("../features/board/BoardContext", async (importOriginal) => {
+	const actual = (await importOriginal()) as Record<string, unknown>;
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
@@ -96,7 +107,7 @@ import type {
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../types";
-import BoardPage from "./BoardPage";
+import { BoardPage } from "../features/board";
 
 function makeListBoardValue(
 	columns: Column[],

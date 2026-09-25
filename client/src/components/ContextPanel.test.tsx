@@ -79,15 +79,28 @@ const mockProjects: TrackerProject[] = [
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
 const mockShowToast = vi.fn();
-vi.mock("../context/BoardContext", () => ({
-	useBoard: () => mockUseBoard(),
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
+vi.mock("../features/board/BoardContext", async (importOriginal) => {
+	const actual = (await importOriginal()) as Record<string, unknown>;
+	return {
+		...actual,
+		useBoard: () => mockUseBoard(),
+	};
+});
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
+vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
+vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
 
 vi.mock("react-router", () => ({
 	useParams: () => ({ cardId: "1" }),
@@ -122,7 +135,7 @@ vi.mock("../shared/useTicketIntakeChat", () => ({
 	}),
 }));
 
-import ContextPanel from "./ContextPanel";
+import { ContextPanel } from "../features/board";
 
 function makeCard(over: Partial<Card>): Card {
 	return {

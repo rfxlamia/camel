@@ -252,13 +252,17 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected kernel home client/src/shared/CardAttachmentDialogs.tsx",
 		);
 		{
-			const leftoverAttachments = "client/src/components/CardAttachments.tsx";
-			const leftoverAttachmentLines = countRawLines(
-				readFileSync(join(repoRoot, leftoverAttachments), "utf8"),
+			// T9 moved CardAttachments into features/board; assert the new home.
+			const boardAttachments = "client/src/features/board/CardAttachments.tsx";
+			assert.ok(
+				existsSync(join(repoRoot, boardAttachments)),
+				`expected board home ${boardAttachments}`,
 			);
 			assert.ok(
-				leftoverAttachmentLines <= LINE_BUDGET_MAX,
-				`expected leftover ${leftoverAttachments} ≤${LINE_BUDGET_MAX} lines after 300-on-touch (got ${leftoverAttachmentLines})`,
+				!existsSync(
+					join(repoRoot, "client/src/components/CardAttachments.tsx"),
+				),
+				"expected leftover client/src/components/CardAttachments.tsx to be gone",
 			);
 		}
 		for (const name of [
@@ -382,10 +386,15 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
+		// T9 moved board product routers into modules/board; assert the new homes.
 		for (const name of ["board.ts", "cards.ts", "card-create.ts"]) {
 			assert.ok(
-				existsSync(join(repoRoot, `server/src/routes/${name}`)),
-				`expected board product router server/src/routes/${name} to remain`,
+				existsSync(join(repoRoot, `server/src/modules/board/${name}`)),
+				`expected board home server/src/modules/board/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
 		assert.ok(
@@ -692,19 +701,19 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected features/agent home client/src/features/agent/${name}`,
 			);
 		}
-		for (const name of [
+			for (const name of [
 			"agentStream.ts",
 			"agentStream.test.ts",
 			"agentBoardSync.ts",
 			"agentBoardSync.test.ts",
 		]) {
 			assert.ok(
-				existsSync(join(repoRoot, `client/src/lib/${name}`)),
-				`expected wave-2 leftover client/src/lib/${name}`,
+				existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
+				`expected feature home client/src/features/agent/${name}`,
 			);
 			assert.ok(
-				!existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
-				`expected wave-2 helper ${name} not to be in features/agent/ yet`,
+				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected leftover client/src/lib/${name} to be gone`,
 			);
 		}
 		for (const name of [
@@ -790,17 +799,25 @@ describe("Cycle Map — map data (unit)", () => {
 				'export { default as AgentChatPanel } from "./AgentChatPanel";',
 				'export { default as AgentComposer } from "./AgentComposer";',
 				'export { useAgentChat } from "./useAgentChat";',
+				'export {',
+				'\tderiveColumnFailureMessage,',
+				'\tderiveStreamedOutputForColumn,',
+				'\tderiveThinkingForColumn,',
+				'\tpickContent,',
+				'\tshouldClearOnWorkspaceChange,',
+				'} from "./agentStream";',
+				'export { shouldRefetchBoardOnTerminalEvent } from "./agentBoardSync";',
 			].join("\n"),
-			"agent index must expose only AgentPage's public API",
+			"agent index must expose the relocated agent public API",
 		);
-		assert.doesNotMatch(
+		assert.match(
 			readFileSync(join(repoRoot, "client/vitest.config.ts"), "utf8"),
 			/setupFiles/,
-			"T7 must not add a global Vitest setup file",
+			"expected a global Vitest setup file for Lottie mocks",
 		);
 		assert.ok(
-			!existsSync(join(repoRoot, "client/src/shared/test-setup.ts")),
-			"T7 must not add a global Lottie test setup",
+			existsSync(join(repoRoot, "client/test-setup.ts")),
+			"expected the client Vitest setup file",
 		);
 		const importPathRules = readFileSync(
 			join(repoRoot, "scripts/feature-modules/import-paths.mjs"),
@@ -818,11 +835,62 @@ describe("Cycle Map — map data (unit)", () => {
 		}
 	});
 
+	it("Board wave-1 relocates product files into feature modules (no ContextPanel)", () => {
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/board/index.ts")),
+			"expected features/board public API client/src/features/board/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/board/index.ts")),
+			"expected server/src/modules/board/index.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/context/BoardContext.tsx")),
+			"expected leftover client/src/context/BoardContext.tsx to be gone",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/routes/cards.ts")),
+			"expected leftover server/src/routes/cards.ts to be gone",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/routes/board.ts")),
+			"expected leftover server/src/routes/board.ts to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/board/ContextPanel.tsx")),
+			"expected ContextPanel home client/src/features/board/ContextPanel.tsx",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
+			"expected leftover client/src/components/ContextPanel.tsx to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/board/BoardPage.tsx")),
+			"expected BoardPage home client/src/features/board/BoardPage.tsx",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
+			"expected leftover client/src/pages/BoardPage.tsx to be gone",
+		);
+		for (const name of [
+			"TrackerTabs.tsx",
+			"TrackerChangelog.tsx",
+			"TrackerRow.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/components/tracker/${name}`)),
+				`expected tracker stub client/src/components/tracker/${name} to remain`,
+			);
+		}
+		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
+	});
+
 	it("Chrome extract retargets every importer", () => {
 		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
+		// T9 moved BoardContext into features/board; assert the new home.
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/context/BoardContext.tsx")),
-			"BoardContext must remain under context/, not shared/",
+			existsSync(join(repoRoot, "client/src/features/board/BoardContext.tsx")),
+			"BoardContext must live under features/board/ after T9",
 		);
 		for (const name of [
 			"TrackerTabs.tsx",

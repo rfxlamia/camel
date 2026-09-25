@@ -138,23 +138,27 @@ vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
-vi.mock("./BoardContext", () => ({
-	useBoard: () => ({
-		subscribeFocusEvents: (
-			handler: (event: {
-				type: "focus_session.updated";
-				userId: number;
-				workspaceId: number;
-				payload: { session: FocusSession | null };
-			}) => void,
-		) => {
-			focusEventHandlers.add(handler);
-			return () => {
-				focusEventHandlers.delete(handler);
-			};
-		},
-	}),
-}));
+vi.mock("../features/board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../features/board")>();
+	return {
+		...actual,
+		useBoard: () => ({
+			subscribeFocusEvents: (
+				handler: (event: {
+					type: "focus_session.updated";
+					userId: number;
+					workspaceId: number;
+					payload: { session: FocusSession | null };
+				}) => void,
+			) => {
+				focusEventHandlers.add(handler);
+				return () => {
+					focusEventHandlers.delete(handler);
+				};
+			},
+		}),
+	};
+});
 
 describe("FocusSessionProvider", () => {
 	beforeEach(() => {
