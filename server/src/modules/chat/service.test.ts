@@ -5,7 +5,7 @@ import { createChatService } from "./service.js";
 
 /**
  * Requires running PostgreSQL. Gated behind RUN_INTEGRATION=1.
- * RUN_INTEGRATION=1 npm run test -- server/src/chat/service.test.ts
+ * RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/chat/service.test.ts
  */
 describe.skipIf(!process.env.RUN_INTEGRATION)("chat service", () => {
 	let userAId: number;

@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -15,6 +9,7 @@ import { collectGitDiff } from "./git-diff.mjs";
 import {
 	checkLineBudget,
 	collectLineBudgetViolations,
+	isNonTrivialTouch,
 	LINE_BUDGET_RULE_ID,
 } from "./line-budget.mjs";
 
@@ -413,17 +408,15 @@ describe("Cycle J — barrel consolidation (unit)", () => {
 		const afterText = makeLines(999);
 
 		const hunks = [
-			"@@ -9,1 +9,2 @@",
+			"@@ -9,4 +9,5 @@",
 			'-import { config } from "../config.js";',
 			'+import { config } from "../../config.js";',
+			'-import type { Tool, ToolEvent } from "../agent/tools/types.js";',
 			'+import type { Tool, ToolEvent } from "../agent/index.js";',
-			"@@ -10,0 +12 @@",
-			"+\tcountSearchResults,",
-			"@@ -14,4 +16,2 @@",
-			'-} from "../agent/prompt-sanitizer.js";',
 			'-import { toAnthropicToolDefs } from "../agent/tools/registry.js";',
 			'-import { countSearchResults } from "../agent/tools/trace.js";',
-			'-import type { Tool, ToolEvent } from "../agent/tools/types.js";',
+			"+import {",
+			"+\tcountSearchResults,",
 			"+\ttoAnthropicToolDefs,",
 			'+} from "../agent/index.js";',
 		].join("\n");
@@ -692,6 +685,191 @@ describe("Cycle L — mixed import-retarget plus body-rewrap (unit)", () => {
 		});
 
 		expectLineBudgetViolation(path, 999)(violations);
+	});
+});
+
+describe("Review regressions — import classification (unit)", () => {
+	it("treats reordered function arguments as a non-trivial touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+		const hunks = [
+			"@@ -20,2 +20,2 @@",
+			"-\tfirstArg,",
+			"-\tsecondArg,",
+			"+\tsecondArg,",
+			"+\tfirstArg,",
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("does not let an import binding name exempt an unrelated argument reorder", () => {
+		const hunk = [
+			"@@ -1,1 +1,1 @@",
+			'-import { firstArg, secondArg } from "./old.js";',
+			'+import { firstArg, secondArg } from "./new.js";',
+			"@@ -20,2 +20,2 @@",
+			"-\tfirstArg,",
+			"-\tsecondArg,",
+			"+\tsecondArg,",
+			"+\tfirstArg,",
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("does not ignore type modifiers in multiline import bindings", () => {
+		const hunk = [
+			"@@ -20,4 +20,4 @@",
+			" import {",
+			"-\ttype Foo,",
+			"+\tFoo,",
+			' } from "./module.js";',
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("keeps reordered bindings inside an active import declaration exempt", () => {
+		const hunk = [
+			"@@ -20,5 +20,5 @@",
+			" import {",
+			"-\tfirstArg,",
+			"-\tsecondArg,",
+			"+\tsecondArg,",
+			"+\tfirstArg,",
+			' } from "./module.js";',
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), false);
+	});
+
+	it("treats a return line terminator as a non-trivial touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+		const hunks = [
+			"@@ -20,2 +20,1 @@",
+			"-return",
+			"-{ ok: true };",
+			"+return { ok: true };",
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("treats moving code across a line comment as a non-trivial touch", () => {
+		const path = "server/src/routes/cards.ts";
+		const beforeText = makeLines(999);
+		const afterText = makeLines(999);
+		const hunks = [
+			"@@ -20,2 +20,2 @@",
+			"-foo(); // call foo",
+			"-bar();",
+			"+foo();",
+			"+// call foo bar();",
+		].join("\n");
+
+		const violations = checkLineBudget({
+			path,
+			status: "modified",
+			beforeText,
+			afterText,
+			hunks,
+		});
+
+		expectLineBudgetViolation(path, 999)(violations);
+	});
+
+	it("preserves whitespace inside string literals", () => {
+		const hunk = [
+			"@@ -20,1 +20,1 @@",
+			'-const value = "a  b";',
+			'+const value = "a b";',
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves whitespace inside template literals", () => {
+		const hunk = [
+			"@@ -20,1 +20,1 @@",
+			"-const value = `a  b`;",
+			"+const value = `a b`;",
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves empty array elisions", () => {
+		const hunk = [
+			"@@ -20,1 +20,1 @@",
+			"-const value = [];",
+			"+const value = [,];",
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves repeated array elisions", () => {
+		const hunk = [
+			"@@ -20,1 +20,1 @@",
+			"-const value = [,];",
+			"+const value = [,,];",
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves whitespace inside regular-expression literals", () => {
+		const hunk = [
+			"@@ -20,1 +20,1 @@",
+			"-const pattern = /^ $/;",
+			"+const pattern = /^$/;",
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves side-effect import statements", () => {
+		const hunk = ["@@ -20,1 +20,0 @@", '-import "./polyfill.js";'].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves export-star statements", () => {
+		const hunk = ["@@ -20,1 +20,0 @@", '-export * from "./module.js";'].join(
+			"\n",
+		);
+
+		assert.equal(isNonTrivialTouch(hunk), true);
+	});
+
+	it("preserves type-only versus value default imports", () => {
+		const hunk = [
+			"@@ -20,1 +20,1 @@",
+			'-import type Foo from "./old.js";',
+			'+import Foo from "./new.js";',
+		].join("\n");
+
+		assert.equal(isNonTrivialTouch(hunk), true);
 	});
 });
 

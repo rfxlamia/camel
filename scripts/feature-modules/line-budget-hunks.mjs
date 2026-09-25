@@ -1,22 +1,38 @@
 /**
- * @param {string} hunks
+ * @typedef {{ text: string, changed: boolean }} DiffLine
+ * @typedef {{ removed: DiffLine[], added: DiffLine[] }} DiffHunk
+ * @typedef {{ statement: "import" | "export", declarationType: "type" | "value" }} ImportKind
+ * @typedef {{ text: string, kind: ImportKind | null }} ImportChangeLine
  */
-function parseChangedLines(hunks) {
-	/** @type {string[]} */
-	const removed = [];
-	/** @type {string[]} */
-	const added = [];
-	let inHunk = false;
+
+/**
+ * Keep each unified-diff hunk separate so continuation lines cannot borrow
+ * import context from an unrelated changed region.
+ * @param {string} hunks
+ * @returns {DiffHunk[]}
+ */
+function parseHunks(hunks) {
+	/** @type {DiffHunk[]} */
+	const sections = [];
+	let section;
 	for (const line of hunks.split("\n")) {
 		if (line.startsWith("@@")) {
-			inHunk = true;
+			section = { removed: [], added: [] };
+			sections.push(section);
 			continue;
 		}
-		if (!inHunk) continue;
-		if (line.startsWith("-")) removed.push(line.slice(1));
-		else if (line.startsWith("+")) added.push(line.slice(1));
+		if (!section) continue;
+		if (line.startsWith("-")) {
+			section.removed.push({ text: line.slice(1), changed: true });
+		} else if (line.startsWith("+")) {
+			section.added.push({ text: line.slice(1), changed: true });
+		} else if (line.startsWith(" ")) {
+			const text = line.slice(1);
+			section.removed.push({ text, changed: false });
+			section.added.push({ text, changed: false });
+		}
 	}
-	return { removed, added };
+	return sections;
 }
 
 /**
@@ -31,9 +47,8 @@ function collapseWhitespace(line) {
  * Every run of `[A-Za-z0-9_$]` is one token; every other non-whitespace
  * character is its own token; whitespace itself contributes no tokens.
  * Single/double-quoted strings and template literals are kept intact as
- * single tokens (escapes respected) so `"a b"` vs `"ab"` still differs,
- * with runs of whitespace inside them collapsed to one space so a pure
- * reflow inside a template literal stays trivial.
+ * exact single tokens (escapes respected), so whitespace in a literal is
+ * treated as content rather than reflow.
  * @param {string} text
  * @returns {string[]}
  */
@@ -60,7 +75,7 @@ function tokenizeForEquivalence(text) {
 				i++;
 				if (c === ch) break;
 			}
-			tokens.push(token.replace(/\s+/g, " "));
+			tokens.push(token);
 			continue;
 		}
 		if (/[A-Za-z0-9_$]/.test(ch)) {
@@ -108,14 +123,40 @@ function isWhitespaceEquivalentLines(removed, added) {
 	// bracket/paren/brace, which the biome formatter adds and removes as
 	// part of multi-line vs single-line reflow (`Item[],` vs `Item[]`):
 	// that comma is rewrap, not content, so it is dropped from the stream.
-	// Residual risk: whitespace-only changes inside string literals are
-	// invisible to this comparison — accepted: tests + human review cover
-	// string-content changes.
+	// Literal contents are preserved exactly; only whitespace outside literals
+	// remains eligible for reflow equivalence.
+	const exactLineFingerprint = (lines) =>
+		lines.map((line) => line.trim()).join("\n");
+	const hasSlashSensitiveLine = [...removed, ...added].some((line) =>
+		line.includes("/"),
+	);
+	// A slash can be a regex delimiter or a line comment. Treat changed slash
+	// lines conservatively: preserving each trimmed line avoids both regex
+	// whitespace loss and code moving across a `//` boundary without adding a
+	// parser dependency to this guard.
+	if (
+		hasSlashSensitiveLine &&
+		exactLineFingerprint(removed) !== exactLineFingerprint(added)
+	) {
+		return false;
+	}
+	const hasRestrictedLineTerminator = [...removed, ...added].some((line) =>
+		/\b(?:return|throw|break|continue|yield)\s*$/.test(line.trim()),
+	);
+	if (
+		hasRestrictedLineTerminator &&
+		exactLineFingerprint(removed) !== exactLineFingerprint(added)
+	) {
+		return false;
+	}
 	const fingerprint = (lines) => {
 		const tokens = tokenizeForEquivalence(lines.join("\n"));
-		const filtered = tokens.filter(
-			(token, index) => token !== "," || !isClosingBracket(tokens[index + 1]),
-		);
+		const filtered = tokens.filter((token, index) => {
+			if (token !== "," || !isClosingBracket(tokens[index + 1])) return true;
+			if (tokens[index + 1] !== "]") return false;
+			const previous = tokens[index - 1];
+			return previous === "[" || previous === ",";
+		});
 		return filtered.join("\0");
 	};
 	return fingerprint(removed) === fingerprint(added);
@@ -137,17 +178,135 @@ function isImportOrExportFromLine(line) {
 }
 
 /**
- * Continuation lines of a formatted import/export, plus one-line forms.
+ * @param {string} line
+ * @returns {ImportKind}
+ */
+function getImportKind(line) {
+	const trimmed = line.trim();
+	return {
+		statement: trimmed.startsWith("export") ? "export" : "import",
+		declarationType: /^(?:import|export)\s+type(?:\s|\{|\*)/.test(trimmed)
+			? "type"
+			: "value",
+	};
+}
+
+/**
  * @param {string} line
  */
-function isImportRelatedLine(line) {
+function isImportDeclarationEndLine(line) {
+	return /^}?\s*from\s+['"]/.test(line.trim());
+}
+
+/**
+ * @param {string} line
+ */
+function isCompleteImportDeclaration(line) {
 	const trimmed = line.trim();
-	if (trimmed === "") return true;
-	if (isImportOrExportFromLine(line)) return true;
-	if (/^}?\s*from\s+['"]/.test(trimmed)) return true;
-	if (trimmed === "{" || trimmed === "}" || trimmed === "},") return true;
-	if (/^(type\s+)?[\w$]+,?\s*$/.test(trimmed)) return true;
-	return false;
+	return (
+		isImportDeclarationEndLine(trimmed) ||
+		/^import\s+['"]/.test(trimmed) ||
+		(/^import\s*\(/.test(trimmed) && /\)\s*;?$/.test(trimmed)) ||
+		/\bfrom\s+['"][^'"]+['"]/.test(trimmed)
+	);
+}
+
+/**
+ * @param {string} line
+ */
+function isImportContinuationCandidate(line) {
+	const trimmed = line.trim();
+	return (
+		trimmed === "" ||
+		trimmed === "{" ||
+		trimmed === "}" ||
+		trimmed === "}," ||
+		/^(type\s+)?[\w$]+,?\s*$/.test(trimmed)
+	);
+}
+
+/**
+ * @param {string} binding
+ */
+function normalizeImportBindingName(binding) {
+	const normalized = binding
+		.trim()
+		.replace(/,\s*$/, "")
+		.replace(/\s+/g, " ")
+		.replace(/^type\s+/, "");
+	const alias = normalized.match(/\bas\s+([\w$]+)$/);
+	return alias ? alias[1] : normalized.split(/\s+/)[0];
+}
+
+/**
+ * Classify one diff side using active declaration state. Continuation lines
+ * outside an active declaration remain semantic lines, even if their names
+ * happen to match an import elsewhere in the diff.
+ * @param {DiffLine[]} entries
+ */
+function classifyImportLines(entries) {
+	const importIndexes = new Set();
+	const importKinds = new Map();
+	/** @type {ImportKind | null} */
+	let activeKind = null;
+	for (let index = 0; index < entries.length; index++) {
+		const entry = entries[index];
+		const trimmed = entry.text.trim();
+		if (isImportOrExportFromLine(trimmed)) {
+			const kind = getImportKind(trimmed);
+			activeKind = isCompleteImportDeclaration(trimmed) ? null : kind;
+			if (entry.changed) {
+				importIndexes.add(index);
+				importKinds.set(index, kind);
+			}
+			continue;
+		}
+		if (activeKind) {
+			if (entry.changed) {
+				importIndexes.add(index);
+				importKinds.set(index, activeKind);
+			}
+			if (isImportDeclarationEndLine(trimmed)) activeKind = null;
+			continue;
+		}
+		if (isImportDeclarationEndLine(trimmed) && entry.changed) {
+			importIndexes.add(index);
+			importKinds.set(index, null);
+		}
+	}
+
+	return {
+		imports: entries.flatMap((entry, index) =>
+			entry.changed && importIndexes.has(index)
+				? [{ text: entry.text, kind: importKinds.get(index) ?? null }]
+				: [],
+		),
+		others: entries
+			.filter((entry, index) => entry.changed && !importIndexes.has(index))
+			.map((entry) => entry.text),
+	};
+}
+
+/**
+ * @param {string} hunks
+ */
+function classifyImportChanges(hunks) {
+	const sections = parseHunks(hunks);
+	const result = {
+		removedImports: [],
+		addedImports: [],
+		removedOthers: [],
+		addedOthers: [],
+	};
+	for (const section of sections) {
+		const removed = classifyImportLines(section.removed);
+		const added = classifyImportLines(section.added);
+		result.removedImports.push(...removed.imports);
+		result.addedImports.push(...added.imports);
+		result.removedOthers.push(...removed.others);
+		result.addedOthers.push(...added.others);
+	}
+	return result;
 }
 
 /**
@@ -179,51 +338,99 @@ function normalizeBindingOrder(line) {
 }
 
 /**
- * Sorted multiset of every identifier bound by the changed import/export
- * lines (module specifiers ignored, `type` modifiers kept). Multiline blocks
- * contribute their bare continuation lines (`countSearchResults,`) alongside
- * single-line brace groups, so N leaf imports consolidated into one barrel
- * import compare equal when the global binding set is identical.
- * @param {string[]} lines
+ * @param {string | ImportChangeLine} line
  */
-function extractImportBindings(lines) {
+function getImportLineText(line) {
+	return typeof line === "string" ? line : line.text;
+}
+
+/**
+ * Sorted semantic signatures of changed import/export declarations. Module
+ * paths are omitted, but statement kind, type/value kind, and local bindings
+ * remain significant so only binding organization can be ignored.
+ * @param {(string | ImportChangeLine)[]} lines
+ */
+function extractImportSignatures(lines) {
 	/** @type {string[]} */
-	const bindings = [];
+	const signatures = [];
+	/** @type {ImportKind | null} */
+	let activeKind = null;
 	for (const line of lines) {
-		const trimmed = line.trim();
-		const braceMatch = trimmed.match(/\{([^}]*)\}/);
-		if (braceMatch) {
-			for (const part of braceMatch[1].split(",")) {
-				const binding = part.trim().replace(/\s+/g, " ");
-				if (binding) bindings.push(binding);
+		const text = getImportLineText(line);
+		const trimmed = text.trim();
+		if (isImportOrExportFromLine(trimmed)) {
+			const kind = getImportKind(trimmed);
+			const { statement, declarationType } = kind;
+			const kindPrefix = `${statement}:${declarationType}`;
+			if (/^import\s+['"]/.test(trimmed)) {
+				signatures.push(`${kindPrefix}:side-effect`);
+			} else if (/^export\s+(?:type\s+)?\*\s+from\s/.test(trimmed)) {
+				signatures.push(`${kindPrefix}:star`);
+			} else {
+				const braceMatch = trimmed.match(/\{([^}]*)\}/);
+				if (braceMatch) {
+					for (const part of braceMatch[1].split(",")) {
+						const normalized = part.trim().replace(/\s+/g, " ");
+						if (!normalized) continue;
+						const bindingType = normalized.startsWith("type ")
+							? "type"
+							: declarationType;
+						const binding = normalized.replace(/^type\s+/, "");
+						signatures.push(`${statement}:${bindingType}:named:${binding}`);
+					}
+				}
+				const defaultMatch = trimmed.match(
+					/^(?:import|export)\s+(?:type\s+)?([\w$]+)\s*(?:,|from)/,
+				);
+				if (defaultMatch) {
+					signatures.push(
+						`${statement}:${declarationType}:default:${defaultMatch[1]}`,
+					);
+				}
+				const namespaceMatch = trimmed.match(
+					/^import\s+\*\s+as\s+([\w$]+)\s+from\s/,
+				);
+				if (namespaceMatch) {
+					signatures.push(
+						`import:${declarationType}:namespace:${namespaceMatch[1]}`,
+					);
+				}
 			}
-			const defaultMatch = trimmed.match(/^import\s+(?:type\s+)?([\w$]+)\s*,/);
-			if (defaultMatch) bindings.push(defaultMatch[1]);
+			activeKind = isCompleteImportDeclaration(trimmed) ? null : kind;
 			continue;
 		}
-		if (/^import\s*\{?\s*$/.test(trimmed)) continue;
-		if (/^}?\s*from\s+['"]/.test(trimmed)) continue;
-		if (trimmed === "{" || trimmed === "}" || trimmed === "},") continue;
-		if (trimmed === "") continue;
-		if (/^(type\s+)?[\w$]+\s*,?\s*$/.test(trimmed)) {
-			bindings.push(trimmed.replace(/,\s*$/, "").replace(/\s+/g, " "));
+		if (activeKind && isImportContinuationCandidate(trimmed)) {
+			const binding = normalizeImportBindingName(trimmed);
+			const bindingType = trimmed.startsWith("type ")
+				? "type"
+				: activeKind.declarationType;
+			if (binding) {
+				signatures.push(
+					`${activeKind.statement}:${bindingType}:named:${binding}`,
+				);
+			}
 			continue;
 		}
-		const defaultOnly = trimmed.match(
-			/^import\s+(?:type\s+)?([\w$]+)\s+from\s+['"]/,
-		);
-		if (defaultOnly) {
-			bindings.push(defaultOnly[1]);
+		if (isImportDeclarationEndLine(trimmed)) {
+			activeKind = null;
 			continue;
 		}
-		const namespace = trimmed.match(
-			/^import\s+\*\s+as\s+([\w$]+)\s+from\s+['"]/,
-		);
-		if (namespace) {
-			bindings.push(namespace[1]);
+		if (isImportContinuationCandidate(trimmed)) {
+			const binding = normalizeImportBindingName(trimmed);
+			const providedKind = typeof line === "string" ? null : line.kind;
+			const kind = providedKind ?? {
+				statement: "import",
+				declarationType: "value",
+			};
+			const bindingType = trimmed.startsWith("type ")
+				? "type"
+				: kind.declarationType;
+			if (binding) {
+				signatures.push(`${kind.statement}:${bindingType}:named:${binding}`);
+			}
 		}
 	}
-	return bindings.sort();
+	return signatures.sort();
 }
 
 /**
@@ -231,34 +438,33 @@ function extractImportBindings(lines) {
  * Exempt only when the quoted module path changed (including multiline `from`).
  * Binding / new-import changes are a touch.
  * An empty subset counts as trivial (pure-rewrap mixed hunks need this).
- * @param {string[]} removed
- * @param {string[]} added
+ * @param {(string | ImportChangeLine)[]} removed
+ * @param {(string | ImportChangeLine)[]} added
  */
 function isImportSpecifierOnlyLines(removed, added) {
 	const changed = [...removed, ...added];
 	if (changed.length === 0) return true;
-	if (!changed.every(isImportRelatedLine)) return false;
 	// Sort stripped lines so a pure reorder stays trivial: biome
 	// organizeImports force-reorders imports on amend. Binding order within
 	// one line is normalized too (see normalizeBindingOrder).
-	// Additionally compare the global binding multiset so barrel
-	// consolidation during relocation (N leaf imports merged into one barrel
-	// import with the identical binding set) stays trivial even though the
-	// line structure differs. A binding ADD or REMOVE changes the multiset
-	// and stays a touch.
+	// Additionally compare semantic signatures so barrel consolidation during
+	// relocation (N leaf imports merged into one barrel import with the same
+	// bindings) stays trivial even though the line structure differs. A
+	// statement, type/value, or binding change stays a touch.
 	const fingerprint = (lines) =>
 		lines
-			.map((line) =>
-				collapseWhitespace(
-					normalizeBindingOrder(stripQuotedModuleSpecifiers(line)),
-				),
-			)
+			.map((line) => {
+				const text = getImportLineText(line);
+				return collapseWhitespace(
+					normalizeBindingOrder(stripQuotedModuleSpecifiers(text)),
+				);
+			})
 			.sort()
 			.join("\n");
 	if (fingerprint(removed) === fingerprint(added)) return true;
 	return (
-		extractImportBindings(removed).join("\n") ===
-		extractImportBindings(added).join("\n")
+		extractImportSignatures(removed).join("\n") ===
+		extractImportSignatures(added).join("\n")
 	);
 }
 
@@ -277,17 +483,20 @@ function isImportSpecifierOnlyLines(removed, added) {
  * add/remove, new imports, comments stay a touch). Whole hunk trivial iff
  * BOTH subsets trivial; an empty subset counts as trivial so pure-import
  * and pure-rewrap hunks keep working.
- * Residual risk: string-literal whitespace invisibility — same accepted
- * Cycle-K risk (tests + human review cover string-content changes).
+ * Literal and comment contents are intentionally handled conservatively.
  * @param {string} hunks
  */
 export function isNonTrivialTouch(hunks) {
-	const { removed, added } = parseChangedLines(hunks);
-	if (removed.length === 0 && added.length === 0) return false;
-	const removedImports = removed.filter(isImportRelatedLine);
-	const addedImports = added.filter(isImportRelatedLine);
-	const removedOthers = removed.filter((line) => !isImportRelatedLine(line));
-	const addedOthers = added.filter((line) => !isImportRelatedLine(line));
+	const { removedImports, addedImports, removedOthers, addedOthers } =
+		classifyImportChanges(hunks);
+	if (
+		removedImports.length === 0 &&
+		addedImports.length === 0 &&
+		removedOthers.length === 0 &&
+		addedOthers.length === 0
+	) {
+		return false;
+	}
 	if (!isWhitespaceEquivalentLines(removedOthers, addedOthers)) return true;
 	if (!isImportSpecifierOnlyLines(removedImports, addedImports)) return true;
 	return false;
