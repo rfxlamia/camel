@@ -1,4 +1,4 @@
-import type { AgentEvent } from "../types";
+import type { AgentEvent } from "../../types";
 
 const BOARD_REFETCH_TERMINAL_TYPES = new Set<AgentEvent["type"]>([
 	"agent.card.failed",
