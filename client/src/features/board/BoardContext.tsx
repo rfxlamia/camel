@@ -10,9 +10,8 @@ import {
 	useState,
 } from "react";
 import { ApiError, api } from "../../api";
-import { useShowToast } from "../../shared/ToastContext";
 import type { TicketIntakeResultEvent } from "../../shared/useTicketIntakeChat";
-import { useWorkspace } from "../../shared/WorkspaceContext";
+import { shouldClearOnWorkspaceChange } from "../agent";
 import { getRemovalRedirect } from "../../shared/workspaceSelection";
 import type {
 	ActivityEvent,
@@ -21,7 +20,8 @@ import type {
 	FlowMetrics,
 	User,
 } from "../../types";
-import { shouldClearOnWorkspaceChange } from "../../lib/agentStream";
+import { useShowToast } from "../../shared/ToastContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
 
 /** Trailing debounce for SSE-triggered refreshes. Chosen to coalesce burst
  *  events (e.g. own mutation + its echo) without noticeable UI lag. */
@@ -205,9 +205,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		[],
 	);
 
-	const registerRefreshTrackerList = useCallback((fn: (() => void) | null) => {
-		trackerListRefreshRef.current = fn;
-	}, []);
+	const registerRefreshTrackerList = useCallback(
+		(fn: (() => void) | null) => {
+			trackerListRefreshRef.current = fn;
+		},
+		[],
+	);
 
 	const refreshTrackerList = useCallback(() => {
 		trackerListRefreshRef.current?.();

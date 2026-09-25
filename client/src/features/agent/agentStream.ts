@@ -1,4 +1,4 @@
-import type { AgentEvent } from "../types";
+import type { AgentEvent } from "../../types";
 
 /** Derive concatenated live thinking text for a given boardId + columnSlug.
  * Filters only `agent.card.thinking` events; concatenates their `token` in order.

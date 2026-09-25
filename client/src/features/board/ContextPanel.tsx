@@ -7,26 +7,25 @@ import {
 	useState,
 } from "react";
 import { useNavigate, useParams } from "react-router";
-import { api, type TicketHistoryEntry } from "../api";
+import { api, type TicketHistoryEntry } from "../../api";
+import { type SaveCardResult, useBoard } from "./BoardContext";
+import { useShowToast } from "../../shared/ToastContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
+import { useTicketIntakeChat } from "../../shared/useTicketIntakeChat";
 import {
-	AssigneePicker,
-	BoardCardTaxonomyFields,
-	CardAttachments,
 	describeCardEvent,
 	findCardInColumns,
 	getMissingCardRedirect,
 	parseCardId,
-	type SaveCardResult,
-	useBoard,
-} from "../features/board";
-import type { PreparedImagePair } from "../shared/imageAttachments";
-import { TicketIntakeChatOverlay } from "../shared/TicketIntakeChatOverlay";
-import { useShowToast } from "../shared/ToastContext";
-import { useTicketIntakeChat } from "../shared/useTicketIntakeChat";
-import { useWorkspace } from "../shared/WorkspaceContext";
-import type { ActivityEvent, Card, WorkspaceMember } from "../types";
-import { formatRelativeTime } from "../types";
-import FocusEntryButton from "./FocusEntryButton";
+} from "./cardPanel";
+import type { PreparedImagePair } from "../../shared/imageAttachments";
+import type { ActivityEvent, Card, WorkspaceMember } from "../../types";
+import { formatRelativeTime } from "../../types";
+import { AssigneePicker } from "./AssigneePicker";
+import BoardCardTaxonomyFields from "./BoardCardTaxonomyFields";
+import CardAttachments from "./CardAttachments";
+import FocusEntryButton from "../../shared/FocusEntryButton";
+import { TicketIntakeChatOverlay } from "../../shared/TicketIntakeChatOverlay";
 
 const inputClass =
 	"mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";

@@ -12,12 +12,9 @@ import TrackerPhaseSection from "../components/tracker/TrackerPhaseSection";
 import TrackerProjectHeader from "../components/tracker/TrackerProjectHeader";
 import { useBoard } from "../features/board";
 import { useShowToast } from "../shared/ToastContext";
-import { sortStatusesByPosition } from "../shared/trackerUtils";
 import { useWorkspace } from "../shared/WorkspaceContext";
-import {
-	reorderWorkItem,
-	updateWorkItemStatus,
-} from "../shared/workItemMutations";
+import { sortStatusesByPosition } from "../shared/trackerUtils";
+import { updateWorkItemStatus, reorderWorkItem } from "../shared/workItemMutations";
 import type {
 	TrackerPhase,
 	TrackerProject,

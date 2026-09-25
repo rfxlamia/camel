@@ -8,7 +8,7 @@ import {
 	deriveStreamedOutputForColumn,
 	deriveThinkingForColumn,
 	pickContent,
-} from "../lib/agentStream";
+} from "../features/agent";
 import { useBoard } from "../features/board";
 import { ToolTrace } from "../shared/ToolTraceView";
 import {
