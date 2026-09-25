@@ -13,12 +13,12 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import express, { type Request, Router } from "express";
-import type { ToolEvent } from "../modules/agent/index.js";
-import { checkChatLimit } from "../modules/agent/index.js";
-import { requireAuth } from "../auth.js";
-import type { Json } from "../db/types.js";
-import { db } from "../db/kysely.js";
-import { lookupMembership } from "../lib/helpers.js";
+import type { ToolEvent } from "../agent/index.js";
+import { checkChatLimit } from "../agent/index.js";
+import { requireAuth } from "../../auth.js";
+import type { Json } from "../../db/types.js";
+import { db } from "../../db/kysely.js";
+import { lookupMembership } from "../../lib/helpers.js";
 import { estimateContextTokens, runChatTurn } from "./run-chat-turn.js";
 import { createChatService } from "./service.js";
 import { setStreamHeaders, writeStreamEvent } from "./stream-protocol.js";

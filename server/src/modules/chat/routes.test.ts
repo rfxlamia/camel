@@ -22,16 +22,16 @@ const mockService = {
 	insertAttachment: vi.fn(),
 };
 
-vi.mock("../modules/agent/index.js", async (importOriginal) => {
+vi.mock("../agent/index.js", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../modules/agent/index.js")>();
+		await importOriginal<typeof import("../agent/index.js")>();
 	return {
 		...actual,
 		checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
 	};
 });
 
-vi.mock("../auth.js", () => ({
+vi.mock("../../auth.js", () => ({
 	requireAuth: (
 		req: express.Request,
 		_res: express.Response,
@@ -51,7 +51,7 @@ vi.mock("./service.js", () => ({
 	createChatService: () => mockService,
 }));
 
-vi.mock("../lib/helpers.js", () => ({
+vi.mock("../../lib/helpers.js", () => ({
 	lookupMembership: vi.fn().mockResolvedValue("member"),
 }));
 

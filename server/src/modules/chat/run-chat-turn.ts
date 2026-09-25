@@ -6,15 +6,15 @@
  */
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
-import { config } from "../config.js";
+import { config } from "../../config.js";
 import {
 	createSafeSystemPrompt,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "../modules/agent/index.js";
-import { toAnthropicToolDefs } from "../modules/agent/index.js";
-import { countSearchResults } from "../modules/agent/index.js";
-import type { Tool, ToolEvent } from "../modules/agent/index.js";
+} from "../agent/index.js";
+import { toAnthropicToolDefs } from "../agent/index.js";
+import { countSearchResults } from "../agent/index.js";
+import type { Tool, ToolEvent } from "../agent/index.js";
 
 // ---------------------------------------------------------------------------
 // Client + token budgets (mirrors agent/llm.ts — kept in sync)

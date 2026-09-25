@@ -1,5 +1,5 @@
-import type { Tool, ToolResult } from "../../modules/agent/index.js";
-import { MAX_ARTIFACT_BYTES } from "../../modules/agent/index.js";
+import type { Tool, ToolResult } from "../../agent/index.js";
+import { MAX_ARTIFACT_BYTES } from "../../agent/index.js";
 import type { ChatAttachmentFormat, InsertAttachmentParams } from "../types.js";
 
 type InsertAttachmentInput = Omit<InsertAttachmentParams, "userId">;

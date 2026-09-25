@@ -450,8 +450,16 @@ describe("Cycle Map — map data (unit)", () => {
 			);
 		}
 		assert.ok(
-			existsSync(join(repoRoot, "server/src/chat/routes.ts")),
-			"expected leftover server/src/chat/routes.ts to still exist (server chat is T8)",
+			existsSync(join(repoRoot, "server/src/modules/chat/index.ts")),
+			"expected server/src/modules/chat/index.ts",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "server/src/chat/routes.ts")),
+			"expected leftover server/src/chat/routes.ts to be gone",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/agent/llm.ts")),
+			"expected leftover server/src/agent/llm.ts to still exist",
 		);
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/pages/ChatPage.tsx")),

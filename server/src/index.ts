@@ -2,7 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import { createAgentRouter } from "./agent/routes.js";
-import { createChatRouter } from "./chat/routes.js";
+import { createChatRouter } from "./modules/chat/index.js";
 import {
 	cleanupExpiredSessions,
 	createAuthRateLimiter,

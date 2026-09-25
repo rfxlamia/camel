@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../../db/kysely.js";
-import { MAX_ARTIFACT_BYTES } from "../../modules/agent/index.js";
+import { db } from "../../../db/kysely.js";
+import { MAX_ARTIFACT_BYTES } from "../../agent/index.js";
 import { createChatService } from "../service.js";
 import { makeCreateChatFile } from "./createChatFile.js";
 

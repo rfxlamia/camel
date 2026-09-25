@@ -1,11 +1,11 @@
 import { sql, type Selectable } from "kysely";
-import type { DBExecutor } from "../db/kysely.js";
+import type { DBExecutor } from "../../db/kysely.js";
 import type {
 	ChatAttachments,
 	ChatMessages,
 	ChatThreads,
 	Json,
-} from "../db/types.js";
+} from "../../db/types.js";
 import type {
 	ChatAttachment,
 	ChatAttachmentFormat,

@@ -1,11 +1,11 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 import { createChatService } from "./service.js";
 
 /**
  * Requires running PostgreSQL. Gated behind RUN_INTEGRATION=1.
- * RUN_INTEGRATION=1 npm run test -- server/src/chat/service.test.ts
+ * RUN_INTEGRATION=1 npm run test -- server/src/modules/chat/service.test.ts
  */
 describe.skipIf(!process.env.RUN_INTEGRATION)("chat service", () => {
 	let userAId: number;
