@@ -7,14 +7,14 @@
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../../config.js";
-import type { Tool, ToolEvent } from "../agent/index.js";
 import {
-	countSearchResults,
 	createSafeSystemPrompt,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-	toAnthropicToolDefs,
 } from "../agent/index.js";
+import { toAnthropicToolDefs } from "../agent/index.js";
+import { countSearchResults } from "../agent/index.js";
+import type { Tool, ToolEvent } from "../agent/index.js";
 
 // ---------------------------------------------------------------------------
 // Client + token budgets (mirrors agent/llm.ts — kept in sync)
@@ -77,7 +77,9 @@ export function estimateContextTokens(
 	return Math.ceil(chars / 4);
 }
 
-function countMessageChars(content: Anthropic.MessageParam["content"]): number {
+function countMessageChars(
+	content: Anthropic.MessageParam["content"],
+): number {
 	if (typeof content === "string") return content.length;
 	if (!Array.isArray(content)) return 0;
 	let total = 0;
