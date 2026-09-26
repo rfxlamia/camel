@@ -236,7 +236,9 @@ describe("MyWorkPage", () => {
 		);
 
 		const row = await screen.findByTestId("my-work-row-7-board-AT-17");
-		expect(screen.queryByTestId("my-work-loading")).toBeNull();
+		await waitFor(() =>
+			expect(screen.queryByTestId("my-work-loading")).toBeNull(),
+		);
 		expect(screen.getByText("AT-17")).toBeTruthy();
 		expect(screen.getByText("Fix Atlas sync")).toBeTruthy();
 		expect(within(row).getByText("Atlas")).toBeTruthy();
