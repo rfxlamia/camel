@@ -6,7 +6,7 @@ const ROOT = "client/src";
 const ALLOWLIST = new Set([
 	"client/src/shared/workItemMutations.ts",
 	"client/src/api.ts",
-	"client/src/features/board/BoardContext.tsx",
+	"client/src/features/board/BoardProvider.tsx",
 ]);
 const FORBIDDEN = /\bapi\.(updateWorkItem|updateTrackerItem|updateCard)\b/;
 

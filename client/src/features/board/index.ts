@@ -5,12 +5,14 @@ export {
 	type SaveCardResult,
 	useBoard,
 } from "./BoardContext";
+export { BoardPageSurface } from "./BoardPageSurface";
 export { moveCardToColumn, revertCardMove } from "./boardColumnMoves";
 export { type BoardViewMode } from "./boardViewPrefs";
 export { default as CalendarView } from "./CalendarView";
 export { default as CardAttachments } from "./CardAttachments";
 export { CardBody } from "./CardView";
 export { default as ColumnView } from "./ColumnView";
+export { ContextPanelSurface } from "./ContextPanelSurface";
 export {
 	describeCardEvent,
 	findCardInColumns,
