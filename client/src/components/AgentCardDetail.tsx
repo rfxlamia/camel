@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
+import { useBoard } from "../features/board";
 import {
 	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
 	deriveThinkingForColumn,
 	pickContent,
-} from "../features/agent";
-import { useBoard } from "../features/board";
+} from "../lib/agentStream";
 import { ToolTrace } from "../shared/ToolTraceView";
 import {
 	deriveToolTrace,

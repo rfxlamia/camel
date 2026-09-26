@@ -6,15 +6,11 @@ const mockUseTicketIntakeChat = vi.fn();
 vi.mock("./useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => mockUseTicketIntakeChat(),
 }));
-vi.mock("../features/board", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../features/board")>();
-	return {
-		...actual,
-		useBoard: () => ({
-			ticketIntakeEvents: [],
-		}),
-	};
-});
+vi.mock("../features/board", () => ({
+	useBoard: () => ({
+		ticketIntakeEvents: [],
+	}),
+}));
 vi.mock("./WorkspaceContext", () => ({
 	useWorkspace: () => ({
 		activeWorkspaceId: 1,

@@ -10,11 +10,11 @@ const { mockPublishEvent, mockTestUser } = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("../../db/redis.js", () => ({
+vi.mock("../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
-vi.mock("../../realtime.js", () => ({
+vi.mock("../realtime.js", () => ({
 	publishEvent: mockPublishEvent,
 	clearPresence: vi.fn(),
 	heartbeat: vi.fn(),
@@ -26,8 +26,8 @@ vi.mock("../../realtime.js", () => ({
 	workspacePresenceKey: vi.fn(),
 	workspacePresencePattern: vi.fn(),
 }));
-vi.mock("../../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../../auth.js")>();
+vi.mock("../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {

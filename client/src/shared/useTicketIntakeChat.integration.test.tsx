@@ -8,6 +8,11 @@ import {
 	waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("lottie-react", () => ({
+	default: () => null,
+}));
+
 import type { TicketIntakeDraft } from "../api";
 import type { User } from "../types";
 

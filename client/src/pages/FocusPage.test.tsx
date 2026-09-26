@@ -40,13 +40,9 @@ vi.mock("../context/FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),
 }));
 
-vi.mock("../features/board", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../features/board")>();
-	return {
-		...actual,
-		useBoard: () => mockUseBoard(),
-	};
-});
+vi.mock("../features/board", () => ({
+	useBoard: () => mockUseBoard(),
+}));
 
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
