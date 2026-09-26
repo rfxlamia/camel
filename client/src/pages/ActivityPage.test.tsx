@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ActivityEvent } from "../types";
+
+vi.mock("../features/board", () => ({
+	useBoard: vi.fn(),
+}));
+
 import { describeEvent } from "./ActivityPage";
 
 function makeEvent(patch: Partial<ActivityEvent>): ActivityEvent {

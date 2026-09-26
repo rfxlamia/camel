@@ -16,6 +16,11 @@ import {
 	useNavigate,
 } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("lottie-react", () => ({
+	default: () => null,
+}));
+
 import type { MyWorkItem, MyWorkListResponse } from "../shared/myWorkTypes";
 import { resetMyWorkMutationsForTests } from "../shared/workItemMutations";
 import type { User } from "../types";

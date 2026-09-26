@@ -33,6 +33,10 @@ export const HUB_TO_LEAF_ALLOWLIST = [
 		importer: "client/src/api.ts",
 		target: "client/src/features/my-work/myWork",
 	},
+	{
+		importer: "client/src/features/board/BoardContext.tsx",
+		target: "client/src/lib/agentStream",
+	},
 ];
 
 /**

@@ -39,13 +39,6 @@ vi.mock("../features/board", async (importOriginal) => {
 		CalendarView: () => <div data-testid="calendar-view" />,
 	};
 });
-vi.mock("../features/board/BoardContext", async (importOriginal) => {
-	const actual = (await importOriginal()) as Record<string, unknown>;
-	return {
-		...actual,
-		useBoard: () => mockUseBoard(),
-	};
-});
 vi.mock("../features/board/ListView", () => ({
 	default: () => <div data-testid="list-view" />,
 }));
@@ -59,7 +52,7 @@ vi.mock("../shared/ToastContext", () => ({
 	useShowToast: () => vi.fn(),
 }));
 
-import { BoardPage } from "../features/board";
+import BoardPage from "./BoardPage";
 
 const boardColumns = [
 	{

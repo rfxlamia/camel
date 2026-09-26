@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("lottie-react", () => ({
+	default: () => null,
+}));
+
 import {
 	type AttachmentViewerHarness,
 	advanceRefreshDebounce,

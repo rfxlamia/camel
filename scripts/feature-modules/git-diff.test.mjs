@@ -701,19 +701,19 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected features/agent home client/src/features/agent/${name}`,
 			);
 		}
-			for (const name of [
+		for (const name of [
 			"agentStream.ts",
 			"agentStream.test.ts",
 			"agentBoardSync.ts",
 			"agentBoardSync.test.ts",
 		]) {
 			assert.ok(
-				existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
-				`expected feature home client/src/features/agent/${name}`,
+				existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected wave-2 leftover client/src/lib/${name}`,
 			);
 			assert.ok(
-				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
-				`expected leftover client/src/lib/${name} to be gone`,
+				!existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
+				`expected wave-2 helper ${name} not to be in features/agent/ yet`,
 			);
 		}
 		for (const name of [
@@ -799,25 +799,21 @@ describe("Cycle Map — map data (unit)", () => {
 				'export { default as AgentChatPanel } from "./AgentChatPanel";',
 				'export { default as AgentComposer } from "./AgentComposer";',
 				'export { useAgentChat } from "./useAgentChat";',
-				'export {',
-				'\tderiveColumnFailureMessage,',
-				'\tderiveStreamedOutputForColumn,',
-				'\tderiveThinkingForColumn,',
-				'\tpickContent,',
-				'\tshouldClearOnWorkspaceChange,',
-				'} from "./agentStream";',
-				'export { shouldRefetchBoardOnTerminalEvent } from "./agentBoardSync";',
 			].join("\n"),
-			"agent index must expose the relocated agent public API",
+			"agent index must expose only AgentPage's public API",
 		);
-		assert.match(
+		assert.doesNotMatch(
 			readFileSync(join(repoRoot, "client/vitest.config.ts"), "utf8"),
 			/setupFiles/,
-			"expected a global Vitest setup file for Lottie mocks",
+			"T7 must not add a global Vitest setup file",
 		);
 		assert.ok(
-			existsSync(join(repoRoot, "client/test-setup.ts")),
-			"expected the client Vitest setup file",
+			!existsSync(join(repoRoot, "client/test-setup.ts")),
+			"T9 must not add a global Lottie test setup",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/shared/test-setup.ts")),
+			"T7 must not add a global Lottie test setup",
 		);
 		const importPathRules = readFileSync(
 			join(repoRoot, "scripts/feature-modules/import-paths.mjs"),
@@ -835,7 +831,7 @@ describe("Cycle Map — map data (unit)", () => {
 		}
 	});
 
-	it("Board wave-1 relocates product files into feature modules (no ContextPanel)", () => {
+	it("Board wave-1 relocates product files while preserving legacy orchestrators", () => {
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/features/board/index.ts")),
 			"expected features/board public API client/src/features/board/index.ts",
@@ -857,20 +853,20 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover server/src/routes/board.ts to be gone",
 		);
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/features/board/ContextPanel.tsx")),
-			"expected ContextPanel home client/src/features/board/ContextPanel.tsx",
+			existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
+			"expected ContextPanel to remain under client/src/components/ContextPanel.tsx",
 		);
 		assert.ok(
-			!existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
-			"expected leftover client/src/components/ContextPanel.tsx to be gone",
+			!existsSync(join(repoRoot, "client/src/features/board/ContextPanel.tsx")),
+			"expected ContextPanel not to move into features/board/ yet",
 		);
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/features/board/BoardPage.tsx")),
-			"expected BoardPage home client/src/features/board/BoardPage.tsx",
+			existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
+			"expected BoardPage to remain under client/src/pages/BoardPage.tsx",
 		);
 		assert.ok(
-			!existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
-			"expected leftover client/src/pages/BoardPage.tsx to be gone",
+			!existsSync(join(repoRoot, "client/src/features/board/BoardPage.tsx")),
+			"expected BoardPage not to move into features/board/ yet",
 		);
 		for (const name of [
 			"TrackerTabs.tsx",

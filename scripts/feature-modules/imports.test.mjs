@@ -141,6 +141,25 @@ describe("Cycle A — public API and in-module (unit)", () => {
 		assert.match(violations[0], new RegExp(DEEP_IMPORT_RULE_ID));
 	});
 
+	it("allows the exact BoardContext-to-agentStream legacy leaf edge", () => {
+		const violations = checkImports({
+			filePath: "client/src/features/board/BoardContext.tsx",
+			source: `import { shouldClearOnWorkspaceChange } from "../../lib/agentStream";\n`,
+			map,
+		});
+		assert.deepEqual(violations, []);
+	});
+
+	it("rejects other feature imports into the agentStream legacy leaf", () => {
+		const violations = checkImports({
+			filePath: "client/src/features/board/other.ts",
+			source: `import { shouldClearOnWorkspaceChange } from "../../lib/agentStream";\n`,
+			map,
+		});
+		assert.equal(violations.length, 1);
+		assert.match(violations[0], new RegExp(ONE_WAY_RULE_ID));
+	});
+
 	it("allows board module index import from leftover server routes", () => {
 		for (const [filePath, source] of [
 			[

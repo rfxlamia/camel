@@ -15,6 +15,11 @@ import {
 	useNavigate,
 } from "react-router";
 import { afterEach, beforeEach, expect, vi } from "vitest";
+
+vi.mock("lottie-react", () => ({
+	default: () => null,
+}));
+
 import {
 	configureRequestBoundaryForTests,
 	resetRequestBoundaryForTests,

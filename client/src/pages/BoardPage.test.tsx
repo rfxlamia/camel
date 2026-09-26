@@ -41,13 +41,6 @@ vi.mock("../features/board", async (importOriginal) => {
 	};
 });
 
-vi.mock("../features/board/BoardContext", async (importOriginal) => {
-	const actual = (await importOriginal()) as Record<string, unknown>;
-	return {
-		...actual,
-		useBoard: () => mockUseBoard(),
-	};
-});
 vi.mock("../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
@@ -107,7 +100,7 @@ import type {
 	TrackerVocabulary,
 	WorkspaceMember,
 } from "../types";
-import { BoardPage } from "../features/board";
+import BoardPage from "./BoardPage";
 
 function makeListBoardValue(
 	columns: Column[],
