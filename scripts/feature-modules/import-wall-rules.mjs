@@ -35,11 +35,6 @@ function checkSpecifier({ filePath, specifier, resolved, mapConfig }) {
 
 	const importerFeature = parseImporterFeature(filePath);
 	const target = classifyModuleTarget(resolved);
-	const hubToLeafAllowlisted = HUB_TO_LEAF_ALLOWLIST.some(
-		(entry) =>
-			toPosix(filePath) === entry.importer &&
-			stripExtension(resolved) === stripExtension(entry.target),
-	);
 
 	if (target?.feature && FORBIDDEN_PRODUCT_FEATURES.has(target.feature)) {
 		violations.push(
@@ -53,6 +48,11 @@ function checkSpecifier({ filePath, specifier, resolved, mapConfig }) {
 			importerFeature &&
 			importerFeature.side === target.side &&
 			importerFeature.feature === target.feature;
+		const hubToLeafAllowlisted = HUB_TO_LEAF_ALLOWLIST.some(
+			(entry) =>
+				toPosix(filePath) === entry.importer &&
+				stripExtension(resolved) === stripExtension(entry.target),
+		);
 
 		if (
 			!sameModule &&
@@ -70,10 +70,7 @@ function checkSpecifier({ filePath, specifier, resolved, mapConfig }) {
 	}
 
 	if (importerFeature && isLegacyFeaturePath(resolved)) {
-		if (
-			!isAllowlistedKernelInWaiting(resolved, allowlist) &&
-			!hubToLeafAllowlisted
-		) {
+		if (!isAllowlistedKernelInWaiting(resolved, allowlist)) {
 			violations.push(
 				`${filePath}: ${ONE_WAY_RULE_ID}: module must not import legacy feature file (${specifier})`,
 			);
