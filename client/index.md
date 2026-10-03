@@ -45,7 +45,7 @@ Route-level page components.
 
 Reusable UI components.
 
-- **[ContextPanel.tsx](./src/components/ContextPanel.tsx)** - Card detail panel; route-driven via `/board/card/:cardId`
+- **[ContextPanel.tsx](./src/features/board/ContextPanel.tsx)** - Card detail panel; route-driven via `/board/card/:cardId`
 - **[CardView.tsx](./src/components/CardView.tsx)** - Individual card rendering
 - **[ColumnView.tsx](./src/components/ColumnView.tsx)** - Column container with cards
 - **[AuthPage.tsx](./src/components/AuthPage.tsx)** - Login/register authentication page

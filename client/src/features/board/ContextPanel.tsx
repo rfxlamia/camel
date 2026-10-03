@@ -1,5 +1,6 @@
-import { ContextPanelSurface, useBoard } from "../features/board";
-import { FocusEntryButton } from "../features/focus";
+import { FocusEntryButton } from "../focus";
+import { useBoard } from "./BoardContext";
+import { ContextPanelSurface } from "./ContextPanelSurface";
 
 type FocusEntryButtonProps = {
 	source: "board";

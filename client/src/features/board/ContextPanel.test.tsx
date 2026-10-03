@@ -22,7 +22,7 @@ import type {
 	TrackerPhase,
 	TrackerProject,
 	TrackerVocabulary,
-} from "../types";
+} from "../../types";
 
 const mockPriorities: TrackerVocabulary[] = [
 	{
@@ -79,21 +79,21 @@ const mockProjects: TrackerProject[] = [
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
 const mockShowToast = vi.fn();
-vi.mock("../features/board", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../features/board")>();
+vi.mock("./BoardContext", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./BoardContext")>();
 	return {
 		...actual,
 		useBoard: () => mockUseBoard(),
 	};
 });
-vi.mock("../shared/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
-vi.mock("../shared/ToastContext", () => ({
+vi.mock("../../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
-vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
-vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
+vi.mock("../../shared/LoadingCamel", () => ({ default: () => null }));
+vi.mock("../../shared/SuccessAnimation", () => ({ default: () => null }));
 
 vi.mock("react-router", () => ({
 	useParams: () => ({ cardId: "1" }),
@@ -105,7 +105,7 @@ const getCardActivity = vi.fn();
 const mockGetHistory = vi.fn();
 const listTrackerVocabularies = vi.fn();
 const listTrackerProjects = vi.fn();
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
 	api: {
 		getWorkspaceMembers: (...a: unknown[]) => getWorkspaceMembers(...a),
 		getCardActivity: (...a: unknown[]) => getCardActivity(...a),
@@ -119,7 +119,7 @@ vi.mock("../api", () => ({
 
 const mockOpen = vi.fn();
 const mockClose = vi.fn();
-vi.mock("../shared/useTicketIntakeChat", () => ({
+vi.mock("../../shared/useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => ({
 		open: mockOpen,
 		close: mockClose,

@@ -8,26 +8,26 @@ import {
 	within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Card, CardAttachment, Column } from "../types";
+import type { Card, CardAttachment, Column } from "../../types";
 
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
 const mockShowToast = vi.fn();
-vi.mock("../features/board", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../features/board")>();
+vi.mock("./BoardContext", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./BoardContext")>();
 	return {
 		...actual,
 		useBoard: () => mockUseBoard(),
 	};
 });
-vi.mock("../shared/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
-vi.mock("../shared/ToastContext", () => ({
+vi.mock("../../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
-vi.mock("../shared/LoadingCamel", () => ({ default: () => null }));
-vi.mock("../shared/SuccessAnimation", () => ({ default: () => null }));
+vi.mock("../../shared/LoadingCamel", () => ({ default: () => null }));
+vi.mock("../../shared/SuccessAnimation", () => ({ default: () => null }));
 
 vi.mock("react-router", () => ({
 	useParams: () => ({ cardId: "1" }),
@@ -41,7 +41,7 @@ const deleteCardAttachment = vi.fn();
 const listTrackerVocabularies = vi.fn();
 const listTrackerProjects = vi.fn();
 const getHistory = vi.fn();
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
 	api: {
 		getWorkspaceMembers: (...args: unknown[]) => getWorkspaceMembers(...args),
 		getCardActivity: (...args: unknown[]) => getCardActivity(...args),
@@ -58,14 +58,14 @@ vi.mock("../api", () => ({
 }));
 
 const prepareImageAttachment = vi.fn();
-vi.mock("../shared/imageAttachments", () => ({
+vi.mock("../../shared/imageAttachments", () => ({
 	MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024,
 	MAX_ATTACHMENT_COUNT: 3,
 	prepareImageAttachment: (...args: unknown[]) =>
 		prepareImageAttachment(...args),
 }));
 
-vi.mock("../shared/useTicketIntakeChat", () => ({
+vi.mock("../../shared/useTicketIntakeChat", () => ({
 	useTicketIntakeChat: () => ({
 		open: vi.fn(),
 		close: vi.fn(),
