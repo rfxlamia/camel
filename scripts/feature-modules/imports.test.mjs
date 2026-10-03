@@ -143,7 +143,7 @@ describe("Cycle A — public API and in-module (unit)", () => {
 	it("allows board module index import from leftover server routes", () => {
 		for (const [filePath, source] of [
 			[
-				"server/src/routes/workspaces.ts",
+				"server/src/routes/presence.ts",
 				`import { removeAttachmentPairsBestEffort } from "../modules/board/index.js";\n`,
 			],
 			[
