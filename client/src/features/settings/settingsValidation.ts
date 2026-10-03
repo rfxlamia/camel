@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from "../types";
+import type { WorkspaceRole } from "../../types";
 
 const WORKSPACE_NAME_MAX = 100;
 

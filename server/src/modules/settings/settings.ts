@@ -4,9 +4,9 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type RequestHandler, Router } from "express";
 import { sql } from "kysely";
-import { type DBExecutor, db } from "../db/kysely.js";
-import { validateFileContent } from "../lib/file-validator.js";
-import { publishEvent } from "../realtime.js";
+import { type DBExecutor, db } from "../../db/kysely.js";
+import { validateFileContent } from "../../lib/file-validator.js";
+import { publishEvent } from "../../realtime.js";
 
 export const VALID_SETTING_KEYS = new Set(["board_name", "logo_path"]);
 
@@ -59,7 +59,7 @@ export function generateLogoFilename(mimetype: string): string {
 }
 
 export const UPLOADS_DIR = fileURLToPath(
-	new URL("../../../client/public/uploads", import.meta.url),
+	new URL("../../../../client/public/uploads", import.meta.url),
 );
 mkdirSync(UPLOADS_DIR, { recursive: true });
 

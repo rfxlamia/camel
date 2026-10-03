@@ -12,8 +12,8 @@ import {
 	loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort,
 } from "../modules/board/index.js";
+import { checkCanEditSettings } from "../modules/settings/index.js";
 import { validateWorkspaceName } from "../validators/input-length.js";
-import { checkCanEditSettings } from "./settings.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
 

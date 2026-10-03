@@ -13,7 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 import {
 	batchUpsertSettings,
 	DEFAULT_SETTINGS,
