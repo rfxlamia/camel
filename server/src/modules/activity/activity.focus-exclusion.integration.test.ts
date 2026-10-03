@@ -3,23 +3,16 @@
 //
 // Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
 // Run:
-//   RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/activity.focus-exclusion.integration.test.ts
+//   RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/activity/activity.focus-exclusion.integration.test.ts
 import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import {
-	afterAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
-import { pool } from "../db/pool.js";
-import { createErrorHandler } from "../middleware/error-handler.js";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
+import { pool } from "../../db/pool.js";
+import { createErrorHandler } from "../../middleware/error-handler.js";
 import { activityRouter } from "./activity.js";
 
 const { mockCurrentUser } = vi.hoisted(() => ({
@@ -32,11 +25,11 @@ const { mockCurrentUser } = vi.hoisted(() => ({
 
 const WORKSPACE_ID = 2095;
 
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn().mockResolvedValue(undefined),
 	clearPresence: vi.fn().mockResolvedValue(undefined),
 	heartbeat: vi.fn(),
@@ -172,9 +165,7 @@ integration("GET /activity focus_session exclusion", () => {
 			payload: { cardTitle: "Focus test card" },
 		});
 
-		const res = await request(app).get(
-			`/workspaces/${WORKSPACE_ID}/activity`,
-		);
+		const res = await request(app).get(`/workspaces/${WORKSPACE_ID}/activity`);
 
 		expect(res.status).toBe(200);
 		expect(res.body.events).toHaveLength(1);
@@ -192,9 +183,7 @@ integration("GET /activity focus_session exclusion", () => {
 			});
 		}
 
-		const res = await request(app).get(
-			`/workspaces/${WORKSPACE_ID}/activity`,
-		);
+		const res = await request(app).get(`/workspaces/${WORKSPACE_ID}/activity`);
 
 		expect(res.status).toBe(200);
 		expect(res.body).toEqual({ events: [] });

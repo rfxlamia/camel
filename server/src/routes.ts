@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { myWorkObservability } from "./core/my-work-observability.js";
 import { workItemsRouter } from "./lib/work-items.js";
 import { requireEmailVerified } from "./middleware/email-gate.js";
+import { activityRouter } from "./modules/activity/index.js";
 import {
 	boardRouter,
 	cardAttachmentsRouter,
@@ -32,7 +33,6 @@ import {
 	membersRouter,
 	workspacesRouter,
 } from "./modules/workspaces/index.js";
-import { activityRouter } from "./routes/activity.js";
 import { presenceRouter } from "./routes/presence.js";
 
 // Re-export helpers for backward compatibility

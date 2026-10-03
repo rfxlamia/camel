@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetUnifiedWorkspaceActivity = vi.fn();
 
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: (_req: unknown, _res: unknown, next: () => void) =>
 		next(),
 }));
-vi.mock("../lib/work-item-events.js", () => ({
+vi.mock("../../lib/work-item-events.js", () => ({
 	getUnifiedWorkspaceActivity: (...args: unknown[]) =>
 		mockGetUnifiedWorkspaceActivity(...args),
 }));
@@ -19,8 +19,9 @@ function createApp() {
 	const app = express();
 	app.use(express.json());
 	app.use((req, _res, next) => {
-		(req as express.Request & { workspace?: { workspaceId: number } }).workspace =
-			{ workspaceId: 7 };
+		(
+			req as express.Request & { workspace?: { workspaceId: number } }
+		).workspace = { workspaceId: 7 };
 		next();
 	});
 	app.use("/workspaces/:workspaceId", activityRouter);
@@ -59,9 +60,7 @@ describe("GET /activity/unified", () => {
 	it("caps limit query param at 200", async () => {
 		mockGetUnifiedWorkspaceActivity.mockResolvedValue([]);
 
-		await request(createApp()).get(
-			"/workspaces/7/activity/unified?limit=500",
-		);
+		await request(createApp()).get("/workspaces/7/activity/unified?limit=500");
 
 		expect(mockGetUnifiedWorkspaceActivity).toHaveBeenCalledWith(7, 200);
 	});
