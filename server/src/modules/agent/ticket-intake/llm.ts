@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "../../../config.js";
+import { logger } from "../../../lib/logger.js";
 import { getClient } from "../llm.js";
 import { sanitizeUserInput } from "../prompt-sanitizer.js";
 import type { TicketExtraction, TicketType } from "./completeness.js";
@@ -121,7 +122,7 @@ function parseExtractionText(text: string): TicketExtraction {
 			});
 		}
 
-		console.error("extractTicketFields: failed to parse LLM response:", text);
+		logger.error({ text }, "extractTicketFields: failed to parse LLM response");
 		return empty;
 	}
 }

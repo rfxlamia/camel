@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { logger } from "../lib/logger.js";
 import { createOriginValidator } from "./cors.js";
 
 describe("createOriginValidator", () => {
@@ -64,7 +65,7 @@ describe("createOriginValidator", () => {
 	it("in production with no CORS_ORIGIN, denies all and warns", () => {
 		vi.stubEnv("NODE_ENV", "production");
 		delete process.env.CORS_ORIGIN;
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 		const validator = createOriginValidator();
 		expect(callValidator(validator, "https://app.example.com")).toBe(false);
 		expect(warnSpy).toHaveBeenCalledWith(

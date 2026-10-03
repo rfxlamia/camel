@@ -7,6 +7,7 @@ import { mintCamelSession, SESSION_COOKIE } from "../../auth.js";
 import { config } from "../../config.js";
 import { db } from "../../db/kysely.js";
 import { pool } from "../../db/pool.js";
+import { logger } from "../../lib/logger.js";
 
 // Pure: extract primary verified email from GitHub /user/emails API response.
 export function getGitHubPrimaryEmail(
@@ -152,11 +153,13 @@ export function createOAuthBridgeRouter(): Router {
 
 		// Detect existing camel session
 		const oldToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
-		console.log(
-			"[complete-oauth] baUserId=%d oldToken=%s cookies=%j",
-			baUserId,
-			oldToken ? oldToken.slice(0, 8) + "..." : "NONE",
-			Object.keys(req.cookies ?? {}),
+		logger.debug(
+			{
+				baUserId,
+				hasOldToken: Boolean(oldToken),
+				cookieNames: Object.keys(req.cookies ?? {}),
+			},
+			"complete-oauth",
 		);
 		if (oldToken) {
 			// Wrap session lookup + account transfer in a single transaction to

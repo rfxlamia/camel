@@ -1,3 +1,5 @@
+import { logger } from "../lib/logger.js";
+
 const MAX_SAMPLES = 200;
 export const WORK_ITEMS_LIST_THRESHOLD_MS = 100;
 
@@ -46,14 +48,12 @@ export function isOverThreshold(): boolean {
 }
 
 export function startWorkItemLatencyReporter(): ReturnType<typeof setInterval> {
-	return setInterval(() => {
-		if (!isOverThreshold()) return;
-		const snapshot = getListLatencySnapshot();
-		console.warn(
-			JSON.stringify({
-				event: "work_items_list_latency_threshold",
-				...snapshot,
-			}),
-		);
-	}, 15 * 60 * 1000);
+	return setInterval(
+		() => {
+			if (!isOverThreshold()) return;
+			const snapshot = getListLatencySnapshot();
+			logger.warn(snapshot, "work_items_list_latency_threshold");
+		},
+		15 * 60 * 1000,
+	);
 }

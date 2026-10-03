@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import type { NextFunction, Request, Response } from "express";
+import { logger } from "../lib/logger.js";
 
 export interface TimeoutOptions {
 	timeout?: number;
@@ -45,11 +46,14 @@ export function serverTimeout(
 	server.keepAliveTimeout = keepAliveTimeout;
 	server.headersTimeout = headersTimeout;
 
-	console.log(`[server] Timeout configuration:`, {
-		requestTimeout: `${timeout}ms`,
-		keepAliveTimeout: `${keepAliveTimeout}ms`,
-		headersTimeout: `${headersTimeout}ms`,
-	});
+	logger.info(
+		{
+			requestTimeout: `${timeout}ms`,
+			keepAliveTimeout: `${keepAliveTimeout}ms`,
+			headersTimeout: `${headersTimeout}ms`,
+		},
+		"Timeout configuration",
+	);
 }
 
 export function llmTimeout(timeoutMs: number = 60000) {

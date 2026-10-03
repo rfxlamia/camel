@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rmdir, unlink, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { config } from "../config.js";
+import { logger } from "./logger.js";
 
 export interface AttachmentPair {
 	thumbnailPath: string;
@@ -74,9 +75,9 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 			try {
 				await this.removePair(pair);
 			} catch (cleanupError) {
-				console.error(
+				logger.error(
+					{ err: cleanupError },
 					"Failed to clean up an incomplete attachment pair",
-					cleanupError,
 				);
 			}
 			throw error;
@@ -113,7 +114,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 		);
 		for (const result of results) {
 			if (result.status === "rejected") {
-				console.error("Failed to clean up attachment files", result.reason);
+				logger.error(
+					{ err: result.reason },
+					"Failed to clean up attachment files",
+				);
 			}
 		}
 	}

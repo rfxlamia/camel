@@ -25,13 +25,14 @@ import { requireAuth } from "../../auth.js";
 import { allocateCardIdentity } from "../../core/allocate-card-identity.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
 import { getAttachmentStorage } from "../../lib/attachment-storage.js";
+import { logger } from "../../lib/logger.js";
+import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
 import { llmTimeout } from "../../middleware/timeout.js";
 import { publishEvent as realPublishEvent } from "../../realtime.js";
 import {
 	loadAttachmentPairsForAgentBoard,
 	removeAttachmentPairsBestEffort,
 } from "../board/index.js";
-import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
 import {
 	classifyFollowUpIntent as realClassifyFollowUpIntent,
 	classifyIntent as realClassifyIntent,
@@ -703,25 +704,20 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "intent is required" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.createBoard({
-					workspaceId,
-					userId: req.user!.id,
-					intent: intent.trim(),
+			const result = await service.createBoard({
+				workspaceId,
+				userId: req.user!.id,
+				intent: intent.trim(),
+			});
+
+			if ("status" in result && typeof result.status === "number") {
+				return res.status(result.status).json({
+					error: "message" in result ? result.message : "Request failed",
 				});
-
-				if ("status" in result && typeof result.status === "number") {
-					return res.status(result.status).json({
-						error: "message" in result ? result.message : "Request failed",
-					});
-				}
-				res.status(201).json(result);
-			} catch (err) {
-				console.error("agent createBoard error:", err);
-				res.status(500).json({ error: "Failed to create board" });
 			}
+			res.status(201).json(result);
 		},
 	);
 
@@ -742,37 +738,32 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "message or action is required" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result =
-					action.kind === "confirm"
-						? await service.confirmRegenerateBoard({
+			const result =
+				action.kind === "confirm"
+					? await service.confirmRegenerateBoard({
+							boardId,
+							userId: req.user!.id,
+							workspaceId,
+						})
+					: action.kind === "cancel"
+						? await service.cancelRegenerateBoard({
 								boardId,
 								userId: req.user!.id,
 								workspaceId,
 							})
-						: action.kind === "cancel"
-							? await service.cancelRegenerateBoard({
-									boardId,
-									userId: req.user!.id,
-									workspaceId,
-								})
-							: await service.sendMessage({
-									boardId,
-									userId: req.user!.id,
-									workspaceId,
-									message: action.message,
-								});
+						: await service.sendMessage({
+								boardId,
+								userId: req.user!.id,
+								workspaceId,
+								message: action.message,
+							});
 
-				if ("status" in result && typeof result.status === "number") {
-					return res.status(result.status).json(result);
-				}
-				res.json(result);
-			} catch (err) {
-				console.error("agent sendMessage error:", err);
-				res.status(500).json({ error: "Failed to send message" });
+			if ("status" in result && typeof result.status === "number") {
+				return res.status(result.status).json(result);
 			}
+			res.json(result);
 		},
 	);
 
@@ -787,29 +778,24 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.approveBoard({
-					boardId,
-					userId: req.user!.id,
-					workspaceId,
-				});
+			const result = await service.approveBoard({
+				boardId,
+				userId: req.user!.id,
+				workspaceId,
+			});
 
-				if (result && "status" in result && typeof result.status === "number") {
-					return res.status(result.status).json(result);
-				}
-
-				// Fire-and-forget execution — client receives progress via SSE
-				service.runPipeline({ boardId, workspaceId }).catch((err) => {
-					console.error("agent runPipeline error:", err);
-				});
-
-				res.json({ ok: true });
-			} catch (err) {
-				console.error("agent approveBoard error:", err);
-				res.status(500).json({ error: "Failed to approve board" });
+			if (result && "status" in result && typeof result.status === "number") {
+				return res.status(result.status).json(result);
 			}
+
+			// Fire-and-forget execution — client receives progress via SSE
+			service.runPipeline({ boardId, workspaceId }).catch((err) => {
+				logger.error({ err, boardId, workspaceId }, "agent runPipeline failed");
+			});
+
+			res.json({ ok: true });
 		},
 	);
 
@@ -825,15 +811,10 @@ export function createAgentRouter(
 					.json({ error: "workspaceId must be an integer" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const boards = await service.getBoards({ workspaceId });
-				res.json(boards);
-			} catch (err) {
-				console.error("agent getBoards error:", err);
-				res.status(500).json({ error: "Failed to list boards" });
-			}
+			const boards = await service.getBoards({ workspaceId });
+			res.json(boards);
 		},
 	);
 
@@ -848,32 +829,27 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.getBoardById({ boardId, workspaceId });
-				if (
-					!result ||
-					("status" in result && typeof result.status === "number")
-				) {
-					const statusCode =
-						result && "status" in result && typeof result.status === "number"
-							? result.status
-							: 404;
-					return res.status(statusCode).json(result ?? { error: "Not found" });
-				}
-
-				const columns = await loadAgentBoardColumns(db, boardId, workspaceId);
-
-				// Fetch stored tool trace (read-only replay)
-				const toolTrace = await getToolTrace(db, boardId);
-				const conversations = await selectConversationHistory(db, boardId);
-
-				res.json({ ...result, columns, toolTrace, conversations });
-			} catch (err) {
-				console.error("agent getBoardById error:", err);
-				res.status(500).json({ error: "Failed to get board" });
+			const result = await service.getBoardById({ boardId, workspaceId });
+			if (
+				!result ||
+				("status" in result && typeof result.status === "number")
+			) {
+				const statusCode =
+					result && "status" in result && typeof result.status === "number"
+						? result.status
+						: 404;
+				return res.status(statusCode).json(result ?? { error: "Not found" });
 			}
+
+			const columns = await loadAgentBoardColumns(db, boardId, workspaceId);
+
+			// Fetch stored tool trace (read-only replay)
+			const toolTrace = await getToolTrace(db, boardId);
+			const conversations = await selectConversationHistory(db, boardId);
+
+			res.json({ ...result, columns, toolTrace, conversations });
 		},
 	);
 
@@ -889,23 +865,18 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.getCardOutput({
-					boardId,
-					columnSlug,
-					workspaceId,
-				});
+			const result = await service.getCardOutput({
+				boardId,
+				columnSlug,
+				workspaceId,
+			});
 
-				if ("status" in result && typeof result.status === "number") {
-					return res.status(result.status).json(result);
-				}
-				res.json(result);
-			} catch (err) {
-				console.error("agent getCardOutput error:", err);
-				res.status(500).json({ error: "Failed to get output" });
+			if ("status" in result && typeof result.status === "number") {
+				return res.status(result.status).json(result);
 			}
+			res.json(result);
 		},
 	);
 
@@ -920,19 +891,14 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.getArtifact({ boardId, workspaceId });
+			const result = await service.getArtifact({ boardId, workspaceId });
 
-				if ("status" in result && typeof result.status === "number") {
-					return res.status(result.status).json(result);
-				}
-				res.json(result);
-			} catch (err) {
-				console.error("agent getArtifact error:", err);
-				res.status(500).json({ error: "Failed to get artifact" });
+			if ("status" in result && typeof result.status === "number") {
+				return res.status(result.status).json(result);
 			}
+			res.json(result);
 		},
 	);
 
@@ -947,24 +913,19 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			try {
-				if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
 
-				const result = await service.getArtifact({ boardId, workspaceId });
+			const result = await service.getArtifact({ boardId, workspaceId });
 
-				if ("status" in result) {
-					return res.status(result.status).json(result);
-				}
-
-				const { headers, body } = buildArtifactDownload({
-					filename: result.filename,
-					content: result.content,
-				});
-				res.set(headers).send(body);
-			} catch (err) {
-				console.error("agent downloadArtifact error:", err);
-				res.status(500).json({ error: "Failed to download artifact" });
+			if ("status" in result) {
+				return res.status(result.status).json(result);
 			}
+
+			const { headers, body } = buildArtifactDownload({
+				filename: result.filename,
+				content: result.content,
+			});
+			res.set(headers).send(body);
 		},
 	);
 

@@ -10,10 +10,11 @@ import {
 import rateLimit from "express-rate-limit";
 import { sql } from "kysely";
 import { RedisStore } from "rate-limit-redis";
+import { seedTrackerVocabulary } from "./core/tracker-vocabulary-seed.js";
 import { db } from "./db/kysely.js";
 import { getRedisClient } from "./db/redis.js";
-import { seedTrackerVocabulary } from "./core/tracker-vocabulary-seed.js";
 import { InMemoryRateLimiter } from "./lib/in-memory-rate-limiter.js";
+import { logger } from "./lib/logger.js";
 import {
 	validateDisplayName,
 	validateUsername,
@@ -297,7 +298,7 @@ export async function rotateSessionToken(
 			return newToken;
 		});
 	} catch (err) {
-		console.error("[auth] session rotation failed:", err);
+		logger.error({ err }, "auth: session rotation failed");
 		return null;
 	}
 }
@@ -314,11 +315,11 @@ export async function cleanupExpiredSessions(): Promise<number> {
 			.executeTakeFirst();
 		const count = Number(result.numDeletedRows ?? 0);
 		if (count > 0) {
-			console.log(`[auth] cleaned up ${count} expired session(s)`);
+			logger.info({ count }, "auth: cleaned up expired sessions");
 		}
 		return count;
 	} catch (err) {
-		console.error("[auth] failed to cleanup expired sessions:", err);
+		logger.error({ err }, "auth: failed to cleanup expired sessions");
 		return 0;
 	}
 }
@@ -335,7 +336,13 @@ export async function requireAuth(
 		const row = await db
 			.selectFrom("sessions as s")
 			.innerJoin("users as u", "u.id", "s.user_id")
-			.select(["u.id", "u.username", "u.display_name", "u.email", "u.email_verified"])
+			.select([
+				"u.id",
+				"u.username",
+				"u.display_name",
+				"u.email",
+				"u.email_verified",
+			])
 			.where("s.token", "=", token)
 			.where("s.expires_at", ">", sql<Date>`now()`)
 			.executeTakeFirst();
@@ -512,7 +519,8 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 
 	auth.post("/logout", async (req, res) => {
 		const token = req.cookies?.[SESSION_COOKIE];
-		if (token) await db.deleteFrom("sessions").where("token", "=", token).execute();
+		if (token)
+			await db.deleteFrom("sessions").where("token", "=", token).execute();
 		res.clearCookie(SESSION_COOKIE, { path: "/" });
 		res.status(204).end();
 	});

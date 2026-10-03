@@ -7,6 +7,7 @@ import {
 	normalizeAttachmentUploadError,
 } from "../../lib/attachment-upload.js";
 import { validateAttachmentPairs } from "../../lib/attachment-validation.js";
+import { logger } from "../../lib/logger.js";
 import { publishEvent } from "../../realtime.js";
 import { mapAttachmentResponse } from "./attachment-response.js";
 import {
@@ -112,7 +113,7 @@ function sendExistingCardUploadError(
 	}
 	if (statusCode(error) === 404)
 		return res.status(404).json({ error: "Not found" });
-	console.error("Failed to add card attachments", error);
+	logger.error({ err: error }, "Failed to add card attachments");
 	return res.status(500).json({ error: "Unable to add card attachments" });
 }
 
@@ -136,7 +137,7 @@ async function publishExistingAttachments(
 				},
 			});
 		} catch (error) {
-			console.error("Failed to publish attachment event:", error);
+			logger.error({ err: error }, "Failed to publish attachment event");
 		}
 	}
 }

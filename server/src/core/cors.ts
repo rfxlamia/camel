@@ -1,3 +1,5 @@
+import { logger } from "../lib/logger.js";
+
 /**
  * CORS origin validation — exact-string allowlist parsed from CORS_ORIGIN env var.
  *
@@ -29,8 +31,8 @@ export function createOriginValidator() {
 	let allowed = parseOrigins();
 
 	if (isProduction && allowed.size === 0 && !warned) {
-		console.warn(
-			"[CORS] CORS_ORIGIN is not set in production — all cross-origin requests will be denied. " +
+		logger.warn(
+			"CORS_ORIGIN is not set in production — all cross-origin requests will be denied. " +
 				"Set CORS_ORIGIN to a comma-separated list of allowed origins.",
 		);
 		warned = true;

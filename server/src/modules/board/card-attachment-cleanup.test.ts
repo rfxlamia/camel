@@ -3,6 +3,7 @@ import type {
 	AttachmentPair,
 	AttachmentStorage,
 } from "../../lib/attachment-storage.js";
+import { logger } from "../../lib/logger.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 
 function pair(index: number): AttachmentPair {
@@ -32,7 +33,7 @@ describe("removeAttachmentPairsBestEffort", () => {
 			}
 		});
 		const storage = { removePair } as unknown as AttachmentStorage;
-		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(logger, "error").mockImplementation(() => {});
 
 		await removeAttachmentPairsBestEffort(
 			storage,
@@ -42,9 +43,9 @@ describe("removeAttachmentPairsBestEffort", () => {
 		expect(maximumActive).toBeLessThanOrEqual(8);
 		expect(calls).toHaveLength(9);
 		expect(calls.at(-1)).toBe("8/thumbnail");
-		expect(console.error).toHaveBeenCalledWith(
+		expect(logger.error).toHaveBeenCalledWith(
+			{ err: expect.any(Error) },
 			"Failed to clean up attachment files",
-			expect.any(Error),
 		);
 	});
 });

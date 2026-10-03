@@ -13,12 +13,13 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import express, { type Request, Router } from "express";
+import { requireAuth } from "../../auth.js";
+import { db } from "../../db/kysely.js";
+import type { Json } from "../../db/types.js";
+import { lookupMembership } from "../../lib/helpers.js";
+import { logger } from "../../lib/logger.js";
 import type { ToolEvent } from "../agent/index.js";
 import { checkChatLimit } from "../agent/index.js";
-import { requireAuth } from "../../auth.js";
-import type { Json } from "../../db/types.js";
-import { db } from "../../db/kysely.js";
-import { lookupMembership } from "../../lib/helpers.js";
 import { estimateContextTokens, runChatTurn } from "./run-chat-turn.js";
 import { createChatService } from "./service.js";
 import { setStreamHeaders, writeStreamEvent } from "./stream-protocol.js";
@@ -85,7 +86,9 @@ function getUserId(req: Request): number {
 	throw new Error("unauthenticated");
 }
 
-function buildAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageParam[] {
+function buildAnthropicMessages(
+	messages: ChatMessage[],
+): Anthropic.MessageParam[] {
 	return messages
 		.filter((m) => m.role === "user" || m.role === "assistant")
 		.map((m) => ({
@@ -166,23 +169,13 @@ export function createChatRouter(): Router {
 	router.use(express.json());
 
 	router.get("/api/chat/threads", requireAuth, async (req, res) => {
-		try {
-			const threads = await service.listThreads(getUserId(req));
-			res.json(threads);
-		} catch (err) {
-			console.error("chat listThreads error:", err);
-			res.status(500).json({ error: "Failed to list threads" });
-		}
+		const threads = await service.listThreads(getUserId(req));
+		res.json(threads);
 	});
 
 	router.post("/api/chat/threads", requireAuth, async (req, res) => {
-		try {
-			const thread = await service.createThread(getUserId(req));
-			res.json(thread);
-		} catch (err) {
-			console.error("chat createThread error:", err);
-			res.status(500).json({ error: "Failed to create thread" });
-		}
+		const thread = await service.createThread(getUserId(req));
+		res.json(thread);
 	});
 
 	router.get("/api/chat/threads/:id", requireAuth, async (req, res) => {
@@ -191,28 +184,23 @@ export function createChatRouter(): Router {
 			return res.status(400).json({ error: "thread id must be an integer" });
 		}
 
-		try {
-			const thread = await service.getThread(getUserId(req), threadId);
-			if (!thread) {
-				return res.status(404).json({ error: "Not found" });
-			}
-
-			const messages = await service.getMessages(threadId);
-			const attachmentsByMessage = await service.getAttachmentsForMessages(
-				messages.map((m) => m.id),
-			);
-
-			res.json({
-				...thread,
-				messages: messages.map((m) => ({
-					...m,
-					attachments: attachmentsByMessage.get(m.id) ?? [],
-				})),
-			});
-		} catch (err) {
-			console.error("chat getThread error:", err);
-			res.status(500).json({ error: "Failed to load thread" });
+		const thread = await service.getThread(getUserId(req), threadId);
+		if (!thread) {
+			return res.status(404).json({ error: "Not found" });
 		}
+
+		const messages = await service.getMessages(threadId);
+		const attachmentsByMessage = await service.getAttachmentsForMessages(
+			messages.map((m) => m.id),
+		);
+
+		res.json({
+			...thread,
+			messages: messages.map((m) => ({
+				...m,
+				attachments: attachmentsByMessage.get(m.id) ?? [],
+			})),
+		});
 	});
 
 	router.patch("/api/chat/threads/:id", requireAuth, async (req, res) => {
@@ -226,20 +214,15 @@ export function createChatRouter(): Router {
 			return res.status(400).json({ error: "title is required" });
 		}
 
-		try {
-			const updated = await service.renameThread(
-				getUserId(req),
-				threadId,
-				title.trim(),
-			);
-			if (!updated) {
-				return res.status(404).json({ error: "Not found" });
-			}
-			res.json(updated);
-		} catch (err) {
-			console.error("chat renameThread error:", err);
-			res.status(500).json({ error: "Failed to rename thread" });
+		const updated = await service.renameThread(
+			getUserId(req),
+			threadId,
+			title.trim(),
+		);
+		if (!updated) {
+			return res.status(404).json({ error: "Not found" });
 		}
+		res.json(updated);
 	});
 
 	router.delete("/api/chat/threads/:id", requireAuth, async (req, res) => {
@@ -248,43 +231,35 @@ export function createChatRouter(): Router {
 			return res.status(400).json({ error: "thread id must be an integer" });
 		}
 
-		try {
-			const deleted = await service.deleteThread(getUserId(req), threadId);
-			if (!deleted) {
-				return res.status(404).json({ error: "Not found" });
-			}
-			res.status(204).send();
-		} catch (err) {
-			console.error("chat deleteThread error:", err);
-			res.status(500).json({ error: "Failed to delete thread" });
+		const deleted = await service.deleteThread(getUserId(req), threadId);
+		if (!deleted) {
+			return res.status(404).json({ error: "Not found" });
 		}
+		res.status(204).send();
 	});
 
 	router.get("/api/chat/attachments/:id", requireAuth, async (req, res) => {
 		const attachmentId = Number(req.params.id);
 		if (!Number.isInteger(attachmentId)) {
-			return res.status(400).json({ error: "attachment id must be an integer" });
+			return res
+				.status(400)
+				.json({ error: "attachment id must be an integer" });
 		}
 
-		try {
-			const attachment = await service.getAttachment(
-				getUserId(req),
-				attachmentId,
-			);
-			if (!attachment) {
-				return res.status(404).json({ error: "Not found" });
-			}
-
-			res.setHeader(
-				"Content-Disposition",
-				`attachment; filename="${attachment.filename}"`,
-			);
-			res.setHeader("Content-Type", attachmentContentType(attachment.format));
-			res.send(attachment.content);
-		} catch (err) {
-			console.error("chat getAttachment error:", err);
-			res.status(500).json({ error: "Failed to download attachment" });
+		const attachment = await service.getAttachment(
+			getUserId(req),
+			attachmentId,
+		);
+		if (!attachment) {
+			return res.status(404).json({ error: "Not found" });
 		}
+
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="${attachment.filename}"`,
+		);
+		res.setHeader("Content-Type", attachmentContentType(attachment.format));
+		res.send(attachment.content);
 	});
 
 	router.post(
@@ -444,8 +419,7 @@ export function createChatRouter(): Router {
 					});
 
 					const firstUserMessage =
-						userMessageText ??
-						history.find((m) => m.role === "user")?.content;
+						userMessageText ?? history.find((m) => m.role === "user")?.content;
 					if (firstUserMessage && thread.title === "Untitled") {
 						await service.autoTitleThread(userId, threadId, firstUserMessage);
 					}
@@ -453,7 +427,7 @@ export function createChatRouter(): Router {
 					writeStreamEvent(res, { type: "done", messageId: updated.id });
 					res.end();
 				} catch (err) {
-					console.error("chat message stream error:", err);
+					logger.error({ err, threadId }, "chat message stream failed");
 					if (assistantRowId !== undefined) {
 						await service.deleteMessage(assistantRowId);
 					}
@@ -474,7 +448,7 @@ export function createChatRouter(): Router {
 					}
 				}
 			} catch (err) {
-				console.error("chat postMessage error:", err);
+				logger.error({ err, threadId }, "chat postMessage failed");
 				if (!res.headersSent) {
 					res.status(500).json({ error: "Failed to send message" });
 				}

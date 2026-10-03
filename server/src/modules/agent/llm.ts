@@ -14,6 +14,8 @@
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../../config.js";
+import { logger } from "../../lib/logger.js";
+import { runChatTurn } from "../chat/index.js";
 import {
 	detectPromptInjection,
 	escapeXml,
@@ -22,7 +24,6 @@ import {
 } from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
 import type { Tool, ToolEvent } from "./tools/types.js";
-import { runChatTurn } from "../chat/index.js";
 
 // ---------------------------------------------------------------------------
 // Client singleton — lazy-initialized on first call
@@ -109,9 +110,9 @@ async function classifyIntentOnce(
 ): Promise<ClassifyResult> {
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(intent)) {
-		console.warn(
-			"classifyIntentOnce: prompt injection detected, intent length:",
-			intent.length,
+		logger.warn(
+			{ intentLength: intent.length },
+			"classifyIntentOnce: prompt injection detected",
 		);
 		return {
 			templateId: null,
@@ -182,7 +183,7 @@ async function classifyIntentOnce(
 		}
 
 		// All parsing strategies failed — return null so retry wrapper can try again
-		console.error("classifyIntentOnce: failed to parse LLM response:", text);
+		logger.error({ text }, "classifyIntentOnce: failed to parse LLM response");
 		return { templateId: null, explanation: "" };
 	}
 }
@@ -205,14 +206,16 @@ export async function classifyIntent(intent: string): Promise<ClassifyResult> {
 
 		// Parse failure (explanation is empty) — retry if attempts remain
 		if (attempt < CLASSIFY_MAX_ATTEMPTS) {
-			console.warn(
-				`classifyIntent: attempt ${attempt} parse failed, retrying (${CLASSIFY_MAX_ATTEMPTS - attempt} left)...`,
+			logger.warn(
+				{ attempt, attemptsLeft: CLASSIFY_MAX_ATTEMPTS - attempt },
+				"classifyIntent: parse failed, retrying",
 			);
 		}
 	}
 
-	console.error(
-		`classifyIntent: all ${CLASSIFY_MAX_ATTEMPTS} attempts failed for intent length: ${intent.length}`,
+	logger.error(
+		{ attempts: CLASSIFY_MAX_ATTEMPTS, intentLength: intent.length },
+		"classifyIntent: all attempts failed",
 	);
 	return {
 		templateId: null,
@@ -406,9 +409,9 @@ async function classifyFollowUpIntentOnce(
 ): Promise<FollowUpResult | null> {
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(userMessage)) {
-		console.warn(
-			"classifyFollowUpIntentOnce: prompt injection detected, message length:",
-			userMessage.length,
+		logger.warn(
+			{ messageLength: userMessage.length },
+			"classifyFollowUpIntentOnce: prompt injection detected",
 		);
 		// Return a safe fallback instead of processing potentially malicious input
 		return {
@@ -489,9 +492,9 @@ async function classifyFollowUpIntentOnce(
 		}
 	}
 
-	console.error(
-		"classifyFollowUpIntentOnce: failed to parse LLM response:",
-		text,
+	logger.error(
+		{ text },
+		"classifyFollowUpIntentOnce: failed to parse LLM response",
 	);
 	return null;
 }
@@ -524,14 +527,16 @@ export async function classifyFollowUpIntent(
 		}
 
 		if (attempt < FOLLOW_UP_MAX_ATTEMPTS) {
-			console.warn(
-				`classifyFollowUpIntent: attempt ${attempt} parse failed, retrying (${FOLLOW_UP_MAX_ATTEMPTS - attempt} left)...`,
+			logger.warn(
+				{ attempt, attemptsLeft: FOLLOW_UP_MAX_ATTEMPTS - attempt },
+				"classifyFollowUpIntent: parse failed, retrying",
 			);
 		}
 	}
 
-	console.error(
-		`classifyFollowUpIntent: all ${FOLLOW_UP_MAX_ATTEMPTS} attempts failed for message length: ${userMessage.length}`,
+	logger.error(
+		{ attempts: FOLLOW_UP_MAX_ATTEMPTS, messageLength: userMessage.length },
+		"classifyFollowUpIntent: all attempts failed",
 	);
 	return {
 		intent: "OFF_TOPIC",
@@ -563,9 +568,9 @@ export async function detectReportPeriod(
 
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(intent)) {
-		console.warn(
-			"detectReportPeriod: prompt injection detected, intent length:",
-			intent.length,
+		logger.warn(
+			{ intentLength: intent.length },
+			"detectReportPeriod: prompt injection detected",
 		);
 		return {
 			hasPeriod: false,
@@ -616,16 +621,16 @@ export async function generateClarificationQuestion(
 ): Promise<string> {
 	// Security: Check for prompt injection attempts
 	if (detectPromptInjection(intent)) {
-		console.warn(
-			"generateClarificationQuestion: prompt injection detected in intent, length:",
-			intent.length,
+		logger.warn(
+			{ intentLength: intent.length },
+			"generateClarificationQuestion: prompt injection detected in intent",
 		);
 		return "I could not process your request. Could you rephrase your question?";
 	}
 	if (detectPromptInjection(feedback)) {
-		console.warn(
-			"generateClarificationQuestion: prompt injection detected in feedback, length:",
-			feedback.length,
+		logger.warn(
+			{ feedbackLength: feedback.length },
+			"generateClarificationQuestion: prompt injection detected in feedback",
 		);
 		return "I could not process your request. Could you rephrase your question?";
 	}
@@ -685,9 +690,9 @@ export async function executeCard(
 	// Blocking here would reintroduce the false-positive DoS risk that the heuristic
 	// is designed to avoid. See also: prompt-sanitizer.ts for multilingual coverage.
 	if (detectPromptInjection(intent)) {
-		console.warn(
-			"executeCard: prompt injection detected in intent, length:",
-			intent.length,
+		logger.warn(
+			{ intentLength: intent.length },
+			"executeCard: prompt injection detected in intent",
 		);
 	}
 

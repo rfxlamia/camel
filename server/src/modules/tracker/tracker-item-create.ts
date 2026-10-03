@@ -4,7 +4,7 @@ import type { AuthUser } from "../../auth.js";
 import { positionBetween } from "../../core/position.js";
 import { derivePrefix, formatKey } from "../../core/tracker-key.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
-import { publishEvent } from "../../realtime.js";
+import { logger } from "../../lib/logger.js";
 import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
 import { parseDateRange } from "../../lib/tracker-item-parsers.js";
@@ -19,6 +19,7 @@ import {
 	legacyTrackerItemResponse,
 } from "../../lib/work-item-response.js";
 import { lockTaskCreateReferences } from "../../lib/workspace-mutation-lock.js";
+import { publishEvent } from "../../realtime.js";
 
 async function workspacePrefix(
 	dbExec: DBExecutor,
@@ -107,15 +108,23 @@ function lockReferences(body: Record<string, unknown>, actorId: number) {
 	return {
 		actorId,
 		assigneeIds: integerIds(body.assigneeIds),
-		vocabularyIds: [body.statusId, body.priorityId, ...integerIds(body.labelIds)].filter(
-			(id): id is number => Number.isInteger(id),
-		),
-		statusId: Number.isInteger(body.statusId) ? (body.statusId as number) : undefined,
+		vocabularyIds: [
+			body.statusId,
+			body.priorityId,
+			...integerIds(body.labelIds),
+		].filter((id): id is number => Number.isInteger(id)),
+		statusId: Number.isInteger(body.statusId)
+			? (body.statusId as number)
+			: undefined,
 		priorityId: Number.isInteger(body.priorityId)
 			? (body.priorityId as number)
 			: undefined,
-		projectId: Number.isInteger(body.projectId) ? (body.projectId as number) : undefined,
-		phaseId: Number.isInteger(body.phaseId) ? (body.phaseId as number) : undefined,
+		projectId: Number.isInteger(body.projectId)
+			? (body.projectId as number)
+			: undefined,
+		phaseId: Number.isInteger(body.phaseId)
+			? (body.phaseId as number)
+			: undefined,
 	};
 }
 
@@ -245,13 +254,19 @@ async function hydrateCreatedItem(
 	if ((metadata.labelIds ?? []).length > 0) {
 		await syncLabels(trx, created.id, metadata.labelIds!);
 	}
-	await recordTrackerActivity(trx, input.actor, input.workspaceId, "tracker_item_created", {
-		trackerItemId: created.id,
-		payload: {
-			title: input.title,
-			key: formatKey(input.prefix, created.keyNumber),
+	await recordTrackerActivity(
+		trx,
+		input.actor,
+		input.workspaceId,
+		"tracker_item_created",
+		{
+			trackerItemId: created.id,
+			payload: {
+				title: input.title,
+				key: formatKey(input.prefix, created.keyNumber),
+			},
 		},
-	});
+	);
 	const row = await findTrackerItemByKeyNumber(
 		trx,
 		input.workspaceId,
@@ -268,7 +283,9 @@ async function hydrateCreatedItem(
 	return item as Record<string, unknown>;
 }
 
-async function createInTransaction(input: CreateInput): Promise<CreatedResult | InvalidResult> {
+async function createInTransaction(
+	input: CreateInput,
+): Promise<CreatedResult | InvalidResult> {
 	return db.transaction().execute(async (trx) => {
 		const metadata = await validateCreate(trx, input);
 		if ("kind" in metadata) return metadata;
@@ -313,12 +330,14 @@ export async function createTrackerItemHandler(req: Request, res: Response) {
 			trackerItemId: result.id,
 		});
 	} catch (error) {
-		console.error("Failed to publish tracker.created event:", error);
+		logger.error({ err: error }, "Failed to publish tracker.created event");
 	}
-	return res.status(201).json(
-		legacyTrackerItemResponse(
-			result.item,
-			Boolean(req.canonicalWorkItemsRoute),
-		),
-	);
+	return res
+		.status(201)
+		.json(
+			legacyTrackerItemResponse(
+				result.item,
+				Boolean(req.canonicalWorkItemsRoute),
+			),
+		);
 }

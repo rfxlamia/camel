@@ -1,19 +1,23 @@
-import { Router, type Request, type Response } from "express";
+import { type Request, type Response, Router } from "express";
 import type { AuthUser } from "../../../auth.js";
 import { requireAuth } from "../../../auth.js";
+import { db } from "../../../db/kysely.js";
+import { lookupMembership, recordActivity } from "../../../lib/helpers.js";
+import { logger } from "../../../lib/logger.js";
+import { publishEvent } from "../../../realtime.js";
 import {
 	checkCompleteness,
 	inferTypeFromClassifierAnswer,
 	type TicketExtraction,
 } from "./completeness.js";
 import { getTicketHistory } from "./history.js";
-import { extractTicketFields } from "./llm.js";
 import {
 	createLinearComment,
 	createLinearIssue,
 	getLabelId,
 	isTicketIntakeConfigured,
 } from "./linear-client.js";
+import { extractTicketFields } from "./llm.js";
 import {
 	checkChatLimit,
 	peekChatLimit,
@@ -21,9 +25,6 @@ import {
 	recordSubmitSuccess,
 } from "./rate-limits.js";
 import { executeWithRetry } from "./retry.js";
-import { db } from "../../../db/kysely.js";
-import { publishEvent } from "../../../realtime.js";
-import { lookupMembership, recordActivity } from "../../../lib/helpers.js";
 
 export const ticketIntakeRouter = Router();
 
@@ -134,7 +135,7 @@ async function runSubmitInBackground(
 				body: buildCommentBody(user, body.source, body.cardId),
 			});
 		} catch (err) {
-			console.error("createLinearComment failed:", err);
+			logger.error({ err }, "createLinearComment failed");
 		}
 
 		await publishEvent(workspaceId, {
@@ -224,9 +225,7 @@ ticketIntakeRouter.get(
 	async (req, res) => {
 		const workspaceId = Number(req.params.workspaceId);
 		if (!Number.isInteger(workspaceId)) {
-			return res
-				.status(400)
-				.json({ error: "workspaceId must be an integer" });
+			return res.status(400).json({ error: "workspaceId must be an integer" });
 		}
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
@@ -249,16 +248,12 @@ ticketIntakeRouter.post(
 	requireAuth,
 	async (req, res) => {
 		if (!isTicketIntakeConfigured()) {
-			return res
-				.status(503)
-				.json({ error: "Ticket intake is not configured" });
+			return res.status(503).json({ error: "Ticket intake is not configured" });
 		}
 
 		const workspaceId = Number(req.params.workspaceId);
 		if (!Number.isInteger(workspaceId)) {
-			return res
-				.status(400)
-				.json({ error: "workspaceId must be an integer" });
+			return res.status(400).json({ error: "workspaceId must be an integer" });
 		}
 
 		const { message, isFirstTurn, autoError, conversationHistory } =
@@ -336,9 +331,7 @@ ticketIntakeRouter.get(
 	async (req, res) => {
 		const workspaceId = Number(req.params.workspaceId);
 		if (!Number.isInteger(workspaceId)) {
-			return res
-				.status(400)
-				.json({ error: "workspaceId must be an integer" });
+			return res.status(400).json({ error: "workspaceId must be an integer" });
 		}
 
 		const cardId = Number(req.query.cardId);

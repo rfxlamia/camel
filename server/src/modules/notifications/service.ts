@@ -1,5 +1,6 @@
 import { db } from "../../db/kysely.js";
 import { type DomainEvent, domainBus, EVENTS } from "../../events.js";
+import { logger } from "../../lib/logger.js";
 
 type PushFn = (
 	userId: number,
@@ -39,9 +40,9 @@ async function insertNotification(params: {
 			.executeTakeFirst();
 		return row ?? null;
 	} catch (err) {
-		console.error(
-			`Failed to insert notification (type=${params.type}, user=${params.userId}):`,
-			err,
+		logger.error(
+			{ err, type: params.type, userId: params.userId },
+			"Failed to insert notification",
 		);
 		return null;
 	}
@@ -157,9 +158,9 @@ function onCardDeleted(event: DomainEvent): void {
 		.where("card_id", "=", cardId)
 		.execute()
 		.catch((err) => {
-			console.error(
-				`Failed to mark notifications source_deleted for card ${cardId}:`,
-				err,
+			logger.error(
+				{ err, cardId },
+				"Failed to mark notifications source_deleted",
 			);
 		});
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { logger } from "../lib/logger.js";
 import {
 	createErrorHandler,
 	sanitizeError,
@@ -81,9 +82,7 @@ describe("Error Sanitization", () => {
 		});
 
 		it("should log detailed errors server-side", () => {
-			const consoleSpy = vi
-				.spyOn(console, "error")
-				.mockImplementation(() => {});
+			const logSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
 			const handler = createErrorHandler();
 			const req = { get: vi.fn() } as any;
 			const res = {
@@ -95,8 +94,11 @@ describe("Error Sanitization", () => {
 			const error = new Error("Sensitive database error");
 			handler(error, req, res, next);
 
-			expect(consoleSpy).toHaveBeenCalled();
-			consoleSpy.mockRestore();
+			expect(logSpy).toHaveBeenCalledWith(
+				expect.objectContaining({ err: error }),
+				"request failed",
+			);
+			logSpy.mockRestore();
 		});
 	});
 });

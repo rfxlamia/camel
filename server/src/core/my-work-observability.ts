@@ -1,3 +1,4 @@
+import { logger } from "../lib/logger.js";
 import {
 	getListLatencySnapshot,
 	recordListDuration,
@@ -56,7 +57,7 @@ export type MyWorkObservability = {
 };
 
 function defaultLogger(event: MyWorkObservabilityEvent): void {
-	console.info(JSON.stringify(event));
+	logger.info(event, "my_work_observability");
 }
 
 function monotonicNow(): number {
