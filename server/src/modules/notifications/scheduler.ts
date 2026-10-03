@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 import { db } from "../../db/kysely.js";
+import { logger } from "../../lib/logger.js";
 
 export async function runDueDateReminders(): Promise<void> {
 	const rows = await db
@@ -33,9 +34,9 @@ export async function runDueDateReminders(): Promise<void> {
 				WHERE type = 'due_date_reminder' DO NOTHING
 			`.execute(db);
 		} catch (err) {
-			console.error(
-				`Failed to insert due_date_reminder for card ${row.card_id}:`,
-				err,
+			logger.error(
+				{ err, cardId: row.card_id },
+				"Failed to insert due_date_reminder",
 			);
 		}
 	}

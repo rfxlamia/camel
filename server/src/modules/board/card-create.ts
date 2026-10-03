@@ -14,6 +14,7 @@ import { validateAttachmentPairs } from "../../lib/attachment-validation.js";
 import { addCardAssignee } from "../../lib/card-assignees.js";
 import { hydrateCardResponses } from "../../lib/card-response.js";
 import { recordActivity } from "../../lib/helpers.js";
+import { logger } from "../../lib/logger.js";
 import {
 	type NormalizedTaskCreateMetadata,
 	validateTaskCreateMetadata,
@@ -359,7 +360,7 @@ async function persistCreatedCard(
 }
 
 function publisherError(kind: string, error: unknown): void {
-	console.error(`Failed to publish card ${kind} event:`, error);
+	logger.error({ err: error, kind }, "Failed to publish card event");
 }
 
 async function publishCreatedCard(
@@ -606,7 +607,7 @@ export async function createCard(req: Request, res: Response) {
 			attachments,
 		);
 	} catch (error) {
-		console.error("Failed to write card attachments", error);
+		logger.error({ err: error }, "Failed to write card attachments");
 		return res.status(500).json({ error: "Unable to store card attachments" });
 	}
 
@@ -619,7 +620,7 @@ export async function createCard(req: Request, res: Response) {
 		});
 	} catch (error) {
 		await removeWrittenAttachments(attachmentStorage, writtenAttachments);
-		console.error("Failed to create card with attachments", error);
+		logger.error({ err: error }, "Failed to create card with attachments");
 		return res.status(500).json({ error: "Unable to create card" });
 	}
 	if (result.kind !== "ok") {

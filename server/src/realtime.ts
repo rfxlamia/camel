@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import type { RedisClientType } from "redis";
 import type { AuthUser } from "./auth.js";
 import { getRedisClient } from "./db/redis.js";
+import { logger } from "./lib/logger.js";
 
 // Redis carries the real-time layer (presence + pub/sub). If it is down the
 // app must keep working: presence degrades to "just me" and events fall back
@@ -224,7 +225,10 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 	return {
 		setRedisAvailable(val: boolean): void {
 			if (redisAvailable !== val) {
-				console.log(`Redis availability changed: ${redisAvailable} → ${val}`);
+				logger.info(
+					{ from: redisAvailable, to: val },
+					"Redis availability changed",
+				);
 				redisAvailable = val;
 			}
 		},
@@ -240,11 +244,11 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
 		async reconnectSubscriber(): Promise<void> {
 			try {
 				await this.connectSubscriber();
-				console.log(
+				logger.info(
 					"Redis subscriber reconnected — re-subscribed to workspace events",
 				);
 			} catch (err) {
-				console.error("Redis re-subscribe failed:", err);
+				logger.error({ err }, "Redis re-subscribe failed");
 			}
 		},
 
@@ -410,7 +414,7 @@ export { connectRedis } from "./db/redis.js";
 export async function initRealtime(): Promise<void> {
 	const client = getRedisClient();
 	if (!client) {
-		console.warn(
+		logger.warn(
 			"Redis not reachable — presence/real-time degraded (board still works)",
 		);
 		return;
@@ -419,7 +423,7 @@ export async function initRealtime(): Promise<void> {
 	try {
 		const sub = client.duplicate();
 		sub.on("error", (err) => {
-			console.error("Redis subscriber error:", err.message);
+			logger.error({ err }, "Redis subscriber error");
 		});
 		await sub.connect();
 		activeSubscriber = sub;
@@ -442,9 +446,9 @@ export async function initRealtime(): Promise<void> {
 			activeHub.reconnectSubscriber();
 		});
 
-		console.log("Redis connected — real-time layer active");
+		logger.info("Redis connected — real-time layer active");
 	} catch {
-		console.warn(
+		logger.warn(
 			"Redis not reachable — presence/real-time degraded (board still works)",
 		);
 	}

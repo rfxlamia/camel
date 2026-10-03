@@ -2,6 +2,7 @@ import { type Request, type Response, Router } from "express";
 import { db } from "../../db/kysely.js";
 import { getAttachmentStorage } from "../../lib/attachment-storage.js";
 import { recordActivity } from "../../lib/helpers.js";
+import { logger } from "../../lib/logger.js";
 import { publishEvent } from "../../realtime.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 import {
@@ -144,7 +145,7 @@ async function deleteAttachment(req: Request, res: Response): Promise<void> {
 			},
 		});
 	} catch (error) {
-		console.error("Failed to publish attachment event:", error);
+		logger.error({ err: error }, "Failed to publish attachment event");
 	}
 	res.status(204).end();
 }

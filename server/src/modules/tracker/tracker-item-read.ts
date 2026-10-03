@@ -5,13 +5,14 @@ import {
 	WORK_ITEMS_LIST_THRESHOLD_MS,
 } from "../../core/work-item-latency.js";
 import { db } from "../../db/kysely.js";
+import { logger } from "../../lib/logger.js";
+import { getWorkItemEvents } from "../../lib/work-item-events.js";
+import { listMergedWorkItems } from "../../lib/work-item-response.js";
 import {
 	resolveWorkItemByKey,
 	routeKeyParam,
 	workspacePrefix,
 } from "./tracker-item-route-helpers.js";
-import { getWorkItemEvents } from "../../lib/work-item-events.js";
-import { listMergedWorkItems } from "../../lib/work-item-response.js";
 
 export async function listTrackerItemsHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
@@ -24,13 +25,7 @@ export async function listTrackerItemsHandler(req: Request, res: Response) {
 	const ms = performance.now() - start;
 	recordListDuration(ms);
 	if (ms > WORK_ITEMS_LIST_THRESHOLD_MS) {
-		console.warn(
-			JSON.stringify({
-				event: "work_items_list_slow",
-				ms,
-				workspaceId,
-			}),
-		);
+		logger.warn({ ms, workspaceId }, "work_items_list_slow");
 	}
 	res.json(items);
 }

@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { logger } from "../lib/logger.js";
 
 const SENSITIVE_PATTERNS = [
 	/\b(relation|table|column|constraint|index)\s+"[^"]+"\s+(does not exist|already exists)\b/i,
@@ -72,18 +73,22 @@ export function createErrorHandler() {
 			return;
 		}
 
-		console.error("Error:", {
-			message: sanitizeForLog(err.message),
-			stack: err.stack,
-			statusCode: err.statusCode,
-			code: err.code,
-			path: sanitizeForLog(req.path),
-			method: sanitizeForLog(req.method),
-			ip: req.ip,
-			userAgent: sanitizeForLog(req.get("user-agent")),
-		});
-
 		const sanitized = sanitizeError(err);
+
+		// pino serializes `err` (message + stack) as JSON, so newlines in the
+		// message cannot forge log lines; request fields are still sanitized.
+		logger[sanitized.statusCode >= 500 ? "error" : "warn"](
+			{
+				err,
+				statusCode: err.statusCode,
+				code: err.code,
+				path: sanitizeForLog(req.path),
+				method: sanitizeForLog(req.method),
+				ip: req.ip,
+				userAgent: sanitizeForLog(req.get("user-agent")),
+			},
+			"request failed",
+		);
 
 		res.status(sanitized.statusCode).json({
 			error: sanitized.message,

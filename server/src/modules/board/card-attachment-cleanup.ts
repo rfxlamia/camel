@@ -3,6 +3,7 @@ import type {
 	AttachmentPair,
 	AttachmentStorage,
 } from "../../lib/attachment-storage.js";
+import { logger } from "../../lib/logger.js";
 
 type AttachmentPathRow = {
 	thumbnail_path: string;
@@ -80,7 +81,10 @@ export async function removeAttachmentPairsBestEffort(
 		);
 		for (const result of results) {
 			if (result.status === "rejected") {
-				console.error("Failed to clean up attachment files", result.reason);
+				logger.error(
+					{ err: result.reason },
+					"Failed to clean up attachment files",
+				);
 			}
 		}
 	}

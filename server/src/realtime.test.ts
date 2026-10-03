@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { logger } from "./lib/logger.js";
+import type { AttachmentEventPayload, BoardEvent } from "./realtime.js";
 import {
 	createRealtimeHub,
 	workspaceEventChannel,
 	workspacePresencePattern,
 } from "./realtime.js";
-import type { AttachmentEventPayload, BoardEvent } from "./realtime.js";
 
 type MockRequest = {
 	params: Record<string, string>;
@@ -232,21 +233,22 @@ describe("agent live-thinking event round-trip", () => {
 
 describe("Redis reconnection", () => {
 	it("setRedisAvailable flips the flag and logs on change", () => {
-		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const logSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
 		const hub = createRealtimeHub({ publisher: null, subscriber: null });
 
 		// Initially false (no publisher)
 		hub.setRedisAvailable(true);
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"Redis availability changed: false → true",
+		expect(logSpy).toHaveBeenCalledWith(
+			{ from: false, to: true },
+			"Redis availability changed",
 		);
 
 		// Setting same value again should not log
-		consoleSpy.mockClear();
+		logSpy.mockClear();
 		hub.setRedisAvailable(true);
-		expect(consoleSpy).not.toHaveBeenCalled();
+		expect(logSpy).not.toHaveBeenCalled();
 
-		consoleSpy.mockRestore();
+		logSpy.mockRestore();
 	});
 
 	it("reconnectSubscriber calls connectSubscriber", async () => {
@@ -267,7 +269,7 @@ describe("Redis reconnection", () => {
 		const pSubscribe = vi.fn(async () => {
 			throw new Error("connection lost");
 		});
-		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const logSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const hub = createRealtimeHub({
 			publisher: null,
 			subscriber: { pSubscribe },
@@ -275,12 +277,12 @@ describe("Redis reconnection", () => {
 
 		// Should not throw
 		await hub.reconnectSubscriber();
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"Redis re-subscribe failed:",
-			expect.any(Error),
+		expect(logSpy).toHaveBeenCalledWith(
+			{ err: expect.any(Error) },
+			"Redis re-subscribe failed",
 		);
 
-		consoleSpy.mockRestore();
+		logSpy.mockRestore();
 	});
 
 	it("publishEvent uses Redis when available after reconnection", async () => {

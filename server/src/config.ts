@@ -29,6 +29,10 @@ const envSchema = z.object({
 	// custom values like "staging" don't crash startup.
 	NODE_ENV: z.string().optional(),
 
+	// pino log level (trace|debug|info|warn|error|fatal|silent). Consumed by
+	// lib/logger.ts directly from process.env; declared here for documentation.
+	LOG_LEVEL: z.string().optional(),
+
 	// Comma-separated list of allowed CORS origins. Required in production
 	// (enforced below) — otherwise the API silently denies all cross-origin
 	// requests. Consumed by core/cors.ts.

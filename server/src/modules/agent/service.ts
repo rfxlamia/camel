@@ -9,6 +9,7 @@
  */
 
 import type { CardTimestamps } from "../../core/metrics.js";
+import { logger } from "../../lib/logger.js";
 import {
 	deriveFilename,
 	extractRevisedDocument,
@@ -368,7 +369,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 							"Which time period should this status report cover?";
 					}
 				} catch (err) {
-					console.error("[createBoard] detectReportPeriod failed:", err);
+					logger.error({ err }, "createBoard: detectReportPeriod failed");
 					explanation = "Which time period should this status report cover?";
 				}
 			}
@@ -439,7 +440,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						};
 					}
 				} catch (err) {
-					console.error("[approveBoard] detectReportPeriod failed:", err);
+					logger.error({ err }, "approveBoard: detectReportPeriod failed");
 					return {
 						status: 422 as const,
 						message: "Which time period should this status report cover?",
@@ -646,8 +647,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				const unresolved = findUnresolvedPlaceholders(rendered);
 				if (unresolved.length > 0) {
 					const reason = `Unresolved placeholders: ${unresolved.join(", ")}`;
-					console.error(
-						`[runPipeline] card ${column.columnSlug} halted — ${reason}`,
+					logger.error(
+						{ columnSlug: column.columnSlug, reason },
+						"runPipeline: card halted",
 					);
 					await deps.insertOutput!({
 						boardId,
@@ -807,8 +809,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 
 					if (result.output.trim().length === 0) {
 						const reason = "Empty output";
-						console.error(
-							`[runPipeline] card ${column.columnSlug} halted — ${reason}`,
+						logger.error(
+							{ columnSlug: column.columnSlug, reason },
+							"runPipeline: card halted",
 						);
 						await deps.insertOutput!({
 							boardId,
@@ -878,8 +881,9 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						tokenBuffer = "";
 					}
 					const reason = String(err);
-					console.error(
-						`[runPipeline] card ${column.columnSlug} threw — ${reason}`,
+					logger.error(
+						{ columnSlug: column.columnSlug, reason },
+						"runPipeline: card threw",
 					);
 					await deps.insertOutput!({
 						boardId,
@@ -1072,7 +1076,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 						});
 						return { explanation: reply, boardUpdated: false };
 					} catch (err) {
-						console.error("[sendMessage] detectReportPeriod failed:", err);
+						logger.error({ err }, "sendMessage: detectReportPeriod failed");
 						const reply = "Which time period should this status report cover?";
 						await deps.insertConversation!({
 							boardId,
@@ -1207,7 +1211,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			});
 
 			this.runPipeline({ boardId, workspaceId }).catch((err: unknown) => {
-				console.error("[confirmRegenerateBoard] runPipeline failed:", err);
+				logger.error({ err }, "confirmRegenerateBoard: runPipeline failed");
 			});
 
 			return { ok: true as const };

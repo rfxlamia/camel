@@ -14,12 +14,14 @@ import {
 } from "./core/work-item-latency.js";
 import { pool } from "./db/pool.js";
 import { connectRedis } from "./db/redis.js";
+import { logger } from "./lib/logger.js";
 import {
 	csrfProtection,
 	generateCsrfToken,
 	setCsrfToken,
 } from "./middleware/csrf.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
+import { requestContextMiddleware } from "./middleware/request-context.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 import {
@@ -45,6 +47,7 @@ const app = express();
 // Adjust the number if the deployment has more than one proxy hop.
 // See: https://expressjs.com/en/guide/behind-proxies.html
 app.set("trust proxy", 1);
+app.use(requestContextMiddleware());
 app.use(securityHeaders());
 app.use(cors({ origin: createOriginValidator(), credentials: true }));
 
@@ -141,20 +144,18 @@ let server: ReturnType<typeof app.listen> | undefined;
 const shutdown = async () => {
 	if (isShuttingDown) return;
 	isShuttingDown = true;
-	console.log("Shutting down gracefully...");
+	logger.info("Shutting down gracefully...");
 
 	// Start forced-exit timer BEFORE async cleanup.
 	const forceExit = setTimeout(() => {
-		console.error("Graceful shutdown timed out — forcing exit");
+		logger.error("Graceful shutdown timed out — forcing exit");
 		process.exit(1);
 	}, 5000);
 	// Don't hold the process open just for the timer.
 	forceExit.unref();
 
 	if (!server) {
-		console.error(
-			"Signal received before server started — exiting immediately",
-		);
+		logger.error("Signal received before server started — exiting immediately");
 		process.exit(1);
 	}
 
@@ -168,7 +169,7 @@ const shutdown = async () => {
 	try {
 		await shutdownRealtime();
 	} catch (err) {
-		console.error("shutdownRealtime() failed:", err);
+		logger.error({ err }, "shutdownRealtime() failed");
 	}
 
 	server.close(async () => {
@@ -176,7 +177,7 @@ const shutdown = async () => {
 		if (latencyReporterInterval) clearInterval(latencyReporterInterval);
 		await pool.end();
 		clearTimeout(forceExit);
-		console.log("Shutdown complete — exiting cleanly");
+		logger.info("Shutdown complete — exiting cleanly");
 		process.exit(0);
 	});
 };
@@ -185,7 +186,7 @@ process.on("SIGINT", shutdown);
 
 const port = config.PORT;
 server = app.listen(port, async () => {
-	console.log(`Camel Kanban API listening on http://localhost:${port}`);
+	logger.info({ port }, "Camel Kanban API listening");
 
 	// Configure server timeouts
 	serverTimeout(server!, {

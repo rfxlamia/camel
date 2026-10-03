@@ -1,4 +1,5 @@
 import { createClient, type RedisClientType } from "redis";
+import { logger } from "../lib/logger.js";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 
@@ -26,24 +27,24 @@ export async function connectRedis(): Promise<void> {
 	});
 	client.on("error", (err) => {
 		if (connected) {
-			console.error("Redis unavailable — rate limiting degraded:", err.message);
+			logger.error({ err }, "Redis unavailable — rate limiting degraded");
 			connected = false;
 		}
 	});
 	client.on("ready", () => {
 		if (!connected) {
 			connected = true;
-			console.log("Redis reconnected — rate limiting restored");
+			logger.info("Redis reconnected — rate limiting restored");
 		}
 	});
 
 	try {
 		await client.connect();
 		connected = true;
-		console.log("Redis connected — shared client active");
+		logger.info("Redis connected — shared client active");
 	} catch {
 		connected = false;
 		client = null;
-		console.warn("Redis not reachable — rate limiting will be skipped");
+		logger.warn("Redis not reachable — rate limiting will be skipped");
 	}
 }
