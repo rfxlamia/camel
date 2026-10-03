@@ -529,6 +529,208 @@ function withTempGitRepo(dirPrefix, run) {
 	}
 }
 
+describe("Cycle R — relocation-equivalent hunks (unit)", () => {
+	const from = "server/src/routes/settings.ts";
+	const to = "server/src/modules/settings/settings.ts";
+	const urlLine = (lit) => `\tnew URL("${lit}", import.meta.url),`;
+
+	/**
+	 * @param {string[]} hunkLines
+	 * @param {{ path?: string, fromPath?: string, status?: string }} [opts]
+	 */
+	function check(hunkLines, opts = {}) {
+		const path = opts.path ?? to;
+		return checkLineBudget({
+			path,
+			status: opts.status ?? "rename",
+			renameKind: "rename-with-edit",
+			fromPath: opts.fromPath ?? from,
+			beforeText: makeLines(643),
+			afterText: makeLines(643),
+			hunks: ["@@ -1,1 +1,1 @@", ...hunkLines].join("\n"),
+		});
+	}
+
+	it("passes import retarget plus a resolution-equivalent URL literal after a move", () => {
+		const violations = check([
+			'-import { db } from "../db/kysely.js";',
+			'+import { db } from "../../db/kysely.js";',
+			`-${urlLine("../../../client/public/uploads")}`,
+			`+${urlLine("../../../../client/public/uploads")}`,
+		]);
+		assert.deepEqual(violations, []);
+	});
+
+	it("touches when the URL literal resolves to a different target", () => {
+		const violations = check([
+			`-${urlLine("../../../client/public/uploads")}`,
+			`+${urlLine("../../../client/public/other")}`,
+		]);
+		expectLineBudgetViolation(to, 643)(violations);
+	});
+
+	it("touches when the URL literal is not re-resolved for the new directory", () => {
+		const violations = check([
+			`-${urlLine("../../../client/public/uploads")}`,
+			`+${urlLine("../../../client/public/uploads ")}`,
+		]);
+		expectLineBudgetViolation(to, 643)(violations);
+	});
+
+	it("touches a URL literal edit when the file did not move", () => {
+		const violations = check(
+			[
+				`-${urlLine("../../../client/public/uploads")}`,
+				`+${urlLine("../../../../client/public/uploads")}`,
+			],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches when the rest of the URL line changes", () => {
+		const violations = check([
+			`-${urlLine("../../../client/public/uploads")}`,
+			'+\tnew URL("../../../../client/public/uploads", base),',
+		]);
+		expectLineBudgetViolation(to, 643)(violations);
+	});
+
+	it("touches a URL literal that is not relative", () => {
+		const violations = check([
+			'-\tnew URL("/abs/uploads", import.meta.url),',
+			'+\tnew URL("/abs/uploads", import.meta.url),',
+			`-${urlLine("../a")}`,
+			`+${urlLine("/abs/a")}`,
+		]);
+		expectLineBudgetViolation(to, 643)(violations);
+	});
+
+	it("touches a mixed hunk when a body line changes next to a valid URL change", () => {
+		const violations = check([
+			`-${urlLine("../../../client/public/uploads")}`,
+			`+${urlLine("../../../../client/public/uploads")}`,
+			"-\tconst limit = 10;",
+			"+\tconst limit = 11;",
+		]);
+		expectLineBudgetViolation(to, 643)(violations);
+	});
+
+	it("passes default-to-named conversion that keeps every local binding", () => {
+		const violations = check(
+			[
+				'-import LogoCropper from "../components/LogoCropper";',
+				'-import ManageMembersSection from "../components/settings/ManageMembersSection";',
+				"-import {",
+				"-\tcanEditWorkspaceSettings,",
+				"-\tvalidateBoardName,",
+				'-} from "../lib/settingsValidation";',
+				"+import {",
+				"+\tcanEditWorkspaceSettings,",
+				"+\tLogoCropper,",
+				"+\tManageMembersSection,",
+				"+\tvalidateBoardName,",
+				'+} from "../features/settings";',
+			],
+			{
+				path: "client/src/pages/SettingsPage.tsx",
+				fromPath: "client/src/pages/SettingsPage.tsx",
+				status: "modified",
+			},
+		);
+		assert.deepEqual(violations, []);
+	});
+
+	it("touches when a binding is dropped", () => {
+		const violations = check(
+			[
+				'-import A from "./a";',
+				'-import B from "./b";',
+				'+import { A } from "./index";',
+			],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches when a binding is added", () => {
+		const violations = check(
+			['-import A from "./a";', '+import { A, B } from "./index";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches when a value import becomes type-only", () => {
+		const violations = check(
+			['-import { A } from "./a";', '+import type { A } from "./a";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches when an inline type qualifier appears on a binding", () => {
+		const violations = check(
+			['-import { A, B } from "./a";', '+import { A, type B } from "./a";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches an aliased import whose local name changes", () => {
+		const violations = check(
+			['-import { A as X } from "./a";', '+import { A as Y } from "./a";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches a non-import line edit", () => {
+		const violations = check(["-const a = 1;", "+const a = 2;"], {
+			path: from,
+			fromPath: from,
+			status: "modified",
+		});
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("passes a real git mv with import retarget and URL literal fix", () => {
+		withTempGitRepo(".tmp-fm-line-budget-url-", (dir) => {
+			const body = Array.from(
+				{ length: 640 },
+				(_, i) => `export const n${i} = ${i};`,
+			).join("\n");
+			const head = (imp, lit) =>
+				`import { db } from "${imp}";\nexport const DIR = fileURLToPath(\n\tnew URL("${lit}", import.meta.url),\n);\n${body}\n`;
+			mkdirSync(join(dir, "server/src/routes"), { recursive: true });
+			mkdirSync(join(dir, "server/src/modules/settings"), { recursive: true });
+			writeFileSync(
+				join(dir, from),
+				head("../db/kysely.js", "../../../client/public/uploads"),
+			);
+			git(dir, ["add", from]);
+			git(dir, ["commit", "-m", "base"]);
+
+			git(dir, ["mv", from, to]);
+			writeFileSync(
+				join(dir, to),
+				head("../../db/kysely.js", "../../../../client/public/uploads"),
+			);
+			git(dir, ["add", to]);
+			git(dir, ["commit", "-m", "relocate"]);
+
+			const baseRef = git(dir, ["rev-parse", "HEAD~1"]);
+			const diff = collectGitDiff(dir, baseRef);
+			const violations = collectLineBudgetViolations({
+				rootDir: dir,
+				baseRef,
+				diff,
+			});
+			assert.deepEqual(violations, []);
+		});
+	});
+});
+
 describe("Cycle F — hunk producer + CLI grandfather (integration)", () => {
 	it("classifies whitespace-only and import-only edits via real git hunks", () => {
 		withTempGitRepo(".tmp-fm-line-budget-git-", (dir) => {

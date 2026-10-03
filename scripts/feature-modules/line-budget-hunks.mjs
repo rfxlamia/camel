@@ -1,3 +1,5 @@
+import { posix } from "node:path";
+
 /**
  * @param {string} hunks
  */
@@ -81,31 +83,136 @@ function stripQuotedModuleSpecifiers(text) {
 		.replace(/\bimport\s+['"][^'"]+['"]/g, 'import ""');
 }
 
+const URL_LITERAL = /new URL\(\s*(['"])([^'"]*)\1\s*,\s*import\.meta\.url\s*\)/;
+
 /**
- * Exempt only when the quoted module path changed (including multiline `from`).
- * Binding / new-import changes are a touch.
- * @param {string} hunks
+ * @param {string} line
  */
-function isImportSpecifierOnlyHunks(hunks) {
-	const { removed, added } = parseChangedLines(hunks);
-	const changed = [...removed, ...added];
-	if (changed.length === 0) return true;
-	if (!changed.every(isImportRelatedLine)) return false;
-	// Sort stripped lines so a pure reorder stays trivial: biome
-	// organizeImports force-reorders imports on amend.
+function isUrlLiteralLine(line) {
+	return URL_LITERAL.test(line);
+}
+
+/**
+ * Same `new URL("<relative>", import.meta.url)` expression, literal blanked.
+ * @param {string} line
+ */
+function urlLineShape(line) {
+	return collapseWhitespace(
+		line.replace(URL_LITERAL, 'new URL("", import.meta.url)'),
+	);
+}
+
+/**
+ * Trivial only when the rest of the line is identical and both literals are
+ * relative and resolve to the same target from the old and new file locations.
+ * @param {string} removedLine
+ * @param {string} addedLine
+ * @param {{ fromPath?: string, path?: string }} context
+ */
+function isResolutionEquivalentUrl(removedLine, addedLine, context) {
+	const { fromPath, path } = context;
+	if (!path) return false;
+	if (urlLineShape(removedLine) !== urlLineShape(addedLine)) return false;
+	const before = URL_LITERAL.exec(removedLine)?.[2];
+	const after = URL_LITERAL.exec(addedLine)?.[2];
+	if (before === undefined || after === undefined) return false;
+	if (!/^\.\.?\//.test(before) || !/^\.\.?\//.test(after)) return false;
+	const resolve = (dir, literal) => posix.normalize(posix.join(dir, literal));
+	return (
+		resolve(posix.dirname(fromPath ?? path), before) ===
+		resolve(posix.dirname(path), after)
+	);
+}
+
+/**
+ * Local binding names (with `type` qualifier) introduced by import lines.
+ * Module specifiers are ignored; imported-vs-default kind is ignored so a
+ * default-to-named conversion that keeps every local name stays comparable.
+ * Returns null when a line cannot be reduced to bindings.
+ * @param {string[]} lines
+ * @returns {string[] | null}
+ */
+function importBindings(lines) {
+	/** @type {string[]} */
+	const bindings = [];
+	let inTypeStatement = false;
+	for (const raw of lines) {
+		let line = collapseWhitespace(stripQuotedModuleSpecifiers(raw));
+		if (line === "") continue;
+		if (/^export\b/.test(line)) return null;
+		if (/^import\s*\(/.test(line)) return null;
+		if (/^import\b/.test(line)) {
+			inTypeStatement = /^import\s+type\b/.test(line);
+			line = line.replace(/^import\s+(type\s+)?/, "");
+		}
+		const closes = /\bfrom\s*""\s*;?$/.test(line);
+		line = line.replace(/\bfrom\s*""\s*;?$/, "").replace(/[{}]/g, " ");
+		for (const part of line.split(",")) {
+			let name = part.trim();
+			if (name === "" || name === '""') continue;
+			let isType = inTypeStatement;
+			if (/^type\s+/.test(name)) {
+				isType = true;
+				name = name.replace(/^type\s+/, "");
+			}
+			const alias = /\bas\s+([\w$]+)$/.exec(name);
+			if (alias) name = alias[1];
+			if (!/^[\w$]+$/.test(name)) return null;
+			bindings.push(`${isType ? "type " : ""}${name}`);
+		}
+		if (closes) inTypeStatement = false;
+	}
+	return bindings.sort();
+}
+
+/**
+ * @param {string[]} removed
+ * @param {string[]} added
+ */
+function haveSameImportBindings(removed, added) {
+	const before = importBindings(removed);
+	const after = importBindings(added);
+	if (before === null || after === null) return false;
+	return before.join("\n") === after.join("\n");
+}
+
+/**
+ * @param {string[]} removed
+ * @param {string[]} added
+ */
+function isImportOnlyChange(removed, added) {
+	if (removed.length === 0 && added.length === 0) return true;
 	const fingerprint = (lines) =>
 		lines
 			.map((line) => collapseWhitespace(stripQuotedModuleSpecifiers(line)))
 			.sort()
 			.join("\n");
-	return fingerprint(removed) === fingerprint(added);
+	if (fingerprint(removed) === fingerprint(added)) return true;
+	return haveSameImportBindings(removed, added);
 }
 
 /**
  * @param {string} hunks
+ * @param {{ fromPath?: string, path?: string }} [context] old/new file paths
  */
-export function isNonTrivialTouch(hunks) {
+export function isNonTrivialTouch(hunks, context = {}) {
 	if (isWhitespaceOnlyHunks(hunks)) return false;
-	if (isImportSpecifierOnlyHunks(hunks)) return false;
-	return true;
+
+	const { removed, added } = parseChangedLines(hunks);
+	const removedUrls = removed.filter(isUrlLiteralLine);
+	const addedUrls = added.filter(isUrlLiteralLine);
+	const removedRest = removed.filter((line) => !isUrlLiteralLine(line));
+	const addedRest = added.filter((line) => !isUrlLiteralLine(line));
+
+	if (removedUrls.length !== addedUrls.length) return true;
+	if (
+		!removedUrls.every((line, i) =>
+			isResolutionEquivalentUrl(line, addedUrls[i], context),
+		)
+	) {
+		return true;
+	}
+
+	if (![...removedRest, ...addedRest].every(isImportRelatedLine)) return true;
+	return !isImportOnlyChange(removedRest, addedRest);
 }
