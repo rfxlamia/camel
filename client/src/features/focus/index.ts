@@ -1,3 +1,8 @@
+export {
+	default as FocusEntryButton,
+	type FocusEntryButtonProps,
+} from "./FocusEntryButton";
+export { FocusSessionProvider, useFocusSession } from "./FocusSessionContext";
 export { default as FocusTimer, type FocusTimerProps } from "./FocusTimer";
 export {
 	computeDisplaySeconds,

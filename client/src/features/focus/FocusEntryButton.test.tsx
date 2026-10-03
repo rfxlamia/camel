@@ -7,7 +7,7 @@ import {
 	waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FocusSession } from "../types";
+import type { FocusSession } from "../../types";
 
 const { mockUseFocusSession, mockNavigate, mockUseWorkspace, mockShowToast } =
 	vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const { mockUseFocusSession, mockNavigate, mockUseWorkspace, mockShowToast } =
 		mockShowToast: vi.fn(),
 	}));
 
-vi.mock("../context/FocusSessionContext", () => ({
+vi.mock("./FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),
 }));
 
@@ -29,15 +29,15 @@ vi.mock("react-router", async (importOriginal) => {
 	};
 });
 
-vi.mock("../shared/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../shared/ToastContext", () => ({
+vi.mock("../../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
-import { ApiError } from "../api";
+import { ApiError } from "../../api";
 import FocusEntryButton from "./FocusEntryButton";
 
 function makeSession(overrides: Partial<FocusSession> = {}): FocusSession {

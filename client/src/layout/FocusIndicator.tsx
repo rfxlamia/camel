@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { useFocusSession } from "../context/FocusSessionContext";
+import { useFocusSession } from "../features/focus";
 
 export default function FocusIndicator() {
 	const { session, loading } = useFocusSession();

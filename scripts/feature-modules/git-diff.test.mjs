@@ -664,13 +664,34 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover server/src/routes/${name} to be gone`,
 			);
 		}
+		for (const name of [
+			"FocusSessionContext.tsx",
+			"FocusSessionContext.test.tsx",
+			"FocusSessionContext.guards.test.tsx",
+			"FocusEntryButton.tsx",
+			"FocusEntryButton.test.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/focus/${name}`)),
+				`expected client/src/features/focus/${name}`,
+			);
+		}
+		for (const path of [
+			"client/src/context/FocusSessionContext.tsx",
+			"client/src/context/FocusSessionContext.test.tsx",
+			"client/src/context/FocusSessionContext.guards.test.tsx",
+			"client/src/components/FocusEntryButton.tsx",
+			"client/src/components/FocusEntryButton.test.tsx",
+			"client/src/shared/FocusEntryButton.tsx",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, path)),
+				`expected leftover ${path} to be gone`,
+			);
+		}
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/components/FocusEntryButton.tsx")),
-			"expected leftover client/src/components/FocusEntryButton.tsx to still exist",
-		);
-		assert.ok(
-			existsSync(join(repoRoot, "client/src/context/FocusSessionContext.tsx")),
-			"expected leftover client/src/context/FocusSessionContext.tsx to still exist (wave-2)",
+			existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
+			"expected leftover client/src/components/ContextPanel.tsx to still exist",
 		);
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/pages/FocusPage.tsx")),

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { api } from "./api";
 import ContextPanel from "./components/ContextPanel";
-import { FocusSessionProvider } from "./context/FocusSessionContext";
+import { FocusSessionProvider } from "./features/focus";
 import { BoardProvider } from "./features/board";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
