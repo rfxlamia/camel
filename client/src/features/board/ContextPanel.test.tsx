@@ -1,4 +1,4 @@
-// client/src/components/ContextPanel.test.tsx — NEW FILE (jsdom).
+// client/src/features/board/ContextPanel.test.tsx (jsdom).
 // Proves the DetailsSection server→form sync effect (the one whose deps trip
 // biome's useExhaustiveDependencies). Two behaviors must hold:
 //   1. A server card refresh (new version) adopts into the form when the draft
