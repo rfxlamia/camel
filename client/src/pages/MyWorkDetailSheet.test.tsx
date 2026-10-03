@@ -89,7 +89,7 @@ vi.mock("../api", () => ({
 	ApiError: MockApiError,
 }));
 
-vi.mock("../context/NotificationsContext", () => ({
+vi.mock("../features/notifications", () => ({
 	useNotificationsContext: (...args: unknown[]) =>
 		mockUseNotificationsContext(...args),
 }));

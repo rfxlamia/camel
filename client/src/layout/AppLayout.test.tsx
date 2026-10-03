@@ -36,7 +36,7 @@ vi.mock("../shared/PresenceContext", () => ({
 vi.mock("../shared/ToastContext", () => ({
 	useToastState: () => mockUseToastState(),
 }));
-vi.mock("../context/NotificationsContext", () => ({
+vi.mock("../features/notifications", () => ({
 	NotificationsProvider: ({ children }: { children: ReactNode }) => (
 		<>{children}</>
 	),

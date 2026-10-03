@@ -1143,6 +1143,60 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected no empty client/src/features/workspaces tree",
 		);
 	});
+
+	it("Notifications relocates product files while InboxPage stays a page", () => {
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/notifications/index.ts")),
+			"expected features/notifications public API client/src/features/notifications/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/notifications/index.ts")),
+			"expected server/src/modules/notifications/index.ts",
+		);
+		for (const name of [
+			"useNotifications.ts",
+			"useNotifications.test.ts",
+			"NotificationsContext.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/notifications/${name}`)),
+				`expected client/src/features/notifications/${name}`,
+			);
+		}
+		for (const path of [
+			"client/src/hooks/useNotifications.ts",
+			"client/src/hooks/useNotifications.test.ts",
+			"client/src/context/NotificationsContext.tsx",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, path)),
+				`expected leftover ${path} to be gone`,
+			);
+		}
+		for (const name of [
+			"router.ts",
+			"router.test.ts",
+			"scheduler.ts",
+			"scheduler.test.ts",
+			"service.ts",
+			"service.test.ts",
+			"sse.ts",
+			"sse.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/notifications/${name}`)),
+				`expected server/src/modules/notifications/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/notifications/${name}`)),
+				`expected leftover server/src/notifications/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/InboxPage.tsx")),
+			"expected InboxPage to remain under client/src/pages/InboxPage.tsx",
+		);
+	});
 });
 
 describe("Cycle A — stub CLI (integration)", () => {

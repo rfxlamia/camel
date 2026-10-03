@@ -1,9 +1,9 @@
 import { createContext, type ReactNode, useContext } from "react";
+import { useWorkspace } from "../../shared/WorkspaceContext";
 import {
 	type UseNotificationsResult,
 	useNotifications,
-} from "../hooks/useNotifications";
-import { useWorkspace } from "../shared/WorkspaceContext";
+} from "./useNotifications";
 
 const NotificationsContext = createContext<UseNotificationsResult | null>(null);
 

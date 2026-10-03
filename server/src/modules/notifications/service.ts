@@ -1,5 +1,5 @@
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS, type DomainEvent } from "../events.js";
+import { db } from "../../db/kysely.js";
+import { type DomainEvent, domainBus, EVENTS } from "../../events.js";
 
 type PushFn = (
 	userId: number,
@@ -67,15 +67,21 @@ function onCardAssigned(event: DomainEvent): void {
 }
 
 function onCardDueDateChanged(event: DomainEvent): void {
-	const { assigneeId, cardId, cardTitle, actorDisplayName, oldDueDate, newDueDate } =
-		event.payload as {
-			assigneeId: number | null;
-			cardId: number;
-			cardTitle: string;
-			actorDisplayName: string;
-			oldDueDate: string | null;
-			newDueDate: string | null;
-		};
+	const {
+		assigneeId,
+		cardId,
+		cardTitle,
+		actorDisplayName,
+		oldDueDate,
+		newDueDate,
+	} = event.payload as {
+		assigneeId: number | null;
+		cardId: number;
+		cardTitle: string;
+		actorDisplayName: string;
+		oldDueDate: string | null;
+		newDueDate: string | null;
+	};
 	if (!assigneeId || assigneeId === event.actorId) return;
 	const title = !newDueDate
 		? `${actorDisplayName} removed due date from '${cardTitle}'`
@@ -101,13 +107,17 @@ function onCardDueDateRemoved(event: DomainEvent): void {
 }
 
 function onMemberJoined(event: DomainEvent): void {
-	const { newMemberId, newMemberDisplayName, workspaceName, existingMemberIds } =
-		event.payload as {
-			newMemberId: number;
-			newMemberDisplayName: string;
-			workspaceName: string;
-			existingMemberIds: number[];
-		};
+	const {
+		newMemberId,
+		newMemberDisplayName,
+		workspaceName,
+		existingMemberIds,
+	} = event.payload as {
+		newMemberId: number;
+		newMemberDisplayName: string;
+		workspaceName: string;
+		existingMemberIds: number[];
+	};
 	void (async () => {
 		const existing = await db
 			.selectFrom("notifications")

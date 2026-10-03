@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
-import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
+import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { registerPush } from "./service.js";
 import {
 	pushNotificationToUser,

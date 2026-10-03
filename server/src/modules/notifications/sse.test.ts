@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Request, Response } from "express";
-import { db } from "../db/kysely.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { db } from "../../db/kysely.js";
 import {
-	sseNotificationHandler,
 	pushNotificationToUser,
 	pushReadAllEvent,
+	sseNotificationHandler,
 } from "./sse.js";
 
 describe("pushNotificationToUser — user-keyed isolation", () => {
@@ -48,7 +48,11 @@ describe("pushNotificationToUser — user-keyed isolation", () => {
 		write1.mockClear();
 		write2.mockClear();
 
-		pushNotificationToUser(1, 1, { id: 42, type: "card_assigned", title: "Assigned!" });
+		pushNotificationToUser(1, 1, {
+			id: 42,
+			type: "card_assigned",
+			title: "Assigned!",
+		});
 
 		expect(write1).toHaveBeenCalledOnce();
 		expect(write1.mock.calls[0][0]).toContain("notification.created");
@@ -84,7 +88,11 @@ describe("pushNotificationToUser — user-keyed isolation", () => {
 		writeWs1.mockClear();
 		writeWs2.mockClear();
 
-		pushNotificationToUser(1, 1, { id: 42, type: "card_assigned", title: "Assigned!" });
+		pushNotificationToUser(1, 1, {
+			id: 42,
+			type: "card_assigned",
+			title: "Assigned!",
+		});
 
 		expect(writeWs1).toHaveBeenCalledOnce();
 		expect(writeWs2).not.toHaveBeenCalled();

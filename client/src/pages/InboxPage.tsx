@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { useNotificationsContext } from "../context/NotificationsContext";
+import { useNotificationsContext } from "../features/notifications";
 import EmptyState from "../shared/EmptyState";
 import PageHeader from "../shared/PageHeader";
 import type { AppNotification, AppNotificationType } from "../types";

@@ -19,6 +19,7 @@ import {
 	createMyWorkPreAuthObservabilityMiddleware,
 	myWorkRouter,
 } from "./modules/my-work/index.js";
+import { notificationsRouter } from "./modules/notifications/index.js";
 import { settingsRouter } from "./modules/settings/index.js";
 import {
 	trackerItemsRouter,
@@ -31,7 +32,6 @@ import {
 	membersRouter,
 	workspacesRouter,
 } from "./modules/workspaces/index.js";
-import { notificationsRouter } from "./notifications/router.js";
 import { activityRouter } from "./routes/activity.js";
 import { presenceRouter } from "./routes/presence.js";
 

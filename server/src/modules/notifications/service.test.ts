@@ -7,10 +7,19 @@
  *   RUN_INTEGRATION=1 npx vitest run src/notifications/service.test.ts
  */
 import "dotenv/config";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
 import { initNotificationService } from "./service.js";
 
 let workspaceId: number;
@@ -50,32 +59,52 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		beforeAll(async () => {
 			const actor = await db
 				.insertInto("users")
-				.values({ username: `notif-actor-${Date.now()}`, display_name: "Actor", password_hash: "h" })
+				.values({
+					username: `notif-actor-${Date.now()}`,
+					display_name: "Actor",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			actorId = actor.id;
 			const assignee = await db
 				.insertInto("users")
-				.values({ username: `notif-assignee-${Date.now()}`, display_name: "Assignee", password_hash: "h" })
+				.values({
+					username: `notif-assignee-${Date.now()}`,
+					display_name: "Assignee",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			assigneeId = assignee.id;
 			const memberA = await db
 				.insertInto("users")
-				.values({ username: `notif-membera-${Date.now()}`, display_name: "Member A", password_hash: "h" })
+				.values({
+					username: `notif-membera-${Date.now()}`,
+					display_name: "Member A",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			memberAId = memberA.id;
 			const memberB = await db
 				.insertInto("users")
-				.values({ username: `notif-memberb-${Date.now()}`, display_name: "Member B", password_hash: "h" })
+				.values({
+					username: `notif-memberb-${Date.now()}`,
+					display_name: "Member B",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			memberBId = memberB.id;
 
 			const workspace = await db
 				.insertInto("workspaces")
-				.values({ name: "Notif Service WS", owner_user_id: actorId, is_personal: false })
+				.values({
+					name: "Notif Service WS",
+					owner_user_id: actorId,
+					is_personal: false,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
@@ -103,9 +132,18 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		afterAll(async () => {
-			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("cards").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("columns").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("notifications")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("cards")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("columns")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 			await db
 				.deleteFrom("users")
@@ -114,7 +152,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		beforeEach(async () => {
-			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("notifications")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 			cleanup = initNotificationService();
 		});
 
@@ -128,7 +169,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					type: EVENTS.CARD_ASSIGNED,
 					workspaceId,
 					actorId,
-					payload: { cardId, assigneeId, cardTitle: "Fix login bug", actorDisplayName: "Actor" },
+					payload: {
+						cardId,
+						assigneeId,
+						cardTitle: "Fix login bug",
+						actorDisplayName: "Actor",
+					},
 				});
 				await vi.waitFor(async () => {
 					const rows = await notificationsFor(assigneeId, "card_assigned");
@@ -144,7 +190,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					type: EVENTS.CARD_ASSIGNED,
 					workspaceId,
 					actorId: assigneeId,
-					payload: { cardId, assigneeId, cardTitle: "Fix login bug", actorDisplayName: "Assignee" },
+					payload: {
+						cardId,
+						assigneeId,
+						cardTitle: "Fix login bug",
+						actorDisplayName: "Assignee",
+					},
 				});
 				await new Promise((r) => setTimeout(r, 50));
 				const rows = await notificationsFor(assigneeId, "card_assigned");
@@ -156,7 +207,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					type: EVENTS.CARD_ASSIGNED,
 					workspaceId,
 					actorId,
-					payload: { cardId, assigneeId: null, cardTitle: "Fix login bug", actorDisplayName: "Actor" },
+					payload: {
+						cardId,
+						assigneeId: null,
+						cardTitle: "Fix login bug",
+						actorDisplayName: "Actor",
+					},
 				});
 				await new Promise((r) => setTimeout(r, 50));
 				const rows = await db
@@ -327,7 +383,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					type: EVENTS.SYSTEM_ALERT,
 					workspaceId,
 					actorId,
-					payload: { title: "Maintenance at midnight", body: "Server restart at 00:00 UTC" },
+					payload: {
+						title: "Maintenance at midnight",
+						body: "Server restart at 00:00 UTC",
+					},
 				});
 				await vi.waitFor(async () => {
 					const rows = await db
