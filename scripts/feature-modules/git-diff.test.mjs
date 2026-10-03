@@ -1197,6 +1197,37 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected InboxPage to remain under client/src/pages/InboxPage.tsx",
 		);
 	});
+
+	it("Activity relocates the server router while pages stay in pages", () => {
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/activity/index.ts")),
+			"expected server/src/modules/activity/index.ts",
+		);
+		for (const name of [
+			"activity.ts",
+			"activity.unified.test.ts",
+			"activity.focus-exclusion.integration.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/activity/${name}`)),
+				`expected server/src/modules/activity/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
+		for (const page of ["ActivityPage.tsx", "DashboardPage.tsx"]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/pages/${page}`)),
+				`expected ${page} to remain under client/src/pages/`,
+			);
+		}
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/features/activity")),
+			"expected no empty client/src/features/activity tree",
+		);
+	});
 });
 
 describe("Cycle A — stub CLI (integration)", () => {

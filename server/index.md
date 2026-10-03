@@ -75,7 +75,7 @@ Server kernel shared code (not a product feature).
 
 Route modules extracted from routes.ts.
 
-- **[activity.ts](./src/routes/activity.ts)** - GET workspace activity feed from card_events
+- **[activity.ts](./src/modules/activity/activity.ts)** - GET workspace activity feed from card_events
 - **[board.ts](./src/routes/board.ts)** - GET board with human columns and cards
 - **[cards.ts](./src/routes/cards.ts)** - CRUD and move for cards; enforces WIP limits and optimistic locking
 - **[columns.ts](./src/routes/columns.ts)** - CRUD for kanban columns with fractional positioning
