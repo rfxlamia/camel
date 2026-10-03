@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
+import { db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
 import {
 	checkActorCanManage,
 	lookupMembership,
 	workspaceAccessService,
-} from "../lib/helpers.js";
+} from "../../lib/helpers.js";
 
 export const membersRouter = Router({ mergeParams: true });
 

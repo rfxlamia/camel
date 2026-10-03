@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockLookupMembership = vi.fn();
-vi.mock("../lib/helpers.js", () => ({
+vi.mock("../../lib/helpers.js", () => ({
 	lookupMembership: (...args: unknown[]) => mockLookupMembership(...args),
 	serializeWorkspaceList: vi.fn(),
 }));
@@ -11,7 +11,7 @@ vi.mock("../lib/helpers.js", () => ({
 const mockExecuteTakeFirst = vi.fn();
 const mockExecuteTakeFirstOrThrow = vi.fn();
 
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: {
 		updateTable: vi.fn(() => ({
 			set: vi.fn(() => ({
@@ -32,7 +32,7 @@ vi.mock("../db/kysely.js", () => ({
 	},
 }));
 
-vi.mock("../auth.js", () => ({
+vi.mock("../../auth.js", () => ({
 	requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 

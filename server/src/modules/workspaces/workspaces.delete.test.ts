@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AttachmentPair } from "../lib/attachment-storage.js";
+import type { AttachmentPair } from "../../lib/attachment-storage.js";
 
 const mocks = vi.hoisted(() => ({
 	lookupMembership: vi.fn(),
@@ -16,37 +16,37 @@ const mocks = vi.hoisted(() => ({
 	recordActivity: vi.fn(),
 }));
 
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: {
 		selectFrom: mocks.dbSelectFrom,
 		transaction: () => ({ execute: mocks.transactionExecute }),
 	},
 }));
-vi.mock("../lib/helpers.js", () => ({
+vi.mock("../../lib/helpers.js", () => ({
 	lookupMembership: mocks.lookupMembership,
 	serializeWorkspaceList: vi.fn(),
 	recordActivity: mocks.recordActivity,
 }));
-vi.mock("../lib/workspace-mutation-lock.js", () => ({
+vi.mock("../../lib/workspace-mutation-lock.js", () => ({
 	lockWorkspaceMutation: mocks.lockWorkspaceMutation,
 }));
-vi.mock("../modules/board/index.js", () => ({
+vi.mock("../board/index.js", () => ({
 	loadAttachmentPairsForWorkspace: mocks.loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort: mocks.removeAttachmentPairsBestEffort,
 }));
-vi.mock("../lib/attachment-storage.js", () => ({
+vi.mock("../../lib/attachment-storage.js", () => ({
 	getAttachmentStorage: mocks.getAttachmentStorage,
 }));
-vi.mock("../core/tracker-vocabulary-seed.js", () => ({
+vi.mock("../../core/tracker-vocabulary-seed.js", () => ({
 	seedTrackerVocabulary: vi.fn(),
 }));
-vi.mock("../modules/settings/index.js", () => ({
+vi.mock("../settings/index.js", () => ({
 	checkCanEditSettings: vi.fn(),
 }));
-vi.mock("../middleware/workspace.js", () => ({
+vi.mock("../../middleware/workspace.js", () => ({
 	requireWorkspaceMember: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: mocks.publishEvent,
 }));
 

@@ -2,26 +2,19 @@
 //
 // Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
 // Run:
-//   RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/members.focus-session.integration.test.ts
+//   RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/workspaces/members.focus-session.integration.test.ts
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
-import {
-	afterAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
-import type { AuthUser } from "../auth.js";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
-import { pool } from "../db/pool.js";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AuthUser } from "../../auth.js";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
+import { pool } from "../../db/pool.js";
 import {
 	createDefaultWorkspaceAccessDeps,
 	createWorkspaceAccessService,
-} from "../lib/helpers.js";
+} from "../../lib/helpers.js";
 
 const WORKSPACE_ID = 3;
 const MEMBER_USER_ID = 7;
@@ -33,12 +26,12 @@ const { mockPublishEvent } = vi.hoisted(() => ({
 	mockPublishEvent: vi.fn(async () => undefined),
 }));
 
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
 
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: mockPublishEvent,
 	clearPresence: vi.fn(async () => undefined),
 	heartbeat: vi.fn(),
@@ -51,8 +44,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresencePattern: vi.fn(),
 }));
 
-vi.mock("../lib/helpers.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../lib/helpers.js")>();
+vi.mock("../../lib/helpers.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../lib/helpers.js")>();
 	const deps = actual.createDefaultWorkspaceAccessDeps({
 		now: () => FIXED_NOW,
 	});
@@ -96,10 +89,9 @@ async function idFor(sql: string, values: unknown[]): Promise<number> {
 }
 
 async function cleanup(): Promise<void> {
-	await pool.query(
-		"DELETE FROM focus_sessions WHERE workspace_id = $1",
-		[WORKSPACE_ID],
-	);
+	await pool.query("DELETE FROM focus_sessions WHERE workspace_id = $1", [
+		WORKSPACE_ID,
+	]);
 	await pool.query("DELETE FROM card_events WHERE workspace_id = $1", [
 		WORKSPACE_ID,
 	]);

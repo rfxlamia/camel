@@ -1101,6 +1101,48 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected SettingsPage to remain under client/src/pages/SettingsPage.tsx",
 		);
 	});
+
+	it("Workspaces relocates server routers while kernel chrome and presence stay", () => {
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/workspaces/index.ts")),
+			"expected server/src/modules/workspaces/index.ts",
+		);
+		for (const name of [
+			"workspaces.ts",
+			"workspaces.delete.test.ts",
+			"workspaces.patch.test.ts",
+			"workspaces.post.test.ts",
+			"members.ts",
+			"members.mutations.test.ts",
+			"members.notification.test.ts",
+			"members.focus-session.integration.test.ts",
+			"members-mutations.integration.test.ts",
+			"members-role.patch.integration.test.ts",
+			"invites.ts",
+			"invites.notification.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/workspaces/${name}`)),
+				`expected server/src/modules/workspaces/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/shared/WorkspaceContext.tsx")),
+			"expected WorkspaceContext to remain in client/src/shared/",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/routes/presence.ts")),
+			"expected presence.ts to stay beside the realtime kernel",
+		);
+		assert.ok(
+			!existsSync(join(repoRoot, "client/src/features/workspaces")),
+			"expected no empty client/src/features/workspaces tree",
+		);
+	});
 });
 
 describe("Cycle A — stub CLI (integration)", () => {
