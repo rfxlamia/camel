@@ -4,7 +4,7 @@
  * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
  *
  * Run:
- *   RUN_INTEGRATION=1 npx vitest run src/notifications/service.test.ts
+ *   RUN_INTEGRATION=1 npx vitest run src/modules/notifications/service.test.ts
  */
 import "dotenv/config";
 import {

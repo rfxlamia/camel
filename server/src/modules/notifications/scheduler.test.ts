@@ -10,7 +10,7 @@
  * depend on the hour and always run.
  *
  * Run:
- *   RUN_INTEGRATION=1 npx vitest run src/notifications/scheduler.test.ts
+ *   RUN_INTEGRATION=1 npx vitest run src/modules/notifications/scheduler.test.ts
  */
 import "dotenv/config";
 import { sql } from "kysely";
