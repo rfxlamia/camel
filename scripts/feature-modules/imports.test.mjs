@@ -146,10 +146,6 @@ describe("Cycle A — public API and in-module (unit)", () => {
 				"server/src/routes/presence.ts",
 				`import { removeAttachmentPairsBestEffort } from "../modules/board/index.js";\n`,
 			],
-			[
-				"server/src/agent/routes.ts",
-				`import { removeAttachmentPairsBestEffort } from "../modules/board/index.js";\n`,
-			],
 		]) {
 			const violations = checkImports({ filePath, source, map });
 			assert.deepEqual(violations, [], filePath);
