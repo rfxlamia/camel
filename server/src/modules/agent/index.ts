@@ -12,6 +12,7 @@ export {
 	sanitizeLLMOutput,
 	sanitizeUserInput,
 } from "./prompt-sanitizer.js";
+export { createAgentRouter } from "./routes.js";
 export {
 	type AgentBoardRecord,
 	type AgentBoardServiceDeps,
@@ -70,6 +71,7 @@ export {
 	RetryError,
 	type RetryFailure,
 } from "./ticket-intake/retry.js";
+export { ticketIntakeRouter } from "./ticket-intake/routes.js";
 export {
 	type CreateFileCtx,
 	makeCreateFile,

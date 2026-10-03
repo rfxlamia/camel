@@ -17,7 +17,7 @@ interface FakeRow {
 
 let cardEvents: FakeRow[] = [];
 
-vi.mock("../config.js", () => ({
+vi.mock("../../../config.js", () => ({
 	config: {
 		ANTHROPIC_API_KEY: "test-anthropic-key",
 		ANTHROPIC_MODEL: "claude-sonnet-4-20250514",
@@ -26,8 +26,9 @@ vi.mock("../config.js", () => ({
 	},
 }));
 
-vi.mock("../lib/helpers.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../lib/helpers.js")>();
+vi.mock("../../../lib/helpers.js", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../../../lib/helpers.js")>();
 	return {
 		...actual,
 		lookupMembership: vi.fn().mockResolvedValue("member"),
@@ -51,9 +52,8 @@ vi.mock("../lib/helpers.js", async (importOriginal) => {
 	};
 });
 
-vi.mock("../modules/agent/index.js", async (importOriginal) => {
-	const actual =
-		await importOriginal<typeof import("../modules/agent/index.js")>();
+vi.mock("./history.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("./history.js")>();
 	return {
 		...actual,
 		getTicketHistory: vi.fn(
@@ -75,11 +75,11 @@ vi.mock("../modules/agent/index.js", async (importOriginal) => {
 	};
 });
 
-vi.mock("../auth.js", () => ({
+vi.mock("../../../auth.js", () => ({
 	requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
-vi.mock("../realtime.js", () => ({
+vi.mock("../../../realtime.js", () => ({
 	publishEvent: vi.fn().mockResolvedValue(undefined),
 	clearPresence: vi.fn().mockResolvedValue(undefined),
 }));
@@ -125,11 +125,9 @@ describe("ticket-intake end-to-end: card-context submit → history", () => {
 		cardEvents = [];
 		mockAnthropicCreate.mockReset();
 		mockLinearFetch.mockReset();
-		const { resetRateLimitsForTesting } = await import(
-			"../modules/agent/index.js"
-		);
+		const { resetRateLimitsForTesting } = await import("./rate-limits.js");
 		resetRateLimitsForTesting();
-		const { ticketIntakeRouter } = await import("./ticket-intake.js");
+		const { ticketIntakeRouter } = await import("./routes.js");
 		app = express();
 		app.use(express.json());
 		app.use((req, _res, next) => {

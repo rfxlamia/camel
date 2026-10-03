@@ -39,9 +39,9 @@ Database layer.
 
 LLM pipeline for agentic kanban.
 
-- **[routes.ts](./src/agent/routes.ts)** - Agent board REST endpoints (create board, send message, approve, get outputs)
+- **[routes.ts](./src/modules/agent/routes.ts)** - Agent board REST endpoints (create board, send message, approve, get outputs)
 - **[service.ts](./src/agent/service.ts)** - Pure business logic with dependency injection; fully unit-testable
-- **[llm.ts](./src/agent/llm.ts)** - Thin Anthropic SDK wrappers; supports native API and compatible endpoints (MiMo)
+- **[llm.ts](./src/modules/agent/llm.ts)** - Thin Anthropic SDK wrappers; supports native API and compatible endpoints (MiMo)
 - **[templates.ts](./src/agent/templates.ts)** - Agent template definitions with `{placeholder}` system prompts
 - **[artifact.ts](./src/agent/artifact.ts)** - Artifact slug generation, filename derivation, byte limits
 
@@ -95,9 +95,9 @@ Route modules extracted from routes.ts.
 - **[wip.test.ts](./src/core/wip.test.ts)** - Unit tests for WIP limit checks
 - **[metrics.test.ts](./src/core/metrics.test.ts)** - Unit tests for flow metrics
 - **[workspaceMigration.test.ts](./src/db/workspaceMigration.test.ts)** - Workspace migration helper tests
-- **[routes.test.ts](./src/agent/routes.test.ts)** - Agent routes tests
+- **[routes.test.ts](./src/modules/agent/routes.test.ts)** - Agent routes tests
 - **[service.test.ts](./src/agent/service.test.ts)** - Agent service tests
-- **[llm.test.ts](./src/agent/llm.test.ts)** - LLM layer tests
+- **[llm.test.ts](./src/modules/agent/llm.test.ts)** - LLM layer tests
 - **[templates.test.ts](./src/agent/templates.test.ts)** - Template rendering tests
 - **[artifact.test.ts](./src/agent/artifact.test.ts)** - Artifact utility tests
 - **[pipeline.integration.test.ts](./src/agent/pipeline.integration.test.ts)** - Integration tests (opt-in via `RUN_LLM_IT=1`)

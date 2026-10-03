@@ -1,8 +1,6 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import { createAgentRouter } from "./agent/routes.js";
-import { createChatRouter } from "./modules/chat/index.js";
 import {
 	cleanupExpiredSessions,
 	createAuthRateLimiter,
@@ -14,6 +12,7 @@ import {
 	getListLatencySnapshot,
 	startWorkItemLatencyReporter,
 } from "./core/work-item-latency.js";
+import { pool } from "./db/pool.js";
 import { connectRedis } from "./db/redis.js";
 import {
 	csrfProtection,
@@ -23,14 +22,17 @@ import {
 import { createErrorHandler } from "./middleware/error-handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
-import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
-import { initNotificationService } from "./notifications/service.js";
+import {
+	createAgentRouter,
+	ticketIntakeRouter,
+} from "./modules/agent/index.js";
+import { createChatRouter } from "./modules/chat/index.js";
 import { startDueDateScheduler } from "./notifications/scheduler.js";
+import { initNotificationService } from "./notifications/service.js";
+import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
 import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
 import { UPLOADS_DIR } from "./routes/settings.js";
-import { ticketIntakeRouter } from "./routes/ticket-intake.js";
-import { pool } from "./db/pool.js";
 import { api } from "./routes.js";
 
 const app = express();

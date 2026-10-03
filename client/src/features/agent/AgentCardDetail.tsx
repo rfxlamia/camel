@@ -2,22 +2,22 @@ import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { api } from "../api";
-import { useBoard } from "../features/board";
+import { api } from "../../api";
+import { useBoard } from "../board";
 import {
 	deriveColumnFailureMessage,
 	deriveStreamedOutputForColumn,
 	deriveThinkingForColumn,
 	pickContent,
-} from "../lib/agentStream";
-import { ToolTrace } from "../shared/ToolTraceView";
+} from "./agentStream";
+import { ToolTrace } from "../../shared/ToolTraceView";
 import {
 	deriveToolTrace,
 	hasLiveToolActivityForColumn,
 	pickToolTraceForColumn,
-} from "../shared/toolTrace";
-import { useWorkspace } from "../shared/WorkspaceContext";
-import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../types";
+} from "../../shared/toolTrace";
+import { useWorkspace } from "../../shared/WorkspaceContext";
+import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../../types";
 
 interface AgentCardDetailProps {
 	column: AgentColumn;

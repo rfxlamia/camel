@@ -3,19 +3,19 @@
 // so the test exercises ONLY this component's live-vs-DB selection + states.
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentColumn } from "../types";
+import type { AgentColumn } from "../../types";
 
 const mockUseBoard = vi.fn();
 const mockUseWorkspace = vi.fn();
-vi.mock("../features/board", () => ({
+vi.mock("../board", () => ({
 	useBoard: () => mockUseBoard(),
 }));
-vi.mock("../shared/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
 const getAgentCardOutput = vi.fn();
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
 	api: { getAgentCardOutput: (...a: unknown[]) => getAgentCardOutput(...a) },
 }));
 
