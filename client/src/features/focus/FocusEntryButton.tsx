@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ApiError } from "../api";
-import { useFocusSession } from "../context/FocusSessionContext";
-import { useShowToast } from "./ToastContext";
-import { useWorkspace } from "./WorkspaceContext";
-import type { WorkItemSource } from "../types";
+import { ApiError } from "../../api";
+import { useShowToast } from "../../shared/ToastContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
+import type { WorkItemSource } from "../../types";
+import { useFocusSession } from "./FocusSessionContext";
 
 export type FocusEntryButtonProps = {
 	source: WorkItemSource;

@@ -2,7 +2,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FocusSession, User } from "../types";
+import type { FocusSession, User } from "../../types";
 
 const {
 	mockFocusGet,
@@ -49,8 +49,8 @@ const {
 	mockSetFocusSessionHydrated: vi.fn(),
 }));
 
-vi.mock("../api", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../api")>();
+vi.mock("../../api", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../api")>();
 	return {
 		...actual,
 		api: {
@@ -64,11 +64,11 @@ vi.mock("../api", async (importOriginal) => {
 	};
 });
 
-import { ApiError } from "../api";
+import { ApiError } from "../../api";
 import {
 	FocusSessionProvider,
 	useFocusSession,
-} from "../context/FocusSessionContext";
+} from "./FocusSessionContext";
 
 const testUser: User = {
 	id: 7,
@@ -160,7 +160,7 @@ function createWrapper() {
 	};
 }
 
-vi.mock("../shared/WorkspaceContext", () => ({
+vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => ({
 		activeWorkspaceId,
 		user: testUser,
@@ -169,11 +169,11 @@ vi.mock("../shared/WorkspaceContext", () => ({
 	}),
 }));
 
-vi.mock("../shared/ToastContext", () => ({
+vi.mock("../../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
-vi.mock("../features/board", () => ({
+vi.mock("../board", () => ({
 	useBoard: () => ({
 		subscribeFocusEvents: (
 			handler: (event: {

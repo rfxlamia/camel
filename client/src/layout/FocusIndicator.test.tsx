@@ -8,7 +8,7 @@ const { mockUseFocusSession, mockNavigate } = vi.hoisted(() => ({
 	mockNavigate: vi.fn(),
 }));
 
-vi.mock("../context/FocusSessionContext", () => ({
+vi.mock("../features/focus/FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),
 }));
 

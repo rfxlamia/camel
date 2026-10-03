@@ -7,18 +7,18 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { ApiError, api } from "../api";
-import { useBoard } from "../features/board";
+import { ApiError, api } from "../../api";
+import { useBoard } from "../board";
 import {
 	ACCESS_REVOKED_TOAST,
 	deletionEventTargetsFocusedTask,
 	isActiveFocusSession,
 	membershipRemovalTargetsUser,
 	TASK_MISSING_TOAST,
-} from "../features/focus";
-import { useShowToast } from "../shared/ToastContext";
-import { useWorkspace } from "../shared/WorkspaceContext";
-import type { FocusSession, WorkItemSource } from "../types";
+} from "./focusGuards";
+import { useShowToast } from "../../shared/ToastContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
+import type { FocusSession, WorkItemSource } from "../../types";
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;

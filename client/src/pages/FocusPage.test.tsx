@@ -36,7 +36,7 @@ vi.mock("../api", () => ({
 	},
 }));
 
-vi.mock("../context/FocusSessionContext", () => ({
+vi.mock("../features/focus/FocusSessionContext", () => ({
 	useFocusSession: () => mockUseFocusSession(),
 }));
 
