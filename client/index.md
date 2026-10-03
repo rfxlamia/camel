@@ -64,36 +64,36 @@ Reusable UI components.
 - **[LoadingCamel.tsx](./src/components/LoadingCamel.tsx)** - Lottie loading animation
 - **[SuccessAnimation.tsx](./src/components/SuccessAnimation.tsx)** - Lottie success animation
 
-### src/components/agent/
+### src/features/agent/
 
-Agent-specific sub-components.
+Agent feature module (public API via `index.ts`).
 
-- **[AgentBoardHeader.tsx](./src/components/agent/AgentBoardHeader.tsx)** - Status badge and metadata header for agent board
-- **[AgentBoardVisual.tsx](./src/components/agent/AgentBoardVisual.tsx)** - Column grid visualizing per-column execution state
-- **[AgentChatPanel.tsx](./src/components/agent/AgentChatPanel.tsx)** - Chat input and conversation thread for agent follow-ups
+- **[AgentBoardHeader.tsx](./src/features/agent/AgentBoardHeader.tsx)** - Status badge and metadata header for agent board
+- **[AgentBoardVisual.tsx](./src/features/agent/AgentBoardVisual.tsx)** - Column grid visualizing per-column execution state
+- **[AgentChatPanel.tsx](./src/features/agent/AgentChatPanel.tsx)** - Chat input and conversation thread for agent follow-ups
 
 ### src/hooks/
 
 Custom React hooks.
 
 - **[useAgentBoard.ts](./src/features/agent/useAgentBoard.ts)** - Agent board fetch and SSE event-driven re-fetch
-- **[useAgentChat.ts](./src/hooks/useAgentChat.ts)** - Agent chat send, queue, and conversation state
+- **[useAgentChat.ts](./src/features/agent/useAgentChat.ts)** - Agent chat send, queue, and conversation state
 
 ### src/lib/
 
 Utility modules.
 
 - **[title.ts](./src/lib/title.ts)** - Page title and favicon helpers
-- **[agentQueue.ts](./src/lib/agentQueue.ts)** - Agent message queue management
+- **[agentQueue.ts](./src/shared/agentQueue.ts)** - Agent message queue management
 - **[agentStream.ts](./src/features/agent/agentStream.ts)** - SSE stream handling for agent events
 - **[agentBoardSync.ts](./src/features/agent/agentBoardSync.ts)** - Sync agent board state with kanban board
-- **[agentColumnState.ts](./src/lib/agentColumnState.ts)** - Agent column state management
+- **[agentColumnState.ts](./src/features/agent/agentColumnState.ts)** - Agent column state management
 - **[cardPanel.ts](./src/lib/cardPanel.ts)** - Card panel open/close logic
 - **[toolTrace.ts](./src/lib/toolTrace.ts)** - Tool trace event parsing
 - **[workspaceSelection.ts](./src/lib/workspaceSelection.ts)** - Workspace selection with localStorage persistence
 - **[workspaceSwitcher.ts](./src/lib/workspaceSwitcher.ts)** - Workspace switching with limit enforcement
 - **[settingsValidation.ts](./src/lib/settingsValidation.ts)** - Settings form validation rules
-- **[agentFollowUp.ts](./src/lib/agentFollowUp.ts)** - Converts server conversations to follow-up message format
+- **[agentFollowUp.ts](./src/features/agent/agentFollowUp.ts)** - Converts server conversations to follow-up message format
 
 ### src/assets/
 
@@ -107,16 +107,16 @@ Static assets.
 - **[api.test.ts](./src/api.test.ts)** - API client tests
 - **[types.test.ts](./src/types.test.ts)** - Type utility tests
 - **[title.test.ts](./src/lib/title.test.ts)** - Title helper tests
-- **[agentQueue.test.ts](./src/lib/agentQueue.test.ts)** - Agent queue tests
+- **[agentQueue.test.ts](./src/shared/agentQueue.test.ts)** - Agent queue tests
 - **[agentStream.test.ts](./src/features/agent/agentStream.test.ts)** - Agent stream tests
 - **[agentBoardSync.test.ts](./src/features/agent/agentBoardSync.test.ts)** - Board sync tests
-- **[agentColumnState.test.ts](./src/lib/agentColumnState.test.ts)** - Column state tests
+- **[agentColumnState.test.ts](./src/features/agent/agentColumnState.test.ts)** - Column state tests
 - **[cardPanel.test.ts](./src/lib/cardPanel.test.ts)** - Card panel tests
 - **[toolTrace.test.ts](./src/lib/toolTrace.test.ts)** - Tool trace tests
 - **[workspaceSelection.test.ts](./src/lib/workspaceSelection.test.ts)** - Workspace selection tests
 - **[workspaceSwitcher.test.ts](./src/lib/workspaceSwitcher.test.ts)** - Workspace switcher tests
 - **[settingsValidation.test.ts](./src/lib/settingsValidation.test.ts)** - Settings validation tests
 - **[AgentPage.test.tsx](./src/pages/AgentPage.test.tsx)** - Agent page component tests
-- **[ArtifactCard.test.tsx](./src/components/ArtifactCard.test.tsx)** - Artifact card tests
+- **[ArtifactCard.test.tsx](./src/features/agent/ArtifactCard.test.tsx)** - Artifact card tests
 - **[AgentCardDetail.test.tsx](./src/features/agent/AgentCardDetail.test.tsx)** - Agent card detail tests
 - **[ToolTrace.test.tsx](./src/components/ToolTrace.test.tsx)** - Tool trace component tests

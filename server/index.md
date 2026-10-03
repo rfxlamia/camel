@@ -35,25 +35,28 @@ Database layer.
 - **[schema.sql](./src/db/schema.sql)** - Main DB schema (columns, cards, card_events, workspaces, users)
 - **[agent-schema.sql](./src/db/agent-schema.sql)** - Agent subsystem schema (agent_boards, agent_card_outputs)
 
-### src/agent/
+### src/modules/agent/
 
 LLM pipeline for agentic kanban.
 
 - **[routes.ts](./src/modules/agent/routes.ts)** - Agent board REST endpoints (create board, send message, approve, get outputs)
-- **[service.ts](./src/agent/service.ts)** - Pure business logic with dependency injection; fully unit-testable
+- **[service.ts](./src/modules/agent/service.ts)** - Pure business logic with dependency injection; fully unit-testable
 - **[llm.ts](./src/modules/agent/llm.ts)** - Thin Anthropic SDK wrappers; supports native API and compatible endpoints (MiMo)
-- **[templates.ts](./src/agent/templates.ts)** - Agent template definitions with `{placeholder}` system prompts
-- **[artifact.ts](./src/agent/artifact.ts)** - Artifact slug generation, filename derivation, byte limits
+- **[templates.ts](./src/modules/agent/templates.ts)** - Agent template definitions with `{placeholder}` system prompts
+- **[artifact.ts](./src/modules/agent/artifact.ts)** - Artifact slug generation, filename derivation, byte limits
+- **[ticket-intake/routes.ts](./src/modules/agent/ticket-intake/routes.ts)** - Ticket intake REST endpoints (chat, submit, history)
+- **[ticket-intake/llm.ts](./src/modules/agent/ticket-intake/llm.ts)** - Ticket field extraction via the LLM client
+- **ticket-intake/** (`completeness`, `history`, `linear-client`, `rate-limits`, `retry`) - Ticket intake helpers: completeness checks, history lookup, Linear client, rate limits, retry
 
-### src/agent/tools/
+### src/modules/agent/tools/
 
 Tool registry for LLM function calling.
 
-- **[registry.ts](./src/agent/tools/registry.ts)** - Tool registration and lookup
-- **[types.ts](./src/agent/tools/types.ts)** - Tool interface definitions (ToolResult, ToolInputSchema, risk tiers)
-- **[webSearch.ts](./src/agent/tools/webSearch.ts)** - Tavily web search tool with error classification
-- **[createFile.ts](./src/agent/tools/createFile.ts)** - File creation tool for agent artifacts
-- **[trace.ts](./src/agent/tools/trace.ts)** - Tool execution tracing
+- **[registry.ts](./src/modules/agent/tools/registry.ts)** - Tool registration and lookup
+- **[types.ts](./src/modules/agent/tools/types.ts)** - Tool interface definitions (ToolResult, ToolInputSchema, risk tiers)
+- **[webSearch.ts](./src/modules/agent/tools/webSearch.ts)** - Tavily web search tool with error classification
+- **[createFile.ts](./src/modules/agent/tools/createFile.ts)** - File creation tool for agent artifacts
+- **[trace.ts](./src/modules/agent/tools/trace.ts)** - Tool execution tracing
 
 ### src/middleware/
 
@@ -96,14 +99,14 @@ Route modules extracted from routes.ts.
 - **[metrics.test.ts](./src/core/metrics.test.ts)** - Unit tests for flow metrics
 - **[workspaceMigration.test.ts](./src/db/workspaceMigration.test.ts)** - Workspace migration helper tests
 - **[routes.test.ts](./src/modules/agent/routes.test.ts)** - Agent routes tests
-- **[service.test.ts](./src/agent/service.test.ts)** - Agent service tests
+- **[service.test.ts](./src/modules/agent/service.test.ts)** - Agent service tests
 - **[llm.test.ts](./src/modules/agent/llm.test.ts)** - LLM layer tests
-- **[templates.test.ts](./src/agent/templates.test.ts)** - Template rendering tests
-- **[artifact.test.ts](./src/agent/artifact.test.ts)** - Artifact utility tests
-- **[pipeline.integration.test.ts](./src/agent/pipeline.integration.test.ts)** - Integration tests (opt-in via `RUN_LLM_IT=1`)
-- **[createFile.test.ts](./src/agent/tools/createFile.test.ts)** - createFile tool tests
-- **[registry.test.ts](./src/agent/tools/registry.test.ts)** - Tool registry tests
-- **[trace.test.ts](./src/agent/tools/trace.test.ts)** - Tool trace parsing tests
-- **[webSearch.test.ts](./src/agent/tools/webSearch.test.ts)** - Web search tool tests
+- **[templates.test.ts](./src/modules/agent/templates.test.ts)** - Template rendering tests
+- **[artifact.test.ts](./src/modules/agent/artifact.test.ts)** - Artifact utility tests
+- **[pipeline.integration.test.ts](./src/modules/agent/pipeline.integration.test.ts)** - Integration tests (opt-in via `RUN_LLM_IT=1`)
+- **[createFile.test.ts](./src/modules/agent/tools/createFile.test.ts)** - createFile tool tests
+- **[registry.test.ts](./src/modules/agent/tools/registry.test.ts)** - Tool registry tests
+- **[trace.test.ts](./src/modules/agent/tools/trace.test.ts)** - Tool trace parsing tests
+- **[webSearch.test.ts](./src/modules/agent/tools/webSearch.test.ts)** - Web search tool tests
 - **[settings.test.ts](./src/routes/settings.test.ts)** - Settings route tests
 - **[workspaceAccess.test.ts](./src/routes/workspaceAccess.test.ts)** - Workspace access logic tests
