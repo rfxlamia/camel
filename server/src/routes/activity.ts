@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db } from "../../db/kysely.js";
-import { getUnifiedWorkspaceActivity } from "../../lib/work-item-events.js";
-import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { db } from "../db/kysely.js";
+import { requireWorkspaceMember } from "../middleware/workspace.js";
+import { getUnifiedWorkspaceActivity } from "../lib/work-item-events.js";
 
 function activitySelect() {
 	return db
@@ -79,7 +79,9 @@ activityRouter.get(
 
 		const rawLimit = Number(req.query.limit);
 		const limit =
-			Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
+			Number.isInteger(rawLimit) && rawLimit > 0
+				? Math.min(rawLimit, 200)
+				: 50;
 		const events = await getUnifiedWorkspaceActivity(workspaceId, limit);
 		res.json({ events });
 	},
