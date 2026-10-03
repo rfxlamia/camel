@@ -467,8 +467,8 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected leftover server/src/chat/routes.ts to be gone",
 		);
 		assert.ok(
-			existsSync(join(repoRoot, "server/src/agent/llm.ts")),
-			"expected leftover server/src/agent/llm.ts to still exist",
+			!existsSync(join(repoRoot, "server/src/agent/llm.ts")),
+			"expected leftover server/src/agent/llm.ts to be gone after agent wave-2",
 		);
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/pages/ChatPage.tsx")),
@@ -712,6 +712,9 @@ describe("Cycle Map — map data (unit)", () => {
 			"agentColumnState.ts",
 			"agentColumnState.test.ts",
 			"agentFollowUp.ts",
+			"AgentCardDetail.tsx",
+			"AgentCardDetail.test.tsx",
+			"useAgentBoard.ts",
 		]) {
 			assert.ok(
 				existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
@@ -725,12 +728,12 @@ describe("Cycle Map — map data (unit)", () => {
 			"agentBoardSync.test.ts",
 		]) {
 			assert.ok(
-				existsSync(join(repoRoot, `client/src/lib/${name}`)),
-				`expected wave-2 leftover client/src/lib/${name}`,
+				existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
+				`expected wave-2 helper client/src/features/agent/${name}`,
 			);
 			assert.ok(
-				!existsSync(join(repoRoot, `client/src/features/agent/${name}`)),
-				`expected wave-2 helper ${name} not to be in features/agent/ yet`,
+				!existsSync(join(repoRoot, `client/src/lib/${name}`)),
+				`expected leftover client/src/lib/${name} to be gone`,
 			);
 		}
 		for (const name of [
@@ -762,6 +765,16 @@ describe("Cycle Map — map data (unit)", () => {
 			"tools/types.ts",
 			"tools/webSearch.ts",
 			"tools/webSearch.test.ts",
+			"llm.ts",
+			"llm.test.ts",
+			"routes.ts",
+			"routes.test.ts",
+			"pipeline.integration.test.ts",
+			"ticket-intake/llm.ts",
+			"ticket-intake/llm.test.ts",
+			"ticket-intake/routes.ts",
+			"ticket-intake/routes.test.ts",
+			"ticket-intake/routes.integration.test.ts",
 		]) {
 			assert.ok(
 				existsSync(join(repoRoot, `server/src/modules/agent/${name}`)),
@@ -770,33 +783,26 @@ describe("Cycle Map — map data (unit)", () => {
 		}
 		for (const name of [
 			"server/src/agent/service.ts",
+			"server/src/agent/llm.ts",
+			"server/src/agent/llm.test.ts",
+			"server/src/agent/routes.ts",
+			"server/src/agent/routes.test.ts",
+			"server/src/agent/pipeline.integration.test.ts",
+			"server/src/agent/ticket-intake/llm.ts",
+			"server/src/agent/ticket-intake/llm.test.ts",
+			"server/src/routes/ticket-intake.ts",
+			"server/src/routes/ticket-intake.test.ts",
+			"server/src/routes/ticket-intake.integration.test.ts",
 			"client/src/components/ArtifactCard.tsx",
+			"client/src/components/AgentCardDetail.tsx",
+			"client/src/components/AgentCardDetail.test.tsx",
+			"client/src/hooks/useAgentBoard.ts",
 		]) {
 			assert.ok(
 				!existsSync(join(repoRoot, name)),
 				`expected leftover ${name} to be gone`,
 			);
 		}
-		assert.ok(
-			existsSync(join(repoRoot, "server/src/routes/ticket-intake.ts")),
-			"expected leftover server/src/routes/ticket-intake.ts to still exist (imports leftover ticket-intake/llm.ts)",
-		);
-		assert.ok(
-			existsSync(join(repoRoot, "server/src/agent/llm.ts")),
-			"expected leftover server/src/agent/llm.ts to still exist (llm cluster is wave-2)",
-		);
-		assert.ok(
-			existsSync(join(repoRoot, "server/src/agent/routes.ts")),
-			"expected leftover server/src/agent/routes.ts to still exist (llm cluster is wave-2)",
-		);
-		assert.ok(
-			existsSync(join(repoRoot, "client/src/components/AgentCardDetail.tsx")),
-			"expected leftover client/src/components/AgentCardDetail.tsx to still exist (wave-2)",
-		);
-		assert.ok(
-			existsSync(join(repoRoot, "client/src/hooks/useAgentBoard.ts")),
-			"expected leftover client/src/hooks/useAgentBoard.ts to still exist (wave-2)",
-		);
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/pages/AgentPage.tsx")),
 			"expected AgentPage to remain under client/src/pages/AgentPage.tsx",
@@ -813,8 +819,10 @@ describe("Cycle Map — map data (unit)", () => {
 			[
 				'export { default as AgentBoardHeader } from "./AgentBoardHeader";',
 				'export { default as AgentBoardVisual } from "./AgentBoardVisual";',
+				'export { default as AgentCardDetail } from "./AgentCardDetail";',
 				'export { default as AgentChatPanel } from "./AgentChatPanel";',
 				'export { default as AgentComposer } from "./AgentComposer";',
+				'export { useAgentBoard } from "./useAgentBoard";',
 				'export { useAgentChat } from "./useAgentChat";',
 			].join("\n"),
 			"agent index must expose only AgentPage's public API",

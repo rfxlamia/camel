@@ -13,16 +13,16 @@
  */
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
-import { config } from "../config.js";
+import { config } from "../../config.js";
 import {
 	detectPromptInjection,
 	escapeXml,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "../modules/agent/index.js";
-import { renderSystemPrompt } from "../modules/agent/index.js";
-import type { Tool, ToolEvent } from "../modules/agent/index.js";
-import { runChatTurn } from "../modules/chat/index.js";
+} from "./prompt-sanitizer.js";
+import { renderSystemPrompt } from "./templates.js";
+import type { Tool, ToolEvent } from "./tools/types.js";
+import { runChatTurn } from "../chat/index.js";
 
 // ---------------------------------------------------------------------------
 // Client singleton — lazy-initialized on first call

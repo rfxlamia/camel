@@ -8,9 +8,9 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
-import { setAttachmentStorageForTests } from "../lib/attachment-storage.js";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
+import { setAttachmentStorageForTests } from "../../lib/attachment-storage.js";
 import {
 	buildArtifactDownload,
 	defaultToolRegistry,

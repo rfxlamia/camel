@@ -40,9 +40,9 @@ vi.mock("../auth.js", async (importOriginal) => {
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import { createAgentRouter } from "../agent/routes.js";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
+import { createAgentRouter } from "../modules/agent/index.js";
 import { api } from "../routes.js";
 import { registerAgentAndSeedTests } from "./cards-identity.integration.helpers.js";
 

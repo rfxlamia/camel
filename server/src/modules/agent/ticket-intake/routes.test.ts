@@ -2,16 +2,16 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Single resettable factory for ../lib/helpers.js — Tasks 6 and 7 extend THIS
+// Single resettable factory for ../../../lib/helpers.js — Tasks 6 and 7 extend THIS
 // mock (vi.mock allows exactly one factory per module path per file; never
 // redeclare it when those tasks add their describes to this file).
 const mockLookupMembership = vi.fn();
 const mockRecordActivity = vi.fn();
-vi.mock("../lib/helpers.js", () => ({
+vi.mock("../../../lib/helpers.js", () => ({
 	lookupMembership: (...args: unknown[]) => mockLookupMembership(...args),
 	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
 }));
-vi.mock("../auth.js", () => ({
+vi.mock("../../../auth.js", () => ({
 	requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 const mockCheckChatLimit = vi.fn().mockResolvedValue({ isLocked: false });
@@ -51,16 +51,20 @@ const mockInferTypeFromClassifierAnswer = (text: string) => {
 	if (/\bimprovement(s)?\b/.test(normalized)) return "Improvement";
 	return null;
 };
-vi.mock("../modules/agent/index.js", () => ({
+vi.mock("./rate-limits.js", () => ({
 	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
 	peekChatLimit: (...args: unknown[]) => mockPeekChatLimit(...args),
 	peekSubmitLimit: (...args: unknown[]) => mockPeekSubmitLimit(...args),
 	recordSubmitSuccess: (...args: unknown[]) => mockRecordSubmitSuccess(...args),
+}));
+vi.mock("./linear-client.js", () => ({
 	createLinearIssue: (...args: unknown[]) => mockCreateLinearIssue(...args),
 	createLinearComment: (...args: unknown[]) => mockCreateLinearComment(...args),
 	getLabelId: (...args: unknown[]) => mockGetLabelId(...args),
 	isTicketIntakeConfigured: (...args: unknown[]) =>
 		mockIsTicketIntakeConfigured(...args),
+}));
+vi.mock("./retry.js", () => ({
 	executeWithRetry: async (
 		op: () => Promise<unknown>,
 		opts: { maxAttempts: number },
@@ -78,23 +82,27 @@ vi.mock("../modules/agent/index.js", () => ({
 			}
 		}
 	},
+}));
+vi.mock("./history.js", () => ({
 	getTicketHistory: (...args: unknown[]) => mockGetTicketHistory(...args),
+}));
+vi.mock("./completeness.js", () => ({
 	checkCompleteness: (...args: unknown[]) => mockCheckCompleteness(...args),
 	inferTypeFromClassifierAnswer: (...args: unknown[]) =>
 		mockInferTypeFromClassifierAnswer(...args),
 }));
-vi.mock("../realtime.js", () => ({
+
+vi.mock("../../../realtime.js", () => ({
 	publishEvent: vi.fn().mockResolvedValue(undefined),
 }));
-// ticket-intake/llm.ts stays leftover (llm cluster, wave-2): the route imports
-// extractTicketFields from it directly, so mock it directly — the barrel mock
-// above cannot cover a path the barrel does not re-export.
-vi.mock("../agent/ticket-intake/llm.js", () => ({
+// The route imports extractTicketFields from ./llm.js directly, so mock it
+// directly.
+vi.mock("./llm.js", () => ({
 	extractTicketFields: (...args: unknown[]) => mockExtractTicketFields(...args),
 }));
 
-import { publishEvent } from "../realtime.js";
-import { ticketIntakeRouter } from "./ticket-intake.js";
+import { publishEvent } from "../../../realtime.js";
+import { ticketIntakeRouter } from "./routes.js";
 
 const mockPublishEvent = vi.mocked(publishEvent);
 

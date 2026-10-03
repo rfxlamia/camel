@@ -1,11 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { config } from "../../config.js";
-import type {
-	TicketExtraction,
-	TicketType,
-} from "../../modules/agent/index.js";
-import { sanitizeUserInput } from "../../modules/agent/index.js";
+import { config } from "../../../config.js";
 import { getClient } from "../llm.js";
+import { sanitizeUserInput } from "../prompt-sanitizer.js";
+import type { TicketExtraction, TicketType } from "./completeness.js";
 
 const MODEL = config.ANTHROPIC_MODEL;
 

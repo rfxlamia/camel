@@ -1,29 +1,29 @@
 import { Router, type Request, type Response } from "express";
-import type { AuthUser } from "../auth.js";
-import { requireAuth } from "../auth.js";
+import type { AuthUser } from "../../../auth.js";
+import { requireAuth } from "../../../auth.js";
 import {
 	checkCompleteness,
 	inferTypeFromClassifierAnswer,
 	type TicketExtraction,
-} from "../modules/agent/index.js";
-import { getTicketHistory } from "../modules/agent/index.js";
-import { extractTicketFields } from "../agent/ticket-intake/llm.js";
+} from "./completeness.js";
+import { getTicketHistory } from "./history.js";
+import { extractTicketFields } from "./llm.js";
 import {
 	createLinearComment,
 	createLinearIssue,
 	getLabelId,
 	isTicketIntakeConfigured,
-} from "../modules/agent/index.js";
+} from "./linear-client.js";
 import {
 	checkChatLimit,
 	peekChatLimit,
 	peekSubmitLimit,
 	recordSubmitSuccess,
-} from "../modules/agent/index.js";
-import { executeWithRetry } from "../modules/agent/index.js";
-import { db } from "../db/kysely.js";
-import { publishEvent } from "../realtime.js";
-import { lookupMembership, recordActivity } from "../lib/helpers.js";
+} from "./rate-limits.js";
+import { executeWithRetry } from "./retry.js";
+import { db } from "../../../db/kysely.js";
+import { publishEvent } from "../../../realtime.js";
+import { lookupMembership, recordActivity } from "../../../lib/helpers.js";
 
 export const ticketIntakeRouter = Router();
 

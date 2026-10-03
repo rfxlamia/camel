@@ -54,7 +54,7 @@ Reusable UI components.
 - **[CardView.tsx](./src/components/CardView.tsx)** - Individual card rendering
 - **[ColumnView.tsx](./src/components/ColumnView.tsx)** - Column container with cards
 - **[AuthPage.tsx](./src/components/AuthPage.tsx)** - Login/register authentication page
-- **[AgentCardDetail.tsx](./src/components/AgentCardDetail.tsx)** - Agent card detail view with markdown rendering
+- **[AgentCardDetail.tsx](./src/features/agent/AgentCardDetail.tsx)** - Agent card detail view with markdown rendering
 - **[ArtifactCard.tsx](./src/components/ArtifactCard.tsx)** - Agent artifact display card
 - **[ToolTrace.tsx](./src/components/ToolTrace.tsx)** - Tool execution trace visualization
 - **[PresenceBar.tsx](./src/components/PresenceBar.tsx)** - Online users presence indicator
@@ -76,7 +76,7 @@ Agent-specific sub-components.
 
 Custom React hooks.
 
-- **[useAgentBoard.ts](./src/hooks/useAgentBoard.ts)** - Agent board fetch and SSE event-driven re-fetch
+- **[useAgentBoard.ts](./src/features/agent/useAgentBoard.ts)** - Agent board fetch and SSE event-driven re-fetch
 - **[useAgentChat.ts](./src/hooks/useAgentChat.ts)** - Agent chat send, queue, and conversation state
 
 ### src/lib/
@@ -85,8 +85,8 @@ Utility modules.
 
 - **[title.ts](./src/lib/title.ts)** - Page title and favicon helpers
 - **[agentQueue.ts](./src/lib/agentQueue.ts)** - Agent message queue management
-- **[agentStream.ts](./src/lib/agentStream.ts)** - SSE stream handling for agent events
-- **[agentBoardSync.ts](./src/lib/agentBoardSync.ts)** - Sync agent board state with kanban board
+- **[agentStream.ts](./src/features/agent/agentStream.ts)** - SSE stream handling for agent events
+- **[agentBoardSync.ts](./src/features/agent/agentBoardSync.ts)** - Sync agent board state with kanban board
 - **[agentColumnState.ts](./src/lib/agentColumnState.ts)** - Agent column state management
 - **[cardPanel.ts](./src/lib/cardPanel.ts)** - Card panel open/close logic
 - **[toolTrace.ts](./src/lib/toolTrace.ts)** - Tool trace event parsing
@@ -108,8 +108,8 @@ Static assets.
 - **[types.test.ts](./src/types.test.ts)** - Type utility tests
 - **[title.test.ts](./src/lib/title.test.ts)** - Title helper tests
 - **[agentQueue.test.ts](./src/lib/agentQueue.test.ts)** - Agent queue tests
-- **[agentStream.test.ts](./src/lib/agentStream.test.ts)** - Agent stream tests
-- **[agentBoardSync.test.ts](./src/lib/agentBoardSync.test.ts)** - Board sync tests
+- **[agentStream.test.ts](./src/features/agent/agentStream.test.ts)** - Agent stream tests
+- **[agentBoardSync.test.ts](./src/features/agent/agentBoardSync.test.ts)** - Board sync tests
 - **[agentColumnState.test.ts](./src/lib/agentColumnState.test.ts)** - Column state tests
 - **[cardPanel.test.ts](./src/lib/cardPanel.test.ts)** - Card panel tests
 - **[toolTrace.test.ts](./src/lib/toolTrace.test.ts)** - Tool trace tests
@@ -118,5 +118,5 @@ Static assets.
 - **[settingsValidation.test.ts](./src/lib/settingsValidation.test.ts)** - Settings validation tests
 - **[AgentPage.test.tsx](./src/pages/AgentPage.test.tsx)** - Agent page component tests
 - **[ArtifactCard.test.tsx](./src/components/ArtifactCard.test.tsx)** - Artifact card tests
-- **[AgentCardDetail.test.tsx](./src/components/AgentCardDetail.test.tsx)** - Agent card detail tests
+- **[AgentCardDetail.test.tsx](./src/features/agent/AgentCardDetail.test.tsx)** - Agent card detail tests
 - **[ToolTrace.test.tsx](./src/components/ToolTrace.test.tsx)** - Tool trace component tests
