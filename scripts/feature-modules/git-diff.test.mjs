@@ -1232,15 +1232,20 @@ describe("Cycle Map — map data (unit)", () => {
 	});
 
 	it("Auth relocates oauth into the auth module and meets the #131 close bar", () => {
-		/** @param {string} dir repo-relative directory; [] when absent */
+		/**
+		 * @param {string} dir repo-relative directory; [] when absent.
+		 * Dotfiles (e.g. a local .DS_Store) are ignored so the assertions
+		 * describe product files, not raw directory state.
+		 */
 		const listFiles = (dir) => {
 			const abs = join(repoRoot, dir);
 			if (!existsSync(abs)) return [];
-			return readdirSync(abs, { withFileTypes: true }).flatMap((entry) =>
-				entry.isDirectory()
+			return readdirSync(abs, { withFileTypes: true }).flatMap((entry) => {
+				if (entry.name.startsWith(".")) return [];
+				return entry.isDirectory()
 					? listFiles(`${dir}/${entry.name}`)
-					: [`${dir}/${entry.name}`],
-			);
+					: [`${dir}/${entry.name}`];
+			});
 		};
 
 		assert.ok(
@@ -1304,10 +1309,12 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected ${page} under client/src/pages/`,
 			);
 		}
-		assert.ok(
-			!FEATURES.includes("dashboard"),
-			"dashboard is not a FEATURES name",
-		);
+		for (const tree of [
+			"client/src/features/dashboard",
+			"server/src/modules/dashboard",
+		]) {
+			assert.ok(!existsSync(join(repoRoot, tree)), `expected no ${tree} tree`);
+		}
 
 		// Tracker stubs remain thin re-exports of the tracker feature.
 		const stubs = listFiles("client/src/components");
@@ -1356,6 +1363,40 @@ describe("Cycle Map — map data (unit)", () => {
 		);
 
 		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
+	});
+
+	it("Auth module relative specifiers all resolve to real files", () => {
+		// The dominant relocate risk is a mis-rewritten relative specifier. A wrong
+		// depth in a vi.mock path would silently stop the mock from intercepting
+		// the real module, so check from/import()/vi.mock specifiers explicitly.
+		const authDir = join(repoRoot, "server/src/modules/auth");
+		const specifier =
+			/(?:\bfrom\s+|\bimport\(\s*|\bvi\.mock\(\s*)["'](\.{1,2}\/[^"']*)["']/g;
+		const files = readdirSync(authDir).filter((name) => name.endsWith(".ts"));
+		assert.ok(files.length >= 6, "expected the auth module files to exist");
+
+		for (const file of files) {
+			const text = readFileSync(join(authDir, file), "utf8");
+			const specifiers = [...text.matchAll(specifier)].map((m) => m[1]);
+			assert.ok(
+				specifiers.length > 0,
+				`${file}: expected at least one relative specifier (regex miss?)`,
+			);
+			for (const spec of specifiers) {
+				// NodeNext: an explicit ".js" specifier maps only to a sibling .ts/.tsx
+				// file, never to a directory index. Falling back to "/index.ts" here
+				// would let "../auth.js" falsely resolve to the auth/ directory itself.
+				const base = join(authDir, spec.replace(/\.js$/, ""));
+				const candidates = spec.endsWith(".js")
+					? [`${base}.ts`, `${base}.tsx`]
+					: [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`];
+				const resolved = candidates.some((candidate) => existsSync(candidate));
+				assert.ok(
+					resolved,
+					`${file}: relative specifier "${spec}" does not resolve to a file`,
+				);
+			}
+		}
 	});
 });
 
