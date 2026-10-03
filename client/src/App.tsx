@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { api } from "./api";
-import ContextPanel from "./components/ContextPanel";
+import { BoardProvider, ContextPanel } from "./features/board";
 import { FocusSessionProvider } from "./features/focus";
-import { BoardProvider } from "./features/board";
 import AppLayout from "./layout/AppLayout";
 import ActivityPage from "./pages/ActivityPage";
 import AuthPage from "./pages/AuthPage";

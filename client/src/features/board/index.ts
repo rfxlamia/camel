@@ -12,6 +12,7 @@ export { default as CalendarView } from "./CalendarView";
 export { default as CardAttachments } from "./CardAttachments";
 export { CardBody } from "./CardView";
 export { default as ColumnView } from "./ColumnView";
+export { default as ContextPanel } from "./ContextPanel";
 export { ContextPanelSurface } from "./ContextPanelSurface";
 export {
 	describeCardEvent,

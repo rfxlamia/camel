@@ -119,7 +119,6 @@ describe("Cycle A — public API and in-module (unit)", () => {
 	it("allows board index import from leftover pages and contexts", () => {
 		for (const filePath of [
 			"client/src/pages/BoardPage.tsx",
-			"client/src/components/ContextPanel.tsx",
 			"client/src/context/FocusSessionContext.tsx",
 		]) {
 			const violations = checkImports({

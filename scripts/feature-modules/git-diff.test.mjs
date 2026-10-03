@@ -690,10 +690,6 @@ describe("Cycle Map — map data (unit)", () => {
 			);
 		}
 		assert.ok(
-			existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
-			"expected leftover client/src/components/ContextPanel.tsx to still exist",
-		);
-		assert.ok(
 			existsSync(join(repoRoot, "client/src/pages/FocusPage.tsx")),
 			"expected FocusPage to remain under client/src/pages/FocusPage.tsx",
 		);
@@ -873,14 +869,20 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "server/src/routes/board.ts")),
 			"expected leftover server/src/routes/board.ts to be gone",
 		);
-		assert.ok(
-			existsSync(join(repoRoot, "client/src/components/ContextPanel.tsx")),
-			"expected ContextPanel to remain under client/src/components/ContextPanel.tsx",
-		);
-		assert.ok(
-			!existsSync(join(repoRoot, "client/src/features/board/ContextPanel.tsx")),
-			"expected ContextPanel not to move into features/board/ yet",
-		);
+		for (const name of [
+			"ContextPanel.tsx",
+			"ContextPanel.test.tsx",
+			"ContextPanel.attachments.test.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/board/${name}`)),
+				`expected client/src/features/board/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/components/${name}`)),
+				`expected leftover client/src/components/${name} to be gone`,
+			);
+		}
 		assert.ok(
 			existsSync(join(repoRoot, "client/src/pages/BoardPage.tsx")),
 			"expected BoardPage to remain under client/src/pages/BoardPage.tsx",
