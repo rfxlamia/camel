@@ -26,15 +26,18 @@ import {
 	createAgentRouter,
 	ticketIntakeRouter,
 } from "./modules/agent/index.js";
+import {
+	betterAuthHandler,
+	createOAuthBridgeRouter,
+	oauthRouter,
+} from "./modules/auth/index.js";
 import { createChatRouter } from "./modules/chat/index.js";
 import {
 	initNotificationService,
 	startDueDateScheduler,
 } from "./modules/notifications/index.js";
 import { UPLOADS_DIR } from "./modules/settings/index.js";
-import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
 import { initRealtime, shutdownRealtime } from "./realtime.js";
-import { oauthRouter } from "./routes/oauth.js";
 import { api } from "./routes.js";
 
 const app = express();

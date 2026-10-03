@@ -10,10 +10,10 @@ vi.mock("better-auth", () => ({
 vi.mock("better-auth/node", () => ({
 	toNodeHandler: vi.fn(() => vi.fn()),
 }));
-vi.mock("./db/pool.js", () => ({
+vi.mock("../../db/pool.js", () => ({
 	pool: { query: vi.fn(), connect: vi.fn() },
 }));
-vi.mock("./config.js", () => ({
+vi.mock("../../config.js", () => ({
 	config: {
 		GOOGLE_CLIENT_ID: undefined,
 		GOOGLE_CLIENT_SECRET: undefined,

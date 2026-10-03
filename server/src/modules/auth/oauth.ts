@@ -6,10 +6,10 @@ import {
 	type PendingInvite,
 	requireAuth,
 	USERNAME_RE,
-} from "../auth.js";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
-import { validateUsername } from "../validators/input-length.js";
+} from "../../auth.js";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
+import { validateUsername } from "../../validators/input-length.js";
 
 export const oauthRouter = Router();
 
