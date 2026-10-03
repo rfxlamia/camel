@@ -1,19 +1,19 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
 import {
 	type AttachmentPair,
 	getAttachmentStorage,
-} from "../lib/attachment-storage.js";
-import { lookupMembership, serializeWorkspaceList } from "../lib/helpers.js";
-import { lockWorkspaceMutation } from "../lib/workspace-mutation-lock.js";
+} from "../../lib/attachment-storage.js";
+import { lookupMembership, serializeWorkspaceList } from "../../lib/helpers.js";
+import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
+import { validateWorkspaceName } from "../../validators/input-length.js";
 import {
 	loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort,
-} from "../modules/board/index.js";
-import { checkCanEditSettings } from "../modules/settings/index.js";
-import { validateWorkspaceName } from "../validators/input-length.js";
+} from "../board/index.js";
+import { checkCanEditSettings } from "../settings/index.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
 

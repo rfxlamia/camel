@@ -5,7 +5,7 @@
 //
 // Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
 // Run:
-//   RUN_INTEGRATION=1 npx vitest run src/routes/members-mutations.integration.test.ts
+//   RUN_INTEGRATION=1 npx vitest run src/modules/workspaces/members-mutations.integration.test.ts
 import "dotenv/config";
 import {
 	afterAll,
@@ -22,12 +22,12 @@ const { mockPublishEvent, mockTestUser } = vi.hoisted(() => ({
 	mockTestUser: { id: 1, username: "testuser", displayName: "Test User" },
 }));
 
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
 
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: mockPublishEvent,
 	clearPresence: vi.fn(),
 	heartbeat: vi.fn(),
@@ -40,8 +40,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresencePattern: vi.fn(),
 }));
 
-vi.mock("../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {
@@ -54,10 +54,10 @@ vi.mock("../auth.js", async (importOriginal) => {
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import { db } from "../db/kysely.js";
-import { pool } from "../db/pool.js";
-import { createErrorHandler } from "../middleware/error-handler.js";
-import { api } from "../routes.js";
+import { db } from "../../db/kysely.js";
+import { pool } from "../../db/pool.js";
+import { createErrorHandler } from "../../middleware/error-handler.js";
+import { api } from "../../routes.js";
 
 /** Isolated from other integration test workspace IDs used this session
  * (1, 96, 97, 99). */

@@ -5,14 +5,14 @@
  * (same flag as test:integration:routes in CI).
  *
  * Run from repo root:
- *   RUN_INTEGRATION=1 npm run test -- server/src/routes/members-role.patch.integration.test.ts
+ *   RUN_INTEGRATION=1 npm run test -- server/src/modules/workspaces/members-role.patch.integration.test.ts
  */
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AuthUser } from "../auth.js";
-import { db } from "../db/kysely.js";
+import type { AuthUser } from "../../auth.js";
+import { db } from "../../db/kysely.js";
 import { membersRouter } from "./members.js";
 
 let currentUserId: number;

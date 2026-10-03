@@ -2,19 +2,19 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../lib/helpers.js", () => ({
+vi.mock("../../lib/helpers.js", () => ({
 	lookupMembership: vi.fn(),
 	serializeWorkspaceList: vi.fn(),
 }));
 
-vi.mock("../core/tracker-vocabulary-seed.js", () => ({
+vi.mock("../../core/tracker-vocabulary-seed.js", () => ({
 	seedTrackerVocabulary: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockInsertWorkspace = vi.fn();
 const mockInsertMember = vi.fn();
 
-vi.mock("../db/kysely.js", () => ({
+vi.mock("../../db/kysely.js", () => ({
 	db: {
 		transaction: vi.fn(() => ({
 			execute: async (cb: (trx: unknown) => Promise<unknown>) => {

@@ -26,12 +26,14 @@ import {
 	trackerProjectsRouter,
 	trackerVocabulariesRouter,
 } from "./modules/tracker/index.js";
+import {
+	invitesRouter,
+	membersRouter,
+	workspacesRouter,
+} from "./modules/workspaces/index.js";
 import { notificationsRouter } from "./notifications/router.js";
 import { activityRouter } from "./routes/activity.js";
-import { invitesRouter } from "./routes/invites.js";
-import { membersRouter } from "./routes/members.js";
 import { presenceRouter } from "./routes/presence.js";
-import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility
 export {

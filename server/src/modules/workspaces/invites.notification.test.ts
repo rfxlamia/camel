@@ -4,14 +4,14 @@
  * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
  *
  * Run:
- *   RUN_INTEGRATION=1 npx vitest run src/routes/invites.notification.test.ts
+ *   RUN_INTEGRATION=1 npx vitest run src/modules/workspaces/invites.notification.test.ts
  */
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
+import { db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
 import { invitesRouter } from "./invites.js";
 
 const inviteeUsername = `invitee-charlie-${Date.now()}`;

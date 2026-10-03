@@ -79,12 +79,12 @@ Route modules extracted from routes.ts.
 - **[board.ts](./src/routes/board.ts)** - GET board with human columns and cards
 - **[cards.ts](./src/routes/cards.ts)** - CRUD and move for cards; enforces WIP limits and optimistic locking
 - **[columns.ts](./src/routes/columns.ts)** - CRUD for kanban columns with fractional positioning
-- **[invites.ts](./src/routes/invites.ts)** - Accept and decline workspace invites
-- **[members.ts](./src/routes/members.ts)** - Workspace member list, add, and remove
+- **[invites.ts](./src/modules/workspaces/invites.ts)** - Accept and decline workspace invites
+- **[members.ts](./src/modules/workspaces/members.ts)** - Workspace member list, add, and remove
 - **[metrics.ts](./src/routes/metrics.ts)** - GET flow metrics and 8-bucket weekly history
 - **[presence.ts](./src/routes/presence.ts)** - SSE endpoint, heartbeat, and online user list
 - **[settings.ts](./src/modules/settings/settings.ts)** - Board settings API (board_name, logo_path) with file upload support
-- **[workspaces.ts](./src/routes/workspaces.ts)** - CRUD for workspaces with membership cap enforcement
+- **[workspaces.ts](./src/modules/workspaces/workspaces.ts)** - CRUD for workspaces with membership cap enforcement
 - **[EXTRACTION_PLAN.md](./src/routes/EXTRACTION_PLAN.md)** - Plan for splitting handlers out of routes.ts
 
 ## Test Files

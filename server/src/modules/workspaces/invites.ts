@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
+import { db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
 export const invitesRouter = Router({ mergeParams: true });
 
 invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {

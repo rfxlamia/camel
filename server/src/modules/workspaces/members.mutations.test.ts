@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockUpdateMemberRole = vi.fn();
 const mockRemoveMember = vi.fn();
 
-vi.mock("../lib/helpers.js", () => ({
+vi.mock("../../lib/helpers.js", () => ({
 	workspaceAccessService: {
 		updateMemberRole: (...args: unknown[]) => mockUpdateMemberRole(...args),
 		removeMember: (...args: unknown[]) => mockRemoveMember(...args),
@@ -88,8 +88,7 @@ describe("DELETE /members/:userId", () => {
 			status: 403,
 			error: "Cannot remove yourself",
 		});
-		const res = await request(createApp(5))
-			.delete("/workspaces/7/members/5");
+		const res = await request(createApp(5)).delete("/workspaces/7/members/5");
 		expect(res.status).toBe(403);
 		expect(res.body).toEqual({ error: "Cannot remove yourself" });
 		expect(mockRemoveMember).toHaveBeenCalledWith({
@@ -102,8 +101,7 @@ describe("DELETE /members/:userId", () => {
 
 	it("returns 204 on successful removal", async () => {
 		mockRemoveMember.mockResolvedValue({ status: 204 });
-		const res = await request(createApp())
-			.delete("/workspaces/7/members/3");
+		const res = await request(createApp()).delete("/workspaces/7/members/3");
 		expect(res.status).toBe(204);
 		expect(mockRemoveMember).toHaveBeenCalledWith({
 			actorId: 1,
@@ -118,8 +116,7 @@ describe("DELETE /members/:userId", () => {
 			status: 404,
 			error: "Not found",
 		});
-		const res = await request(createApp())
-			.delete("/workspaces/7/members/99");
+		const res = await request(createApp()).delete("/workspaces/7/members/99");
 		expect(res.status).toBe(404);
 		expect(res.body).toEqual({ error: "Not found" });
 	});
