@@ -60,7 +60,7 @@ Reusable UI components.
 - **[PresenceBar.tsx](./src/components/PresenceBar.tsx)** - Online users presence indicator
 - **[TrashZone.tsx](./src/components/TrashZone.tsx)** - Drag target for deleting cards
 - **[Toast.tsx](./src/components/Toast.tsx)** - Toast notification component
-- **[LogoCropper.tsx](./src/components/LogoCropper.tsx)** - Image cropper for board logo upload
+- **[LogoCropper.tsx](./src/features/settings/LogoCropper.tsx)** - Image cropper for board logo upload
 - **[LoadingCamel.tsx](./src/components/LoadingCamel.tsx)** - Lottie loading animation
 - **[SuccessAnimation.tsx](./src/components/SuccessAnimation.tsx)** - Lottie success animation
 
@@ -92,7 +92,7 @@ Utility modules.
 - **[toolTrace.ts](./src/lib/toolTrace.ts)** - Tool trace event parsing
 - **[workspaceSelection.ts](./src/lib/workspaceSelection.ts)** - Workspace selection with localStorage persistence
 - **[workspaceSwitcher.ts](./src/lib/workspaceSwitcher.ts)** - Workspace switching with limit enforcement
-- **[settingsValidation.ts](./src/lib/settingsValidation.ts)** - Settings form validation rules
+- **[settingsValidation.ts](./src/features/settings/settingsValidation.ts)** - Settings form validation rules
 - **[agentFollowUp.ts](./src/features/agent/agentFollowUp.ts)** - Converts server conversations to follow-up message format
 
 ### src/assets/
@@ -115,7 +115,7 @@ Static assets.
 - **[toolTrace.test.ts](./src/lib/toolTrace.test.ts)** - Tool trace tests
 - **[workspaceSelection.test.ts](./src/lib/workspaceSelection.test.ts)** - Workspace selection tests
 - **[workspaceSwitcher.test.ts](./src/lib/workspaceSwitcher.test.ts)** - Workspace switcher tests
-- **[settingsValidation.test.ts](./src/lib/settingsValidation.test.ts)** - Settings validation tests
+- **[settingsValidation.test.ts](./src/features/settings/settingsValidation.test.ts)** - Settings validation tests
 - **[AgentPage.test.tsx](./src/pages/AgentPage.test.tsx)** - Agent page component tests
 - **[ArtifactCard.test.tsx](./src/features/agent/ArtifactCard.test.tsx)** - Artifact card tests
 - **[AgentCardDetail.test.tsx](./src/features/agent/AgentCardDetail.test.tsx)** - Agent card detail tests

@@ -29,8 +29,8 @@ vi.mock("../../api", () => ({
 	},
 }));
 
-import ManageMembersSection from "./ManageMembersSection";
 import { ApiError } from "../../api";
+import ManageMembersSection from "./ManageMembersSection";
 
 const owner: WorkspaceMember = {
 	userId: 1,
@@ -135,10 +135,9 @@ describe("ManageMembersSection interactions", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Member User")).toBeTruthy();
 		});
-		fireEvent.change(
-			screen.getByLabelText("Role for Member User"),
-			{ target: { value: "admin" } },
-		);
+		fireEvent.change(screen.getByLabelText("Role for Member User"), {
+			target: { value: "admin" },
+		});
 		await waitFor(() => {
 			expect(updateWorkspaceMemberRole).toHaveBeenCalledWith(7, 3, {
 				role: "admin",
@@ -154,10 +153,9 @@ describe("ManageMembersSection interactions", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Member User")).toBeTruthy();
 		});
-		fireEvent.change(
-			screen.getByLabelText("Role for Member User"),
-			{ target: { value: "admin" } },
-		);
+		fireEvent.change(screen.getByLabelText("Role for Member User"), {
+			target: { value: "admin" },
+		});
 		await waitFor(() => {
 			expect(showToast).toHaveBeenCalledWith("Not found", "error");
 		});
@@ -197,10 +195,7 @@ describe("ManageMembersSection interactions", () => {
 			).getByRole("button", { name: "Confirm remove" }),
 		);
 		await waitFor(() => {
-			expect(showToast).toHaveBeenCalledWith(
-				"Cannot remove yourself",
-				"error",
-			);
+			expect(showToast).toHaveBeenCalledWith("Cannot remove yourself", "error");
 		});
 	});
 

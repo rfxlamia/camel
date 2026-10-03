@@ -19,6 +19,7 @@ import {
 	createMyWorkPreAuthObservabilityMiddleware,
 	myWorkRouter,
 } from "./modules/my-work/index.js";
+import { settingsRouter } from "./modules/settings/index.js";
 import {
 	trackerItemsRouter,
 	trackerPhasesRouter,
@@ -30,7 +31,6 @@ import { activityRouter } from "./routes/activity.js";
 import { invitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { presenceRouter } from "./routes/presence.js";
-import { settingsRouter } from "./routes/settings.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
 // Re-export helpers for backward compatibility

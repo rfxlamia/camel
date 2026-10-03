@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
-import LogoCropper from "../components/LogoCropper";
-import ManageMembersSection from "../components/settings/ManageMembersSection";
 import {
 	canEditWorkspaceSettings,
 	getWorkspaceDangerZoneState,
+	LogoCropper,
+	ManageMembersSection,
 	validateBoardName,
 	validateUnsavedChanges,
 	validateWorkspaceName,
-} from "../lib/settingsValidation";
+} from "../features/settings";
 import { useShowToast } from "../shared/ToastContext";
 import { useWorkspace } from "../shared/WorkspaceContext";
 

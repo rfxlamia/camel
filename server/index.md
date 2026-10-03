@@ -83,7 +83,7 @@ Route modules extracted from routes.ts.
 - **[members.ts](./src/routes/members.ts)** - Workspace member list, add, and remove
 - **[metrics.ts](./src/routes/metrics.ts)** - GET flow metrics and 8-bucket weekly history
 - **[presence.ts](./src/routes/presence.ts)** - SSE endpoint, heartbeat, and online user list
-- **[settings.ts](./src/routes/settings.ts)** - Board settings API (board_name, logo_path) with file upload support
+- **[settings.ts](./src/modules/settings/settings.ts)** - Board settings API (board_name, logo_path) with file upload support
 - **[workspaces.ts](./src/routes/workspaces.ts)** - CRUD for workspaces with membership cap enforcement
 - **[EXTRACTION_PLAN.md](./src/routes/EXTRACTION_PLAN.md)** - Plan for splitting handlers out of routes.ts
 
@@ -108,5 +108,5 @@ Route modules extracted from routes.ts.
 - **[registry.test.ts](./src/modules/agent/tools/registry.test.ts)** - Tool registry tests
 - **[trace.test.ts](./src/modules/agent/tools/trace.test.ts)** - Tool trace parsing tests
 - **[webSearch.test.ts](./src/modules/agent/tools/webSearch.test.ts)** - Web search tool tests
-- **[settings.test.ts](./src/routes/settings.test.ts)** - Settings route tests
+- **[settings.test.ts](./src/modules/settings/settings.test.ts)** - Settings route tests
 - **[workspaceAccess.test.ts](./src/routes/workspaceAccess.test.ts)** - Workspace access logic tests

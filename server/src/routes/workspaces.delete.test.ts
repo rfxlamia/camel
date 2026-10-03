@@ -40,7 +40,7 @@ vi.mock("../lib/attachment-storage.js", () => ({
 vi.mock("../core/tracker-vocabulary-seed.js", () => ({
 	seedTrackerVocabulary: vi.fn(),
 }));
-vi.mock("./settings.js", () => ({
+vi.mock("../modules/settings/index.js", () => ({
 	checkCanEditSettings: vi.fn(),
 }));
 vi.mock("../middleware/workspace.js", () => ({

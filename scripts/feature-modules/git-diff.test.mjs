@@ -1052,6 +1052,55 @@ describe("Cycle Map — map data (unit)", () => {
 			"expected client/src/features/auth/ to not exist yet",
 		);
 	});
+
+	it("Settings relocates product files while SettingsPage stays a page", () => {
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/features/settings/index.ts")),
+			"expected features/settings public API client/src/features/settings/index.ts",
+		);
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/settings/index.ts")),
+			"expected server/src/modules/settings/index.ts",
+		);
+		for (const name of [
+			"LogoCropper.tsx",
+			"ManageMembersSection.tsx",
+			"ManageMembersSection.test.tsx",
+			"settingsValidation.ts",
+			"settingsValidation.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/settings/${name}`)),
+				`expected features/settings home client/src/features/settings/${name}`,
+			);
+		}
+		for (const path of [
+			"client/src/components/LogoCropper.tsx",
+			"client/src/components/settings/ManageMembersSection.tsx",
+			"client/src/components/settings/ManageMembersSection.test.tsx",
+			"client/src/lib/settingsValidation.ts",
+			"client/src/lib/settingsValidation.test.ts",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, path)),
+				`expected leftover ${path} to be gone`,
+			);
+		}
+		for (const name of ["settings.ts", "settings.test.ts"]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/settings/${name}`)),
+				`expected server/src/modules/settings/${name}`,
+			);
+			assert.ok(
+				!existsSync(join(repoRoot, `server/src/routes/${name}`)),
+				`expected leftover server/src/routes/${name} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "client/src/pages/SettingsPage.tsx")),
+			"expected SettingsPage to remain under client/src/pages/SettingsPage.tsx",
+		);
+	});
 });
 
 describe("Cycle A — stub CLI (integration)", () => {
