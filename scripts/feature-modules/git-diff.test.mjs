@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
 	existsSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
@@ -17,6 +18,7 @@ import {
 	unquoteGitPath,
 } from "./git-diff.mjs";
 import { countRawLines, LINE_BUDGET_MAX } from "./line-budget.mjs";
+import { FEATURES } from "./map.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const cliScript = join(repoRoot, "scripts/check-feature-modules.mjs");
@@ -1227,6 +1229,133 @@ describe("Cycle Map — map data (unit)", () => {
 			!existsSync(join(repoRoot, "client/src/features/activity")),
 			"expected no empty client/src/features/activity tree",
 		);
+	});
+
+	it("Auth relocates oauth into the auth module and meets the #131 close bar", () => {
+		/** @param {string} dir repo-relative directory; [] when absent */
+		const listFiles = (dir) => {
+			const abs = join(repoRoot, dir);
+			if (!existsSync(abs)) return [];
+			return readdirSync(abs, { withFileTypes: true }).flatMap((entry) =>
+				entry.isDirectory()
+					? listFiles(`${dir}/${entry.name}`)
+					: [`${dir}/${entry.name}`],
+			);
+		};
+
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/modules/auth/index.ts")),
+			"expected server/src/modules/auth/index.ts",
+		);
+		for (const name of [
+			"oauth-bridge.ts",
+			"oauth-bridge.test.ts",
+			"oauth-bridge.route.test.ts",
+			"oauth.ts",
+			"oauth.test.ts",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `server/src/modules/auth/${name}`)),
+				`expected server/src/modules/auth/${name}`,
+			);
+		}
+		for (const path of [
+			"server/src/oauth-bridge.ts",
+			"server/src/oauth-bridge.test.ts",
+			"server/src/oauth-bridge.route.test.ts",
+			"server/src/routes/oauth.ts",
+			"server/src/routes/oauth.test.ts",
+		]) {
+			assert.ok(
+				!existsSync(join(repoRoot, path)),
+				`expected leftover ${path} to be gone`,
+			);
+		}
+		assert.ok(
+			existsSync(join(repoRoot, "server/src/auth.ts")),
+			"expected kernel server/src/auth.ts to stay",
+		);
+
+		// Every FEATURES name has a public index on at least one side.
+		for (const name of FEATURES) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/features/${name}/index.ts`)) ||
+					existsSync(join(repoRoot, `server/src/modules/${name}/index.ts`)),
+				`expected features/${name}/index.ts or modules/${name}/index.ts`,
+			);
+		}
+		// Server-only names must not grow an empty client tree.
+		for (const name of ["workspaces", "activity", "auth"]) {
+			assert.ok(
+				!existsSync(join(repoRoot, `client/src/features/${name}`)),
+				`expected no client/src/features/${name} tree`,
+			);
+		}
+
+		// Pages stay orchestrators; Dashboard is not a FEATURES name.
+		for (const page of [
+			"DashboardPage.tsx",
+			"AuthPage.tsx",
+			"EmailGatePage.tsx",
+			"PickUsernamePage.tsx",
+		]) {
+			assert.ok(
+				existsSync(join(repoRoot, `client/src/pages/${page}`)),
+				`expected ${page} under client/src/pages/`,
+			);
+		}
+		assert.ok(
+			!FEATURES.includes("dashboard"),
+			"dashboard is not a FEATURES name",
+		);
+
+		// Tracker stubs remain thin re-exports of the tracker feature.
+		const stubs = listFiles("client/src/components");
+		assert.equal(stubs.length, 25, "expected the 25 documented tracker stubs");
+		for (const stub of stubs) {
+			assert.ok(
+				stub.startsWith("client/src/components/tracker/"),
+				`unexpected leftover under components/: ${stub}`,
+			);
+			const text = readFileSync(join(repoRoot, stub), "utf8");
+			assert.ok(
+				text.includes("features/tracker"),
+				`${stub} must re-export features/tracker`,
+			);
+			assert.ok(countRawLines(text) <= 10, `${stub} must stay a thin stub`);
+		}
+
+		// Legacy type-folders hold no product files.
+		for (const dir of [
+			"client/src/hooks",
+			"client/src/context",
+			"client/src/lib",
+			"client/src/chat",
+			"server/src/agent",
+			"server/src/chat",
+			"server/src/notifications",
+		]) {
+			assert.deepEqual(listFiles(dir), [], `expected ${dir} to hold no files`);
+		}
+
+		// Only documented kernel files remain under server/src/routes/.
+		assert.deepEqual(
+			listFiles("server/src/routes").sort(),
+			[
+				"server/src/routes/EXTRACTION_PLAN.md",
+				"server/src/routes/cards-identity.integration.helpers.ts",
+				"server/src/routes/cards-identity.integration.test.ts",
+				"server/src/routes/presence.ts",
+				"server/src/routes/work-item-member-concurrency.integration.test.ts",
+				"server/src/routes/work-item-phase-concurrency.integration.test.ts",
+				"server/src/routes/work-item-project-concurrency.integration.test.ts",
+				"server/src/routes/work-item-unified.integration.test.ts",
+				"server/src/routes/workspaceAccess.test.ts",
+			],
+			"server/src/routes must hold only documented kernel files",
+		);
+
+		assert.equal(LINE_BUDGET_MAX, 300, "LINE_BUDGET_MAX must stay 300");
 	});
 });
 

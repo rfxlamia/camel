@@ -4,7 +4,7 @@
  * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
  *
  * Run:
- *   RUN_INTEGRATION=1 npx vitest run src/routes/oauth.test.ts
+ *   RUN_INTEGRATION=1 npx vitest run src/modules/auth/oauth.test.ts
  */
 import "dotenv/config";
 import express from "express";
@@ -18,7 +18,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 
 const testUser: {
 	id: number;
@@ -36,8 +36,8 @@ const testUser: {
 	needsUsername: true,
 };
 
-vi.mock("../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {
@@ -51,7 +51,7 @@ vi.mock("bcryptjs", () => ({
 	default: { hash: vi.fn(async () => "hashed_password") },
 }));
 
-const { oauthRouter } = await import("../routes/oauth.js");
+const { oauthRouter } = await import("./oauth.js");
 
 function createApp() {
 	const app = express();

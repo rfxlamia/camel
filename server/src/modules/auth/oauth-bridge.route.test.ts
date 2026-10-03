@@ -4,7 +4,7 @@
  * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
  *
  * Run:
- *   RUN_INTEGRATION=1 npx vitest run src/oauth-bridge.route.test.ts
+ *   RUN_INTEGRATION=1 npx vitest run src/modules/auth/oauth-bridge.route.test.ts
  */
 import "dotenv/config";
 import cookieParser from "cookie-parser";
@@ -19,7 +19,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { db } from "./db/kysely.js";
+import { db } from "../../db/kysely.js";
 
 const { mockGetSession, mockMintSession } = vi.hoisted(() => ({
 	mockGetSession: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock("better-auth/node", () => ({
 	fromNodeHeaders: vi.fn((h: unknown) => h),
 }));
 
-vi.mock("./config.js", () => ({
+vi.mock("../../config.js", () => ({
 	config: {
 		DATABASE_URL: process.env.DATABASE_URL,
 		CLIENT_URL: "http://localhost:5173",
@@ -51,8 +51,8 @@ vi.mock("./config.js", () => ({
 	},
 }));
 
-vi.mock("./auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("./auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return { ...actual, mintCamelSession: mockMintSession };
 });
 
