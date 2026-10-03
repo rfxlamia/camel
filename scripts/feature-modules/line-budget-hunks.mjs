@@ -125,9 +125,11 @@ function isResolutionEquivalentUrl(removedLine, addedLine, context) {
 }
 
 /**
- * Local binding names (with `type` qualifier) introduced by import lines.
- * Module specifiers are ignored; imported-vs-default kind is ignored so a
+ * Bindings (with `type` qualifier) introduced by import lines. Module
+ * specifiers are ignored and default-vs-named kind is ignored, so a
  * default-to-named conversion that keeps every local name stays comparable.
+ * An aliased import (`x as y`) keeps its imported name: it binds a specific
+ * export, so changing `x` is a real change even when `y` is unchanged.
  * Returns null when a line cannot be reduced to bindings.
  * @param {string[]} lines
  * @returns {string[] | null}
@@ -155,10 +157,19 @@ function importBindings(lines) {
 				isType = true;
 				name = name.replace(/^type\s+/, "");
 			}
-			const alias = /\bas\s+([\w$]+)$/.exec(name);
-			if (alias) name = alias[1];
-			if (!/^[\w$]+$/.test(name)) return null;
-			bindings.push(`${isType ? "type " : ""}${name}`);
+			// An alias binds a specific export, so its imported name is part of the
+			// token; `default as X` is the same binding as `import X`.
+			const alias = /^([\w$]+|\*)\s+as\s+([\w$]+)$/.exec(name);
+			let token;
+			if (alias) {
+				token =
+					alias[1] === "default" ? alias[2] : `${alias[1]} as ${alias[2]}`;
+			} else if (/^[\w$]+$/.test(name)) {
+				token = name;
+			} else {
+				return null;
+			}
+			bindings.push(`${isType ? "type " : ""}${token}`);
 		}
 		if (closes) inTypeStatement = false;
 	}

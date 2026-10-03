@@ -685,6 +685,51 @@ describe("Cycle R — relocation-equivalent hunks (unit)", () => {
 		expectLineBudgetViolation(from, 643)(violations);
 	});
 
+	it("touches an aliased import whose imported name changes", () => {
+		const violations = check(
+			['-import { foo as y } from "./a";', '+import { bar as y } from "./a";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches when an alias is dropped and the local name stays", () => {
+		const violations = check(
+			['-import { a as b } from "./a";', '+import { b } from "./a";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("touches a namespace import whose local name changes", () => {
+		const violations = check(
+			['-import * as ns from "./a";', '+import * as other from "./a";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		expectLineBudgetViolation(from, 643)(violations);
+	});
+
+	it("passes an unchanged alias that only retargets its specifier", () => {
+		const violations = check(
+			[
+				'-import { foo as y, z } from "./a";',
+				'-import * as ns from "./b";',
+				'+import * as ns from "./c";',
+				'+import { z, foo as y } from "./index";',
+			],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		assert.deepEqual(violations, []);
+	});
+
+	it("passes a default import rewritten as an explicit default alias", () => {
+		const violations = check(
+			['-import X from "./a";', '+import { default as X } from "./index";'],
+			{ path: from, fromPath: from, status: "modified" },
+		);
+		assert.deepEqual(violations, []);
+	});
+
 	it("touches a non-import line edit", () => {
 		const violations = check(["-const a = 1;", "+const a = 2;"], {
 			path: from,
