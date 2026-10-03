@@ -20,7 +20,7 @@ const { mockUseNotificationsContext, mockNavigate } = vi.hoisted(() => ({
 	mockNavigate: vi.fn(),
 }));
 
-vi.mock("../context/NotificationsContext", () => ({
+vi.mock("../features/notifications", () => ({
 	useNotificationsContext: () => mockUseNotificationsContext(),
 }));
 

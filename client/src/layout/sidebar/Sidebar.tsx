@@ -1,7 +1,7 @@
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
-import { useNotificationsContext } from "../../context/NotificationsContext";
+import { useNotificationsContext } from "../../features/notifications";
 import { useWorkspace } from "../../shared/WorkspaceContext";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { AGENT_NAV, KANBAN_NAV, SETTINGS_ITEM } from "./navItems";

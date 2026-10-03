@@ -13,10 +13,10 @@
  *   RUN_INTEGRATION=1 npx vitest run src/notifications/scheduler.test.ts
  */
 import "dotenv/config";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "kysely";
-import { seedTrackerVocabulary } from "../core/tracker-vocabulary-seed.js";
-import { db } from "../db/kysely.js";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
+import { db } from "../../db/kysely.js";
 import { runDueDateReminders } from "./scheduler.js";
 
 const isMidnightHourUtc = new Date().getUTCHours() === 0;
@@ -36,7 +36,9 @@ async function statusIdForSlot(slot: string) {
 }
 
 async function todayDateString(): Promise<string> {
-	const result = await sql<{ today: string }>`select to_char(now(), 'YYYY-MM-DD') as today`.execute(db);
+	const result = await sql<{
+		today: string;
+	}>`select to_char(now(), 'YYYY-MM-DD') as today`.execute(db);
 	return result.rows[0].today;
 }
 
@@ -46,13 +48,21 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		beforeAll(async () => {
 			const user = await db
 				.insertInto("users")
-				.values({ username: `scheduler-${Date.now()}`, display_name: "Scheduler User", password_hash: "h" })
+				.values({
+					username: `scheduler-${Date.now()}`,
+					display_name: "Scheduler User",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			userId = user.id;
 			const workspace = await db
 				.insertInto("workspaces")
-				.values({ name: "Scheduler WS", owner_user_id: userId, is_personal: false })
+				.values({
+					name: "Scheduler WS",
+					owner_user_id: userId,
+					is_personal: false,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
@@ -60,24 +70,47 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		afterAll(async () => {
-			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("cards").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("columns").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("notifications")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("cards")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("columns")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 			await db.deleteFrom("users").where("id", "=", userId).execute();
 		});
 
 		afterEach(async () => {
-			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("cards").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("columns").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("notifications")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("cards")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("columns")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 		});
 
 		it("skips cards in done columns", async () => {
 			const today = await todayDateString();
 			const doneColumn = await db
 				.insertInto("columns")
-				.values({ title: "Done", position: 1000, workspace_id: workspaceId, is_done: true })
+				.values({
+					title: "Done",
+					position: 1000,
+					workspace_id: workspaceId,
+					is_done: true,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			const card = await db
@@ -146,7 +179,11 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				const today = await todayDateString();
 				const column = await db
 					.insertInto("columns")
-					.values({ title: "Backlog", position: 1000, workspace_id: workspaceId })
+					.values({
+						title: "Backlog",
+						position: 1000,
+						workspace_id: workspaceId,
+					})
 					.returning("id")
 					.executeTakeFirstOrThrow();
 				const card = await db

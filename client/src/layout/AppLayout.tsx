@@ -1,8 +1,8 @@
 import { Menu, SquareKanban } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router";
-import { NotificationsProvider } from "../context/NotificationsContext";
 import { parseMyWorkDetailState } from "../features/my-work";
+import { NotificationsProvider } from "../features/notifications";
 import { AutoErrorListener } from "../shared/AutoErrorListener";
 import { FloatingChatButton } from "../shared/FloatingChatButton";
 import PresenceBar from "../shared/PresenceBar";

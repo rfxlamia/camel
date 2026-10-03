@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../api";
-import type { AppNotification, AppNotificationType } from "../types";
+import { api } from "../../api";
+import type { AppNotification, AppNotificationType } from "../../types";
 
 const PAGE_SIZE = 50;
 

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { db } from "../db/kysely.js";
+import { db } from "../../db/kysely.js";
 
 interface SseClient {
 	userId: number;
@@ -45,7 +45,13 @@ export async function sseNotificationHandler(
 	}
 
 	const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
-	const client: SseClient = { userId, workspaceId, lastEventId, res, keepAlive };
+	const client: SseClient = {
+		userId,
+		workspaceId,
+		lastEventId,
+		res,
+		keepAlive,
+	};
 	clients.add(client);
 
 	req.on("close", () => {

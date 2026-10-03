@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppNotification } from "../types";
+import type { AppNotification } from "../../types";
 
 const mockGetNotifications = vi.fn();
 const mockMarkNotificationAsRead = vi.fn();
 const mockMarkAllNotificationsAsRead = vi.fn();
 
-vi.mock("../api", () => ({
+vi.mock("../../api", () => ({
 	api: {
 		getNotifications: (...args: unknown[]) => mockGetNotifications(...args),
 		markNotificationAsRead: (...args: unknown[]) =>
@@ -145,9 +145,9 @@ describe("useNotifications", () => {
 
 		expect(mockMarkAllNotificationsAsRead).toHaveBeenCalledWith(1);
 		expect(result.current.unreadCount).toBe(0);
-		expect(
-			result.current.notifications.every((n) => n.readAt !== null),
-		).toBe(true);
+		expect(result.current.notifications.every((n) => n.readAt !== null)).toBe(
+			true,
+		);
 	});
 
 	it("prepends notification and increments unreadCount on SSE notification.created", async () => {

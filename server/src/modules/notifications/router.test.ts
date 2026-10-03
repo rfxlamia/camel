@@ -7,14 +7,24 @@
  *   RUN_INTEGRATION=1 npx vitest run src/notifications/router.test.ts
  */
 import "dotenv/config";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
-import { db } from "../db/kysely.js";
-import { domainBus, EVENTS } from "../events.js";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import { db } from "../../db/kysely.js";
+import { domainBus, EVENTS } from "../../events.js";
 
-vi.mock("../middleware/workspace.js", () => ({
-	requireWorkspaceMember: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+vi.mock("../../middleware/workspace.js", () => ({
+	requireWorkspaceMember: vi.fn(
+		(_req: unknown, _res: unknown, next: () => void) => next(),
+	),
 }));
 
 const { notificationsRouter } = await import("./router.js");
@@ -26,7 +36,10 @@ function createApp() {
 	const app = express();
 	app.use(express.json());
 	app.use((req, _res, next) => {
-		(req as Record<string, unknown>).user = { id: userId, displayName: "Alice" };
+		(req as Record<string, unknown>).user = {
+			id: userId,
+			displayName: "Alice",
+		};
 		next();
 	});
 	app.use("/workspaces/:workspaceId/notifications", notificationsRouter);
@@ -40,13 +53,21 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		beforeAll(async () => {
 			const user = await db
 				.insertInto("users")
-				.values({ username: `notif-router-${Date.now()}`, display_name: "Alice", password_hash: "h" })
+				.values({
+					username: `notif-router-${Date.now()}`,
+					display_name: "Alice",
+					password_hash: "h",
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			userId = user.id;
 			const workspace = await db
 				.insertInto("workspaces")
-				.values({ name: "Notif Router WS", owner_user_id: userId, is_personal: false })
+				.values({
+					name: "Notif Router WS",
+					owner_user_id: userId,
+					is_personal: false,
+				})
 				.returning("id")
 				.executeTakeFirstOrThrow();
 			workspaceId = workspace.id;
@@ -58,14 +79,23 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		afterAll(async () => {
-			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
-			await db.deleteFrom("workspace_members").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("notifications")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
+				.deleteFrom("workspace_members")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 			await db.deleteFrom("users").where("id", "=", userId).execute();
 		});
 
 		beforeEach(async () => {
-			await db.deleteFrom("notifications").where("workspace_id", "=", workspaceId).execute();
+			await db
+				.deleteFrom("notifications")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
 		});
 
 		describe("GET /workspaces/:workspaceId/notifications", () => {
@@ -89,11 +119,15 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 					])
 					.execute();
 
-				const res = await request(app).get(`/workspaces/${workspaceId}/notifications`);
+				const res = await request(app).get(
+					`/workspaces/${workspaceId}/notifications`,
+				);
 				expect(res.status).toBe(200);
 				expect(res.body.notifications).toHaveLength(2);
 				expect(res.body.unreadCount).toBe(2);
-				expect(res.body.notifications[0]).toMatchObject({ boardId: workspaceId });
+				expect(res.body.notifications[0]).toMatchObject({
+					boardId: workspaceId,
+				});
 			});
 		});
 
@@ -101,7 +135,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			it("marks notification as read", async () => {
 				const n = await db
 					.insertInto("notifications")
-					.values({ user_id: userId, workspace_id: workspaceId, type: "welcome", title: "Hi" })
+					.values({
+						user_id: userId,
+						workspace_id: workspaceId,
+						type: "welcome",
+						title: "Hi",
+					})
 					.returning("id")
 					.executeTakeFirstOrThrow();
 
@@ -132,8 +171,18 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				await db
 					.insertInto("notifications")
 					.values([
-						{ user_id: userId, workspace_id: workspaceId, type: "welcome", title: "1" },
-						{ user_id: userId, workspace_id: workspaceId, type: "welcome", title: "2" },
+						{
+							user_id: userId,
+							workspace_id: workspaceId,
+							type: "welcome",
+							title: "1",
+						},
+						{
+							user_id: userId,
+							workspace_id: workspaceId,
+							type: "welcome",
+							title: "2",
+						},
 					])
 					.execute();
 
@@ -157,7 +206,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 				const res = await request(app)
 					.post(`/workspaces/${workspaceId}/notifications/system-alert`)
-					.send({ title: "Maintenance tonight", body: "Server restart at midnight" });
+					.send({
+						title: "Maintenance tonight",
+						body: "Server restart at midnight",
+					});
 
 				expect(res.status).toBe(202);
 				expect(spy).toHaveBeenCalledWith(

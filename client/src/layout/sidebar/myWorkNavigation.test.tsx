@@ -18,7 +18,7 @@ vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => mockUseWorkspace(),
 }));
 
-vi.mock("../../context/NotificationsContext", () => ({
+vi.mock("../../features/notifications", () => ({
 	useNotificationsContext: () => mockUseNotificationsContext(),
 }));
 

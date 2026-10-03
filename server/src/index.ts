@@ -27,9 +27,11 @@ import {
 	ticketIntakeRouter,
 } from "./modules/agent/index.js";
 import { createChatRouter } from "./modules/chat/index.js";
+import {
+	initNotificationService,
+	startDueDateScheduler,
+} from "./modules/notifications/index.js";
 import { UPLOADS_DIR } from "./modules/settings/index.js";
-import { startDueDateScheduler } from "./notifications/scheduler.js";
-import { initNotificationService } from "./notifications/service.js";
 import { betterAuthHandler, createOAuthBridgeRouter } from "./oauth-bridge.js";
 import { initRealtime, shutdownRealtime } from "./realtime.js";
 import { oauthRouter } from "./routes/oauth.js";
