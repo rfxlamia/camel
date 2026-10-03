@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ApiError, api } from "../api";
-import { FocusEntryButton } from "../features/focus";
+import FocusEntryButton from "../features/focus";
 import TrackerChangelog from "../components/tracker/TrackerChangelog";
 import TrackerDateFields from "../components/tracker/TrackerDateFields";
 import {
