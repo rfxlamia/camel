@@ -1,5 +1,6 @@
 export {
 	default as FocusEntryButton,
+	default,
 	type FocusEntryButtonProps,
 } from "./FocusEntryButton";
 export { FocusSessionProvider, useFocusSession } from "./FocusSessionContext";
