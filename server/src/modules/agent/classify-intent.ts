@@ -1,0 +1,149 @@
+import type Anthropic from "@anthropic-ai/sdk";
+import { logger } from "../../lib/logger.js";
+import { extractText, getClient, MODEL } from "./llm-client.js";
+import { detectPromptInjection } from "./prompt-sanitizer.js";
+
+// ---------------------------------------------------------------------------
+// classifyIntent — match user intent to a board template
+// ---------------------------------------------------------------------------
+
+export interface ClassifyResult {
+	templateId: string | null;
+	explanation: string;
+}
+
+// Fix #4: System prompt diperkuat — JSON-only strict, multilingual-aware
+const CLASSIFY_SYSTEM_PROMPT = `You are a board-template classifier. Given a user intent (in ANY language), decide which template fits.
+
+Available templates:
+- "research-report": Research & Report — for research, analysis, investigation, competitive analysis, market reports, or any fact-finding task. This includes requests in Indonesian (riset, analisis, investigasi), Spanish, French, or any other language.
+- "status-report": Status Report — for progress updates, "are we on track?" assessments, sprint or weekly status summaries, and team/project health reports based on current work. This includes requests in Indonesian (laporan status, laporan progress), Spanish, French, or any other language.
+
+CRITICAL RULES:
+1. Respond with ONLY a raw JSON object. No preamble, no explanation text, no markdown, no code fences.
+2. Your entire response must be valid JSON that can be parsed directly.
+3. If the intent is research-related in ANY language, use "research-report".
+4. If the intent is a status or progress report in ANY language, use "status-report".
+
+{"templateId": "research-report" | "status-report" | null, "explanation": "<one sentence in English>"}`;
+
+// Internal single-attempt classifier — extracted so retry wrapper can call it cleanly
+async function classifyIntentOnce(
+	client: Anthropic,
+	intent: string,
+): Promise<ClassifyResult> {
+	// Security: Check for prompt injection attempts
+	if (detectPromptInjection(intent)) {
+		logger.warn(
+			{ intentLength: intent.length },
+			"classifyIntentOnce: prompt injection detected",
+		);
+		return {
+			templateId: null,
+			explanation:
+				"Your request contains patterns that look like prompt injection. Please rephrase your research question.",
+		};
+	}
+
+	// Fix #1: temperature: 0 — classification is deterministic, variance is unwanted
+	// Budget: reasoning models spend tokens on a thinking block before the JSON.
+	// 256 truncated the answer (stop_reason=max_tokens) → unparseable → 422.
+	// max_tokens is a cap, not a target: we only pay for tokens generated.
+	const response = await client.messages.create({
+		model: MODEL,
+		max_tokens: 2048,
+		temperature: 0,
+		system: CLASSIFY_SYSTEM_PROMPT,
+		messages: [{ role: "user", content: intent }],
+	});
+
+	const text = extractText(response);
+
+	// Try multiple parsing strategies
+	try {
+		// Strategy 1: Direct JSON parse
+		const parsed = JSON.parse(text) as ClassifyResult;
+		return {
+			templateId: parsed.templateId ?? null,
+			explanation: parsed.explanation ?? "",
+		};
+	} catch {
+		// Strategy 2: Extract JSON from markdown code blocks
+		const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+		if (jsonMatch) {
+			try {
+				const parsed = JSON.parse(jsonMatch[1].trim()) as ClassifyResult;
+				return {
+					templateId: parsed.templateId ?? null,
+					explanation: parsed.explanation ?? "",
+				};
+			} catch {
+				// Fall through to next strategy
+			}
+		}
+
+		// Fix #3: Strategy 3 — greedy [\s\S]* agar tidak berhenti di } dalam string
+		const jsonObjectMatch = text.match(/\{[\s\S]*\}/);
+		if (jsonObjectMatch) {
+			try {
+				const parsed = JSON.parse(jsonObjectMatch[0]) as ClassifyResult;
+				return {
+					templateId: parsed.templateId ?? null,
+					explanation: parsed.explanation ?? "",
+				};
+			} catch {
+				// Fall through to next strategy
+			}
+		}
+
+		// Strategy 4: Try to extract templateId and explanation from text
+		const templateIdMatch = text.match(/"templateId"\s*:\s*(?:"([^"]+)"|null)/);
+		const explanationMatch = text.match(/"explanation"\s*:\s*"([^"]+)"/);
+		if (templateIdMatch || explanationMatch) {
+			return {
+				templateId: templateIdMatch?.[1] ?? null,
+				explanation: explanationMatch?.[1] ?? "Intent could not be classified.",
+			};
+		}
+
+		// All parsing strategies failed — return null so retry wrapper can try again
+		logger.error({ text }, "classifyIntentOnce: failed to parse LLM response");
+		return { templateId: null, explanation: "" };
+	}
+}
+
+// Fix #2: Retry wrapper — up to 3 attempts before surfacing failure to client
+const CLASSIFY_MAX_ATTEMPTS = 3;
+
+export async function classifyIntent(intent: string): Promise<ClassifyResult> {
+	const client = getClient();
+
+	for (let attempt = 1; attempt <= CLASSIFY_MAX_ATTEMPTS; attempt++) {
+		const result = await classifyIntentOnce(client, intent);
+
+		// Parsing succeeded AND LLM returned a valid templateId → done
+		if (result.templateId !== null) return result;
+
+		// LLM returned null with a real explanation → it genuinely doesn't match any template
+		// Don't retry in this case — it's a semantic decision, not a parse failure
+		if (result.explanation) return result;
+
+		// Parse failure (explanation is empty) — retry if attempts remain
+		if (attempt < CLASSIFY_MAX_ATTEMPTS) {
+			logger.warn(
+				{ attempt, attemptsLeft: CLASSIFY_MAX_ATTEMPTS - attempt },
+				"classifyIntent: parse failed, retrying",
+			);
+		}
+	}
+
+	logger.error(
+		{ attempts: CLASSIFY_MAX_ATTEMPTS, intentLength: intent.length },
+		"classifyIntent: all attempts failed",
+	);
+	return {
+		templateId: null,
+		explanation:
+			"Intent could not be classified. Please try a research-related request.",
+	};
+}
