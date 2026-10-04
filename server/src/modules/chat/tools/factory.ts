@@ -1,6 +1,6 @@
 import type { CardTimestamps } from "../../../core/metrics.js";
 import { db } from "../../../db/kysely.js";
-import type { Tool } from "../../agent/index.js";
+import type { Tool } from "../../../lib/llm/tool-types.js";
 import {
 	type ActivityItem,
 	createToolRegistry,

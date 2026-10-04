@@ -1,6 +1,6 @@
 import type { Response } from "express";
+import type { ToolEvent } from "../../lib/llm/tool-types.js";
 import { logger } from "../../lib/logger.js";
-import type { ToolEvent } from "../agent/index.js";
 
 export type StreamEvent =
 	| { type: "token"; text: string }

@@ -1,8 +1,12 @@
 import type { Request, Response } from "express";
 import { checkChatLimit } from "../../lib/chat-rate-limit.js";
 import { lookupMembership } from "../../lib/helpers.js";
+import {
+	estimateContextTokens,
+	runChatTurn,
+} from "../../lib/llm/run-chat-turn.js";
+import type { ToolEvent } from "../../lib/llm/tool-types.js";
 import { logger } from "../../lib/logger.js";
-import type { ToolEvent } from "../agent/index.js";
 import {
 	buildAnthropicMessages,
 	CHAT_SYSTEM_PROMPT,
@@ -12,7 +16,6 @@ import {
 	resolveChatMessageAction,
 	toolEventsToTrace,
 } from "./chat-helpers.js";
-import { estimateContextTokens, runChatTurn } from "./run-chat-turn.js";
 import type { createChatService } from "./service.js";
 import {
 	safeEndStream,

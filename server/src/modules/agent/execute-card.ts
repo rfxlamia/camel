@@ -1,7 +1,7 @@
 import { detectPromptInjection } from "../../lib/llm/prompt-sanitizer.js";
+import { runChatTurn } from "../../lib/llm/run-chat-turn.js";
 import type { Tool, ToolEvent } from "../../lib/llm/tool-types.js";
 import { logger } from "../../lib/logger.js";
-import { runChatTurn } from "../chat/index.js";
 import { renderSystemPrompt } from "./templates.js";
 
 // ---------------------------------------------------------------------------

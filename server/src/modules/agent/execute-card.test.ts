@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockRunChatTurn = vi.fn();
-vi.mock("../chat/index.js", () => ({
+vi.mock("../../lib/llm/run-chat-turn.js", () => ({
 	runChatTurn: (...args: unknown[]) => mockRunChatTurn(...args),
 }));
 
