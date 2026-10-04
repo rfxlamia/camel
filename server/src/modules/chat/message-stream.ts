@@ -14,8 +14,14 @@ import {
 } from "./chat-helpers.js";
 import { estimateContextTokens, runChatTurn } from "./run-chat-turn.js";
 import type { createChatService } from "./service.js";
-import { setStreamHeaders, writeStreamEvent } from "./stream-protocol.js";
+import {
+	safeEndStream,
+	safeWriteStreamEvent,
+	setStreamHeaders,
+} from "./stream-protocol.js";
 import { createChatToolFactory } from "./tools/factory.js";
+
+const STREAM_ERROR_MESSAGE = "Failed to generate response. Please try again.";
 
 export function createPostMessageHandler(
 	service: ReturnType<typeof createChatService>,
@@ -103,7 +109,6 @@ export function createPostMessageHandler(
 			res.status(200);
 
 			let assistantRowId: number | undefined;
-			let streamed = false;
 
 			try {
 				if (action.kind === "send") {
@@ -154,15 +159,14 @@ export function createPostMessageHandler(
 					]),
 					toolBudget: CHAT_TOOL_BUDGET,
 					onToken: (text) => {
-						streamed = true;
-						writeStreamEvent(res, { type: "token", text });
+						safeWriteStreamEvent(res, { type: "token", text });
 					},
 					onThinking: (text) => {
-						writeStreamEvent(res, { type: "thinking", text });
+						safeWriteStreamEvent(res, { type: "thinking", text });
 					},
 					onToolEvent: (event) => {
 						toolEvents.push(event);
-						writeStreamEvent(res, { type: "tool_event", event });
+						safeWriteStreamEvent(res, { type: "tool_event", event });
 					},
 				});
 
@@ -179,28 +183,32 @@ export function createPostMessageHandler(
 					await service.autoTitleThread(userId, threadId, firstUserMessage);
 				}
 
-				writeStreamEvent(res, { type: "done", messageId: updated.id });
-				res.end();
+				safeWriteStreamEvent(res, { type: "done", messageId: updated.id });
+				safeEndStream(res);
 			} catch (err) {
 				logger.error({ err, threadId }, "chat message stream failed");
 				if (assistantRowId !== undefined) {
-					await service.deleteMessage(assistantRowId);
+					try {
+						await service.deleteMessage(assistantRowId);
+					} catch (cleanupErr) {
+						logger.error(
+							{ err: cleanupErr, threadId },
+							"chat stream cleanup failed",
+						);
+					}
 				}
-				const message =
-					err instanceof Error ? err.message : "Failed to generate response";
+				// Raw err.message may leak driver/SDK internals — log it, send safe copy.
+				// The user message is intentionally retained for inline retry.
 				if (!res.headersSent) {
 					setStreamHeaders(res);
 					res.status(200);
 				}
-				writeStreamEvent(res, {
+				safeWriteStreamEvent(res, {
 					type: "error",
-					message,
+					message: STREAM_ERROR_MESSAGE,
 					retryable: true,
 				});
-				res.end();
-				if (!streamed && action.kind === "send") {
-					// user message retained for inline retry per spec
-				}
+				safeEndStream(res);
 			}
 		} catch (err) {
 			logger.error({ err, threadId }, "chat postMessage failed");

@@ -23,8 +23,7 @@ const mockService = {
 };
 
 vi.mock("../agent/index.js", async (importOriginal) => {
-	const actual =
-		await importOriginal<typeof import("../agent/index.js")>();
+	const actual = await importOriginal<typeof import("../agent/index.js")>();
 	return {
 		...actual,
 		checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
@@ -122,6 +121,36 @@ describe("chat routes (mocked service + LLM)", () => {
 		expect(res.status).toBe(200);
 		expect(res.text).toContain('"type":"token"');
 		expect(res.text).toContain('"type":"done"');
+	});
+
+	it("streams a user-safe error event and never leaks the raw error", async () => {
+		mockService.insertMessage.mockReset();
+		mockRunChatTurn.mockRejectedValueOnce(new Error("sk-secret driver detail"));
+		mockService.insertMessage
+			.mockResolvedValueOnce({ id: 10, role: "user", content: "Hi" })
+			.mockResolvedValueOnce({ id: 11, role: "assistant", content: "" });
+		const res = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ message: "Hi" });
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('"type":"error"');
+		expect(res.text).toContain("Failed to generate response");
+		expect(res.text).not.toContain("sk-secret");
+		expect(mockService.deleteMessage).toHaveBeenCalledWith(11);
+	});
+
+	it("still ends the response when error cleanup throws", async () => {
+		mockService.insertMessage.mockReset();
+		mockRunChatTurn.mockRejectedValueOnce(new Error("boom"));
+		mockService.deleteMessage.mockRejectedValueOnce(new Error("db down"));
+		mockService.insertMessage
+			.mockResolvedValueOnce({ id: 10, role: "user", content: "Hi" })
+			.mockResolvedValueOnce({ id: 11, role: "assistant", content: "" });
+		const res = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ message: "Hi" });
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('"type":"error"');
 	});
 
 	it("POST retry action regenerates without duplicate user message", async () => {
