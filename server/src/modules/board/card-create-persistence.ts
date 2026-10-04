@@ -17,7 +17,7 @@ import type {
 	PreparedCreate,
 	WrittenAttachment,
 } from "./card-create-types.js";
-import { selectFullCard } from "./cards.js";
+import { selectFullCard } from "./card-read.js";
 
 async function insertCardRelations(
 	trx: DBExecutor,
