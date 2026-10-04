@@ -741,7 +741,6 @@ describe("Cycle Map — map data (unit)", () => {
 		for (const name of [
 			"artifact.ts",
 			"artifact.test.ts",
-			"prompt-sanitizer.ts",
 			"service.ts",
 			"service.test.ts",
 			"templates.ts",
@@ -764,7 +763,6 @@ describe("Cycle Map — map data (unit)", () => {
 			"tools/registry.test.ts",
 			"tools/trace.ts",
 			"tools/trace.test.ts",
-			"tools/types.ts",
 			"tools/webSearch.ts",
 			"tools/webSearch.test.ts",
 			"llm.ts",
