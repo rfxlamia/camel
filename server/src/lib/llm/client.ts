@@ -11,9 +11,9 @@ export const MODEL = config.ANTHROPIC_MODEL;
 // Token budgets for extended thinking (per live-thinking.md + commit f24f292).
 // OUTPUT_BUDGET preserved as headroom for report text; native Anthropic counts
 // thinking inside max_tokens, so we add THINKING_BUDGET to MAX_TOKENS.
-// Always send enabled+budget (MiMo accepts, native requires); never set
-// temperature when thinking is on. Design: enabled for ALL columns (ignore
-// _reasoning flag).
+// Thinking turns send enabled+budget (MiMo accepts, native requires); never
+// set temperature when thinking is on. Per-turn opt-out lives in runChatTurn
+// (column `reasoning` flag + ANTHROPIC_THINKING_ENABLED).
 export const OUTPUT_BUDGET = 16384;
 export const THINKING_BUDGET = 8192;
 export const MAX_TOKENS = OUTPUT_BUDGET + THINKING_BUDGET; // 24576

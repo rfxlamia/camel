@@ -3,37 +3,15 @@
  * extended thinking. Split out of run-chat-turn.ts (300-on-touch).
  */
 
-import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
-import { config } from "../../config.js";
+import type Anthropic from "@anthropic-ai/sdk";
+import {
+	MAX_TOKENS,
+	MODEL,
+	OUTPUT_BUDGET,
+	THINKING_BUDGET,
+} from "../../lib/llm/client.js";
 import type { Tool, ToolEvent } from "../agent/index.js";
 import { countSearchResults, toAnthropicToolDefs } from "../agent/index.js";
-
-// ---------------------------------------------------------------------------
-// Client + token budgets (mirrors agent/llm.ts — kept in sync)
-// ---------------------------------------------------------------------------
-
-const NATIVE = config.ANTHROPIC_BASE_URL ? false : true;
-export const MODEL = config.ANTHROPIC_MODEL;
-
-export const OUTPUT_BUDGET = 16384;
-export const THINKING_BUDGET = 8192;
-export const MAX_TOKENS = OUTPUT_BUDGET + THINKING_BUDGET;
-
-let _client: Anthropic | null = null;
-
-export function getClient(): Anthropic {
-	if (!_client) {
-		const opts: ClientOptions = { apiKey: config.ANTHROPIC_API_KEY };
-		if (config.ANTHROPIC_BASE_URL) {
-			opts.baseURL = config.ANTHROPIC_BASE_URL;
-		}
-		if (!NATIVE) {
-			opts.defaultHeaders = { "api-key": config.ANTHROPIC_API_KEY };
-		}
-		_client = new Anthropic(opts);
-	}
-	return _client;
-}
 
 // ---------------------------------------------------------------------------
 // Tool helpers (shared with agent path)

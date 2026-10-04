@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { extractText, getClient, MODEL } from "../../lib/llm/client.js";
 import { logger } from "../../lib/logger.js";
-import { extractText, getClient, MODEL } from "./llm-client.js";
 import { detectPromptInjection } from "./prompt-sanitizer.js";
 import { TEMPLATES } from "./templates.js";
 

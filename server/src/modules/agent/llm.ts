@@ -12,6 +12,12 @@
  *                  false when using compatible endpoint like MiMo
  */
 
+export {
+	getClient,
+	MAX_TOKENS,
+	OUTPUT_BUDGET,
+	THINKING_BUDGET,
+} from "../../lib/llm/client.js";
 export { type ClassifyResult, classifyIntent } from "./classify-intent.js";
 export { type ExecuteResult, executeCard } from "./execute-card.js";
 export {
@@ -20,12 +26,6 @@ export {
 	type FollowUpIntent,
 	type FollowUpResult,
 } from "./follow-up-intent.js";
-export {
-	getClient,
-	MAX_TOKENS,
-	OUTPUT_BUDGET,
-	THINKING_BUDGET,
-} from "./llm-client.js";
 export {
 	detectReportPeriod,
 	generateClarificationQuestion,
