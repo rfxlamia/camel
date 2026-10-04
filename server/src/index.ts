@@ -1,11 +1,7 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import {
-	cleanupExpiredSessions,
-	createAuthRateLimiter,
-	createAuthRouter,
-} from "./auth.js";
+import { cleanupExpiredSessions } from "./auth.js";
 import { config } from "./config.js";
 import { createOriginValidator } from "./core/cors.js";
 import {
@@ -30,6 +26,8 @@ import {
 } from "./modules/agent/index.js";
 import {
 	betterAuthHandler,
+	createAuthRateLimiter,
+	createAuthRouter,
 	createOAuthBridgeRouter,
 	oauthRouter,
 } from "./modules/auth/index.js";

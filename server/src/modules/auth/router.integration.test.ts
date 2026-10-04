@@ -1,24 +1,24 @@
-// Integration tests for two auth.ts fixes:
+// Integration tests for two auth router fixes:
 //   1. /login must not crash bcrypt.compare() when password_hash is null
 //      (OAuth-only users).
 //   2. /register must apply pending workspace_invites, not just fetch them.
 //
 // Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
 // Run:
-//   RUN_INTEGRATION=1 npx vitest run src/auth.integration.test.ts
+//   RUN_INTEGRATION=1 npx vitest run src/modules/auth/router.integration.test.ts
 import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
 
-import { createAuthRouter } from "./auth.js";
-import { pool } from "./db/pool.js";
+import { pool } from "../../db/pool.js";
+import { createAuthRouter } from "./router.js";
 
 function createTestApp() {
 	const app = express();
