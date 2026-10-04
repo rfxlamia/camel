@@ -131,14 +131,13 @@ describe("AgentCardDetail live-vs-DB selection", () => {
 		);
 	});
 
-	it("badge does not show a misleading OFF (thinking enabled for all columns)", async () => {
+	it("badge reflects the column reasoning flag", async () => {
 		setBoard([]);
 		const offColumn = { ...COLUMN, reasoning: false };
 		const { container } = render(
 			<AgentCardDetail column={offColumn} boardId={5} onClose={() => {}} />,
 		);
 		await waitFor(() => expect(getAgentCardOutput).toHaveBeenCalled());
-		// The stale "OFF" badge must be gone — extended thinking is on for all.
-		expect(container.textContent).not.toContain("OFF");
+		expect(container.textContent).toContain("OFF");
 	});
 });

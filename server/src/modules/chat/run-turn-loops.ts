@@ -62,6 +62,16 @@ function toolResultCount(
 	return countSearchResults(content);
 }
 
+/** Request fields that differ between thinking and non-thinking turns. */
+function budgetParams(useThinking: boolean) {
+	return useThinking
+		? ({
+				max_tokens: MAX_TOKENS,
+				thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
+			} as const)
+		: ({ max_tokens: OUTPUT_BUDGET } as const);
+}
+
 // ---------------------------------------------------------------------------
 // Loops
 // ---------------------------------------------------------------------------
@@ -70,13 +80,13 @@ export async function runSingleShot(
 	client: Anthropic,
 	system: string,
 	messages: Anthropic.MessageParam[],
+	useThinking: boolean,
 	onToken: (token: string) => void,
 	onThinking?: (text: string) => void,
 ): Promise<RunChatTurnResult> {
 	const stream = client.messages.stream({
 		model: MODEL,
-		max_tokens: MAX_TOKENS,
-		thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
+		...budgetParams(useThinking),
 		system,
 		messages,
 	});
@@ -118,6 +128,7 @@ export async function runWithTools(
 	messages: Anthropic.MessageParam[],
 	tools: Tool[],
 	toolBudget: number,
+	useThinking: boolean,
 	onToken: (token: string) => void,
 	onToolEvent?: (e: ToolEvent) => void,
 	onThinking?: (text: string) => void,
@@ -132,8 +143,7 @@ export async function runWithTools(
 	for (let iteration = 0; iteration < maxIterations; iteration++) {
 		const stream = client.messages.stream({
 			model: MODEL,
-			max_tokens: MAX_TOKENS,
-			thinking: { type: "enabled", budget_tokens: THINKING_BUDGET },
+			...budgetParams(useThinking),
 			system,
 			messages: conversationMessages,
 			tools: toAnthropicToolDefs(tools),

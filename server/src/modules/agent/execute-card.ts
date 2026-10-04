@@ -17,9 +17,8 @@ export async function executeCard(
 	systemPrompt: string,
 	intent: string,
 	previousOutputs: string[],
-	// `reasoning` flag is ignored: per spec, extended thinking is enabled for
-	// ALL columns (design decision). Kept for caller compat.
-	_reasoning: boolean,
+	// Per-column extended-thinking flag (columns.reasoning); false skips it.
+	reasoning: boolean,
 	onToken: (token: string) => void,
 	tools: Tool[] = [],
 	toolBudget = 3,
@@ -62,6 +61,7 @@ export async function executeCard(
 		messages: [{ role: "user", content: messageContent }],
 		tools,
 		toolBudget,
+		thinking: reasoning,
 		onToken,
 		onThinking,
 		onToolEvent,
