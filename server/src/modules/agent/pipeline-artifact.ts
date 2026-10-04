@@ -1,7 +1,7 @@
+import { MAX_ARTIFACT_BYTES } from "../../lib/llm/artifact-limits.js";
 import {
 	deriveFilename,
 	extractRevisedDocument,
-	MAX_ARTIFACT_BYTES,
 	parseQaVerdict,
 } from "./artifact.js";
 import type {

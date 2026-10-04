@@ -1,0 +1,1 @@
+export const MAX_ARTIFACT_BYTES = 1_000_000;

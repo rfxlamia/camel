@@ -1,13 +1,7 @@
-import type { Tool, ToolInputSchema } from "./types.js";
+import type { Tool } from "../../../lib/llm/tool-types.js";
 
 export interface ToolRegistry {
 	resolveTools(names: string[]): Tool[];
-}
-
-export interface AnthropicToolDef {
-	name: string;
-	description: string;
-	input_schema: ToolInputSchema;
 }
 
 export function createToolRegistry(tools: Tool[]): ToolRegistry {
@@ -20,12 +14,4 @@ export function createToolRegistry(tools: Tool[]): ToolRegistry {
 				.filter((tool): tool is Tool => tool !== undefined);
 		},
 	};
-}
-
-export function toAnthropicToolDefs(tools: Tool[]): AnthropicToolDef[] {
-	return tools.map(({ name, description, inputSchema }) => ({
-		name,
-		description,
-		input_schema: inputSchema,
-	}));
 }

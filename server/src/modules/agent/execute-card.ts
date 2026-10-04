@@ -1,8 +1,8 @@
+import { detectPromptInjection } from "../../lib/llm/prompt-sanitizer.js";
+import type { Tool, ToolEvent } from "../../lib/llm/tool-types.js";
 import { logger } from "../../lib/logger.js";
 import { runChatTurn } from "../chat/index.js";
-import { detectPromptInjection } from "./prompt-sanitizer.js";
 import { renderSystemPrompt } from "./templates.js";
-import type { Tool, ToolEvent } from "./tools/types.js";
 
 // ---------------------------------------------------------------------------
 // executeCard — run a single card's agent with streaming

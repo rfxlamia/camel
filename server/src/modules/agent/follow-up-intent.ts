@@ -1,13 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { extractText, getClient, MODEL } from "../../lib/llm/client.js";
-import { logger } from "../../lib/logger.js";
-import { FOLLOW_UP_SYSTEM_PROMPT } from "./follow-up-prompt.js";
 import {
 	detectPromptInjection,
 	escapeXml,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "./prompt-sanitizer.js";
+} from "../../lib/llm/prompt-sanitizer.js";
+import { logger } from "../../lib/logger.js";
+import { FOLLOW_UP_SYSTEM_PROMPT } from "./follow-up-prompt.js";
 
 // ---------------------------------------------------------------------------
 // classifyFollowUpIntent — route follow-up messages with scope guard
