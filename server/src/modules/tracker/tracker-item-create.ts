@@ -1,8 +1,7 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
 import type { AuthUser } from "../../auth.js";
-import { positionBetween } from "../../core/position.js";
-import { derivePrefix, formatKey } from "../../core/tracker-key.js";
+import { formatKey } from "../../core/tracker-key.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
 import { logger } from "../../lib/logger.js";
 import { recordTrackerActivity } from "../../lib/tracker-activity.js";
@@ -20,85 +19,13 @@ import {
 } from "../../lib/work-item-response.js";
 import { lockTaskCreateReferences } from "../../lib/workspace-mutation-lock.js";
 import { publishEvent } from "../../realtime.js";
-
-async function workspacePrefix(
-	dbExec: DBExecutor,
-	workspaceId: number,
-): Promise<string | null> {
-	const row = await dbExec
-		.selectFrom("workspaces")
-		.select("name")
-		.where("id", "=", workspaceId)
-		.executeTakeFirst();
-	return row ? derivePrefix(row.name) : null;
-}
-
-async function backlogStatusId(
-	dbExec: DBExecutor,
-	workspaceId: number,
-): Promise<number> {
-	const row = await dbExec
-		.selectFrom("tracker_vocabularies")
-		.select("id")
-		.where("workspace_id", "=", workspaceId)
-		.where("kind", "=", "status")
-		.where(sql`lower(name)`, "=", "backlog")
-		.executeTakeFirst();
-	if (!row) throw new Error("Backlog status not found for workspace");
-	return row.id;
-}
-
-async function statusCategory(
-	dbExec: DBExecutor,
-	workspaceId: number,
-	statusId: number,
-): Promise<string | null> {
-	const row = await dbExec
-		.selectFrom("tracker_vocabularies")
-		.select("category")
-		.where("id", "=", statusId)
-		.where("workspace_id", "=", workspaceId)
-		.where("kind", "=", "status")
-		.executeTakeFirst();
-	return row?.category ?? null;
-}
-
-async function endOfBucketPosition(
-	dbExec: DBExecutor,
-	workspaceId: number,
-	projectId: number | null,
-	phaseId: number | null,
-): Promise<number> {
-	let query = dbExec
-		.selectFrom("tracker_items")
-		.select(sql<number | null>`max(position)`.as("max_position"))
-		.where("workspace_id", "=", workspaceId)
-		.where("deleted_at", "is", null);
-	query =
-		projectId === null
-			? query.where("project_id", "is", null)
-			: query.where("project_id", "=", projectId);
-	query =
-		phaseId === null
-			? query.where("phase_id", "is", null)
-			: query.where("phase_id", "=", phaseId);
-	const row = await query.executeTakeFirst();
-	return positionBetween(row?.max_position ?? null, null);
-}
-
-async function syncLabels(
-	dbExec: DBExecutor,
-	trackerItemId: number,
-	labelIds: number[],
-): Promise<void> {
-	for (const vocabularyId of [...new Set(labelIds)]) {
-		await dbExec
-			.insertInto("tracker_item_labels")
-			.values({ tracker_item_id: trackerItemId, vocabulary_id: vocabularyId })
-			.onConflict((oc) => oc.doNothing())
-			.execute();
-	}
-}
+import {
+	backlogStatusId,
+	endOfBucketPosition,
+	statusCategory,
+	syncLabels,
+	workspacePrefix,
+} from "./tracker-item-create-queries.js";
 
 function lockReferences(body: Record<string, unknown>, actorId: number) {
 	const integerIds = (value: unknown): number[] =>
