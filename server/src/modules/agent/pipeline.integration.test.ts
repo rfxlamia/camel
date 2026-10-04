@@ -102,7 +102,7 @@ describe.skipIf(process.env.RUN_LLM_IT !== "1")(
 			expect(indices).toEqual([0, 1, 2, 3, 4]);
 		});
 
-		it("streams live thinking end-to-end and accepts max_tokens=24576 (opt-in)", async () => {
+		it("streams live thinking end-to-end for a reasoning=true column (opt-in)", async () => {
 			const events: Array<Record<string, unknown>> = [];
 			const service = createAgentBoardService({
 				getBoard: vi.fn(async () => ({
@@ -114,7 +114,8 @@ describe.skipIf(process.env.RUN_LLM_IT !== "1")(
 					status: "approved",
 					executionStatus: "running",
 				})),
-				getColumns: vi.fn(async () => [mockColumns[0]]),
+				// Thinking is only requested for reasoning=true columns.
+				getColumns: vi.fn(async () => [{ ...mockColumns[0], reasoning: true }]),
 				executeCard: realExecuteCard,
 				insertOutput: vi.fn(async () => {}),
 				insertCard: vi.fn(async () => {}),

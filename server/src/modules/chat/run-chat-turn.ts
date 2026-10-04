@@ -13,13 +13,19 @@ import {
 	sanitizeLLMOutput,
 	sanitizeUserInput,
 } from "../agent/index.js";
-import { getClient, runSingleShot, runWithTools } from "./run-turn-loops.js";
+import {
+	getClient,
+	type RunChatTurnResult,
+	runSingleShot,
+	runWithTools,
+} from "./run-turn-loops.js";
 
 export {
 	MAX_TOKENS,
 	OUTPUT_BUDGET,
 	THINKING_BUDGET,
 } from "./run-turn-loops.js";
+export type { RunChatTurnResult };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,11 +44,6 @@ export interface RunChatTurnOptions {
 	onToken: (token: string) => void;
 	onThinking?: (text: string) => void;
 	onToolEvent?: (e: ToolEvent) => void;
-}
-
-export interface RunChatTurnResult {
-	output: string;
-	thinking?: string;
 }
 
 // ---------------------------------------------------------------------------
