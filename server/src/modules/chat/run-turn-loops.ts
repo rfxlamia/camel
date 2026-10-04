@@ -7,7 +7,6 @@ import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { config } from "../../config.js";
 import type { Tool, ToolEvent } from "../agent/index.js";
 import { countSearchResults, toAnthropicToolDefs } from "../agent/index.js";
-import type { RunChatTurnResult } from "./run-chat-turn.js";
 
 // ---------------------------------------------------------------------------
 // Client + token budgets (mirrors agent/llm.ts — kept in sync)
@@ -60,6 +59,11 @@ function toolResultCount(
 ): number | undefined {
 	if (toolName === "create_file") return undefined;
 	return countSearchResults(content);
+}
+
+export interface RunChatTurnResult {
+	output: string;
+	thinking?: string;
 }
 
 /** Request fields that differ between thinking and non-thinking turns. */

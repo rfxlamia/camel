@@ -19,6 +19,7 @@ export default function AgentThinkingSection({
 		<div>
 			<button
 				type="button"
+				aria-expanded={isOpen}
 				onClick={onToggle}
 				className="flex w-full items-center gap-1.5 text-left"
 			>
