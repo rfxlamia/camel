@@ -6,7 +6,7 @@ import {
 } from "./channels.js";
 import type { PresenceLike } from "./types.js";
 
-export type OnlineUser = AuthUser & { lastSeen: string };
+type OnlineUser = AuthUser & { lastSeen: string };
 
 interface PresenceManagerOptions {
 	presence: PresenceLike | null;

@@ -275,6 +275,7 @@ describe("Redis reconnection", () => {
 			subscriber: { pSubscribe },
 		});
 
+		// rethrow is intentional — sub.on("ready") in realtime.ts catches it
 		await expect(hub.reconnectSubscriber()).rejects.toThrow("connection lost");
 		expect(logSpy).toHaveBeenCalledWith(
 			{ err: expect.any(Error) },
@@ -367,9 +368,15 @@ describe("shutdown", () => {
 	});
 });
 
-describe("singleton live bindings", () => {
-	it("re-points exported helpers when the hub is replaced", async () => {
+describe("singleton exports", () => {
+	it("keeps routing to the current hub for consumers that snapshot the helpers", async () => {
 		const realtime = await import("./realtime.js");
+		// Mirrors lib/helpers.ts and agent/routes.ts, which capture these into
+		// dependency objects at module load, before initRealtime() swaps the hub.
+		const snapshot = {
+			publishEvent: realtime.publishEvent,
+			clearPresence: realtime.clearPresence,
+		};
 		const hub = realtime.createRealtimeHub({
 			publisher: null,
 			subscriber: null,
@@ -377,11 +384,11 @@ describe("singleton live bindings", () => {
 		const client = hub.connectLocalClient({ workspaceId: 1 });
 
 		realtime.setRealtimeHubForTests(hub);
-		await realtime.publishEvent(1, { type: "card.created", cardId: 3 });
+		await snapshot.publishEvent(1, { type: "card.created", cardId: 3 });
 		expect(client.drain()).toEqual([{ type: "card.created", cardId: 3 }]);
 
 		realtime.setRealtimeHubForTests(null);
-		await realtime.publishEvent(1, { type: "card.created", cardId: 4 });
+		await snapshot.publishEvent(1, { type: "card.created", cardId: 4 });
 		expect(client.drain()).toEqual([]);
 	});
 });
