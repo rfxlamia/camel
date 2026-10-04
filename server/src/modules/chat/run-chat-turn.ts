@@ -7,6 +7,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "../../config.js";
+import { getClient } from "../../lib/llm/client.js";
 import type { Tool, ToolEvent } from "../agent/index.js";
 import {
 	createSafeSystemPrompt,
@@ -14,17 +15,11 @@ import {
 	sanitizeUserInput,
 } from "../agent/index.js";
 import {
-	getClient,
 	type RunChatTurnResult,
 	runSingleShot,
 	runWithTools,
 } from "./run-turn-loops.js";
 
-export {
-	MAX_TOKENS,
-	OUTPUT_BUDGET,
-	THINKING_BUDGET,
-} from "./run-turn-loops.js";
 export type { RunChatTurnResult };
 
 // ---------------------------------------------------------------------------
