@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { logger } from "../../lib/logger.js";
 import { extractText, getClient, MODEL } from "./llm-client.js";
 import { detectPromptInjection } from "./prompt-sanitizer.js";
-import { getTemplate } from "./templates.js";
+import { TEMPLATES } from "./templates.js";
 
 // ---------------------------------------------------------------------------
 // classifyIntent — match user intent to a board template
@@ -13,7 +13,7 @@ export interface ClassifyResult {
 	explanation: string;
 }
 
-const UNKNOWN_TEMPLATE_EXPLANATION =
+export const UNKNOWN_TEMPLATE_EXPLANATION =
 	"Intent could not be matched to a supported template. Please try a research-related request.";
 
 /**
@@ -32,7 +32,8 @@ export function normalizeClassifyResult(parsed: {
 		return { templateId: null, explanation };
 	}
 	const templateId = typeof raw === "string" ? raw.trim() : "";
-	if (templateId && getTemplate(templateId)) {
+	// hasOwn: plain-object lookup would accept "constructor", "toString", etc.
+	if (templateId && Object.hasOwn(TEMPLATES, templateId)) {
 		return { templateId, explanation };
 	}
 	logger.warn(

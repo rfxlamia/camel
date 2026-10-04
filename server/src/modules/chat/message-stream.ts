@@ -21,6 +21,12 @@ import {
 } from "./stream-protocol.js";
 import { createChatToolFactory } from "./tools/factory.js";
 
+class ThreadNotFoundError extends Error {
+	constructor() {
+		super("Thread not found");
+	}
+}
+
 const STREAM_ERROR_MESSAGE = "Failed to generate response. Please try again.";
 
 export function createPostMessageHandler(
@@ -119,7 +125,7 @@ export function createPostMessageHandler(
 						content: action.message,
 					});
 					if (!userRow) {
-						throw new Error("Thread not found");
+						throw new ThreadNotFoundError();
 					}
 					history = [...history, userRow];
 				} else if (retryTargetId !== undefined) {
@@ -134,7 +140,7 @@ export function createPostMessageHandler(
 					content: "",
 				});
 				if (!placeholder) {
-					throw new Error("Thread not found");
+					throw new ThreadNotFoundError();
 				}
 				assistantRowId = placeholder.id;
 
@@ -149,6 +155,9 @@ export function createPostMessageHandler(
 					},
 				});
 
+				// Intentionally keeps running after a client disconnect: safe writes
+				// become no-ops, and the finished message is still persisted so it
+				// shows up when the user reloads the thread.
 				const result = await runChatTurn({
 					systemPrompt: CHAT_SYSTEM_PROMPT,
 					messages: buildAnthropicMessages(history),
@@ -203,10 +212,12 @@ export function createPostMessageHandler(
 					setStreamHeaders(res);
 					res.status(200);
 				}
+				// A vanished thread can never succeed on retry; everything else can.
+				const threadGone = err instanceof ThreadNotFoundError;
 				safeWriteStreamEvent(res, {
 					type: "error",
-					message: STREAM_ERROR_MESSAGE,
-					retryable: true,
+					message: threadGone ? "Thread not found" : STREAM_ERROR_MESSAGE,
+					retryable: !threadGone,
 				});
 				safeEndStream(res);
 			}

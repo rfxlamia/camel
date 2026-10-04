@@ -151,6 +151,20 @@ describe("chat routes (mocked service + LLM)", () => {
 			.send({ message: "Hi" });
 		expect(res.status).toBe(200);
 		expect(res.text).toContain('"type":"error"');
+		expect(res.text).not.toContain("db down");
+		expect(mockService.deleteMessage).toHaveBeenCalledWith(11);
+	});
+
+	it("marks the error non-retryable when the thread vanished mid-request", async () => {
+		mockService.insertMessage.mockReset();
+		mockService.insertMessage.mockResolvedValueOnce(null);
+		const res = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ message: "Hi" });
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('"type":"error"');
+		expect(res.text).toContain('"retryable":false');
+		expect(mockRunChatTurn).not.toHaveBeenCalled();
 	});
 
 	it("POST retry action regenerates without duplicate user message", async () => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { UNKNOWN_TEMPLATE_EXPLANATION } from "./classify-intent.js";
 import type { Tool, ToolEvent } from "./tools/types.js";
 
 const mockCreate = vi.fn();
@@ -54,8 +55,7 @@ describe("classifyIntent", () => {
 		const { classifyIntent } = await import("./llm.js");
 		const result = await classifyIntent("riset kompetitor fintech");
 		expect(result.templateId).toBeNull();
-		expect(result.explanation).not.toBe("");
-		expect(result.explanation).not.toBe("Matched!");
+		expect(result.explanation).toBe(UNKNOWN_TEMPLATE_EXPLANATION);
 		// Non-empty explanation => semantic decision, no retry
 		expect(mockCreate).toHaveBeenCalledTimes(1);
 	});
@@ -72,6 +72,26 @@ describe("classifyIntent", () => {
 		const { classifyIntent } = await import("./llm.js");
 		const result = await classifyIntent("riset kompetitor fintech");
 		expect(result.templateId).toBeNull();
+		expect(result.explanation).toBe(UNKNOWN_TEMPLATE_EXPLANATION);
+	});
+
+	it.each([
+		"constructor",
+		"toString",
+		"__proto__",
+	])("downgrades Object.prototype key %s to null", async (key) => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: `{"templateId":"${key}","explanation":"Matched!"}`,
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("riset kompetitor fintech");
+		expect(result.templateId).toBeNull();
+		expect(result.explanation).toBe(UNKNOWN_TEMPLATE_EXPLANATION);
 	});
 
 	it("downgrades a non-string templateId to null", async () => {

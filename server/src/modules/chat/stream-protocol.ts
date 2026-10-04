@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { logger } from "../../lib/logger.js";
 import type { ToolEvent } from "../agent/index.js";
 
 export type StreamEvent =
@@ -32,14 +33,16 @@ export function safeWriteStreamEvent(
 	try {
 		writeStreamEvent(res, event);
 		return true;
-	} catch {
+	} catch (err) {
+		// Disconnects are filtered above; anything thrown here is unexpected.
+		logger.warn({ err }, "stream write failed");
 		return false;
 	}
 }
 
 /** End the response without throwing if it is already closed. */
 export function safeEndStream(res: Response): void {
-	if (res.writableEnded) return;
+	if (res.writableEnded || res.destroyed) return;
 	try {
 		res.end();
 	} catch {
