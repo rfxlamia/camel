@@ -33,26 +33,43 @@ function createDisconnectedHub(): RealtimeHub {
 let activeHub: RealtimeHub = createDisconnectedHub();
 let activeSubscriber: RedisClientType | null = null;
 
-// Hub methods are closures (no `this`), so these live bindings are the hub's
-// own functions. `useHub` re-points them whenever the singleton is replaced.
-export let publishEvent = activeHub.publishEvent;
-export let sseHandler = activeHub.sseHandler;
-export let heartbeat = activeHub.heartbeat;
-export let clearPresence = activeHub.clearPresence;
-export let onlineUsers = activeHub.onlineUsers;
+// Consumers capture these exports into dependency objects at module load
+// (lib/helpers.ts, modules/agent/routes.ts), before initRealtime() swaps the
+// hub. Each export must therefore resolve `activeHub` at call time rather than
+// being bound to a particular hub.
+export function publishEvent(
+	...args: Parameters<RealtimeHub["publishEvent"]>
+): ReturnType<RealtimeHub["publishEvent"]> {
+	return activeHub.publishEvent(...args);
+}
 
-function useHub(hub: RealtimeHub): void {
-	activeHub = hub;
-	publishEvent = hub.publishEvent;
-	sseHandler = hub.sseHandler;
-	heartbeat = hub.heartbeat;
-	clearPresence = hub.clearPresence;
-	onlineUsers = hub.onlineUsers;
+export function sseHandler(
+	...args: Parameters<RealtimeHub["sseHandler"]>
+): ReturnType<RealtimeHub["sseHandler"]> {
+	return activeHub.sseHandler(...args);
+}
+
+export function heartbeat(
+	...args: Parameters<RealtimeHub["heartbeat"]>
+): ReturnType<RealtimeHub["heartbeat"]> {
+	return activeHub.heartbeat(...args);
+}
+
+export function clearPresence(
+	...args: Parameters<RealtimeHub["clearPresence"]>
+): ReturnType<RealtimeHub["clearPresence"]> {
+	return activeHub.clearPresence(...args);
+}
+
+export function onlineUsers(
+	...args: Parameters<RealtimeHub["onlineUsers"]>
+): ReturnType<RealtimeHub["onlineUsers"]> {
+	return activeHub.onlineUsers(...args);
 }
 
 /** Replace the singleton only in integration tests that exercise the real hub. */
 export function setRealtimeHubForTests(hub: RealtimeHub | null): void {
-	useHub(hub ?? createDisconnectedHub());
+	activeHub = hub ?? createDisconnectedHub();
 }
 
 export async function initRealtime(): Promise<void> {
@@ -71,13 +88,11 @@ export async function initRealtime(): Promise<void> {
 		});
 		await sub.connect();
 		activeSubscriber = sub;
-		useHub(
-			createRealtimeHub({
-				publisher: client,
-				subscriber: sub,
-				presence: client,
-			}),
-		);
+		activeHub = createRealtimeHub({
+			publisher: client,
+			subscriber: sub,
+			presence: client,
+		});
 		await activeHub.connectSubscriber();
 
 		// Reconnection handlers — attach AFTER initial setup to avoid
@@ -90,7 +105,8 @@ export async function initRealtime(): Promise<void> {
 		});
 		sub.on("ready", () => {
 			activeHub.reconnectSubscriber().catch(() => {
-				// already logged by reconnectSubscriber before it rethrew
+				// reconnectSubscriber logs the failure and rethrows by design; this is
+				// its only caller, and the next "ready" event retries.
 			});
 		});
 
