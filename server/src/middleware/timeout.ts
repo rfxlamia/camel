@@ -48,9 +48,9 @@ export function serverTimeout(
 
 	logger.info(
 		{
-			requestTimeout: `${timeout}ms`,
-			keepAliveTimeout: `${keepAliveTimeout}ms`,
-			headersTimeout: `${headersTimeout}ms`,
+			requestTimeoutMs: timeout,
+			keepAliveTimeoutMs: keepAliveTimeout,
+			headersTimeoutMs: headersTimeout,
 		},
 		"Timeout configuration",
 	);

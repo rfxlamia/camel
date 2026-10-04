@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { requestContext } from "../lib/logger.js";
+import { logger, requestContext } from "../lib/logger.js";
 import { requestContextMiddleware } from "./request-context.js";
 
 function run(inbound?: string) {
@@ -33,5 +33,16 @@ describe("requestContextMiddleware", () => {
 	it("generates an id when none is supplied", () => {
 		const { req } = run(undefined);
 		expect(req.id).toMatch(/^[0-9a-f-]{36}$/);
+	});
+
+	it("includes requestId in the request completed log line", () => {
+		const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+		const { res } = run("abc-123");
+		res.emit("finish");
+		expect(info).toHaveBeenCalledWith(
+			expect.objectContaining({ requestId: "abc-123", status: 200 }),
+			"request completed",
+		);
+		info.mockRestore();
 	});
 });

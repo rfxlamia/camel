@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
+import { logger } from "../../lib/logger.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
 
 vi.mock("../../auth.js", async (importOriginal) => {
@@ -30,6 +31,7 @@ import { createAgentRouter } from "./routes.js";
 
 describe("agent routes error handling", () => {
 	it("lets handler failures reach the global error handler", async () => {
+		const logSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const app = express();
 		app.use(express.json());
 		app.use("/api", createAgentRouter());
@@ -39,5 +41,10 @@ describe("agent routes error handling", () => {
 
 		expect(res.status).toBe(500);
 		expect(res.body).toEqual({ error: "internal server error" });
+		expect(logSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ err: expect.any(Error) }),
+			"request failed",
+		);
+		logSpy.mockRestore();
 	});
 });

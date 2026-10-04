@@ -791,8 +791,12 @@ export function createAgentRouter(
 			}
 
 			// Fire-and-forget execution — client receives progress via SSE
+			const requestId = req.id;
 			service.runPipeline({ boardId, workspaceId }).catch((err) => {
-				logger.error({ err, boardId, workspaceId }, "agent runPipeline failed");
+				logger.error(
+					{ err, boardId, workspaceId, requestId },
+					"agent runPipeline failed",
+				);
 			});
 
 			res.json({ ok: true });

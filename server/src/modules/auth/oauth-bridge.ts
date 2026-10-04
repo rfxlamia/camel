@@ -157,7 +157,7 @@ export function createOAuthBridgeRouter(): Router {
 			{
 				baUserId,
 				hasOldToken: Boolean(oldToken),
-				cookieNames: Object.keys(req.cookies ?? {}),
+				cookieCount: Object.keys(req.cookies ?? {}).length,
 			},
 			"complete-oauth",
 		);

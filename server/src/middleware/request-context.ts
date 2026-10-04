@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { logger, requestContext } from "../lib/logger.js";
 
-const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,128}$/;
+const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation
@@ -28,6 +28,8 @@ export function requestContextMiddleware() {
 		res.on("finish", () => {
 			logger.info(
 				{
+					// Explicit: this listener runs outside the ALS scope.
+					requestId,
 					method: req.method,
 					path: req.path,
 					status: res.statusCode,
