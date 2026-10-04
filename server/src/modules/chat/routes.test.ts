@@ -22,13 +22,9 @@ const mockService = {
 	insertAttachment: vi.fn(),
 };
 
-vi.mock("../agent/index.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../agent/index.js")>();
-	return {
-		...actual,
-		checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
-	};
-});
+vi.mock("../../lib/chat-rate-limit.js", () => ({
+	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
+}));
 
 vi.mock("../../auth.js", () => ({
 	requireAuth: (

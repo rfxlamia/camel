@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
+import { checkChatLimit } from "../../lib/chat-rate-limit.js";
 import { lookupMembership } from "../../lib/helpers.js";
 import { logger } from "../../lib/logger.js";
 import type { ToolEvent } from "../agent/index.js";
-import { checkChatLimit } from "../agent/index.js";
 import {
 	buildAnthropicMessages,
 	CHAT_SYSTEM_PROMPT,

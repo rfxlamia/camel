@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { checkChatLimit as libCheckChatLimit } from "../../../lib/chat-rate-limit.js";
 import {
 	checkChatLimit,
 	peekSubmitLimit,
@@ -71,6 +72,18 @@ describe("ticket-intake rate limits", () => {
 				isLocked: false,
 				remainingAttempts: 0,
 			});
+		});
+	});
+	describe("shared chat limiter", () => {
+		it("is one limiter with the AI Chat entry point (lib)", async () => {
+			await libCheckChatLimit(7);
+			expect((await checkChatLimit(7)).isLocked).toBe(true);
+		});
+
+		it("resetRateLimitsForTesting also clears the chat limiter", async () => {
+			await libCheckChatLimit(9);
+			resetRateLimitsForTesting();
+			expect((await libCheckChatLimit(9)).isLocked).toBe(false);
 		});
 	});
 });
