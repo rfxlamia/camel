@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Tool, ToolEvent } from "../../lib/llm/tool-types.js";
 import { UNKNOWN_TEMPLATE_EXPLANATION } from "./classify-intent.js";
-import type { Tool, ToolEvent } from "./tools/types.js";
 
 const mockCreate = vi.fn();
 const mockStream = vi.fn();

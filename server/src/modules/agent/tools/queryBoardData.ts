@@ -3,7 +3,7 @@ import {
 	computeFlowMetrics,
 	computeMetricsHistory,
 } from "../../../core/metrics.js";
-import type { Tool, ToolResult } from "./types.js";
+import type { Tool, ToolResult } from "../../../lib/llm/tool-types.js";
 
 export interface ActivityItem {
 	type: string;

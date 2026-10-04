@@ -1,5 +1,3 @@
-export const MAX_ARTIFACT_BYTES = 1_000_000;
-
 export function slugify(text: string): string {
 	return text
 		.toLowerCase()

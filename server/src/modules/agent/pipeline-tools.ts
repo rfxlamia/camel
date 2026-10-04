@@ -1,3 +1,4 @@
+import type { Tool } from "../../lib/llm/tool-types.js";
 import { extractRevisedDocument } from "./artifact.js";
 import type {
 	AgentBoardRecord,
@@ -6,7 +7,6 @@ import type {
 } from "./service-types.js";
 import { makeCreateFile } from "./tools/createFile.js";
 import { makeQueryBoardData } from "./tools/queryBoardData.js";
-import type { Tool } from "./tools/types.js";
 
 export function resolveColumnTools(
 	deps: AgentBoardServiceDeps,

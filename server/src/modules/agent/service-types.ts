@@ -1,6 +1,6 @@
 import type { CardTimestamps } from "../../core/metrics.js";
+import type { Tool } from "../../lib/llm/tool-types.js";
 import type { ActivityItem } from "./tools/queryBoardData.js";
-import type { Tool } from "./tools/types.js";
 
 export interface AgentBoardRecord {
 	id: number;

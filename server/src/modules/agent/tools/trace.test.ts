@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-	countSearchResults,
-	mergeToolTraceRows,
-	parseToolCallInput,
-} from "./trace.js";
+import { countSearchResults } from "../../../lib/llm/search-count.js";
+import { mergeToolTraceRows, parseToolCallInput } from "./trace.js";
 
 describe("countSearchResults", () => {
 	it("counts numbered result lines", () => {

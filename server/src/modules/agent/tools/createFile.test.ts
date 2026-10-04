@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MAX_ARTIFACT_BYTES } from "../artifact.js";
+import { MAX_ARTIFACT_BYTES } from "../../../lib/llm/artifact-limits.js";
 import { makeCreateFile } from "./createFile.js";
 
 function buildCtx(overrides: Record<string, unknown> = {}) {

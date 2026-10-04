@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { createToolRegistry, toAnthropicToolDefs } from "./registry.js";
-import type { Tool } from "./types.js";
+import { toAnthropicToolDefs } from "../../../lib/llm/tool-defs.js";
+import type { Tool } from "../../../lib/llm/tool-types.js";
+import { createToolRegistry } from "./registry.js";
 
 const mockTool: Tool = {
 	name: "web_search",

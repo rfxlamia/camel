@@ -1,10 +1,10 @@
 import { extractText, getClient, MODEL } from "../../lib/llm/client.js";
-import { logger } from "../../lib/logger.js";
 import {
 	detectPromptInjection,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "./prompt-sanitizer.js";
+} from "../../lib/llm/prompt-sanitizer.js";
+import { logger } from "../../lib/logger.js";
 
 // ---------------------------------------------------------------------------
 // detectReportPeriod — check whether a status-report intent names a time window
