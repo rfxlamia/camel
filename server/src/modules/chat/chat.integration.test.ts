@@ -21,7 +21,7 @@ vi.mock("../../auth.js", () => ({
 	},
 }));
 
-vi.mock("./run-chat-turn.js", () => ({
+vi.mock("../../lib/llm/run-chat-turn.js", () => ({
 	runChatTurn: (...args: unknown[]) => mockRunChatTurn(...args),
 	estimateContextTokens: vi.fn(() => 100),
 }));

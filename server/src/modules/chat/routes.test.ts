@@ -37,7 +37,7 @@ vi.mock("../../auth.js", () => ({
 	},
 }));
 
-vi.mock("./run-chat-turn.js", () => ({
+vi.mock("../../lib/llm/run-chat-turn.js", () => ({
 	runChatTurn: (...args: unknown[]) => mockRunChatTurn(...args),
 	estimateContextTokens: vi.fn(() => 100),
 }));
@@ -228,7 +228,9 @@ describe("chat routes (mocked service + LLM)", () => {
 	});
 
 	it("returns 413 on context overflow without persisting user message", async () => {
-		const { estimateContextTokens } = await import("./run-chat-turn.js");
+		const { estimateContextTokens } = await import(
+			"../../lib/llm/run-chat-turn.js"
+		);
 		vi.mocked(estimateContextTokens).mockReturnValue(999_999);
 		const res = await request(app)
 			.post("/api/chat/threads/1/messages")

@@ -7,18 +7,18 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "../../config.js";
-import { getClient } from "../../lib/llm/client.js";
-import type { Tool, ToolEvent } from "../agent/index.js";
+import { getClient } from "./client.js";
 import {
 	createSafeSystemPrompt,
 	sanitizeLLMOutput,
 	sanitizeUserInput,
-} from "../agent/index.js";
+} from "./prompt-sanitizer.js";
 import {
 	type RunChatTurnResult,
 	runSingleShot,
 	runWithTools,
 } from "./run-turn-loops.js";
+import type { Tool, ToolEvent } from "./tool-types.js";
 
 export type { RunChatTurnResult };
 

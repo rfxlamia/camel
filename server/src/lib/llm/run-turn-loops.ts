@@ -4,14 +4,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import {
-	MAX_TOKENS,
-	MODEL,
-	OUTPUT_BUDGET,
-	THINKING_BUDGET,
-} from "../../lib/llm/client.js";
-import type { Tool, ToolEvent } from "../agent/index.js";
-import { countSearchResults, toAnthropicToolDefs } from "../agent/index.js";
+import { MAX_TOKENS, MODEL, OUTPUT_BUDGET, THINKING_BUDGET } from "./client.js";
+import { countSearchResults } from "./search-count.js";
+import { toAnthropicToolDefs } from "./tool-defs.js";
+import type { Tool, ToolEvent } from "./tool-types.js";
 
 // ---------------------------------------------------------------------------
 // Tool helpers (shared with agent path)

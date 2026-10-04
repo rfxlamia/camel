@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Request } from "express";
 import type { Json } from "../../db/types.js";
-import type { ToolEvent } from "../agent/index.js";
+import type { ToolEvent } from "../../lib/llm/tool-types.js";
 import type { ChatMessage } from "./types.js";
 
 /** Conservative input token budget before hard-failing long threads. */
