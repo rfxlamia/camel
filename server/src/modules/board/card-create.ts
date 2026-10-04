@@ -360,7 +360,7 @@ async function persistCreatedCard(
 }
 
 function publisherError(kind: string, error: unknown): void {
-	logger.error({ err: error, kind }, "Failed to publish card event");
+	logger.error({ err: error }, `Failed to publish card ${kind} event`);
 }
 
 async function publishCreatedCard(
