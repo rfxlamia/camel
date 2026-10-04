@@ -14,7 +14,8 @@ vi.mock("@anthropic-ai/sdk", () => {
 	};
 });
 
-vi.mock("./templates.js", () => ({
+vi.mock("./templates.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./templates.js")>()),
 	renderSystemPrompt: (tpl: string, vars: Record<string, string>) =>
 		tpl.replace(/\{(\w+)\}/g, (_m: string, key: string) =>
 			key in vars ? vars[key] : `{${key}}`,
@@ -39,6 +40,66 @@ describe("classifyIntent", () => {
 		const result = await classifyIntent("riset kompetitor fintech");
 		expect(result.templateId).toBe("research-report");
 		expect(result.explanation).toBe("Matched!");
+	});
+
+	it("downgrades an unknown templateId to null so createBoard returns 422", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"templateId":"Research Report","explanation":"Matched!"}',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("riset kompetitor fintech");
+		expect(result.templateId).toBeNull();
+		expect(result.explanation).not.toBe("");
+		expect(result.explanation).not.toBe("Matched!");
+		// Non-empty explanation => semantic decision, no retry
+		expect(mockCreate).toHaveBeenCalledTimes(1);
+	});
+
+	it("downgrades an unknown templateId from the regex fallback strategy", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: 'Sure! "templateId": "bogus-template", "explanation": "ok" (truncated',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("riset kompetitor fintech");
+		expect(result.templateId).toBeNull();
+	});
+
+	it("downgrades a non-string templateId to null", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"templateId":42,"explanation":"Matched!"}',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("riset kompetitor fintech");
+		expect(result.templateId).toBeNull();
+	});
+
+	it("accepts status-report and trims whitespace around a valid id", async () => {
+		mockCreate.mockResolvedValueOnce({
+			content: [
+				{
+					type: "text",
+					text: '{"templateId":" status-report ","explanation":"Weekly status."}',
+				},
+			],
+		});
+		const { classifyIntent } = await import("./llm.js");
+		const result = await classifyIntent("laporan status mingguan");
+		expect(result.templateId).toBe("status-report");
 	});
 
 	it("returns null templateId when LLM cannot match", async () => {

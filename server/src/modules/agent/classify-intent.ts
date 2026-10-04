@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { logger } from "../../lib/logger.js";
 import { extractText, getClient, MODEL } from "./llm-client.js";
 import { detectPromptInjection } from "./prompt-sanitizer.js";
+import { getTemplate } from "./templates.js";
 
 // ---------------------------------------------------------------------------
 // classifyIntent — match user intent to a board template
@@ -10,6 +11,35 @@ import { detectPromptInjection } from "./prompt-sanitizer.js";
 export interface ClassifyResult {
 	templateId: string | null;
 	explanation: string;
+}
+
+const UNKNOWN_TEMPLATE_EXPLANATION =
+	"Intent could not be matched to a supported template. Please try a research-related request.";
+
+/**
+ * Allow-list the LLM's templateId against real templates. Unknown values
+ * (e.g. "Research Report") are downgraded to null so createBoard returns 422
+ * instead of creating a board with zero columns.
+ */
+export function normalizeClassifyResult(parsed: {
+	templateId?: unknown;
+	explanation?: unknown;
+}): ClassifyResult {
+	const explanation =
+		typeof parsed.explanation === "string" ? parsed.explanation : "";
+	const raw = parsed.templateId;
+	if (raw === null || raw === undefined) {
+		return { templateId: null, explanation };
+	}
+	const templateId = typeof raw === "string" ? raw.trim() : "";
+	if (templateId && getTemplate(templateId)) {
+		return { templateId, explanation };
+	}
+	logger.warn(
+		{ templateId: raw },
+		"classifyIntent: LLM returned unknown templateId",
+	);
+	return { templateId: null, explanation: UNKNOWN_TEMPLATE_EXPLANATION };
 }
 
 // Fix #4: System prompt diperkuat — JSON-only strict, multilingual-aware
@@ -62,21 +92,13 @@ async function classifyIntentOnce(
 	// Try multiple parsing strategies
 	try {
 		// Strategy 1: Direct JSON parse
-		const parsed = JSON.parse(text) as ClassifyResult;
-		return {
-			templateId: parsed.templateId ?? null,
-			explanation: parsed.explanation ?? "",
-		};
+		return normalizeClassifyResult(JSON.parse(text));
 	} catch {
 		// Strategy 2: Extract JSON from markdown code blocks
 		const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
 		if (jsonMatch) {
 			try {
-				const parsed = JSON.parse(jsonMatch[1].trim()) as ClassifyResult;
-				return {
-					templateId: parsed.templateId ?? null,
-					explanation: parsed.explanation ?? "",
-				};
+				return normalizeClassifyResult(JSON.parse(jsonMatch[1].trim()));
 			} catch {
 				// Fall through to next strategy
 			}
@@ -86,11 +108,7 @@ async function classifyIntentOnce(
 		const jsonObjectMatch = text.match(/\{[\s\S]*\}/);
 		if (jsonObjectMatch) {
 			try {
-				const parsed = JSON.parse(jsonObjectMatch[0]) as ClassifyResult;
-				return {
-					templateId: parsed.templateId ?? null,
-					explanation: parsed.explanation ?? "",
-				};
+				return normalizeClassifyResult(JSON.parse(jsonObjectMatch[0]));
 			} catch {
 				// Fall through to next strategy
 			}
@@ -100,10 +118,10 @@ async function classifyIntentOnce(
 		const templateIdMatch = text.match(/"templateId"\s*:\s*(?:"([^"]+)"|null)/);
 		const explanationMatch = text.match(/"explanation"\s*:\s*"([^"]+)"/);
 		if (templateIdMatch || explanationMatch) {
-			return {
+			return normalizeClassifyResult({
 				templateId: templateIdMatch?.[1] ?? null,
 				explanation: explanationMatch?.[1] ?? "Intent could not be classified.",
-			};
+			});
 		}
 
 		// All parsing strategies failed — return null so retry wrapper can try again
