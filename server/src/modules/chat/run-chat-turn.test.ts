@@ -169,6 +169,73 @@ describe("runChatTurn", () => {
 		expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
 	});
 
+	it("omits thinking and uses OUTPUT_BUDGET max_tokens when thinking=false (single-shot)", async () => {
+		mockStream.mockReturnValueOnce(
+			makeTurn({ text: "ok", stopReason: "end_turn" }),
+		);
+
+		const { runChatTurn } = await import("./run-chat-turn.js");
+		await runChatTurn({
+			systemPrompt: "prompt",
+			messages: [{ role: "user", content: "hi" }],
+			thinking: false,
+			onToken: vi.fn(),
+		});
+
+		const args = mockStream.mock.calls[0][0];
+		expect(args.max_tokens).toBe(16384);
+		expect(args).not.toHaveProperty("thinking");
+	});
+
+	it("omits thinking on every iteration of the tool loop when thinking=false", async () => {
+		mockStream
+			.mockReturnValueOnce(
+				makeTurn({
+					stopReason: "tool_use",
+					toolUse: { id: "t1", name: "web_search", input: { query: "q" } },
+				}),
+			)
+			.mockReturnValueOnce(makeTurn({ text: "done", stopReason: "end_turn" }));
+
+		const { runChatTurn } = await import("./run-chat-turn.js");
+		await runChatTurn({
+			systemPrompt: "prompt",
+			messages: [{ role: "user", content: "hi" }],
+			tools: [mockTool(async () => ({ ok: true, content: "r" }))],
+			thinking: false,
+			onToken: vi.fn(),
+		});
+
+		expect(mockStream).toHaveBeenCalledTimes(2);
+		for (const [args] of mockStream.mock.calls) {
+			expect(args.max_tokens).toBe(16384);
+			expect(args).not.toHaveProperty("thinking");
+		}
+	});
+
+	it("ANTHROPIC_THINKING_ENABLED=false overrides thinking=true", async () => {
+		vi.stubEnv("ANTHROPIC_THINKING_ENABLED", "false");
+		try {
+			mockStream.mockReturnValueOnce(
+				makeTurn({ text: "ok", stopReason: "end_turn" }),
+			);
+
+			const { runChatTurn } = await import("./run-chat-turn.js");
+			await runChatTurn({
+				systemPrompt: "prompt",
+				messages: [{ role: "user", content: "hi" }],
+				thinking: true,
+				onToken: vi.fn(),
+			});
+
+			const args = mockStream.mock.calls[0][0];
+			expect(args.max_tokens).toBe(16384);
+			expect(args).not.toHaveProperty("thinking");
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
 	it("sanitizes user message content before sending to LLM", async () => {
 		mockStream.mockReturnValueOnce(
 			makeTurn({ text: "ok", stopReason: "end_turn" }),

@@ -882,11 +882,23 @@ describe("executeCard extended thinking + live streaming", () => {
 		});
 
 		const { executeCard } = await import("./llm.js");
-		await executeCard("prompt", "intent", [], false, vi.fn());
+		await executeCard("prompt", "intent", [], true, vi.fn());
 
 		const args = mockStream.mock.calls[0][0];
 		expect(args.max_tokens).toBe(24576);
 		expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
+	});
+
+	it("reasoning=false skips thinking and uses max_tokens=16384", async () => {
+		mockStream.mockReturnValueOnce(
+			makeTurn({ text: "out", stopReason: "end_turn" }),
+		);
+		const { executeCard } = await import("./llm.js");
+		await executeCard("prompt", "intent", [], false, vi.fn());
+
+		const args = mockStream.mock.calls[0][0];
+		expect(args.max_tokens).toBe(16384);
+		expect(args).not.toHaveProperty("thinking");
 	});
 
 	it("requests thinking enabled + max_tokens=24576 on the tools path too", async () => {
@@ -898,7 +910,7 @@ describe("executeCard extended thinking + live streaming", () => {
 			"prompt",
 			"intent",
 			[],
-			false,
+			true,
 			vi.fn(),
 			[mockTool(vi.fn(async () => ({ ok: true, content: "hit" })))],
 			3,
@@ -1059,7 +1071,7 @@ describe("executeCard extended thinking + live streaming", () => {
 		});
 
 		const { executeCard } = await import("./llm.js");
-		const result = await executeCard("prompt", "intent", [], false, vi.fn());
+		const result = await executeCard("prompt", "intent", [], true, vi.fn());
 		// Budget asserts output headroom is preserved (OUTPUT_BUDGET=16384).
 		expect(mockStream.mock.calls[0][0].max_tokens).toBe(24576);
 		expect(result.output).toBe("a long report");

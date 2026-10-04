@@ -57,6 +57,11 @@ const envSchema = z.object({
 	EMAIL_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
 	FOCUS_MODE_ENABLED: z.enum(["true", "false"]).default("false"),
 
+	// Global kill switch for extended thinking. Set "false" when the configured
+	// ANTHROPIC_BASE_URL endpoint rejects or mishandles the `thinking` param.
+	// Per-column `reasoning` flags can only turn thinking off, never force it on.
+	ANTHROPIC_THINKING_ENABLED: z.enum(["true", "false"]).default("true"),
+
 	// Private attachment bytes must not share the public uploads directory.
 	ATTACHMENTS_DIR: z.string().min(1).optional(),
 });

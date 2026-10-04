@@ -3,13 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../../api";
-import { useBoard } from "../board";
-import {
-	deriveColumnFailureMessage,
-	deriveStreamedOutputForColumn,
-	deriveThinkingForColumn,
-	pickContent,
-} from "./agentStream";
 import { ToolTrace } from "../../shared/ToolTraceView";
 import {
 	deriveToolTrace,
@@ -18,6 +11,14 @@ import {
 } from "../../shared/toolTrace";
 import { useWorkspace } from "../../shared/WorkspaceContext";
 import type { AgentCardOutput, AgentColumn, ToolTraceItem } from "../../types";
+import { useBoard } from "../board";
+import {
+	deriveColumnFailureMessage,
+	deriveStreamedOutputForColumn,
+	deriveThinkingForColumn,
+	pickContent,
+} from "./agentStream";
+import ThinkingBadge from "./ThinkingBadge";
 
 interface AgentCardDetailProps {
 	column: AgentColumn;
@@ -205,15 +206,7 @@ export default function AgentCardDetail({
 			</div>
 
 			<div className="space-y-4 p-4">
-				{/* Reasoning badge — extended thinking enabled for all columns */}
-				<div>
-					<span className="text-xs font-medium text-neutral-600">
-						Extended Thinking:
-					</span>
-					<span className="ml-2 rounded-md px-2 py-0.5 text-xs font-medium bg-success-100 text-success-900">
-						ON
-					</span>
-				</div>
+				<ThinkingBadge enabled={column.reasoning} />
 
 				{/* System prompt — collapsible */}
 				<div>

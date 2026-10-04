@@ -6,6 +6,7 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
+import { config } from "../../config.js";
 import type { Tool, ToolEvent } from "../agent/index.js";
 import {
 	createSafeSystemPrompt,
@@ -29,6 +30,11 @@ export interface RunChatTurnOptions {
 	messages: Anthropic.MessageParam[];
 	tools?: Tool[];
 	toolBudget?: number;
+	/**
+	 * Request extended thinking for this turn. Defaults to true; `false` skips
+	 * it. The ANTHROPIC_THINKING_ENABLED env switch can only turn it off.
+	 */
+	thinking?: boolean;
 	onToken: (token: string) => void;
 	onThinking?: (text: string) => void;
 	onToolEvent?: (e: ToolEvent) => void;
@@ -104,11 +110,14 @@ export async function runChatTurn(
 		messages,
 		tools = [],
 		toolBudget = 3,
+		thinking: wantThinking = true,
 		onToken,
 		onThinking,
 		onToolEvent,
 	} = options;
 
+	const useThinking =
+		wantThinking && config.ANTHROPIC_THINKING_ENABLED === "true";
 	const client = getClient();
 	const safeSystem = createSafeSystemPrompt(systemPrompt);
 	const sanitizedMessages = sanitizeMessages(messages);
@@ -120,6 +129,7 @@ export async function runChatTurn(
 			client,
 			safeSystem,
 			sanitizedMessages,
+			useThinking,
 			onToken,
 			onThinking,
 		);
@@ -130,6 +140,7 @@ export async function runChatTurn(
 			sanitizedMessages,
 			tools,
 			toolBudget,
+			useThinking,
 			onToken,
 			onToolEvent,
 			onThinking,
