@@ -1,415 +1,59 @@
-import type { Request, Response } from "express";
 import type { RedisClientType } from "redis";
-import type { AuthUser } from "./auth.js";
 import { getRedisClient } from "./db/redis.js";
 import { logger } from "./lib/logger.js";
+import { createRealtimeHub, type RealtimeHub } from "./realtime/hub.js";
 
 // Redis carries the real-time layer (presence + pub/sub). If it is down the
 // app must keep working: presence degrades to "just me" and events fall back
 // to direct in-process fan-out (fine for a single server instance).
 
-const PRESENCE_TTL_SECONDS = 60;
-const WORKSPACE_EVENTS_PATTERN = "camel:workspace:*:events";
-
-export function workspaceEventChannel(workspaceId: number): string {
-	return `camel:workspace:${workspaceId}:events`;
-}
-
-export function workspacePresenceKey(
-	workspaceId: number,
-	userId: number,
-): string {
-	return `camel:workspace:${workspaceId}:presence:${userId}`;
-}
-
-export function workspacePresencePattern(workspaceId: number): string {
-	return `camel:workspace:${workspaceId}:presence:*`;
-}
-
-function parseWorkspaceFromEventChannel(channel: string): number | null {
-	const match = channel.match(/^camel:workspace:(\d+):events$/);
-	return match ? Number(match[1]) : null;
-}
-
-export interface AttachmentEventPayload {
-	attachmentId: number;
-	mimeType: string;
-	createdAt: string;
-}
-
-type BoardEventType =
-	| "card.created"
-	| "card.updated"
-	| "card.moved"
-	| "card.reordered"
-	| "card.deleted"
-	| "attachment.added"
-	| "attachment.removed"
-	| "column.created"
-	| "column.updated"
-	| "column.deleted"
-	| "presence.changed"
-	| "settings.updated"
-	| "membership.removed"
-	| "membership.role_changed"
-	// Agent events (Phase 1)
-	| "agent.board.generating"
-	| "agent.board.ready"
-	| "agent.board.failed"
-	| "agent.card.started"
-	| "agent.card.token"
-	| "agent.card.done"
-	| "agent.card.failed"
-	| "agent.card.thinking"
-	| "agent.tool.started"
-	| "agent.tool.result"
-	| "agent.tool.failed"
-	| "ticket_intake.submit_result"
-	| "tracker.created"
-	| "tracker.updated"
-	| "tracker.deleted"
-	| "tracker.vocabulary.created"
-	| "tracker.project.created"
-	| "tracker.project.updated"
-	| "tracker.project.deleted"
-	| "tracker.phase.created"
-	| "tracker.phase.updated"
-	| "tracker.phase.deleted"
-	| "focus_session.updated";
-
-type BoardEventFields = {
-	actor?: AuthUser;
-	cardId?: number;
-	trackerItemId?: number;
-	userId?: number;
-	workspaceId?: number;
-	workspaceName?: string;
-	role?: string;
-	toolName?: string;
-	query?: string;
-	resultCount?: number;
-	errorCode?: string;
-	attempt?: number;
-	columnSlug?: string;
-	token?: string;
-	boardId?: number;
-	success?: boolean;
-	issueUrl?: string;
-	issueIdentifier?: string;
-	errorMessage?: string;
-	retryable?: boolean;
-	ticketResult?: {
-		success: boolean;
-		issueUrl?: string;
-		issueIdentifier?: string;
-		errorMessage?: string;
-		retryable?: boolean;
-	};
-	at?: string;
-};
-
-export type BoardEvent =
-	| (BoardEventFields & {
-			type: "attachment.added" | "attachment.removed";
-			payload: AttachmentEventPayload;
-	  })
-	| (BoardEventFields & {
-			type: Exclude<BoardEventType, "attachment.added" | "attachment.removed">;
-			payload?: Record<string, unknown>;
-	  });
-
-type WithoutAt<T> = T extends unknown ? Omit<T, "at"> : never;
-type PublishableEvent = WithoutAt<BoardEvent>;
-
-interface PublisherLike {
-	publish(channel: string, message: string): Promise<number>;
-	set?(key: string, value: string, options?: { EX: number }): Promise<unknown>;
-	del?(key: string): Promise<unknown>;
-	mGet?(keys: string[]): Promise<(string | null)[]>;
-}
-
-interface SubscriberLike {
-	pSubscribe(
-		pattern: string,
-		listener: (message: string, channel: string) => void,
-	): Promise<void>;
-}
-
-interface PresenceLike {
-	scanIterator(options: {
-		MATCH: string;
-		COUNT?: number;
-	}): AsyncIterable<string | string[]>;
-	set?(key: string, value: string, options?: { EX: number }): Promise<unknown>;
-	del?(key: string): Promise<unknown>;
-	mGet?(keys: string[]): Promise<(string | null)[]>;
-}
-
-export interface RealtimeHubDeps {
-	publisher: PublisherLike | null;
-	subscriber: SubscriberLike | null;
-	presence?: PresenceLike | null;
-}
-
-interface SseClient {
-	workspaceId: number;
-	userId?: number;
-	res: Response;
-	keepAlive: ReturnType<typeof setInterval>;
-}
-
-interface LocalTestClient {
-	workspaceId: number;
-	buffer: PublishableEvent[];
-}
-
-export function createRealtimeHub(deps: RealtimeHubDeps) {
-	let redisAvailable = deps.publisher !== null;
-	let isShuttingDown = false;
-	const presence = (deps.presence ?? deps.publisher) as PresenceLike | null;
-	const clientsByWorkspace = new Map<number, Set<SseClient>>();
-	const localTestClients = new Set<LocalTestClient>();
-
-	function addSseClient(client: SseClient): void {
-		let set = clientsByWorkspace.get(client.workspaceId);
-		if (!set) {
-			set = new Set();
-			clientsByWorkspace.set(client.workspaceId, set);
-		}
-		set.add(client);
-	}
-
-	function removeSseClient(client: SseClient): void {
-		const set = clientsByWorkspace.get(client.workspaceId);
-		if (set) {
-			set.delete(client);
-			if (set.size === 0) clientsByWorkspace.delete(client.workspaceId);
-		}
-	}
-
-	function fanOut(
-		workspaceId: number,
-		message: string,
-		event: PublishableEvent,
-	): void {
-		const set = clientsByWorkspace.get(workspaceId);
-		if (set) {
-			for (const client of set) {
-				if (
-					event.type === "focus_session.updated" &&
-					client.userId !== event.userId
-				) {
-					continue;
-				}
-				client.res.write(`data: ${message}\n\n`);
-			}
-		}
-		for (const client of localTestClients) {
-			if (client.workspaceId === workspaceId) {
-				client.buffer.push(event);
-			}
-		}
-	}
-
-	function onRedisMessage(message: string, channel: string): void {
-		const workspaceId = parseWorkspaceFromEventChannel(channel);
-		if (workspaceId === null) return;
-		try {
-			const parsed = JSON.parse(message) as PublishableEvent;
-			fanOut(workspaceId, message, parsed);
-		} catch {
-			// ignore malformed payloads
-		}
-	}
-
-	return {
-		setRedisAvailable(val: boolean): void {
-			if (redisAvailable !== val) {
-				logger.info(
-					{ from: redisAvailable, to: val },
-					"Redis availability changed",
-				);
-				redisAvailable = val;
-			}
-		},
-
-		async connectSubscriber(): Promise<void> {
-			if (!deps.subscriber) return;
-			await deps.subscriber.pSubscribe(
-				WORKSPACE_EVENTS_PATTERN,
-				onRedisMessage,
-			);
-		},
-
-		async reconnectSubscriber(): Promise<void> {
-			try {
-				await this.connectSubscriber();
-				logger.info(
-					"Redis subscriber reconnected — re-subscribed to workspace events",
-				);
-			} catch (err) {
-				logger.error({ err }, "Redis re-subscribe failed");
-			}
-		},
-
-		connectLocalClient({ workspaceId }: { workspaceId: number }) {
-			const client: LocalTestClient = { workspaceId, buffer: [] };
-			localTestClients.add(client);
-			return {
-				drain: () => {
-					const events = [...client.buffer];
-					client.buffer = [];
-					return events;
-				},
-			};
-		},
-
-		async publishEvent(
-			workspaceId: number,
-			event: PublishableEvent,
-		): Promise<void> {
-			const message = JSON.stringify({
-				...event,
-				at: new Date().toISOString(),
-			});
-			if (redisAvailable && deps.publisher) {
-				try {
-					await deps.publisher.publish(
-						workspaceEventChannel(workspaceId),
-						message,
-					);
-					return;
-				} catch {
-					// fall through to local fan-out
-				}
-			}
-			fanOut(workspaceId, message, event);
-		},
-
-		sseHandler(req: Request, res: Response): void {
-			const workspaceId = Number(req.params.workspaceId);
-			if (!Number.isInteger(workspaceId)) {
-				res.status(400).json({ error: "workspaceId must be an integer" });
-				return;
-			}
-
-			if (isShuttingDown) {
-				res.status(503).json({ error: "Server is shutting down" });
-				return;
-			}
-
-			res.writeHead(200, {
-				"Content-Type": "text/event-stream",
-				"Cache-Control": "no-cache",
-				Connection: "keep-alive",
-			});
-			res.write(": connected\n\n");
-
-			const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
-			const client: SseClient = {
-				workspaceId,
-				userId: req.user?.id,
-				res,
-				keepAlive,
-			};
-			addSseClient(client);
-
-			req.on("close", () => {
-				clearInterval(keepAlive);
-				removeSseClient(client);
-			});
-		},
-
-		async heartbeat(workspaceId: number, user: AuthUser): Promise<void> {
-			if (!redisAvailable || !presence?.set) return;
-			try {
-				await presence.set(
-					workspacePresenceKey(workspaceId, user.id),
-					JSON.stringify({ ...user, lastSeen: new Date().toISOString() }),
-					{ EX: PRESENCE_TTL_SECONDS },
-				);
-			} catch {
-				// presence is best-effort
-			}
-		},
-
-		async clearPresence(workspaceId: number, userId: number): Promise<void> {
-			if (!redisAvailable || !presence?.del) return;
-			try {
-				await presence.del(workspacePresenceKey(workspaceId, userId));
-			} catch {
-				// best-effort
-			}
-		},
-
-		shutdown(): void {
-			isShuttingDown = true;
-			for (const [_ws, set] of clientsByWorkspace) {
-				for (const client of set) {
-					try {
-						clearInterval(client.keepAlive);
-						client.res.end();
-					} catch {
-						// best-effort: client may already be closed
-					}
-				}
-			}
-			clientsByWorkspace.clear();
-		},
-
-		async onlineUsers(
-			workspaceId: number,
-			self?: AuthUser,
-		): Promise<Array<AuthUser & { lastSeen: string }>> {
-			const fallback = self
-				? [{ ...self, lastSeen: new Date().toISOString() }]
-				: [];
-			if (!redisAvailable || !presence?.scanIterator) return fallback;
-			try {
-				const keys: string[] = [];
-				for await (const key of presence.scanIterator({
-					MATCH: workspacePresencePattern(workspaceId),
-				})) {
-					keys.push(...(Array.isArray(key) ? key : [key]));
-				}
-				if (keys.length === 0) return fallback;
-				const values = presence.mGet ? await presence.mGet(keys) : [];
-				const users = values
-					.filter((v): v is string => v !== null)
-					.map((v) => JSON.parse(v) as AuthUser & { lastSeen: string });
-				if (self && !users.some((u) => u.id === self.id))
-					users.push(fallback[0]);
-				return users.sort((a, b) => a.displayName.localeCompare(b.displayName));
-			} catch {
-				return fallback;
-			}
-		},
-	};
-}
+export { connectRedis } from "./db/redis.js";
+export {
+	workspaceEventChannel,
+	workspacePresenceKey,
+	workspacePresencePattern,
+} from "./realtime/channels.js";
+export { createRealtimeHub } from "./realtime/hub.js";
+export type {
+	AttachmentEventPayload,
+	BoardEvent,
+	RealtimeHubDeps,
+} from "./realtime/types.js";
 
 // ---- Production singleton ----------------------------------------------------
 
-type RealtimeHub = ReturnType<typeof createRealtimeHub>;
+function createDisconnectedHub(): RealtimeHub {
+	return createRealtimeHub({
+		publisher: null,
+		subscriber: null,
+		presence: null,
+	});
+}
 
-let activeHub: RealtimeHub = createRealtimeHub({
-	publisher: null,
-	subscriber: null,
-	presence: null,
-});
+let activeHub: RealtimeHub = createDisconnectedHub();
 let activeSubscriber: RedisClientType | null = null;
+
+// Hub methods are closures (no `this`), so these live bindings are the hub's
+// own functions. `useHub` re-points them whenever the singleton is replaced.
+export let publishEvent = activeHub.publishEvent;
+export let sseHandler = activeHub.sseHandler;
+export let heartbeat = activeHub.heartbeat;
+export let clearPresence = activeHub.clearPresence;
+export let onlineUsers = activeHub.onlineUsers;
+
+function useHub(hub: RealtimeHub): void {
+	activeHub = hub;
+	publishEvent = hub.publishEvent;
+	sseHandler = hub.sseHandler;
+	heartbeat = hub.heartbeat;
+	clearPresence = hub.clearPresence;
+	onlineUsers = hub.onlineUsers;
+}
 
 /** Replace the singleton only in integration tests that exercise the real hub. */
 export function setRealtimeHubForTests(hub: RealtimeHub | null): void {
-	activeHub =
-		hub ??
-		createRealtimeHub({
-			publisher: null,
-			subscriber: null,
-			presence: null,
-		});
+	useHub(hub ?? createDisconnectedHub());
 }
-
-export { connectRedis } from "./db/redis.js";
 
 export async function initRealtime(): Promise<void> {
 	const client = getRedisClient();
@@ -427,11 +71,13 @@ export async function initRealtime(): Promise<void> {
 		});
 		await sub.connect();
 		activeSubscriber = sub;
-		activeHub = createRealtimeHub({
-			publisher: client,
-			subscriber: sub,
-			presence: client,
-		});
+		useHub(
+			createRealtimeHub({
+				publisher: client,
+				subscriber: sub,
+				presence: client,
+			}),
+		);
 		await activeHub.connectSubscriber();
 
 		// Reconnection handlers — attach AFTER initial setup to avoid
@@ -443,7 +89,9 @@ export async function initRealtime(): Promise<void> {
 			activeHub.setRedisAvailable(false);
 		});
 		sub.on("ready", () => {
-			activeHub.reconnectSubscriber();
+			activeHub.reconnectSubscriber().catch(() => {
+				// already logged by reconnectSubscriber before it rethrew
+			});
 		});
 
 		logger.info("Redis connected — real-time layer active");
@@ -452,38 +100,6 @@ export async function initRealtime(): Promise<void> {
 			"Redis not reachable — presence/real-time degraded (board still works)",
 		);
 	}
-}
-
-export async function publishEvent(
-	workspaceId: number,
-	event: PublishableEvent,
-): Promise<void> {
-	return activeHub.publishEvent(workspaceId, event);
-}
-
-export function sseHandler(req: Request, res: Response): void {
-	return activeHub.sseHandler(req, res);
-}
-
-export async function heartbeat(
-	workspaceId: number,
-	user: AuthUser,
-): Promise<void> {
-	return activeHub.heartbeat(workspaceId, user);
-}
-
-export async function clearPresence(
-	workspaceId: number,
-	userId: number,
-): Promise<void> {
-	return activeHub.clearPresence(workspaceId, userId);
-}
-
-export async function onlineUsers(
-	workspaceId: number,
-	self?: AuthUser,
-): Promise<Array<AuthUser & { lastSeen: string }>> {
-	return activeHub.onlineUsers(workspaceId, self);
 }
 
 export async function shutdownRealtime(): Promise<void> {

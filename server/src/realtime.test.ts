@@ -265,7 +265,7 @@ describe("Redis reconnection", () => {
 		);
 	});
 
-	it("reconnectSubscriber handles errors gracefully", async () => {
+	it("reconnectSubscriber logs and rethrows subscribe errors", async () => {
 		const pSubscribe = vi.fn(async () => {
 			throw new Error("connection lost");
 		});
@@ -275,8 +275,7 @@ describe("Redis reconnection", () => {
 			subscriber: { pSubscribe },
 		});
 
-		// Should not throw
-		await hub.reconnectSubscriber();
+		await expect(hub.reconnectSubscriber()).rejects.toThrow("connection lost");
 		expect(logSpy).toHaveBeenCalledWith(
 			{ err: expect.any(Error) },
 			"Redis re-subscribe failed",
@@ -365,5 +364,24 @@ describe("shutdown", () => {
 			hub.shutdown();
 			hub.shutdown();
 		}).not.toThrow();
+	});
+});
+
+describe("singleton live bindings", () => {
+	it("re-points exported helpers when the hub is replaced", async () => {
+		const realtime = await import("./realtime.js");
+		const hub = realtime.createRealtimeHub({
+			publisher: null,
+			subscriber: null,
+		});
+		const client = hub.connectLocalClient({ workspaceId: 1 });
+
+		realtime.setRealtimeHubForTests(hub);
+		await realtime.publishEvent(1, { type: "card.created", cardId: 3 });
+		expect(client.drain()).toEqual([{ type: "card.created", cardId: 3 }]);
+
+		realtime.setRealtimeHubForTests(null);
+		await realtime.publishEvent(1, { type: "card.created", cardId: 4 });
+		expect(client.drain()).toEqual([]);
 	});
 });
