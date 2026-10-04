@@ -37,10 +37,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("chat end-to-end", () => {
 	let threadId: number;
 
 	beforeAll(async () => {
-		const { resetRateLimitsForTesting } = await import(
-			"../agent/index.js"
+		const { resetChatLimitForTesting } = await import(
+			"../../lib/chat-rate-limit.js"
 		);
-		resetRateLimitsForTesting();
+		resetChatLimitForTesting();
 
 		const user = await db
 			.insertInto("users")
