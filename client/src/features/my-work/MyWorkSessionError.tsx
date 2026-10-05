@@ -5,8 +5,11 @@ import { useWorkspace } from "../../shared/WorkspaceContext";
 export function SessionErrorState() {
 	const { logout } = useWorkspace();
 	const handleSignIn = useCallback(async () => {
-		await logout();
-		window.location.assign("/login");
+		try {
+			await logout();
+		} finally {
+			window.location.assign("/login");
+		}
 	}, [logout]);
 
 	return (

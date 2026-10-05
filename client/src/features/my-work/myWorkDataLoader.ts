@@ -1,4 +1,3 @@
-import type { MutableRefObject } from "react";
 import { api } from "../../api";
 import type {
 	MyWorkItem,
@@ -187,7 +186,7 @@ export interface LoadRequestContext {
 	requestViewKey: string;
 	fresh: boolean;
 	currentPage: () => number;
-	allCacheRef: MutableRefObject<AllPageCache>;
+	allCacheRef: { current: AllPageCache };
 	isCurrent: () => boolean;
 }
 

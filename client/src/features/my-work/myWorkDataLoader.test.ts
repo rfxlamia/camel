@@ -234,3 +234,57 @@ describe("loadMyWorkRequest (All scope cursor pagination)", () => {
 		expect(prepared?.loaded.items.map((entry) => entry.key)).toEqual(["OR-9"]);
 	});
 });
+
+describe("loadMyWorkRequest (Active scope)", () => {
+	beforeEach(() => {
+		mockListMyWork.mockReset();
+		mockListActive.mockReset();
+	});
+
+	function loadActive(viewOverrides: Partial<MyWorkViewState> = {}) {
+		const requestView = view(viewOverrides);
+		return loadMyWorkRequest({
+			requestView,
+			requestViewKey: myWorkRequestKey(requestView),
+			fresh: false,
+			currentPage: () => requestView.page,
+			allCacheRef: { current: { key: "", pages: new Map() } },
+			isCurrent: () => true,
+		});
+	}
+
+	it("forwards workspace and source but not the search query", async () => {
+		mockListActive.mockResolvedValueOnce({ items: [], nextCursor: null });
+		await loadActive({ workspaceId: 7, source: "board", q: "atlas" });
+		expect(mockListActive).toHaveBeenCalledTimes(1);
+		const request = mockListActive.mock.calls[0]?.[0];
+		expect(request).toMatchObject({ workspaceId: 7, source: "board" });
+		expect(request).not.toHaveProperty("q");
+		expect(mockListMyWork).not.toHaveBeenCalled();
+	});
+
+	it("trusts server-side filtering and flags an incomplete candidate set", async () => {
+		const other = sourceItem(9, "tracker", "OR-9", { workspaceId: 12 });
+		mockListActive.mockResolvedValueOnce({ items: [other], nextCursor: "c1" });
+		const prepared = await loadActive({ workspaceId: 7, source: "board" });
+		expect(prepared?.loaded.items.map((entry) => entry.key)).toEqual(["OR-9"]);
+		expect(prepared?.loaded.candidateSetIncomplete).toBe(true);
+		expect(prepared?.activeCandidates?.map((entry) => entry.key)).toEqual([
+			"OR-9",
+		]);
+	});
+
+	it("returns null when the request is superseded", async () => {
+		mockListActive.mockResolvedValueOnce({ items: [], nextCursor: null });
+		const requestView = view();
+		const prepared = await loadMyWorkRequest({
+			requestView,
+			requestViewKey: myWorkRequestKey(requestView),
+			fresh: false,
+			currentPage: () => 1,
+			allCacheRef: { current: { key: "", pages: new Map() } },
+			isCurrent: () => false,
+		});
+		expect(prepared).toBeNull();
+	});
+});
