@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = "server/src";
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const ROOT = join(REPO_ROOT, "server/src");
 // Only the choke points (and demo seeding, which writes actorless backdated
 // events) may insert into the audit tables directly.
 const ALLOWLIST = new Set([
@@ -10,27 +12,46 @@ const ALLOWLIST = new Set([
 	"server/src/lib/tracker-activity.ts",
 	"server/src/db/seed.ts",
 ]);
+const TABLE = "(?:card_events|tracker_events)";
 const FORBIDDEN = [
-	/\.insertInto\(\s*["'`](card_events|tracker_events)["'`]\s*,?\s*\)/g,
-	/\binsert\s+into\s+(card_events|tracker_events)\b/gi,
+	// Kysely: .insertInto("card_events"), with optional generic / whitespace.
+	new RegExp(
+		`\\.insertInto\\s*(?:<[^<>]*>\\s*)?\\(\\s*["'\`]${TABLE}["'\`]`,
+		"g",
+	),
+	// Raw SQL: optional schema prefix and quote/bracket around the name.
+	new RegExp(
+		`\\binsert\\s+into\\s+(?:["'\`\\[]?\\w+["'\`\\]]?\\.)?["'\`\\[]?${TABLE}\\b`,
+		"gi",
+	),
+	// sql.table("card_events") / sql.id("card_events") interpolations.
+	new RegExp(`\\bsql\\.(?:table|id)\\(\\s*["'\`]${TABLE}["'\`]`, "g"),
 ];
-const SKIP = /\.(test|test-support|integration[\w.-]*)\.(ts|tsx)$/;
+const SKIP = /\.(test|test-support)\.(ts|tsx)$/;
 
 function walk(dir, files = []) {
-	for (const name of readdirSync(dir)) {
-		const path = join(dir, name);
-		if (statSync(path).isDirectory()) {
+	const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+		a.name.localeCompare(b.name),
+	);
+	for (const entry of entries) {
+		const path = join(dir, entry.name);
+		if (entry.isDirectory()) {
 			walk(path, files);
-		} else if (/\.(ts|tsx)$/.test(name)) {
+		} else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name)) {
 			files.push(path);
 		}
 	}
 	return files;
 }
 
+if (!existsSync(ROOT)) {
+	console.error(`Event write routing check: ${ROOT} not found.`);
+	process.exit(1);
+}
+
 const violations = [];
 for (const file of walk(ROOT)) {
-	const rel = relative(".", file).replace(/\\/g, "/");
+	const rel = relative(REPO_ROOT, file).replace(/\\/g, "/");
 	if (ALLOWLIST.has(rel) || SKIP.test(rel)) continue;
 
 	const text = readFileSync(file, "utf8");
@@ -45,7 +66,7 @@ for (const file of walk(ROOT)) {
 if (violations.length > 0) {
 	console.error(
 		"Event write routing violations (use recordActivity / recordTrackerActivity):\n" +
-			violations.join("\n"),
+			violations.sort().join("\n"),
 	);
 	process.exit(1);
 }
