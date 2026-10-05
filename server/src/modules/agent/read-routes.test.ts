@@ -13,10 +13,10 @@ vi.mock("../../auth.js", async (importOriginal) => {
 	};
 });
 
-const mockRequireWorkspaceMember = vi.fn();
+const mockAssertWorkspaceMember = vi.fn();
 vi.mock("./membership.js", () => ({
-	requireWorkspaceMember: (...args: unknown[]) =>
-		mockRequireWorkspaceMember(...args),
+	assertWorkspaceMember: (...args: unknown[]) =>
+		mockAssertWorkspaceMember(...args),
 }));
 
 import { registerReadRoutes } from "./read-routes.js";
@@ -27,7 +27,7 @@ describe("GET agent card output: columnSlug validation", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockRequireWorkspaceMember.mockResolvedValue(true);
+		mockAssertWorkspaceMember.mockResolvedValue(true);
 		getCardOutput.mockResolvedValue({ output: "ok", thinking: null });
 		const router = express.Router();
 		registerReadRoutes(router, { getCardOutput } as never);
@@ -57,7 +57,7 @@ describe("GET agent card output: columnSlug validation", () => {
 		);
 		expect(res.status).toBe(400);
 		expect(res.body).toEqual({ error: "Invalid params" });
-		expect(mockRequireWorkspaceMember).not.toHaveBeenCalled();
+		expect(mockAssertWorkspaceMember).not.toHaveBeenCalled();
 		expect(getCardOutput).not.toHaveBeenCalled();
 	});
 });

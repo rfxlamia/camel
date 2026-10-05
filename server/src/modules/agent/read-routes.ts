@@ -7,7 +7,7 @@ import {
 	loadAgentBoardColumns,
 	selectConversationHistory,
 } from "./board-db.js";
-import { requireWorkspaceMember } from "./membership.js";
+import { assertWorkspaceMember } from "./membership.js";
 import type { createAgentBoardService } from "./service.js";
 
 const COLUMN_SLUG_RE = /^[\w-]{1,100}$/;
@@ -32,7 +32,7 @@ export function registerReadRoutes(
 					.json({ error: "workspaceId must be an integer" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const boards = await service.getBoards({ workspaceId });
 			res.json(boards);
@@ -50,7 +50,7 @@ export function registerReadRoutes(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result = await service.getBoardById({ boardId, workspaceId });
 			if (
@@ -89,7 +89,7 @@ export function registerReadRoutes(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result = await service.getCardOutput({
 				boardId,
@@ -115,7 +115,7 @@ export function registerReadRoutes(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result = await service.getArtifact({ boardId, workspaceId });
 
@@ -137,7 +137,7 @@ export function registerReadRoutes(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result = await service.getArtifact({ boardId, workspaceId });
 
