@@ -24,7 +24,6 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.104.1",
 		"@tavily/core": "^0.5.0",
-		"@types/multer": "^2.1.0",
 		"bcryptjs": "^3.0.3",
 		"better-auth": "^1.6.22",
 		"cookie-parser": "^1.4.7",
@@ -46,6 +45,7 @@
 		"@types/cors": "^2.8.17",
 		"@types/culori": "^4.0.1",
 		"@types/express": "^5.0.0",
+		"@types/multer": "^2.1.0",
 		"@types/node": "^22.10.0",
 		"@types/pg": "^8.11.10",
 		"@types/supertest": "^7.2.0",

@@ -85,7 +85,6 @@ Route modules extracted from routes.ts.
 - **[presence.ts](./src/routes/presence.ts)** - SSE endpoint, heartbeat, and online user list
 - **[settings.ts](./src/modules/settings/settings.ts)** - Board settings API (board_name, logo_path) with file upload support
 - **[workspaces.ts](./src/modules/workspaces/workspaces.ts)** - CRUD for workspaces with membership cap enforcement
-- **[EXTRACTION_PLAN.md](./src/routes/EXTRACTION_PLAN.md)** - Plan for splitting handlers out of routes.ts
 
 ## Test Files
 
