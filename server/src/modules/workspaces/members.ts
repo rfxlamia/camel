@@ -6,15 +6,18 @@ import {
 	lookupMembership,
 	workspaceAccessService,
 } from "../../lib/helpers.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { workspaceIdParam } from "../../validators/schemas.js";
 
 export const membersRouter = Router({ mergeParams: true });
 
 membersRouter.get("/members", async (req, res) => {
-	const { workspaceId: wsId } = req.params as { workspaceId: string };
-	const workspaceId = Number(wsId);
-	if (!Number.isInteger(workspaceId)) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const parsedId = parseWith(
+		workspaceIdParam,
+		(req.params as { workspaceId?: string }).workspaceId,
+	);
+	if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+	const workspaceId = parsedId.data;
 
 	const role = await lookupMembership(req.user!.id, workspaceId);
 	if (!role) return res.status(404).json({ error: "Not found" });
@@ -39,11 +42,12 @@ membersRouter.get("/members", async (req, res) => {
 });
 
 membersRouter.post("/members", async (req, res) => {
-	const { workspaceId: wsId } = req.params as { workspaceId: string };
-	const workspaceId = Number(wsId);
-	if (!Number.isInteger(workspaceId)) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const parsedId = parseWith(
+		workspaceIdParam,
+		(req.params as { workspaceId?: string }).workspaceId,
+	);
+	if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+	const workspaceId = parsedId.data;
 
 	const actorRole = await lookupMembership(req.user!.id, workspaceId);
 	if (!actorRole) return res.status(404).json({ error: "Not found" });

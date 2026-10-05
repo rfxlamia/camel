@@ -8,6 +8,8 @@ import {
 } from "../../lib/attachment-storage.js";
 import { recordActivity } from "../../lib/helpers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { optionalVersion } from "../../validators/schemas.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 import { publishCardWorkspaceEvent } from "./card-events.js";
 
@@ -23,10 +25,9 @@ cardsDeleteRouter.delete(
 		if (Number.isNaN(id)) {
 			return res.status(400).json({ error: "invalid card id" });
 		}
-		const { version } = (req.body ?? {}) as { version?: unknown };
-		if (version !== undefined && !Number.isInteger(version)) {
-			return res.status(400).json({ error: "version must be an integer" });
-		}
+		const parsedVersion = parseWith(optionalVersion, req.body?.version);
+		if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
+		const version = parsedVersion.data;
 
 		type DeleteResult =
 			| { kind: "not_found" }

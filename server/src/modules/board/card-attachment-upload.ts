@@ -9,6 +9,7 @@ import {
 import { validateAttachmentPairs } from "../../lib/attachment-validation.js";
 import { logger } from "../../lib/logger.js";
 import { publishEvent } from "../../realtime.js";
+import { parsePositiveIntegerParam } from "../../validators/schemas.js";
 import { mapAttachmentResponse } from "./attachment-response.js";
 import {
 	EXISTING_CARD_ATTACHMENT_CAPACITY_MESSAGE,
@@ -58,12 +59,6 @@ const PARTIAL_UPLOAD_MESSAGE = (accepted: number, requested: number) =>
 	`${accepted} of ${requested} images added — card limit is ${EXISTING_CARD_ATTACHMENT_LIMIT} images`;
 
 type UploadedFile = Express.Multer.File;
-
-function parsePositiveInteger(value: string | undefined): number | null {
-	if (!value || !/^\d+$/.test(value)) return null;
-	const parsed = Number(value);
-	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function parseUploadedAttachments(req: Request): {
 	attachments?: PreparedAttachment[];
@@ -185,7 +180,7 @@ export async function uploadExistingCardAttachments(
 	res: Response,
 ): Promise<Response> {
 	const workspaceId = req.workspace?.workspaceId;
-	const cardId = parsePositiveInteger(
+	const cardId = parsePositiveIntegerParam(
 		typeof req.params.cardId === "string" ? req.params.cardId : undefined,
 	);
 	if (workspaceId === undefined || cardId === null) {

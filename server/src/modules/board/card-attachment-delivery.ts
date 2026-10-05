@@ -4,6 +4,7 @@ import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { config } from "../../config.js";
 import { db } from "../../db/kysely.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { parsePositiveIntegerParam } from "../../validators/schemas.js";
 
 const MIME_TO_DOWNLOAD_EXTENSION = {
 	"image/png": "png",
@@ -25,12 +26,6 @@ declare global {
 			attachmentDelivery?: AttachmentDeliveryRow;
 		}
 	}
-}
-
-function parsePositiveInteger(value: string | undefined): number | null {
-	if (!value || !/^\d+$/.test(value)) return null;
-	const parsed = Number(value);
-	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 export type AttachmentOwnershipGuardOptions = {
@@ -55,7 +50,7 @@ async function loadOwnedCard(
 ): Promise<void> {
 	try {
 		const workspaceId = req.workspace?.workspaceId;
-		const cardId = parsePositiveInteger(
+		const cardId = parsePositiveIntegerParam(
 			typeof req.params.cardId === "string" ? req.params.cardId : undefined,
 		);
 		if (workspaceId === undefined || cardId === null) {
@@ -94,7 +89,7 @@ async function loadOwnedAttachment(
 	next: NextFunction,
 	cardId: number,
 ): Promise<void> {
-	const attachmentId = parsePositiveInteger(
+	const attachmentId = parsePositiveIntegerParam(
 		typeof req.params.attachmentId === "string"
 			? req.params.attachmentId
 			: undefined,
