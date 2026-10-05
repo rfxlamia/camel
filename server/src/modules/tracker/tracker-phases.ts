@@ -1,147 +1,23 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import type { AuthUser } from "../../auth.js";
 import { positionBetween } from "../../core/position.js";
-import { type DBExecutor, db } from "../../db/kysely.js";
+import { db } from "../../db/kysely.js";
+import { parseDateRange } from "../../lib/tracker-item-parsers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { publishEvent } from "../../realtime.js";
-import { recordActivity } from "../../lib/helpers.js";
-import { parseDateRange } from "../../lib/tracker-item-parsers.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
-import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
-
-const PHASE_COLUMNS = [
-	"id",
-	"project_id",
-	"name",
-	"subtitle",
-	"start_date",
-	"end_date",
-	"position",
-	"version",
-	"created_at",
-	"updated_at",
-] as const;
-
-type PhaseRow = {
-	id: number;
-	project_id: number;
-	name: string;
-	subtitle: string;
-	start_date: Date | string | null;
-	end_date: Date | string | null;
-	position: number;
-	version: number;
-	created_at: Date | string;
-	updated_at: Date | string;
-};
-
-type PhaseActivityEvent =
-	| "tracker_phase_created"
-	| "tracker_phase_updated"
-	| "tracker_phase_deleted";
-
-function formatDate(value: Date | string | null): string | null {
-	if (value == null) return null;
-	if (typeof value === "string") return value.slice(0, 10);
-	return value.toISOString().slice(0, 10);
-}
-
-function formatTimestamp(value: Date | string): string {
-	if (value instanceof Date) return value.toISOString();
-	return value;
-}
-
-function serializePhase(row: PhaseRow) {
-	return {
-		id: row.id,
-		projectId: row.project_id,
-		name: row.name,
-		subtitle: row.subtitle,
-		startDate: formatDate(row.start_date),
-		endDate: formatDate(row.end_date),
-		position: row.position,
-		version: row.version,
-		createdAt: formatTimestamp(row.created_at),
-		updatedAt: formatTimestamp(row.updated_at),
-	};
-}
-
-async function recordPhaseActivity(
-	dbExec: DBExecutor,
-	actor: AuthUser,
-	workspaceId: number,
-	eventType: PhaseActivityEvent,
-	opts: { payload?: Record<string, unknown> },
-): Promise<void> {
-	await recordTrackerActivity(
-		dbExec,
-		actor,
-		workspaceId,
-		eventType as Parameters<typeof recordTrackerActivity>[3],
-		opts,
-	);
-}
-
-async function lookupPhaseInWorkspace(
-	dbExec: DBExecutor,
-	workspaceId: number,
-	phaseId: number,
-): Promise<{ id: number; project_id: number } | undefined> {
-	return dbExec
-		.selectFrom("tracker_phases as tp")
-		.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
-		.select(["tp.id as id", "tp.project_id as project_id"])
-		.where("tp.id", "=", phaseId)
-		.where("tp.deleted_at", "is", null)
-		.where("tpr.workspace_id", "=", workspaceId)
-		.where("tpr.deleted_at", "is", null)
-		.executeTakeFirst();
-}
-
-async function releasePhaseItemsToNoPhase(
-	trx: DBExecutor,
-	projectId: number,
-	phaseId: number,
-): Promise<
-	Array<{ itemId: number; projectId: number; phaseId: number | null }>
-> {
-	const items = await trx
-		.selectFrom("tracker_items")
-		.select(["id", "project_id", "phase_id", "position"])
-		.where("phase_id", "=", phaseId)
-		.where("deleted_at", "is", null)
-		.orderBy("position", "asc")
-		.execute();
-
-	const releasedTriples = items.map((item) => ({
-		itemId: item.id,
-		projectId: item.project_id!,
-		phaseId: item.phase_id,
-	}));
-
-	const bucketRow = await trx
-		.selectFrom("tracker_items")
-		.select(sql<number | null>`max(position)`.as("max_position"))
-		.where("project_id", "=", projectId)
-		.where("phase_id", "is", null)
-		.where("deleted_at", "is", null)
-		.executeTakeFirst();
-
-	let prevPosition = bucketRow?.max_position ?? null;
-
-	for (const item of items) {
-		const newPosition = positionBetween(prevPosition, null);
-		await trx
-			.updateTable("tracker_items")
-			.set({ phase_id: null, position: newPosition })
-			.where("id", "=", item.id)
-			.execute();
-		prevPosition = newPosition;
-	}
-
-	return releasedTriples;
-}
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import {
+	deletePhaseTransaction,
+	lookupPhaseInWorkspace,
+	recordPhaseActivity,
+} from "./tracker-phase-queries.js";
+import { PHASE_COLUMNS, serializePhase } from "./tracker-phase-serialize.js";
+import {
+	nameField,
+	phaseIdParam,
+	projectIdParam,
+	requiredVersion,
+} from "./tracker-schemas.js";
 
 export const trackerPhasesRouter = Router({ mergeParams: true });
 
@@ -151,17 +27,16 @@ trackerPhasesRouter.post(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 		const actor = req.user!;
-		const projectId = Number(req.params.projectId);
-		const trimmedName =
-			typeof req.body?.name === "string" ? req.body.name.trim() : "";
 
-		if (!Number.isInteger(projectId) || projectId <= 0) {
-			return res.status(400).json({ error: "invalid project id" });
+		const parsedProjectId = parseWith(projectIdParam, req.params.projectId);
+		if (!parsedProjectId.ok) {
+			return sendValidationError(res, parsedProjectId.body);
 		}
+		const projectId = parsedProjectId.data;
 
-		if (!trimmedName) {
-			return res.status(400).json({ error: "name is required" });
-		}
+		const parsedName = parseWith(nameField, req.body?.name);
+		if (!parsedName.ok) return sendValidationError(res, parsedName.body);
+		const trimmedName = parsedName.data;
 
 		const hasDates = "startDate" in req.body || "endDate" in req.body;
 		let startDate: string | null = null;
@@ -169,7 +44,7 @@ trackerPhasesRouter.post(
 		if (hasDates) {
 			const parsed = parseDateRange(req.body ?? {});
 			if ("error" in parsed) {
-				return res.status(400).json({ error: parsed.error });
+				return sendValidationError(res, { error: parsed.error });
 			}
 			if ("startDate" in req.body) startDate = parsed.startDate;
 			if ("endDate" in req.body) endDate = parsed.endDate;
@@ -213,9 +88,15 @@ trackerPhasesRouter.post(
 				.returning(PHASE_COLUMNS)
 				.executeTakeFirstOrThrow();
 
-			await recordPhaseActivity(trx, actor, workspaceId, "tracker_phase_created", {
-				payload: { phaseId: row.id, projectId, name: trimmedName },
-			});
+			await recordPhaseActivity(
+				trx,
+				actor,
+				workspaceId,
+				"tracker_phase_created",
+				{
+					payload: { phaseId: row.id, projectId, name: trimmedName },
+				},
+			);
 
 			return { kind: "ok" as const, row };
 		});
@@ -239,21 +120,18 @@ trackerPhasesRouter.patch(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 		const actor = req.user!;
-		const phaseId = Number(req.params.id);
-		const { name, version } = req.body ?? {};
 
-		if (!Number.isInteger(phaseId) || phaseId <= 0) {
-			return res.status(400).json({ error: "invalid phase id" });
-		}
+		const parsedPhaseId = parseWith(phaseIdParam, req.params.id);
+		if (!parsedPhaseId.ok) return sendValidationError(res, parsedPhaseId.body);
+		const phaseId = parsedPhaseId.data;
 
-		const trimmedName = typeof name === "string" ? name.trim() : "";
-		if (!trimmedName) {
-			return res.status(400).json({ error: "name is required" });
-		}
+		const parsedName = parseWith(nameField, req.body?.name);
+		if (!parsedName.ok) return sendValidationError(res, parsedName.body);
+		const trimmedName = parsedName.data;
 
-		if (typeof version !== "number" || !Number.isInteger(version)) {
-			return res.status(400).json({ error: "version must be an integer" });
-		}
+		const parsedVersion = parseWith(requiredVersion, req.body?.version);
+		if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
+		const version = parsedVersion.data;
 
 		const phase = await lookupPhaseInWorkspace(db, workspaceId, phaseId);
 		if (!phase) {
@@ -270,7 +148,7 @@ trackerPhasesRouter.patch(
 		if (hasDates) {
 			const parsed = parseDateRange(req.body ?? {});
 			if ("error" in parsed) {
-				return res.status(400).json({ error: parsed.error });
+				return sendValidationError(res, { error: parsed.error });
 			}
 			if ("startDate" in req.body) setFields.start_date = parsed.startDate;
 			if ("endDate" in req.body) setFields.end_date = parsed.endDate;
@@ -324,108 +202,12 @@ trackerPhasesRouter.delete(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 		const actor = req.user!;
-		const phaseId = Number(req.params.id);
 
-		if (!Number.isInteger(phaseId) || phaseId <= 0) {
-			return res.status(400).json({ error: "invalid phase id" });
-		}
+		const parsedPhaseId = parseWith(phaseIdParam, req.params.id);
+		if (!parsedPhaseId.ok) return sendValidationError(res, parsedPhaseId.body);
+		const phaseId = parsedPhaseId.data;
 
-		const result = await db.transaction().execute(async (trx) => {
-			await lockWorkspaceMutation(trx, workspaceId);
-
-			const project = await trx
-				.selectFrom("tracker_projects as tpr")
-				.select("tpr.id as id")
-				.where("tpr.workspace_id", "=", workspaceId)
-				.where("tpr.deleted_at", "is", null)
-				.where("tpr.id", "in", (eb) =>
-					eb
-						.selectFrom("tracker_phases as tp")
-						.select("tp.project_id")
-						.where("tp.id", "=", phaseId)
-						.where("tp.deleted_at", "is", null),
-				)
-				.orderBy("tpr.id")
-				.forUpdate()
-				.executeTakeFirst();
-
-			if (!project) {
-				return { kind: "not_found" as const };
-			}
-
-			const phase = await trx
-				.selectFrom("tracker_phases as tp")
-				.innerJoin("tracker_projects as tpr", "tpr.id", "tp.project_id")
-				.select(["tp.id as id", "tp.project_id as project_id"])
-				.where("tp.id", "=", phaseId)
-				.where("tp.deleted_at", "is", null)
-				.where("tpr.workspace_id", "=", workspaceId)
-				.where("tpr.deleted_at", "is", null)
-				.orderBy("tp.id")
-				.forUpdate()
-				.executeTakeFirst();
-
-			if (!phase) {
-				return { kind: "not_found" as const };
-			}
-
-			const cards = await trx
-				.selectFrom("cards")
-				.select(["id", "title", "project_id", "phase_id"])
-				.where("workspace_id", "=", workspaceId)
-				.where("phase_id", "=", phaseId)
-				.where("deleted_at", "is", null)
-				.execute();
-
-			const releasedTriples = await releasePhaseItemsToNoPhase(
-				trx,
-				phase.project_id,
-				phaseId,
-			);
-
-			const releasedCardIds: number[] = [];
-			if (cards.length > 0) {
-				const updatedCards = await trx
-					.updateTable("cards")
-					.set({
-						phase_id: null,
-						version: sql`version + 1`,
-					})
-					.where("workspace_id", "=", workspaceId)
-					.where("phase_id", "=", phaseId)
-					.where("deleted_at", "is", null)
-					.returning(["id"])
-					.execute();
-				releasedCardIds.push(...updatedCards.map((card) => card.id));
-			}
-
-			for (const card of cards) {
-				await recordActivity(trx, actor, workspaceId, "update", {
-					cardId: card.id,
-					payload: {
-						cardTitle: card.title,
-						changed: ["phase"],
-					},
-				});
-			}
-
-			await trx
-				.updateTable("tracker_phases")
-				.set({ deleted_at: sql`now()`, updated_at: sql`now()` })
-				.where("id", "=", phaseId)
-				.where("deleted_at", "is", null)
-				.execute();
-
-			await recordPhaseActivity(trx, actor, workspaceId, "tracker_phase_deleted", {
-				payload: {
-					phaseId,
-					projectId: phase.project_id,
-					released: releasedTriples,
-				},
-			});
-
-			return { kind: "ok" as const, releasedCardIds };
-		});
+		const result = await deletePhaseTransaction(workspaceId, actor, phaseId);
 
 		if (result.kind === "not_found") {
 			return res.status(404).json({ error: "Not found" });

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { formatKey, parseKeyFromUrl } from "../../core/tracker-key.js";
+import { formatKey } from "../../core/tracker-key.js";
 import {
 	recordListDuration,
 	WORK_ITEMS_LIST_THRESHOLD_MS,
@@ -8,11 +8,12 @@ import { db } from "../../db/kysely.js";
 import { logger } from "../../lib/logger.js";
 import { getWorkItemEvents } from "../../lib/work-item-events.js";
 import { listMergedWorkItems } from "../../lib/work-item-response.js";
+import { sendValidationError } from "../../validators/http.js";
 import {
 	resolveWorkItemByKey,
-	routeKeyParam,
 	workspacePrefix,
 } from "./tracker-item-route-helpers.js";
+import { parseTrackerKey } from "./tracker-schemas.js";
 
 export async function listTrackerItemsHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
@@ -32,10 +33,9 @@ export async function listTrackerItemsHandler(req: Request, res: Response) {
 
 export async function getTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
-	const parsed = parseKeyFromUrl(routeKeyParam(req.params.key));
-	if (!parsed) {
-		return res.status(400).json({ error: "invalid tracker key" });
-	}
+	const key = parseTrackerKey(req.params.key);
+	if (!key.ok) return sendValidationError(res, key.body);
+	const parsed = key.data;
 
 	const prefix = await workspacePrefix(db, workspaceId);
 	if (!prefix) return res.status(404).json({ error: "Not found" });
@@ -58,10 +58,9 @@ export async function getTrackerItemHandler(req: Request, res: Response) {
 
 export async function getTrackerItemEventsHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
-	const parsed = parseKeyFromUrl(routeKeyParam(req.params.key));
-	if (!parsed) {
-		return res.status(400).json({ error: "invalid tracker key" });
-	}
+	const key = parseTrackerKey(req.params.key);
+	if (!key.ok) return sendValidationError(res, key.body);
+	const parsed = key.data;
 
 	const events = await getWorkItemEvents(db, workspaceId, parsed.keyNumber);
 	if (!events) {

@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
-import { parseKeyFromUrl } from "../../core/tracker-key.js";
 import { db } from "../../db/kysely.js";
 import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import {
@@ -10,15 +9,14 @@ import {
 import { publishEvent } from "../../realtime.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { optionalVersion } from "../../validators/schemas.js";
-import { routeKeyParam } from "./tracker-item-route-helpers.js";
+import { parseTrackerKey } from "./tracker-schemas.js";
 
 export async function deleteTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
 	const actor = req.user!;
-	const parsed = parseKeyFromUrl(routeKeyParam(req.params.key));
-	if (!parsed) {
-		return res.status(400).json({ error: "invalid tracker key" });
-	}
+	const key = parseTrackerKey(req.params.key);
+	if (!key.ok) return sendValidationError(res, key.body);
+	const parsed = key.data;
 
 	const parsedVersion = parseWith(optionalVersion, req.body?.version);
 	if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);

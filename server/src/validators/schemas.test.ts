@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { parseWith } from "./http.js";
 import {
+	finiteNumber,
+	intField,
+	intOrNullField,
 	optionalVersion,
 	parsePositiveIntegerParam,
+	positiveIdParam,
+	requiredVersion,
+	trimmedRequired,
 	workspaceIdParam,
 } from "./schemas.js";
 
@@ -70,5 +76,90 @@ describe("parsePositiveIntegerParam", () => {
 		"abc",
 	])("returns null for %j", (value) => {
 		expect(parsePositiveIntegerParam(value)).toBeNull();
+	});
+});
+
+describe("requiredVersion", () => {
+	it("accepts integers", () => {
+		expect(parseWith(requiredVersion, 4)).toEqual({ ok: true, data: 4 });
+	});
+
+	it.each([undefined, null, "1", 1.5, Number.NaN])("rejects %j", (value) => {
+		expect(parseWith(requiredVersion, value)).toEqual({
+			ok: false,
+			body: { error: "version must be an integer" },
+		});
+	});
+});
+
+describe("positiveIdParam", () => {
+	const schema = positiveIdParam("invalid thing id");
+
+	it("coerces digit strings", () => {
+		expect(parseWith(schema, "12")).toEqual({ ok: true, data: 12 });
+	});
+
+	it.each([
+		"",
+		"0",
+		"-1",
+		"1.5",
+		"1e2",
+		"0x10",
+		" 5 ",
+		"abc",
+		"9007199254740993",
+	])("rejects %j with the caller's message", (raw) => {
+		expect(parseWith(schema, raw)).toEqual({
+			ok: false,
+			body: { error: "invalid thing id" },
+		});
+	});
+});
+
+describe("trimmedRequired", () => {
+	const schema = trimmedRequired("name is required");
+
+	it("returns the trimmed value", () => {
+		expect(parseWith(schema, "  hi  ")).toEqual({ ok: true, data: "hi" });
+	});
+
+	it.each(["", "   ", undefined, null, 5])("rejects %j", (value) => {
+		expect(parseWith(schema, value)).toEqual({
+			ok: false,
+			body: { error: "name is required" },
+		});
+	});
+});
+
+describe("intField / intOrNullField / finiteNumber", () => {
+	it("intField accepts integers only", () => {
+		expect(parseWith(intField("bad"), 3).ok).toBe(true);
+		for (const value of [1.5, "3", null, undefined]) {
+			expect(parseWith(intField("bad"), value)).toEqual({
+				ok: false,
+				body: { error: "bad" },
+			});
+		}
+	});
+
+	it("intOrNullField also accepts null", () => {
+		expect(parseWith(intOrNullField("bad"), null)).toEqual({
+			ok: true,
+			data: null,
+		});
+		expect(parseWith(intOrNullField("bad"), "x").ok).toBe(false);
+	});
+
+	it("finiteNumber rejects NaN, Infinity and strings", () => {
+		expect(parseWith(finiteNumber("bad"), 0.5).ok).toBe(true);
+		for (const value of [
+			Number.NaN,
+			Number.POSITIVE_INFINITY,
+			"1",
+			undefined,
+		]) {
+			expect(parseWith(finiteNumber("bad"), value).ok).toBe(false);
+		}
 	});
 });

@@ -19,6 +19,7 @@ import {
 } from "../../lib/work-item-response.js";
 import { lockTaskCreateReferences } from "../../lib/workspace-mutation-lock.js";
 import { publishEvent } from "../../realtime.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
 import {
 	backlogStatusId,
 	endOfBucketPosition,
@@ -26,6 +27,7 @@ import {
 	syncLabels,
 	workspacePrefix,
 } from "./tracker-item-create-queries.js";
+import { titleField } from "./tracker-schemas.js";
 
 function lockReferences(body: Record<string, unknown>, actorId: number) {
 	const integerIds = (value: unknown): number[] =>
@@ -226,8 +228,9 @@ export async function createTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
 	const actor = req.user!;
 	const body = (req.body ?? {}) as Record<string, unknown>;
-	const title = typeof body.title === "string" ? body.title.trim() : "";
-	if (!title) return res.status(400).json({ error: "title is required" });
+	const parsedTitle = parseWith(titleField, body.title);
+	if (!parsedTitle.ok) return sendValidationError(res, parsedTitle.body);
+	const title = parsedTitle.data;
 	const prefix = await workspacePrefix(db, workspaceId);
 	if (!prefix) return res.status(404).json({ error: "Not found" });
 	const dates =
@@ -245,7 +248,7 @@ export async function createTrackerItemHandler(req: Request, res: Response) {
 	};
 	const result = await createInTransaction(input);
 	if (result.kind === "invalid") {
-		return res.status(400).json({
+		return sendValidationError(res, {
 			error: "Some task fields are invalid",
 			fieldErrors: result.fieldErrors,
 		});
