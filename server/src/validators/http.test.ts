@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { parseWith, sendValidationError, validateOrReply } from "./http.js";
+import { parseWith, sendValidationError } from "./http.js";
 
 const schema = z.object({
 	title: z.string({ error: "title is required" }),
@@ -48,6 +48,24 @@ describe("parseWith", () => {
 		});
 	});
 
+	it("keeps field names that collide with Object.prototype members", () => {
+		const input = JSON.parse('{"toString":1,"__proto__":1}');
+		const result = parseWith(
+			z.object({
+				toString: z.string({ error: "a" }),
+				["__proto__"]: z.string({ error: "b" }),
+			}),
+			input,
+			{ fieldErrors: true },
+		);
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(Object.keys(result.body.fieldErrors ?? {}).sort()).toEqual([
+			"__proto__",
+			"toString",
+		]);
+	});
+
 	it("omits fieldErrors when issues have no field path", () => {
 		const result = parseWith(z.string({ error: "bad" }), 1, {
 			fieldErrors: true,
@@ -68,20 +86,5 @@ describe("sendValidationError", () => {
 		sendValidationError(res, { error: "x" });
 		expect(status).toHaveBeenCalledWith(400);
 		expect(json).toHaveBeenCalledWith({ error: "x" });
-	});
-});
-
-describe("validateOrReply", () => {
-	it("returns data without replying on success", () => {
-		const { res, status } = mockRes();
-		expect(validateOrReply(res, z.string(), "ok")).toBe("ok");
-		expect(status).not.toHaveBeenCalled();
-	});
-
-	it("replies 400 and returns undefined on failure", () => {
-		const { res, status, json } = mockRes();
-		expect(validateOrReply(res, schema, {})).toBeUndefined();
-		expect(status).toHaveBeenCalledWith(400);
-		expect(json).toHaveBeenCalledWith({ error: "title is required" });
 	});
 });

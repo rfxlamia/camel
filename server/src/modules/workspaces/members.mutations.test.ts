@@ -27,6 +27,17 @@ function createApp(userId = 1) {
 	return app;
 }
 
+describe("GET/POST /members workspaceId validation", () => {
+	it.each([
+		"get",
+		"post",
+	] as const)("%s returns 400 with the standard body for a non-integer workspaceId", async (method) => {
+		const res = await request(createApp())[method]("/workspaces/abc/members");
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "workspaceId must be an integer" });
+	});
+});
+
 describe("PATCH /members/:userId", () => {
 	beforeEach(() => vi.clearAllMocks());
 
