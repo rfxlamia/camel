@@ -1,12 +1,13 @@
 import { ClipboardList, RotateCcw } from "lucide-react";
+import type { MyWorkItem, MyWorkWorkspace } from "../../shared/myWorkTypes";
+import type { WorkItemSource } from "../../types";
+import MyWorkDetailSheet from "./MyWorkDetailSheet";
+import MyWorkHeader from "./MyWorkHeader";
+import MyWorkList from "./MyWorkList";
+import { SessionErrorState } from "./MyWorkSessionError";
+import MyWorkToolbar from "./MyWorkToolbar";
 import type { MyWorkDetailSelection } from "./myWorkNavigation";
 import type { MyWorkViewState } from "./myWorkUtils";
-import type { WorkItemSource } from "../../types";
-import type { MyWorkItem, MyWorkWorkspace } from "../../shared/myWorkTypes";
-import MyWorkDetailSheet from "./MyWorkDetailSheet";
-import MyWorkList, { SessionErrorState } from "./MyWorkList";
-import MyWorkToolbar from "./MyWorkToolbar";
-import { ToolbarIntro } from "./MyWorkToolbarParts";
 import { useDelayedLoading } from "./useDelayedLoading";
 import type { LoadError, LoadedPage } from "./useMyWorkData";
 
@@ -49,7 +50,7 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 	return (
 		<div className="min-h-full bg-neutral-100">
 			<div className="mx-auto max-w-6xl px-4 pt-5 pb-8 md:px-6 md:pt-7">
-				<ToolbarIntro loading={loading} onRefresh={onRefresh} />
+				<MyWorkHeader loading={loading} onRefresh={onRefresh} />
 				<div className="mt-4 rounded-md border border-neutral-200 bg-white">
 					<MyWorkToolbar
 						scope={view.scope}
@@ -86,10 +87,7 @@ export function MyWorkPageView(props: MyWorkPageViewProps) {
 
 type MyWorkDetailProps = Pick<
 	MyWorkPageViewProps,
-	| "detailSelection"
-	| "onCloseDetail"
-	| "onListRefresh"
-	| "detailRefreshToken"
+	"detailSelection" | "onCloseDetail" | "onListRefresh" | "detailRefreshToken"
 >;
 
 function MyWorkDetail({
