@@ -95,7 +95,9 @@ export function useMyWorkData(view: MyWorkViewState) {
 	const activeCandidatesRef = useRef<ActiveCandidates | null>(null);
 	const requestKey = myWorkRequestKey(view);
 
-	// Declared before the effects below so they always read the committed view.
+	// Declared before the effects below so they read the committed view. loadData
+	// derives its request key from the same snapshot it reads, so a caller that
+	// runs before this effect flushes can't cache one view's data under another's key.
 	useEffect(() => {
 		viewRef.current = view;
 	}, [view]);
@@ -107,6 +109,7 @@ export function useMyWorkData(view: MyWorkViewState) {
 	const loadData = useCallback(
 		async ({ fresh = false, refreshDetail = fresh }: LoadOptions = {}) => {
 			const requestView = viewRef.current;
+			const requestViewKey = myWorkRequestKey(requestView);
 			const identity = myWorkLoadIdentity(requestView);
 			const seq = ++loadSeqRef.current;
 			const isCurrent = () => seq === loadSeqRef.current;
@@ -119,7 +122,7 @@ export function useMyWorkData(view: MyWorkViewState) {
 			try {
 				const prepared = await loadMyWorkRequest({
 					requestView,
-					requestViewKey: requestKey,
+					requestViewKey,
 					fresh,
 					currentPage: () => viewRef.current.page,
 					allCacheRef,
@@ -128,7 +131,7 @@ export function useMyWorkData(view: MyWorkViewState) {
 				if (!prepared || !isCurrent()) return;
 				if (prepared.activeCandidates) {
 					activeCandidatesRef.current = {
-						key: requestKey,
+						key: requestViewKey,
 						items: prepared.activeCandidates,
 						candidateSetIncomplete: Boolean(
 							prepared.loaded.candidateSetIncomplete,
@@ -154,7 +157,7 @@ export function useMyWorkData(view: MyWorkViewState) {
 				if (isCurrent()) patchData({ loading: false });
 			}
 		},
-		[patchData, requestKey],
+		[patchData],
 	);
 
 	useEffect(() => {
