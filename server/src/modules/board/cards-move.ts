@@ -34,7 +34,7 @@ cardsMoveRouter.post(
 		if (Number.isNaN(cardId)) {
 			return res.status(400).json({ error: "invalid card id" });
 		}
-		const { toColumnId, index, version, statusId } = req.body ?? {};
+		const { toColumnId, index, statusId } = req.body ?? {};
 		if (statusId !== undefined) {
 			return res
 				.status(400)
@@ -49,8 +49,9 @@ cardsMoveRouter.post(
 				.status(400)
 				.json({ error: "toColumnId and index are required" });
 		}
-		const versionCheck = parseWith(optionalVersion, version);
-		if (!versionCheck.ok) return sendValidationError(res, versionCheck.body);
+		const parsedVersion = parseWith(optionalVersion, req.body?.version);
+		if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
+		const version = parsedVersion.data;
 
 		type MoveResult =
 			| { kind: "not_found_card" }

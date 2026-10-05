@@ -31,13 +31,16 @@ export function parseWith<S extends z.ZodType>(
 		error: options.message ?? issues[0]?.message ?? "Invalid request",
 	};
 	if (options.fieldErrors) {
-		const fieldErrors: Record<string, string> = {};
+		// Map + fromEntries so field names like "toString" or "__proto__" survive.
+		const fieldErrors = new Map<string, string>();
 		for (const issue of issues) {
 			const key = issue.path[0];
-			if (typeof key !== "string" || key in fieldErrors) continue;
-			fieldErrors[key] = issue.message;
+			if (typeof key !== "string" || fieldErrors.has(key)) continue;
+			fieldErrors.set(key, issue.message);
 		}
-		if (Object.keys(fieldErrors).length > 0) body.fieldErrors = fieldErrors;
+		if (fieldErrors.size > 0) {
+			body.fieldErrors = Object.fromEntries(fieldErrors);
+		}
 	}
 	return { ok: false, body };
 }
@@ -47,20 +50,4 @@ export function sendValidationError(
 	body: ValidationErrorBody,
 ): Response {
 	return res.status(400).json(body);
-}
-
-/**
- * Parse `input` with `schema`; on failure reply 400 and return `undefined`.
- * Callers must `return` when the result is `undefined`.
- */
-export function validateOrReply<S extends z.ZodType>(
-	res: Response,
-	schema: S,
-	input: unknown,
-	options?: ParseOptions,
-): z.output<S> | undefined {
-	const parsed = parseWith(schema, input, options);
-	if (parsed.ok) return parsed.data;
-	sendValidationError(res, parsed.body);
-	return undefined;
 }
