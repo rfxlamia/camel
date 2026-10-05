@@ -2,12 +2,12 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { generateRandomPastelBorder } from "../../core/pastelColor.js";
 import { db } from "../../db/kysely.js";
+import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { publishEvent } from "../../realtime.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
-
-const VOCAB_KINDS = ["status", "priority", "label"] as const;
-type VocabKind = (typeof VOCAB_KINDS)[number];
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { finiteNumber, trimmedRequired } from "../../validators/schemas.js";
+import { vocabularyKind } from "./tracker-schemas.js";
 
 const RETURNING_COLUMNS = [
 	"id",
@@ -18,10 +18,6 @@ const RETURNING_COLUMNS = [
 	"category",
 	"created_at",
 ] as const;
-
-function isVocabKind(value: string): value is VocabKind {
-	return (VOCAB_KINDS as readonly string[]).includes(value);
-}
 
 function serializeVocabulary(row: {
 	id: number;
@@ -50,13 +46,9 @@ trackerVocabulariesRouter.get(
 	requireWorkspaceMember,
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
-		const kind = typeof req.query.kind === "string" ? req.query.kind : "";
-
-		if (!isVocabKind(kind)) {
-			return res
-				.status(400)
-				.json({ error: "kind must be status, priority, or label" });
-		}
+		const parsedKind = parseWith(vocabularyKind, req.query.kind);
+		if (!parsedKind.ok) return sendValidationError(res, parsedKind.body);
+		const kind = parsedKind.data;
 
 		const rows = await db
 			.selectFrom("tracker_vocabularies")
@@ -76,26 +68,30 @@ trackerVocabulariesRouter.post(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 		const actor = req.user!;
-		const { kind, name, position, colour } = req.body ?? {};
+		const { name, colour } = req.body ?? {};
 
-		if (!isVocabKind(kind)) {
-			return res
-				.status(400)
-				.json({ error: "kind must be status, priority, or label" });
-		}
+		const parsedKind = parseWith(vocabularyKind, req.body?.kind);
+		if (!parsedKind.ok) return sendValidationError(res, parsedKind.body);
+		const kind = parsedKind.data;
 
 		if (kind === "status") {
-			return res.status(400).json({ error: "The status vocabulary is fixed." });
+			return sendValidationError(res, {
+				error: "The status vocabulary is fixed.",
+			});
 		}
 
-		const trimmedName = typeof name === "string" ? name.trim() : "";
-		if (!trimmedName) {
-			return res.status(400).json({ error: "name is required" });
-		}
+		const parsedName = parseWith(trimmedRequired("name is required"), name);
+		if (!parsedName.ok) return sendValidationError(res, parsedName.body);
+		const trimmedName = parsedName.data;
 
-		if (typeof position !== "number" || !Number.isFinite(position)) {
-			return res.status(400).json({ error: "position must be a number" });
+		const parsedPosition = parseWith(
+			finiteNumber("position must be a number"),
+			req.body?.position,
+		);
+		if (!parsedPosition.ok) {
+			return sendValidationError(res, parsedPosition.body);
 		}
+		const position = parsedPosition.data;
 
 		const duplicate = await db
 			.selectFrom("tracker_vocabularies")
