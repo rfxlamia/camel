@@ -1349,7 +1349,6 @@ describe("Cycle Map — map data (unit)", () => {
 		assert.deepEqual(
 			listFiles("server/src/routes").sort(),
 			[
-				"server/src/routes/EXTRACTION_PLAN.md",
 				"server/src/routes/cards-identity.integration.helpers.ts",
 				"server/src/routes/cards-identity.integration.test.ts",
 				"server/src/routes/presence.ts",
