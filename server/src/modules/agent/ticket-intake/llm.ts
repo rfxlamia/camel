@@ -1,11 +1,7 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { config } from "../../../config.js";
+import { extractText, getClient, MODEL } from "../../../lib/llm/client.js";
 import { sanitizeUserInput } from "../../../lib/llm/prompt-sanitizer.js";
 import { logger } from "../../../lib/logger.js";
-import { getClient } from "../llm.js";
 import type { TicketExtraction, TicketType } from "./completeness.js";
-
-const MODEL = config.ANTHROPIC_MODEL;
 
 const VALID_TYPES = new Set<TicketType>(["Bug", "Feature", "Improvement"]);
 
@@ -32,13 +28,6 @@ You extract structured ticket fields from a user's message for a Linear issue in
 </rules>
 
 REMINDER: Your entire response must be valid JSON only — {"title":...,"description":...,"expected":...,"actual":...,"repro":...,"type":...}. No other text.`;
-
-function extractText(response: Anthropic.Message): string {
-	return response.content
-		.filter((block): block is Anthropic.TextBlock => block.type === "text")
-		.map((block) => block.text)
-		.join("");
-}
 
 function normalizeExtraction(
 	parsed: Partial<TicketExtraction>,

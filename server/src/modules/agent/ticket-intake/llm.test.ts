@@ -9,7 +9,8 @@ vi.mock("../../../config.js", () => ({
 	},
 }));
 
-vi.mock("../llm.js", () => ({
+vi.mock("../../../lib/llm/client.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../lib/llm/client.js")>()),
 	getClient: () => ({
 		messages: {
 			create: mockCreate,
