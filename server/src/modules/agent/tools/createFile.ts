@@ -1,4 +1,4 @@
-import { MAX_ARTIFACT_BYTES } from "../../../lib/llm/artifact-limits.js";
+import { MAX_ARTIFACT_BYTES } from "../../../lib/artifact-limits.js";
 import type { Tool, ToolResult } from "../../../lib/llm/tool-types.js";
 import { deriveFilename } from "../artifact.js";
 

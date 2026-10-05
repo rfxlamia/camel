@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ARTIFACT_BYTES } from "../../lib/llm/artifact-limits.js";
+import { MAX_ARTIFACT_BYTES } from "../../lib/artifact-limits.js";
 import {
 	deriveFilename,
 	extractRevisedDocument,
