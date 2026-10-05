@@ -11,7 +11,7 @@ import {
 	isTicketIntakeConfigured,
 } from "./linear-client.js";
 import { peekSubmitLimit, recordSubmitSuccess } from "./rate-limits.js";
-import { executeWithRetry } from "./retry.js";
+import { classifyFailure, executeWithRetry } from "./retry.js";
 
 interface SubmitBody {
 	title: string;
@@ -69,7 +69,9 @@ export function extractSubmitFailure(error: unknown): {
 			message,
 		};
 	}
-	return { retryable: false, message };
+	// Untagged errors (e.g. a LinearApiError from getLabelId, which is not run
+	// through executeWithRetry) get the same 5xx/network classification.
+	return { retryable: classifyFailure(error).retryable, message };
 }
 
 /** Publish without throwing: a realtime outage must not turn a created ticket into a failure, nor leave an unhandled rejection. */
@@ -101,15 +103,25 @@ export async function runSubmitInBackground(
 			{ maxAttempts: 10 },
 		);
 
-		await recordSubmitSuccess(user.id);
-		await recordActivity(db, user, workspaceId, "linear_ticket_created", {
-			cardId: body.cardId ?? null,
-			payload: {
-				issueUrl: result.issueUrl,
-				issueIdentifier: result.issueIdentifier,
-				title: body.title,
-			},
-		});
+		// The ticket exists now: bookkeeping failures must not turn this into a
+		// "failed" result (the user would resubmit and create a duplicate).
+		try {
+			await recordSubmitSuccess(user.id);
+		} catch (err) {
+			logger.error({ err }, "ticket intake: recordSubmitSuccess failed");
+		}
+		try {
+			await recordActivity(db, user, workspaceId, "linear_ticket_created", {
+				cardId: body.cardId ?? null,
+				payload: {
+					issueUrl: result.issueUrl,
+					issueIdentifier: result.issueIdentifier,
+					title: body.title,
+				},
+			});
+		} catch (err) {
+			logger.error({ err }, "ticket intake: recordActivity failed");
+		}
 
 		const issueId = result.issueId;
 		try {
