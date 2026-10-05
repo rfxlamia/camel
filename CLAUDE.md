@@ -27,7 +27,7 @@ This file provides guidance to agents when working with code in this repository.
 
 **Optimistic locking**: Cards have `version` field. Stale writes return HTTP 409 (not 500).
 
-**Activity logging**: Every mutation MUST call `recordActivity()` to write `card_events` (not automatic).
+**Activity logging**: Every mutation MUST call `recordActivity()` to write `card_events` (not automatic). Only `recordActivity` / `recordTrackerActivity` may insert into `card_events` / `tracker_events` — enforced by `npm run check:event-write-routing` (allowlist: helpers, tracker-activity, seed).
 
 **UI design authority**: `docs/pocket/rule/creative-brief.md` is the source of truth for colors (OKLCH), typography (Work Sans), spacing. Load before making UI decisions.
 
