@@ -1,3 +1,4 @@
+import type { MutableRefObject } from "react";
 import { api } from "../../api";
 import type {
 	MyWorkItem,
@@ -39,26 +40,12 @@ export interface PreparedPage {
 	activeCandidates?: MyWorkItem[];
 }
 
-interface MutableRef<T> {
-	current: T;
-}
-
+/** Workspace/source filtering is server-side only; responses are not re-filtered. */
 function requestFilters(view: MyWorkViewState) {
 	return {
 		...(view.workspaceId === "" ? {} : { workspaceId: view.workspaceId }),
 		...(view.source === "" ? {} : { source: view.source }),
 	};
-}
-
-function applyPresentationFilters(
-	items: MyWorkItem[],
-	view: MyWorkViewState,
-): MyWorkItem[] {
-	return items.filter(
-		(item) =>
-			(view.workspaceId === "" || item.workspaceId === view.workspaceId) &&
-			(view.source === "" || item.source === view.source),
-	);
 }
 
 export function myWorkSearchQuery(view: MyWorkViewState): string {
@@ -157,10 +144,7 @@ function prepareActivePage(
 	view: MyWorkViewState,
 	page: number,
 ): PreparedPage {
-	const activeItems = filterMyWorkItems(
-		applyPresentationFilters(response.items, view),
-		"active",
-	);
+	const activeItems = filterMyWorkItems(response.items, "active");
 	reconcileMyWorkMutations(activeItems);
 	const ordered = orderMyWorkItems(
 		projectMyWorkListItems(activeItems, "active"),
@@ -179,12 +163,11 @@ function prepareActivePage(
 
 function prepareAllPage(
 	response: MyWorkListResponse,
-	view: MyWorkViewState,
 	page: number,
 ): PreparedPage {
-	const filtered = applyPresentationFilters(response.items, view);
-	reconcileMyWorkMutations(filtered);
-	const ordered = orderMyWorkItems(projectMyWorkListItems(filtered, "all"));
+	const items = response.items;
+	reconcileMyWorkMutations(items);
+	const ordered = orderMyWorkItems(projectMyWorkListItems(items, "all"));
 	return {
 		loaded: {
 			items: ordered,
@@ -194,8 +177,8 @@ function prepareAllPage(
 			hasPrevious: page > 1,
 			hasNext: Boolean(response.nextCursor),
 		},
-		workspaceOptions: mergeWorkspaceOptions([], filtered),
-		workspaceItems: filtered,
+		workspaceOptions: mergeWorkspaceOptions([], items),
+		workspaceItems: items,
 	};
 }
 
@@ -204,7 +187,7 @@ export interface LoadRequestContext {
 	requestViewKey: string;
 	fresh: boolean;
 	currentPage: () => number;
-	allCacheRef: MutableRef<AllPageCache>;
+	allCacheRef: MutableRefObject<AllPageCache>;
 	isCurrent: () => boolean;
 }
 
@@ -231,6 +214,6 @@ export async function loadMyWorkRequest({
 		isCurrent,
 	);
 	return allPage && isCurrent()
-		? prepareAllPage(allPage.response, requestView, allPage.page)
+		? prepareAllPage(allPage.response, allPage.page)
 		: null;
 }
