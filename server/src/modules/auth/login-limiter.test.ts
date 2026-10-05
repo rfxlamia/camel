@@ -60,9 +60,18 @@ describe("Account-scoped login rate limiter", () => {
 			);
 		});
 
-		it("fails open when Redis throws", async () => {
+		it("falls back to the in-memory limiter when Redis throws", async () => {
 			mockRedisClient.incr.mockRejectedValue(new Error("Redis down"));
-			expect(await checkAndRecordLoginAttempt("testuser")).toBe(false);
+			const username = "redis-down-user";
+			try {
+				// Fail-closed: the first attempts are allowed, then the account locks.
+				for (let attempt = 1; attempt <= 5; attempt++) {
+					expect(await checkAndRecordLoginAttempt(username)).toBe(false);
+				}
+				expect(await checkAndRecordLoginAttempt(username)).toBe(true);
+			} finally {
+				await clearLoginFailures(username);
+			}
 		});
 
 		it("uses atomic INCR to prevent TOCTOU race condition", async () => {

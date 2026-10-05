@@ -34,7 +34,6 @@ function metadataReferences(body: CreateBody) {
 		: [];
 	return {
 		assigneeIds: integerIds(body.assigneeIds),
-		userIds: integerIds(body.assigneeIds),
 		vocabularyIds: [...statusId, ...priorityId, ...integerIds(body.labelIds)],
 		statusId: statusId[0] ?? null,
 		priorityId: priorityId[0] ?? null,
@@ -186,10 +185,6 @@ export async function prepareCreateRequest(
 	const uploaded = uploadedAttachments(req);
 	if (uploaded.error) return { kind: "bad_request", error: uploaded.error };
 	const attachments = uploaded.attachments ?? [];
-	const attachmentValidationError = await validateAttachmentPairs(attachments);
-	if (attachmentValidationError) {
-		return { kind: "bad_request", error: attachmentValidationError };
-	}
 	const { columnId } = body;
 	if (body.statusId !== undefined) {
 		return {
@@ -215,6 +210,11 @@ export async function prepareCreateRequest(
 			kind: "bad_request",
 			error: description.error ?? "invalid description",
 		};
+	}
+	// Last: inspects file contents, so run it only once the cheap body checks pass.
+	const attachmentValidationError = await validateAttachmentPairs(attachments);
+	if (attachmentValidationError) {
+		return { kind: "bad_request", error: attachmentValidationError };
 	}
 	return {
 		kind: "ready",
