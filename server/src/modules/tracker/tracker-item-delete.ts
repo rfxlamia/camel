@@ -2,13 +2,15 @@ import type { Request, Response } from "express";
 import { sql } from "kysely";
 import { parseKeyFromUrl } from "../../core/tracker-key.js";
 import { db } from "../../db/kysely.js";
-import { publishEvent } from "../../realtime.js";
 import { recordTrackerActivity } from "../../lib/tracker-activity.js";
-import { routeKeyParam } from "./tracker-item-route-helpers.js";
 import {
 	findBoardCardByKeyNumber,
 	findTrackerItemByKeyNumber,
 } from "../../lib/work-item-response.js";
+import { publishEvent } from "../../realtime.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { optionalVersion } from "../../validators/schemas.js";
+import { routeKeyParam } from "./tracker-item-route-helpers.js";
 
 export async function deleteTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
@@ -18,10 +20,9 @@ export async function deleteTrackerItemHandler(req: Request, res: Response) {
 		return res.status(400).json({ error: "invalid tracker key" });
 	}
 
-	const { version } = (req.body ?? {}) as { version?: unknown };
-	if (version !== undefined && !Number.isInteger(version)) {
-		return res.status(400).json({ error: "version must be an integer" });
-	}
+	const parsedVersion = parseWith(optionalVersion, req.body?.version);
+	if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
+	const version = parsedVersion.data;
 
 	const existing = await findTrackerItemByKeyNumber(
 		db,

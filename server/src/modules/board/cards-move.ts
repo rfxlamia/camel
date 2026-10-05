@@ -14,6 +14,8 @@ import { db } from "../../db/kysely.js";
 import { addCardAssignee } from "../../lib/card-assignees.js";
 import { recordActivity } from "../../lib/helpers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { optionalVersion } from "../../validators/schemas.js";
 import { emitCardAssigned, publishCardWorkspaceEvent } from "./card-events.js";
 import { batchUpdateCardPositions } from "./card-positions.js";
 import { hydrateCard } from "./card-read.js";
@@ -47,9 +49,8 @@ cardsMoveRouter.post(
 				.status(400)
 				.json({ error: "toColumnId and index are required" });
 		}
-		if (version !== undefined && !Number.isInteger(version)) {
-			return res.status(400).json({ error: "version must be an integer" });
-		}
+		const versionCheck = parseWith(optionalVersion, version);
+		if (!versionCheck.ok) return sendValidationError(res, versionCheck.body);
 
 		type MoveResult =
 			| { kind: "not_found_card" }

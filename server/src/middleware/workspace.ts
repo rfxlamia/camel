@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { lookupMembership } from "../lib/helpers.js";
+import { parseWith, sendValidationError } from "../validators/http.js";
+import { workspaceIdParam } from "../validators/schemas.js";
 
 declare global {
 	// biome-ignore lint/style/noNamespace: Express augmentation
@@ -13,11 +15,6 @@ declare global {
 	}
 }
 
-function parseWorkspaceId(raw: string): number | null {
-	const workspaceId = Number(raw);
-	return Number.isInteger(workspaceId) ? workspaceId : null;
-}
-
 /**
  * Middleware: validates workspaceId param, checks membership, attaches workspace info to req.
  * Returns 400 if workspaceId is invalid, 404 if user is not a member.
@@ -29,12 +26,12 @@ export async function requireWorkspaceMember(
 ) {
 	try {
 		const rawId = req.params.workspaceId;
-		const workspaceId = parseWorkspaceId(
+		const parsedId = parseWith(
+			workspaceIdParam,
 			typeof rawId === "string" ? rawId : "",
 		);
-		if (workspaceId === null) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
-		}
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const workspaceId = parsedId.data;
 
 		const role = await lookupMembership(req.user!.id, workspaceId);
 		if (!role) {
