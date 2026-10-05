@@ -10,6 +10,12 @@ import {
 import { requireWorkspaceMember } from "./membership.js";
 import type { createAgentBoardService } from "./service.js";
 
+const COLUMN_SLUG_RE = /^[\w-]{1,100}$/;
+
+function isValidColumnSlug(slug: unknown): slug is string {
+	return typeof slug === "string" && COLUMN_SLUG_RE.test(slug);
+}
+
 export function registerReadRoutes(
 	router: Router,
 	service: ReturnType<typeof createAgentBoardService>,
@@ -75,8 +81,11 @@ export function registerReadRoutes(
 		async (req, res) => {
 			const workspaceId = Number(req.params.workspaceId);
 			const boardId = Number(req.params.boardId);
-			const columnSlug = req.params.columnSlug as string;
+			const columnSlug = req.params.columnSlug;
 			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
+				return res.status(400).json({ error: "Invalid params" });
+			}
+			if (!isValidColumnSlug(columnSlug)) {
 				return res.status(400).json({ error: "Invalid params" });
 			}
 

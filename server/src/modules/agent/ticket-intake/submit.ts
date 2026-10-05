@@ -55,23 +55,36 @@ function parseSubmitBody(body: unknown): SubmitBody | null {
 	};
 }
 
-function extractSubmitFailure(error: unknown): {
+export function extractSubmitFailure(error: unknown): {
 	retryable: boolean;
 	message: string;
 } {
+	const message =
+		error instanceof Error && error.message
+			? error.message
+			: "Submission failed";
 	if (error && typeof error === "object" && "retryable" in error) {
 		return {
 			retryable: Boolean((error as { retryable: boolean }).retryable),
-			message: "Submission failed",
+			message,
 		};
 	}
-	return {
-		retryable: false,
-		message: error instanceof Error ? error.message : "Submission failed",
-	};
+	return { retryable: false, message };
 }
 
-async function runSubmitInBackground(
+/** Publish without throwing: a realtime outage must not turn a created ticket into a failure, nor leave an unhandled rejection. */
+async function publishSubmitResult(
+	workspaceId: number,
+	event: Parameters<typeof publishEvent>[1],
+): Promise<void> {
+	try {
+		await publishEvent(workspaceId, event);
+	} catch (err) {
+		logger.error({ err }, "ticket intake: failed to publish submit result");
+	}
+}
+
+export async function runSubmitInBackground(
 	workspaceId: number,
 	user: AuthUser,
 	body: SubmitBody,
@@ -108,7 +121,7 @@ async function runSubmitInBackground(
 			logger.error({ err }, "createLinearComment failed");
 		}
 
-		await publishEvent(workspaceId, {
+		await publishSubmitResult(workspaceId, {
 			type: "ticket_intake.submit_result",
 			success: true,
 			issueUrl: result.issueUrl,
@@ -117,7 +130,7 @@ async function runSubmitInBackground(
 		});
 	} catch (error) {
 		const failure = extractSubmitFailure(error);
-		await publishEvent(workspaceId, {
+		await publishSubmitResult(workspaceId, {
 			type: "ticket_intake.submit_result",
 			success: false,
 			retryable: failure.retryable,
@@ -165,5 +178,7 @@ export async function handleSubmit(
 
 	res.status(202).json({ status: "submitting" });
 
-	void runSubmitInBackground(workspaceId, req.user!, body);
+	void runSubmitInBackground(workspaceId, req.user!, body).catch((err) => {
+		logger.error({ err }, "ticket intake: background submit crashed");
+	});
 }
