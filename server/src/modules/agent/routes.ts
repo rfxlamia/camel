@@ -22,7 +22,7 @@ import { Router } from "express";
 import { requireAuth } from "../../auth.js";
 import { logger } from "../../lib/logger.js";
 import { llmTimeout } from "../../middleware/timeout.js";
-import { requireWorkspaceMember } from "./membership.js";
+import { assertWorkspaceMember } from "./membership.js";
 import { resolveMessageAction } from "./message-action.js";
 import { registerReadRoutes } from "./read-routes.js";
 import {
@@ -75,7 +75,7 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "intent is required" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result = await service.createBoard({
 				workspaceId,
@@ -109,7 +109,7 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "message or action is required" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result =
 				action.kind === "confirm"
@@ -149,7 +149,7 @@ export function createAgentRouter(
 				return res.status(400).json({ error: "Invalid params" });
 			}
 
-			if (!(await requireWorkspaceMember(req, res, workspaceId))) return;
+			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
 			const result = await service.approveBoard({
 				boardId,

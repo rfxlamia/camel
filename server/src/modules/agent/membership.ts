@@ -1,21 +1,12 @@
 import type { Request, Response } from "express";
-import { db } from "../../db/kysely.js";
+import { lookupMembership } from "../../lib/helpers.js";
 
-export async function lookupMembership(
-	userId: number,
-	workspaceId: number,
-): Promise<string | null> {
-	const row = await db
-		.selectFrom("workspace_members")
-		.select("role")
-		.where("user_id", "=", userId)
-		.where("workspace_id", "=", workspaceId)
-		.executeTakeFirst();
-	return row?.role ?? null;
-}
-
-// Helper: check workspace membership and short-circuit with 404
-export async function requireWorkspaceMember(
+/**
+ * True when the caller is a member of the workspace. Otherwise sends a 404
+ * and returns false, so handlers can `if (!(await assertWorkspaceMember(...))) return;`.
+ * (Not the Express middleware of the same purpose in middleware/workspace.ts.)
+ */
+export async function assertWorkspaceMember(
 	req: Request,
 	res: Response,
 	workspaceId: number,
