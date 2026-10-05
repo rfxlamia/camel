@@ -9,13 +9,15 @@ vi.mock("../../../realtime.js", () => ({
 	publishEvent: (...args: unknown[]) => mockPublishEvent(...args),
 }));
 vi.mock("../../../db/kysely.js", () => ({ db: {} }));
+const mockRecordActivity = vi.fn();
+const mockRecordSubmitSuccess = vi.fn();
 vi.mock("../../../lib/helpers.js", () => ({
 	lookupMembership: vi.fn(),
-	recordActivity: vi.fn(async () => {}),
+	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
 }));
 vi.mock("./rate-limits.js", () => ({
 	peekSubmitLimit: vi.fn(),
-	recordSubmitSuccess: vi.fn(async () => {}),
+	recordSubmitSuccess: (...args: unknown[]) => mockRecordSubmitSuccess(...args),
 }));
 vi.mock("./linear-client.js", () => ({
 	createLinearIssue: (...args: unknown[]) => mockCreateLinearIssue(...args),
@@ -54,6 +56,23 @@ describe("extractSubmitFailure", () => {
 		});
 	});
 
+	it("classifies untagged HTTP errors by status", () => {
+		const http = (status: number) =>
+			Object.assign(new Error(`HTTP ${status}`), { status });
+		expect(extractSubmitFailure(http(503))).toEqual({
+			retryable: true,
+			message: "HTTP 503",
+		});
+		expect(extractSubmitFailure(http(404))).toEqual({
+			retryable: false,
+			message: "HTTP 404",
+		});
+		expect(extractSubmitFailure(new Error("boom"))).toEqual({
+			retryable: false,
+			message: "boom",
+		});
+	});
+
 	it("falls back to a generic message for non-Error values", () => {
 		expect(extractSubmitFailure({ retryable: true })).toEqual({
 			retryable: true,
@@ -71,6 +90,8 @@ describe("runSubmitInBackground", () => {
 		vi.clearAllMocks();
 		mockGetLabelId.mockResolvedValue("label-1");
 		mockCreateLinearComment.mockResolvedValue(undefined);
+		mockRecordActivity.mockResolvedValue(undefined);
+		mockRecordSubmitSuccess.mockResolvedValue(undefined);
 	});
 
 	it("publishes a failure result with the error message", async () => {
@@ -107,6 +128,24 @@ describe("runSubmitInBackground", () => {
 		expect(mockPublishEvent).toHaveBeenCalledWith(
 			7,
 			expect.objectContaining({ success: true }),
+		);
+	});
+	it.each([
+		["recordActivity", mockRecordActivity],
+		["recordSubmitSuccess", mockRecordSubmitSuccess],
+	])("still publishes success when %s rejects after the ticket was created", async (_name, failing) => {
+		mockCreateLinearIssue.mockResolvedValue({
+			issueId: "i1",
+			issueUrl: "https://linear.app/x/1",
+			issueIdentifier: "X-1",
+		});
+		failing.mockRejectedValue(new Error("db down"));
+		mockPublishEvent.mockResolvedValue(undefined);
+		await runSubmitInBackground(7, user, body);
+		expect(mockPublishEvent).toHaveBeenCalledTimes(1);
+		expect(mockPublishEvent).toHaveBeenCalledWith(
+			7,
+			expect.objectContaining({ success: true, issueIdentifier: "X-1" }),
 		);
 	});
 });
