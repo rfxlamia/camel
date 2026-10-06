@@ -46,10 +46,7 @@ vi.mock("../../api", async (importOriginal) => {
 });
 
 import { ApiError } from "../../api";
-import {
-	FocusSessionProvider,
-	useFocusSession,
-} from "./FocusSessionContext";
+import { FocusSessionProvider, useFocusSession } from "./FocusSessionContext";
 
 const testUser: User = {
 	id: 7,
@@ -106,7 +103,7 @@ function makePausedSession(
 	};
 }
 
-let activeWorkspaceId = 3;
+let activeWorkspaceId: number | null = 3;
 
 function emitFocusEvent(event: {
 	type: "focus_session.updated";
@@ -187,6 +184,19 @@ describe("FocusSessionProvider", () => {
 		expect(result.current.session).toEqual(running);
 		expect(mockSetHasActiveFocusSession).toHaveBeenCalledWith(true);
 		expect(mockSetFocusSessionHydrated).toHaveBeenCalledWith(true);
+	});
+
+	it("hydrates immediately when no workspace is selected (picker open)", async () => {
+		activeWorkspaceId = null;
+
+		const { result } = renderHook(() => useFocusSession(), {
+			wrapper: createWrapper(),
+		});
+
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(mockFocusGet).not.toHaveBeenCalled();
+		expect(mockSetFocusSessionHydrated).toHaveBeenLastCalledWith(true);
+		expect(mockSetHasActiveFocusSession).toHaveBeenLastCalledWith(false);
 	});
 
 	it("session null silent settles empty without error or toast", async () => {
