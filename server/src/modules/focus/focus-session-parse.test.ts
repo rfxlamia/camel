@@ -26,18 +26,18 @@ describe("parseFocusPostBody", () => {
 	});
 
 	it.each([
-		null,
-		undefined,
-		"x",
-		[],
-		{},
-		{ action: "start", source: "board", taskId: 1 },
-		{ action: "focus", source: "other", taskId: 1 },
-		{ action: "focus", source: "board", taskId: "1" },
-		{ action: "focus", source: "board", taskId: 1.5 },
-		{ action: "focus", source: "board", taskId: 1, version: "1" },
-		{ action: "focus", source: "board", taskId: 1, version: null },
-		{ action: "switch", source: "board", taskId: 1, sessionId: 1.2 },
+		[null],
+		[undefined],
+		["x"],
+		[[]],
+		[{}],
+		[{ action: "start", source: "board", taskId: 1 }],
+		[{ action: "focus", source: "other", taskId: 1 }],
+		[{ action: "focus", source: "board", taskId: "1" }],
+		[{ action: "focus", source: "board", taskId: 1.5 }],
+		[{ action: "focus", source: "board", taskId: 1, version: "1" }],
+		[{ action: "focus", source: "board", taskId: 1, version: null }],
+		[{ action: "switch", source: "board", taskId: 1, sessionId: 1.2 }],
 	])("rejects %j with the single legacy body", (body) => {
 		expect(parseFocusPostBody(body)).toEqual(INVALID);
 	});
