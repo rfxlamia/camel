@@ -14,67 +14,16 @@ import {
 	persistWorkspaceId,
 	readSavedWorkspaceId,
 } from "../shared/workspaceSelection";
-import {
-	applyCreatedWorkspaceSelection,
-	FOCUS_BLOCKED_TOAST,
-	FOCUS_LOADING_TOAST,
-	getSwitchAttemptState,
-	persistRemindedInviteIds,
-	readRemindedInviteIds,
-} from "../shared/workspaceSwitcher";
-import type {
-	SettingsMap,
-	SwitchConfirmState,
-	User,
-	Workspace,
-	WorkspaceInvite,
-} from "../types";
+import { readRemindedInviteIds } from "../shared/workspaceSwitcher";
+import type { SettingsMap, User, Workspace, WorkspaceInvite } from "../types";
 import {
 	type BoardViewMode,
 	readBoardViewMode,
 	writeBoardViewMode,
 } from "./boardViewPrefs";
 import { useShowToast } from "./ToastContext";
-
-interface WorkspaceContextValue {
-	user: User;
-	activeWorkspaceId: number | null;
-	activeWorkspace: Workspace | null;
-	workspaces: Workspace[];
-	pendingInvites: WorkspaceInvite[];
-	pickerRequired: boolean;
-	workspacesReady: boolean;
-	remindedInviteIds: number[];
-	hasUnsavedCardEdits: boolean;
-	setHasUnsavedCardEdits: (dirty: boolean) => void;
-	switchConfirm: SwitchConfirmState;
-	attemptSwitchWorkspace: (workspaceId: number) => void;
-	confirmPendingSwitch: () => void;
-	cancelPendingSwitch: () => void;
-	switchWorkspace: (workspaceId: number) => void;
-	reloadWorkspaces: () => Promise<Workspace[]>;
-	acceptWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
-	declineWorkspaceInvite: (invite: WorkspaceInvite) => Promise<void>;
-	remindInviteLater: (invite: WorkspaceInvite) => void;
-	openCreateWorkspace: () => void;
-	closeCreateWorkspace: () => void;
-	createWorkspaceOpen: boolean;
-	submitCreateWorkspace: (name: string) => Promise<void>;
-	logout: () => Promise<void>;
-	/** Immediate local sign-out (no POST /logout). Use for already-rejected sessions (401). */
-	signOutLocally: () => void;
-	settings: SettingsMap;
-	settingsVersion: number;
-	refreshSettings: () => Promise<void>;
-	ticketIntakeEnabled: boolean;
-	focusModeEnabled: boolean;
-	boardViewMode: BoardViewMode;
-	setBoardViewMode: (mode: BoardViewMode) => void;
-	hasActiveFocusSession: boolean;
-	setHasActiveFocusSession: (active: boolean) => void;
-	focusSessionHydrated: boolean;
-	setFocusSessionHydrated: (hydrated: boolean) => void;
-}
+import { useWorkspaceSwitching } from "./useWorkspaceSwitching";
+import type { WorkspaceContextValue } from "./workspaceContextTypes";
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
@@ -105,9 +54,6 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 		readRemindedInviteIds(),
 	);
 	const [hasUnsavedCardEdits, setHasUnsavedCardEdits] = useState(false);
-	const [switchConfirm, setSwitchConfirm] = useState<SwitchConfirmState>({
-		open: false,
-	});
 	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 	const [settings, setSettings] = useState<SettingsMap>({
 		boardName: "Camel",
@@ -220,146 +166,33 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 		return list;
 	}, []);
 
-	/** Flip active workspace id only — board/presence clear via render-phase reset. */
-	const switchWorkspace = useCallback((workspaceId: number) => {
-		setHasUnsavedCardEdits(false);
-		setSwitchConfirm({ open: false });
-		setActiveWorkspaceId(workspaceId);
-		persistWorkspaceId(workspaceId);
-		setPickerRequired(false);
-	}, []);
-
-	const guardFocusBeforeSwitch = useCallback((): boolean => {
-		// No active workspace (picker) means no focus session to protect.
-		if (activeWorkspaceIdRef.current === null) return true;
-		if (!focusSessionHydratedRef.current) {
-			showToast(FOCUS_LOADING_TOAST, "warning");
-			return false;
-		}
-		if (hasActiveFocusRef.current) {
-			showToast(FOCUS_BLOCKED_TOAST, "warning");
-			return false;
-		}
-		return true;
-	}, [showToast]);
-
-	const attemptSwitchWorkspace = useCallback(
-		(workspaceId: number) => {
-			const state = getSwitchAttemptState({
-				activeWorkspaceId,
-				targetWorkspaceId: workspaceId,
-				hasUnsavedCardEdits: hasUnsavedRef.current,
-				hasActiveFocusSession: hasActiveFocusRef.current,
-				focusSessionHydrated: focusSessionHydratedRef.current,
-			});
-			if (state.status === "noop") return;
-			if (state.status === "focus-loading") {
-				showToast(FOCUS_LOADING_TOAST, "warning");
-				return;
-			}
-			if (state.status === "focus-blocked") {
-				showToast(FOCUS_BLOCKED_TOAST, "warning");
-				return;
-			}
-			if (state.status === "confirm-required") {
-				setSwitchConfirm({
-					open: true,
-					pendingWorkspaceId: state.pendingWorkspaceId,
-				});
-				return;
-			}
-			switchWorkspace(state.workspaceId);
-		},
-		[activeWorkspaceId, showToast, switchWorkspace],
-	);
-
-	const confirmPendingSwitch = useCallback(() => {
-		if (!switchConfirm.open) return;
-		const pendingWorkspaceId = switchConfirm.pendingWorkspaceId;
-		setSwitchConfirm({ open: false });
-		if (!guardFocusBeforeSwitch()) return;
-		switchWorkspace(pendingWorkspaceId);
-	}, [switchConfirm, switchWorkspace, guardFocusBeforeSwitch]);
-
-	const cancelPendingSwitch = useCallback(() => {
-		setSwitchConfirm({ open: false });
-	}, []);
-
-	const acceptWorkspaceInvite = useCallback(
-		async (invite: WorkspaceInvite) => {
-			try {
-				await api.acceptInvite(invite.workspaceId, invite.id);
-				const list = await reloadWorkspaces();
-				if (!guardFocusBeforeSwitch()) return;
-				switchWorkspace(
-					list.find((w) => w.id === invite.workspaceId)?.id ??
-						invite.workspaceId,
-				);
-			} catch (err) {
-				if (err instanceof ApiError && err.status === 409) {
-					showToast(
-						err.message || "Couldn't accept the invite. Try again.",
-						"error",
-					);
-					return;
-				}
-				showToast("Couldn't accept the invite. Try again.", "error");
-			}
-		},
-		[reloadWorkspaces, showToast, switchWorkspace, guardFocusBeforeSwitch],
-	);
-
-	const declineWorkspaceInvite = useCallback(
-		async (invite: WorkspaceInvite) => {
-			try {
-				await api.declineInvite(invite.workspaceId, invite.id);
-				await reloadWorkspaces();
-			} catch {
-				showToast("Couldn't decline the invite. Try again.", "error");
-			}
-		},
-		[reloadWorkspaces, showToast],
-	);
-
-	const remindInviteLater = useCallback((invite: WorkspaceInvite) => {
-		setRemindedInviteIds((prev) => {
-			if (prev.includes(invite.id)) return prev;
-			const next = [...prev, invite.id];
-			persistRemindedInviteIds(next);
-			return next;
-		});
-	}, []);
-
-	const openCreateWorkspace = useCallback(() => {
-		setCreateWorkspaceOpen(true);
-	}, []);
-
-	const closeCreateWorkspace = useCallback(() => {
-		setCreateWorkspaceOpen(false);
-	}, []);
-
-	const submitCreateWorkspace = useCallback(
-		async (name: string) => {
-			const trimmed = name.trim();
-			if (!trimmed) return;
-			try {
-				const prevIds = workspacesRef.current.map((w) => w.id);
-				const created = await api.createWorkspace({ name: trimmed });
-				await reloadWorkspaces();
-				const selection = applyCreatedWorkspaceSelection({
-					currentWorkspaceIds: prevIds,
-					createdWorkspace: created,
-				});
-				setCreateWorkspaceOpen(false);
-				if (!guardFocusBeforeSwitch()) return;
-				switchWorkspace(selection.activeWorkspaceId);
-				showToast(selection.toast, "success");
-			} catch {
-				showToast("Couldn't create the workspace. Try again.", "error");
-			}
-		},
-		[reloadWorkspaces, showToast, switchWorkspace, guardFocusBeforeSwitch],
-	);
+	const {
+		switchConfirm,
+		switchWorkspace,
+		attemptSwitchWorkspace,
+		confirmPendingSwitch,
+		cancelPendingSwitch,
+		acceptWorkspaceInvite,
+		declineWorkspaceInvite,
+		remindInviteLater,
+		openCreateWorkspace,
+		closeCreateWorkspace,
+		submitCreateWorkspace,
+	} = useWorkspaceSwitching({
+		showToast,
+		activeWorkspaceId,
+		activeWorkspaceIdRef,
+		workspacesRef,
+		hasUnsavedRef,
+		hasActiveFocusRef,
+		focusSessionHydratedRef,
+		reloadWorkspaces,
+		setHasUnsavedCardEdits,
+		setActiveWorkspaceId,
+		setPickerRequired,
+		setRemindedInviteIds,
+		setCreateWorkspaceOpen,
+	});
 
 	useEffect(() => {
 		let active = true;
