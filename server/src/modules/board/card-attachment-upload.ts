@@ -9,6 +9,7 @@ import {
 import { validateAttachmentPairs } from "../../lib/attachment-validation.js";
 import { logger } from "../../lib/logger.js";
 import { publishEvent } from "../../realtime.js";
+import { sendValidationError } from "../../validators/http.js";
 import { parsePositiveIntegerParam } from "../../validators/schemas.js";
 import { mapAttachmentResponse } from "./attachment-response.js";
 import {
@@ -188,10 +189,14 @@ export async function uploadExistingCardAttachments(
 	}
 
 	const uploaded = parseUploadedAttachments(req);
-	if (uploaded.error) return res.status(400).json({ error: uploaded.error });
+	if (uploaded.error) {
+		return sendValidationError(res, { error: uploaded.error });
+	}
 	const attachments = uploaded.attachments ?? [];
 	const validationError = await validateAttachmentPairs(attachments);
-	if (validationError) return res.status(400).json({ error: validationError });
+	if (validationError) {
+		return sendValidationError(res, { error: validationError });
+	}
 
 	const storage = getAttachmentStorage();
 	const written: WrittenAttachment[] = [];

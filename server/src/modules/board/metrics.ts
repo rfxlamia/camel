@@ -5,6 +5,7 @@ import {
 } from "../../core/metrics.js";
 import { db } from "../../db/kysely.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { sendValidationError } from "../../validators/http.js";
 
 async function getCardTimeline(workspaceId: number) {
 	return db
@@ -46,9 +47,9 @@ metricsRouter.get(
 			weeks !== undefined &&
 			(!Number.isInteger(weeks) || weeks < 1 || weeks > 26)
 		) {
-			return res
-				.status(400)
-				.json({ error: "weeks must be an integer between 1 and 26" });
+			return sendValidationError(res, {
+				error: "weeks must be an integer between 1 and 26",
+			});
 		}
 		const rows = await getCardTimeline(workspaceId);
 		const history = computeMetricsHistory(

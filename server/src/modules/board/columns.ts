@@ -5,59 +5,19 @@ import { db } from "../../db/kysely.js";
 import { recordActivity } from "../../lib/helpers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { type BoardEvent, publishEvent } from "../../realtime.js";
-import {
-	COLUMN_COLOR_VALIDATION_ERROR,
-	isValidColumnColor,
-	validateColumnBatch,
-} from "../../validators/column.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
 import { validateColumnName } from "../../validators/input-length.js";
+import { columnIdParam } from "./board-schemas.js";
 import {
 	deleteColumnWithStatusRemap,
 	updateColumnWithIsDoneRemap,
 } from "./column-is-done-remap.js";
-
-const RETURNING_COLUMNS = [
-	"id",
-	"title",
-	"position",
-	"wip_limit",
-	"policy",
-	"is_done",
-	"is_signable",
-	"signable_assignee_id",
-	"color",
-] as const;
-
-type ColumnPatchInput = {
-	title?: string;
-	wipLimit?: number | null;
-	policy?: string;
-	isDone?: boolean;
-	isSignable?: boolean;
-	signableAssigneeId?: number | null;
-	hasSignableAssigneeId: boolean;
-	color?: string | null;
-};
-
-function buildColumnPatchFields(input: ColumnPatchInput) {
-	const fields: Parameters<
-		typeof updateColumnWithIsDoneRemap
-	>[0]["patchFields"] = {};
-	if (input.title != null) fields.title = input.title;
-	if (input.wipLimit !== undefined) fields.wip_limit = input.wipLimit ?? null;
-	if (input.policy != null) fields.policy = input.policy;
-	if (input.isDone !== undefined) fields.is_done = input.isDone;
-	if (input.isSignable !== undefined) fields.is_signable = input.isSignable;
-	if (input.isSignable === false) {
-		fields.signable_assignee_id = null;
-	} else if (input.hasSignableAssigneeId) {
-		fields.signable_assignee_id = input.signableAssigneeId ?? null;
-	}
-	if (input.color !== undefined) fields.color = input.color;
-	return fields;
-}
+import { parseColumnPatch } from "./column-patch-parse.js";
+import { RETURNING_COLUMNS } from "./column-returning.js";
+import { columnsBatchRouter } from "./columns-batch.js";
 
 export const columnsRouter = Router({ mergeParams: true });
+columnsRouter.use(columnsBatchRouter);
 
 columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	const { workspaceId } = req.workspace!;
@@ -65,7 +25,7 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	const { title } = req.body ?? {};
 	const titleValidation = validateColumnName(title ?? "");
 	if (!titleValidation.valid) {
-		return res.status(400).json({ error: titleValidation.error });
+		return sendValidationError(res, { error: titleValidation.error as string });
 	}
 	const created = await db
 		.insertInto("columns")
@@ -86,187 +46,21 @@ columnsRouter.post("/columns", requireWorkspaceMember, async (req, res) => {
 	res.status(201).json(created);
 });
 
-columnsRouter.post(
-	"/columns/batch",
-	requireWorkspaceMember,
-	async (req, res) => {
-		const { workspaceId } = req.workspace!;
-
-		const validation = validateColumnBatch(req.body?.columns);
-		if (!validation.valid) {
-			return res.status(400).json({ error: validation.error });
-		}
-
-		const templateName =
-			typeof req.body?.templateName === "string" ? req.body.templateName : "";
-		const normalized = validation.normalized!;
-
-		try {
-			const result = await db.transaction().execute(async (trx) => {
-				await trx
-					.selectFrom("workspaces")
-					.select("id")
-					.where("id", "=", workspaceId)
-					.forUpdate()
-					.execute();
-
-				const countRow = await trx
-					.selectFrom("columns")
-					.select(sql<number>`count(*)::int`.as("n"))
-					.where("workspace_id", "=", workspaceId)
-					.executeTakeFirstOrThrow();
-				if (countRow.n > 0) {
-					return { conflict: true as const };
-				}
-
-				const created: Array<{
-					id: number;
-					title: string;
-					position: number;
-					wip_limit: number | null;
-					policy: string;
-					is_done: boolean;
-					is_signable: boolean;
-					signable_assignee_id: number | null;
-					color: string | null;
-				}> = [];
-				for (let i = 0; i < normalized.length; i++) {
-					const col = normalized[i];
-					const row = await trx
-						.insertInto("columns")
-						.values({
-							title: col.title,
-							position: i * POSITION_GAP,
-							workspace_id: workspaceId,
-							wip_limit: col.wipLimit,
-							policy: col.policy,
-							is_done: col.isDone,
-							is_signable: false,
-							signable_assignee_id: null,
-							color: col.color,
-						})
-						.returning(RETURNING_COLUMNS)
-						.executeTakeFirstOrThrow();
-					created.push(row);
-				}
-
-				await recordActivity(trx, req.user!, workspaceId, "create", {
-					payload: {
-						templateName,
-						columnCount: normalized.length,
-					},
-				});
-
-				return { conflict: false as const, created };
-			});
-
-			if (result.conflict) {
-				return res.status(409).json({ error: "workspace already has columns" });
-			}
-
-			try {
-				await publishEvent(workspaceId, {
-					type: "column.created",
-					actor: req.user!,
-				});
-			} catch {
-				// best-effort post-commit publish
-			}
-
-			res.status(201).json(result.created);
-		} catch (err) {
-			if (!res.headersSent) {
-				return res.status(500).json({ error: "internal server error" });
-			}
-			throw err;
-		}
-	},
-);
-
 columnsRouter.patch(
 	"/columns/:id",
 	requireWorkspaceMember,
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 
-		const id = Number(req.params.id);
-		if (Number.isNaN(id)) {
-			return res.status(400).json({ error: "invalid column id" });
-		}
-		const {
-			title,
-			wipLimit,
-			policy,
-			isDone,
-			isSignable,
-			signableAssigneeId,
-			color,
-		} = req.body ?? {};
-		const hasSignableAssigneeId = "signableAssigneeId" in (req.body ?? {});
+		const parsedId = parseWith(columnIdParam, req.params.id);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const id = parsedId.data;
 
-		// Validate title if provided
-		let trimmedTitle: string | undefined;
-		if (title !== undefined) {
-			const titleValidation = validateColumnName(title);
-			if (!titleValidation.valid) {
-				return res.status(400).json({ error: titleValidation.error });
-			}
-			trimmedTitle = titleValidation.trimmed;
+		const parsedPatch = await parseColumnPatch(req.body, workspaceId);
+		if ("error" in parsedPatch) {
+			return sendValidationError(res, { error: parsedPatch.error });
 		}
-
-		if (wipLimit !== undefined && wipLimit !== null) {
-			if (!Number.isInteger(wipLimit) || wipLimit < 1) {
-				return res
-					.status(400)
-					.json({ error: "wipLimit must be a positive integer or null" });
-			}
-		}
-		if (isDone !== undefined && typeof isDone !== "boolean") {
-			return res.status(400).json({ error: "isDone must be a boolean" });
-		}
-		if (isSignable !== undefined && typeof isSignable !== "boolean") {
-			return res.status(400).json({ error: "isSignable must be a boolean" });
-		}
-		if (signableAssigneeId !== undefined && signableAssigneeId !== null) {
-			if (!Number.isInteger(signableAssigneeId)) {
-				return res
-					.status(400)
-					.json({ error: "signableAssigneeId must be an integer or null" });
-			}
-			const memberCheck = await db
-				.selectFrom("workspace_members")
-				.select("user_id")
-				.where("workspace_id", "=", workspaceId)
-				.where("user_id", "=", signableAssigneeId)
-				.executeTakeFirst();
-			if (!memberCheck) {
-				return res.status(400).json({
-					error: "signableAssigneeId must be a member of this workspace",
-				});
-			}
-		}
-
-		// Validate color if provided
-		if (color !== undefined && !isValidColumnColor(color)) {
-			return res.status(400).json({
-				error: COLUMN_COLOR_VALIDATION_ERROR,
-			});
-		}
-
-		const patchFields = buildColumnPatchFields({
-			title: trimmedTitle,
-			wipLimit,
-			policy,
-			isDone,
-			isSignable,
-			signableAssigneeId,
-			hasSignableAssigneeId,
-			color,
-		});
-
-		if (Object.keys(patchFields).length === 0) {
-			return res.status(400).json({ error: "no updatable fields provided" });
-		}
+		const { patchFields, isDone } = parsedPatch;
 
 		// isDone changes must serialize on the workspace row and update the
 		// normalized card status in the same transaction as the column geometry.
@@ -340,10 +134,9 @@ columnsRouter.delete(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 
-		const id = Number(req.params.id);
-		if (Number.isNaN(id)) {
-			return res.status(400).json({ error: "invalid column id" });
-		}
+		const parsedId = parseWith(columnIdParam, req.params.id);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const id = parsedId.data;
 		const result = await deleteColumnWithStatusRemap({
 			workspaceId,
 			columnId: id,

@@ -10,6 +10,7 @@ import { recordActivity } from "../../lib/helpers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { optionalVersion } from "../../validators/schemas.js";
+import { cardIdParam } from "./board-schemas.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 import { publishCardWorkspaceEvent } from "./card-events.js";
 
@@ -21,10 +22,9 @@ cardsDeleteRouter.delete(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 
-		const id = Number(req.params.id);
-		if (Number.isNaN(id)) {
-			return res.status(400).json({ error: "invalid card id" });
-		}
+		const parsedId = parseWith(cardIdParam, req.params.id);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const id = parsedId.data;
 		const parsedVersion = parseWith(optionalVersion, req.body?.version);
 		if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
 		const version = parsedVersion.data;
