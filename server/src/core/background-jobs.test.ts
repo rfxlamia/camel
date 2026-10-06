@@ -13,17 +13,17 @@ const mocks = vi.hoisted(() => ({
 	order: [] as string[],
 }));
 
-vi.mock("./auth.js", () => ({
+vi.mock("../auth.js", () => ({
 	cleanupExpiredSessions: mocks.cleanupExpiredSessions,
 }));
-vi.mock("./modules/notifications/index.js", () => ({
+vi.mock("../modules/notifications/index.js", () => ({
 	initNotificationService: mocks.initNotificationService,
 	startDueDateScheduler: mocks.startDueDateScheduler,
 }));
-vi.mock("./core/work-item-latency.js", () => ({
+vi.mock("./work-item-latency.js", () => ({
 	startWorkItemLatencyReporter: mocks.startWorkItemLatencyReporter,
 }));
-vi.mock("./db/redis.js", () => ({
+vi.mock("../db/redis.js", () => ({
 	connectRedis: vi.fn(),
 	getRedisClient: () => ({
 		duplicate: mocks.duplicate,
@@ -111,7 +111,7 @@ describe("BACKGROUND_JOBS switch", () => {
 
 describe("HTTP and SSE stay active under off (source contract)", () => {
 	const dir = dirname(fileURLToPath(import.meta.url));
-	const indexSrc = readFileSync(join(dir, "index.ts"), "utf8");
+	const indexSrc = readFileSync(join(dir, "..", "index.ts"), "utf8");
 	const jobsSrc = readFileSync(join(dir, "background-jobs.ts"), "utf8");
 
 	it("references BACKGROUND_JOBS only in background-jobs.ts", () => {

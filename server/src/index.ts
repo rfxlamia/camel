@@ -1,8 +1,11 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import { startBackgroundJobs, stopBackgroundJobs } from "./background-jobs.js";
 import { config } from "./config.js";
+import {
+	startBackgroundJobs,
+	stopBackgroundJobs,
+} from "./core/background-jobs.js";
 import { createOriginValidator } from "./core/cors.js";
 import { getListLatencySnapshot } from "./core/work-item-latency.js";
 import { pool } from "./db/pool.js";

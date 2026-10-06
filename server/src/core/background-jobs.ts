@@ -1,10 +1,10 @@
-import { cleanupExpiredSessions } from "./auth.js";
-import { startWorkItemLatencyReporter } from "./core/work-item-latency.js";
+import { cleanupExpiredSessions } from "../auth.js";
 import {
 	initNotificationService,
 	startDueDateScheduler,
-} from "./modules/notifications/index.js";
-import { initRealtime } from "./realtime.js";
+} from "../modules/notifications/index.js";
+import { initRealtime } from "../realtime.js";
+import { startWorkItemLatencyReporter } from "./work-item-latency.js";
 
 const SESSION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
