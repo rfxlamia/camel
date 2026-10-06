@@ -15,11 +15,13 @@ type SchemaClient = {
  */
 export async function applySchema(client: SchemaClient): Promise<void> {
 	const sql = readFileSync(join(here, "schema.sql"), "utf8");
+	const mergeSql = readFileSync(join(here, "work-item-merge.sql"), "utf8");
 	const agentSql = readFileSync(join(here, "agent-schema.sql"), "utf8");
 	const chatSql = readFileSync(join(here, "chat-schema.sql"), "utf8");
 	try {
 		await client.query("BEGIN");
 		await client.query(sql);
+		await client.query(mergeSql);
 		await client.query(agentSql);
 		await client.query(chatSql);
 		await client.query("COMMIT");

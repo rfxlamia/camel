@@ -1,0 +1,3 @@
+-- Work-item single-table merge: additive expand step (Phase 1).
+-- Runs inside the single transaction opened by migrate.ts; every statement
+-- must be idempotent. Do not use CREATE INDEX CONCURRENTLY here.
