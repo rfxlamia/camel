@@ -79,4 +79,36 @@ describe.skipIf(!runIntegration)("work-item-merge expand", () => {
 			await expect(insertCard(scratch, seed, null)).resolves.toBeTruthy();
 		});
 	});
+
+	describe("when duplicate card keys pre-exist", () => {
+		let scratch: ScratchSchema;
+		let seed: Seed;
+		beforeAll(async () => {
+			scratch = await createScratchSchema("wim_dupes");
+			await applySchema(scratch.client);
+			seed = await seedWorkspace(scratch);
+			await scratch.client.query("DROP INDEX uq_cards_workspace_key");
+			await insertCard(scratch, seed, 7);
+			await insertCard(scratch, seed, 7);
+		});
+		afterAll(async () => {
+			await scratch.drop();
+		});
+
+		it("aborts loudly, creates no index and leaves rows unchanged", async () => {
+			await expect(applySchema(scratch.client)).rejects.toThrow(
+				`work-item-merge: duplicate card keys workspace=${seed.workspaceId} key=7`,
+			);
+			const index = await scratch.client.query(
+				"SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = 'uq_cards_workspace_key'",
+				[scratch.schema],
+			);
+			expect(index.rows).toHaveLength(0);
+			const cards = await scratch.client.query(
+				"SELECT count(*)::int AS n FROM cards WHERE workspace_id = $1 AND key_number = 7",
+				[seed.workspaceId],
+			);
+			expect(cards.rows[0].n).toBe(2);
+		});
+	});
 });
