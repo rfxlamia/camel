@@ -3,24 +3,27 @@ import { db } from "../../db/kysely.js";
 import {
 	createScopedBoardService,
 	lookupMembership,
-	parseWorkspaceId,
 } from "../../lib/helpers.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { workspaceIdParam } from "../../validators/schemas.js";
+import { cardIdParam } from "./board-schemas.js";
 import { loadCardResponse, selectFullCard } from "./card-read.js";
 
 export const cardsGetRouter = Router({ mergeParams: true });
 
 cardsGetRouter.get("/cards/:id", async (req, res) => {
-	const workspaceId = parseWorkspaceId(
+	const parsedWorkspaceId = parseWith(
+		workspaceIdParam,
 		(req.params as { workspaceId: string; id: string }).workspaceId,
 	);
-	if (workspaceId === null) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
+	if (!parsedWorkspaceId.ok) {
+		return sendValidationError(res, parsedWorkspaceId.body);
 	}
+	const workspaceId = parsedWorkspaceId.data;
 
-	const cardId = Number(req.params.id);
-	if (Number.isNaN(cardId)) {
-		return res.status(400).json({ error: "invalid card id" });
-	}
+	const parsedCardId = parseWith(cardIdParam, req.params.id);
+	if (!parsedCardId.ok) return sendValidationError(res, parsedCardId.body);
+	const cardId = parsedCardId.data;
 	const result = await createScopedBoardService({
 		getMembership: async (wsId, userId) => {
 			const r = await lookupMembership(userId, wsId);

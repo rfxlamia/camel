@@ -3,11 +3,13 @@ import {
 	parseLabelIds,
 	parsePriorityId,
 } from "../../lib/tracker-item-parsers.js";
+import { parseWith } from "../../validators/http.js";
 import {
 	validateCardDescription,
 	validateCardTitle,
 	validateDueDate,
 } from "../../validators/input-length.js";
+import { optionalVersion } from "../../validators/schemas.js";
 
 export type CardSetFields = {
 	title?: string;
@@ -45,13 +47,13 @@ export async function parseCardUpdateBody(
 	body: Record<string, unknown>,
 	workspaceId: number,
 ): Promise<ParsedCardUpdate | { error: string }> {
-	const { title, description, version } = body;
+	const { title, description } = body;
 	if ("statusId" in body) {
 		return { error: "statusId is not accepted for card updates" };
 	}
-	if (version !== undefined && !Number.isInteger(version)) {
-		return { error: "version must be an integer" };
-	}
+	const parsedVersion = parseWith(optionalVersion, body.version);
+	if (!parsedVersion.ok) return { error: parsedVersion.body.error };
+	const version = parsedVersion.data;
 
 	const flags: CardUpdateFlags = {
 		hasTitle: "title" in body,

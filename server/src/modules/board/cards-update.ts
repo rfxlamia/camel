@@ -14,7 +14,9 @@ import {
 import { recordActivity } from "../../lib/helpers.js";
 import { parseCardProjectPhase } from "../../lib/tracker-item-parsers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
 import { loadCardAttachmentsForCards } from "./attachment-response.js";
+import { cardIdParam } from "./board-schemas.js";
 import {
 	emitCardAssigned,
 	emitDueDateChange,
@@ -33,13 +35,12 @@ cardsUpdateRouter.patch(
 		const { workspaceId } = req.workspace!;
 
 		const body = (req.body ?? {}) as Record<string, unknown>;
-		const id = Number(req.params.id);
-		if (Number.isNaN(id)) {
-			return res.status(400).json({ error: "invalid card id" });
-		}
+		const parsedId = parseWith(cardIdParam, req.params.id);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const id = parsedId.data;
 		const parsedBody = await parseCardUpdateBody(body, workspaceId);
 		if ("error" in parsedBody) {
-			return res.status(400).json({ error: parsedBody.error });
+			return sendValidationError(res, { error: parsedBody.error });
 		}
 		const { version, setFields, assigneeIds, labelIds, flags } = parsedBody;
 		const {
@@ -213,7 +214,7 @@ cardsUpdateRouter.patch(
 			return res.status(404).json({ error: "card not found" });
 		}
 		if (result.kind === "bad_request") {
-			return res.status(400).json({ error: result.error });
+			return sendValidationError(res, { error: result.error });
 		}
 		if (result.kind === "conflict") {
 			if (result.card) {

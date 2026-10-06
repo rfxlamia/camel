@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { db } from "../../db/kysely.js";
 import { getAttachmentStorage } from "../../lib/attachment-storage.js";
 import { logger } from "../../lib/logger.js";
+import { sendValidationError } from "../../validators/http.js";
 import {
 	persistCreatedCard,
 	removeWrittenAttachments,
@@ -24,7 +25,7 @@ function respondToCreateFailure(
 	if (result.kind === "wip") {
 		return res.status(409).json({ error: "WIP limit reached for this column" });
 	}
-	return res.status(400).json({
+	return sendValidationError(res, {
 		error: "Some card fields are invalid",
 		fieldErrors: result.fieldErrors,
 	});
@@ -34,7 +35,7 @@ export async function createCard(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
 	const preparedRequest = await prepareCreateRequest(req, workspaceId);
 	if (preparedRequest.kind === "bad_request") {
-		return res.status(400).json({ error: preparedRequest.error });
+		return sendValidationError(res, { error: preparedRequest.error });
 	}
 
 	const { input, attachments } = preparedRequest;

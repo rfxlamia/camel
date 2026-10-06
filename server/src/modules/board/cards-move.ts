@@ -16,6 +16,7 @@ import { recordActivity } from "../../lib/helpers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { optionalVersion } from "../../validators/schemas.js";
+import { cardIdParam } from "./board-schemas.js";
 import { emitCardAssigned, publishCardWorkspaceEvent } from "./card-events.js";
 import { batchUpdateCardPositions } from "./card-positions.js";
 import { hydrateCard } from "./card-read.js";
@@ -30,24 +31,23 @@ cardsMoveRouter.post(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 
-		const cardId = Number(req.params.id);
-		if (Number.isNaN(cardId)) {
-			return res.status(400).json({ error: "invalid card id" });
-		}
+		const parsedId = parseWith(cardIdParam, req.params.id);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const cardId = parsedId.data;
 		const { toColumnId, index, statusId } = req.body ?? {};
 		if (statusId !== undefined) {
-			return res
-				.status(400)
-				.json({ error: "statusId is not accepted for card moves" });
+			return sendValidationError(res, {
+				error: "statusId is not accepted for card moves",
+			});
 		}
 		if (
 			!Number.isInteger(toColumnId) ||
 			!Number.isInteger(index) ||
 			index < 0
 		) {
-			return res
-				.status(400)
-				.json({ error: "toColumnId and index are required" });
+			return sendValidationError(res, {
+				error: "toColumnId and index are required",
+			});
 		}
 		const parsedVersion = parseWith(optionalVersion, req.body?.version);
 		if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
