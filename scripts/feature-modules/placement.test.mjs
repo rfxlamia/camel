@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
-import { describe, it } from "node:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { FEATURES } from "./map.mjs";
@@ -42,7 +38,7 @@ function git(cwd, args) {
  * @param {(dir: string) => void} run
  */
 function withTempGitRepo(dirPrefix, run) {
-	const dir = mkdtempSync(join(repoRoot, dirPrefix));
+	const dir = mkdtempSync(join(tmpdir(), dirPrefix));
 	try {
 		git(dir, ["init"]);
 		git(dir, ["config", "user.email", "fm@test.local"]);
@@ -70,7 +66,12 @@ describe("Cycle 1 — allowed board module (unit)", () => {
 function expectPlacementViolation(path) {
 	const violations = checkPlacement({ path, status: "new", map });
 	assert.equal(violations.length, 1, violations.join("; "));
-	assert.match(violations[0], new RegExp(`^${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: ${PLACEMENT_RULE_ID}:`));
+	assert.match(
+		violations[0],
+		new RegExp(
+			`^${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: ${PLACEMENT_RULE_ID}:`,
+		),
+	);
 }
 
 describe("Cycle A — kernel allow (unit)", () => {
@@ -156,7 +157,11 @@ describe("Cycle B — forbidden type-folders (unit)", () => {
 			[],
 		);
 		assert.deepEqual(
-			checkPlacement({ path: "scripts/feature-modules/x.ts", status: "new", map }),
+			checkPlacement({
+				path: "scripts/feature-modules/x.ts",
+				status: "new",
+				map,
+			}),
 			[],
 		);
 	});
