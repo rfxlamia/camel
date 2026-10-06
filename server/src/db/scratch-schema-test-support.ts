@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { pool } from "./pool.js";
 
-export type ScratchClient = Awaited<ReturnType<typeof pool.connect>>;
+export type ScratchClient = PoolClient;
 
 export type ScratchSchema = {
 	client: ScratchClient;
