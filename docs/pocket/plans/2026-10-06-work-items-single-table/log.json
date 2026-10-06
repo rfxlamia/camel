@@ -43,6 +43,36 @@
           "file": "execution-plan/tasks/T15-maintenance-mode-config-for-camel-ggf-nginx-local-files.md",
           "done_sha": "572d16a33f017ab9a6fac7261f00961d9cb39704"
         }
+      ],
+      "corrections": [
+        {
+          "sha": "f8af006",
+          "files": [
+            "server/src/background-jobs.test.ts",
+            "server/src/background-jobs.ts",
+            "server/src/core/background-jobs.test.ts",
+            "server/src/core/background-jobs.ts",
+            "server/src/index.ts"
+          ],
+          "for_task": "T14"
+        },
+        {
+          "sha": "0d19eba",
+          "files": [
+            "server/src/modules/board/column-is-done-remap.ts",
+            "server/src/modules/board/column-remap-cards.ts"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "f9d54b4",
+          "files": [
+            "server/src/db/types-agent-chat.ts",
+            "server/src/db/types-tracker.ts",
+            "server/src/db/types.ts"
+          ],
+          "for_task": "T2"
+        }
       ]
     },
     {
