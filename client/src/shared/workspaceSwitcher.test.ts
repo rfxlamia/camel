@@ -46,6 +46,18 @@ describe("workspace switcher state", () => {
 		).toEqual({ status: "focus-loading" });
 	});
 
+	it("skips focus checks when no workspace is active (picker)", () => {
+		expect(
+			getSwitchAttemptState({
+				activeWorkspaceId: null,
+				targetWorkspaceId: 2,
+				hasUnsavedCardEdits: false,
+				hasActiveFocusSession: false,
+				focusSessionHydrated: false,
+			}),
+		).toEqual({ status: "switch", workspaceId: 2 });
+	});
+
 	it("allows switching when focus is hydrated and no session is active", () => {
 		expect(
 			getSwitchAttemptState({

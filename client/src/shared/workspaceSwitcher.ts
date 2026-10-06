@@ -42,8 +42,11 @@ export function getSwitchAttemptState({
 	focusSessionHydrated,
 }: SwitchAttemptInput): SwitchAttemptState {
 	if (activeWorkspaceId === targetWorkspaceId) return { status: "noop" };
-	if (!focusSessionHydrated) return { status: "focus-loading" };
-	if (hasActiveFocusSession) return { status: "focus-blocked" };
+	// No active workspace means no focus session to protect (workspace picker).
+	if (activeWorkspaceId !== null) {
+		if (!focusSessionHydrated) return { status: "focus-loading" };
+		if (hasActiveFocusSession) return { status: "focus-blocked" };
+	}
 	if (hasUnsavedCardEdits) {
 		return {
 			status: "confirm-required",

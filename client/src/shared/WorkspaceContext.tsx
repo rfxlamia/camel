@@ -9,11 +9,6 @@ import {
 } from "react";
 import { ApiError, api } from "../api";
 import {
-	type BoardViewMode,
-	readBoardViewMode,
-	writeBoardViewMode,
-} from "./boardViewPrefs";
-import {
 	chooseInitialWorkspace,
 	clearSavedWorkspaceId,
 	persistWorkspaceId,
@@ -34,6 +29,11 @@ import type {
 	Workspace,
 	WorkspaceInvite,
 } from "../types";
+import {
+	type BoardViewMode,
+	readBoardViewMode,
+	writeBoardViewMode,
+} from "./boardViewPrefs";
 import { useShowToast } from "./ToastContext";
 
 interface WorkspaceContextValue {
@@ -230,6 +230,8 @@ export function WorkspaceProvider({ user, onSignedOut, children }: Props) {
 	}, []);
 
 	const guardFocusBeforeSwitch = useCallback((): boolean => {
+		// No active workspace (picker) means no focus session to protect.
+		if (activeWorkspaceIdRef.current === null) return true;
 		if (!focusSessionHydratedRef.current) {
 			showToast(FOCUS_LOADING_TOAST, "warning");
 			return false;
