@@ -19,6 +19,7 @@ import {
 	membershipRemovalTargetsUser,
 	TASK_MISSING_TOAST,
 } from "./focusGuards";
+import { useFocusActions } from "./useFocusActions";
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;
@@ -163,136 +164,12 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 		});
 	}, [activeWorkspaceId, adoptSession, subscribeFocusEvents, user.id]);
 
-	const reconcileVersionConflict = useCallback(
-		(err: ApiError): boolean => {
-			if (err.status !== 409 || err.code !== "version_conflict") return false;
-			adoptSession(err.session ?? null);
-			setActionError(null);
-			return true;
-		},
-		[adoptSession],
-	);
-
-	const handleMutationError = useCallback(
-		(err: unknown): void => {
-			if (!(err instanceof ApiError)) throw err;
-			if (reconcileVersionConflict(err)) return;
-			if (err.status >= 500 || err.status === 409) {
-				setActionError(err.message);
-				return;
-			}
-			throw err;
-		},
-		[reconcileVersionConflict],
-	);
-
-	const runPost = useCallback(
-		async (body: {
-			action: "focus" | "switch";
-			source: WorkItemSource;
-			taskId: number;
-			version?: number;
-			sessionId?: number;
-		}) => {
-			if (activeWorkspaceId === null) return;
-			setActionError(null);
-			try {
-				const { session: next } = await api.focus.post(activeWorkspaceId, body);
-				adoptSession(next);
-				setActionError(null);
-			} catch (err) {
-				if (!(err instanceof ApiError)) throw err;
-				if (err.code === "session_active") {
-					adoptSession(err.session ?? null);
-					throw err;
-				}
-				if (err.status === 409 && err.code === "version_conflict") {
-					const adopted = err.session ?? null;
-					adoptSession(adopted);
-					const landedOnTarget =
-						adopted !== null &&
-						adopted.source === body.source &&
-						adopted.taskId === body.taskId;
-					if (landedOnTarget) {
-						setActionError(null);
-						return;
-					}
-					throw err;
-				}
-				if (err.status >= 500 || err.status === 409) {
-					setActionError(err.message);
-				}
-				throw err;
-			}
-		},
-		[activeWorkspaceId, adoptSession],
-	);
-
-	const runPatchAction = useCallback(
-		async (
-			action: "start" | "pause" | "resume" | "finish",
-		): Promise<FocusSession | undefined> => {
-			if (activeWorkspaceId === null || session === null) return undefined;
-			setActionError(null);
-			try {
-				const { session: next } = await api.focus.patch(activeWorkspaceId, {
-					action,
-					version: session.version,
-					sessionId: session.id,
-				});
-				setActionError(null);
-				if (action === "finish") {
-					adoptSession(null);
-					return next;
-				}
-				adoptSession(next);
-				return next;
-			} catch (err) {
-				handleMutationError(err);
-				return undefined;
-			}
-		},
-		[activeWorkspaceId, adoptSession, handleMutationError, session],
-	);
-
-	const focus = useCallback(
-		(params: { source: WorkItemSource; taskId: number }) =>
-			runPost({ action: "focus", ...params }),
-		[runPost],
-	);
-
-	const switchTo = useCallback(
-		(params: {
-			source: WorkItemSource;
-			taskId: number;
-			version: number;
-			sessionId: number;
-		}) => runPost({ action: "switch", ...params }),
-		[runPost],
-	);
-
-	const start = useCallback(
-		() => runPatchAction("start").then(() => undefined),
-		[runPatchAction],
-	);
-
-	const pause = useCallback(
-		() => runPatchAction("pause").then(() => undefined),
-		[runPatchAction],
-	);
-
-	const resume = useCallback(
-		() => runPatchAction("resume").then(() => undefined),
-		[runPatchAction],
-	);
-
-	const finish = useCallback(async (): Promise<FocusSession> => {
-		const finished = await runPatchAction("finish");
-		if (!finished) {
-			throw new Error("Finish failed");
-		}
-		return finished;
-	}, [runPatchAction]);
+	const { focus, switchTo, start, pause, resume, finish } = useFocusActions({
+		activeWorkspaceId,
+		session,
+		adoptSession,
+		setActionError,
+	});
 
 	const autoFinishFromGuard = useCallback(
 		async (message: string) => {
