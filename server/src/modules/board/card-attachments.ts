@@ -64,7 +64,7 @@ async function deleteAttachment(req: Request, res: Response): Promise<void> {
 				attachmentId: number;
 				mimeType: string;
 				createdAt: string;
-				columnId: number;
+				columnId: number | null;
 				thumbnailPath: string;
 				originalPath: string;
 		  };

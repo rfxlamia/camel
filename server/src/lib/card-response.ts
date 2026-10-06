@@ -17,7 +17,7 @@ export type CardResponseVocabulary = VocabularyRow;
 
 export type CardResponseRow = {
 	id: number;
-	column_id: number;
+	column_id: number | null;
 	title: string;
 	description: string;
 	position: number;

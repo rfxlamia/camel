@@ -213,12 +213,17 @@ async function markSourceDone(
 	const { input } = context;
 	const authorized = await readAuthorizedItem(trx, input);
 	if (!authorized) return { kind: "not_found" };
+	const boardColumnId =
+		authorized.source === "board" ? authorized.item.column_id : null;
+	if (authorized.source === "board" && boardColumnId == null) {
+		return { kind: "unmappable" };
+	}
 	const target = resolveMyWorkDoneTarget(
-		authorized.source === "board"
+		boardColumnId != null
 			? {
 					source: "board",
 					workspaceId: input.workspaceId,
-					columnId: authorized.item.column_id,
+					columnId: boardColumnId,
 				}
 			: { source: "tracker", workspaceId: input.workspaceId },
 		await loadDoneTargetInputs(trx, input.workspaceId),

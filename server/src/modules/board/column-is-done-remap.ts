@@ -218,8 +218,16 @@ async function loadRemapPlan(
 		.where("workspace_id", "=", workspaceId)
 		.where("kind", "=", "status")
 		.execute();
+	const columnCards = cards.flatMap((card) =>
+		card.column_id == null ? [] : [{ ...card, column_id: card.column_id }],
+	);
 	return {
-		plan: buildRemapPlan({ beforeColumns, afterColumns, cards, statuses }),
+		plan: buildRemapPlan({
+			beforeColumns,
+			afterColumns,
+			cards: columnCards,
+			statuses,
+		}),
 		afterColumns,
 	};
 }

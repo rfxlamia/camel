@@ -191,6 +191,7 @@ export async function loadAgentBoardColumns(
 
 	const cardsByColumn = new Map<number, Array<(typeof cardRows)[number]>>();
 	for (const card of cardRows) {
+		if (card.column_id == null) continue;
 		const cards = cardsByColumn.get(card.column_id);
 		if (cards) {
 			cards.push(card);

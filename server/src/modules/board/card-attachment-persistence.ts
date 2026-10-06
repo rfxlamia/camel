@@ -61,7 +61,7 @@ function toIso(value: Date | string): string {
 		: new Date(value).toISOString();
 }
 
-type LockedCard = { id: number; column_id: number };
+type LockedCard = { id: number; column_id: number | null };
 
 async function lockExistingCard(
 	trx: DBExecutor,

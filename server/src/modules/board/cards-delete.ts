@@ -35,7 +35,7 @@ cardsDeleteRouter.delete(
 			| {
 					kind: "ok";
 					title: string;
-					column_id: number;
+					column_id: number | null;
 					attachmentPairs: AttachmentPair[];
 			  };
 

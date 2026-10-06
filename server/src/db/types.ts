@@ -198,21 +198,26 @@ export interface FocusSessions {
 }
 
 export interface Cards {
-	column_id: number;
+	column_id: number | null;
+	completed_at: Timestamp | null;
 	created_at: Generated<Timestamp>;
 	deleted_at: Timestamp | null;
 	description: Generated<string>;
 	done_at: Timestamp | null;
 	due_date: Timestamp | null;
+	end_date: Timestamp | null;
 	id: Generated<number>;
 	key_number: number | null;
+	plan_position: number | null;
 	position: number;
 	priority_id: number | null;
 	project_id: number | null;
 	phase_id: number | null;
+	start_date: Timestamp | null;
 	started_at: Timestamp | null;
 	status_id: number | null;
 	title: string;
+	updated_at: Timestamp | null;
 	version: Generated<number>;
 	workspace_id: number;
 }
@@ -295,6 +300,7 @@ export interface TrackerItems {
 	end_date: Timestamp | null;
 	id: Generated<number>;
 	key_number: number;
+	migrated_to_id: number | null;
 	phase_id: number | null;
 	position: number | null;
 	priority_id: number | null;

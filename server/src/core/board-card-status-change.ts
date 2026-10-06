@@ -1,16 +1,16 @@
 import { sql } from "kysely";
+import type { AuthUser } from "../auth.js";
+import type { DBExecutor } from "../db/kysely.js";
+import { addCardAssignee } from "../lib/card-assignees.js";
+import { recordActivity } from "../lib/helpers.js";
 import {
 	mapColumnSlots,
-	statusIdForSlot,
 	type StatusSlot,
+	statusIdForSlot,
 } from "./column-status-map.js";
 import { resolveColumnForStatusChange } from "./column-status-reverse.js";
 import { positionBetween } from "./position.js";
 import { checkWipLimit } from "./wip.js";
-import type { DBExecutor } from "../db/kysely.js";
-import type { AuthUser } from "../auth.js";
-import { recordActivity } from "../lib/helpers.js";
-import { addCardAssignee } from "../lib/card-assignees.js";
 
 export type BoardCardStatusChangeResult =
 	| { kind: "not_found" }
@@ -37,14 +37,7 @@ export async function applyBoardCardStatusChange(
 ): Promise<BoardCardStatusChangeResult> {
 	const card = await trx
 		.selectFrom("cards")
-		.select([
-			"id",
-			"column_id",
-			"title",
-			"version",
-			"started_at",
-			"done_at",
-		])
+		.select(["id", "column_id", "title", "version", "started_at", "done_at"])
 		.where("id", "=", params.cardId)
 		.where("workspace_id", "=", params.workspaceId)
 		.where("deleted_at", "is", null)
@@ -63,6 +56,8 @@ export async function applyBoardCardStatusChange(
 		.where("kind", "=", "status")
 		.executeTakeFirst();
 	if (!statusRow?.slot) return { kind: "invalid_status" };
+
+	if (card.column_id == null) return { kind: "unmappable" };
 
 	const targetSlot = statusRow.slot as StatusSlot;
 	const destinationColumn = await trx
