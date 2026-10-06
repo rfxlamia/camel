@@ -243,6 +243,7 @@ integration("POST /cards — atomic metadata create", () => {
 			.post(`/api/workspaces/${WORKSPACE_ID}/cards`)
 			.send({ columnId: fixtures.signableColumnId, title: "Stale assignee" });
 		expect(response.status).toBe(400);
+		expect(response.body.error).toBe("Some card fields are invalid");
 		expect(response.body.fieldErrors.columnId).toMatch(/member/);
 		expect(
 			await query("SELECT id FROM cards WHERE workspace_id = $1", [
@@ -262,6 +263,7 @@ integration("POST /cards — atomic metadata create", () => {
 				dueDate: "2026-02-30",
 			});
 		expect(response.status).toBe(400);
+		expect(response.body.error).toBe("Some card fields are invalid");
 		expect(response.body.fieldErrors).toEqual(
 			expect.objectContaining({
 				assigneeIds: expect.any(String),

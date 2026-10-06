@@ -48,6 +48,40 @@ describe("board card id validation", () => {
 		expect(res.body).toEqual({ error: "invalid card id" });
 	});
 
+	it.each([
+		["get", "/cards/0"],
+		["get", "/cards/-1"],
+		["get", "/cards/3.5"],
+		["get", "/cards/1e3"],
+		["patch", "/cards/0"],
+		["delete", "/cards/3.5"],
+		["post", "/cards/0/move"],
+	] as const)("%s %s is rejected as an invalid card id", async (method, path) => {
+		const res = await request(createApp())[method](`${base}${path}`).send({});
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "invalid card id" });
+	});
+
+	it.each([
+		["patch", "/columns/0"],
+		["patch", "/columns/-1"],
+		["delete", "/columns/3.5"],
+	] as const)("%s %s is rejected as an invalid column id", async (method, path) => {
+		const res = await request(createApp())[method](`${base}${path}`).send({});
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "invalid column id" });
+	});
+
+	it.each([
+		"0",
+		"-1",
+		"1.5",
+	])("GET /cards/:id rejects workspaceId %s", async (id) => {
+		const res = await request(createApp()).get(`/workspaces/${id}/cards/3`);
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "workspaceId must be an integer" });
+	});
+
 	it("GET /cards/:id rejects a non-integer workspaceId", async () => {
 		const res = await request(createApp()).get("/workspaces/abc/cards/3");
 		expect(res.status).toBe(400);
