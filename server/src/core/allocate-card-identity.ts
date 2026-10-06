@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 import { type DBExecutor } from "../db/kysely.js";
+import { allocateWorkItemKey } from "./allocate-work-item-key.js";
 import { mapColumnSlots, statusIdForSlot } from "./column-status-map.js";
 
 export interface CardIdentity {
@@ -18,12 +19,9 @@ export async function allocateCardIdentity(
 	dbExec: DBExecutor,
 	input: { workspaceId: number; columnId: number },
 ): Promise<CardIdentity> {
-	const counter = await dbExec
-		.updateTable("workspaces")
-		.set({ tracker_key_counter: sql`tracker_key_counter + 1` })
-		.where("id", "=", input.workspaceId)
-		.returning("tracker_key_counter")
-		.executeTakeFirstOrThrow();
+	const { keyNumber } = await allocateWorkItemKey(dbExec, {
+		workspaceId: input.workspaceId,
+	});
 
 	const destination = await dbExec
 		.selectFrom("columns")
@@ -61,7 +59,7 @@ export async function allocateCardIdentity(
 	}
 
 	return {
-		keyNumber: counter.tracker_key_counter,
+		keyNumber,
 		statusId,
 	};
 }

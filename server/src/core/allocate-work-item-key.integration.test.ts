@@ -1,6 +1,7 @@
 // Integration describe requires a running PostgreSQL. Gated behind RUN_INTEGRATION=1.
 // Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/core/allocate-work-item-key.integration.test.ts
 import "dotenv/config";
+import { readFileSync } from "node:fs";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
@@ -50,5 +51,23 @@ describe.skipIf(!runIntegration)("allocateWorkItemKey (integration)", () => {
 			[WORKSPACE_ID],
 		);
 		expect(row.rows[0]!.tracker_key_counter).toBe(7);
+	});
+});
+
+describe("no inline key counter copy remains (source contract)", () => {
+	const read = (relative: string) =>
+		readFileSync(new URL(relative, import.meta.url), "utf8");
+
+	it("tracker-item-create.ts does not update the key counter itself", () => {
+		const source = read("../modules/tracker/tracker-item-create.ts");
+		expect(source).not.toContain("tracker_key_counter");
+	});
+
+	it("allocate-card-identity.ts delegates to allocateWorkItemKey", () => {
+		const source = read("./allocate-card-identity.ts");
+		expect(source).toMatch(
+			/import\s*\{[^}]*\ballocateWorkItemKey\b[^}]*\}\s*from\s*"\.\/allocate-work-item-key\.js"/,
+		);
+		expect(source).not.toContain("tracker_key_counter");
 	});
 });

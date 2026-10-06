@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
 import type { AuthUser } from "../../auth.js";
+import { allocateWorkItemKey } from "../../core/allocate-work-item-key.js";
 import { formatKey } from "../../core/tracker-key.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
 import { logger } from "../../lib/logger.js";
@@ -139,15 +140,12 @@ async function insertTrackerItem(
 		phaseId,
 	);
 	const category = await statusCategory(trx, input.workspaceId, statusId);
-	const counter = await trx
-		.updateTable("workspaces")
-		.set({ tracker_key_counter: sql`tracker_key_counter + 1` })
-		.where("id", "=", input.workspaceId)
-		.returning("tracker_key_counter")
-		.executeTakeFirstOrThrow();
+	const { keyNumber } = await allocateWorkItemKey(trx, {
+		workspaceId: input.workspaceId,
+	});
 	const values: Record<string, unknown> = {
 		workspace_id: input.workspaceId,
-		key_number: counter.tracker_key_counter,
+		key_number: keyNumber,
 		title: input.title,
 		description: input.description,
 		status_id: statusId,
@@ -168,7 +166,7 @@ async function insertTrackerItem(
 		.values(values as never)
 		.returning("id")
 		.executeTakeFirstOrThrow();
-	return { id: inserted.id, keyNumber: counter.tracker_key_counter };
+	return { id: inserted.id, keyNumber };
 }
 
 async function hydrateCreatedItem(
