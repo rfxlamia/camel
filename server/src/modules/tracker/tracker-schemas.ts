@@ -37,10 +37,14 @@ export const vocabularyKind = z.enum(VOCAB_KINDS, {
 
 /** Reorder neighbours: each key, when present, must be a string; one is required. */
 export const reorderNeighborKeys = z
-	.object({
-		beforeKey: z.string({ error: "beforeKey must be a string" }).optional(),
-		afterKey: z.string({ error: "afterKey must be a string" }).optional(),
-	})
+	.object(
+		{
+			beforeKey: z.string({ error: "beforeKey must be a string" }).optional(),
+			afterKey: z.string({ error: "afterKey must be a string" }).optional(),
+		},
+		// A JSON array body used to destructure to two undefineds, so keep that message.
+		{ error: "beforeKey or afterKey is required" },
+	)
 	.refine(
 		(value) => value.beforeKey !== undefined || value.afterKey !== undefined,
 		{

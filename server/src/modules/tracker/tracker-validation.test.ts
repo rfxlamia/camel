@@ -188,6 +188,8 @@ describe("tracker 400 bodies", () => {
 			[{ afterKey: 1 }, "afterKey must be a string"],
 			[{ beforeKey: 1, afterKey: 2 }, "beforeKey must be a string"],
 			[{}, "beforeKey or afterKey is required"],
+			[[], "beforeKey or afterKey is required"],
+			[[{ beforeKey: "CT-2" }], "beforeKey or afterKey is required"],
 		])("%j -> 400 %s", async (body, message) => {
 			const res = await request(createApp())
 				.post(`${T}/items/CT-1/reorder`)
