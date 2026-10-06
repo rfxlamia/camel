@@ -92,10 +92,11 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 			setLoading(false);
 			setActionError(null);
 			setHasActiveFocusSession(false);
-			// No workspace means no session to hydrate. Staying unhydrated here
-			// would make the switch guard reject every pick from the workspace
-			// picker (focus-loading toast forever).
-			setFocusSessionHydrated(true);
+			// Stay unhydrated: this phase also runs on every page load before the
+			// workspace resolves, and FocusPage must not read it as "settled, no
+			// session". The workspace-switch guard skips focus checks while no
+			// workspace is active, so the picker is not blocked.
+			setFocusSessionHydrated(false);
 			return;
 		}
 

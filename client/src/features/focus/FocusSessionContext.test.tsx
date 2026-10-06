@@ -186,7 +186,7 @@ describe("FocusSessionProvider", () => {
 		expect(mockSetFocusSessionHydrated).toHaveBeenCalledWith(true);
 	});
 
-	it("hydrates immediately when no workspace is selected (picker open)", async () => {
+	it("stays unhydrated with an empty session when no workspace is selected", async () => {
 		activeWorkspaceId = null;
 
 		const { result } = renderHook(() => useFocusSession(), {
@@ -195,8 +195,52 @@ describe("FocusSessionProvider", () => {
 
 		await waitFor(() => expect(result.current.loading).toBe(false));
 		expect(mockFocusGet).not.toHaveBeenCalled();
-		expect(mockSetFocusSessionHydrated).toHaveBeenLastCalledWith(true);
+		expect(mockSetFocusSessionHydrated).toHaveBeenLastCalledWith(false);
 		expect(mockSetHasActiveFocusSession).toHaveBeenLastCalledWith(false);
+	});
+
+	it("drops a stale fetch when the workspace is cleared mid-flight", async () => {
+		let resolveGet: (value: { session: FocusSession | null }) => void =
+			() => {};
+		mockFocusGet.mockReturnValue(
+			new Promise((resolve) => {
+				resolveGet = resolve;
+			}),
+		);
+
+		const { result, rerender } = renderHook(() => useFocusSession(), {
+			wrapper: createWrapper(),
+		});
+		expect(mockFocusGet).toHaveBeenCalledWith(3);
+
+		activeWorkspaceId = null;
+		rerender();
+		await waitFor(() => expect(result.current.loading).toBe(false));
+
+		resolveGet({ session: makeRunningSession() });
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(result.current.session).toBeNull();
+		expect(mockSetFocusSessionHydrated).toHaveBeenLastCalledWith(false);
+		expect(mockSetHasActiveFocusSession).not.toHaveBeenCalledWith(true);
+	});
+
+	it("drops hydrated to false when a workspace is selected after null", async () => {
+		activeWorkspaceId = null;
+		mockFocusGet.mockReturnValue(new Promise(() => {}));
+
+		const { result, rerender } = renderHook(() => useFocusSession(), {
+			wrapper: createWrapper(),
+		});
+		await waitFor(() => expect(result.current.loading).toBe(false));
+
+		activeWorkspaceId = 3;
+		rerender();
+
+		await waitFor(() => expect(result.current.loading).toBe(true));
+		expect(mockFocusGet).toHaveBeenCalledWith(3);
+		expect(mockSetFocusSessionHydrated).toHaveBeenLastCalledWith(false);
 	});
 
 	it("session null silent settles empty without error or toast", async () => {
