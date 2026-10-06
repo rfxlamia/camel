@@ -8,12 +8,14 @@ import {
 } from "../../lib/attachment-storage.js";
 import { lookupMembership, serializeWorkspaceList } from "../../lib/helpers.js";
 import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
-import { validateWorkspaceName } from "../../validators/input-length.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { intField, workspaceIdParam } from "../../validators/schemas.js";
 import {
 	loadAttachmentPairsForWorkspace,
 	removeAttachmentPairsBestEffort,
 } from "../board/index.js";
 import { checkCanEditSettings } from "../settings/index.js";
+import { workspaceNameBody } from "./workspace-params.js";
 
 export const workspacesRouter = Router({ mergeParams: true });
 
@@ -67,12 +69,9 @@ workspacesRouter.get("/", async (req, res) => {
 });
 
 workspacesRouter.post("/", async (req, res) => {
-	const { name } = req.body ?? {};
-	const nameResult = validateWorkspaceName(name);
-	if (!nameResult.valid) {
-		return res.status(400).json({ error: nameResult.error });
-	}
-	const trimmedName = nameResult.trimmed!;
+	const parsedName = parseWith(workspaceNameBody, (req.body ?? {}).name);
+	if (!parsedName.ok) return sendValidationError(res, parsedName.body);
+	const trimmedName = parsedName.data;
 
 	const ws = await db.transaction().execute(async (trx) => {
 		const inserted = await trx
@@ -106,10 +105,9 @@ workspacesRouter.post("/", async (req, res) => {
 });
 
 workspacesRouter.patch("/:workspaceId", async (req, res) => {
-	const workspaceId = Number(req.params.workspaceId);
-	if (!Number.isInteger(workspaceId)) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const parsedId = parseWith(workspaceIdParam, req.params.workspaceId);
+	if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+	const workspaceId = parsedId.data;
 
 	const role = await lookupMembership(req.user!.id, workspaceId);
 	if (!role) return res.status(404).json({ error: "Not found" });
@@ -119,12 +117,9 @@ workspacesRouter.patch("/:workspaceId", async (req, res) => {
 		return res.status(edit.status).json({ error: edit.error });
 	}
 
-	const { name } = req.body ?? {};
-	const nameResult = validateWorkspaceName(name);
-	if (!nameResult.valid) {
-		return res.status(400).json({ error: nameResult.error });
-	}
-	const trimmedName = nameResult.trimmed!;
+	const parsedName = parseWith(workspaceNameBody, (req.body ?? {}).name);
+	if (!parsedName.ok) return sendValidationError(res, parsedName.body);
+	const trimmedName = parsedName.data;
 
 	const updated = await db
 		.updateTable("workspaces")
@@ -150,10 +145,9 @@ workspacesRouter.patch("/:workspaceId", async (req, res) => {
 });
 
 workspacesRouter.delete("/:workspaceId", async (req, res) => {
-	const workspaceId = Number(req.params.workspaceId);
-	if (!Number.isInteger(workspaceId)) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const parsedId = parseWith(workspaceIdParam, req.params.workspaceId);
+	if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+	const workspaceId = parsedId.data;
 
 	type WorkspaceDeletionResult =
 		| { kind: "not_found" }
@@ -229,24 +223,26 @@ workspacesRouter.delete("/:workspaceId", async (req, res) => {
 });
 
 workspacesRouter.post("/:workspaceId/transfer-ownership", async (req, res) => {
-	const workspaceId = Number(req.params.workspaceId);
-	if (!Number.isInteger(workspaceId)) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const parsedId = parseWith(workspaceIdParam, req.params.workspaceId);
+	if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+	const workspaceId = parsedId.data;
 
 	const actorRole = await lookupMembership(req.user!.id, workspaceId);
 	if (!actorRole || actorRole !== "owner") {
 		return res.status(404).json({ error: "Not found" });
 	}
 
-	const { newOwnerId, previousOwnerRole } = req.body ?? {};
-	if (!Number.isInteger(newOwnerId)) {
-		return res.status(400).json({ error: "newOwnerId is required" });
-	}
+	const { newOwnerId: rawNewOwnerId, previousOwnerRole } = req.body ?? {};
+	const parsedOwner = parseWith(
+		intField("newOwnerId is required"),
+		rawNewOwnerId,
+	);
+	if (!parsedOwner.ok) return sendValidationError(res, parsedOwner.body);
+	const newOwnerId = parsedOwner.data;
 	if (newOwnerId === req.user!.id) {
-		return res
-			.status(400)
-			.json({ error: "Cannot transfer ownership to yourself" });
+		return sendValidationError(res, {
+			error: "Cannot transfer ownership to yourself",
+		});
 	}
 	const demotedRole =
 		previousOwnerRole === "admin" || previousOwnerRole === "member"

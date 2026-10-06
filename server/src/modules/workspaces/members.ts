@@ -7,7 +7,12 @@ import {
 	workspaceAccessService,
 } from "../../lib/helpers.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
-import { workspaceIdParam } from "../../validators/schemas.js";
+import { trimmedRequired, workspaceIdParam } from "../../validators/schemas.js";
+import {
+	MEMBER_PARAMS_MESSAGE,
+	memberParams,
+	memberRoleBody,
+} from "./workspace-params.js";
 
 export const membersRouter = Router({ mergeParams: true });
 
@@ -57,14 +62,17 @@ membersRouter.post("/members", async (req, res) => {
 		return res.status(manage.status).json({ error: manage.error });
 	}
 
-	const { username, role: inviteRole } = req.body ?? {};
-	if (typeof username !== "string" || username.trim() === "") {
-		return res.status(400).json({ error: "username is required" });
-	}
+	const { username: rawUsername, role: inviteRole } = req.body ?? {};
+	const parsedUsername = parseWith(
+		trimmedRequired("username is required"),
+		rawUsername,
+	);
+	if (!parsedUsername.ok) return sendValidationError(res, parsedUsername.body);
+	const username = parsedUsername.data;
 	const memberRole =
 		inviteRole === "admin" || inviteRole === "member" ? inviteRole : "member";
 
-	const normalizedUsername = username.trim().toLowerCase();
+	const normalizedUsername = username.toLowerCase();
 	const target = await db
 		.selectFrom("users")
 		.select(["id", "username", "display_name"])
@@ -175,22 +183,15 @@ membersRouter.post("/members", async (req, res) => {
 });
 
 membersRouter.patch("/members/:userId", async (req, res) => {
-	const { workspaceId: wsId, userId: uid } = req.params as {
-		workspaceId: string;
-		userId: string;
-	};
-	const workspaceId = Number(wsId);
-	const targetUserId = Number(uid);
-	if (!Number.isInteger(workspaceId) || !Number.isInteger(targetUserId)) {
-		return res
-			.status(400)
-			.json({ error: "workspaceId and userId must be integers" });
-	}
+	const parsedParams = parseWith(memberParams, req.params, {
+		message: MEMBER_PARAMS_MESSAGE,
+	});
+	if (!parsedParams.ok) return sendValidationError(res, parsedParams.body);
+	const { workspaceId, userId: targetUserId } = parsedParams.data;
 
-	const { role } = req.body ?? {};
-	if (role !== "admin" && role !== "member") {
-		return res.status(400).json({ error: 'role must be "admin" or "member"' });
-	}
+	const parsedRole = parseWith(memberRoleBody, (req.body ?? {}).role);
+	if (!parsedRole.ok) return sendValidationError(res, parsedRole.body);
+	const role = parsedRole.data;
 
 	const result = await workspaceAccessService.updateMemberRole({
 		actorId: req.user!.id,
@@ -213,17 +214,11 @@ membersRouter.patch("/members/:userId", async (req, res) => {
 });
 
 membersRouter.delete("/members/:userId", async (req, res) => {
-	const { workspaceId: wsId, userId: uid } = req.params as {
-		workspaceId: string;
-		userId: string;
-	};
-	const workspaceId = Number(wsId);
-	const targetUserId = Number(uid);
-	if (!Number.isInteger(workspaceId) || !Number.isInteger(targetUserId)) {
-		return res
-			.status(400)
-			.json({ error: "workspaceId and userId must be integers" });
-	}
+	const parsedParams = parseWith(memberParams, req.params, {
+		message: MEMBER_PARAMS_MESSAGE,
+	});
+	if (!parsedParams.ok) return sendValidationError(res, parsedParams.body);
+	const { workspaceId, userId: targetUserId } = parsedParams.data;
 
 	const result = await workspaceAccessService.removeMember({
 		actorId: req.user!.id,

@@ -1,20 +1,16 @@
 import { Router } from "express";
 import { db } from "../../db/kysely.js";
 import { domainBus, EVENTS } from "../../events.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { INVITE_PARAMS_MESSAGE, inviteParams } from "./workspace-params.js";
 export const invitesRouter = Router({ mergeParams: true });
 
 invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
-	const { workspaceId: wsId, inviteId: invId } = req.params as {
-		workspaceId: string;
-		inviteId: string;
-	};
-	const workspaceId = Number(wsId);
-	const inviteId = Number(invId);
-	if (!Number.isInteger(workspaceId) || !Number.isInteger(inviteId)) {
-		return res
-			.status(400)
-			.json({ error: "workspaceId and inviteId must be integers" });
-	}
+	const parsedParams = parseWith(inviteParams, req.params, {
+		message: INVITE_PARAMS_MESSAGE,
+	});
+	if (!parsedParams.ok) return sendValidationError(res, parsedParams.body);
+	const { workspaceId, inviteId } = parsedParams.data;
 
 	// Wrap invite consumption + membership insert in a single transaction to
 	// prevent TOCTOU races (M14): the invite must be deleted atomically as the
@@ -130,17 +126,11 @@ invitesRouter.post("/invites/:inviteId/accept", async (req, res) => {
 });
 
 invitesRouter.delete("/invites/:inviteId", async (req, res) => {
-	const { workspaceId: wsId, inviteId: invId } = req.params as {
-		workspaceId: string;
-		inviteId: string;
-	};
-	const workspaceId = Number(wsId);
-	const inviteId = Number(invId);
-	if (!Number.isInteger(workspaceId) || !Number.isInteger(inviteId)) {
-		return res
-			.status(400)
-			.json({ error: "workspaceId and inviteId must be integers" });
-	}
+	const parsedParams = parseWith(inviteParams, req.params, {
+		message: INVITE_PARAMS_MESSAGE,
+	});
+	if (!parsedParams.ok) return sendValidationError(res, parsedParams.body);
+	const { workspaceId, inviteId } = parsedParams.data;
 
 	const result = await db
 		.deleteFrom("workspace_invites")
