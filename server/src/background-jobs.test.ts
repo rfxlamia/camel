@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -103,5 +106,23 @@ describe("BACKGROUND_JOBS switch", () => {
 		]);
 		// scheduler + latency reporter + 24h session cleanup
 		expect(vi.getTimerCount()).toBe(3);
+	});
+});
+
+describe("HTTP and SSE stay active under off (source contract)", () => {
+	const dir = dirname(fileURLToPath(import.meta.url));
+	const indexSrc = readFileSync(join(dir, "index.ts"), "utf8");
+	const jobsSrc = readFileSync(join(dir, "background-jobs.ts"), "utf8");
+
+	it("references BACKGROUND_JOBS only in background-jobs.ts", () => {
+		expect(jobsSrc).toContain("BACKGROUND_JOBS");
+		expect(indexSrc).not.toContain("BACKGROUND_JOBS");
+	});
+
+	it("index.ts listens and mounts routes unconditionally", () => {
+		expect(indexSrc).toMatch(/^server = app\.listen\(/m);
+		expect(indexSrc).toMatch(/^app\.use\("\/api", api\);/m);
+		expect(indexSrc).toMatch(/^app\.use\(createChatRouter\(\)\);/m);
+		expect(indexSrc).toMatch(/^app\.use\("\/api", createAgentRouter\(\)\);/m);
 	});
 });
