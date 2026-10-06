@@ -8,6 +8,9 @@ import {
 	useState,
 } from "react";
 import { ApiError, api } from "../../api";
+import { useShowToast } from "../../shared/ToastContext";
+import { useWorkspace } from "../../shared/WorkspaceContext";
+import type { FocusSession, WorkItemSource } from "../../types";
 import { useBoard } from "../board";
 import {
 	ACCESS_REVOKED_TOAST,
@@ -16,9 +19,6 @@ import {
 	membershipRemovalTargetsUser,
 	TASK_MISSING_TOAST,
 } from "./focusGuards";
-import { useShowToast } from "../../shared/ToastContext";
-import { useWorkspace } from "../../shared/WorkspaceContext";
-import type { FocusSession, WorkItemSource } from "../../types";
 
 interface FocusSessionContextValue {
 	session: FocusSession | null;
@@ -91,7 +91,10 @@ export function FocusSessionProvider({ children }: { children: ReactNode }) {
 			setLoading(false);
 			setActionError(null);
 			setHasActiveFocusSession(false);
-			setFocusSessionHydrated(false);
+			// No workspace means no session to hydrate. Staying unhydrated here
+			// would make the switch guard reject every pick from the workspace
+			// picker (focus-loading toast forever).
+			setFocusSessionHydrated(true);
 			return;
 		}
 
