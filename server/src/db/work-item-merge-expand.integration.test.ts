@@ -111,4 +111,33 @@ describe.skipIf(!runIntegration)("work-item-merge expand", () => {
 			expect(cards.rows[0].n).toBe(2);
 		});
 	});
+
+	describe("when applied twice", () => {
+		let scratch: ScratchSchema;
+		beforeAll(async () => {
+			scratch = await createScratchSchema("wim_twice");
+		});
+		afterAll(async () => {
+			await scratch.drop();
+		});
+
+		const snapshot = async () => {
+			const columns = await scratch.client.query(
+				"SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = $1 ORDER BY table_name, column_name",
+				[scratch.schema],
+			);
+			const indexes = await scratch.client.query(
+				"SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = $1 ORDER BY indexname",
+				[scratch.schema],
+			);
+			return { columns: columns.rows, indexes: indexes.rows };
+		};
+
+		it("is a no-op the second time", async () => {
+			await applySchema(scratch.client);
+			const before = await snapshot();
+			await expect(applySchema(scratch.client)).resolves.toBeUndefined();
+			expect(await snapshot()).toEqual(before);
+		});
+	});
 });
