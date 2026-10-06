@@ -4,6 +4,28 @@
  */
 
 import type { ColumnType } from "kysely";
+import type {
+	AgentArtifacts,
+	AgentBoards,
+	AgentCardOutputs,
+	AgentConversations,
+	AgentToolCalls,
+	ChatAttachments,
+	ChatMessages,
+	ChatThreads,
+} from "./types-agent-chat.js";
+import type {
+	TrackerEvents,
+	TrackerItemAssignees,
+	TrackerItemLabels,
+	TrackerItems,
+	TrackerPhases,
+	TrackerProjects,
+	TrackerVocabularies,
+} from "./types-tracker.js";
+
+export * from "./types-agent-chat.js";
+export * from "./types-tracker.js";
 
 export type Generated<T> =
 	T extends ColumnType<infer S, infer I, infer U>
@@ -23,58 +45,6 @@ export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
-
-export interface AgentArtifacts {
-	board_id: number;
-	content: string;
-	created_at: Generated<Timestamp>;
-	filename: string;
-	format: Generated<string>;
-	id: Generated<number>;
-	workspace_id: number;
-}
-
-export interface AgentBoards {
-	created_at: Generated<Timestamp>;
-	execution_status: Generated<string>;
-	id: Generated<number>;
-	original_intent: string;
-	status: Generated<string>;
-	template_id: Generated<string>;
-	updated_at: Generated<Timestamp>;
-	user_id: number;
-	workspace_id: number;
-}
-
-export interface AgentCardOutputs {
-	board_id: number;
-	card_index: Generated<number>;
-	column_slug: string;
-	created_at: Generated<Timestamp>;
-	id: Generated<number>;
-	output: string;
-	thinking: string | null;
-}
-
-export interface AgentConversations {
-	board_id: number;
-	content: string;
-	created_at: Generated<Timestamp>;
-	id: Generated<number>;
-	role: string;
-}
-
-export interface AgentToolCalls {
-	attempt: Generated<number>;
-	board_id: number;
-	column_slug: string;
-	created_at: Generated<Timestamp>;
-	error_code: string | null;
-	id: Generated<number>;
-	input: Json | null;
-	result: string | null;
-	tool_name: string;
-}
 
 export interface AuthAudit {
 	actor_id: number | null;
@@ -129,33 +99,6 @@ export interface BaVerifications {
 	identifier: string;
 	updated_at: Generated<Timestamp | null>;
 	value: string;
-}
-
-export interface ChatAttachments {
-	content: string;
-	created_at: Generated<Timestamp>;
-	filename: string;
-	format: string;
-	id: Generated<number>;
-	message_id: number;
-}
-
-export interface ChatMessages {
-	content: string;
-	created_at: Generated<Timestamp>;
-	id: Generated<number>;
-	role: string;
-	thinking: string | null;
-	thread_id: number;
-	tool_trace: Json | null;
-}
-
-export interface ChatThreads {
-	created_at: Generated<Timestamp>;
-	id: Generated<number>;
-	title: Generated<string>;
-	updated_at: Generated<Timestamp>;
-	user_id: number;
 }
 
 export interface CardAssignees {
@@ -269,86 +212,6 @@ export interface Settings {
 	text_value: string | null;
 	updated_at: Generated<Timestamp>;
 	version: Generated<number>;
-	workspace_id: number;
-}
-
-export interface TrackerEvents {
-	actor_id: number | null;
-	created_at: Generated<Timestamp>;
-	event_type: string;
-	id: Generated<number>;
-	payload: Generated<Json>;
-	tracker_item_id: number | null;
-	workspace_id: number;
-}
-
-export interface TrackerItemAssignees {
-	tracker_item_id: number;
-	user_id: number;
-}
-
-export interface TrackerItemLabels {
-	tracker_item_id: number;
-	vocabulary_id: number;
-}
-
-export interface TrackerItems {
-	completed_at: Timestamp | null;
-	created_at: Generated<Timestamp>;
-	deleted_at: Timestamp | null;
-	description: Generated<string>;
-	end_date: Timestamp | null;
-	id: Generated<number>;
-	key_number: number;
-	migrated_to_id: number | null;
-	phase_id: number | null;
-	position: number | null;
-	priority_id: number | null;
-	project_id: number | null;
-	start_date: Timestamp | null;
-	status_id: number;
-	title: string;
-	updated_at: Generated<Timestamp>;
-	version: Generated<number>;
-	workspace_id: number;
-}
-
-export interface TrackerPhases {
-	created_at: Generated<Timestamp>;
-	deleted_at: Timestamp | null;
-	end_date: Timestamp | null;
-	id: Generated<number>;
-	name: string;
-	position: number;
-	project_id: number;
-	start_date: Timestamp | null;
-	subtitle: Generated<string>;
-	updated_at: Generated<Timestamp>;
-	version: Generated<number>;
-}
-
-export interface TrackerProjects {
-	created_at: Generated<Timestamp>;
-	deleted_at: Timestamp | null;
-	end_date: Timestamp | null;
-	id: Generated<number>;
-	name: string;
-	position: number;
-	start_date: Timestamp | null;
-	updated_at: Generated<Timestamp>;
-	version: Generated<number>;
-	workspace_id: number;
-}
-
-export interface TrackerVocabularies {
-	category: string | null;
-	colour: string;
-	created_at: Generated<Timestamp>;
-	id: Generated<number>;
-	kind: string;
-	name: string;
-	position: number;
-	slot: "backlog" | "todo" | "in_progress" | "done" | "canceled" | null;
 	workspace_id: number;
 }
 
