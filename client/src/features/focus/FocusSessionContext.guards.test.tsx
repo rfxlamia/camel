@@ -65,10 +65,7 @@ vi.mock("../../api", async (importOriginal) => {
 });
 
 import { ApiError } from "../../api";
-import {
-	FocusSessionProvider,
-	useFocusSession,
-} from "./FocusSessionContext";
+import { FocusSessionProvider, useFocusSession } from "./FocusSessionContext";
 
 const testUser: User = {
 	id: 7,
