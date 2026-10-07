@@ -1,0 +1,81 @@
+{
+  "task_id": "T8",
+  "task_name": "Guard, parity assertions, counter repair and write trigger",
+  "cycle": 2,
+  "timestamp": "2026-10-07T10:30:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle 1 no data RED: accepted; T7 migrated_to_id scoping already made re-run a no-op; guard IF NOT EXISTS (un-migrated) RETURN sits before pre-check, temp tables and assertions, so no assertion can run when nothing is un-migrated.",
+      "Cycles 2, 5, 6, 7 regression guards: accepted with mutation proof; parity mutation cases were genuinely RED.",
+      "Gate: guard.sql counter repair and trigger sit behind work_item_merge.enabled = 'on'; parity assertions are inside the gated copy block. Gate-off path pinned by cycle 7.",
+      "Assertions scoped to wim_pending (rows with migrated_to_id IS NULL at start of this run); no whole-table comparisons; all messages start with 'work-item-merge:' and name workspace and key.",
+      "Trigger is BEFORE INSERT only, created only if absent AND a migrated row exists, creation conditional, trigger dropped with the table. No UPDATE/SELECT blocking.",
+      "Normal-restart crash-loop check: no RAISE EXCEPTION can fire when no un-migrated rows exist (early RETURN). schema.sql/agent/chat SQL only UPDATE tracker_items (line 931), never INSERT, so the trigger cannot trip a restart.",
+      "Dockerfile COPY: dist is built by tsc (no .sql emitted); COPY target ./server/dist/db/ matches migrate.js here; wiring assertion added to expand test.",
+      "Out-of-scope edits (Dockerfile, test-support extraction, T7 notice filter): justified; event-write routing check passes.",
+      "git diff --stat shows 8 files, none of the user's .gitignore or deploy/*school* files.",
+      "Risk (a): schema.sql 816-869 key backfill runs before the merge in the same transaction, only touches cards with NULL keys, and already raises counters past tracker and card MAX; on re-run it is a no-op, so it does not conflict with the repair. The T8 repair is monotonic (counter < max only) and mostly redundant defense in depth.",
+      "Risk (b): counter MAX is over cards with key_number NOT NULL, soft-deleted included (no deleted_at filter); covered by test.",
+      "Risk (c): trigger function work_item_merge_block_tracker_insert survives DROP TABLE; documented in guard.sql with the cleanup statement for the schema-removal task. Not carried to a later task file by this diff.",
+      "Risk (d): copy pre-check is scoped to ti.migrated_to_id IS NULL, so already migrated rows and their cards never self-collide.",
+      "Cycle 2: parity block moved to guard.sql runs after work-item-merge.sql in the same applySchema transaction (migrate.ts lines 39-40). Copy block creates wim_pending/wim_focus only after both early RETURNs (gate off, no un-migrated rows), so on a re-run or gate-off the tables do not exist and to_regclass IS NULL returns before any assertion; no empty-snapshot case, no false RAISE. When the copy ran, the new block sees the same ON COMMIT DROP snapshot and the same messages; assertion SQL moved verbatim. No new RAISE on normal restart."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Run-once early return makes post-go-live restarts a true no-op; assertions cannot see user edits",
+      "Assertions report first offending workspace/key/field via ORDER BY ... LIMIT 1 with readable messages",
+      "Guard file is gated, idempotent, INSERT-only trigger with pg_trigger existence check",
+      "Atomicity proven from a second connection on the same scratch search_path with a positive control",
+      "Mutation proof for every regression-guard cycle; gate-off path pinned",
+      "Lint, event-write routing and tsc-visible changes clean in the audited range",
+      "Parity assertions now live in guard.sql with a double gate (enabled flag and to_regclass on both temp tables); atomicity preserved in one transaction; pure assertion logic separated from data-copy SQL"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge-guard.sql",
+        "line": 99,
+        "description": "Relation-parity per-table count subqueries are still written twice (CASE and WHERE) for three relations (moved verbatim, not deduped); a LATERAL would halve it. Carried forward."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge-guard.sql",
+        "line": 40,
+        "description": "Orphaned trigger function work_item_merge_block_tracker_insert survives DROP TABLE tracker_items; the cleanup is only a SQL comment. Make sure the schema-removal task (T19 or later) packet carries the DROP FUNCTION IF EXISTS line."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge.test-support.ts",
+        "line": 1,
+        "description": "Not matched by tsconfig exclude (src/**/*.test.ts), so it compiles into dist like scratch-schema-test-support.ts. Imports only a type, so harmless."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge-guard.sql",
+        "line": 15,
+        "description": "Counter repair runs on every gated migration, not only while un-migrated rows exist, and takes no row lock. It is monotonic and idempotent, so safe; accepted."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge.sql",
+        "line": 240,
+        "description": "Focus remap matches task_id = old tracker id while remapped sessions keep task_source = 'tracker'. In a hand-built partial state a remapped new card id could equal a still-pending tracker id. Pre-existing T7 design, unreachable in a single-transaction migration."
+      }
+    ],
+    "assessment": "Important finding cleared: work-item-merge.sql is 277 lines, guard 169, none over 300. Copy DO block is about 235 lines but is now data-copy SQL whose single-transaction atomicity justifies its length; assertions are separated. No behavior change; gating, ordering and crash-loop safety confirmed. Only Minors remain."
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "c957abfab9d03ab0c3c1679caf6207974a5f0d0e"
+}

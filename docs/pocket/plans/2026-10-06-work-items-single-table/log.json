@@ -212,9 +212,10 @@
         {
           "id": "T8",
           "name": "Guard, parity assertions, counter repair and write trigger",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T7",
-          "file": "execution-plan/tasks/T8-guard-parity-assertions-counter-repair-and-write-trigger.md"
+          "file": "execution-plan/tasks/T8-guard-parity-assertions-counter-repair-and-write-trigger.md",
+          "done_sha": "c957abfab9d03ab0c3c1679caf6207974a5f0d0e"
         },
         {
           "id": "T9",

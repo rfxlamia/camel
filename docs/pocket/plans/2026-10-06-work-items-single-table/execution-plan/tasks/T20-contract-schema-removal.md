@@ -75,3 +75,7 @@ Red flags:
 Done when: both scenarios pass and the three migration tests are updated and green
 Uncertain when: a deploy script or doc still names a dropped table
 Escalate when: the date gate is not satisfied
+
+## Carried from Phase 4 T8 audit (2026-10-07)
+- T8 added a BEFORE INSERT trigger `trg_tracker_items_block_insert` on `tracker_items`. It drops with the table, but its function `work_item_merge_block_tracker_insert()` does NOT. Schema removal MUST run `DROP FUNCTION IF EXISTS work_item_merge_block_tracker_insert();`.
+- `server/src/db/work-item-merge-guard.sql` (parity block, counter repair, trigger) queries `tracker_items`; remove or adjust it, its `applySchema` wiring in `migrate.ts`, and its `Dockerfile` COPY line together with the table drop.
