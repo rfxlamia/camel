@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+# Application routes: private, show only the landing page when logged out.
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /login
+Disallow: /board
+Disallow: /my-work
+Disallow: /dashboard
+Disallow: /inbox
+Disallow: /tracker
+Disallow: /agent
+Disallow: /focus
+Disallow: /chat
+Disallow: /history
+Disallow: /activity
+Disallow: /settings
+
+Sitemap: https://camel.web.id/sitemap.xml
