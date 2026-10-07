@@ -78,7 +78,7 @@
     {
       "order": 2,
       "file": "execution-plan/phase-2.md",
-      "status": "WAITING",
+      "status": "REVIEW",
       "tasks": [
         {
           "id": "T3",
@@ -119,6 +119,25 @@
           "depends": "T15",
           "file": "execution-plan/tasks/T25-maintenance-rehearsal-on-camel-ggf-main-agent-only.md",
           "done_sha": "caa23b7d78a9c601a8c0d87ff68b3a2075f700c8"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "1432ab0d58631c9027c57faeabf1bafc6ae9a521",
+          "files": [
+            "server/src/modules/agent/service-deps-activity.column-less.integration.test.ts",
+            "server/src/modules/board/column-less-scope.integration.test.ts",
+            "server/src/modules/chat/tools/factory.column-less.integration.test.ts"
+          ],
+          "for_task": "T3"
+        },
+        {
+          "sha": "5b04d40c4f324485a82308cb318171a5cd5680e2",
+          "files": [
+            "server/src/lib/health.test.ts",
+            "server/src/lib/health.ts"
+          ],
+          "for_task": "T23"
         }
       ]
     },

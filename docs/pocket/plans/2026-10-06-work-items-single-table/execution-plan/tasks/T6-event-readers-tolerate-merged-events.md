@@ -84,3 +84,7 @@ Red flags:
 Done when: three scenarios pass, existing activity tests green
 Uncertain when: mapper functions are not exported
 Escalate when: unified-feed changes seem required
+
+## Carried from Phase 2 phase-level pass (P2-F3, user-approved 2026-10-07)
+- `GET /cards/:id/activity` (`server/src/modules/activity/activity.ts:~88-118`, `cardCheck` lookup) lacks `column_id IS NOT NULL`, so a column-less item resolves under `/cards/*` instead of 404 (spec Appendix B.5).
+- In this task: add `.where("column_id", "is not", null)` to that lookup and a column-less 404 test case. Keep the existing 404 shape.

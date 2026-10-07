@@ -1,0 +1,84 @@
+{
+  "phase_key": "phase-2",
+  "phase_file": "execution-plan/phase-2.md",
+  "timestamp": "2026-10-07T04:07:04Z",
+  "reviewer_mode": "read-only",
+  "reviewer_model": "opus",
+  "findings": [
+    {
+      "id": "P2-F1",
+      "severity": "Important",
+      "for_task": "T3",
+      "files": [
+        "server/src/modules/board/column-less-scope.integration.test.ts"
+      ],
+      "description": "check:feature-modules (make check) fails: FM-RULE-4 deep imports into agent (../agent/service-deps-activity.js) and chat (../chat/tools/factory.js); symbols not exported from module index.ts. Fails Phase Completion Gate and blocks T24.",
+      "recommended_fix": "Move agent and chat describe blocks into module-local test files (agent/service-deps-activity.column-less.integration.test.ts, chat/tools/factory.column-less.integration.test.ts) with own seeds and unique ids; keep board readers in board file; do not widen module APIs."
+    },
+    {
+      "id": "P2-F2",
+      "severity": "Minor",
+      "for_task": "T23",
+      "files": [
+        "server/src/lib/health.ts",
+        "server/src/lib/health.test.ts",
+        "deploy/CUTOVER-CHECKLIST.md"
+      ],
+      "description": "/api/health is public via nginx /api/ proxy and exposes workItemsListLatency (usage volume, backend perf) plus buildId; CUTOVER-CHECKLIST baseline '/api/health 401' becomes stale after T24.",
+      "recommended_fix": "Public HEALTH_PATH returns {ok, buildId}; /health keeps full payload; add test; update checklist baseline at T24."
+    },
+    {
+      "id": "P2-F3",
+      "severity": "Minor",
+      "for_task": "T4",
+      "files": [
+        "server/src/modules/activity/activity.ts"
+      ],
+      "description": "GET /cards/:id/activity (activity.ts:88-118) lacks column_id IS NOT NULL; a column-less item resolves under /cards/* (spec B.5). Uncovered by any task; read-only, no column-less rows in prod yet.",
+      "recommended_fix": "Add predicate + column-less 404 test in T6 (already edits activity.ts), or record explicit exemption."
+    }
+  ],
+  "candidates_judged_summary": [
+    "T4 helper vs T5 inline predicates: not a finding (different query shapes, one-way imports).",
+    "Maintenance interplay with hook composes correctly.",
+    "Appendix C covered except P2-F3.",
+    "No cross-file regressions (static).",
+    "Default-suite flake not in phase-2 files; captured as pre-existing src/modules/chat/routes.test.ts dynamic-import timeout under load."
+  ],
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "status": "PHASE_PASS_RESOLVED",
+  "corrections": [
+    {
+      "sha": "1432ab0d58631c9027c57faeabf1bafc6ae9a521",
+      "fixes": "P2-F1",
+      "affectedTasks": [
+        "T3"
+      ]
+    },
+    {
+      "sha": "5b04d40c4f324485a82308cb318171a5cd5680e2",
+      "fixes": "P2-F2",
+      "affectedTasks": [
+        "T23"
+      ]
+    }
+  ],
+  "deferred": [
+    {
+      "id": "P2-F3",
+      "to": "T6",
+      "note": "user-approved; appended to T6 task file"
+    }
+  ],
+  "resolved": [
+    "P2-F1",
+    "P2-F2"
+  ],
+  "confirm_notes": [
+    "Confirm re-run (opus): P2-F1 and P2-F2 resolved; no new cross-task findings; hook contract holds; no fixture-id collisions; P2-F3 deferral note actionable; CUTOVER-CHECKLIST /api/health baseline to update at T24."
+  ]
+}
