@@ -7,9 +7,9 @@ import {
 	stopBackgroundJobs,
 } from "./core/background-jobs.js";
 import { createOriginValidator } from "./core/cors.js";
-import { getListLatencySnapshot } from "./core/work-item-latency.js";
 import { pool } from "./db/pool.js";
 import { connectRedis } from "./db/redis.js";
+import { buildHealthPayload } from "./lib/health.js";
 import { logger } from "./lib/logger.js";
 import {
 	csrfProtection,
@@ -98,7 +98,7 @@ app.use(
 
 app.get("/health", (_req, res) => {
 	if (isShuttingDown) return res.status(503).json({ status: "shutting_down" });
-	res.json({ ok: true, workItemsListLatency: getListLatencySnapshot() });
+	res.json(buildHealthPayload());
 });
 
 // CSRF token endpoint for client to retrieve the token
