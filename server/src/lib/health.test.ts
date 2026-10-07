@@ -85,3 +85,16 @@ describe("health contract with the reload hook", () => {
 		expect(hook).toContain("buildId");
 	});
 });
+
+describe("Dockerfile build id", () => {
+	const dockerfile = readFileSync(
+		new URL("../../../Dockerfile", import.meta.url),
+		"utf8",
+	);
+	const runner = dockerfile.slice(dockerfile.lastIndexOf("FROM "));
+
+	it("declares ARG BUILD_ID and exports it as ENV in the runtime stage", () => {
+		expect(runner).toContain("ARG BUILD_ID");
+		expect(runner).toContain("ENV BUILD_ID=$BUILD_ID");
+	});
+});

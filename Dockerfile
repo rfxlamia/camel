@@ -37,6 +37,9 @@ RUN mkdir -p ./client/public/uploads ./server/private-uploads
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+ARG BUILD_ID
+ENV BUILD_ID=$BUILD_ID
+
 EXPOSE 3001
 
 ENTRYPOINT ["/entrypoint.sh"]
