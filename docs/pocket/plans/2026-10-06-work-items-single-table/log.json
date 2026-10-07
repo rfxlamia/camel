@@ -220,9 +220,10 @@
         {
           "id": "T9",
           "name": "Merged-table reads and the unified list",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T6, T8",
-          "file": "execution-plan/tasks/T9-merged-table-reads-and-the-unified-list.md"
+          "file": "execution-plan/tasks/T9-merged-table-reads-and-the-unified-list.md",
+          "done_sha": "063e9d4449d003cb8f282b08be7c6721c1dbd2e5"
         },
         {
           "id": "T10",

@@ -1,0 +1,80 @@
+{
+  "task_id": "T9",
+  "task_name": "Merged-table reads and the unified list",
+  "cycle": 1,
+  "reviewed_sha": "063e9d4449d003cb8f282b08be7c6721c1dbd2e5",
+  "timestamp": "2026-10-07T12:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Concern 1 (5 tracker-items.integration tests red): not actionable for T9. Reads moved to cards while POST /tracker/items still writes tracker_items until T10; the plan sequences T9 reads before T10 writes and the rollback note says code ships only at cutover. Tests are untouched in this range (not weakened). T10 'Done when' requires existing tracker tests adapted and green. Coverage: create/update + events (search, stale-prefix redirect and changelog become green once create/update write cards and recordActivity writes card_events; the changelog test name still says tracker_events and its reads need adapting in T10), labels PATCH + activity (T10 steps 8-9 plus update event), assignee strip on membership removal is NOT in T10: it lives in lib/helpers.ts removeMember, owned by T11 step 4-5 (same phase, depends T9). In practice that test goes green after T10 alone because helpers.ts already deletes card_assignees for all workspace cards. Only gap: search, redirect and changelog have no explicit T10 RED scenario, they rely on adapted existing tests.",
+      "Concern 2 (DATE local-midnight toISOString shift): not actionable, identical to old path; pg returns Date for DATE and formatDateOnly is unchanged.",
+      "Concern 3 (test reads shared user name from DB): not actionable, test-only.",
+      "Concern 4 (legacy shim): acceptable. It is not on the list, GET detail or events read paths; only write routes (T10) and My Work (T12) reach it. Re-export through work-item-response.ts is cosmetic (Minor).",
+      "Concern 5 (GET /work-items/:key resolves from merged table): correct, uses findWorkItemByKeyNumber with the explicit non-default-board predicate, redirectFrom handling preserved.",
+      "Response shape: field order and names identical for tracker and board serializers; source derived from column_id NULL; tracker position now comes from plan_position (spec B.2); updatedAt stored-wins else computeCardUpdatedAt (spec B.1).",
+      "Ordering: ORDER BY created_at, id replaces tracker-wins dedup; previous stable sort on created_at only gave tracker-first on ties; deterministic now, accepted per task.",
+      "Unified feed reads only card_events, keeps item-less tracker_% events, no duplicates, soft-deleted cards keep source via un-filtered join and only hide the title.",
+      "Collision check filters migrated_to_id IS NULL; check:key-collisions retained.",
+      "Board-scoped readers and board-feed-filter.ts untouched in range.",
+      "Done-when cycles: all 5 covered by merged integration (5/5) and work-item-debt integration (2/2)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "work-item-response.ts cut from ~480 to 205 lines with serializers extracted (252); all touched non-test .ts files are at or under 300 lines",
+      "Single query via LEFT JOIN columns with explicit (column_id IS NULL OR col.board_id IS NULL) predicate",
+      "Unified feed is one SELECT with a small mapper, source/title join semantics documented in a comment",
+      "Integration tests exercise real Postgres and pin shape, exclusion, updatedAt fallback, event de-duplication",
+      ".js extensions present, no deep imports across modules, new shim sits in kernel lib/"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/work-item-response.ts",
+        "line": 12,
+        "description": "Legacy tracker_items shim helpers are still re-exported from work-item-response.ts. Not on read paths, but a facade that keeps tracker_items reachable from the kernel read module. Have T10/T12 import legacy-tracker-item-response.js directly and drop this re-export; T13 text scan should confirm."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/work-item-response.ts",
+        "line": 47,
+        "description": "selectBoardWorkItemRows and selectWorkItemRows repeat the same ~30-column select list; extract a shared column list or have the board variant derive from the merged one."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-items.integration.test.ts",
+        "line": 202,
+        "description": "Five tests fail at HEAD (search, stale-prefix redirect, changelog, labels PATCH, membership strip) until T10 moves writes. Not weakened. Ensure T10 adapts the changelog test (name says tracker_events) and that the phase-level pass runs them after T10."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/work-item-events.ts",
+        "line": 74,
+        "description": "For column-less items trackerItemId now carries the card id (new id), consistent with spec A.7; add the SSE/event new-id assertion planned by the spec when T10 lands."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-items.serialize.test.ts",
+        "line": 5,
+        "description": "Unrelated formatter-only reflow in adapted tests (work-items.test.ts, tracker-items.serialize.test.ts) adds diff noise; harmless."
+      }
+    ],
+    "refactor_heuristics": {
+      "identical_logic_3plus": "none found (select list duplicated twice only)",
+      "files_over_300": "none among touched non-test files",
+      "functions_over_50": "none"
+    }
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  }
+}
