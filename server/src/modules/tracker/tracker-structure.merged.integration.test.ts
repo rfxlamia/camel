@@ -6,7 +6,15 @@ import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 
 const { mockCurrentUser } = vi.hoisted(() => ({
 	mockCurrentUser: { id: 7111, username: "t11-user", displayName: "T11 User" },
@@ -354,6 +362,70 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				name: "Chore",
 			});
 			expect(await legacyCount("tracker_events")).toBe(0);
+		});
+
+		describe("member removal", () => {
+			const sqlLog: string[] = [];
+
+			/** Records every statement sent through the shared pg pool. */
+			function captureSql() {
+				const originalConnect = pool.connect.bind(pool) as any;
+				vi.spyOn(pool, "connect").mockImplementation((async (
+					...args: any[]
+				) => {
+					const client = await originalConnect(...args);
+					if (!client.__sqlLogged) {
+						const query = client.query.bind(client);
+						client.query = (...qArgs: any[]) => {
+							const first = qArgs[0];
+							sqlLog.push(
+								typeof first === "string" ? first : (first?.text ?? ""),
+							);
+							return query(...qArgs);
+						};
+						client.__sqlLogged = true;
+					}
+					return client;
+				}) as any);
+			}
+
+			afterEach(() => {
+				vi.restoreAllMocks();
+				sqlLog.length = 0;
+			});
+
+			async function assignees(cardId: number): Promise<number[]> {
+				const rows = await q<{ user_id: number }>(
+					"SELECT user_id FROM card_assignees WHERE card_id = $1 ORDER BY user_id",
+					[cardId],
+				);
+				return rows.map((r) => r.user_id);
+			}
+
+			it("clears merged assignments for board cards and Tracker items", async () => {
+				const item = await insertCard({ title: "item", columnId: null });
+				const boardCard = await insertCard({
+					title: "board",
+					columnId: fx.columnId,
+				});
+				for (const cardId of [item, boardCard]) {
+					await q(
+						"INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2), ($1, $3)",
+						[cardId, MEMBER_ID, mockCurrentUser.id],
+					);
+				}
+				captureSql();
+
+				const res = await request(app).delete(`${BASE}/members/${MEMBER_ID}`);
+				expect(res.status).toBe(204);
+
+				expect(await assignees(item)).toEqual([mockCurrentUser.id]);
+				expect(await assignees(boardCard)).toEqual([mockCurrentUser.id]);
+				const touchesTrackerTables = sqlLog.filter((text) =>
+					/tracker_item_assignees|tracker_items/.test(text),
+				);
+				expect(touchesTrackerTables).toEqual([]);
+			});
 		});
 	},
 );

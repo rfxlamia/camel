@@ -80,24 +80,13 @@ export function buildRemoveMemberDep(
 				.where("signable_assignee_id", "=", userId)
 				.execute();
 
+			// `cards` holds board cards and column-less Tracker items alike.
 			await trx
 				.deleteFrom("card_assignees")
 				.using("cards")
 				.whereRef("card_assignees.card_id", "=", "cards.id")
 				.where("cards.workspace_id", "=", workspaceId)
 				.where("card_assignees.user_id", "=", userId)
-				.execute();
-
-			await trx
-				.deleteFrom("tracker_item_assignees")
-				.using("tracker_items")
-				.whereRef(
-					"tracker_item_assignees.tracker_item_id",
-					"=",
-					"tracker_items.id",
-				)
-				.where("tracker_items.workspace_id", "=", workspaceId)
-				.where("tracker_item_assignees.user_id", "=", userId)
 				.execute();
 
 			const user = await trx
