@@ -193,6 +193,14 @@
             "server/src/modules/chat/tools/factory.ts"
           ],
           "for_task": "T6"
+        },
+        {
+          "sha": "5b2d572e0df1091b59babc098510fa855a103b2b",
+          "files": [
+            "server/src/db/migrate.test.ts",
+            "server/src/db/migrate.ts"
+          ],
+          "for_task": "T7"
         }
       ]
     },

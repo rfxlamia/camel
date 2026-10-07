@@ -1,7 +1,7 @@
 {
   "phase_key": "phase-3",
   "phase_file": "execution-plan/phase-3.md",
-  "timestamp": "2026-10-07T07:57:34Z",
+  "timestamp": "2026-10-07T08:04:12Z",
   "reviewer_mode": "read-only",
   "reviewer_model": "opus",
   "findings": [
@@ -52,6 +52,16 @@
       "description": "Gate carry-over missed T17 (cutover script) and T18 (rehearsal); checklist lacked the command and had stale HAZARD wording.",
       "recommended_fix": "Append notes to T17/T18 with gated one-off migrate + abort conditions; record command in checklist; update HAZARD.",
       "resolution": "Main agent appended notes to T17, T18 (and T9 heads-up) and updated CUTOVER-CHECKLIST 2026-10-07; plan-doc bookkeeping, no code correction."
+    },
+    {
+      "id": "P3-F5",
+      "severity": "Important",
+      "for_task": "T7 (gate code) / T17-T19 notes",
+      "files": [
+        "server/src/db/migrate.ts"
+      ],
+      "description": "migrate() attaches no pg 'notice' listener, so RAISE NOTICE lines never reach stdout; T17/T18/T19/checklist abort conditions based on notices cannot work.",
+      "recommended_fix": "Option A: client.on('notice') logging in migrate(), pinned by test."
     }
   ],
   "candidates_judged_summary": [
@@ -73,11 +83,17 @@
     {
       "sha": "eafddf1b830b84acb07baf900f866e96a370a577",
       "fixes": "P3-F1,P3-F2"
+    },
+    {
+      "sha": "5b2d572e0df1091b59babc098510fa855a103b2b",
+      "fixes": "P3-F5"
     }
   ],
   "resolved": [
     "P3-F1",
     "P3-F2",
     "P3-F3"
-  ]
+  ],
+  "recovery_attempt_consumed": true,
+  "recovery_stage": "confirm"
 }

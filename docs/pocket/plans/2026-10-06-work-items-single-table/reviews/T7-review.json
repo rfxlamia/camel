@@ -2,7 +2,7 @@
   "task_id": "T7",
   "task_name": "Copy block: tracker data into cards",
   "cycle": 1,
-  "timestamp": "2026-10-07T07:54:19Z",
+  "timestamp": "2026-10-07T08:04:12Z",
   "reviewer_mode": "read-only",
   "reviewer_config": "batch-parallel",
   "stage_1": {
@@ -20,7 +20,8 @@
       "Key counter: prod read-only check 2026-10-07 found 0/37 workspaces with counter below max key.",
       "Satellites ON CONFLICT DO NOTHING; compatible vocabulary ids; focus remap scoped.",
       "NULL-safe notices; trivial perf at prod scale; scratch schema isolation.",
-      "Cycle 3 no natural RED: accepted via mutation proof."
+      "Cycle 3 no natural RED: accepted via mutation proof.",
+      "P3-F5 correction 5b2d572 audited REVIEW_PASS: migrate() prints Postgres notices to stdout; listener detached before release; empirically verified on scratch DB."
     ]
   },
   "stage_2": {
@@ -57,6 +58,18 @@
         "file": "server/src/db/migrate.ts",
         "line": 24,
         "description": "WORK_ITEM_MERGE read in applySchema; must stay unset except during T19 (runbook note added to T19)."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/migrate.ts",
+        "line": 49,
+        "description": "onNotice logs n.message without fallback (cosmetic)."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/migrate.test.ts",
+        "line": 16,
+        "description": "Fake client notice heuristic brittle; no explicit failure-path detach test."
       }
     ],
     "assessment": "Approved"
@@ -68,5 +81,5 @@
     "max_cycles": 2,
     "cycles_remaining": 2
   },
-  "reviewed_sha": "2e8da2c8b82114db5723b599a2f9d2ddc8233f15"
+  "reviewed_sha": "5b2d572e0df1091b59babc098510fa855a103b2b"
 }

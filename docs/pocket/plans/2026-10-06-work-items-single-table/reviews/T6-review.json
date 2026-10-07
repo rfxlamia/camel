@@ -2,7 +2,7 @@
   "task_id": "T6",
   "task_name": "Event readers tolerate merged events",
   "cycle": 2,
-  "timestamp": "2026-10-07T07:54:19Z",
+  "timestamp": "2026-10-07T08:04:12Z",
   "reviewer_mode": "read-only",
   "reviewer_config": "batch-parallel",
   "stage_1": {
@@ -15,7 +15,8 @@
       "P2-F3 cycle 4 verified.",
       "Mapper extraction verbatim + re-export; file 251 lines.",
       "Unchanged-output, no unified-feed/UNION/schema change; fixtures unique.",
-      "Fix 2ca1200 touches only title resolution; no query/schema/route changes."
+      "Fix 2ca1200 touches only title resolution; no query/schema/route changes.",
+      "P3-F5 correction 5b2d572 audited REVIEW_PASS: migrate() prints Postgres notices to stdout; listener detached before release; empirically verified on scratch DB."
     ]
   },
   "stage_2": {
@@ -44,5 +45,5 @@
     "max_cycles": 2,
     "cycles_remaining": 1
   },
-  "reviewed_sha": "eafddf1b830b84acb07baf900f866e96a370a577"
+  "reviewed_sha": "5b2d572e0df1091b59babc098510fa855a103b2b"
 }
