@@ -44,11 +44,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_workspace_key
 -- transaction. New card ids always come from the sequence (never explicit).
 -- Idempotent: only tracker_items with migrated_to_id IS NULL are copied, and
 -- the only write to tracker_items is migrated_to_id. tracker_events is read
--- only. Order: map -> insert -> remaps -> events.
+-- only. Order: collision pre-check -> map -> insert -> remaps -> events -> notices.
 DO $work_item_merge_copy$
 DECLARE
   audit RECORD;
+  clash RECORD;
 BEGIN
+  -- Pre-check FIRST: a tracker key that already exists on a card (soft-deleted
+  -- cards included) aborts the whole migration with a readable message.
+  SELECT ti.workspace_id, ti.key_number
+  INTO clash
+  FROM tracker_items AS ti
+  JOIN cards AS c
+    ON c.workspace_id = ti.workspace_id AND c.key_number = ti.key_number
+  WHERE ti.migrated_to_id IS NULL
+  ORDER BY ti.workspace_id, ti.key_number
+  LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'work-item-merge: key collision workspace=% key=%',
+      clash.workspace_id, clash.key_number;
+  END IF;
+
   DROP TABLE IF EXISTS pg_temp.wim_map;
   CREATE TEMP TABLE wim_map (
     old_id       INTEGER PRIMARY KEY,

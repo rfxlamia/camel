@@ -393,4 +393,30 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			s.client.off("notice", onNotice);
 		}
 	});
+	it("aborts the whole merge when a tracker key collides with a card key", async () => {
+		const ws = await seedWorkspace(s, `c5-${tag}`);
+		await seedItem(s, ws, 7);
+		await seedItem(s, ws, 8);
+		await s.client.query(
+			`INSERT INTO cards (column_id, title, position, workspace_id, status_id, key_number)
+			 VALUES (NULL, 'native', 1, $1, $2, 7)`,
+			[ws.id, ws.statusId],
+		);
+
+		await expect(applySchema(s.client)).rejects.toThrow(
+			new RegExp(`^work-item-merge: key collision workspace=${ws.id} key=7`),
+		);
+
+		expect(
+			await rows(
+				s,
+				"SELECT id FROM tracker_items WHERE migrated_to_id IS NOT NULL",
+			),
+		).toHaveLength(0);
+		expect(
+			await rows(s, "SELECT key_number FROM cards WHERE workspace_id = $1", [
+				ws.id,
+			]),
+		).toEqual([{ key_number: 7 }]);
+	});
 });
