@@ -1,5 +1,5 @@
 // Requires PostgreSQL. Gated behind RUN_INTEGRATION=1.
-// Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/routes/work-item-merged-allocator.integration.test.ts
+// Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/agent/work-item-merged-allocator.integration.test.ts
 // Board create, Tracker create and the agent create dependency share one key allocator.
 import "dotenv/config";
 import request from "supertest";
@@ -10,17 +10,17 @@ const { SCHEMA, mockCurrentUser } = vi.hoisted(() => ({
 	mockCurrentUser: { id: 0, username: "alloc-user", displayName: "Owner" },
 }));
 
-vi.mock("../db/pool.js", async () => {
+vi.mock("../../db/pool.js", async () => {
 	const { createScratchPool } = await import(
-		"../db/scratch-pool-test-support.js"
+		"../../db/scratch-pool-test-support.js"
 	);
 	return { pool: createScratchPool(SCHEMA) };
 });
-vi.mock("../db/redis.js", () => ({
+vi.mock("../../db/redis.js", () => ({
 	getRedisClient: vi.fn(),
 	connectRedis: vi.fn(),
 }));
-vi.mock("../realtime.js", () => ({
+vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn().mockResolvedValue(undefined),
 	clearPresence: vi.fn().mockResolvedValue(undefined),
 	heartbeat: vi.fn(),
@@ -32,8 +32,8 @@ vi.mock("../realtime.js", () => ({
 	workspacePresenceKey: vi.fn(),
 	workspacePresencePattern: vi.fn(),
 }));
-vi.mock("../auth.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../auth.js")>();
+vi.mock("../../auth.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../auth.js")>();
 	return {
 		...actual,
 		requireAuth: (req: any, _res: any, next: any) => {
@@ -43,19 +43,19 @@ vi.mock("../auth.js", async (importOriginal) => {
 	};
 });
 
-import { applySchema } from "../db/migrate.js";
-import { pool } from "../db/pool.js";
+import { applySchema } from "../../db/migrate.js";
+import { pool } from "../../db/pool.js";
 import {
 	createScratchSchema,
 	type ScratchSchema,
-} from "../db/scratch-schema-test-support.js";
-import { rows } from "../db/work-item-merge.test-support.js";
-import { boardDeps } from "../modules/agent/service-deps-board.js";
+} from "../../db/scratch-schema-test-support.js";
+import { rows } from "../../db/work-item-merge.test-support.js";
 import {
 	createMergedApp,
 	createWorkspaceThroughRoutes,
 	insertUser,
-} from "./work-item-merged.app.test-support.js";
+} from "../../db/work-item-merged-app.test-support.js";
+import { boardDeps } from "./service-deps-board.js";
 
 const app = createMergedApp();
 

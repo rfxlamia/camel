@@ -7,7 +7,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const SERVER_SRC = join(REPO_ROOT, "server/src");
 // Still defines `insertInto("tracker_events")` itself until the old tables go (T21).
 const DEFINITION_FILE = "server/src/lib/tracker-activity.ts";

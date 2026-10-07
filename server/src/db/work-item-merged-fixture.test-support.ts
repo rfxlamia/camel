@@ -2,8 +2,8 @@
 // 16 done) plus 53 live tracker items sharing one key sequence, with projects,
 // phases, labels, assignees, events and one focus session. Seeded into a
 // scratch schema BEFORE the merge runs.
-import type { ScratchSchema } from "../db/scratch-schema-test-support.js";
-import { rows, seedWorkspace } from "../db/work-item-merge.test-support.js";
+import type { ScratchSchema } from "./scratch-schema-test-support.js";
+import { rows, seedWorkspace } from "./work-item-merge.test-support.js";
 
 export const BOARD_CARDS = 25;
 export const TRACKER_ITEMS = 53;

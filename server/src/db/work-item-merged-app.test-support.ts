@@ -5,10 +5,10 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
 import { expect } from "vitest";
-import type { ScratchSchema } from "../db/scratch-schema-test-support.js";
-import { rows } from "../db/work-item-merge.test-support.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
+import type { ScratchSchema } from "./scratch-schema-test-support.js";
+import { rows } from "./work-item-merge.test-support.js";
 
 // biome-ignore lint/suspicious/noExplicitAny: loosely typed JSON response bodies
 export type Json = Record<string, any>;
