@@ -42,6 +42,10 @@ import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
+import {
+	getUnifiedWorkspaceActivity,
+	getWorkItemEvents,
+} from "./work-item-events.js";
 import { listMergedWorkItems } from "./work-item-response.js";
 
 const WORKSPACE_ID = 992;
@@ -344,6 +348,136 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("merged work item reads", () => {
 			version: 3,
 			createdAt: "2026-01-01T00:00:26.000Z",
 			updatedAt: "2026-02-01T00:00:00.000Z",
+		});
+	});
+	describe("activity feed", () => {
+		async function insertEvent(
+			cardId: number | null,
+			eventType: string,
+			createdAt: string,
+			payload: unknown = {},
+			toColumnId: number | null = null,
+		) {
+			await q(
+				`INSERT INTO card_events
+				 (card_id, to_column_id, actor_id, event_type, payload, workspace_id, created_at)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+				[
+					cardId,
+					toColumnId,
+					mockCurrentUser.id,
+					eventType,
+					JSON.stringify(payload),
+					WORKSPACE_ID,
+					createdAt,
+				],
+			);
+		}
+
+		it("Unified feed shows each event once", async () => {
+			const boardCard = await insertCard(fx, 1);
+			const goneCard = await insertCard(fx, 2, {
+				deletedAt: "2026-04-01T00:00:00Z",
+			});
+			const planned = await insertCard(fx, 26, { columnId: null });
+			// Copied tracker events live in card_events (item and item-less).
+			await insertEvent(
+				planned,
+				"tracker_item_created",
+				"2026-01-10T00:00:00Z",
+				{
+					title: "item-26",
+				},
+			);
+			await insertEvent(
+				planned,
+				"tracker_item_updated",
+				"2026-01-11T00:00:00Z",
+			);
+			await insertEvent(boardCard, "create", "2026-01-12T00:00:00Z", {
+				cardTitle: "item-1",
+			});
+			await insertEvent(
+				boardCard,
+				"move",
+				"2026-01-13T00:00:00Z",
+				{},
+				fx.columnId,
+			);
+			await insertEvent(goneCard, "update", "2026-01-14T00:00:00Z", {
+				cardTitle: "Gone",
+			});
+			await insertEvent(
+				null,
+				"tracker_project_created",
+				"2026-01-15T00:00:00Z",
+				{
+					title: "Roadmap",
+				},
+			);
+			// Pre-soft-delete board delete events (card_id NULL, not tracker_*) were
+			// never part of the unified feed and stay out of it.
+			await insertEvent(null, "delete", "2026-01-16T00:00:00Z", {
+				cardTitle: "Ancient",
+			});
+			// The untouched legacy table holds the same events plus one more.
+			const [legacy] = await q<{ id: number }>(
+				`INSERT INTO tracker_items (workspace_id, key_number, title, status_id)
+				 VALUES ($1, 26, 'item-26', $2) RETURNING id`,
+				[WORKSPACE_ID, fx.statusId],
+			);
+			for (const [itemId, type, at] of [
+				[legacy.id, "tracker_item_created", "2026-01-10T00:00:00Z"],
+				[legacy.id, "tracker_item_updated", "2026-01-11T00:00:00Z"],
+				[null, "tracker_project_created", "2026-01-15T00:00:00Z"],
+				[legacy.id, "tracker_item_updated", "2026-01-20T00:00:00Z"],
+			] as const) {
+				await q(
+					`INSERT INTO tracker_events (tracker_item_id, actor_id, event_type, payload, workspace_id, created_at)
+					 VALUES ($1, $2, $3, '{"title":"Roadmap"}'::jsonb, $4, $5)`,
+					[itemId, mockCurrentUser.id, type, WORKSPACE_ID, at],
+				);
+			}
+
+			const events = await getUnifiedWorkspaceActivity(WORKSPACE_ID, 50);
+
+			expect(events.map((e) => [e.source, e.eventType, e.title])).toEqual([
+				["tracker", "tracker_project_created", "Roadmap"],
+				["board", "tracker_item_updated", "Gone"],
+				["board", "tracker_item_updated", "item-1"],
+				["board", "tracker_item_created", "item-1"],
+				["tracker", "tracker_item_updated", "item-26"],
+				["tracker", "tracker_item_created", "item-26"],
+			]);
+			expect(new Set(events.map((e) => e.eventKey)).size).toBe(events.length);
+			expect(events[2].payload).toEqual({
+				field: "status",
+				from: null,
+				to: "Requested",
+			});
+		});
+
+		it("Item events are read from card_events", async () => {
+			const planned = await insertCard(fx, 26, { columnId: null });
+			await insertEvent(
+				planned,
+				"tracker_item_created",
+				"2026-01-10T00:00:00Z",
+			);
+			await insertEvent(
+				planned,
+				"tracker_item_updated",
+				"2026-01-11T00:00:00Z",
+			);
+
+			const events = await getWorkItemEvents(db, WORKSPACE_ID, 26);
+
+			expect(events?.map((e) => e.eventType)).toEqual([
+				"tracker_item_updated",
+				"tracker_item_created",
+			]);
+			expect(events?.[0].trackerItemId).toBe(planned);
+			expect(await getWorkItemEvents(db, WORKSPACE_ID, 27)).toBeNull();
 		});
 	});
 });
