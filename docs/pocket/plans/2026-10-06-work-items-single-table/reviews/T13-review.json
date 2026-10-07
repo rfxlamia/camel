@@ -1,0 +1,63 @@
+{
+  "task_id": "T13",
+  "task_name": "Merged-table integration verification",
+  "cycle": 1,
+  "reviewed_sha": "0af3eabb703aad999adcc4281f77074a7aaee18e",
+  "timestamp": "2026-10-07T15:10:24Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Concern 1 (placement): accepted. FM-RULE-1 forbids new files in routes/; tracker tests live in modules/tracker, allocator test in modules/agent because importing boardDeps from tracker would be a cross-module deep import (FM-RULE-4). Shared helpers sit in server/src/db as *.test-support.ts, matching existing scratch-schema support files. make check (feature-module guard) is green.",
+      "Concern 2 (agent zero events): correct reading of existing behavior, not a T13 defect. service-deps-board.ts insertCard carries an explicit R6 comment (no recordActivity, no actor in fire-and-forget runPipeline). The task wording 'each creation wrote one event' was inaccurate for the agent path; the test asserts 1/1/0 and documents why. Residual tension with CLAUDE.md 'every mutation MUST call recordActivity' is a pre-existing product decision owned by the agent module (see Minor).",
+      "Concern 3 (timezone): pre-existing production behavior (formatDateOnly and four other toISOString().slice(0,10) sites existed before the merge). Pinning TZ=UTC in vi.hoisted does not hide a T13 regression and does not weaken an assertion. Verified the pin is effective: suite passes 8/8 on this WIB machine and with TZ=Asia/Jakarta. Recorded as Minor follow-up owned by serializer/pg date-parsing, not T13.",
+      "Concern 4 (header counts): faithful. Predicate is identical to client BoardToolbar (doneAt -> done, else startedAt -> active). Fixture inserts started_at/done_at explicitly, so the expected 6/16 come from seeded data, not from the derivation; the test also cross-checks via /metrics (throughput 16, wipCount 6).",
+      "Concern 5 (scratch app): sound. vi.mock of db/pool.js returns a pool with search_path=scratch schema via connection options, real api router and error handler are mounted; no leaked wim_* schemas remain in the database after runs.",
+      "Spec: Story 1 reference workspace (78 / 25 / 6 / 16, key set, KEY-33 stays and focus session follows), Data is preserved, Run-once safety (second applySchema is a no-op, post-go-live edits kept, legacy insert raises) and Client contract unchanged (existing routes called, /cards/:id of tracker item 404) are all asserted. Merge is gated ON (workItemMerge:true) in every merge fixture. Non-test diff empty; no production changes. Fixtures anonymized (REF-33, card-N, item-N, generic usernames). All test files <=300 lines (max 285). No skipped tests beyond the RUN_INTEGRATION gate and no loosened assertions."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Real assertions throughout: full key-set equality, per-item field and relation comparison for all 53 tracker items, counts before/after for restart, trigger error message matched, unique index violation asserted via rejects.",
+      "Writers scan self-tests its comment stripper (comment mention ignored, real writer caught) and keeps string/template literals intact when stripping.",
+      "Isolation: per-file unique scratch schema, dropped in afterAll, pool ended, vi.mock file-scoped.",
+      "Fixture and app helpers are reusable and small; allocator test exercises board route, tracker route and boardDeps against one counter."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/work-item-merged-writers.test.ts",
+        "line": 18,
+        "description": "Writer regexes do not cover schema-qualified names (public.tracker_items) or Kysely calls with a non-literal table argument, and only the first hit per regex per file is reported. Acceptable for a guard backed by the DB trigger; consider adding an optional (?:\\w+\\.)? prefix."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/work-item-serializers.ts",
+        "line": 90,
+        "description": "Pre-existing: formatDateOnly uses toISOString on pg DATE parsed in local time, shifting dates by one day in zones east of UTC. Test pins TZ=UTC. Prod is UTC. File a follow-up (pg DATE type parser or string slice) outside T13."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/agent/service-deps-board.ts",
+        "line": 181,
+        "description": "Pre-existing: agent-created cards write no card_events (R6), at odds with CLAUDE.md 'every mutation MUST call recordActivity'. T13 pins the current behavior (0 events). Owner: agent module; product decision whether to amend CLAUDE.md or add an actor-less event."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/work-item-merged.integration.test.ts",
+        "line": 1,
+        "description": "Sabotage-RED proof is controller-run per packet and not reproducible from the diff; the file is 285 lines, close to the 300 cap. No action needed now."
+      }
+    ]
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  }
+}

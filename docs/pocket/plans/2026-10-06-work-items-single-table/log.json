@@ -259,9 +259,10 @@
         {
           "id": "T13",
           "name": "Merged-table integration verification",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T10, T11, T12",
-          "file": "execution-plan/tasks/T13-merged-table-integration-verification.md"
+          "file": "execution-plan/tasks/T13-merged-table-integration-verification.md",
+          "done_sha": "0af3eabb703aad999adcc4281f77074a7aaee18e"
         },
         {
           "id": "T16",
