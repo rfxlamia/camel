@@ -43,6 +43,31 @@ async function defaultFetchCardTimestamps(
 	}));
 }
 
+type ActivityRow = {
+	event_type: string;
+	payload: unknown;
+	created_at: Date;
+	current_card_title: string | null;
+};
+
+export function toActivityItem(r: ActivityRow): ActivityItem {
+	const payload = r.payload as {
+		cardTitle?: unknown;
+		title?: unknown;
+	} | null;
+	const fromPayload =
+		typeof payload?.cardTitle === "string"
+			? payload.cardTitle
+			: typeof payload?.title === "string"
+				? payload.title
+				: null;
+	return {
+		type: r.event_type,
+		cardTitle: r.current_card_title ?? fromPayload,
+		at: r.created_at.toISOString(),
+	};
+}
+
 async function defaultFetchActivityEvents(
 	workspaceId: number,
 	limit: number,
@@ -63,14 +88,7 @@ async function defaultFetchActivityEvents(
 		.orderBy("e.id", "desc")
 		.limit(limit)
 		.execute();
-	return rows.map((r) => {
-		const payload = r.payload as { cardTitle?: string } | null;
-		return {
-			type: r.event_type,
-			cardTitle: r.current_card_title ?? payload?.cardTitle ?? null,
-			at: r.created_at.toISOString(),
-		};
-	});
+	return rows.map(toActivityItem);
 }
 
 function makeChatQueryBoardData(ctx: ChatToolFactoryCtx): Tool {
