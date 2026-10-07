@@ -267,9 +267,10 @@
         {
           "id": "T16",
           "name": "Cutover snapshot and verify script",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T13",
-          "file": "execution-plan/tasks/T16-cutover-snapshot-and-verify-script.md"
+          "file": "execution-plan/tasks/T16-cutover-snapshot-and-verify-script.md",
+          "done_sha": "e167a523a9c5376864d8dd99542af839c8253d04"
         },
         {
           "id": "T17",
