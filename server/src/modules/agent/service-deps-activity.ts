@@ -11,6 +11,7 @@ export const activityDeps: Pick<
 			.select(["created_at", "started_at", "done_at"])
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
+			.where("column_id", "is not", null)
 			.execute();
 		return rows.map((r) => ({
 			createdAt: r.created_at,
