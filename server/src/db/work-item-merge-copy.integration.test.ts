@@ -324,7 +324,9 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 
 		const messages: string[] = [];
 		const onNotice = (n: { message?: string }) => {
-			if (n.message?.startsWith("work-item-merge:")) messages.push(n.message);
+			// Audit lines only: the run-once guard also emits a "copy skipped" notice.
+			if (n.message?.startsWith("work-item-merge: workspace="))
+				messages.push(n.message);
 		};
 		s.client.on("notice", onNotice);
 		try {
