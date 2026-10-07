@@ -48,9 +48,12 @@ vi.mock("../../auth.js", async (importOriginal) => {
 	};
 });
 
+import { db } from "../../db/kysely.js";
 import { pool } from "../../db/pool.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
 import { api } from "../../routes.js";
+import { buildReadySessionInput } from "../focus/focus-session-inputs.js";
+import { createFocusSessionRepo } from "../focus/focus-session-repo.js";
 
 const ALICE = 72001;
 const BOB = 72002;
@@ -303,6 +306,111 @@ itRun("My Work on the merged table", () => {
 		expect(after).toEqual({
 			version: before.version + 1,
 			status_id: before.status_id,
+		});
+	});
+	// Cycle 2 — focus sessions and SSE carry the new id.
+	it("resolves a migrated focus task from cards where column_id IS NULL", async () => {
+		const repo = createFocusSessionRepo(db);
+		const task = await repo.findTask("tracker", ids.trackerId, WS);
+		expect(task).toEqual({
+			id: ids.trackerId,
+			keyNumber: 2,
+			title: "Tracker work",
+			workspaceName: "Merge",
+		});
+		expect(await repo.findTask("tracker", ids.boardId, WS)).toBeNull();
+		expect(await repo.findTask("board", ids.trackerId, WS)).toBeNull();
+		await pool.query("UPDATE cards SET deleted_at = now() WHERE id = $1", [
+			ids.trackerId,
+		]);
+		expect(await repo.findTask("tracker", ids.trackerId, WS)).toBeNull();
+	});
+
+	it("keeps the /tracker/<key> return path for a tracker focus task", async () => {
+		const task = await createFocusSessionRepo(db).findTask(
+			"tracker",
+			ids.trackerId,
+			WS,
+		);
+		const input = buildReadySessionInput({
+			userId: ALICE,
+			workspaceId: WS,
+			source: "tracker",
+			taskId: ids.trackerId,
+			task: task!,
+		});
+		expect(input).toMatchObject({
+			task_source: "tracker",
+			task_id: ids.trackerId,
+			task_key: "ME-2",
+			return_path: "/tracker/ME-2",
+		});
+	});
+
+	it("keeps an active tracker focus session alive on load instead of auto-finishing it", async () => {
+		await pool.query(
+			`INSERT INTO focus_sessions
+			   (user_id, workspace_id, task_source, task_id, task_key, return_path, state)
+			 VALUES ($1, $2, 'tracker', $3, 'ME-2', '/tracker/ME-2', 'ready')`,
+			[ALICE, WS, ids.trackerId],
+		);
+		const res = await request(app).get(`/api/workspaces/${WS}/focus-session`);
+		expect(res.status).toBe(200);
+		expect(res.body.session).toMatchObject({
+			state: "ready",
+			source: "tracker",
+			taskId: ids.trackerId,
+			returnPath: "/tracker/ME-2",
+		});
+	});
+
+	it("publishes the card id as trackerItemId for every Tracker write route", async () => {
+		const base = `/api/workspaces/${WS}/tracker/items`;
+		const published = () =>
+			mockPublishEvent.mock.calls.map(([, event]) => ({
+				type: event.type,
+				trackerItemId: event.trackerItemId,
+			}));
+		const title = await request(app)
+			.patch(`${base}/ME-2`)
+			.send({ title: "Renamed" });
+		expect(title.status).toBe(200);
+		expect(published()).toContainEqual({
+			type: "tracker.updated",
+			trackerItemId: ids.trackerId,
+		});
+		mockPublishEvent.mockClear();
+		const status = await request(app)
+			.patch(`${base}/ME-2`)
+			.send({ statusId: ids.statusDone });
+		expect(status.status).toBe(200);
+		expect(published()).toContainEqual({
+			type: "tracker.updated",
+			trackerItemId: ids.trackerId,
+		});
+		mockPublishEvent.mockClear();
+		const created = await request(app)
+			.post(base)
+			.send({ title: "Created via route" });
+		expect(created.status).toBe(201);
+		const createdCard = await pool.query<{
+			id: number;
+			column_id: number | null;
+		}>(
+			"SELECT id, column_id FROM cards WHERE workspace_id = $1 AND title = 'Created via route'",
+			[WS],
+		);
+		expect(createdCard.rows[0]!.column_id).toBeNull();
+		expect(published()).toContainEqual({
+			type: "tracker.created",
+			trackerItemId: createdCard.rows[0]!.id,
+		});
+		mockPublishEvent.mockClear();
+		const removed = await request(app).delete(`${base}/ME-2`);
+		expect(removed.status).toBeLessThan(300);
+		expect(published()).toContainEqual({
+			type: "tracker.deleted",
+			trackerItemId: ids.trackerId,
 		});
 	});
 });
