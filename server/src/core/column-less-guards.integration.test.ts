@@ -162,4 +162,62 @@ describe.skipIf(!runIntegration)("column-less guards (integration)", () => {
 			expect(task).toBeNull();
 		});
 	});
+
+	describe("board cards keep their behavior", () => {
+		it("status-change moves the card to the done column and logs the move", async () => {
+			const result = await db.transaction().execute((trx) =>
+				applyBoardCardStatusChange(trx, {
+					workspaceId: WORKSPACE_ID,
+					actor,
+					cardId: fx.boardCardId,
+					targetStatusId: fx.doneStatusId,
+				}),
+			);
+			expect(result).toEqual({
+				kind: "ok",
+				moved: true,
+				cardTitle: "On board",
+				addedSignableAssignee: undefined,
+			});
+			const card = await readCard(fx.boardCardId);
+			expect(card.column_id).toBe(fx.doneColumnId);
+			expect(card.status_id).toBe(fx.doneStatusId);
+			expect(card.version).toBe(2);
+			expect(await eventCount(fx.boardCardId)).toBe(1);
+		});
+
+		it("my-work mark-done (board branch) completes the card", async () => {
+			const result = await createMyWorkMarkDoneService().markDone({
+				userId: USER_ID,
+				actor,
+				workspaceId: WORKSPACE_ID,
+				source: "board",
+				keyNumber: KEY_BOARD,
+			});
+			expect(result).toEqual({
+				kind: "ok",
+				source: "board",
+				itemId: fx.boardCardId,
+				itemTitle: "On board",
+				changed: true,
+				moved: true,
+				addedSignableAssignee: undefined,
+			});
+			expect((await readCard(fx.boardCardId)).column_id).toBe(fx.doneColumnId);
+		});
+
+		it("focus findTask(board) returns the task", async () => {
+			const task = await createFocusSessionRepo().findTask(
+				"board",
+				fx.boardCardId,
+				WORKSPACE_ID,
+			);
+			expect(task).toEqual({
+				id: fx.boardCardId,
+				keyNumber: KEY_BOARD,
+				title: "On board",
+				workspaceName: "Column Less Guard",
+			});
+		});
+	});
 });
