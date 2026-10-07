@@ -327,4 +327,31 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			)[0].task_id,
 		).toBe(map.get(a));
 	});
+	it("preserves soft-deleted tracker rows and leaves empty workspaces unchanged", async () => {
+		const ws = await seedWorkspace(s, `c3-${tag}`);
+		const empty = await seedWorkspace(s, `c3e-${tag}`);
+		const deleted = await seedItem(s, ws, 31, {
+			deletedAt: "2026-04-01T00:00:00Z",
+		});
+		await seedItem(s, ws, 32);
+
+		await applySchema(s.client);
+
+		const [ti] = await rows(s, "SELECT * FROM tracker_items WHERE id = $1", [
+			deleted,
+		]);
+		expect(ti.migrated_to_id).toEqual(expect.any(Number));
+		const [card] = await rows(s, "SELECT * FROM cards WHERE id = $1", [
+			ti.migrated_to_id,
+		]);
+		expect(card.key_number).toBe(31);
+		expect(card.deleted_at).toEqual(ti.deleted_at);
+		expect(card.deleted_at).not.toBeNull();
+		expect(
+			await rows(s, "SELECT id FROM cards WHERE workspace_id = $1", [empty.id]),
+		).toHaveLength(0);
+		expect(
+			await rows(s, "SELECT id FROM cards WHERE workspace_id = $1", [ws.id]),
+		).toHaveLength(2);
+	});
 });
