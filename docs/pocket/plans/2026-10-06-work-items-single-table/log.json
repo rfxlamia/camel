@@ -244,9 +244,10 @@
         {
           "id": "T12",
           "name": "My-work, focus and realtime ids on the merged table",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T9, T5",
-          "file": "execution-plan/tasks/T12-my-work-focus-and-realtime-ids-on-the-merged-table.md"
+          "file": "execution-plan/tasks/T12-my-work-focus-and-realtime-ids-on-the-merged-table.md",
+          "done_sha": "ad4c2feeb299ed2e52d53a555c4eb9d4ec975474"
         }
       ]
     },

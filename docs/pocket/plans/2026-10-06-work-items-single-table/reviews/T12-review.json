@@ -1,0 +1,70 @@
+{
+  "task_id": "T12",
+  "task_name": "My-work, focus and realtime ids on the merged table",
+  "cycle": 1,
+  "reviewed_sha": "ad4c2feeb299ed2e52d53a555c4eb9d4ec975474",
+  "timestamp": "2026-10-07T13:03:04Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Mark-done tracker branch now defaults to applyTrackerItemStatusChange (cards, column_id IS NULL, FOR UPDATE, version predicate, updated_at=now(), recordTrackerItemActivity once). Stale version returns 409 version_conflict; covered by merged integration tests (version++ and stale 409 on a column-less item, no tracker rows written). Board branch of readAuthorizedItem keeps column_id IS NOT NULL and the same selects; workspace scoping and assignment FOR UPDATE check preserved.",
+      "My Work list/detail/hydration read selectWorkItemRows with column_id IS NULL, workspace membership exists-join and assignment filter retained; tracker labels/assignees hydrate via loadCardLabelsForCards/loadCardAssigneesForCards. No legacy-tracker-item-response or loadTrackerAssigneesForItems importer remains in My Work. No tracker_items/tracker_item_*/tracker_events access in touched production files.",
+      "Focus findTask('tracker') resolves via cards, workspace-scoped, column_id IS NULL, deleted_at IS NULL; return path /tracker/<key> unchanged and tested.",
+      "SSE trackerItemId is cards.id on create, update, status, delete, reorder and mark-done (publishers pass result.id/existing.id/result.itemId); one merged test asserts every route. No Redis/SSE topology change.",
+      "Client diff empty (zero client edits). Board-branch status change (T5) untouched. Legacy status shim and its test deleted; nothing imports them.",
+      "ANY(ARRAY(SELECT card_id FROM card_assignees WHERE user_id = $n)) is semantically identical to the EXISTS semi-join (same row set, no ordering change since ORDER BY is explicit), still bound inside a workspace-filtered query, and userId is a bound parameter via the sql template (no injection).",
+      "Notes 2-5 accepted as Minor deferrals; note 1 and the fixture change do not weaken coverage (see Minor findings)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Perf regression root-caused (stale stats, nested loop) and fixed with an InitPlan; rationale documented in a comment on assignedToUser.",
+      "Mark-done file trimmed to 290 lines; my-work-query.ts at 300 via removing sourceAlias in favor of a constant, not obfuscation.",
+      "Dedupe NOT EXISTS shadow subquery removed from the board query, simplifying the hot path.",
+      "Merged integration test covers list, detail, mark-done, stale 409, focus resolution, return path, live-session survival and SSE ids."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/my-work/my-work-query.ts",
+        "line": 108,
+        "description": "Tracker SQL updated-at sort key is coalesce(c.updated_at, c.created_at) while serializeMergedWorkItem/serializeUpdatedAt falls back to done_at ?? started_at ?? created_at when updated_at is NULL. The displayed updatedAt is the same serializer as /work-items, so API values are consistent, but the SQL order and the cursor (built from the serialized value) diverge for a column-less row with NULL updated_at and done_at/started_at set. Migrated and Tracker-created rows always have updated_at, so this is latent. Fix: use coalesce(c.updated_at, c.done_at, c.started_at, c.created_at) for the tracker branch (and update the pagination assertions)."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/my-work/my-work.integration.fixtures.ts",
+        "line": 1,
+        "description": "atlasShadow became an unassigned filler card and the rollup test no longer asserts tracker-wins. Acceptable: the unique key index makes a shadow structurally impossible, the filler asserts it is not listed, and the merged test asserts each item appears once. No coverage loss of consequence."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/my-work/my-work-response-serialization.ts",
+        "line": 91,
+        "description": "mergeMyWorkRows (tracker-wins dedupe) is now dead logic still called from my-work-service-list.ts and referenced by authorization tests. Remove in T21 together with the tracker-wins tests."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/legacy-tracker-item-response.ts",
+        "line": 1,
+        "description": "Dead module with no production importer; loadTrackerAssigneesForItems in lib/tracker-assignees.ts is only used by it (and test mocks). Delete both in T21."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/my-work/my-work-data-source-list.ts",
+        "line": 105,
+        "description": "Tracker rows copy plan_position into position after the query (and in detail). Cosmetic mapping shim; fold into selectWorkItemRows consumers or MyWorkTrackerRow type in T21."
+      }
+    ]
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  }
+}

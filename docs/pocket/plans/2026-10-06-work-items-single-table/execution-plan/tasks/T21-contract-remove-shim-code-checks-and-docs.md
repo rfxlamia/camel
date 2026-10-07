@@ -71,3 +71,4 @@ Escalate when: client change is unavoidable
 ## Carried from Phase 4 T9/T10 audits (2026-10-07)
 - Remove the temporary shims if still present: `server/src/lib/legacy-tracker-item-response.ts`, `server/src/core/legacy-tracker-item-status-change.ts` (+ test).
 - `server/src/lib/tracker-item-activity.ts` casts `tracker_item_*` event types into `recordActivity` because the union in `lib/helpers.ts` (623 lines, 300-on-touch) was not widened. When `helpers.ts` is split, widen the union and drop the cast.
+- From T12 audit: `lib/legacy-tracker-item-response.ts` is dead code; `lib/tracker-assignees.ts` `loadTrackerAssigneesForItems` is only used by it and test mocks; `mergeMyWorkRows` (tracker-wins dedupe, `my-work-service-list.ts`) is dead logic since keys are unique; My Work tracker sort key `coalesce(c.updated_at, c.created_at)` should match the serializer fallback (`coalesce(c.updated_at, c.done_at, c.started_at, c.created_at)`).
