@@ -16,7 +16,9 @@ export type TrackerItemRow = {
 	description: string;
 	version: number;
 	created_at: Date;
-	updated_at: Date;
+	updated_at: Date | null;
+	started_at?: Date | null;
+	done_at?: Date | null;
 	status_id: number;
 	status_name: string;
 	status_kind: string;
@@ -44,6 +46,7 @@ export type BoardWorkItemRow = {
 	description: string;
 	version: number;
 	created_at: Date;
+	updated_at?: Date | null;
 	started_at: Date | null;
 	done_at: Date | null;
 	due_date: string | null;
@@ -65,6 +68,24 @@ export type BoardWorkItemRow = {
 	project_id: number | null;
 	phase_id: number | null;
 };
+
+/**
+ * Stored `updated_at` wins. NULL means "use the computed value" (the board
+ * cards' historic derivation, see work-item-merge.sql).
+ */
+function serializeUpdatedAt(row: {
+	updated_at?: Date | null;
+	started_at?: Date | null;
+	done_at?: Date | null;
+	created_at: Date;
+}): string {
+	if (row.updated_at != null) return row.updated_at.toISOString();
+	return computeCardUpdatedAt({
+		done_at: row.done_at ?? null,
+		started_at: row.started_at ?? null,
+		created_at: row.created_at,
+	});
+}
 
 function formatDateOnly(value: Date | string | null): string | null {
 	if (value == null) return null;
@@ -135,7 +156,7 @@ export function serializeTrackerWorkItem(
 		assignees,
 		version: row.version,
 		createdAt: row.created_at.toISOString(),
-		updatedAt: row.updated_at.toISOString(),
+		updatedAt: serializeUpdatedAt(row),
 	};
 	if (opts?.redirectFrom) {
 		body.canonicalKey = key;
@@ -179,7 +200,7 @@ export function serializeBoardWorkItem(
 		assignees,
 		version: row.version,
 		createdAt: row.created_at.toISOString(),
-		updatedAt: computeCardUpdatedAt(row),
+		updatedAt: serializeUpdatedAt(row),
 		columnId: row.column_id,
 		columnName: row.column_name,
 		dueDate: row.due_date,
@@ -216,11 +237,7 @@ export function serializeMergedWorkItem(
 ) {
 	if (row.column_id == null) {
 		return serializeTrackerWorkItem(
-			{
-				...row,
-				position: row.plan_position,
-				updated_at: row.updated_at as Date,
-			},
+			{ ...row, position: row.plan_position },
 			prefix,
 			assignees,
 			labels,

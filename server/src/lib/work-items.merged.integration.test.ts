@@ -42,6 +42,7 @@ import { db } from "../db/kysely.js";
 import { pool } from "../db/pool.js";
 import { createErrorHandler } from "../middleware/error-handler.js";
 import { api } from "../routes.js";
+import { computeCardUpdatedAt } from "./card-response.js";
 import {
 	getUnifiedWorkspaceActivity,
 	getWorkItemEvents,
@@ -376,6 +377,40 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("merged work item reads", () => {
 		expect(
 			res.body.some((i: { key: string }) => Number(i.key.split("-")[1]) >= 200),
 		).toBe(false);
+	});
+
+	it("updatedAt falls back to the computed value", async () => {
+		const stored = "2026-05-05T05:05:05.000Z";
+		await insertCard(fx, 1, { columnId: null, updatedAt: stored });
+		await insertCard(fx, 2, { columnId: null, updatedAt: null });
+		await insertCard(fx, 3, { updatedAt: null });
+		await insertCard(fx, 4, { updatedAt: stored });
+		await q(
+			"UPDATE cards SET started_at = $2, done_at = $3 WHERE workspace_id = $1 AND key_number IN (3, 4)",
+			[WORKSPACE_ID, "2026-04-01T00:00:00Z", "2026-04-02T00:00:00Z"],
+		);
+
+		const res = await request(app).get(listUrl);
+
+		expect(res.status).toBe(200);
+		const byKey = Object.fromEntries(
+			res.body.map((i: { key: string }) => [i.key, i]),
+		);
+		const computed = (key: number) =>
+			computeCardUpdatedAt({
+				done_at: key >= 3 ? "2026-04-02T00:00:00.000Z" : null,
+				started_at: key >= 3 ? "2026-04-01T00:00:00.000Z" : null,
+				created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, key)),
+			});
+		// Column-less item with a stored value: stored.
+		expect(byKey["TE-1"].updatedAt).toBe(stored);
+		// Column-less item with NULL: computed (created_at, nothing newer exists).
+		expect(byKey["TE-2"].updatedAt).toBe(computed(2));
+		// Board card with NULL: computed (done_at wins).
+		expect(byKey["TE-3"].updatedAt).toBe(computed(3));
+		expect(byKey["TE-3"].updatedAt).toBe("2026-04-02T00:00:00.000Z");
+		// Board card with a stored value: stored.
+		expect(byKey["TE-4"].updatedAt).toBe(stored);
 	});
 
 	describe("activity feed", () => {
