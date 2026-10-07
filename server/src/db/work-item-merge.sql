@@ -57,6 +57,16 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Run-once guard: once every tracker row carries migrated_to_id the block
+  -- is a complete no-op, so user edits made after go-live are never touched
+  -- and no assertion can run against post-go-live data.
+  IF NOT EXISTS (
+    SELECT 1 FROM tracker_items WHERE migrated_to_id IS NULL
+  ) THEN
+    RAISE NOTICE 'work-item-merge: copy skipped (no un-migrated tracker rows)';
+    RETURN;
+  END IF;
+
   -- Pre-check FIRST: a tracker key that already exists on a card (soft-deleted
   -- cards included) aborts the whole migration with a readable message.
   SELECT ti.workspace_id, ti.key_number
