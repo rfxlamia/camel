@@ -24,6 +24,10 @@ export async function applySchema(
 		opts.workItemMerge === true || process.env.WORK_ITEM_MERGE === "on";
 	const sql = readFileSync(join(here, "schema.sql"), "utf8");
 	const mergeSql = readFileSync(join(here, "work-item-merge.sql"), "utf8");
+	const guardSql = readFileSync(
+		join(here, "work-item-merge-guard.sql"),
+		"utf8",
+	);
 	const agentSql = readFileSync(join(here, "agent-schema.sql"), "utf8");
 	const chatSql = readFileSync(join(here, "chat-schema.sql"), "utf8");
 	try {
@@ -33,6 +37,7 @@ export async function applySchema(
 			await client.query("SET LOCAL work_item_merge.enabled = 'on'");
 		}
 		await client.query(mergeSql);
+		await client.query(guardSql);
 		await client.query(agentSql);
 		await client.query(chatSql);
 		await client.query("COMMIT");

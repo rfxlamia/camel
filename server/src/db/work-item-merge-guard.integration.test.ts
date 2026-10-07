@@ -1,13 +1,16 @@
 // Requires a running PostgreSQL. Gated behind RUN_INTEGRATION=1.
 // Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/db/work-item-merge-guard.integration.test.ts
 import "dotenv/config";
+import { Kysely, PostgresDialect } from "kysely";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { allocateWorkItemKey } from "../core/allocate-work-item-key.js";
 import { applySchema } from "./migrate.js";
 import { pool } from "./pool.js";
 import {
 	createScratchSchema,
 	type ScratchSchema,
 } from "./scratch-schema-test-support.js";
+import type { DB } from "./types.js";
 import {
 	rows,
 	seedEvents,
@@ -266,5 +269,56 @@ describe.skipIf(!runIntegration)("work-item-merge guard", () => {
 				expect(left[0].n).toBe(0);
 			});
 		}
+	});
+
+	it("Counter repair raises every workspace counter to its max key", async () => {
+		const w1 = await seedWorkspace(s, `g3a-${tag}`);
+		const w2 = await seedWorkspace(s, `g3b-${tag}`);
+		// w1: tracker rows migrate to cards; counter far below the max key.
+		await seedItem(s, w1, 11);
+		await seedItem(s, w1, 12);
+		// w2: the max key lives on a soft-deleted card only.
+		for (const [key, deleted] of [
+			[3, false],
+			[9, true],
+		] as const) {
+			await s.client.query(
+				`INSERT INTO cards (workspace_id, column_id, title, position, status_id, key_number, deleted_at)
+				 VALUES ($1, NULL, 'c', 1, $2, $3, ${deleted ? "now()" : "NULL"})`,
+				[w2.id, w2.statusId, key],
+			);
+		}
+		await s.client.query(
+			"UPDATE workspaces SET tracker_key_counter = 2 WHERE id = ANY($1)",
+			[[w1.id, w2.id]],
+		);
+
+		await applySchema(s.client, ENABLED);
+
+		const counters = await rows(
+			s,
+			"SELECT id, tracker_key_counter FROM workspaces WHERE id = ANY($1) ORDER BY id",
+			[[w1.id, w2.id]],
+		);
+		expect(counters.map((r) => r.tracker_key_counter)).toEqual([12, 9]);
+
+		// The allocator hands out max + 1 on the repaired counters.
+		const scratchDb = new Kysely<DB>({
+			dialect: new PostgresDialect({
+				pool: {
+					connect: async () => ({
+						query: s.client.query.bind(s.client),
+						release: () => {},
+					}),
+					end: async () => {},
+				} as any,
+			}),
+		});
+		expect(
+			await allocateWorkItemKey(scratchDb, { workspaceId: w1.id }),
+		).toEqual({ keyNumber: 13 });
+		expect(
+			await allocateWorkItemKey(scratchDb, { workspaceId: w2.id }),
+		).toEqual({ keyNumber: 10 });
 	});
 });

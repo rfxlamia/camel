@@ -30,4 +30,15 @@ describe("work-item-merge.sql wiring", () => {
 			"COPY server/src/db/work-item-merge.sql ./server/dist/db/work-item-merge.sql",
 		);
 	});
+
+	it("runs the guard file right after the merge file and ships it in the image", () => {
+		const mergeRun = migrateSource.indexOf("client.query(mergeSql)");
+		const guardRun = migrateSource.indexOf("client.query(guardSql)");
+		const agent = migrateSource.indexOf("client.query(agentSql)");
+		expect(mergeRun).toBeLessThan(guardRun);
+		expect(guardRun).toBeLessThan(agent);
+		expect(dockerfile).toContain(
+			"COPY server/src/db/work-item-merge-guard.sql ./server/dist/db/work-item-merge-guard.sql",
+		);
+	});
 });
