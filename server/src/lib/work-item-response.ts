@@ -12,12 +12,6 @@ import {
 } from "./work-item-serializers.js";
 
 export {
-	findTrackerItemByKeyNumber,
-	hydrateMutationItem,
-	hydrateTrackerWorkItems,
-	selectTrackerItemRows,
-} from "./legacy-tracker-item-response.js";
-export {
 	type BoardWorkItemRow,
 	legacyTrackerItemResponse,
 	type MergedWorkItemRow,

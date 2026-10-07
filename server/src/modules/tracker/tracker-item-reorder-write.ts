@@ -6,7 +6,7 @@ import {
 	rebalance,
 } from "../../core/position.js";
 import { type DBExecutor } from "../../db/kysely.js";
-import { recordActivity } from "../../lib/helpers.js";
+import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
 
 type Sibling = { id: number; key_number: number; position: number };
 
@@ -143,9 +143,15 @@ export async function reorderInTransaction(
 		.set({ plan_position: position })
 		.where("id", "=", locked.id)
 		.execute();
-	await recordActivity(trx, input.actor, workspaceId, "tracker_item_updated", {
-		cardId: locked.id,
-		payload: { title: locked.title, changed: ["position"] },
-	});
+	await recordTrackerItemActivity(
+		trx,
+		input.actor,
+		workspaceId,
+		"tracker_item_updated",
+		{
+			cardId: locked.id,
+			payload: { title: locked.title, changed: ["position"] },
+		},
+	);
 	return { kind: "ok" };
 }

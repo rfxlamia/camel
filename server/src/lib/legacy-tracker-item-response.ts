@@ -1,5 +1,5 @@
-// Legacy tracker_items read shim. Write paths (T10) and My Work (T12) still use it;
-// delete once they move to the merged table (T21 removes the file).
+// Legacy tracker_items read shim. Only My Work (T12) still uses selectTrackerItemRows;
+// T10 moved every Tracker write path to the merged table. T21 removes this file.
 import type { DBExecutor } from "../db/kysely.js";
 import { loadTrackerAssigneesForItems } from "./tracker-assignees.js";
 import { type VocabularyRow } from "./vocabulary-response.js";

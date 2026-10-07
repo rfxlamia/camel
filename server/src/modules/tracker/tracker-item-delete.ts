@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
 import { db } from "../../db/kysely.js";
-import { recordActivity } from "../../lib/helpers.js";
+import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
 import { findBoardCardByKeyNumber } from "../../lib/work-item-response.js";
 import { publishEvent } from "../../realtime.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
@@ -64,10 +64,16 @@ export async function deleteTrackerItemHandler(req: Request, res: Response) {
 			};
 		}
 
-		await recordActivity(trx, actor, workspaceId, "tracker_item_deleted", {
-			cardId: row.id,
-			payload: { title: row.title },
-		});
+		await recordTrackerItemActivity(
+			trx,
+			actor,
+			workspaceId,
+			"tracker_item_deleted",
+			{
+				cardId: row.id,
+				payload: { title: row.title },
+			},
+		);
 
 		return { kind: "ok" };
 	});

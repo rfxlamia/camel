@@ -28,11 +28,9 @@ vi.mock("../middleware/workspace.js", () => ({
 vi.mock("./work-item-response.js", () => ({
 	listMergedWorkItems: (...args: unknown[]) => mockListMergedWorkItems(...args),
 	findBoardCardByKeyNumber: vi.fn(),
-	findTrackerItemByKeyNumber: vi.fn(),
 	findWorkItemByKeyNumber: (...args: unknown[]) =>
 		mockFindWorkItemByKeyNumber(...args),
 	hydrateBoardWorkItems: vi.fn(),
-	hydrateTrackerWorkItems: vi.fn(),
 	hydrateWorkItems: (...args: unknown[]) => mockHydrateWorkItems(...args),
 }));
 vi.mock("./work-item-events.js", () => ({

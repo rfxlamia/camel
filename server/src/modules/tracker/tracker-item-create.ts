@@ -4,9 +4,9 @@ import type { AuthUser } from "../../auth.js";
 import { allocateWorkItemKey } from "../../core/allocate-work-item-key.js";
 import { formatKey } from "../../core/tracker-key.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
-import { recordActivity } from "../../lib/helpers.js";
 import { logger } from "../../lib/logger.js";
 import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
+import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
 import { parseDateRange } from "../../lib/tracker-item-parsers.js";
 import {
 	type NormalizedTaskCreateMetadata,
@@ -181,7 +181,7 @@ async function hydrateCreatedItem(
 	if ((metadata.labelIds ?? []).length > 0) {
 		await syncLabels(trx, created.id, metadata.labelIds!);
 	}
-	await recordActivity(
+	await recordTrackerItemActivity(
 		trx,
 		input.actor,
 		input.workspaceId,

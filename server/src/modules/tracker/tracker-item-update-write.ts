@@ -5,8 +5,8 @@ import {
 	getTrackerStatusCategory,
 } from "../../core/tracker-item-status-change.js";
 import type { DBExecutor } from "../../db/kysely.js";
-import { recordActivity } from "../../lib/helpers.js";
 import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
+import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
 import { endOfBucketPosition } from "./tracker-item-create-queries.js";
 import { syncTrackerItemLabels } from "./tracker-item-labels.js";
 import { classifyWriteFailure } from "./tracker-item-merged-queries.js";
@@ -113,15 +113,21 @@ export async function writeTrackerUpdate(
 	if (parsed.hasLabelIds && parsed.labelIds !== undefined) {
 		await syncTrackerItemLabels(trx, existing.id, parsed.labelIds);
 	}
-	await recordActivity(trx, input.actor, workspaceId, "tracker_item_updated", {
-		cardId: existing.id,
-		payload: {
-			title:
-				typeof parsed.setFields.title === "string"
-					? parsed.setFields.title
-					: existing.title,
-			changed: changedFields(parsed),
+	await recordTrackerItemActivity(
+		trx,
+		input.actor,
+		workspaceId,
+		"tracker_item_updated",
+		{
+			cardId: existing.id,
+			payload: {
+				title:
+					typeof parsed.setFields.title === "string"
+						? parsed.setFields.title
+						: existing.title,
+				changed: changedFields(parsed),
+			},
 		},
-	});
+	);
 	return { kind: "ok" };
 }

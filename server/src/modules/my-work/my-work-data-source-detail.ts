@@ -1,8 +1,6 @@
 import type { DBExecutor } from "../../db/kysely.js";
-import {
-	selectBoardWorkItemRows,
-	selectTrackerItemRows,
-} from "../../lib/work-item-response.js";
+import { selectTrackerItemRows } from "../../lib/legacy-tracker-item-response.js";
+import { selectBoardWorkItemRows } from "../../lib/work-item-response.js";
 import type {
 	MyWorkBoardRow,
 	MyWorkDetailQueryInput,

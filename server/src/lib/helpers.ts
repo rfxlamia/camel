@@ -600,10 +600,7 @@ export async function recordActivity(
 		| "linear_ticket_created"
 		| "focus_session"
 		| "attachment_added"
-		| "attachment_removed"
-		| "tracker_item_created"
-		| "tracker_item_updated"
-		| "tracker_item_deleted",
+		| "attachment_removed",
 	opts: {
 		cardId?: number | null;
 		fromColumnId?: number | null;

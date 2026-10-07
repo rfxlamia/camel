@@ -30,8 +30,6 @@ vi.mock("./tracker-item-merged-queries.js", () => ({
 	loadMutationResponse: vi.fn(),
 }));
 vi.mock("../../lib/work-item-response.js", () => ({
-	findTrackerItemByKeyNumber: (...args: unknown[]) =>
-		mockFindTrackerItem(...args),
 	findBoardCardByKeyNumber: (...args: unknown[]) => mockFindBoardCard(...args),
 }));
 

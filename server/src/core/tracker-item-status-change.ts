@@ -1,7 +1,7 @@
 import { type RawBuilder, sql } from "kysely";
 import type { AuthUser } from "../auth.js";
 import type { DBExecutor } from "../db/kysely.js";
-import { recordActivity } from "../lib/helpers.js";
+import { recordTrackerItemActivity } from "../lib/tracker-item-activity.js";
 import { classifyColumnlessWriteFailure } from "./classify-columnless-write-failure.js";
 
 export type TrackerItemStatusChangeResult =
@@ -141,7 +141,7 @@ async function recordTrackerStatusActivity(
 	params: TrackerItemStatusChangeParams,
 	item: TrackerStatusChangeItem,
 ): Promise<void> {
-	await recordActivity(
+	await recordTrackerItemActivity(
 		trx,
 		params.actor,
 		params.workspaceId,
