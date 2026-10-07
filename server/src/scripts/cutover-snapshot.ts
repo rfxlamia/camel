@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { readFile, writeFile } from "node:fs/promises";
 import { sql } from "kysely";
 import { derivePrefix } from "../core/tracker-key.js";
@@ -69,38 +70,39 @@ export async function takeSnapshot(
 	dbExec: DBExecutor,
 ): Promise<CutoverSnapshot> {
 	const { rows } = await sql<SnapshotRow>`
+		WITH visible_board AS (
+			SELECT c.workspace_id, c.key_number, c.started_at, c.done_at
+			FROM cards c
+			JOIN columns col ON col.id = c.column_id
+			WHERE c.deleted_at IS NULL AND col.board_id IS NULL
+		), visible_tracker AS (
+			SELECT ti.workspace_id, ti.key_number
+			FROM tracker_items ti
+			WHERE ti.deleted_at IS NULL AND ti.migrated_to_id IS NULL
+			  AND ti.key_number IS NOT NULL
+		)
 		SELECT w.id AS workspace_id,
 			COALESCE((
 				SELECT array_agg(item_key ORDER BY item_key)
 				FROM (
-					SELECT c.key_number AS item_key
-					FROM cards c
-					LEFT JOIN columns col ON col.id = c.column_id
-					WHERE c.workspace_id = w.id AND c.deleted_at IS NULL
-					  AND col.board_id IS NULL AND c.key_number IS NOT NULL
+					SELECT b.key_number AS item_key
+					FROM visible_board b
+					WHERE b.workspace_id = w.id AND b.key_number IS NOT NULL
 					UNION ALL
-					SELECT ti.key_number
-					FROM tracker_items ti
-					WHERE ti.workspace_id = w.id AND ti.deleted_at IS NULL
-					  AND ti.key_number IS NOT NULL
+					SELECT t.key_number
+					FROM visible_tracker t
+					WHERE t.workspace_id = w.id
 				) visible_keys
 			), ARRAY[]::integer[]) AS keys,
-			(SELECT count(*)::integer FROM tracker_items ti
-				WHERE ti.workspace_id = w.id AND ti.deleted_at IS NULL
-				  AND ti.key_number IS NOT NULL) AS tracker_count,
-			(SELECT count(*)::integer FROM cards c
-				LEFT JOIN columns col ON col.id = c.column_id
-				WHERE c.workspace_id = w.id AND c.deleted_at IS NULL
-				  AND col.board_id IS NULL) AS board_count,
-			(SELECT count(*)::integer FROM cards c
-				LEFT JOIN columns col ON col.id = c.column_id
-				WHERE c.workspace_id = w.id AND c.deleted_at IS NULL
-				  AND col.board_id IS NULL AND c.started_at IS NOT NULL
-				  AND c.done_at IS NULL) AS in_progress_count,
-			(SELECT count(*)::integer FROM cards c
-				LEFT JOIN columns col ON col.id = c.column_id
-				WHERE c.workspace_id = w.id AND c.deleted_at IS NULL
-				  AND col.board_id IS NULL AND c.done_at IS NOT NULL) AS done_count
+			(SELECT count(*)::integer FROM visible_tracker t
+				WHERE t.workspace_id = w.id) AS tracker_count,
+			(SELECT count(*)::integer FROM visible_board b
+				WHERE b.workspace_id = w.id) AS board_count,
+			(SELECT count(*)::integer FROM visible_board b
+				WHERE b.workspace_id = w.id AND b.started_at IS NOT NULL
+				  AND b.done_at IS NULL) AS in_progress_count,
+			(SELECT count(*)::integer FROM visible_board b
+				WHERE b.workspace_id = w.id AND b.done_at IS NOT NULL) AS done_count
 		FROM workspaces w
 		ORDER BY w.id
 	`.execute(dbExec);

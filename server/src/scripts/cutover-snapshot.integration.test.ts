@@ -171,4 +171,57 @@ describe.skipIf(!runIntegration)("cutover snapshot parity gate", () => {
 		).toEqual([secondaryWorkspaceId]);
 		await expect(main(["verify", snapshotFile])).resolves.toBe(1);
 	});
+
+	it("excludes column-less cards and already-copied tracker rows from old counts", async () => {
+		const workspace = await seedWorkspace(
+			scratch,
+			"partially-migrated-fixture",
+		);
+		const [column] = await rows<{ id: number }>(
+			scratch,
+			`INSERT INTO columns (workspace_id, title, position, is_done)
+			 VALUES ($1, 'Board', 1024, false) RETURNING id`,
+			[workspace.id],
+		);
+		const addCard = async (columnId: number | null, key: number) =>
+			scratch.client.query(
+				`INSERT INTO cards (workspace_id, column_id, title, position, key_number, status_id)
+				 VALUES ($1, $2, $3, $4, $5, $6)`,
+				[
+					workspace.id,
+					columnId,
+					`fixture-${key}`,
+					key * 1024,
+					key,
+					workspace.statusId,
+				],
+			);
+		await addCard(column.id, 1);
+		await addCard(null, 2);
+
+		const migratedItemId = await seedItem(scratch, workspace, 3);
+		const [copiedCard] = await rows<{ id: number }>(
+			scratch,
+			`INSERT INTO cards (workspace_id, column_id, title, position, key_number, status_id)
+			 VALUES ($1, NULL, 'copied-tracker', 0, 3, $2) RETURNING id`,
+			[workspace.id, workspace.statusId],
+		);
+		await scratch.client.query(
+			"UPDATE tracker_items SET migrated_to_id = $2 WHERE id = $1",
+			[migratedItemId, copiedCard.id],
+		);
+		await seedItem(scratch, workspace, 4);
+
+		const snapshot = await takeSnapshot(db);
+		const workspaceSnapshot = snapshot.workspaces.find(
+			(item) => item.workspaceId === workspace.id,
+		);
+		expect(workspaceSnapshot).toMatchObject({
+			keys: [1, 4],
+			trackerCount: 1,
+			boardCount: 1,
+			inProgressCount: 0,
+			doneCount: 0,
+		});
+	});
 });
