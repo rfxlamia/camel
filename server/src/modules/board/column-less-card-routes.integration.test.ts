@@ -177,5 +177,73 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				expect(await readRow(id)).toEqual(before);
 			});
 		});
+
+		describe("board cards unchanged", () => {
+			it("serves GET, PATCH and move with their usual status codes and 409 on a stale version", async () => {
+				const id = await insertCard(fixture.statusId, fixture.columnId, 51);
+
+				const get = await request(app).get(`${base}/cards/${id}`);
+				expect(get.status).toBe(200);
+				expect(get.body.id).toBe(id);
+				expect(get.body.columnId).toBe(fixture.columnId);
+
+				const patch = await request(app)
+					.patch(`${base}/cards/${id}`)
+					.send({ title: "Renamed", version: get.body.version });
+				expect(patch.status).toBe(200);
+				expect(patch.body.title).toBe("Renamed");
+				expect(patch.body.version).toBe(get.body.version + 1);
+
+				const stalePatch = await request(app)
+					.patch(`${base}/cards/${id}`)
+					.send({ title: "Stale", version: get.body.version });
+				expect(stalePatch.status).toBe(409);
+				expect((await readRow(id)).title).toBe("Renamed");
+
+				const staleMove = await request(app)
+					.post(`${base}/cards/${id}/move`)
+					.send({
+						toColumnId: fixture.targetColumnId,
+						index: 0,
+						version: get.body.version,
+					});
+				expect(staleMove.status).toBe(409);
+				expect((await readRow(id)).column_id).toBe(fixture.columnId);
+
+				const move = await request(app)
+					.post(`${base}/cards/${id}/move`)
+					.send({ toColumnId: fixture.targetColumnId, index: 0 });
+				expect(move.status).toBe(200);
+				expect((await readRow(id)).column_id).toBe(fixture.targetColumnId);
+			});
+
+			it("accepts attachment upload and soft-deletes with 204, then 404s the deleted card", async () => {
+				const id = await insertCard(fixture.statusId, fixture.columnId, 52);
+				const image = pngFixture();
+				const upload = await request(app)
+					.post(`${base}/cards/${id}/attachments`)
+					.attach("thumbnail", image, {
+						filename: "t.png",
+						contentType: "image/png",
+					})
+					.attach("original", image, {
+						filename: "o.png",
+						contentType: "image/png",
+					});
+				expect(upload.status).toBe(201);
+				expect(await attachmentCount(id)).toBe(1);
+
+				const staleDelete = await request(app)
+					.delete(`${base}/cards/${id}`)
+					.send({ version: 999 });
+				expect(staleDelete.status).toBe(409);
+
+				const del = await request(app).delete(`${base}/cards/${id}`);
+				expect(del.status).toBe(204);
+				const again = await request(app).delete(`${base}/cards/${id}`);
+				expect(again.status).toBe(404);
+				expect(again.body).toEqual({ error: "card not found" });
+			});
+		});
 	},
 );
