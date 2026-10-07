@@ -24,7 +24,7 @@ import {
 	seedEvents,
 	seedItem,
 	seedWorkspace,
-} from "./work-item-merge-test-support.js";
+} from "./work-item-merge.test-support.js";
 
 const ENABLED = { workItemMerge: true };
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
