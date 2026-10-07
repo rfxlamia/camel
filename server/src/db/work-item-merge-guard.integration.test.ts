@@ -2,7 +2,15 @@
 // Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/db/work-item-merge-guard.integration.test.ts
 import "dotenv/config";
 import { Kysely, PostgresDialect } from "kysely";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { allocateWorkItemKey } from "../core/allocate-work-item-key.js";
 import { applySchema } from "./migrate.js";
 import { pool } from "./pool.js";
@@ -446,5 +454,59 @@ describe.skipIf(!runIntegration)("work-item-merge guard", () => {
 				)
 			)[0].n,
 		).toBe(5);
+	});
+
+	// Labeled regression guard: the gate check at the top of the guard SQL and
+	// the copy block already satisfy this. Proven able to fail by removing the
+	// gate check from work-item-merge-guard.sql (counter repair then runs).
+	it("Merge gate off leaves everything untouched", async () => {
+		vi.stubEnv("WORK_ITEM_MERGE", "");
+		try {
+			const ws = await seedWorkspace(s, `g7-${tag}`);
+			await seedItem(s, ws, 71);
+			await s.client.query(
+				`INSERT INTO cards (workspace_id, column_id, title, position, status_id, key_number)
+				 VALUES ($1, NULL, 'high key', 1, $2, 80)`,
+				[ws.id, ws.statusId],
+			);
+			await s.client.query(
+				"UPDATE workspaces SET tracker_key_counter = 5 WHERE id = $1",
+				[ws.id],
+			);
+
+			const { notices } = await withNotices(s, () => applySchema(s.client));
+
+			expect(
+				notices.some((m) => m.startsWith("work-item-merge: copy skipped")),
+			).toBe(true);
+			expect(notices.some((m) => m.includes("workspace="))).toBe(false);
+			expect(
+				await rows(s, "SELECT id FROM cards WHERE workspace_id = $1", [ws.id]),
+			).toHaveLength(1);
+			expect(
+				await rows(
+					s,
+					"SELECT id FROM tracker_items WHERE migrated_to_id IS NOT NULL",
+				),
+			).toHaveLength(0);
+			const [counter] = await rows(
+				s,
+				"SELECT tracker_key_counter FROM workspaces WHERE id = $1",
+				[ws.id],
+			);
+			expect(counter.tracker_key_counter).toBe(5);
+			expect(
+				(
+					await rows(
+						s,
+						`SELECT count(*)::int AS n FROM pg_trigger
+						 WHERE tgrelid = 'tracker_items'::regclass AND NOT tgisinternal`,
+					)
+				)[0].n,
+			).toBe(0);
+			await seedItem(s, ws, 72);
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 });
