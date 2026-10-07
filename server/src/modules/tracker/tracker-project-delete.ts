@@ -1,9 +1,39 @@
 import { sql } from "kysely";
 import type { AuthUser } from "../../auth.js";
-import { db } from "../../db/kysely.js";
+import { type DBExecutor, db } from "../../db/kysely.js";
 import { recordActivity } from "../../lib/helpers.js";
 import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
 import { recordProjectActivity } from "./tracker-project-serialize.js";
+
+/**
+ * Live `cards` rows in the project. Column-less rows are Tracker items and feed
+ * the released triples; rows with a column are board cards.
+ */
+async function loadProjectCards(
+	trx: DBExecutor,
+	workspaceId: number,
+	projectId: number,
+) {
+	const rows = await trx
+		.selectFrom("cards")
+		.select(["id", "title", "column_id", "project_id", "phase_id"])
+		.where("workspace_id", "=", workspaceId)
+		.where("project_id", "=", projectId)
+		.where("deleted_at", "is", null)
+		.orderBy("id")
+		.execute();
+
+	return {
+		cards: rows.filter((row) => row.column_id !== null),
+		releasedTriples: rows
+			.filter((row) => row.column_id === null)
+			.map((row) => ({
+				itemId: row.id,
+				projectId: row.project_id!,
+				phaseId: row.phase_id,
+			})),
+	};
+}
 
 export async function deleteProjectTransaction(
 	workspaceId: number,
@@ -26,26 +56,11 @@ export async function deleteProjectTransaction(
 			return { kind: "not_found" as const };
 		}
 
-		const items = await trx
-			.selectFrom("tracker_items")
-			.select(["id", "project_id", "phase_id"])
-			.where("project_id", "=", projectId)
-			.where("deleted_at", "is", null)
-			.execute();
-
-		const releasedTriples = items.map((item) => ({
-			itemId: item.id,
-			projectId: item.project_id!,
-			phaseId: item.phase_id,
-		}));
-
-		const cards = await trx
-			.selectFrom("cards")
-			.select(["id", "title", "project_id", "phase_id"])
-			.where("workspace_id", "=", workspaceId)
-			.where("project_id", "=", projectId)
-			.where("deleted_at", "is", null)
-			.execute();
+		const { cards, releasedTriples } = await loadProjectCards(
+			trx,
+			workspaceId,
+			projectId,
+		);
 
 		const releasedCardIds: number[] = [];
 
@@ -65,8 +80,10 @@ export async function deleteProjectTransaction(
 			.execute();
 
 		await trx
-			.updateTable("tracker_items")
+			.updateTable("cards")
 			.set({ project_id: null, phase_id: null })
+			.where("workspace_id", "=", workspaceId)
+			.where("column_id", "is", null)
 			.where("project_id", "=", projectId)
 			.execute();
 
@@ -80,6 +97,7 @@ export async function deleteProjectTransaction(
 				})
 				.where("project_id", "=", projectId)
 				.where("workspace_id", "=", workspaceId)
+				.where("column_id", "is not", null)
 				.where("deleted_at", "is", null)
 				.returning(["id"])
 				.execute();

@@ -9,7 +9,14 @@ const orchestrationLog: string[] = [];
 function chainable(result: unknown, table?: string) {
 	const b: any = {};
 	let locked = false;
-	for (const m of ["where", "returning", "orderBy", "select", "innerJoin", "$if"]) {
+	for (const m of [
+		"where",
+		"returning",
+		"orderBy",
+		"select",
+		"innerJoin",
+		"$if",
+	]) {
 		b[m] = vi.fn(() => b);
 	}
 	b.forUpdate = vi.fn(() => {
@@ -19,7 +26,7 @@ function chainable(result: unknown, table?: string) {
 	});
 	const isArray = Array.isArray(result);
 	b.execute = vi.fn().mockImplementation(async () => {
-		if (table && !locked && (table === "tracker_items" || table === "cards")) {
+		if (table && !locked && table === "cards") {
 			orchestrationLog.push(`scan:${table}`);
 		}
 		return isArray ? result : [result];
@@ -47,8 +54,12 @@ let phaseItems: Array<{
 }> = [];
 let noPhaseMaxPosition: number | null = null;
 let projectExists = true;
-let cardRows: Array<{ id: number; title: string; project_id: number; phase_id: number }> =
-	[];
+let cardRows: Array<{
+	id: number;
+	title: string;
+	project_id: number;
+	phase_id: number;
+}> = [];
 
 function makeTrx() {
 	const trx: any = {};
@@ -66,24 +77,21 @@ function makeTrx() {
 			return chainable({ max_position: phaseMaxPosition }, table);
 		}
 		if (table === "cards") {
-			return chainable(cardRows, table);
-		}
-		if (table === "tracker_items") {
-			const b = chainable(phaseItems, table);
-			b.orderBy = vi.fn(() => {
-				const ordered = chainable(phaseItems, table);
-				ordered.execute = vi.fn().mockImplementation(async () => {
-					orchestrationLog.push("scan:tracker_items");
-					return phaseItems;
-				});
-				return ordered;
-			});
-			b.execute = vi.fn().mockImplementation(async () => {
-				orchestrationLog.push("scan:tracker_items");
-				return phaseItems;
-			});
-			b.executeTakeFirst = vi.fn().mockResolvedValue({
-				max_position: noPhaseMaxPosition,
+			// Three reads hit `cards`: board cards (selects title), column-less
+			// items (selects id/project_id/phase_id) and the no-phase bucket max.
+			const b = chainable(cardRows, table);
+			b.select = vi.fn((cols: unknown) => {
+				if (!Array.isArray(cols)) {
+					b.executeTakeFirst = vi.fn().mockResolvedValue({
+						max_position: noPhaseMaxPosition,
+					});
+				} else if (!cols.includes("title")) {
+					b.execute = vi.fn().mockImplementation(async () => {
+						orchestrationLog.push("scan:cards");
+						return phaseItems;
+					});
+				}
+				return b;
 			});
 			return b;
 		}
@@ -144,12 +152,10 @@ vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 vi.mock("../../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
 
-import { publishEvent } from "../../realtime.js";
 import { recordActivity } from "../../lib/helpers.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
+import { publishEvent } from "../../realtime.js";
 import { trackerPhasesRouter } from "./tracker-phases.js";
 
 const app = express();
@@ -179,7 +185,6 @@ beforeEach(() => {
 	mockUpdateTable.mockReset();
 	mockTransaction.mockReset();
 	vi.mocked(publishEvent).mockReset();
-	vi.mocked(recordTrackerActivity).mockReset();
 	vi.mocked(recordActivity).mockReset();
 });
 
@@ -351,6 +356,12 @@ describe("PATCH /tracker/phases/:id", () => {
 });
 
 describe("DELETE /tracker/phases/:id", () => {
+	// Column-less items are re-bucketed with a `plan_position`; board cards only
+	// get a version bump.
+	const releasedItemUpdates = () =>
+		updatedSets.filter(
+			(u) => u.table === "cards" && "plan_position" in u.values,
+		);
 	const releasedItems = [
 		{
 			id: 101,
@@ -382,7 +393,7 @@ describe("DELETE /tracker/phases/:id", () => {
 		expect(
 			updatedSets.find((u) => u.table === "tracker_phases")?.values.deleted_at,
 		).toBeTruthy();
-		const itemUpdates = updatedSets.filter((u) => u.table === "tracker_items");
+		const itemUpdates = releasedItemUpdates();
 		expect(itemUpdates.length).toBeGreaterThan(0);
 		for (const update of itemUpdates) {
 			expect(update.values.phase_id).toBeNull();
@@ -390,10 +401,13 @@ describe("DELETE /tracker/phases/:id", () => {
 		}
 	});
 
-	it("writes exactly one tracker_events row carrying the released (itemId, projectId, phaseId) triples", async () => {
+	it("writes exactly one tracker_phase_deleted event carrying the released (itemId, projectId, phaseId) triples", async () => {
 		await request(app).delete("/workspaces/7/tracker/phases/11");
-		expect(recordTrackerActivity).toHaveBeenCalledTimes(1);
-		const [, , , , opts] = vi.mocked(recordTrackerActivity).mock.calls[0] as any[];
+		expect(recordActivity).toHaveBeenCalledTimes(1);
+		const [, , , eventType, opts] = vi.mocked(recordActivity).mock
+			.calls[0] as any[];
+		expect(eventType).toBe("tracker_phase_deleted");
+		expect(opts.cardId).toBeUndefined();
 		expect(opts.payload.released).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ itemId: 101, projectId: 3, phaseId: 11 }),
@@ -413,7 +427,7 @@ describe("DELETE /tracker/phases/:id", () => {
 
 	it("leaves version and updated_at unchanged on released tasks", async () => {
 		await request(app).delete("/workspaces/7/tracker/phases/11");
-		const itemUpdates = updatedSets.filter((u) => u.table === "tracker_items");
+		const itemUpdates = releasedItemUpdates();
 		for (const update of itemUpdates) {
 			expect(update.values).not.toHaveProperty("version");
 			expect(update.values).not.toHaveProperty("updated_at");
@@ -421,9 +435,7 @@ describe("DELETE /tracker/phases/:id", () => {
 	});
 
 	it("locks phase removal before dependent scans", async () => {
-		cardRows = [
-			{ id: 201, title: "Board card", project_id: 3, phase_id: 11 },
-		];
+		cardRows = [{ id: 201, title: "Board card", project_id: 3, phase_id: 11 }];
 		await request(app).delete("/workspaces/7/tracker/phases/11");
 
 		const workspaceLock = orchestrationLog.indexOf("lock:workspaces");
@@ -433,9 +445,6 @@ describe("DELETE /tracker/phases/:id", () => {
 		);
 		const phaseLock = orchestrationLog.indexOf("lock:tracker_phases as tp");
 		const dependentScan = Math.min(
-			orchestrationLog.indexOf("scan:tracker_items") === -1
-				? Number.POSITIVE_INFINITY
-				: orchestrationLog.indexOf("scan:tracker_items"),
 			orchestrationLog.indexOf("scan:cards") === -1
 				? Number.POSITIVE_INFINITY
 				: orchestrationLog.indexOf("scan:cards"),
@@ -455,8 +464,8 @@ describe("DELETE /tracker/phases/:id", () => {
 		];
 		await request(app).delete("/workspaces/7/tracker/phases/11");
 		const positions = updatedSets
-			.filter((u) => u.table === "tracker_items")
-			.map((u) => u.values.position);
+			.filter((u) => u.table === "cards" && "plan_position" in u.values)
+			.map((u) => u.values.plan_position);
 		expect(positions).toEqual([
 			noPhaseMaxPosition! + POSITION_GAP,
 			noPhaseMaxPosition! + POSITION_GAP * 2,

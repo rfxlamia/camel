@@ -179,7 +179,14 @@ export async function recordActivity(
 		| "linear_ticket_created"
 		| "focus_session"
 		| "attachment_added"
-		| "attachment_removed",
+		| "attachment_removed"
+		| "tracker_project_created"
+		| "tracker_project_updated"
+		| "tracker_project_deleted"
+		| "tracker_phase_created"
+		| "tracker_phase_updated"
+		| "tracker_phase_deleted"
+		| "tracker_vocabulary_created",
 	opts: {
 		cardId?: number | null;
 		fromColumnId?: number | null;
