@@ -116,7 +116,59 @@ describe.skipIf(!runIntegration)("cutover snapshot parity gate", () => {
 		});
 		await applySchema(scratch.client, { workItemMerge: true });
 
-		expect(await verifySnapshot(db, snapshot)).toBe(true);
+		const report = await verifySnapshot(db, snapshot);
+		expect(report.matches).toBe(true);
+		expect(
+			report.workspaces.map(({ workspaceId, matches }) => ({
+				workspaceId,
+				matches,
+			})),
+		).toEqual(
+			[reference.workspaceId, secondaryWorkspaceId]
+				.sort((a, b) => a - b)
+				.map((workspaceId) => ({ workspaceId, matches: true })),
+		);
 		await expect(main(["verify", snapshotFile])).resolves.toBe(0);
+	});
+
+	it("identifies only the workspace whose board key changed after the snapshot", async () => {
+		const snapshot = await takeSnapshot(db);
+		await writeFile(snapshotFile, `${JSON.stringify(snapshot)}\n`, {
+			mode: 0o600,
+		});
+		await applySchema(scratch.client, { workItemMerge: true });
+		const [card] = await rows<{ id: number }>(
+			scratch,
+			"SELECT id FROM cards WHERE workspace_id = $1 AND key_number = $2",
+			[reference.workspaceId, reference.boardKeys[0]],
+		);
+		await scratch.client.query(
+			"UPDATE cards SET key_number = 10000 WHERE id = $1",
+			[card.id],
+		);
+
+		const report = await verifySnapshot(db, snapshot);
+		expect(report.matches).toBe(false);
+		expect(report.mismatches.map((workspace) => workspace.workspaceId)).toEqual(
+			[reference.workspaceId],
+		);
+		const originalKeys =
+			snapshot.workspaces.find(
+				(workspace) => workspace.workspaceId === reference.workspaceId,
+			)?.keys ?? [];
+		expect(report.mismatches[0]?.differences).toEqual({
+			keys: {
+				expected: originalKeys,
+				actual: originalKeys
+					.map((key) => (key === reference.boardKeys[0] ? 10000 : key))
+					.sort((a, b) => a - b),
+			},
+		});
+		expect(
+			report.workspaces
+				.filter((workspace) => workspace.matches)
+				.map((workspace) => workspace.workspaceId),
+		).toEqual([secondaryWorkspaceId]);
+		await expect(main(["verify", snapshotFile])).resolves.toBe(1);
 	});
 });

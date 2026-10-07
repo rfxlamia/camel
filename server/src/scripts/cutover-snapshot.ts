@@ -26,6 +26,26 @@ export type CutoverSnapshot = {
 	workspaces: WorkspaceSnapshot[];
 };
 
+type SnapshotMetrics = Omit<WorkspaceSnapshot, "workspaceId">;
+type MetricKey = keyof SnapshotMetrics;
+type MetricValue = number | number[] | null;
+
+type MetricDifferences = Partial<
+	Record<MetricKey, { expected: MetricValue; actual: MetricValue }>
+>;
+
+export type WorkspaceComparison = {
+	workspaceId: number;
+	matches: boolean;
+	differences: MetricDifferences;
+};
+
+export type VerificationReport = {
+	matches: boolean;
+	workspaces: WorkspaceComparison[];
+	mismatches: WorkspaceComparison[];
+};
+
 type SnapshotRow = {
 	workspace_id: number;
 	keys: number[];
@@ -98,7 +118,10 @@ export async function takeSnapshot(
 	};
 }
 
-async function readMergedWorkspace(dbExec: DBExecutor, workspace: Workspace) {
+async function readMergedWorkspace(
+	dbExec: DBExecutor,
+	workspace: Workspace,
+): Promise<SnapshotMetrics> {
 	const prefix = derivePrefix(workspace.name);
 	const [items, columns, boardRows] = await Promise.all([
 		listMergedWorkItems(dbExec, workspace.id, prefix, ""),
@@ -141,36 +164,70 @@ async function readMergedWorkspace(dbExec: DBExecutor, workspace: Workspace) {
 	};
 }
 
+function compareMetrics(
+	expected: SnapshotMetrics | null,
+	actual: SnapshotMetrics | null,
+): MetricDifferences {
+	const differences: MetricDifferences = {};
+	const metrics: MetricKey[] = [
+		"keys",
+		"trackerCount",
+		"boardCount",
+		"inProgressCount",
+		"doneCount",
+	];
+	for (const metric of metrics) {
+		const expectedValue = expected?.[metric] ?? null;
+		const actualValue = actual?.[metric] ?? null;
+		const equal =
+			expectedValue !== null &&
+			actualValue !== null &&
+			(metric === "keys"
+				? JSON.stringify(expectedValue) === JSON.stringify(actualValue)
+				: expectedValue === actualValue);
+		if (!equal)
+			differences[metric] = { expected: expectedValue, actual: actualValue };
+	}
+	return differences;
+}
+
 /** Compare the snapshot with merged list and board response production readers. */
 export async function verifySnapshot(
 	dbExec: DBExecutor,
 	snapshot: CutoverSnapshot,
-): Promise<boolean> {
+): Promise<VerificationReport> {
 	const current = await dbExec
 		.selectFrom("workspaces")
 		.select(["id", "name"])
 		.orderBy("id")
 		.execute();
-	if (current.length !== snapshot.workspaces.length) return false;
-
 	const expectedById = new Map(
 		snapshot.workspaces.map((workspace) => [workspace.workspaceId, workspace]),
 	);
-	for (const workspace of current) {
-		const expected = expectedById.get(workspace.id);
-		if (!expected) return false;
-		const actual = await readMergedWorkspace(dbExec, workspace);
-		if (
-			JSON.stringify(actual.keys) !== JSON.stringify(expected.keys) ||
-			actual.trackerCount !== expected.trackerCount ||
-			actual.boardCount !== expected.boardCount ||
-			actual.inProgressCount !== expected.inProgressCount ||
-			actual.doneCount !== expected.doneCount
-		) {
-			return false;
-		}
+	const currentById = new Map(
+		current.map((workspace) => [workspace.id, workspace]),
+	);
+	const workspaceIds = [
+		...new Set([...expectedById.keys(), ...currentById.keys()]),
+	].sort((a, b) => a - b);
+	const workspaces: WorkspaceComparison[] = [];
+
+	for (const workspaceId of workspaceIds) {
+		const expectedSnapshot = expectedById.get(workspaceId);
+		const currentWorkspace = currentById.get(workspaceId);
+		const actual = currentWorkspace
+			? await readMergedWorkspace(dbExec, currentWorkspace)
+			: null;
+		const differences = compareMetrics(expectedSnapshot ?? null, actual);
+		workspaces.push({
+			workspaceId,
+			matches: Object.keys(differences).length === 0,
+			differences,
+		});
 	}
-	return true;
+
+	const mismatches = workspaces.filter((workspace) => !workspace.matches);
+	return { matches: mismatches.length === 0, workspaces, mismatches };
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -198,9 +255,24 @@ export async function main(argv: string[]): Promise<number> {
 		const snapshot = JSON.parse(
 			await readFile(file, "utf8"),
 		) as CutoverSnapshot;
-		const matches = await verifySnapshot(db, snapshot);
-		console.log(JSON.stringify({ event: "cutover_verify", matches }));
-		return matches ? 0 : 1;
+		const report = await verifySnapshot(db, snapshot);
+		for (const mismatch of report.mismatches) {
+			console.error(
+				JSON.stringify({
+					event: "cutover_verify_mismatch",
+					workspaceId: mismatch.workspaceId,
+					differences: mismatch.differences,
+				}),
+			);
+		}
+		console.log(
+			JSON.stringify({
+				event: "cutover_verify",
+				matches: report.matches,
+				mismatchCount: report.mismatches.length,
+			}),
+		);
+		return report.matches ? 0 : 1;
 	} catch (error) {
 		console.error("Cutover snapshot operation failed:", error);
 		return 1;
