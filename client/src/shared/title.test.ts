@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { formatTitle, getFaviconLink } from "./title";
 
@@ -29,4 +31,10 @@ describe("getFaviconLink", () => {
 			"/uploads/logo-123-abc.png",
 		);
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });
