@@ -149,9 +149,10 @@
         {
           "id": "T6",
           "name": "Event readers tolerate merged events",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T3",
-          "file": "execution-plan/tasks/T6-event-readers-tolerate-merged-events.md"
+          "file": "execution-plan/tasks/T6-event-readers-tolerate-merged-events.md",
+          "done_sha": "2ca1200899ea041c8de21295121d6c3fc690a719"
         },
         {
           "id": "T7",
