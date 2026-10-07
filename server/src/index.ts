@@ -9,7 +9,7 @@ import {
 import { createOriginValidator } from "./core/cors.js";
 import { pool } from "./db/pool.js";
 import { connectRedis } from "./db/redis.js";
-import { buildHealthPayload } from "./lib/health.js";
+import { registerHealthRoutes } from "./lib/health.js";
 import { logger } from "./lib/logger.js";
 import {
 	csrfProtection,
@@ -69,6 +69,9 @@ app.use((req, res, next) => {
 	return requestTimeout(30000)(req, res, next);
 });
 
+// Unauthenticated and cookie-free: mounted before CSRF cookie middleware.
+registerHealthRoutes(app, { isShuttingDown: () => isShuttingDown });
+
 // Issue CSRF cookie on every response
 app.use(setCsrfToken);
 
@@ -95,11 +98,6 @@ app.use(
 	},
 	express.static(UPLOADS_DIR),
 );
-
-app.get("/health", (_req, res) => {
-	if (isShuttingDown) return res.status(503).json({ status: "shutting_down" });
-	res.json(buildHealthPayload());
-});
 
 // CSRF token endpoint for client to retrieve the token
 app.get("/api/csrf-token", (req, res) => {

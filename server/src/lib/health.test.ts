@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import express from "express";
+import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const snapshot = { count: 3, p50: 1, p95: 2, max: 3 };
@@ -6,7 +9,11 @@ vi.mock("../core/work-item-latency.js", () => ({
 	getListLatencySnapshot: () => snapshot,
 }));
 
-import { buildHealthPayload } from "./health.js";
+import {
+	buildHealthPayload,
+	HEALTH_PATH,
+	registerHealthRoutes,
+} from "./health.js";
 
 describe("buildHealthPayload", () => {
 	const original = process.env.BUILD_ID;
@@ -29,5 +36,52 @@ describe("buildHealthPayload", () => {
 		const first = buildHealthPayload().buildId;
 		expect(first.length).toBeGreaterThan(0);
 		expect(buildHealthPayload().buildId).toBe(first);
+	});
+});
+
+describe.skipIf(!process.env.RUN_INTEGRATION)("health routes", () => {
+	const appWith = (shuttingDown: boolean) => {
+		const app = express();
+		registerHealthRoutes(app, { isShuttingDown: () => shuttingDown });
+		return app;
+	};
+
+	it("serves HEALTH_PATH unauthenticated with a build id and no cookies", async () => {
+		const res = await request(appWith(false)).get(HEALTH_PATH);
+		expect(res.status).toBe(200);
+		expect(res.body).toMatchObject({ ok: true });
+		expect(typeof res.body.buildId).toBe("string");
+		expect(res.headers["set-cookie"]).toBeUndefined();
+	});
+
+	it("keeps /health with the same payload", async () => {
+		const res = await request(appWith(false)).get("/health");
+		expect(res.status).toBe(200);
+		expect(res.body.buildId).toBeTruthy();
+	});
+
+	it("returns 503 on both routes while shutting down", async () => {
+		const app = appWith(true);
+		for (const path of [HEALTH_PATH, "/health"]) {
+			const res = await request(app).get(path);
+			expect(res.status).toBe(503);
+			expect(res.body).toEqual({ status: "shutting_down" });
+		}
+	});
+});
+
+describe("health contract with the reload hook", () => {
+	const hook = readFileSync(
+		new URL("../../../client/src/shared/useBuildReload.ts", import.meta.url),
+		"utf8",
+	);
+
+	it("exports the path the hook fetches", () => {
+		expect(HEALTH_PATH).toBe("/api/health");
+		expect(hook).toContain(`"${HEALTH_PATH}"`);
+	});
+
+	it("reads the buildId field", () => {
+		expect(hook).toContain("buildId");
 	});
 });
