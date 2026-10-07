@@ -104,6 +104,7 @@ activityRouter.get(
 			.where("id", "=", cardId)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
+			.where("column_id", "is not", null)
 			.executeTakeFirst();
 		if (!cardCheck) {
 			return res.status(404).json({ error: "Not found" });

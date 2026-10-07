@@ -178,3 +178,37 @@ integration("GET /activity merged-event tolerance", () => {
 		}
 	});
 });
+
+integration("GET /cards/:id/activity column-less items", () => {
+	it("returns the existing 404 for a column-less card", async () => {
+		const { cardId } = await setupFixtures();
+		await pool.query("UPDATE cards SET column_id = NULL WHERE id = $1", [
+			cardId,
+		]);
+
+		const res = await request(app).get(
+			`/workspaces/${WORKSPACE_ID}/cards/${cardId}/activity`,
+		);
+
+		expect(res.status).toBe(404);
+		expect(res.body).toEqual({ error: "Not found" });
+	});
+
+	it("still returns 200 with events for a normal board card", async () => {
+		const { columnId, cardId } = await setupFixtures();
+		await insertCardEvent("move", {
+			cardId,
+			fromColumnId: columnId,
+			toColumnId: columnId,
+			payload: { cardTitle: "Feed test card" },
+		});
+
+		const res = await request(app).get(
+			`/workspaces/${WORKSPACE_ID}/cards/${cardId}/activity`,
+		);
+
+		expect(res.status).toBe(200);
+		expect(res.body.events).toHaveLength(1);
+		expect(res.body.events[0].type).toBe("move");
+	});
+});
