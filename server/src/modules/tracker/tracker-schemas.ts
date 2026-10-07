@@ -58,3 +58,13 @@ export const nameField = trimmedRequired("name is required");
 export { requiredVersion };
 export const titleField = trimmedRequired("title is required");
 export const statusIdField = intField("statusId must be an integer");
+
+const COLUMN_LOCKED_MESSAGE = "column_id cannot be set on a Tracker item";
+
+/**
+ * Tracker items are column-less `cards` rows; a PATCH may never give them a
+ * column (no promote flow). Any `column_id` key, even null, is rejected.
+ */
+export const trackerPatchColumnGuard = z.looseObject({
+	column_id: z.never({ error: COLUMN_LOCKED_MESSAGE }).optional(),
+});

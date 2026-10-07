@@ -498,5 +498,39 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				expect((await junctions(id)).assignees).toEqual([]);
 			});
 		});
+
+		describe("promotion through PATCH", () => {
+			it("rejects column_id with 400 {error, fieldErrors} and leaves the row unchanged", async () => {
+				await request(app)
+					.post(`${BASE}/tracker/items`)
+					.send({ title: "Fixed" });
+				const { rows: cols } = await pool.query(
+					"SELECT id FROM columns ORDER BY id LIMIT 1",
+				);
+				const before = (await cardRows())[0];
+
+				for (const body of [
+					{ title: "Promoted", column_id: cols[0]?.id ?? 1, version: 1 },
+					{ title: "Promoted", column_id: null, version: 1 },
+				]) {
+					const res = await request(app)
+						.patch(`${BASE}/work-items/CA-1`)
+						.send(body);
+					expect(res.status).toBe(400);
+					expect(typeof res.body.error).toBe("string");
+					expect(res.body.fieldErrors).toEqual({
+						column_id: expect.any(String),
+					});
+				}
+
+				const after = (await cardRows())[0];
+				expect(after).toMatchObject({
+					title: before.title,
+					version: before.version,
+					column_id: null,
+				});
+				expect(await eventTypes(after.id)).toEqual(["tracker_item_created"]);
+			});
+		});
 	},
 );

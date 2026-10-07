@@ -17,7 +17,7 @@ import {
 	updateTrackerItemStatusOnly,
 } from "./tracker-item-update-status.js";
 import { writeTrackerUpdate } from "./tracker-item-update-write.js";
-import { parseTrackerKey } from "./tracker-schemas.js";
+import { parseTrackerKey, trackerPatchColumnGuard } from "./tracker-schemas.js";
 
 export async function updateTrackerItemHandler(req: Request, res: Response) {
 	const { workspaceId } = req.workspace!;
@@ -53,6 +53,11 @@ export async function updateTrackerItemHandler(req: Request, res: Response) {
 			keyNumber: parsed.keyNumber,
 		});
 	}
+
+	const columnGuard = parseWith(trackerPatchColumnGuard, body, {
+		fieldErrors: true,
+	});
+	if (!columnGuard.ok) return sendValidationError(res, columnGuard.body);
 
 	if (isStatusOnlyUpdate(body)) {
 		return updateTrackerItemStatusOnly(req, res, {
