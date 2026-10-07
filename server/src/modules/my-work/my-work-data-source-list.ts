@@ -37,6 +37,18 @@ export async function listAuthorizedMyWorkspaces(
 	}));
 }
 
+/**
+ * The caller's assigned card ids are read once as an init plan, so cards are
+ * fetched by primary key. A semi-join/EXISTS lets the planner rescan
+ * card_assignees per candidate row when column_id statistics are stale
+ * (e.g. right after column-less rows are first created or migrated).
+ */
+function assignedToUser(userId: number) {
+	return sql<boolean>`c.id = ANY(ARRAY(
+		SELECT "me_ca"."card_id" FROM "card_assignees" AS "me_ca" WHERE "me_ca"."user_id" = ${userId}
+	))`;
+}
+
 function buildTrackerRowsQuery(
 	executor: DBExecutor,
 	input: MyWorkSourceQueryInput,
@@ -57,15 +69,7 @@ function buildTrackerRowsQuery(
 					.where("auth_wm.user_id", "=", input.userId),
 			),
 		)
-		.where((eb) =>
-			eb.exists(
-				eb
-					.selectFrom("card_assignees as me_ca")
-					.select("me_ca.card_id")
-					.whereRef("me_ca.card_id", "=", "c.id")
-					.where("me_ca.user_id", "=", input.userId),
-			),
-		);
+		.where(assignedToUser(input.userId));
 	if (input.workspaceId !== undefined) {
 		query = query.where("c.workspace_id", "=", input.workspaceId);
 	}
@@ -124,15 +128,7 @@ function buildBoardRowsQuery(
 					.where("auth_wm.user_id", "=", input.userId),
 			),
 		)
-		.where((eb) =>
-			eb.exists(
-				eb
-					.selectFrom("card_assignees as me_ca")
-					.select("me_ca.card_id")
-					.whereRef("me_ca.card_id", "=", "c.id")
-					.where("me_ca.user_id", "=", input.userId),
-			),
-		);
+		.where(assignedToUser(input.userId));
 	if (input.workspaceId !== undefined) {
 		query = query.where("c.workspace_id", "=", input.workspaceId);
 	}
