@@ -231,4 +231,100 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			).length,
 		).toBe(5);
 	});
+	it("copies item-less events, rewrites released ids and remaps focus sessions", async () => {
+		const ws = await seedWorkspace(s, `c2-${tag}`);
+		const a = await seedItem(s, ws, 21);
+		const b = await seedItem(s, ws, 22);
+		await seedEvents(s, ws, null, 1, "tracker_project_created", {
+			projectId: 7,
+			name: "p",
+		});
+		await seedEvents(s, ws, null, 2, "tracker_vocabulary_created", {
+			vocabularyId: 9,
+		});
+		await seedEvents(s, ws, null, 1, "tracker_project_deleted", {
+			projectId: 7,
+			released: [
+				{ itemId: b, projectId: 7, phaseId: null },
+				{ itemId: a, projectId: 7, phaseId: 3 },
+			],
+		});
+		await s.client.query(
+			`INSERT INTO focus_sessions (user_id, workspace_id, task_source, task_id, task_key, return_path, state)
+			 VALUES ($1, $3, 'tracker', $4, 'K-21', '/tracker/K-21', 'ready'),
+			        ($2, $3, 'board', $4, NULL, '/board/card/' || $4, 'ready')`,
+			[ws.userId, ws.otherUserId, ws.id, a],
+		);
+
+		await applySchema(s.client);
+
+		const map = new Map(
+			(await rows(s, "SELECT id, migrated_to_id FROM tracker_items")).map(
+				(r) => [r.id, r.migrated_to_id],
+			),
+		);
+		const events = await rows(
+			s,
+			"SELECT * FROM card_events WHERE card_id IS NULL AND workspace_id = $1 ORDER BY created_at, id",
+			[ws.id],
+		);
+		expect(events.map((e) => e.event_type).sort()).toEqual([
+			"tracker_project_created",
+			"tracker_project_deleted",
+			"tracker_vocabulary_created",
+			"tracker_vocabulary_created",
+		]);
+		expect(
+			events.find((e) => e.event_type === "tracker_project_created").payload,
+		).toEqual({ projectId: 7, name: "p" });
+		expect(
+			events.find((e) => e.event_type === "tracker_project_deleted").payload,
+		).toEqual({
+			projectId: 7,
+			released: [
+				{ itemId: map.get(b), projectId: 7, phaseId: null },
+				{ itemId: map.get(a), projectId: 7, phaseId: 3 },
+			],
+		});
+
+		const focus = await rows(
+			s,
+			"SELECT task_source, task_id, return_path FROM focus_sessions ORDER BY task_source",
+		);
+		expect(focus[0]).toMatchObject({
+			task_source: "board",
+			task_id: a,
+			return_path: `/board/card/${a}`,
+		});
+		expect(focus[1]).toMatchObject({
+			task_source: "tracker",
+			task_id: map.get(a),
+			return_path: "/tracker/K-21",
+		});
+		const orphans = await rows(
+			s,
+			`SELECT 1 FROM focus_sessions f
+			 WHERE f.task_source = 'tracker'
+			   AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.id = f.task_id)`,
+		);
+		expect(orphans).toHaveLength(0);
+
+		// idempotent: a second run copies and remaps nothing
+		await applySchema(s.client);
+		expect(
+			(
+				await rows(s, "SELECT id FROM card_events WHERE workspace_id = $1", [
+					ws.id,
+				])
+			).length,
+		).toBe(4);
+		expect(
+			(
+				await rows(
+					s,
+					"SELECT task_id FROM focus_sessions WHERE task_source = 'tracker'",
+				)
+			)[0].task_id,
+		).toBe(map.get(a));
+	});
 });

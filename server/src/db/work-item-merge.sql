@@ -111,4 +111,71 @@ BEGIN
   FROM tracker_events AS e
   JOIN wim_map AS m ON m.old_id = e.tracker_item_id
   ORDER BY e.id;
+
+  -- Item-less events (project/phase/vocabulary) keep card_id NULL. For delete
+  -- events, payload.released[].itemId is rewritten to the new card id through
+  -- the persisted tracker_items.migrated_to_id; unresolvable ids stay as-is.
+  -- Idempotency: copy only the rows beyond the number of identical rows
+  -- already present in card_events (matched with row_number()).
+  CREATE TEMP TABLE wim_item_less ON COMMIT DROP AS
+  WITH rewritten AS (
+    SELECT
+      e.id AS src_id, e.workspace_id, e.actor_id, e.event_type, e.created_at,
+      CASE
+        WHEN e.event_type IN ('tracker_project_deleted', 'tracker_phase_deleted')
+         AND jsonb_typeof(e.payload -> 'released') = 'array'
+        THEN jsonb_set(e.payload, '{released}', (
+          SELECT COALESCE(jsonb_agg(
+            CASE
+              WHEN jsonb_typeof(r.elem -> 'itemId') = 'number'
+               AND ti.migrated_to_id IS NOT NULL
+              THEN jsonb_set(r.elem, '{itemId}', to_jsonb(ti.migrated_to_id))
+              ELSE r.elem
+            END ORDER BY r.ord), '[]'::jsonb)
+          FROM jsonb_array_elements(e.payload -> 'released')
+            WITH ORDINALITY AS r(elem, ord)
+          LEFT JOIN tracker_items AS ti
+            ON jsonb_typeof(r.elem -> 'itemId') = 'number'
+           AND ti.id = (r.elem ->> 'itemId')::integer
+           AND ti.workspace_id = e.workspace_id
+        ))
+        ELSE e.payload
+      END AS payload
+    FROM tracker_events AS e
+    WHERE e.tracker_item_id IS NULL
+  )
+  SELECT
+    w.*,
+    row_number() OVER (
+      PARTITION BY w.workspace_id, w.event_type, w.actor_id, w.payload, w.created_at
+      ORDER BY w.src_id
+    ) AS rn
+  FROM rewritten AS w;
+
+  INSERT INTO card_events (
+    card_id, from_column_id, to_column_id, actor_id, event_type, payload,
+    workspace_id, created_at
+  )
+  SELECT NULL, NULL, NULL, w.actor_id, w.event_type, w.payload,
+         w.workspace_id, w.created_at
+  FROM wim_item_less AS w
+  WHERE w.rn > (
+    SELECT count(*)
+    FROM card_events AS ce
+    WHERE ce.card_id IS NULL
+      AND ce.workspace_id = w.workspace_id
+      AND ce.event_type = w.event_type
+      AND ce.actor_id IS NOT DISTINCT FROM w.actor_id
+      AND ce.payload = w.payload
+      AND ce.created_at = w.created_at
+  )
+  ORDER BY w.src_id;
+
+  -- Focus sessions keep task_source = 'tracker'; only the id is remapped.
+  UPDATE focus_sessions AS f
+  SET task_id = m.new_id
+  FROM wim_map AS m
+  WHERE f.task_source = 'tracker'
+    AND f.task_id = m.old_id
+    AND f.workspace_id = m.workspace_id;
 END $work_item_merge_copy$;
