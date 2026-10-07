@@ -41,6 +41,7 @@ export async function applyBoardCardStatusChange(
 		.where("id", "=", params.cardId)
 		.where("workspace_id", "=", params.workspaceId)
 		.where("deleted_at", "is", null)
+		.where("column_id", "is not", null)
 		.forUpdate()
 		.executeTakeFirst();
 	if (!card) return { kind: "not_found" };

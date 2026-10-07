@@ -237,6 +237,7 @@ export function createFocusSessionRepo(executor = db): FocusSessionRepo {
 					.where("cards.id", "=", taskId)
 					.where("cards.workspace_id", "=", workspaceId)
 					.where("cards.deleted_at", "is", null)
+					.where("cards.column_id", "is not", null)
 					.executeTakeFirst();
 				if (!row) return null;
 				return {

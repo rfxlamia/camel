@@ -103,6 +103,7 @@ async function readAuthorizedItem(
 			.where("workspace_id", "=", input.workspaceId)
 			.where("key_number", "=", input.keyNumber)
 			.where("deleted_at", "is", null)
+			.where("column_id", "is not", null)
 			.forUpdate()
 			.executeTakeFirst();
 		if (!item || !(await assignmentExists(trx, input, item.id))) return null;
