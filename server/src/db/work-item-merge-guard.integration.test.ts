@@ -372,4 +372,79 @@ describe.skipIf(!runIntegration)("work-item-merge guard", () => {
 		);
 		expect(row.n).toBe(1);
 	});
+
+	// Labeled regression guard: the cycle 1 run-once guard plus the
+	// `migrated_to_id IS NULL` scoping of the copy already satisfy this. Proven
+	// able to fail by removing that filter from the copy's INSERT ... SELECT.
+	it("Partially migrated state only processes the remaining rows", async () => {
+		const ws = await seedWorkspace(s, `g6-${tag}`);
+		const ids: number[] = [];
+		for (const key of [61, 62, 63, 64, 65])
+			ids.push(await seedItem(s, ws, key));
+		await applySchema(s.client, ENABLED);
+
+		// Rebuild an interrupted state: only the first 2 rows stay migrated.
+		const remaining = ids.slice(2);
+		const stale = await rows(
+			s,
+			"SELECT migrated_to_id FROM tracker_items WHERE id = ANY($1)",
+			[remaining],
+		);
+		await s.client.query("DELETE FROM cards WHERE id = ANY($1)", [
+			stale.map((r) => r.migrated_to_id),
+		]);
+		await s.client.query(
+			"UPDATE tracker_items SET migrated_to_id = NULL WHERE id = ANY($1)",
+			[remaining],
+		);
+		await s.client.query(
+			"UPDATE cards SET title = 'edited' WHERE id IN (SELECT migrated_to_id FROM tracker_items WHERE id = ANY($1))",
+			[ids.slice(0, 2)],
+		);
+		const firstTwoBefore = await rows(
+			s,
+			"SELECT * FROM cards WHERE id IN (SELECT migrated_to_id FROM tracker_items WHERE id = ANY($1)) ORDER BY id",
+			[ids.slice(0, 2)],
+		);
+		expect(firstTwoBefore).toHaveLength(2);
+
+		const { notices } = await withNotices(s, () =>
+			applySchema(s.client, ENABLED),
+		);
+
+		expect(notices.filter((m) => m.includes("workspace="))).toEqual([
+			`work-item-merge: workspace=${ws.id} tracker_before=3 cards_added=3`,
+		]);
+		expect(
+			await rows(
+				s,
+				"SELECT * FROM cards WHERE id IN (SELECT migrated_to_id FROM tracker_items WHERE id = ANY($1)) ORDER BY id",
+				[ids.slice(0, 2)],
+			),
+		).toEqual(firstTwoBefore);
+		const all = await rows(
+			s,
+			"SELECT key_number FROM cards WHERE workspace_id = $1 ORDER BY key_number",
+			[ws.id],
+		);
+		expect(all.map((r) => r.key_number)).toEqual([61, 62, 63, 64, 65]);
+		const unmigrated = await rows(
+			s,
+			"SELECT id FROM tracker_items WHERE migrated_to_id IS NULL",
+		);
+		expect(unmigrated).toHaveLength(0);
+
+		// Second run is a no-op.
+		const second = await withNotices(s, () => applySchema(s.client, ENABLED));
+		expect(second.notices.some((m) => m.includes("workspace="))).toBe(false);
+		expect(
+			(
+				await rows(
+					s,
+					"SELECT count(*)::int AS n FROM cards WHERE workspace_id = $1",
+					[ws.id],
+				)
+			)[0].n,
+		).toBe(5);
+	});
 });
