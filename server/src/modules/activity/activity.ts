@@ -64,6 +64,8 @@ activityRouter.get("/activity", requireWorkspaceMember, async (req, res) => {
 	const rows = await activitySelect()
 		.where("e.workspace_id", "=", workspaceId)
 		.where("e.event_type", "<>", "focus_session")
+		.where("e.event_type", "not like", "tracker_project_%")
+		.where("e.event_type", "not like", "tracker_phase_%")
 		.orderBy("e.created_at", "desc")
 		.orderBy("e.id", "desc")
 		.limit(limit)
