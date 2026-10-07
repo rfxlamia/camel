@@ -247,4 +247,66 @@ describe.skipIf(!runIntegration)("column-less scope (integration)", () => {
 		expect(payload.metrics.throughput).toBe(1);
 		expect(payload.metrics.wipCount).toBe(1);
 	});
+
+	// Regression guard: every reader already carries deleted_at IS NULL, and
+	// column_id IS NOT NULL independently excludes column-less rows, so the two
+	// predicates overlap. Only the soft-deleted column-less row remains here, so
+	// this fails only if a reader lacks both predicates.
+	it("regression guard: soft-deleted column-less item appears nowhere and keeps its key", async () => {
+		await pool.query("DELETE FROM cards WHERE id = ANY($1::int[])", [
+			fixture.columnLessIds,
+		]);
+		const status = await pool.query<{ id: number }>(
+			"SELECT id FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status'",
+			[WORKSPACE_ID],
+		);
+		const statusId = status.rows[0]!.id;
+		const deletedKey = 6;
+		const deletedId = await insertCard(
+			statusId,
+			null,
+			deletedKey,
+			{ created: "9 days", started: "8 days", done: "4 days" },
+			new Date().toISOString(),
+		);
+
+		const metrics = await request(app).get(
+			`/api/workspaces/${WORKSPACE_ID}/metrics`,
+		);
+		expect(metrics.body.throughput).toBe(1);
+		expect(metrics.body.wipCount).toBe(1);
+
+		const board = await request(app).get(
+			`/api/workspaces/${WORKSPACE_ID}/board`,
+		);
+		const listed = board.body.columns.flatMap((c: any) =>
+			c.cards.map((card: any) => card.id),
+		);
+		expect(listed).not.toContain(deletedId);
+		expect(listed).toHaveLength(fixture.boardIds.length);
+
+		expect(await activityDeps.fetchCardTimestamps(WORKSPACE_ID)).toHaveLength(
+			fixture.boardIds.length,
+		);
+		const tool = createChatToolFactory({
+			userId: currentUser.id,
+			threadId: 1,
+			messageId: 1,
+			workspaceId: WORKSPACE_ID,
+			insertAttachment: async () => {},
+		}).resolveTools(["query_board_data"])[0]!;
+		const chat = JSON.parse(
+			(await tool.execute({ data_types: ["metrics"] })).content,
+		);
+		expect(chat.metrics.throughput).toBe(1);
+		expect(chat.metrics.wipCount).toBe(1);
+
+		// The soft-deleted row still holds its key: a new item cannot reuse it.
+		await expect(
+			pool.query(
+				"INSERT INTO cards (workspace_id, column_id, title, position, status_id, key_number) VALUES ($1, NULL, 'dup', 1, $2, $3)",
+				[WORKSPACE_ID, statusId, deletedKey],
+			),
+		).rejects.toMatchObject({ code: "23505" });
+	});
 });
