@@ -74,3 +74,8 @@ Red flags:
 Done when: both scenarios pass and existing my-work/focus tests adapted
 Uncertain when: the SSE fake cannot assert payload ids
 Escalate when: the client needs a code change
+
+## Carried from Phase 4 T10 audit (2026-10-07)
+- `server/src/core/my-work-mark-done.ts` currently calls `applyLegacyTrackerItemStatusChange` from `core/legacy-tracker-item-status-change.ts` (still writes `tracker_items`/`tracker_events`). Switch it to `applyTrackerItemStatusChange` (`core/tracker-item-status-change.ts`, now on `cards`). Until then, My Work mark-done on a Tracker item created after T10 hits a stale `tracker_items` row.
+- My Work data sources import `selectTrackerItemRows` from `lib/legacy-tracker-item-response.ts`, and `lib/tracker-assignees.ts` `loadTrackerAssigneesForItems` still reads `tracker_item_assignees` (My Work only). Move both to the merged tables.
+- After the switch, delete `core/legacy-tracker-item-status-change.ts` and its test if nothing else imports them (otherwise leave for T21).

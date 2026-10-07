@@ -67,3 +67,7 @@ Red flags:
 Done when: scenario passes, full checks green, ADR written
 Uncertain when: the CI smoke step identity is unclear
 Escalate when: client change is unavoidable
+
+## Carried from Phase 4 T9/T10 audits (2026-10-07)
+- Remove the temporary shims if still present: `server/src/lib/legacy-tracker-item-response.ts`, `server/src/core/legacy-tracker-item-status-change.ts` (+ test).
+- `server/src/lib/tracker-item-activity.ts` casts `tracker_item_*` event types into `recordActivity` because the union in `lib/helpers.ts` (623 lines, 300-on-touch) was not widened. When `helpers.ts` is split, widen the union and drop the cast.
