@@ -1,5 +1,6 @@
 import type { CardTimestamps } from "../../../core/metrics.js";
 import { db } from "../../../db/kysely.js";
+import { resolveEventTitle } from "../../../lib/event-title.js";
 import type { Tool } from "../../../lib/llm/tool-types.js";
 import {
 	type ActivityItem,
@@ -51,19 +52,9 @@ type ActivityRow = {
 };
 
 export function toActivityItem(r: ActivityRow): ActivityItem {
-	const payload = r.payload as {
-		cardTitle?: unknown;
-		title?: unknown;
-	} | null;
-	const fromPayload =
-		typeof payload?.cardTitle === "string"
-			? payload.cardTitle
-			: typeof payload?.title === "string"
-				? payload.title
-				: null;
 	return {
 		type: r.event_type,
-		cardTitle: r.current_card_title ?? fromPayload,
+		cardTitle: r.current_card_title ?? resolveEventTitle(r.payload),
 		at: r.created_at.toISOString(),
 	};
 }

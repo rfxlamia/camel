@@ -1,3 +1,4 @@
+import { resolveEventTitle } from "./event-title.js";
 import type { WorkItemEvent } from "./work-item-events.js";
 
 export function toTrackerEvent(e: {
@@ -41,16 +42,8 @@ export function toCardTrackerEvent(e: {
 	from_column_title: string | null;
 	to_column_title: string | null;
 }): WorkItemEvent {
-	const payload = e.payload as
-		| { title?: string; cardTitle?: string }
-		| Record<string, unknown>
-		| null;
-	const titleFromPayload =
-		typeof payload?.cardTitle === "string"
-			? payload.cardTitle
-			: typeof payload?.title === "string"
-				? payload.title
-				: null;
+	const payload = e.payload as Record<string, unknown> | null;
+	const titleFromPayload = resolveEventTitle(payload);
 	const eventType = e.event_type.startsWith("tracker_")
 		? e.event_type
 		: e.event_type === "create"
