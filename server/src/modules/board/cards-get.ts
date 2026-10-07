@@ -8,6 +8,7 @@ import { parseWith, sendValidationError } from "../../validators/http.js";
 import { workspaceIdParam } from "../../validators/schemas.js";
 import { cardIdParam } from "./board-schemas.js";
 import { loadCardResponse, selectFullCard } from "./card-read.js";
+import { requireBoardCard } from "./require-board-card.js";
 
 export const cardsGetRouter = Router({ mergeParams: true });
 
@@ -30,6 +31,7 @@ cardsGetRouter.get("/cards/:id", async (req, res) => {
 			return r ? { role: r } : null;
 		},
 		getCardById: async (wsId, cId) => {
+			if (!(await requireBoardCard(db, wsId, cId))) return null;
 			const row = await selectFullCard(db)
 				.where("c.id", "=", cId)
 				.where("c.workspace_id", "=", wsId)

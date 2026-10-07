@@ -25,6 +25,7 @@ import {
 import { syncCardLabels } from "./card-labels.js";
 import { loadCardResponse, selectFullCard } from "./card-read.js";
 import { parseCardUpdateBody } from "./card-update-parse.js";
+import { requireBoardCard } from "./require-board-card.js";
 
 export const cardsUpdateRouter = Router({ mergeParams: true });
 
@@ -67,17 +68,9 @@ cardsUpdateRouter.patch(
 			  };
 
 		const result: TxResult = await db.transaction().execute(async (trx) => {
-			const lockedRow = await trx
-				.selectFrom("cards")
-				.select([
-					sql<string | null>`due_date::text`.as("due_date"),
-					"project_id",
-				])
-				.where("id", "=", id)
-				.where("workspace_id", "=", workspaceId)
-				.where("deleted_at", "is", null)
-				.forUpdate()
-				.executeTakeFirst();
+			const lockedRow = await requireBoardCard(trx, workspaceId, id, {
+				lock: true,
+			});
 			if (!lockedRow) {
 				return { kind: "not_found" };
 			}

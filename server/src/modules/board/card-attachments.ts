@@ -14,6 +14,7 @@ import {
 	existingCardMultipartMiddleware,
 	uploadExistingCardAttachments,
 } from "./card-attachment-upload.js";
+import { requireBoardCard } from "./require-board-card.js";
 
 export {
 	attachmentOwnershipGuard,
@@ -69,14 +70,9 @@ async function deleteAttachment(req: Request, res: Response): Promise<void> {
 				originalPath: string;
 		  };
 	const result: DeleteResult = await db.transaction().execute(async (trx) => {
-		const card = await trx
-			.selectFrom("cards")
-			.select(["id", "column_id"])
-			.where("id", "=", cardId)
-			.where("workspace_id", "=", workspaceId)
-			.where("deleted_at", "is", null)
-			.forUpdate()
-			.executeTakeFirst();
+		const card = await requireBoardCard(trx, workspaceId, cardId, {
+			lock: true,
+		});
 		if (!card) return { kind: "not_found" };
 
 		const attachment = await trx
