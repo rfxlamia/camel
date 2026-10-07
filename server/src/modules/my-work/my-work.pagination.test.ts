@@ -27,6 +27,7 @@ import {
 	ALICE,
 	capturedDb,
 	hydrateRows,
+	isTrackerRowsQuery,
 	NOW,
 	ORBIT,
 	sourceDeps,
@@ -172,12 +173,12 @@ describe("My Work pagination and query boundary", () => {
 			workspaceLocalDates: new Map([[ORBIT.id, "2026-09-11"]]),
 		});
 
-		const query = queries.find((entry) =>
-			entry.sql.includes('from "tracker_items"'),
-		);
+		const query = queries.find((entry) => isTrackerRowsQuery(entry.sql));
 		expect(query).toBeDefined();
-		expect(query?.sql).toContain('"ti"."updated_at"');
-		expect(query?.sql).toContain('"ti"."id" asc');
+		expect(query?.sql).toContain(
+			'coalesce("c"."updated_at", "c"."created_at")',
+		);
+		expect(query?.sql).toContain('"c"."id" asc');
 		expect(query?.sql).toMatch(/limit \$\d+/i);
 		expect(query?.parameters).toContain(3);
 		expect(query?.parameters).toContain("2026-09-10T00:00:00.000Z");

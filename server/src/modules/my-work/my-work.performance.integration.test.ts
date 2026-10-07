@@ -91,20 +91,20 @@ async function environmentEvidence() {
 		pool.query<{
 			workspaces: string | null;
 			workspace_members: string | null;
-			tracker_items: string | null;
-			tracker_item_assignees: string | null;
+			cards: string | null;
+			card_assignees: string | null;
 		}>(`SELECT
        to_regclass('public.workspaces') AS workspaces,
        to_regclass('public.workspace_members') AS workspace_members,
-       to_regclass('public.tracker_items') AS tracker_items,
-       to_regclass('public.tracker_item_assignees') AS tracker_item_assignees`),
+       to_regclass('public.cards') AS cards,
+       to_regclass('public.card_assignees') AS card_assignees`),
 	]);
 	const tables = schemaResult.rows[0];
 	const migrationState =
 		tables?.workspaces &&
 		tables.workspace_members &&
-		tables.tracker_items &&
-		tables.tracker_item_assignees
+		tables.cards &&
+		tables.card_assignees
 			? "required schema tables present"
 			: "required schema tables missing";
 	const runner =
@@ -167,14 +167,14 @@ async function setupPerformanceFixtures(): Promise<void> {
 			throw new Error("benchmark status insert failed");
 		await pool.query(
 			`WITH inserted AS (
-         INSERT INTO tracker_items
-           (workspace_id, key_number, title, description, status_id, position)
-         SELECT $1, item_number, 'performance fixture item', '', $2,
-           item_number::double precision
+         INSERT INTO cards
+           (workspace_id, column_id, key_number, title, description, status_id, position, plan_position)
+         SELECT $1, NULL, item_number, 'performance fixture item', '', $2,
+           item_number::double precision, item_number::double precision
          FROM generate_series(1, 100) AS item_number
          RETURNING id
        )
-       INSERT INTO tracker_item_assignees (tracker_item_id, user_id)
+       INSERT INTO card_assignees (card_id, user_id)
        SELECT id, $3 FROM inserted`,
 			[workspaceId, statusId, PERFORMANCE_USER_ID],
 		);
@@ -211,13 +211,14 @@ integration("My Work real-DB performance boundary", () => {
 
 		const fixtureCount = await pool.query<{ count: string }>(
 			`SELECT count(*)::text AS count
-       FROM tracker_items ti
-       INNER JOIN tracker_item_assignees tia ON tia.tracker_item_id = ti.id
+       FROM cards c
+       INNER JOIN card_assignees ca ON ca.card_id = c.id
        INNER JOIN workspace_members wm
-         ON wm.workspace_id = ti.workspace_id AND wm.user_id = tia.user_id
-       WHERE tia.user_id = $1
-         AND ti.workspace_id = ANY($2::int[])
-         AND ti.deleted_at IS NULL`,
+         ON wm.workspace_id = c.workspace_id AND wm.user_id = ca.user_id
+       WHERE ca.user_id = $1
+         AND c.workspace_id = ANY($2::int[])
+         AND c.column_id IS NULL
+         AND c.deleted_at IS NULL`,
 			[PERFORMANCE_USER_ID, PERFORMANCE_WORKSPACE_IDS],
 		);
 		expect(fixtureCount.rows[0]?.count).toBe("1000");

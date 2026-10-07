@@ -8,7 +8,12 @@ import {
 	type MyWorkSerializedItem,
 	type MyWorkTrackerRow,
 } from "./my-work-response.js";
-import { type CapturedQuery, NOW, ORBIT } from "./my-work-test-support.js";
+import {
+	type CapturedQuery,
+	isTrackerRowsQuery,
+	NOW,
+	ORBIT,
+} from "./my-work-test-support.js";
 
 export function expectOverduePageShape(pages: MyWorkListResponse[]): void {
 	expect(pages).toHaveLength(2);
@@ -67,19 +72,19 @@ export function expectOverdueQueries(
 	firstCursor: MyWorkCursor | null,
 ): void {
 	const trackerQueries = queries.filter((entry) =>
-		entry.sql.includes('from "tracker_items"'),
+		isTrackerRowsQuery(entry.sql),
 	);
 	expect(trackerQueries).toHaveLength(2);
 	const firstQuery = trackerQueries[0]!;
 	const secondQuery = trackerQueries[1]!;
 	expect(firstQuery.sql).toContain("NOT IN (2, 3)");
 	expect(firstQuery.sql).not.toContain(" < 2");
-	expect(firstQuery.sql).toContain('"ti"."key_number" asc');
-	expect(firstQuery.sql).toContain('"ti"."id" asc');
+	expect(firstQuery.sql).toContain('"c"."key_number" asc');
+	expect(firstQuery.sql).toContain('"c"."id" asc');
 	expect(firstQuery.parameters).toContain("2026-09-11");
 	expect(firstQuery.parameters).toContain(51);
-	expect(secondQuery.sql).toContain('"ti"."key_number" =');
-	expect(secondQuery.sql).toContain('"ti"."id" >');
+	expect(secondQuery.sql).toContain('"c"."key_number" =');
+	expect(secondQuery.sql).toContain('"c"."id" >');
 	expect(secondQuery.parameters).toContain(firstCursor?.keyNumber);
 	expect(secondQuery.parameters).toContain(firstCursor?.id);
 	expect(secondQuery.parameters).toContain(51);
@@ -125,20 +130,26 @@ export function expectPrecisionCursors(pages: MyWorkListResponse[]): void {
 
 export function expectPrecisionQueries(queries: CapturedQuery[]): void {
 	const trackerQueries = queries.filter((entry) =>
-		entry.sql.includes('from "tracker_items"'),
+		isTrackerRowsQuery(entry.sql),
 	);
 	expect(trackerQueries).toHaveLength(3);
-	const updatedExpression = `date_trunc('milliseconds', "ti"."updated_at")`;
+	const updatedExpression = `date_trunc('milliseconds', coalesce("c"."updated_at", "c"."created_at"))`;
 	expect(trackerQueries[0]?.sql).toContain(`${updatedExpression} desc`);
 	for (const query of trackerQueries) {
 		expect(query.sql).toContain(updatedExpression);
-		expect(query.sql).not.toContain('"ti"."updated_at" desc');
+		expect(query.sql).not.toContain(
+			'coalesce("c"."updated_at", "c"."created_at") desc',
+		);
 	}
 	for (const query of trackerQueries.slice(1)) {
 		expect(query.sql).toContain(`${updatedExpression} <`);
 		expect(query.sql).toContain(`${updatedExpression} =`);
-		expect(query.sql).not.toContain('"ti"."updated_at" <');
-		expect(query.sql).not.toContain('"ti"."updated_at" =');
+		expect(query.sql).not.toContain(
+			'coalesce("c"."updated_at", "c"."created_at") <',
+		);
+		expect(query.sql).not.toContain(
+			'coalesce("c"."updated_at", "c"."created_at") =',
+		);
 	}
 	expect(trackerQueries[1]?.parameters).toContain("2026-09-10T00:00:00.124Z");
 	expect(trackerQueries[2]?.parameters).toContain("2026-09-10T00:00:00.124Z");

@@ -1,7 +1,9 @@
 import { sql } from "kysely";
 import type { DBExecutor } from "../../db/kysely.js";
-import { selectTrackerItemRows } from "../../lib/legacy-tracker-item-response.js";
-import { selectBoardWorkItemRows } from "../../lib/work-item-response.js";
+import {
+	selectBoardWorkItemRows,
+	selectWorkItemRows,
+} from "../../lib/work-item-response.js";
 import {
 	buildSearchPattern,
 	sourceCursorPredicate,
@@ -40,30 +42,32 @@ function buildTrackerRowsQuery(
 	input: MyWorkSourceQueryInput,
 ) {
 	const order = sourceOrderExpressions("tracker", input);
-	let query = selectTrackerItemRows(executor)
-		.select("ti.workspace_id")
-		.where("ti.workspace_id", "in", [...input.workspaceIds])
-		.where("ti.deleted_at", "is", null)
+	let query = selectWorkItemRows(executor)
+		.select("c.workspace_id")
+		.where("c.column_id", "is", null)
+		.where("c.workspace_id", "in", [...input.workspaceIds])
+		.where("c.deleted_at", "is", null)
+		.where("c.key_number", "is not", null)
 		.where((eb) =>
 			eb.exists(
 				eb
 					.selectFrom("workspace_members as auth_wm")
 					.select("auth_wm.workspace_id")
-					.whereRef("auth_wm.workspace_id", "=", "ti.workspace_id")
+					.whereRef("auth_wm.workspace_id", "=", "c.workspace_id")
 					.where("auth_wm.user_id", "=", input.userId),
 			),
 		)
 		.where((eb) =>
 			eb.exists(
 				eb
-					.selectFrom("tracker_item_assignees as me_tia")
-					.select("me_tia.tracker_item_id")
-					.whereRef("me_tia.tracker_item_id", "=", "ti.id")
-					.where("me_tia.user_id", "=", input.userId),
+					.selectFrom("card_assignees as me_ca")
+					.select("me_ca.card_id")
+					.whereRef("me_ca.card_id", "=", "c.id")
+					.where("me_ca.user_id", "=", input.userId),
 			),
 		);
 	if (input.workspaceId !== undefined) {
-		query = query.where("ti.workspace_id", "=", input.workspaceId);
+		query = query.where("c.workspace_id", "=", input.workspaceId);
 	}
 	if (input.scope === "active") {
 		query = query.where(sql<boolean>`${order.group} NOT IN (2, 3)`);
@@ -94,7 +98,11 @@ export async function listMyWorkTrackerRows(
 		.orderBy(order.id, "asc")
 		.limit(sourceQueryLimit(input))
 		.execute();
-	return rows as MyWorkTrackerRow[];
+	// Tracker rows carry their plan order as `position`.
+	return rows.map((row) => ({
+		...row,
+		position: row.plan_position,
+	})) as MyWorkTrackerRow[];
 }
 
 function buildBoardRowsQuery(
@@ -125,40 +133,6 @@ function buildBoardRowsQuery(
 					.where("me_ca.user_id", "=", input.userId),
 			),
 		);
-	query = query.where((eb) =>
-		eb.not(
-			eb.exists(
-				(() => {
-					let shadow = eb
-						.selectFrom("tracker_items as shadow_ti")
-						.select("shadow_ti.id")
-						.whereRef("shadow_ti.workspace_id", "=", "c.workspace_id")
-						.whereRef("shadow_ti.key_number", "=", "c.key_number")
-						.where("shadow_ti.deleted_at", "is", null)
-						.where((inner) =>
-							inner.exists(
-								inner
-									.selectFrom("tracker_item_assignees as shadow_tia")
-									.select("shadow_tia.tracker_item_id")
-									.whereRef("shadow_tia.tracker_item_id", "=", "shadow_ti.id")
-									.where("shadow_tia.user_id", "=", input.userId),
-							),
-						);
-					if (input.scope === "all" && input.q) {
-						shadow = shadow.where(
-							sourceSearchPredicate(
-								"tracker",
-								input,
-								buildSearchPattern(input.q),
-								"shadow_ti",
-							),
-						);
-					}
-					return shadow;
-				})(),
-			),
-		),
-	);
 	if (input.workspaceId !== undefined) {
 		query = query.where("c.workspace_id", "=", input.workspaceId);
 	}

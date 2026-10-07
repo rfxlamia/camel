@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { listMyWorkBoardRows } from "./my-work-data-source-list.js";
 import { buildSearchPattern, escapeIlikePattern } from "./my-work-query.js";
-import { ALICE, ATLAS, capturedDb } from "./my-work-test-support.js";
+import {
+	ALICE,
+	ATLAS,
+	capturedDb,
+	isTrackerRowsQuery,
+} from "./my-work-test-support.js";
 
 describe("My Work search patterns", () => {
 	it("escapes ILIKE metacharacters for literal matching", () => {
@@ -10,8 +15,8 @@ describe("My Work search patterns", () => {
 	});
 });
 
-describe("My Work board shadow search boundary", () => {
-	it("scopes shadow suppression to tracker rows that also match an All-scope query", async () => {
+describe("My Work board search boundary", () => {
+	it("applies the All-scope query to board rows without a tracker shadow lookup", async () => {
 		const { executor, queries } = capturedDb();
 		await listMyWorkBoardRows(executor, {
 			userId: ALICE.id,
@@ -21,12 +26,14 @@ describe("My Work board shadow search boundary", () => {
 			limit: 10,
 		});
 
-		const boardQuery = queries.find((entry) =>
-			entry.sql.includes('from "cards"'),
+		const boardQuery = queries.find(
+			(entry) =>
+				entry.sql.includes('from "cards"') && !isTrackerRowsQuery(entry.sql),
 		);
 		expect(boardQuery).toBeDefined();
-		expect(boardQuery?.sql).toContain('"tracker_items" as "shadow_ti"');
-		expect(boardQuery?.sql).toContain('"shadow_ti"."title"');
+		expect(boardQuery?.sql).not.toContain("tracker_item");
+		expect(boardQuery?.sql).not.toContain("shadow_ti");
+		expect(boardQuery?.sql).toContain('"c"."title"');
 		expect(boardQuery?.parameters).toContain("%board-only-term%");
 		await executor.destroy();
 	});

@@ -29,6 +29,15 @@ export const NEBULA: MyWorkWorkspace = {
 };
 export const NOW = new Date("2026-09-11T06:00:00.000Z");
 
+/** Tracker rows are the column-less rows of the merged `cards` table. */
+export function isTrackerRowsQuery(sqlText: string): boolean {
+	return (
+		sqlText.includes('from "cards" as "c"') &&
+		sqlText.includes('"c"."column_id" is null') &&
+		sqlText.includes('"c"."key_number" is not null')
+	);
+}
+
 export function trackerRow(
 	overrides: Partial<MyWorkTrackerRow> = {},
 ): MyWorkTrackerRow {

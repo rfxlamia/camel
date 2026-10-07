@@ -17,7 +17,7 @@ type ListedItem = {
 
 export function registerRollupScenarios(): void {
 	// Cycle 1 — authorized cross-workspace rollup and composite identity.
-	it("lists authorized Board/Tracker work once with tracker-wins composite identity", async () => {
+	it("lists authorized Board/Tracker work once with composite identity", async () => {
 		const response = await request(app).get("/api/my-work?scope=active");
 
 		expect(response.status).toBe(200);
@@ -37,7 +37,7 @@ export function registerRollupScenarios(): void {
 		);
 		expect(items).not.toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ title: "Atlas board shadow" }),
+				expect.objectContaining({ title: "Atlas board filler" }),
 			]),
 		);
 		expect(items).not.toEqual(

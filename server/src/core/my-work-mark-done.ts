@@ -1,11 +1,11 @@
 import type { Selectable } from "kysely";
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
-import type { Cards, TrackerItems } from "../db/types.js";
+import type { Cards } from "../db/types.js";
 import type { MyWorkSource } from "../modules/my-work/index.js";
 import { applyBoardCardStatusChange } from "./board-card-status-change.js";
-import { applyLegacyTrackerItemStatusChange } from "./legacy-tracker-item-status-change.js";
 import { resolveMyWorkDoneTarget } from "./my-work-done-target.js";
+import { applyTrackerItemStatusChange } from "./tracker-item-status-change.js";
 
 export type MyWorkMarkDoneInput = {
 	userId: number;
@@ -37,13 +37,13 @@ type BoardMarkDoneRow = Pick<
 	"id" | "column_id" | "status_id" | "title" | "version"
 >;
 type TrackerMarkDoneRow = Pick<
-	Selectable<TrackerItems>,
+	Selectable<Cards>,
 	"id" | "status_id" | "title" | "version"
 >;
 type Transaction = <T>(callback: (trx: DBExecutor) => Promise<T>) => Promise<T>;
 
 type BoardStatusChange = typeof applyBoardCardStatusChange;
-type TrackerStatusChange = typeof applyLegacyTrackerItemStatusChange;
+type TrackerStatusChange = typeof applyTrackerItemStatusChange;
 type SourceChangeResult = Awaited<
 	ReturnType<BoardStatusChange | TrackerStatusChange>
 >;
@@ -75,13 +75,10 @@ async function assignmentExists(
 	input: MyWorkMarkDoneInput,
 	itemId: number,
 ): Promise<boolean> {
-	const table =
-		input.source === "board" ? "card_assignees" : "tracker_item_assignees";
-	const itemColumn = input.source === "board" ? "card_id" : "tracker_item_id";
 	const assignment = await trx
-		.selectFrom(table)
-		.select(itemColumn)
-		.where(itemColumn, "=", itemId)
+		.selectFrom("card_assignees")
+		.select("card_id")
+		.where("card_id", "=", itemId)
 		.where("user_id", "=", input.userId)
 		.forUpdate()
 		.executeTakeFirst();
@@ -96,30 +93,20 @@ async function readAuthorizedItem(
 	trx: DBExecutor,
 	input: MyWorkMarkDoneInput,
 ): Promise<AuthorizedMarkDoneItem | null> {
-	if (input.source === "board") {
-		const item = await trx
-			.selectFrom("cards")
-			.select(["id", "column_id", "status_id", "title", "version"])
-			.where("workspace_id", "=", input.workspaceId)
-			.where("key_number", "=", input.keyNumber)
-			.where("deleted_at", "is", null)
-			.where("column_id", "is not", null)
-			.forUpdate()
-			.executeTakeFirst();
-		if (!item || !(await assignmentExists(trx, input, item.id))) return null;
-		return { source: "board", item };
-	}
-
+	// Tracker items are the column-less rows of the merged `cards` table.
 	const item = await trx
-		.selectFrom("tracker_items")
-		.select(["id", "status_id", "title", "version"])
+		.selectFrom("cards")
+		.select(["id", "column_id", "status_id", "title", "version"])
 		.where("workspace_id", "=", input.workspaceId)
 		.where("key_number", "=", input.keyNumber)
 		.where("deleted_at", "is", null)
+		.where("column_id", input.source === "board" ? "is not" : "is", null)
 		.forUpdate()
 		.executeTakeFirst();
 	if (!item || !(await assignmentExists(trx, input, item.id))) return null;
-	return { source: "tracker", item };
+	return input.source === "board"
+		? { source: "board", item }
+		: { source: "tracker", item };
 }
 
 async function loadDoneTargetInputs(
@@ -293,7 +280,7 @@ export function createMyWorkMarkDoneService(deps: MyWorkMarkDoneDeps = {}) {
 	const context = {
 		boardStatusChange: deps.boardStatusChange ?? applyBoardCardStatusChange,
 		trackerStatusChange:
-			deps.trackerStatusChange ?? applyLegacyTrackerItemStatusChange,
+			deps.trackerStatusChange ?? applyTrackerItemStatusChange,
 	};
 	const markDone = (input: MyWorkMarkDoneInput) =>
 		runTransaction((trx) => markDoneInTransaction(trx, { ...context, input }));

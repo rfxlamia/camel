@@ -3,6 +3,7 @@ import type { DB } from "../../db/types.js";
 import type { MyWorkTrackerRow } from "./my-work-response.js";
 import {
 	type CapturedQuery,
+	isTrackerRowsQuery,
 	NOW,
 	ORBIT,
 	trackerRow,
@@ -17,7 +18,7 @@ export function pagedTrackerDb(
 	const client = {
 		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
 			queries.push({ sql: sqlText, parameters });
-			if (sqlText.includes('from "tracker_items"')) {
+			if (isTrackerRowsQuery(sqlText)) {
 				const rows = trackerQueryCount++ === 0 ? firstPage : secondPage;
 				return { rows: rows as R[] };
 			}
@@ -35,7 +36,7 @@ export function multiPageTrackerDb(rows: MyWorkTrackerRow[]) {
 	const client = {
 		async query<R>(sqlText: string, parameters: readonly unknown[] = []) {
 			queries.push({ sql: sqlText, parameters });
-			if (sqlText.includes('from "tracker_items"')) {
+			if (isTrackerRowsQuery(sqlText)) {
 				const cursorId = parameters.find(
 					(parameter): parameter is number =>
 						typeof parameter === "number" &&
@@ -145,7 +146,7 @@ function subMillisecondRows<R>(
 	sqlText: string,
 	parameters: readonly unknown[],
 ): R[] {
-	if (!sqlText.includes('from "tracker_items"')) return [];
+	if (!isTrackerRowsQuery(sqlText)) return [];
 	const cursorId = cursorIdFor(rows, parameters);
 	const cursorUpdatedAt = cursorTimestamp(parameters);
 	const millisecondPrecision = sqlText.includes("date_trunc('milliseconds'");

@@ -9,10 +9,6 @@ import {
 	loadCardAssigneesForCards,
 } from "../../lib/card-assignees.js";
 import { loadCardLabelsForCards } from "../../lib/card-response.js";
-import {
-	loadTrackerAssigneesForItems,
-	type TrackerItemAssignee,
-} from "../../lib/tracker-assignees.js";
 import type { VocabularyRow } from "../../lib/vocabulary-response.js";
 import {
 	isTerminalMyWorkStatus,
@@ -25,46 +21,6 @@ import type {
 	MyWorkTrackerRow,
 	MyWorkWorkspace,
 } from "./my-work-types.js";
-
-async function loadTrackerLabelsForItems(
-	dbExec: DBExecutor,
-	itemIds: readonly number[],
-): Promise<Map<number, VocabularyRow[]>> {
-	const map = new Map<number, VocabularyRow[]>();
-	if (itemIds.length === 0) return map;
-
-	const rows = await dbExec
-		.selectFrom("tracker_item_labels as til")
-		.innerJoin("tracker_vocabularies as tv", "tv.id", "til.vocabulary_id")
-		.select([
-			"til.tracker_item_id",
-			"tv.id",
-			"tv.kind",
-			"tv.name",
-			"tv.position",
-			"tv.colour",
-		])
-		.where("til.tracker_item_id", "in", [...itemIds])
-		.where("tv.kind", "=", "label")
-		.orderBy("til.tracker_item_id")
-		.orderBy("tv.position")
-		.execute();
-
-	for (const row of rows) {
-		const labels = map.get(row.tracker_item_id) ?? [];
-		labels.push({
-			id: row.id,
-			kind: row.kind,
-			name: row.name,
-			position: row.position,
-			colour: row.colour,
-		});
-		map.set(row.tracker_item_id, labels);
-	}
-	return map;
-}
-
-export const loadMyWorkTrackerLabels = loadTrackerLabelsForItems;
 
 function uniqueIds(ids: readonly number[]): number[] {
 	return [...new Set(ids)];
@@ -163,7 +119,7 @@ function candidateIdsWithout(
 }
 
 type MyWorkHydrationData = {
-	trackerAssignees: ReadonlyMap<number, TrackerItemAssignee[]>;
+	trackerAssignees: ReadonlyMap<number, CardAssignee[]>;
 	trackerLabels: ReadonlyMap<number, VocabularyRow[]>;
 	boardAssignees: ReadonlyMap<number, CardAssignee[]>;
 	boardLabels: ReadonlyMap<number, VocabularyRow[]>;
@@ -201,10 +157,10 @@ async function loadMyWorkHydrationData(
 		doneTargetInputs,
 	] = await Promise.all([
 		ids.trackerIdsForAssignees.length > 0
-			? loadTrackerAssigneesForItems(dbExec, ids.trackerIdsForAssignees)
-			: Promise.resolve(new Map<number, TrackerItemAssignee[]>()),
+			? loadCardAssigneesForCards(dbExec, ids.trackerIdsForAssignees)
+			: Promise.resolve(new Map<number, CardAssignee[]>()),
 		ids.trackerIdsForLabels.length > 0
-			? loadTrackerLabelsForItems(dbExec, ids.trackerIdsForLabels)
+			? loadCardLabelsForCards(dbExec, ids.trackerIdsForLabels)
 			: Promise.resolve(new Map<number, VocabularyRow[]>()),
 		ids.boardIdsForAssignees.length > 0
 			? loadCardAssigneesForCards(dbExec, ids.boardIdsForAssignees)
@@ -248,7 +204,7 @@ export async function hydrateMyWorkRows(
 function serializeHydratedCandidates(
 	candidates: readonly MyWorkCandidate[],
 	workspaces: ReadonlyMap<number, MyWorkWorkspace>,
-	trackerAssignees: ReadonlyMap<number, TrackerItemAssignee[]>,
+	trackerAssignees: ReadonlyMap<number, CardAssignee[]>,
 	trackerLabels: ReadonlyMap<number, VocabularyRow[]>,
 	boardAssignees: ReadonlyMap<number, CardAssignee[]>,
 	boardLabels: ReadonlyMap<number, VocabularyRow[]>,

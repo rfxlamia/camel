@@ -75,7 +75,7 @@ export function registerAuthorizationScenarios(): void {
 		const fixtures = getFixtures();
 		const before = await trackerState(fixtures.orbitTracker.id);
 		await pool.query(
-			"DELETE FROM tracker_item_assignees WHERE tracker_item_id = $1 AND user_id = $2",
+			"DELETE FROM card_assignees WHERE card_id = $1 AND user_id = $2",
 			[fixtures.orbitTracker.id, ALICE_ID],
 		);
 		const response = await request(app)
