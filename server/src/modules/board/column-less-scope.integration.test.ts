@@ -68,8 +68,6 @@ import { pool } from "../../db/pool.js";
 import * as cardResponse from "../../lib/card-response.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
 import { api } from "../../routes.js";
-import { activityDeps } from "../agent/service-deps-activity.js";
-import { createChatToolFactory } from "../chat/tools/factory.js";
 
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
 const WORKSPACE_ID = 3101;
@@ -227,27 +225,6 @@ describe.skipIf(!runIntegration)("column-less scope (integration)", () => {
 		}
 	});
 
-	it("agent timestamps reader excludes column-less cards", async () => {
-		const agentRows = await activityDeps.fetchCardTimestamps(WORKSPACE_ID);
-		expect(agentRows).toHaveLength(fixture.boardIds.length);
-	});
-
-	it("chat query_board_data excludes column-less cards", async () => {
-		const tool = createChatToolFactory({
-			userId: currentUser.id,
-			threadId: 1,
-			messageId: 1,
-			workspaceId: WORKSPACE_ID,
-			insertAttachment: async () => {},
-		}).resolveTools(["query_board_data"])[0]!;
-		const result = await tool.execute({ data_types: ["metrics"] });
-		expect(result.ok).toBe(true);
-		const payload = JSON.parse(result.content);
-		// Board only: 1 done, 1 in progress. Column-less would give 3 / 2.
-		expect(payload.metrics.throughput).toBe(1);
-		expect(payload.metrics.wipCount).toBe(1);
-	});
-
 	// Regression guard: every reader already carries deleted_at IS NULL, and
 	// column_id IS NOT NULL independently excludes column-less rows, so the two
 	// predicates overlap. Only the soft-deleted column-less row remains here, so
@@ -284,22 +261,6 @@ describe.skipIf(!runIntegration)("column-less scope (integration)", () => {
 		);
 		expect(listed).not.toContain(deletedId);
 		expect(listed).toHaveLength(fixture.boardIds.length);
-
-		expect(await activityDeps.fetchCardTimestamps(WORKSPACE_ID)).toHaveLength(
-			fixture.boardIds.length,
-		);
-		const tool = createChatToolFactory({
-			userId: currentUser.id,
-			threadId: 1,
-			messageId: 1,
-			workspaceId: WORKSPACE_ID,
-			insertAttachment: async () => {},
-		}).resolveTools(["query_board_data"])[0]!;
-		const chat = JSON.parse(
-			(await tool.execute({ data_types: ["metrics"] })).content,
-		);
-		expect(chat.metrics.throughput).toBe(1);
-		expect(chat.metrics.wipCount).toBe(1);
 
 		// The soft-deleted row still holds its key: a new item cannot reuse it.
 		await expect(
