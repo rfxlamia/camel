@@ -344,4 +344,32 @@ describe.skipIf(!runIntegration)("work-item-merge guard", () => {
 		await applySchema(s.client);
 		await expect(seedItem(s, ws, 43)).rejects.toThrow(/work-item-merge/);
 	});
+
+	// Labeled regression guard: cycle 4's conditional trigger already satisfies
+	// this. Proven able to fail by dropping the "migrated rows exist" condition.
+	it("Fresh or empty database gets no trigger", async () => {
+		const triggerCount = async () =>
+			(
+				await rows(
+					s,
+					`SELECT count(*)::int AS n FROM pg_trigger
+					 WHERE tgrelid = 'tracker_items'::regclass AND NOT tgisinternal`,
+				)
+			)[0].n;
+
+		await applySchema(s.client);
+		expect(await triggerCount()).toBe(0);
+		// The gate is on but there is nothing to migrate: still no trigger.
+		await applySchema(s.client, ENABLED);
+		expect(await triggerCount()).toBe(0);
+
+		const ws = await seedWorkspace(s, `g5-${tag}`);
+		await seedItem(s, ws, 51);
+		const [row] = await rows(
+			s,
+			"SELECT count(*)::int AS n FROM tracker_items WHERE workspace_id = $1",
+			[ws.id],
+		);
+		expect(row.n).toBe(1);
+	});
 });
