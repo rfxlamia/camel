@@ -56,10 +56,10 @@ function makeTrx() {
 		onConflict: vi.fn(() => chainable(undefined)),
 	}));
 	trx.selectFrom = vi.fn((table: string) => {
-		if (table === "tracker_items") {
+		if (table === "cards") {
 			return chainable({ max_position: bucketMaxPosition });
 		}
-		if (table === "tracker_items as ti") {
+		if (table === "cards as c") {
 			return chainable(existingItemRow);
 		}
 		if (table === "tracker_vocabularies") {
@@ -93,7 +93,7 @@ vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
 
 const mockParseProjectPhase = vi.fn();
 const mockParseDateRange = vi.fn();
@@ -104,8 +104,8 @@ vi.mock("../../lib/tracker-item-parsers.js", () => ({
 	parseLabelIds: vi.fn().mockResolvedValue([]),
 }));
 
-import { trackerItemsRouter } from "./tracker-items.js";
 import { workItemsRouter } from "../../lib/work-items.js";
+import { trackerItemsRouter } from "./tracker-items.js";
 
 function createApp(router: express.Router) {
 	const created = express();
@@ -145,7 +145,9 @@ const existingItemRow = {
 	start_date: null,
 	end_date: null,
 	completed_at: null,
-	position: 1024,
+	column_id: null,
+	column_name: null,
+	plan_position: 1024,
 };
 
 beforeEach(() => {
@@ -168,9 +170,11 @@ beforeEach(() => {
 	}));
 	mockSelectFrom.mockImplementation((table: string) => {
 		if (table === "workspaces") return chainable({ name: "Camel Team" });
-		if (table === "cards as c") return chainable(undefined);
 		if (table === "tracker_vocabularies") {
 			return chainable({ category: "completed", id: 4 });
+		}
+		if (table === "card_assignees as ca" || table === "card_labels as cl") {
+			return chainable([]);
 		}
 		return chainable(existingItemRow);
 	});
@@ -184,9 +188,11 @@ describe("POST /tracker/items — assignment, dates, completion", () => {
 		expect(res.status).toBe(201);
 		const created = insertedValues.find((v) => "title" in v);
 		expect(created).toBeDefined();
-		expect(created.position).not.toBeNull();
-		expect(created.position).not.toBeUndefined();
-		expect(created.position).toBe(POSITION_GAP);
+		expect(created.plan_position).not.toBeNull();
+		expect(created.plan_position).not.toBeUndefined();
+		expect(created.plan_position).toBe(POSITION_GAP);
+		// Board position is a never-read placeholder for column-less rows.
+		expect(created.position).toBe(0);
 	});
 
 	it("persists projectId, phaseId, startDate and endDate on create", async () => {
@@ -284,7 +290,7 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
 			if (table === "cards as c") {
-				return chainable({ id: 99, key_number: 42 });
+				return chainable({ id: 99, key_number: 42, column_id: 7 });
 			}
 			return chainable(undefined);
 		});
@@ -362,7 +368,8 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 			});
 		expect(res.status).toBe(200);
 		const update = updatedSets.find((s) => "phase_id" in s);
-		expect(update.position).not.toBe(999999);
+		expect(update.plan_position).not.toBe(999999);
+		expect(update.position).toBeUndefined();
 		expect(update.completed_at).not.toBe("2020-01-01T00:00:00Z");
 	});
 
@@ -377,13 +384,12 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 			.send({ projectId: null, version: 3 });
 		expect(res.status).toBe(200);
 		const update = updatedSets.find((s) => "project_id" in s);
-		expect(update.position).toBe(3072 + POSITION_GAP);
+		expect(update.plan_position).toBe(3072 + POSITION_GAP);
 	});
 
 	it("sets completed_at via COALESCE when transitioning into a completed status", async () => {
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
-			if (table === "cards as c") return chainable(undefined);
 			if (table === "tracker_vocabularies") {
 				return chainable({ category: "completed", id: 4 });
 			}
@@ -407,7 +413,6 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		};
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
-			if (table === "cards as c") return chainable(undefined);
 			if (table === "tracker_vocabularies") {
 				return chainable({ category: "started", id: 3 });
 			}
@@ -425,7 +430,6 @@ describe("PATCH /tracker/items/:key — assignment, dates, completion", () => {
 		trxStatusCategory = "canceled";
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
-			if (table === "cards as c") return chainable(undefined);
 			if (table === "tracker_vocabularies") {
 				return chainable({ category: "canceled", id: 5 });
 			}
@@ -445,7 +449,7 @@ describe("DELETE /tracker/items/:key", () => {
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
 			if (table === "cards as c") {
-				return chainable({ id: 99, key_number: 42 });
+				return chainable({ id: 99, key_number: 42, column_id: 7 });
 			}
 			return chainable(undefined);
 		});

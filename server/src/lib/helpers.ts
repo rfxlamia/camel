@@ -1,8 +1,10 @@
 import type { AuthUser } from "../auth.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import type { RecordFocusActivity } from "../modules/focus/index.js";
-import { createFocusSessionRepo } from "../modules/focus/index.js";
-import { finishActiveFocusSessionForRemoval } from "../modules/focus/index.js";
+import {
+	createFocusSessionRepo,
+	finishActiveFocusSessionForRemoval,
+} from "../modules/focus/index.js";
 import { clearPresence, publishEvent } from "../realtime.js";
 import { lockWorkspaceMutation } from "./workspace-mutation-lock.js";
 
@@ -598,7 +600,10 @@ export async function recordActivity(
 		| "linear_ticket_created"
 		| "focus_session"
 		| "attachment_added"
-		| "attachment_removed",
+		| "attachment_removed"
+		| "tracker_item_created"
+		| "tracker_item_updated"
+		| "tracker_item_deleted",
 	opts: {
 		cardId?: number | null;
 		fromColumnId?: number | null;

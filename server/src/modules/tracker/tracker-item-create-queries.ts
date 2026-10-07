@@ -52,9 +52,10 @@ export async function endOfBucketPosition(
 	phaseId: number | null,
 ): Promise<number> {
 	let query = dbExec
-		.selectFrom("tracker_items")
-		.select(sql<number | null>`max(position)`.as("max_position"))
+		.selectFrom("cards")
+		.select(sql<number | null>`max(plan_position)`.as("max_position"))
 		.where("workspace_id", "=", workspaceId)
+		.where("column_id", "is", null)
 		.where("deleted_at", "is", null);
 	query =
 		projectId === null

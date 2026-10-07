@@ -24,6 +24,11 @@ vi.mock("../../middleware/workspace.js", () => ({
 vi.mock("./tracker-item-create-queries.js", () => ({
 	workspacePrefix: vi.fn().mockResolvedValue("CT"),
 }));
+vi.mock("./tracker-item-merged-queries.js", () => ({
+	findColumnlessItem: (...args: unknown[]) => mockFindTrackerItem(...args),
+	classifyWriteFailure: vi.fn(),
+	loadMutationResponse: vi.fn(),
+}));
 vi.mock("../../lib/work-item-response.js", () => ({
 	findTrackerItemByKeyNumber: (...args: unknown[]) =>
 		mockFindTrackerItem(...args),
