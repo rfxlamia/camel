@@ -149,6 +149,10 @@ describe.skipIf(!runIntegration)("work-item-merge guard", () => {
 			observer = undefined;
 		});
 
+		// Labeled regression guard: atomicity (BEGIN/ROLLBACK in applySchema plus
+		// the single DO block) predates T8, so this was green on first run. Proven
+		// able to fail by wrapping the card_labels copy in an EXCEPTION-swallowing
+		// sub-block, which changes the error the test sees.
 		it("Any parity mismatch rolls everything back", async () => {
 			const ws = await seedWorkspace(s, `g2-${tag}`);
 			const a = await seedItem(s, ws, 21);
