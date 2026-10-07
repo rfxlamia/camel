@@ -4,6 +4,7 @@ Allow: /
 Disallow: /api/
 Disallow: /uploads/
 Disallow: /login
+Disallow: /signup
 Disallow: /board
 Disallow: /my-work
 Disallow: /dashboard
