@@ -2,7 +2,7 @@ export {
 	type CardAttachmentResponse,
 	loadCardAttachmentsForCards,
 } from "./attachment-response.js";
-export { boardRouter } from "./board.js";
+export { boardRouter, buildBoardResponse } from "./board.js";
 export {
 	loadAttachmentPairsForAgentBoard,
 	loadAttachmentPairsForWorkspace,

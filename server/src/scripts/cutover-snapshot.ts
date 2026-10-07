@@ -10,8 +10,10 @@ import {
 	listMergedWorkItems,
 	selectBoardWorkItemRows,
 } from "../lib/work-item-response.js";
-import { loadCardAttachmentsForCards } from "../modules/board/attachment-response.js";
-import { buildBoardResponse } from "../modules/board/board.js";
+import {
+	buildBoardResponse,
+	loadCardAttachmentsForCards,
+} from "../modules/board/index.js";
 
 export type WorkspaceSnapshot = {
 	workspaceId: number;

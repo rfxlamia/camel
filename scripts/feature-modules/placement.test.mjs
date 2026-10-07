@@ -60,6 +60,19 @@ describe("Cycle 1 — allowed board module (unit)", () => {
 	});
 });
 
+describe("T16 — required cutover scripts (unit)", () => {
+	it("allows the required scripts but rejects other new server scripts", () => {
+		for (const path of [
+			"server/src/scripts/cutover-snapshot.ts",
+			"server/src/scripts/cutover-snapshot.integration.test.ts",
+		]) {
+			assert.deepEqual(checkPlacement({ path, status: "new", map }), []);
+		}
+
+		expectPlacementViolation("server/src/scripts/unrelated.ts");
+	});
+});
+
 /**
  * @param {string} path
  */
