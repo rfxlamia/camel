@@ -7,7 +7,15 @@ import "dotenv/config";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 
 const { currentUser } = vi.hoisted(() => ({
 	currentUser: { id: 31010, username: "cl-scope", displayName: "CL Scope" },
@@ -24,7 +32,40 @@ vi.mock("../../auth.js", async (importOriginal) => {
 	};
 });
 
+// Pass-through spies: real implementations still hit Postgres; we only record
+// which card ids the board route asked each loader for.
+const { loaderCalls } = vi.hoisted(() => ({
+	loaderCalls: {
+		assignees: [] as number[][],
+		labels: [] as number[][],
+		attachments: [] as number[][],
+	},
+}));
+vi.mock("../../lib/card-assignees.js", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../../lib/card-assignees.js")>();
+	return {
+		...actual,
+		loadCardAssigneesForCards: (d: any, ids: number[]) => {
+			loaderCalls.assignees.push([...ids]);
+			return actual.loadCardAssigneesForCards(d, ids);
+		},
+	};
+});
+vi.mock("./attachment-response.js", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("./attachment-response.js")>();
+	return {
+		...actual,
+		loadCardAttachmentsForCards: (d: any, ws: number, ids: number[]) => {
+			loaderCalls.attachments.push([...ids]);
+			return actual.loadCardAttachmentsForCards(d, ws, ids);
+		},
+	};
+});
+
 import { pool } from "../../db/pool.js";
+import * as cardResponse from "../../lib/card-response.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
 import { api } from "../../routes.js";
 
@@ -123,8 +164,21 @@ async function seed(): Promise<Seed> {
 describe.skipIf(!runIntegration)("column-less scope (integration)", () => {
 	let fixture: Seed;
 
+	beforeAll(() => {
+		const original = cardResponse.loadCardLabelsForCards;
+		vi.spyOn(cardResponse, "loadCardLabelsForCards").mockImplementation(
+			(d, ids) => {
+				loaderCalls.labels.push([...ids]);
+				return original(d, ids);
+			},
+		);
+	});
+
 	beforeEach(async () => {
 		await cleanup();
+		loaderCalls.assignees.length = 0;
+		loaderCalls.labels.length = 0;
+		loaderCalls.attachments.length = 0;
 		fixture = await seed();
 	});
 
@@ -142,5 +196,32 @@ describe.skipIf(!runIntegration)("column-less scope (integration)", () => {
 		expect(res.body.throughput).toBe(1);
 		expect(res.body.wipCount).toBe(1);
 		expect(fixture.columnLessIds).toHaveLength(3);
+	});
+
+	it("GET /board returns only board cards and never loads relations for column-less ids", async () => {
+		const clId = fixture.columnLessIds[0]!;
+		await pool.query(
+			"INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)",
+			[clId, currentUser.id],
+		);
+		const res = await request(app).get(`/api/workspaces/${WORKSPACE_ID}/board`);
+		expect(res.status).toBe(200);
+		const listed = res.body.columns.flatMap((c: any) =>
+			c.cards.map((card: any) => card.id),
+		);
+		expect(listed.sort()).toEqual([...fixture.boardIds].sort());
+		expect(JSON.stringify(res.body)).not.toContain(`"id":${clId},`);
+
+		const forbidden = new Set(fixture.columnLessIds);
+		for (const calls of [
+			loaderCalls.assignees,
+			loaderCalls.labels,
+			loaderCalls.attachments,
+		]) {
+			expect(calls.length).toBeGreaterThan(0);
+			for (const ids of calls) {
+				expect(ids.filter((id) => forbidden.has(id))).toEqual([]);
+			}
+		}
 	});
 });

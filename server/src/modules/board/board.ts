@@ -111,6 +111,7 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 		])
 		.where("c.workspace_id", "=", workspaceId)
 		.where("c.deleted_at", "is", null)
+		.where("c.column_id", "is not", null)
 		.orderBy("c.position")
 		.execute();
 	const cards = cardRows.map((c) => ({
