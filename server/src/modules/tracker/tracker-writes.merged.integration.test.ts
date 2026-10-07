@@ -213,5 +213,105 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(await count("tracker_items")).toBe(0);
 			expect(await count("tracker_events")).toBe(0);
 		});
+
+		describe("soft-delete and reorder", () => {
+			async function createThree() {
+				const ids: number[] = [];
+				for (const title of ["A", "B", "C"]) {
+					const res = await request(app)
+						.post(`${BASE}/tracker/items`)
+						.send({ title });
+					expect(res.status).toBe(201);
+					ids.push(res.body.id);
+				}
+				return ids;
+			}
+
+			async function planPositions(): Promise<Record<string, number>> {
+				const { rows } = await pool.query(
+					"SELECT title, plan_position FROM cards WHERE workspace_id = $1",
+					[WORKSPACE_ID],
+				);
+				return Object.fromEntries(rows.map((r) => [r.title, r.plan_position]));
+			}
+
+			it("reorders between neighbors by plan_position, never by board position", async () => {
+				const [a, , c] = await createThree();
+				// Board position is a placeholder; poison it so any read would reorder.
+				await pool.query(
+					"UPDATE cards SET position = 1000 - id WHERE workspace_id = $1",
+					[WORKSPACE_ID],
+				);
+				const before = await planPositions();
+
+				const res = await request(app)
+					.patch(`${BASE}/tracker/items/CA-3/position`)
+					.send({ beforeKey: "CA-1", afterKey: "CA-2" });
+				expect(res.status).toBe(200);
+
+				const after = await planPositions();
+				expect(after.C).toBeGreaterThan(before.A);
+				expect(after.C).toBeLessThan(before.B);
+				expect(after.A).toBe(before.A);
+				expect(after.B).toBe(before.B);
+				const { rows } = await pool.query(
+					"SELECT position, column_id FROM cards WHERE id = $1",
+					[c],
+				);
+				expect(rows[0].column_id).toBeNull();
+				expect(await eventTypes(c)).toEqual([
+					"tracker_item_created",
+					"tracker_item_updated",
+				]);
+				expect(await eventTypes(a)).toEqual(["tracker_item_created"]);
+				expect(await count("tracker_items")).toBe(0);
+			});
+
+			it("rebalances plan_position when neighbors are too close", async () => {
+				await createThree();
+				await pool.query(
+					"UPDATE cards SET plan_position = CASE title WHEN 'A' THEN 1 WHEN 'B' THEN 1.0000000000001 ELSE 5000 END WHERE workspace_id = $1",
+					[WORKSPACE_ID],
+				);
+				const res = await request(app)
+					.patch(`${BASE}/tracker/items/CA-3/position`)
+					.send({ beforeKey: "CA-1", afterKey: "CA-2" });
+				expect(res.status).toBe(200);
+				const after = await planPositions();
+				expect(after.A).toBeLessThan(after.C);
+				expect(after.C).toBeLessThan(after.B);
+				expect(after.B - after.A).toBeGreaterThan(1e-9);
+			});
+
+			it("soft-deletes with deleted_at, one event, 409 on stale version", async () => {
+				const [, b] = await createThree();
+				const stale = await request(app)
+					.delete(`${BASE}/tracker/items/CA-2`)
+					.send({ version: 9 });
+				expect(stale.status).toBe(409);
+				expect(stale.body.code).toBe("version_conflict");
+
+				const del = await request(app)
+					.delete(`${BASE}/tracker/items/CA-2`)
+					.send({ version: 1 });
+				expect(del.status).toBe(204);
+
+				const { rows } = await pool.query(
+					"SELECT deleted_at, column_id FROM cards WHERE id = $1",
+					[b],
+				);
+				expect(rows[0].deleted_at).not.toBeNull();
+				expect(rows[0].column_id).toBeNull();
+				expect(await eventTypes(b)).toEqual([
+					"tracker_item_created",
+					"tracker_item_deleted",
+				]);
+				const again = await request(app)
+					.delete(`${BASE}/tracker/items/CA-2`)
+					.send({ version: 1 });
+				expect(again.status).toBe(404);
+				expect(await count("tracker_items")).toBe(0);
+			});
+		});
 	},
 );
