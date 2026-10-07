@@ -10,14 +10,20 @@ export type ScratchSchema = {
 	drop: () => Promise<void>;
 };
 
+/** Unique, lower-case schema name safe to embed in a connection `options` string. */
+export function scratchSchemaName(prefix: string): string {
+	return `${prefix}_${process.pid}_${randomUUID().replaceAll("-", "")}`;
+}
+
 /**
  * Creates a uniquely named schema and a dedicated client whose search_path
- * points only at it, so DDL never touches the shared `public` schema.
+ * points only at it (or at `opts.schema` when an app pool already targets it), so DDL never touches the shared `public` schema.
  */
 export async function createScratchSchema(
 	prefix: string,
+	opts: { schema?: string } = {},
 ): Promise<ScratchSchema> {
-	const schema = `${prefix}_${process.pid}_${randomUUID().replaceAll("-", "")}`;
+	const schema = opts.schema ?? scratchSchemaName(prefix);
 	const client = await pool.connect();
 	try {
 		await client.query(`CREATE SCHEMA "${schema}"`);
