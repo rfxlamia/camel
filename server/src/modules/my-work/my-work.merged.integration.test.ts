@@ -52,8 +52,10 @@ import { db } from "../../db/kysely.js";
 import { pool } from "../../db/pool.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
 import { api } from "../../routes.js";
-import { buildReadySessionInput } from "../focus/focus-session-inputs.js";
-import { createFocusSessionRepo } from "../focus/focus-session-repo.js";
+import {
+	buildReadySessionInput,
+	createFocusSessionRepo,
+} from "../focus/index.js";
 
 const ALICE = 72001;
 const BOB = 72002;
