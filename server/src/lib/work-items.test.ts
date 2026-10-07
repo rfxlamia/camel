@@ -13,8 +13,8 @@ function chainable(result: unknown) {
 
 const mockListMergedWorkItems = vi.fn();
 const mockGetWorkItemEvents = vi.fn();
-const mockFindTrackerItemByKeyNumber = vi.fn();
-const mockHydrateTrackerWorkItems = vi.fn();
+const mockFindWorkItemByKeyNumber = vi.fn();
+const mockHydrateWorkItems = vi.fn();
 
 vi.mock("../db/kysely.js", () => ({
 	db: {
@@ -28,11 +28,12 @@ vi.mock("../middleware/workspace.js", () => ({
 vi.mock("./work-item-response.js", () => ({
 	listMergedWorkItems: (...args: unknown[]) => mockListMergedWorkItems(...args),
 	findBoardCardByKeyNumber: vi.fn(),
-	findTrackerItemByKeyNumber: (...args: unknown[]) =>
-		mockFindTrackerItemByKeyNumber(...args),
+	findTrackerItemByKeyNumber: vi.fn(),
+	findWorkItemByKeyNumber: (...args: unknown[]) =>
+		mockFindWorkItemByKeyNumber(...args),
 	hydrateBoardWorkItems: vi.fn(),
-	hydrateTrackerWorkItems: (...args: unknown[]) =>
-		mockHydrateTrackerWorkItems(...args),
+	hydrateTrackerWorkItems: vi.fn(),
+	hydrateWorkItems: (...args: unknown[]) => mockHydrateWorkItems(...args),
 }));
 vi.mock("./work-item-events.js", () => ({
 	getWorkItemEvents: (...args: unknown[]) => mockGetWorkItemEvents(...args),
@@ -58,8 +59,9 @@ function createApp(router: express.Router) {
 	const app = express();
 	app.use(express.json());
 	app.use((req, _res, next) => {
-		(req as express.Request & { workspace?: { workspaceId: number } }).workspace =
-			{ workspaceId: 7 };
+		(
+			req as express.Request & { workspace?: { workspaceId: number } }
+		).workspace = { workspaceId: 7 };
 		next();
 	});
 	app.use("/workspaces/:workspaceId", router);
@@ -69,8 +71,8 @@ function createApp(router: express.Router) {
 beforeEach(() => {
 	mockListMergedWorkItems.mockReset();
 	mockGetWorkItemEvents.mockReset();
-	mockFindTrackerItemByKeyNumber.mockReset();
-	mockHydrateTrackerWorkItems.mockReset();
+	mockFindWorkItemByKeyNumber.mockReset();
+	mockHydrateWorkItems.mockReset();
 	mockListMergedWorkItems.mockResolvedValue([{ key: "TE-1", source: "board" }]);
 	mockGetWorkItemEvents.mockResolvedValue([
 		{
@@ -83,12 +85,12 @@ beforeEach(() => {
 			createdAt: "2026-09-01T10:00:00.000Z",
 		},
 	]);
-	mockFindTrackerItemByKeyNumber.mockResolvedValue({
+	mockFindWorkItemByKeyNumber.mockResolvedValue({
 		id: 1,
 		key_number: 1,
 		title: "Detail item",
 	});
-	mockHydrateTrackerWorkItems.mockResolvedValue([
+	mockHydrateWorkItems.mockResolvedValue([
 		{ key: "CT-1", source: "tracker", title: "Detail item" },
 	]);
 });
@@ -117,7 +119,7 @@ describe("work-items route alias", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.body).toMatchObject({ key: "CT-1", title: "Detail item" });
-		expect(mockFindTrackerItemByKeyNumber).toHaveBeenCalled();
+		expect(mockFindWorkItemByKeyNumber).toHaveBeenCalled();
 	});
 
 	it("GET /work-items/:key/events returns changelog events", async () => {

@@ -1,11 +1,9 @@
 import { derivePrefix } from "../../core/tracker-key.js";
 import { type DBExecutor } from "../../db/kysely.js";
 import {
-	type BoardWorkItemRow,
-	findBoardCardByKeyNumber,
-	findTrackerItemByKeyNumber,
-	hydrateBoardWorkItems,
-	hydrateTrackerWorkItems,
+	findWorkItemByKeyNumber,
+	hydrateWorkItems,
+	type MergedWorkItemRow,
 } from "../../lib/work-item-response.js";
 
 export function routeKeyParam(raw: string | string[]): string {
@@ -31,29 +29,12 @@ export async function resolveWorkItemByKey(
 	prefix: string,
 	redirectFrom?: string,
 ) {
-	const trackerRow = await findTrackerItemByKeyNumber(
-		dbExec,
-		workspaceId,
-		keyNumber,
-	);
-	if (trackerRow) {
-		const [item] = await hydrateTrackerWorkItems(dbExec, [trackerRow], prefix);
-		if (redirectFrom) {
-			return { ...item, canonicalKey: item.key, redirectFrom };
-		}
-		return item;
-	}
+	const row = await findWorkItemByKeyNumber(dbExec, workspaceId, keyNumber);
+	if (!row || row.key_number == null) return null;
 
-	const boardRow = await findBoardCardByKeyNumber(
+	const [item] = await hydrateWorkItems(
 		dbExec,
-		workspaceId,
-		keyNumber,
-	);
-	if (!boardRow || boardRow.key_number == null) return null;
-
-	const [item] = await hydrateBoardWorkItems(
-		dbExec,
-		[boardRow as BoardWorkItemRow],
+		[row as MergedWorkItemRow],
 		prefix,
 	);
 	if (redirectFrom) {
