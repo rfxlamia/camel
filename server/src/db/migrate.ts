@@ -44,10 +44,15 @@ export async function applySchema(
 
 export async function migrate() {
 	const client = await pool.connect();
+	// pg surfaces RAISE NOTICE only as a client 'notice' event; print each one
+	// verbatim so cutover runbooks can grep stdout for work-item-merge lines.
+	const onNotice = (n: { message?: string }) => console.log(n.message);
+	client.on("notice", onNotice);
 	try {
 		await applySchema(client);
 		console.log("Schema applied.");
 	} finally {
+		client.off("notice", onNotice);
 		client.release();
 		await pool.end();
 	}
