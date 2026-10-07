@@ -154,6 +154,7 @@ afterAll(async () => {
 		WORKSPACE_ID,
 	]);
 	await pool.query("DELETE FROM workspaces WHERE id = $1", [WORKSPACE_ID]);
+	await pool.query("DELETE FROM users WHERE id = 7101");
 });
 
 describe.skipIf(!process.env.RUN_INTEGRATION)(
@@ -395,6 +396,106 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				expect(invalid.status).toBe(400);
 				expect(invalid.body.error).toBe("invalid status");
 				expect((await row()).version).toBe(1);
+			});
+		});
+
+		describe("labels and assignees", () => {
+			const ASSIGNEE_ID = 7101;
+
+			async function labelId(name: string): Promise<number> {
+				const { rows } = await pool.query(
+					"SELECT id FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'label' AND name = $2",
+					[WORKSPACE_ID, name],
+				);
+				return rows[0].id;
+			}
+
+			async function junctions(cardId: number) {
+				const labels = await pool.query(
+					"SELECT vocabulary_id FROM card_labels WHERE card_id = $1 ORDER BY 1",
+					[cardId],
+				);
+				const assignees = await pool.query(
+					"SELECT user_id FROM card_assignees WHERE card_id = $1 ORDER BY 1",
+					[cardId],
+				);
+				const legacy = await pool.query(
+					`SELECT
+					   (SELECT count(*)::int FROM tracker_item_labels til
+					      JOIN tracker_vocabularies v ON v.id = til.vocabulary_id
+					      WHERE v.workspace_id = $2) AS labels,
+					   (SELECT count(*)::int FROM tracker_item_assignees WHERE user_id = $1) AS assignees`,
+					[ASSIGNEE_ID, WORKSPACE_ID],
+				);
+				return {
+					labels: labels.rows.map((r) => r.vocabulary_id),
+					assignees: assignees.rows.map((r) => r.user_id),
+					legacy: legacy.rows[0],
+				};
+			}
+
+			beforeEach(async () => {
+				await pool.query(
+					`INSERT INTO users (id, username, display_name, password_hash)
+					 VALUES ($1, 'assignee7101', 'Assignee', 'hash') ON CONFLICT (id) DO NOTHING`,
+					[ASSIGNEE_ID],
+				);
+				await pool.query(
+					`INSERT INTO workspace_members (workspace_id, user_id, role)
+					 VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+					[WORKSPACE_ID, ASSIGNEE_ID],
+				);
+			});
+
+			it("adds then removes labels and assignees on card_labels / card_assignees", async () => {
+				const bug = await labelId("Bug");
+				const created = await request(app)
+					.post(`${BASE}/tracker/items`)
+					.send({
+						title: "Tagged",
+						labelIds: [bug],
+						assigneeIds: [ASSIGNEE_ID],
+					});
+				expect(created.status).toBe(201);
+				const id = created.body.id;
+				expect(await junctions(id)).toMatchObject({
+					labels: [bug],
+					assignees: [ASSIGNEE_ID],
+				});
+
+				const feature = await labelId("Feature");
+				const swapped = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ labelIds: [feature, bug], version: 1 });
+				expect(swapped.status).toBe(200);
+				expect(swapped.body.version).toBe(2);
+				expect((await junctions(id)).labels).toEqual([bug, feature].sort());
+
+				const cleared = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ labelIds: [], assigneeIds: [], version: 2 });
+				expect(cleared.status).toBe(200);
+				expect(cleared.body.labels).toEqual([]);
+				expect(cleared.body.assignees).toEqual([]);
+				expect(cleared.body.version).toBe(3);
+				const after = await junctions(id);
+				expect(after.labels).toEqual([]);
+				expect(after.assignees).toEqual([]);
+				expect(after.legacy).toEqual({ labels: 0, assignees: 0 });
+
+				const events = await pool.query(
+					"SELECT payload FROM card_events WHERE card_id = $1 AND event_type = 'tracker_item_updated' ORDER BY id",
+					[id],
+				);
+				expect(events.rows.map((r) => r.payload.changed)).toEqual([
+					["labels"],
+					["assignees", "labels"],
+				]);
+				const stale = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ assigneeIds: [ASSIGNEE_ID], version: 1 });
+				expect(stale.status).toBe(409);
+				expect((await junctions(id)).assignees).toEqual([]);
 			});
 		});
 	},

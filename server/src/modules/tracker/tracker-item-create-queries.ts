@@ -71,13 +71,13 @@ export async function endOfBucketPosition(
 
 export async function syncLabels(
 	dbExec: DBExecutor,
-	trackerItemId: number,
+	cardId: number,
 	labelIds: number[],
 ): Promise<void> {
 	for (const vocabularyId of [...new Set(labelIds)]) {
 		await dbExec
-			.insertInto("tracker_item_labels")
-			.values({ tracker_item_id: trackerItemId, vocabulary_id: vocabularyId })
+			.insertInto("card_labels")
+			.values({ card_id: cardId, vocabulary_id: vocabularyId })
 			.onConflict((oc) => oc.doNothing())
 			.execute();
 	}

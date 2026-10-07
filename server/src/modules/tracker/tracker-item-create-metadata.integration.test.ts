@@ -375,11 +375,15 @@ integration("strict Tracker item creation", () => {
 			const commitIndex = statements.findIndex((sql) => /^COMMIT/i.test(sql));
 			expect(commitIndex).toBeGreaterThan(-1);
 			const hydrationQueries = statements.filter((sql) =>
-				/SELECT .*tracker_(items|item_assignees|item_labels)/is.test(sql),
+				/SELECT .*from "cards" as "c".*inner join "tracker_vocabularies"/is.test(
+					sql,
+				),
 			);
 			expect(hydrationQueries.length).toBeGreaterThan(0);
 			const firstHydration = statements.findIndex((sql) =>
-				/SELECT .*tracker_(items|item_assignees|item_labels)/is.test(sql),
+				/SELECT .*from "cards" as "c".*inner join "tracker_vocabularies"/is.test(
+					sql,
+				),
 			);
 			expect(firstHydration).toBeLessThan(commitIndex);
 		} finally {
