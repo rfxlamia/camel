@@ -62,3 +62,9 @@ Red flags:
 Done when: user confirms the smoke test and the 30-minute log watch is clean
 Uncertain when: verify output has warnings
 Escalate when: restore is needed
+
+## Carried from Phase 3 phase-level pass (P3-F3, user-approved 2026-10-07)
+- The cutover must enable the merge explicitly: start the migration with `WORK_ITEM_MERGE=on` (exact mechanism recorded in `deploy/CUTOVER-CHECKLIST.md` once the gate lands). Without it, the copy block is skipped and logs `work-item-merge: copy skipped`.
+- Verify in the cutover logs: per-workspace `work-item-merge: workspace=...` notices are present and no `copy skipped` notice appears.
+- Until this task runs, production stays on build `8f7f9eb-20261007065202`; see the HAZARD section in `deploy/CUTOVER-CHECKLIST.md`.
+- Exact enable command (from the P3-F3 correction audit): `docker compose -f docker-compose.prod.yml --env-file .env.production run --rm -e WORK_ITEM_MERGE=on --entrypoint node server /app/server/dist/db/migrate.js`. `docker-compose.prod.yml` lists env vars explicitly, so `WORK_ITEM_MERGE` is never inherited by normal starts; never add it to `.env.production`.

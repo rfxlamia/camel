@@ -61,3 +61,11 @@ Red flags:
 Done when: `bash -n` passes, `--dry-run` output reviewed, checklist complete
 Uncertain when: compose service names differ on the host
 Escalate when: restore cannot be made one-command
+
+## Carried from Phase 3 phase-level pass (P3-F3/P3-F4, user-approved 2026-10-07)
+- The merge copy block is gated: it only runs when the migration process has `WORK_ITEM_MERGE=on` (or `applySchema(client, { workItemMerge: true })`). The normal container start (`/entrypoint.sh` → `node migrate.js`) never sets it, because `docker-compose.prod.yml` lists env vars explicitly.
+- Therefore `deploy/cutover-ggf.sh` phase (f) MUST, after the server is stopped and before the new image is started, run the gated one-off migrate:
+  `docker compose -f docker-compose.prod.yml --env-file .env.production run --rm -e WORK_ITEM_MERGE=on --entrypoint node server /app/server/dist/db/migrate.js`
+- The script MUST abort (and go to restore) if that output contains `work-item-merge: copy skipped` or contains no `work-item-merge: workspace=` notice. Only then `up -d`; the entrypoint's ungated migrate is then a harmless no-op.
+- Never add `WORK_ITEM_MERGE` to `.env.production` or to the compose `environment:` block.
+- Add a script-level test or dry-run check that greps the script for the gated command and the abort conditions.

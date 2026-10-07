@@ -170,6 +170,30 @@
           "file": "execution-plan/tasks/T24-deploy-phase-a-to-camel-ggf-main-agent-only.md",
           "done_sha": "2ca1200899ea041c8de21295121d6c3fc690a719"
         }
+      ],
+      "corrections": [
+        {
+          "sha": "2e8da2c8b82114db5723b599a2f9d2ddc8233f15",
+          "files": [
+            "server/src/db/migrate.ts",
+            "server/src/db/work-item-merge-copy.integration.test.ts",
+            "server/src/db/work-item-merge.sql"
+          ],
+          "for_task": "T7"
+        },
+        {
+          "sha": "eafddf1b830b84acb07baf900f866e96a370a577",
+          "files": [
+            "server/src/lib/board-feed-filter.ts",
+            "server/src/modules/activity/activity-feed-merged.integration.test.ts",
+            "server/src/modules/activity/activity.ts",
+            "server/src/modules/agent/service-deps-activity.column-less.integration.test.ts",
+            "server/src/modules/agent/service-deps-activity.ts",
+            "server/src/modules/chat/tools/factory.column-less.integration.test.ts",
+            "server/src/modules/chat/tools/factory.ts"
+          ],
+          "for_task": "T6"
+        }
       ]
     },
     {

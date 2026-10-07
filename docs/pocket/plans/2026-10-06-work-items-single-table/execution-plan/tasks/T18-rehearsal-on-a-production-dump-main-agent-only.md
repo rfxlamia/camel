@@ -62,3 +62,8 @@ Red flags:
 Done when: verify exit 0, idempotency confirmed, dump removed
 Uncertain when: migration duration exceeds the planned window
 Escalate when: any assertion fires
+
+## Carried from Phase 3 phase-level pass (P3-F3/P3-F4, user-approved 2026-10-07)
+- Run the rehearsal migration with the merge enabled: `WORK_ITEM_MERGE=on node dist/db/migrate.js` (or the same one-off `docker compose run ... -e WORK_ITEM_MERGE=on --entrypoint node server /app/server/dist/db/migrate.js` that T17's script uses). Without it the copy is skipped and timings / verify results are meaningless.
+- Assert the per-workspace `work-item-merge: workspace=` notices are present and no `copy skipped` notice appears.
+- The idempotency run (second migrate) must ALSO use `WORK_ITEM_MERGE=on`, and must then produce no per-workspace notices.

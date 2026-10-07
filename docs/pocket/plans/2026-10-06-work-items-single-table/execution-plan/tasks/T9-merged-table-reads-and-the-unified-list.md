@@ -101,3 +101,7 @@ Red flags:
 Done when: two scenarios pass and the existing work-item tests (updated) are green
 Uncertain when: the non-default-board predicate changes counts
 Escalate when: shape drift is unavoidable
+
+## Carried from Phase 3 phase-level pass (heads-up, 2026-10-07)
+- After the gated copy runs, every tracker item event exists in both `card_events` (copied, `card_id` NOT NULL, `tracker_*` type) and `tracker_events`. Today's `getUnifiedWorkspaceActivity` UNION reads both, so the unified feed would show each item event twice. This task's UNION rewrite must drop or dedupe the `tracker_events` branch for migrated rows.
+- Board-scoped readers (`/activity`, chat/agent `fetchActivityEvents`) already exclude all `tracker_*` types via `server/src/lib/board-feed-filter.ts`; keep them on that helper.

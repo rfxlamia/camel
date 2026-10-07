@@ -111,3 +111,8 @@ Red flags:
 Done when: three scenarios pass and all earlier migration tests green
 Uncertain when: the sabotage technique is not possible inside the test DB
 Escalate when: rollback of `DROP NOT NULL` cannot be proven
+
+## Carried from Phase 3 phase-level pass (P3-F3, user-approved 2026-10-07)
+- The merge copy block is gated: it is a no-op unless `applySchema` runs with the merge enabled (`WORK_ITEM_MERGE=on` env, or `applySchema(client, { workItemMerge: true })`, which sets `SET LOCAL work_item_merge.enabled = 'on'`).
+- Everything this task adds that changes production behavior — the run-once guard's parity assertions, the counter repair and especially the BEFORE INSERT trigger on `tracker_items` — MUST sit behind the same gate. Production tracker writes still go to `tracker_items` until T10, so an ungated trigger would break production on any deploy before T19.
+- Tests must enable the merge explicitly and must also pin the disabled path (no trigger, no assertions run).
