@@ -1,7 +1,7 @@
 // Requires a running PostgreSQL. Gated behind RUN_INTEGRATION=1.
 // Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/db/work-item-merge-copy.integration.test.ts
 import "dotenv/config";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { applySchema } from "./migrate.js";
 import { pool } from "./pool.js";
 import {
@@ -9,6 +9,7 @@ import {
 	type ScratchSchema,
 } from "./scratch-schema-test-support.js";
 
+const ENABLED = { workItemMerge: true };
 const runIntegration = Boolean(process.env.RUN_INTEGRATION);
 
 type Ws = {
@@ -128,6 +129,52 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 		await pool.end();
 	});
 
+	it("Copy block is skipped unless the merge is enabled", async () => {
+		vi.stubEnv("WORK_ITEM_MERGE", "");
+		try {
+			const ws = await seedWorkspace(s, `c0-${tag}`);
+			const itemId = await seedItem(s, ws, 51);
+			const notices: string[] = [];
+			const onNotice = (n: { message?: string }) => {
+				if (n.message) notices.push(n.message);
+			};
+			s.client.on("notice", onNotice);
+			try {
+				await applySchema(s.client);
+			} finally {
+				s.client.off("notice", onNotice);
+			}
+			expect(
+				notices.some((m) => m.startsWith("work-item-merge: copy skipped")),
+			).toBe(true);
+			const [ti] = await rows(
+				s,
+				"SELECT migrated_to_id FROM tracker_items WHERE id = $1",
+				[itemId],
+			);
+			expect(ti.migrated_to_id).toBeNull();
+			expect(
+				await rows(s, "SELECT id FROM cards WHERE workspace_id = $1", [ws.id]),
+			).toHaveLength(0);
+			// Phase A expand still applies while the copy is disabled.
+			const [col] = await rows(
+				s,
+				`SELECT is_nullable FROM information_schema.columns
+				 WHERE table_schema = current_schema() AND table_name = 'cards' AND column_name = 'column_id'`,
+			);
+			expect(col.is_nullable).toBe("YES");
+
+			await applySchema(s.client, ENABLED);
+			const [after] = await rows(
+				s,
+				"SELECT migrated_to_id FROM tracker_items WHERE id = $1",
+				[itemId],
+			);
+			expect(after.migrated_to_id).toEqual(expect.any(Number));
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
 	it("copies a tracker item with all its data and relations", async () => {
 		const ws = await seedWorkspace(s, `c1-${tag}`);
 		const itemId = await seedItem(s, ws, 11);
@@ -141,7 +188,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 		);
 		await seedEvents(s, ws, itemId, 5);
 
-		await applySchema(s.client);
+		await applySchema(s.client, ENABLED);
 
 		const [ti] = await rows(s, "SELECT * FROM tracker_items WHERE id = $1", [
 			itemId,
@@ -219,7 +266,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 		);
 
 		// idempotent: a second run copies nothing new
-		await applySchema(s.client);
+		await applySchema(s.client, ENABLED);
 		expect(
 			(await rows(s, "SELECT id FROM cards WHERE key_number = 11")).length,
 		).toBe(1);
@@ -256,7 +303,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			[ws.userId, ws.otherUserId, ws.id, a],
 		);
 
-		await applySchema(s.client);
+		await applySchema(s.client, ENABLED);
 
 		const map = new Map(
 			(await rows(s, "SELECT id, migrated_to_id FROM tracker_items")).map(
@@ -310,7 +357,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 		expect(orphans).toHaveLength(0);
 
 		// idempotent: a second run copies and remaps nothing
-		await applySchema(s.client);
+		await applySchema(s.client, ENABLED);
 		expect(
 			(
 				await rows(s, "SELECT id FROM card_events WHERE workspace_id = $1", [
@@ -335,7 +382,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 		});
 		await seedItem(s, ws, 32);
 
-		await applySchema(s.client);
+		await applySchema(s.client, ENABLED);
 
 		const [ti] = await rows(s, "SELECT * FROM tracker_items WHERE id = $1", [
 			deleted,
@@ -376,7 +423,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 		};
 		s.client.on("notice", onNotice);
 		try {
-			await applySchema(s.client);
+			await applySchema(s.client, ENABLED);
 			expect(messages.sort()).toEqual(
 				[
 					`work-item-merge: workspace=${w1.id} tracker_before=2 cards_added=2`,
@@ -386,7 +433,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			expect((await rows(s, "SELECT id FROM card_events")).length).toBe(4);
 
 			messages.length = 0;
-			await applySchema(s.client);
+			await applySchema(s.client, ENABLED);
 			expect(messages).toEqual([]);
 			expect((await rows(s, "SELECT id FROM card_events")).length).toBe(4);
 		} finally {
@@ -403,7 +450,7 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			[ws.id, ws.statusId],
 		);
 
-		await expect(applySchema(s.client)).rejects.toThrow(
+		await expect(applySchema(s.client, ENABLED)).rejects.toThrow(
 			new RegExp(`^work-item-merge: key collision workspace=${ws.id} key=7`),
 		);
 

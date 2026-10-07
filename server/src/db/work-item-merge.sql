@@ -50,6 +50,13 @@ DECLARE
   audit RECORD;
   clash RECORD;
 BEGIN
+  -- Gate: the copy runs only when the migration was started with the merge
+  -- enabled (WORK_ITEM_MERGE=on or applySchema's workItemMerge option).
+  IF coalesce(current_setting('work_item_merge.enabled', true), '') <> 'on' THEN
+    RAISE NOTICE 'work-item-merge: copy skipped (WORK_ITEM_MERGE not enabled)';
+    RETURN;
+  END IF;
+
   -- Pre-check FIRST: a tracker key that already exists on a card (soft-deleted
   -- cards included) aborts the whole migration with a readable message.
   SELECT ti.workspace_id, ti.key_number
