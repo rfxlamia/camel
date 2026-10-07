@@ -17,22 +17,7 @@ export async function findColumnlessItem(
 	return row && row.column_id == null ? row : undefined;
 }
 
-/** After a guarded write matched no row: stale version (conflict) or gone (not_found). */
-export async function classifyWriteFailure(
-	trx: DBExecutor,
-	workspaceId: number,
-	cardId: number,
-): Promise<"conflict" | "not_found"> {
-	const current = await trx
-		.selectFrom("cards")
-		.select("id")
-		.where("id", "=", cardId)
-		.where("workspace_id", "=", workspaceId)
-		.where("column_id", "is", null)
-		.where("deleted_at", "is", null)
-		.executeTakeFirst();
-	return current ? "conflict" : "not_found";
-}
+export { classifyColumnlessWriteFailure as classifyWriteFailure } from "../../core/classify-columnless-write-failure.js";
 
 /** Response body for a mutated Tracker item (`source` stripped on legacy routes). */
 export async function loadMutationResponse(

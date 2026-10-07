@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { applyLegacyTrackerItemStatusChange as applyTrackerItemStatusChange } from "./legacy-tracker-item-status-change.js";
 import { resolveMyWorkDoneTarget } from "./my-work-done-target.js";
-import { applyTrackerItemStatusChange } from "./tracker-item-status-change.js";
 
 const actor = {
 	id: 42,
@@ -51,7 +51,7 @@ function makeTrackerTrx(
 	const trx = {
 		selectFrom: vi.fn((table: string) => {
 			tableQueries.push(table);
-			if (table === "cards as c") {
+			if (table === "tracker_items" || table === "tracker_items as ti") {
 				return chainable(persistedItem);
 			}
 			if (table === "tracker_vocabularies") {
@@ -113,13 +113,14 @@ const targetInputs = {
 	],
 };
 
-const mockRecordActivity = vi.fn();
-vi.mock("../lib/helpers.js", () => ({
-	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
+const mockRecordTrackerActivity = vi.fn();
+vi.mock("../lib/tracker-activity.js", () => ({
+	recordTrackerActivity: (...args: unknown[]) =>
+		mockRecordTrackerActivity(...args),
 }));
 
 beforeEach(() => {
-	mockRecordActivity.mockReset();
+	mockRecordTrackerActivity.mockReset();
 });
 
 describe("applyTrackerItemStatusChange", () => {
@@ -136,7 +137,7 @@ describe("applyTrackerItemStatusChange", () => {
 		});
 
 		const existingCompletedAt = new Date("2026-09-10T12:30:00.000Z");
-		const { trx, updateCalls, persistedItem, tableQueries } = makeTrackerTrx({
+		const { trx, updateCalls, persistedItem } = makeTrackerTrx({
 			completedAt: existingCompletedAt,
 		});
 		const result = await applyTrackerItemStatusChange(trx, {
@@ -156,19 +157,17 @@ describe("applyTrackerItemStatusChange", () => {
 				updated_at: expect.anything(),
 			}),
 		);
-		expect(tableQueries).not.toContain("tracker_items");
-		expect(updateCalls[0]).not.toHaveProperty("column_id");
 		expect(rawSql(updateCalls[0]?.completed_at)).toBe(
 			"COALESCE(completed_at, now())",
 		);
 		expect(persistedItem.completed_at).toBe(existingCompletedAt);
-		expect(mockRecordActivity).toHaveBeenCalledOnce();
-		expect(mockRecordActivity).toHaveBeenCalledWith(
+		expect(mockRecordTrackerActivity).toHaveBeenCalledOnce();
+		expect(mockRecordTrackerActivity).toHaveBeenCalledWith(
 			trx,
 			actor,
 			7,
 			"tracker_item_updated",
-			expect.objectContaining({ cardId: 100 }),
+			expect.objectContaining({ trackerItemId: 100 }),
 		);
 	});
 

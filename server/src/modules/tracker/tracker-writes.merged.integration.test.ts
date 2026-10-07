@@ -313,5 +313,89 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				expect(await count("tracker_items")).toBe(0);
 			});
 		});
+
+		describe("status change", () => {
+			async function statusId(name: string): Promise<number> {
+				const { rows } = await pool.query(
+					"SELECT id FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'status' AND name = $2",
+					[WORKSPACE_ID, name],
+				);
+				return rows[0].id;
+			}
+
+			async function row() {
+				return (await cardRows())[0];
+			}
+
+			it("follows the tracker status rules and never assigns a column", async () => {
+				const created = await request(app)
+					.post(`${BASE}/tracker/items`)
+					.send({ title: "Status item" });
+				expect(created.body.status.name).toBe("Backlog");
+				const id = created.body.id;
+
+				const started = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ statusId: await statusId("In Progress"), version: 1 });
+				expect(started.status).toBe(200);
+				expect(started.body.status.name).toBe("In Progress");
+				expect(started.body.version).toBe(2);
+				expect(await row()).toMatchObject({
+					status_id: await statusId("In Progress"),
+					completed_at: null,
+					version: 2,
+					column_id: null,
+				});
+
+				const done = await request(app)
+					.patch(`${BASE}/work-items/CA-1`)
+					.send({ statusId: await statusId("Done"), version: 2 });
+				expect(done.status).toBe(200);
+				expect((await row()).completed_at).not.toBeNull();
+				expect((await row()).version).toBe(3);
+
+				const canceled = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ statusId: await statusId("Canceled"), version: 3 });
+				expect(canceled.status).toBe(200);
+				expect(await row()).toMatchObject({
+					status_id: await statusId("Canceled"),
+					completed_at: null,
+					version: 4,
+					column_id: null,
+				});
+
+				const { rows: events } = await pool.query(
+					"SELECT event_type, payload FROM card_events WHERE card_id = $1 ORDER BY id",
+					[id],
+				);
+				expect(events.map((e) => e.event_type)).toEqual([
+					"tracker_item_created",
+					"tracker_item_updated",
+					"tracker_item_updated",
+					"tracker_item_updated",
+				]);
+				expect(events[1].payload.changed).toEqual(["status"]);
+				expect(await count("tracker_items")).toBe(0);
+				expect(await count("tracker_events")).toBe(0);
+			});
+
+			it("returns 409 on a stale version and 400 on an unknown status", async () => {
+				await request(app).post(`${BASE}/tracker/items`).send({ title: "S" });
+				const stale = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ statusId: await statusId("Done"), version: 7 });
+				expect(stale.status).toBe(409);
+				expect(stale.body.code).toBe("version_conflict");
+				expect(await row()).toMatchObject({ version: 1, completed_at: null });
+
+				const invalid = await request(app)
+					.patch(`${BASE}/tracker/items/CA-1`)
+					.send({ statusId: 987654321, version: 1 });
+				expect(invalid.status).toBe(400);
+				expect(invalid.body.error).toBe("invalid status");
+				expect((await row()).version).toBe(1);
+			});
+		});
 	},
 );

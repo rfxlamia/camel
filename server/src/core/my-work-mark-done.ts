@@ -4,8 +4,8 @@ import { type DBExecutor, db } from "../db/kysely.js";
 import type { Cards, TrackerItems } from "../db/types.js";
 import type { MyWorkSource } from "../modules/my-work/index.js";
 import { applyBoardCardStatusChange } from "./board-card-status-change.js";
+import { applyLegacyTrackerItemStatusChange } from "./legacy-tracker-item-status-change.js";
 import { resolveMyWorkDoneTarget } from "./my-work-done-target.js";
-import { applyTrackerItemStatusChange } from "./tracker-item-status-change.js";
 
 export type MyWorkMarkDoneInput = {
 	userId: number;
@@ -43,7 +43,7 @@ type TrackerMarkDoneRow = Pick<
 type Transaction = <T>(callback: (trx: DBExecutor) => Promise<T>) => Promise<T>;
 
 type BoardStatusChange = typeof applyBoardCardStatusChange;
-type TrackerStatusChange = typeof applyTrackerItemStatusChange;
+type TrackerStatusChange = typeof applyLegacyTrackerItemStatusChange;
 type SourceChangeResult = Awaited<
 	ReturnType<BoardStatusChange | TrackerStatusChange>
 >;
@@ -293,7 +293,7 @@ export function createMyWorkMarkDoneService(deps: MyWorkMarkDoneDeps = {}) {
 	const context = {
 		boardStatusChange: deps.boardStatusChange ?? applyBoardCardStatusChange,
 		trackerStatusChange:
-			deps.trackerStatusChange ?? applyTrackerItemStatusChange,
+			deps.trackerStatusChange ?? applyLegacyTrackerItemStatusChange,
 	};
 	const markDone = (input: MyWorkMarkDoneInput) =>
 		runTransaction((trx) => markDoneInTransaction(trx, { ...context, input }));

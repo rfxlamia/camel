@@ -2,12 +2,9 @@ import type { Request, Response } from "express";
 import { applyTrackerItemStatusChange } from "../../core/tracker-item-status-change.js";
 import { formatKey } from "../../core/tracker-key.js";
 import { db } from "../../db/kysely.js";
-import {
-	findTrackerItemByKeyNumber,
-	hydrateMutationItem,
-} from "../../lib/work-item-response.js";
 import { publishEvent } from "../../realtime.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
+import { loadMutationResponse } from "./tracker-item-merged-queries.js";
 import { statusIdField } from "./tracker-schemas.js";
 
 /** True when the PATCH body carries only `version` and `statusId`. */
@@ -62,14 +59,15 @@ export async function updateTrackerItemStatusOnly(
 		return sendValidationError(res, { error: "invalid status" });
 	}
 
-	const row = await findTrackerItemByKeyNumber(db, workspaceId, key.keyNumber);
-	if (!row) return res.status(404).json({ error: "Not found" });
-	const redirectFrom =
-		key.prefix !== prefix ? formatKey(key.prefix, key.keyNumber) : undefined;
-	const item = await hydrateMutationItem(db, row, prefix, {
-		canonicalWorkItem: req.canonicalWorkItemsRoute,
-		redirectFrom,
+	const item = await loadMutationResponse(db, {
+		workspaceId,
+		keyNumber: key.keyNumber,
+		prefix,
+		canonical: Boolean(req.canonicalWorkItemsRoute),
+		redirectFrom:
+			key.prefix !== prefix ? formatKey(key.prefix, key.keyNumber) : undefined,
 	});
+	if (!item) return res.status(404).json({ error: "Not found" });
 	await publishEvent(workspaceId, {
 		type: "tracker.updated",
 		actor,
