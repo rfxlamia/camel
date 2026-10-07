@@ -1,0 +1,64 @@
+{
+  "task_id": "T11",
+  "task_name": "Project, phase, vocabulary and member-removal paths",
+  "cycle": 2,
+  "reviewed_sha": "ffeb2dd299d0c59ae82fc59d9f6d67fe3a98f7c6",
+  "timestamp": "2026-10-07T21:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle 1 stage 1 PASS stands: fix commit ffeb2dd touches only tracker-project-delete.ts, adds no card_events insert, touches no T10 files.",
+      "Behavior-neutral split verified statement by statement against 6691c85: same order (workspace lock, FOR UPDATE project lookup with early not_found, loadProjectCards, soft-delete project then phases, column-less release without version bump, board-card bump with RETURNING then per-card update events, then one tracker_project_deleted event with released triples). Same trx passed to every helper, so one transaction; same where-clauses and workspace scoping; same return values ({kind:not_found} / {kind:ok, releasedCardIds}). Error paths (404/409) live in the caller and are unchanged."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Important finding cleared: deleteProjectTransaction is now ~42 lines; every helper is <=35 lines; file is 170 lines total",
+      "Helpers receive trx; transaction boundary, lock and query order are identical to the pre-split body",
+      "Doc comments on helpers state the version-bump rules (column-less no bump, board cards bump)"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-phase-queries.ts",
+        "line": 94,
+        "description": "deletePhaseTransaction is ~110 lines; only trivial filter edits in this range, so not a refactor trigger. Phase path emits changed:[\"phase\"] and has no project filter, so it is not identical to the project helper; split opportunistically on next non-trivial touch."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-project-delete.ts",
+        "line": 76,
+        "description": "Column-less release does not bump version (parity with old tracker behavior). A client holding the item with stale project_id/phase_id can still write without 409. Decide in T21 or a follow-up."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/routes/work-item-project-concurrency.integration.test.ts",
+        "line": 197,
+        "description": "assertNoBoardArtifacts filters card_events by card_id IS NOT NULL, so duplicate project/phase events from a racing delete are no longer detected; consider asserting exact tracker_project_deleted/tracker_phase_deleted event counts."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-phase-queries.ts",
+        "line": 81,
+        "description": "Empty no-phase bucket yields positionBetween(null,null) = 1024; the re-bucket loop issues one UPDATE per item and does not rebalance on RangeError. Matches old behavior."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/routes/work-item-phase-concurrency.integration.test.ts",
+        "line": 121,
+        "description": "Formatter-only rewraps in both concurrency test files add diff noise unrelated to the task."
+      }
+    ]
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  }
+}

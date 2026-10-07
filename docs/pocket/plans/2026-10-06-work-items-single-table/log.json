@@ -236,9 +236,10 @@
         {
           "id": "T11",
           "name": "Project, phase, vocabulary and member-removal paths",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T9",
-          "file": "execution-plan/tasks/T11-project-phase-vocabulary-and-member-removal-paths.md"
+          "file": "execution-plan/tasks/T11-project-phase-vocabulary-and-member-removal-paths.md",
+          "done_sha": "ffeb2dd299d0c59ae82fc59d9f6d67fe3a98f7c6"
         },
         {
           "id": "T12",
