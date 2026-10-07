@@ -135,5 +135,22 @@ describe.skipIf(!runIntegration)(
 				fixture.boardIds.length,
 			);
 		});
+
+		it("activity reader excludes tracker_* events", async () => {
+			const board = fixture.boardIds[0]!;
+			const colLess = fixture.columnLessIds[0]!;
+			const ev = (type: string, cardId: number | null) =>
+				pool.query(
+					"INSERT INTO card_events (workspace_id, card_id, actor_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::jsonb)",
+					[WORKSPACE_ID, cardId, USER_ID, type, JSON.stringify({ title: "x" })],
+				);
+			await ev("create", board);
+			await ev("tracker_item_updated", colLess);
+			await ev("tracker_vocabulary_created", null);
+			await ev("tracker_project_created", null);
+
+			const items = await activityDeps.fetchActivityEvents!(WORKSPACE_ID, 50);
+			expect(items.map((i) => i.type)).toEqual(["create"]);
+		});
 	},
 );

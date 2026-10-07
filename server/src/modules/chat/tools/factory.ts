@@ -1,5 +1,6 @@
 import type { CardTimestamps } from "../../../core/metrics.js";
 import { db } from "../../../db/kysely.js";
+import { excludeTrackerEvents } from "../../../lib/board-feed-filter.js";
 import { resolveEventTitle } from "../../../lib/event-title.js";
 import type { Tool } from "../../../lib/llm/tool-types.js";
 import {
@@ -75,6 +76,7 @@ async function defaultFetchActivityEvents(
 			"c.title as current_card_title",
 		])
 		.where("e.workspace_id", "=", workspaceId)
+		.where(excludeTrackerEvents)
 		.orderBy("e.created_at", "desc")
 		.orderBy("e.id", "desc")
 		.limit(limit)

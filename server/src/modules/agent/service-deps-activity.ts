@@ -1,4 +1,5 @@
 import { db } from "../../db/kysely.js";
+import { excludeTrackerEvents } from "../../lib/board-feed-filter.js";
 import { resolveEventTitle } from "../../lib/event-title.js";
 import type { AgentBoardServiceDeps } from "./service.js";
 import type { ActivityItem } from "./tools/queryBoardData.js";
@@ -50,6 +51,7 @@ export const activityDeps: Pick<
 				"c.title as current_card_title",
 			])
 			.where("e.workspace_id", "=", workspaceId)
+			.where(excludeTrackerEvents)
 			.orderBy("e.created_at", "desc")
 			.orderBy("e.id", "desc")
 			.limit(limit)
