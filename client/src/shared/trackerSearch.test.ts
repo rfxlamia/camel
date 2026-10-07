@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import type { TrackerProject, WorkItem } from "../types";
 import { partitionTrackerSearch } from "./trackerSearch";
@@ -161,4 +163,10 @@ describe("partitionTrackerSearch", () => {
 		expect(result.filteredItems).toEqual([match]);
 		expect(result.visibleProjects).toEqual([projects[0]]);
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });

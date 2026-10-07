@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from "vitest";
 import {
 	type AutoErrorDetail,
@@ -60,4 +62,10 @@ describe("ticketIntakeBus", () => {
 
 		expect(listener).not.toHaveBeenCalled();
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });
