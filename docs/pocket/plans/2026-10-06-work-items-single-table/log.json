@@ -275,9 +275,10 @@
         {
           "id": "T17",
           "name": "Cutover and restore scripts plus checklist",
-          "status": "BLOCKED",
+          "status": "DONE",
           "depends": "T14, T15, T16",
-          "file": "execution-plan/tasks/T17-cutover-and-restore-scripts-plus-checklist.md"
+          "file": "execution-plan/tasks/T17-cutover-and-restore-scripts-plus-checklist.md",
+          "done_sha": "838cc558432ad6a4101a4eb8dd91130468709d9e"
         }
       ]
     },

@@ -67,3 +67,8 @@ Escalate when: any assertion fires
 - Run the rehearsal migration with the merge enabled: `WORK_ITEM_MERGE=on node dist/db/migrate.js` (or the same one-off `docker compose run ... -e WORK_ITEM_MERGE=on --entrypoint node server /app/server/dist/db/migrate.js` that T17's script uses). Without it the copy is skipped and timings / verify results are meaningless.
 - Assert the per-workspace `work-item-merge: workspace=` notices are present and no `copy skipped` notice appears.
 - The idempotency run (second migrate) must ALSO use `WORK_ITEM_MERGE=on`, and must then produce no per-workspace notices.
+
+## Carried from Phase 5 T17 audit (2026-10-08)
+- T17 scripts are local/git-ignored; verdict pinned by sha256 in `reviews/T17-review.json` (`reviewed_files`). Re-hash before rehearsal; any edit after audit needs a re-audit.
+- Fix during rehearsal (T17 audit Minors): treat merge rc >= 128 (signal) like 255 (outcome unknown, keep `merge_started`, point 2) instead of a clean rollback; dry-run prints `merge_started` after the merge line while `--execute` writes it before; backup row-count equality vs live can false-abort (`cutover-ggf.sh` phase b); restore DB renames are separate transactions; phase c `test -e || cp -a` treats a partial copy as present; bare `shift` on a trailing `--from-phase`/`--date`.
+- Verify on the host (T17 NEEDS_CONTEXT): host user + passwordless sudo, remote shell is bash, free disk vs `MIN_FREE_MB=1024` (Phase A saw ~846 MB), scratch-DB method for the backup check, trailing lines after `Schema applied.` from `compose run -T`, `dotenv` present in the runner image's production deps, old image accepts the new compose file.
