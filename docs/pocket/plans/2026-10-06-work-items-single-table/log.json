@@ -207,7 +207,7 @@
     {
       "order": 4,
       "file": "execution-plan/phase-4.md",
-      "status": "WAITING",
+      "status": "REVIEW",
       "tasks": [
         {
           "id": "T8",
