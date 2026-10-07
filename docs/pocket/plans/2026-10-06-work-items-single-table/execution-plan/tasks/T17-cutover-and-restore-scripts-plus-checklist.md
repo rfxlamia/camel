@@ -70,3 +70,4 @@ Escalate when: restore cannot be made one-command
 - Never add `WORK_ITEM_MERGE` to `.env.production` or to the compose `environment:` block.
 - Add a script-level test or dry-run check that greps the script for the gated command and the abort conditions.
 - (P3-F5) Since 5b2d572, `migrate()` prints every Postgres NOTICE verbatim to stdout. Notices are emitted as they arrive, even if the transaction later rolls back, so the script must ALSO require exit code 0 and a final `Schema applied.` line before trusting the per-workspace notices. Verified on a scratch DB 2026-10-07: gate off → `work-item-merge: copy skipped (WORK_ITEM_MERGE not enabled)` + `Schema applied.`.
+- If the script pipes the one-off run output (e.g. through `tee`), use `set -o pipefail` or check the run's own exit status so the exit-code-0 requirement is not lost. Normal starts also print benign DDL notices (e.g. `already exists, skipping`); only the `work-item-merge:` lines matter.

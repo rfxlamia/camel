@@ -68,3 +68,4 @@ Escalate when: restore is needed
 - Verify in the cutover logs: per-workspace `work-item-merge: workspace=...` notices are present and no `copy skipped` notice appears.
 - Until this task runs, production stays on build `8f7f9eb-20261007065202`; see the HAZARD section in `deploy/CUTOVER-CHECKLIST.md`.
 - Exact enable command (from the P3-F3 correction audit): `docker compose -f docker-compose.prod.yml --env-file .env.production run --rm -e WORK_ITEM_MERGE=on --entrypoint node server /app/server/dist/db/migrate.js`. `docker-compose.prod.yml` lists env vars explicitly, so `WORK_ITEM_MERGE` is never inherited by normal starts; never add it to `.env.production`.
+- (P3-F5) Trust the per-workspace notices only if the gated migrate exits 0 and prints a final `Schema applied.`; notices are printed as they arrive even if the transaction later rolls back (then stderr shows `Migration failed:` and exit 1).

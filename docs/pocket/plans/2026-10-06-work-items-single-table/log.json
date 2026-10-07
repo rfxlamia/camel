@@ -144,7 +144,7 @@
     {
       "order": 3,
       "file": "execution-plan/phase-3.md",
-      "status": "WAITING",
+      "status": "REVIEW",
       "tasks": [
         {
           "id": "T6",
