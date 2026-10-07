@@ -51,13 +51,17 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("health routes", () => {
 		expect(res.status).toBe(200);
 		expect(res.body).toMatchObject({ ok: true });
 		expect(typeof res.body.buildId).toBe("string");
+		expect(res.body.buildId.length).toBeGreaterThan(0);
+		expect(res.body).not.toHaveProperty("workItemsListLatency");
+		expect(Object.keys(res.body).sort()).toEqual(["buildId", "ok"]);
 		expect(res.headers["set-cookie"]).toBeUndefined();
 	});
 
-	it("keeps /health with the same payload", async () => {
+	it("keeps the full payload on the internal /health route", async () => {
 		const res = await request(appWith(false)).get("/health");
 		expect(res.status).toBe(200);
 		expect(res.body.buildId).toBeTruthy();
+		expect(res.body.workItemsListLatency).toEqual(snapshot);
 	});
 
 	it("returns 503 on both routes while shutting down", async () => {
