@@ -321,4 +321,27 @@ describe.skipIf(!runIntegration)("work-item-merge guard", () => {
 			await allocateWorkItemKey(scratchDb, { workspaceId: w2.id }),
 		).toEqual({ keyNumber: 10 });
 	});
+
+	it("Late-write trigger blocks inserts only", async () => {
+		const ws = await seedWorkspace(s, `g4-${tag}`);
+		const itemId = await seedItem(s, ws, 41);
+		await applySchema(s.client, ENABLED);
+
+		await expect(seedItem(s, ws, 42)).rejects.toThrow(/work-item-merge/);
+		await s.client.query(
+			"UPDATE tracker_items SET title = 'still editable' WHERE id = $1",
+			[itemId],
+		);
+		const selected = await rows(
+			s,
+			"SELECT title FROM tracker_items WHERE workspace_id = $1",
+			[ws.id],
+		);
+		expect(selected.map((r) => r.title)).toEqual(["still editable"]);
+
+		// Re-running (with and without the gate) must not trip over the trigger.
+		await applySchema(s.client, ENABLED);
+		await applySchema(s.client);
+		await expect(seedItem(s, ws, 43)).rejects.toThrow(/work-item-merge/);
+	});
 });
