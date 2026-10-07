@@ -157,9 +157,10 @@
         {
           "id": "T7",
           "name": "Copy block: tracker data into cards",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T24",
-          "file": "execution-plan/tasks/T7-copy-block-tracker-data-into-cards.md"
+          "file": "execution-plan/tasks/T7-copy-block-tracker-data-into-cards.md",
+          "done_sha": "72cff2806059a241a5f2fbd107593adfb8146326"
         },
         {
           "id": "T24",

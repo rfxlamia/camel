@@ -1,0 +1,66 @@
+{
+  "task_id": "T7",
+  "task_name": "Copy block: tracker data into cards",
+  "cycle": 1,
+  "timestamp": "2026-10-07T07:35:26Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "released[].itemId rewrite via persisted migrated_to_id; order and other keys verbatim; unmapped counted (user decision).",
+      "updated_at copied; reader unchanged (accepted, later task).",
+      "Item-less dedupe with multiset row_number semantics; idempotent.",
+      "Collision pre-check first; pairing on (workspace_id, key_number).",
+      "Sequence ids only; single atomic DO in applySchema txn; no CONCURRENTLY; tracker_items only migrated_to_id; tracker_events read-only.",
+      "Placeholder position 0 safe (no unique index); readers filter column_id IS NOT NULL.",
+      "COALESCE plan_position; status_id verbatim; dates not merged (started_at/done_at NULL for copied rows).",
+      "No triggers in schema; no extra audit rows.",
+      "Key counter: prod read-only check 2026-10-07 found 0/37 workspaces with counter below max key.",
+      "Satellites ON CONFLICT DO NOTHING; compatible vocabulary ids; focus remap scoped.",
+      "NULL-safe notices; trivial perf at prod scale; scratch schema isolation.",
+      "Cycle 3 no natural RED: accepted via mutation proof."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Atomic DO block with loud collision abort",
+      "Sequence ids + persisted mapping make block re-runnable",
+      "Verbatim event copy except deliberate released rewrite",
+      "Multiset dedupe preserves legitimate duplicates",
+      "ON COMMIT DROP temp tables; scoped remaps",
+      "Isolated scratch-schema tests"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge.sql",
+        "line": 66,
+        "description": "wim_before/wim_item_less created without DROP TABLE IF EXISTS guard (wim_map has one); harmless today."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge.sql",
+        "line": 43,
+        "description": "Block does not bump tracker_key_counter to >= MAX(key_number); prod check shows 0 lagging workspaces; optional hardening."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/db/work-item-merge-copy.integration.test.ts",
+        "line": 1,
+        "description": "Cycle 3 is a regression guard (mutation-proven), not a driving RED."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "72cff2806059a241a5f2fbd107593adfb8146326"
+}
