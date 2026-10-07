@@ -113,7 +113,9 @@ async function cleanupWorkspace(workspaceId: number): Promise<void> {
 	await pool.query("DELETE FROM tracker_projects WHERE workspace_id = $1", [
 		workspaceId,
 	]);
-	await pool.query("DELETE FROM columns WHERE workspace_id = $1", [workspaceId]);
+	await pool.query("DELETE FROM columns WHERE workspace_id = $1", [
+		workspaceId,
+	]);
 	await pool.query("DELETE FROM tracker_vocabularies WHERE workspace_id = $1", [
 		workspaceId,
 	]);
@@ -192,18 +194,23 @@ async function setupTrackerWorkspace(): Promise<TrackerFixtures> {
 	return { statusId, projectId, phaseId };
 }
 
+// Project/phase removal events carry a NULL card_id, so only card-bound events
+// count as board artifacts.
 async function assertNoBoardArtifacts(workspaceId: number): Promise<void> {
 	expect(
 		await query("SELECT id FROM cards WHERE workspace_id = $1", [workspaceId]),
 	).toHaveLength(0);
 	expect(
-		await query("SELECT id FROM card_events WHERE workspace_id = $1", [
-			workspaceId,
-		]),
+		await query(
+			"SELECT id FROM card_events WHERE workspace_id = $1 AND card_id IS NOT NULL",
+			[workspaceId],
+		),
 	).toHaveLength(0);
 }
 
-async function assertNoTrackerItemArtifacts(workspaceId: number): Promise<void> {
+async function assertNoTrackerItemArtifacts(
+	workspaceId: number,
+): Promise<void> {
 	expect(
 		await query("SELECT id FROM tracker_items WHERE workspace_id = $1", [
 			workspaceId,
@@ -228,10 +235,9 @@ async function assertCompleteBoardOutcome(workspaceId: number): Promise<void> {
 	}
 	expect(cards).toHaveLength(1);
 	const cardId = cards[0]!.id;
-	const events = await query(
-		"SELECT id FROM card_events WHERE card_id = $1",
-		[cardId],
-	);
+	const events = await query("SELECT id FROM card_events WHERE card_id = $1", [
+		cardId,
+	]);
 	expect(events.length).toBeGreaterThanOrEqual(1);
 	expect(events.length).toBeLessThanOrEqual(2);
 	if (cards[0]!.project_id != null) {
