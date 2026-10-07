@@ -350,6 +350,34 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("merged work item reads", () => {
 			updatedAt: "2026-02-01T00:00:00.000Z",
 		});
 	});
+	// Labeled regression guard: the single-query rewrite already keeps the
+	// (column_id IS NULL OR board_id IS NULL) predicate, so this passes at first
+	// run. It was proven able to fail by removing that predicate temporarily.
+	it("Non-default-board cards stay excluded", async () => {
+		for (let key = 1; key <= BOARD_COUNT; key++) await insertCard(fx, key);
+		const [agentBoard] = await q<{ id: number }>(
+			`INSERT INTO agent_boards (workspace_id, user_id, template_id, original_intent, status)
+			 VALUES ($1, $2, 'status-report', 'test', 'approved') RETURNING id`,
+			[WORKSPACE_ID, mockCurrentUser.id],
+		);
+		const [agentColumn] = await q<{ id: number }>(
+			`INSERT INTO columns (workspace_id, board_id, title, position, slug)
+			 VALUES ($1, $2, 'Analyst', 3072, 'analyst') RETURNING id`,
+			[WORKSPACE_ID, agentBoard.id],
+		);
+		for (let key = 200; key < 218; key++) {
+			await insertCard(fx, key, { columnId: agentColumn.id });
+		}
+
+		const res = await request(app).get(listUrl);
+
+		expect(res.status).toBe(200);
+		expect(res.body).toHaveLength(BOARD_COUNT);
+		expect(
+			res.body.some((i: { key: string }) => Number(i.key.split("-")[1]) >= 200),
+		).toBe(false);
+	});
+
 	describe("activity feed", () => {
 		async function insertEvent(
 			cardId: number | null,
