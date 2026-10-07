@@ -354,4 +354,43 @@ describe.skipIf(!runIntegration)("work-item-merge copy block", () => {
 			await rows(s, "SELECT id FROM cards WHERE workspace_id = $1", [ws.id]),
 		).toHaveLength(2);
 	});
+	it("emits one audit notice per affected workspace and no extra audit rows", async () => {
+		const w1 = await seedWorkspace(s, `c4a-${tag}`);
+		const w2 = await seedWorkspace(s, `c4b-${tag}`);
+		await seedWorkspace(s, `c4c-${tag}`);
+		const i1 = await seedItem(s, w1, 41);
+		await seedItem(s, w1, 42);
+		const i2 = await seedItem(s, w2, 43);
+		await seedEvents(s, w1, i1, 3);
+		await seedEvents(s, w2, null, 1, "tracker_project_deleted", {
+			projectId: 1,
+			released: [
+				{ itemId: i2, projectId: 1, phaseId: null },
+				{ itemId: 987654, projectId: 1, phaseId: null },
+			],
+		});
+
+		const messages: string[] = [];
+		const onNotice = (n: { message?: string }) => {
+			if (n.message?.startsWith("work-item-merge:")) messages.push(n.message);
+		};
+		s.client.on("notice", onNotice);
+		try {
+			await applySchema(s.client);
+			expect(messages.sort()).toEqual(
+				[
+					`work-item-merge: workspace=${w1.id} tracker_before=2 cards_added=2`,
+					`work-item-merge: workspace=${w2.id} tracker_before=1 cards_added=1 released_unmapped=1`,
+				].sort(),
+			);
+			expect((await rows(s, "SELECT id FROM card_events")).length).toBe(4);
+
+			messages.length = 0;
+			await applySchema(s.client);
+			expect(messages).toEqual([]);
+			expect((await rows(s, "SELECT id FROM card_events")).length).toBe(4);
+		} finally {
+			s.client.off("notice", onNotice);
+		}
+	});
 });

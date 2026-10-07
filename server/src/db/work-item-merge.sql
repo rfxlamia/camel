@@ -46,6 +46,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_cards_workspace_key
 -- the only write to tracker_items is migrated_to_id. tracker_events is read
 -- only. Order: map -> insert -> remaps -> events.
 DO $work_item_merge_copy$
+DECLARE
+  audit RECORD;
 BEGIN
   DROP TABLE IF EXISTS pg_temp.wim_map;
   CREATE TEMP TABLE wim_map (
@@ -53,6 +55,12 @@ BEGIN
     new_id       INTEGER NOT NULL,
     workspace_id INTEGER NOT NULL
   ) ON COMMIT DROP;
+
+  CREATE TEMP TABLE wim_before ON COMMIT DROP AS
+  SELECT workspace_id, count(*)::integer AS tracker_before
+  FROM tracker_items
+  WHERE migrated_to_id IS NULL
+  GROUP BY workspace_id;
 
   WITH inserted AS (
     INSERT INTO cards (
@@ -140,7 +148,23 @@ BEGIN
            AND ti.workspace_id = e.workspace_id
         ))
         ELSE e.payload
-      END AS payload
+      END AS payload,
+      CASE
+        WHEN e.event_type IN ('tracker_project_deleted', 'tracker_phase_deleted')
+         AND jsonb_typeof(e.payload -> 'released') = 'array'
+        THEN (
+          SELECT count(*)::integer
+          FROM jsonb_array_elements(e.payload -> 'released') AS u(elem)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM tracker_items AS ti
+            WHERE jsonb_typeof(u.elem -> 'itemId') = 'number'
+              AND ti.id = (u.elem ->> 'itemId')::integer
+              AND ti.workspace_id = e.workspace_id
+              AND ti.migrated_to_id IS NOT NULL
+          )
+        )
+        ELSE 0
+      END AS unmapped
     FROM tracker_events AS e
     WHERE e.tracker_item_id IS NULL
   )
@@ -149,7 +173,17 @@ BEGIN
     row_number() OVER (
       PARTITION BY w.workspace_id, w.event_type, w.actor_id, w.payload, w.created_at
       ORDER BY w.src_id
-    ) AS rn
+    ) AS rn,
+    (
+      SELECT count(*)::integer
+      FROM card_events AS ce
+      WHERE ce.card_id IS NULL
+        AND ce.workspace_id = w.workspace_id
+        AND ce.event_type = w.event_type
+        AND ce.actor_id IS NOT DISTINCT FROM w.actor_id
+        AND ce.payload = w.payload
+        AND ce.created_at = w.created_at
+    ) AS existing
   FROM rewritten AS w;
 
   INSERT INTO card_events (
@@ -159,16 +193,7 @@ BEGIN
   SELECT NULL, NULL, NULL, w.actor_id, w.event_type, w.payload,
          w.workspace_id, w.created_at
   FROM wim_item_less AS w
-  WHERE w.rn > (
-    SELECT count(*)
-    FROM card_events AS ce
-    WHERE ce.card_id IS NULL
-      AND ce.workspace_id = w.workspace_id
-      AND ce.event_type = w.event_type
-      AND ce.actor_id IS NOT DISTINCT FROM w.actor_id
-      AND ce.payload = w.payload
-      AND ce.created_at = w.created_at
-  )
+  WHERE w.rn > w.existing
   ORDER BY w.src_id;
 
   -- Focus sessions keep task_source = 'tracker'; only the id is remapped.
@@ -178,4 +203,30 @@ BEGIN
   WHERE f.task_source = 'tracker'
     AND f.task_id = m.old_id
     AND f.workspace_id = m.workspace_id;
+
+  -- One audit notice per affected workspace; no per-row card_events audit.
+  FOR audit IN
+    SELECT
+      ws.workspace_id,
+      COALESCE(b.tracker_before, 0) AS tracker_before,
+      (SELECT count(*) FROM wim_map AS m
+        WHERE m.workspace_id = ws.workspace_id) AS cards_added,
+      COALESCE((SELECT sum(w.unmapped) FROM wim_item_less AS w
+        WHERE w.workspace_id = ws.workspace_id AND w.rn > w.existing), 0)
+        AS released_unmapped
+    FROM (
+      SELECT workspace_id FROM wim_before
+      UNION
+      SELECT workspace_id FROM wim_item_less
+        WHERE rn > existing AND unmapped > 0
+    ) AS ws
+    LEFT JOIN wim_before AS b ON b.workspace_id = ws.workspace_id
+    ORDER BY ws.workspace_id
+  LOOP
+    RAISE NOTICE '%', format(
+      'work-item-merge: workspace=%s tracker_before=%s cards_added=%s%s',
+      audit.workspace_id, audit.tracker_before, audit.cards_added,
+      CASE WHEN audit.released_unmapped > 0
+        THEN ' released_unmapped=' || audit.released_unmapped ELSE '' END);
+  END LOOP;
 END $work_item_merge_copy$;
