@@ -1,0 +1,103 @@
+{
+  "task_id": "T17",
+  "task_name": "Cutover and restore scripts plus checklist",
+  "cycle": 2,
+  "reviewed_sha": "0cf5c9d3c6850776b8a95267c70852d03cda5b68",
+  "reviewed_files": {
+    "deploy/cutover-ggf.sh": "fdc092b6c04f743747d73e4fd4671831556778b532d4054f68b54f94b4641526",
+    "deploy/restore-ggf.sh": "b73238bca55e26c9ce7c40c0d32312e69e33e5531b7f004f285ea85a383c63ad",
+    "deploy/CUTOVER-CHECKLIST.md": "d4f55c0b2db62ad2782d510265e12ba70d87e04f96b9e792389e6f867b2ade87",
+    "deploy/docker-compose.ggf.yml": "9ab89940323edb3badc7cb93869bcc95bad7abe7902d9480a6152b7023f50cd2"
+  },
+  "audit_input_note": "T17 deliverables are git-ignored host files; audited by content hash, not git range",
+  "timestamp": "2026-10-08T00:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Hashes: all four files matched the expected post-fix values.",
+      "Safe by default: rcmd, rout, lrun, remote_test_f and get_var are all gated on EXECUTE=1; dry-run, no-flag, restore dry-run and self-check ran under the shim and the shim calls.log stayed at 0 bytes before and after every run in this audit. No remote command is reachable without --execute (no Critical).",
+      "Cycle-1 Important 2 (weak self-check) is cleared: on scratch copies, '|| die' -> '|| true' makes self-check FAIL (3 checks), disabling the merge guard FAILS, removing the POINT=2 assignment FAILS (2 checks, via the failure-point text), and neutralising the 'copy skipped' abort FAILS (3 checks). The new self-check runs the real phase_f against shell-function stubs of ssh/rcmd/sub_marker_exists inside subshells, so it cannot reach the real ssh, and no merge or ssh call is possible from it.",
+      "Cycle-1 Important 3 is cleared: remote_test_f returns 0/1 and calls die on any other code; fixtures cover ssh 0, 1 and 255. A failed 'sub_mark merge_started' aborts at POINT 1 before the merge runs.",
+      "Cycle-1 Important 4 is partly cleared: both dist swaps remove only a literal-constant temp path with 'rm -rf --' (WEB_ROOT is a hardcoded constant, no env override, set -u on, so no expansion to '/' or '.next'); the old dist and .pre-merge copy are never removed; the restore swap is re-runnable. The cutover swap has a new silent-failure hole (see Important 3 below).",
+      "Cycle-1 Important 1 is only partly cleared for rc 0 (POINT=2 is set before validation, restore is primary, checklist reconciled). The rc 255 branch does not work in the real shell (Important 1 below).",
+      "Dry-run printed commands match what --execute sends for rcmd/rout/lrun and the merge command (RPRE is applied identically to both). Exception: the merge_started and merge marker writes are not printed in dry-run (Minor).",
+      "No IPs, secrets or env values in the four files."
+    ]
+  },
+  "stage_2": {
+    "status": "FAIL",
+    "strengths": [
+      "remote_test_f is a clean tri-state probe and is exercised by fixtures.",
+      "merge_started plus merge.done make the never-re-merge guarantee explicit, and the validator fixtures are real.",
+      "The self-check mutation set (a)(b)(c)(d) now all turn red, a large improvement over cycle 1.",
+      "Restore uses --no-deps server for the force-recreate, which shrinks the blast radius."
+    ],
+    "issues": [
+      {
+        "severity": "Important",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 315,
+        "description": "The rc 255 and rc != 0 recovery wiring is dead in the real shell. The ERR trap (set -E) fires on the failing 'ssh | tee' pipeline at line 315 even inside the set +e window, so on_err runs and exits BEFORE line 320 sets POINT=2. Reproduced on a scratch copy with a stubbed ssh that returned 255 after printing a good log: the output was 'ABORT: unexpected failure (exit 255) near line 296' followed by 'FAILURE POINT 1 ... Nothing is committed. Redeploy the OLD image', with the point-2 restore only as a hedge. So a dropped connection (outcome unknown, the migration may have committed) still gets the cycle-1 wrong primary advice, and the checklist sentence at CUTOVER-CHECKLIST.md:96 ('switches to failure point 2 as soon as the merge returns 0 or 255') is false for 255. The self-check misses it: run_f is called as an 'if' condition, where the ERR trap and errexit are suppressed, and no rc 255 fixture exists (only rc 0 and rc 1), so the check passes while the real behaviour differs. Also, for a non-zero rc the 'log: $tmplog' path is never printed (on_err prints only the line number), and the point-2 text says 'merge committed' even though the 255 outcome is unknown and should tell the operator to check the merge state before restoring."
+      },
+      {
+        "severity": "Important",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 302,
+        "description": "merge_started can wedge a legitimate retry. After a clean rollback (merge rc 1, failure point 1) the operator redeploys the old image and fixes the cause, but merge_started.done (written at line 312) is never cleared. A re-run (same --date) reaches line 302, calls die at POINT 2 and prints 'restore' advice, which is over-destructive for a clean rollback. Neither the script's point-1 text nor CUTOVER-CHECKLIST.md says how to clear it (only the checklist sentence at line 96 mentions the refusal). The operator must either delete merge_started.done by hand on the host (unknown to them) or restore. The same re-run also skips phase e because phase-e.done exists, so the one-off migrate would run against a live server (cycle-1 Minor, still unfixed)."
+      },
+      {
+        "severity": "Important",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 343,
+        "description": "The cutover dist swap fails silently when the copy or the first move fails. The if-body is an '&&' chain ('cp -a ... && mv ... && mv ...') inside an if, so a failing cp or first mv does not trip set -e, and the next statement 'test -f $WEB_ROOT/index.html' passes because the OLD dist is still in place. Reproduced on a scratch copy (cp of a missing source printed an error then 'RAN-ON-OK', exit 0). The script then lifts maintenance with the old client dist against the new server and reports success, which contradicts the 'test -f index.html' guard intent. Disk-full during cp -a is plausible on this host (MIN_FREE_MB vs ~846 MB free). The restore variant (restore-ggf.sh:135) is not affected because its chain ends the line."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 231,
+        "description": "Carried forward, unfixed. Backup row-count equality against LIVE data while the site is still serving traffic can false-abort (card_events grows on every mutation). Consider requiring cards and tracker_items equal and restored events <= live."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/restore-ggf.sh",
+        "line": 131,
+        "description": "Carried forward, unfixed. The terminate, rename-aside and rename-new steps are separate -c transactions; an interruption between them leaves no database under the production name and the re-run's first rename fails, contradicting 'every step is re-runnable' (line 55)."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 426,
+        "description": "Carried forward, unfixed. The self-check deletion ban only matches 'docker rmi|image rm|system prune' and the literal 'rm -rf'; 'rm -r', 'rm -fr', 'rm -f' on the dist or 'docker rm' would pass. Phase c's 'test -e ... || cp -a' also leaves a partial copy that later counts as present if cp is interrupted."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 50,
+        "description": "Carried forward, unfixed. MIN_FREE_MB=1024 vs ~846 MB free means preflight aborts today (correct fail-safe, T18 item). A '--from-phase' or '--date' with a missing value hits a bare shift (lines 509-525) and exits with an unhelpful message."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 312,
+        "description": "New. Dry-run does not print the 'sub_mark merge_started' and 'sub_mark merge' marker commands because they sit inside the EXECUTE branch, so dry-run is not fully faithful to what --execute runs."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 313,
+        "description": "New. The self-check calls the real phase_f, which runs a real mktemp for the merge log, so every self-check run leaves cutover-merge.* temp files behind; remove $tmplog after validation or in self-check cleanup."
+      }
+    ]
+  },
+  "overall": "REVIEW_BLOCKED",
+  "fix_instructions": "1) cutover-ggf.sh:315: capture the merge exit code without tripping the ERR trap, e.g. 'trap - ERR' before the pipeline and 'trap on_err ERR' after, or run 'ssh ... > \"$tmplog\" 2>&1 || rc=$?' then 'cat' the log. Keep 'if rc is 0 or 255 then POINT=2' ahead of validation, print $tmplog on failure, and in the point-2 text say 'outcome unknown or committed: check the merge state (merge.done, workspace rows) first, then restore'. Fix CUTOVER-CHECKLIST.md:96 accordingly. 2) Extend --self-check with an rc 255 fixture, and run run_f outside an 'if' condition (e.g. run it in a subshell whose exit status is captured with '|| rc=$?') so the ERR trap is active as in production; confirm that a stubbed rc 255 reports FAILURE POINT 2. 3) On a clean non-zero merge rc (POINT 1, rolled back) remove merge_started.done on the host before dying, or print the exact command to clear it, and say in both the script's point-1 text and the checklist that a re-run needs phase-e.done removed too (or a new --date). 4) cutover-ggf.sh:343: replace the '&&' chain in the if-body with plain sequential statements or add explicit '|| exit 1' on cp and both mv's, and verify $WEB_ROOT.replaced-<date> exists (or the new dist's index.html differs) before the final test. 5) Optionally address the Minors. Then re-run bash -n, shellcheck, shimmed --dry-run/--self-check, confirm calls.log is empty, and update the file hashes.",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "blocked_category": "audit-failed"
+}

@@ -275,7 +275,7 @@
         {
           "id": "T17",
           "name": "Cutover and restore scripts plus checklist",
-          "status": "WAITING",
+          "status": "BLOCKED",
           "depends": "T14, T15, T16",
           "file": "execution-plan/tasks/T17-cutover-and-restore-scripts-plus-checklist.md"
         }
