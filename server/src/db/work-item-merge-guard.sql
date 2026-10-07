@@ -3,6 +3,122 @@
 -- Everything here sits behind the merge gate (work_item_merge.enabled = 'on',
 -- set by applySchema); with the gate off this file changes nothing.
 
+-- Parity assertions, scoped to wim_pending: only the rows migrated by THIS
+-- run, never whole tables (users edit cards after go-live). The temp tables
+-- are created by the copy block and live until commit; when the copy did not
+-- run in this transaction (gate off, nothing left to migrate) they do not
+-- exist and this block returns without checking anything. Any mismatch aborts
+-- the whole migration transaction.
+DO $work_item_merge_parity$
+DECLARE
+  bad RECORD;
+BEGIN
+  IF coalesce(current_setting('work_item_merge.enabled', true), '') <> 'on'
+     OR to_regclass('pg_temp.wim_pending') IS NULL
+     OR to_regclass('pg_temp.wim_focus') IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Parity assertions, scoped to wim_pending. Any mismatch aborts the whole
+  -- migration transaction (nothing is committed) with a readable message.
+  SELECT p.workspace_id, p.key_number
+  INTO bad
+  FROM (
+    SELECT workspace_id, count(*) AS n FROM wim_pending GROUP BY workspace_id
+  ) AS want
+  JOIN wim_pending AS p ON p.workspace_id = want.workspace_id
+  WHERE want.n <> (
+    SELECT count(*) FROM wim_pending AS q
+    JOIN tracker_items AS t ON t.id = q.old_id
+    JOIN cards AS c ON c.id = t.migrated_to_id AND c.workspace_id = q.workspace_id
+    WHERE q.workspace_id = want.workspace_id
+  )
+  ORDER BY p.workspace_id, p.key_number
+  LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'work-item-merge: count mismatch workspace=% key=% (a tracker row has no copied card)',
+      bad.workspace_id, bad.key_number;
+  END IF;
+
+  SELECT p.workspace_id, p.key_number,
+    CASE
+      WHEN c.title IS DISTINCT FROM t.title THEN 'title'
+      WHEN c.status_id IS DISTINCT FROM t.status_id THEN 'status_id'
+      WHEN c.project_id IS DISTINCT FROM t.project_id THEN 'project_id'
+      WHEN c.phase_id IS DISTINCT FROM t.phase_id THEN 'phase_id'
+      WHEN c.start_date IS DISTINCT FROM t.start_date THEN 'start_date'
+      WHEN c.end_date IS DISTINCT FROM t.end_date THEN 'end_date'
+      WHEN c.version IS DISTINCT FROM t.version THEN 'version'
+      WHEN c.key_number IS DISTINCT FROM t.key_number THEN 'key_number'
+    END AS field
+  INTO bad
+  FROM wim_pending AS p
+  JOIN tracker_items AS t ON t.id = p.old_id
+  JOIN cards AS c ON c.id = t.migrated_to_id
+  WHERE c.title IS DISTINCT FROM t.title
+     OR c.status_id IS DISTINCT FROM t.status_id
+     OR c.project_id IS DISTINCT FROM t.project_id
+     OR c.phase_id IS DISTINCT FROM t.phase_id
+     OR c.start_date IS DISTINCT FROM t.start_date
+     OR c.end_date IS DISTINCT FROM t.end_date
+     OR c.version IS DISTINCT FROM t.version
+     OR c.key_number IS DISTINCT FROM t.key_number
+  ORDER BY p.workspace_id, p.key_number
+  LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'work-item-merge: field mismatch workspace=% key=% field=%',
+      bad.workspace_id, bad.key_number, bad.field;
+  END IF;
+
+  -- Relation parity per migrated row: labels, assignees and events must
+  -- exist on the new card exactly as they did on the tracker item.
+  SELECT p.workspace_id, p.key_number,
+    CASE
+      WHEN (SELECT count(*) FROM tracker_item_labels AS l WHERE l.tracker_item_id = p.old_id)
+        <> (SELECT count(*) FROM card_labels AS cl WHERE cl.card_id = t.migrated_to_id)
+        THEN 'card_labels'
+      WHEN (SELECT count(*) FROM tracker_item_assignees AS a WHERE a.tracker_item_id = p.old_id)
+        <> (SELECT count(*) FROM card_assignees AS ca WHERE ca.card_id = t.migrated_to_id)
+        THEN 'card_assignees'
+      WHEN (SELECT count(*) FROM tracker_events AS e WHERE e.tracker_item_id = p.old_id)
+        <> (SELECT count(*) FROM card_events AS ce WHERE ce.card_id = t.migrated_to_id)
+        THEN 'card_events'
+    END AS relation
+  INTO bad
+  FROM wim_pending AS p
+  JOIN tracker_items AS t ON t.id = p.old_id
+  WHERE (SELECT count(*) FROM tracker_item_labels AS l WHERE l.tracker_item_id = p.old_id)
+        <> (SELECT count(*) FROM card_labels AS cl WHERE cl.card_id = t.migrated_to_id)
+     OR (SELECT count(*) FROM tracker_item_assignees AS a WHERE a.tracker_item_id = p.old_id)
+        <> (SELECT count(*) FROM card_assignees AS ca WHERE ca.card_id = t.migrated_to_id)
+     OR (SELECT count(*) FROM tracker_events AS e WHERE e.tracker_item_id = p.old_id)
+        <> (SELECT count(*) FROM card_events AS ce WHERE ce.card_id = t.migrated_to_id)
+  ORDER BY p.workspace_id, p.key_number
+  LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'work-item-merge: relation mismatch workspace=% key=% relation=%',
+      bad.workspace_id, bad.key_number, bad.relation;
+  END IF;
+
+  -- Every remapped focus session must now point at the new card of its item.
+  SELECT p.workspace_id, p.key_number, w.session_id
+  INTO bad
+  FROM wim_focus AS w
+  JOIN wim_pending AS p ON p.old_id = w.old_id
+  JOIN focus_sessions AS f ON f.id = w.session_id
+  WHERE f.task_id IS DISTINCT FROM w.new_id
+     OR NOT EXISTS (
+       SELECT 1 FROM cards AS c
+       WHERE c.id = f.task_id AND c.workspace_id = f.workspace_id
+     )
+  ORDER BY p.workspace_id, p.key_number
+  LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'work-item-merge: focus session mismatch workspace=% key=% session=%',
+      bad.workspace_id, bad.key_number, bad.session_id;
+  END IF;
+END $work_item_merge_parity$;
+
 DO $work_item_merge_guard$
 BEGIN
   IF coalesce(current_setting('work_item_merge.enabled', true), '') <> 'on' THEN
