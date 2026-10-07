@@ -130,6 +130,32 @@ function toUnifiedTrackerActivity(e: {
 	};
 }
 
+type UnifiedActivityRow = {
+	source: "board" | "tracker";
+	id: number;
+	event_type: string;
+	payload: unknown;
+	created_at: Date;
+	username: string | null;
+	display_name: string | null;
+	current_title: string | null;
+	from_column_title: string | null;
+	to_column_title: string | null;
+};
+
+function toUnifiedActivity(row: UnifiedActivityRow): UnifiedActivityEvent {
+	if (row.source === "board") {
+		return toUnifiedCardActivity({
+			...row,
+			current_card_title: row.current_title,
+		});
+	}
+	return toUnifiedTrackerActivity({
+		...row,
+		current_item_title: row.current_title,
+	});
+}
+
 export async function getUnifiedWorkspaceActivity(
 	workspaceId: number,
 	limit: number,
@@ -137,18 +163,7 @@ export async function getUnifiedWorkspaceActivity(
 	// One table: source is "tracker" for item-less events and column-less items,
 	// otherwise "board". The source join keeps soft-deleted cards so their events
 	// do not flip to "tracker"; only the title join hides them.
-	const rows = await sql<{
-		source: "board" | "tracker";
-		id: number;
-		event_type: string;
-		payload: unknown;
-		created_at: Date;
-		username: string | null;
-		display_name: string | null;
-		current_title: string | null;
-		from_column_title: string | null;
-		to_column_title: string | null;
-	}>`
+	const result = await sql<UnifiedActivityRow>`
 		SELECT
 			CASE WHEN c.id IS NULL OR c.column_id IS NULL
 				THEN 'tracker' ELSE 'board' END AS source,
@@ -172,28 +187,5 @@ export async function getUnifiedWorkspaceActivity(
 		LIMIT ${limit}
 	`.execute(db);
 
-	return rows.rows.map((row) => {
-		if (row.source === "board") {
-			return toUnifiedCardActivity({
-				id: row.id,
-				event_type: row.event_type,
-				payload: row.payload,
-				created_at: row.created_at,
-				username: row.username,
-				display_name: row.display_name,
-				current_card_title: row.current_title,
-				from_column_title: row.from_column_title,
-				to_column_title: row.to_column_title,
-			});
-		}
-		return toUnifiedTrackerActivity({
-			id: row.id,
-			event_type: row.event_type,
-			payload: row.payload,
-			created_at: row.created_at,
-			username: row.username,
-			display_name: row.display_name,
-			current_item_title: row.current_title,
-		});
-	});
+	return result.rows.map(toUnifiedActivity);
 }
