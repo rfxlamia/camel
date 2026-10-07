@@ -1,0 +1,51 @@
+{
+  "task_id": "T5",
+  "task_name": "Reject column-less items in core paths",
+  "cycle": 1,
+  "timestamp": "2026-10-07T03:44:09Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "unmappable -> not_found for column-less cards: accepted \u2014 callers (tracker-item-update-board.ts:43, my-work-mark-done-handler.ts:44) map not_found to the existing 404; old 409 status_column_unmappable only for column-less rows (absent in production); board-card behavior unchanged.",
+      "Dead unmappable branches (my-work-mark-done.ts:219-221, board-card-status-change.ts:61): confirmed unreachable; Minor.",
+      "FM-RULE-4 failure is in T3's file, outside range; T5 test imports ../modules/focus/index.js.",
+      "Single flaky server run: not a finding.",
+      "Only 3 board lookups changed; tracker branches and event readers untouched; SQL predicates; no-write proof; can-fail restored; fixtures unique."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Three one-line SQL predicates, nothing else in source.",
+      "Predicates sit in locking SELECTs; column-less rows never locked or mutated.",
+      "Tests assert exact not_found, row equality, zero events, and pin board-card result shapes.",
+      "FM-RULE-4 clean; test 223 lines; no long functions or repetition."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/core/my-work-mark-done.ts",
+        "line": 219,
+        "description": "Board unmappable branch now unreachable (also board-card-status-change.ts:61); remove in T12 or phase pass."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/core/my-work-mark-done.ts",
+        "line": 303,
+        "description": "302->303 lines; 1-line predicate is a trivial touch per guard; split when T12 touches it substantively."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "68baaaf0406085bfb5210cb104aa32157b705d0b"
+}

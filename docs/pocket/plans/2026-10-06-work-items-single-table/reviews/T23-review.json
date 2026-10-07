@@ -1,0 +1,55 @@
+{
+  "task_id": "T23",
+  "task_name": "Build-id reload hook for open tabs",
+  "cycle": 1,
+  "timestamp": "2026-10-07T03:52:55Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Middleware order: registerHealthRoutes mounted before setCsrfToken/csrfProtection; unauthenticated, CSRF-free, no cookie; /health only skips CSRF cookie and uploads static; rate limiter (auth only) unaffected.",
+      "isShuttingDown read live via closure per request; shutdown 503 works on both paths.",
+      "Both /health and /api/health serve old payload + buildId.",
+      "Hook: reload only on res.ok + non-empty differing string buildId; reloading flag (once per page load); inFlight guard; no reload on non-2xx/503/fetch or JSON failure; first-fail capture without reload; cleanup on unmount; cache no-store; no UI.",
+      "Hook mounted at top of App() before early returns; 48 lines, comment-free, no new dependency.",
+      "Dockerfile ARG/ENV BUILD_ID in runner stage; contract test slices from last FROM.",
+      "Test hygiene: env, fetch stub and window.location restored; source contract asserts '/api/health' and buildId.",
+      "Flaky server run not attributable to this diff."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Minimal hook with reload-loop safeguards.",
+      "Health logic in small testable lib/health.ts; correct kernel placement and import styles.",
+      "index.ts 192 lines, App.tsx 204; no long functions or duplication.",
+      "HEALTH_PATH contract pinned between server and hook.",
+      "Behavioral tests with fake timers; real Express routes under RUN_INTEGRATION."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/health.test.ts",
+        "line": 41,
+        "description": "Route tests gated behind RUN_INTEGRATION; middleware order (before setCsrfToken) in index.ts not covered by a test."
+      },
+      {
+        "severity": "Minor",
+        "file": "client/src/shared/useBuildReload.ts",
+        "line": 41,
+        "description": "No debounce between visibility events and interval tick; bounded by inFlight guard; negligible."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "caa23b7d78a9c601a8c0d87ff68b3a2075f700c8"
+}

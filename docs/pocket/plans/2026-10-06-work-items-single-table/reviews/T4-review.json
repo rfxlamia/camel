@@ -1,0 +1,58 @@
+{
+  "task_id": "T4",
+  "task_name": "Reject column-less items on /cards endpoints",
+  "cycle": 1,
+  "timestamp": "2026-10-07T03:33:14Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Helper in cards-get.ts instead of card-read.ts: accepted \u2014 GET /cards/:id lives in cards-get.ts; card-read.ts helpers are only reached after a guarded board-card lock.",
+      "deleted_at filter in requireBoardCard: accepted \u2014 all replaced mutation lookups already filtered deleted_at; GET gains the same 404 for soft-deleted cards, consistent with the family.",
+      "Upload leg already 404 via delivery inner join: accepted \u2014 persistence lock and delivery read are different paths; delivery guard not duplicated; upload leg pinned in test.",
+      "card-attachments-upload failures: shared-DB flake (also on base; 7/7 at HEAD on controller re-run).",
+      "Workspace scoping, 404 shapes, FOR UPDATE before version check, recordActivity, no promote path, unique fixtures: verified."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "One shared 37-line helper replaces five duplicated lock-and-select blocks.",
+      "Helper unions needed columns and narrows column_id to number.",
+      "Opt-in locking; GET lock-free.",
+      "Tests pin 404 bodies, unchanged rows, and board-card regressions incl. 409 on stale writes.",
+      "All modified files <=300 lines; no function >50 lines."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/board/cards-get.ts",
+        "line": 34,
+        "description": "GET now runs requireBoardCard then selectFullCard (extra round trip); acceptable for single-sourced guard."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/board/column-less-card-routes.integration.test.ts",
+        "line": 120,
+        "description": "Attachment DELETE route rejection of column-less items not explicitly tested."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/board/column-less-card-routes.integration.test.ts",
+        "line": 100,
+        "description": "First test is one large it() over five endpoints; consider it.each."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "f789d40a69d2ab353703286b5785712bf7824495"
+}

@@ -83,37 +83,42 @@
         {
           "id": "T3",
           "name": "Board scope filters on aggregate readers",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T2",
-          "file": "execution-plan/tasks/T3-board-scope-filters-on-aggregate-readers.md"
+          "file": "execution-plan/tasks/T3-board-scope-filters-on-aggregate-readers.md",
+          "done_sha": "e7ccc76bbd17de3ea3bfc806c9bc70e17e412d94"
         },
         {
           "id": "T4",
           "name": "Reject column-less items on /cards endpoints",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T2",
-          "file": "execution-plan/tasks/T4-reject-column-less-items-on-cards-endpoints.md"
+          "file": "execution-plan/tasks/T4-reject-column-less-items-on-cards-endpoints.md",
+          "done_sha": "f789d40a69d2ab353703286b5785712bf7824495"
         },
         {
           "id": "T5",
           "name": "Reject column-less items in core paths",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T2",
-          "file": "execution-plan/tasks/T5-reject-column-less-items-in-core-paths.md"
+          "file": "execution-plan/tasks/T5-reject-column-less-items-in-core-paths.md",
+          "done_sha": "68baaaf0406085bfb5210cb104aa32157b705d0b"
         },
         {
           "id": "T23",
           "name": "Build-id reload hook for open tabs",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T2, T14",
-          "file": "execution-plan/tasks/T23-build-id-reload-hook-for-open-tabs.md"
+          "file": "execution-plan/tasks/T23-build-id-reload-hook-for-open-tabs.md",
+          "done_sha": "caa23b7d78a9c601a8c0d87ff68b3a2075f700c8"
         },
         {
           "id": "T25",
           "name": "Maintenance rehearsal on camel-ggf (main agent only)",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T15",
-          "file": "execution-plan/tasks/T25-maintenance-rehearsal-on-camel-ggf-main-agent-only.md"
+          "file": "execution-plan/tasks/T25-maintenance-rehearsal-on-camel-ggf-main-agent-only.md",
+          "done_sha": "caa23b7d78a9c601a8c0d87ff68b3a2075f700c8"
         }
       ]
     },

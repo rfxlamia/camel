@@ -1,0 +1,39 @@
+{
+  "task_id": "T3",
+  "task_name": "Board scope filters on aggregate readers",
+  "cycle": 1,
+  "timestamp": "2026-10-07T03:25:09Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle 2 loader spies: accepted — real DB, pass-through spies prove column-less ids never reach relation loaders.",
+      "Cycle 4 predicate overlap: accepted as labeled regression guard; can-fail proof removed both predicates; 23505 key reservation pinned.",
+      "Cycle 5 no fake timers: accepted — job uses Postgres CURRENT_TIMESTAMP; Etc/GMT zone at local midnight is DST-free and deterministic; can-fail proof (leftJoin + is_done is not true) sound.",
+      "Flaky full RUN_INTEGRATION suite: not attributable to T3 (same on base 8dca870); fixture ids unique; cleanup scoped.",
+      "Duplicate predicate in service-deps-activity.ts and chat/tools/factory.ts: pre-existing duplicated queries; per-file filters in scope; Minor."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All filters are SQL predicates; no TypeScript-side row dropping.",
+      "Production diff 4 files, +1 line each; no response-shape change; no-op for DBs without column-less rows.",
+      "Event readers untouched (T6); scheduler.ts only pinned by test; no fourth unfiltered aggregate reader.",
+      "Integration tests on real Postgres cover metrics, GET /board loaders, agent timestamps, chat query_board_data, soft-delete + 23505.",
+      "Server imports use .js; non-test files well under 300 lines."
+    ],
+    "issues": [
+      {"severity": "Minor", "file": "server/src/modules/board/metrics.ts, server/src/modules/chat/tools/factory.ts, server/src/modules/agent/service-deps-activity.ts", "line": "metrics.ts:12-17; factory.ts:33-37; service-deps-activity.ts:10-14", "description": "Three near-identical card-timestamp queries each carry the same column_id predicate (pre-existing duplication); follow-up: shared board-scoped timestamp reader."},
+      {"severity": "Minor", "file": "server/src/modules/notifications/scheduler.column-less.integration.test.ts", "line": "21-31, 100-135", "description": "Tiny flake window if the run straddles an hour boundary after localMidnightZone() picks the zone."},
+      {"severity": "Minor", "file": "server/src/modules/board/column-less-scope.integration.test.ts", "line": "169-181, 215-258", "description": "vi.spyOn on loadCardLabelsForCards never restored (file-scoped leak); 'response does not contain id string' assertion is weak but covered by listed-ids assertion."}
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {"current_cycle": 1, "max_cycles": 2, "cycles_remaining": 2},
+  "reviewed_sha": "e7ccc76bbd17de3ea3bfc806c9bc70e17e412d94"
+}
