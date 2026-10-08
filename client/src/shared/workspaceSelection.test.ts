@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import {
 	chooseInitialWorkspace,
@@ -87,4 +89,10 @@ describe("workspace selection", () => {
 			"open-event-stream:2",
 		]);
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });

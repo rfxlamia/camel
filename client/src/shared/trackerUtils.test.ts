@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 //
 // trackerUtils.ts already exists with untested behaviour this task locks
 // down before trackerRollup.ts is built on top of it. No implementation
@@ -194,10 +196,7 @@ function phase(id: number, projectId: number, position: number) {
 	};
 }
 
-function groupItem(
-	id: number,
-	overrides: Partial<WorkItem> = {},
-): WorkItem {
+function groupItem(id: number, overrides: Partial<WorkItem> = {}): WorkItem {
 	return {
 		...item(id, 1, "2026-08-01T00:00:00.000Z"),
 		status: statuses[0]!,
@@ -303,14 +302,18 @@ describe("groupItems", () => {
 				(g) => g.label,
 			),
 		).toEqual(["Alpha"]);
-		expect(groupItems([groupItem(1)], "project", ctx).map((g) => g.label)).toEqual(
-			["Alpha", "No project"],
-		);
+		expect(
+			groupItems([groupItem(1)], "project", ctx).map((g) => g.label),
+		).toEqual(["Alpha", "No project"]);
 	});
 
 	it("treats an item pointing at a deleted project as No project", () => {
 		const ctx = { ...context, projects: [project(1, "Alpha", 1024)] };
-		const groups = groupItems([groupItem(1, { projectId: 99 })], "project", ctx);
+		const groups = groupItems(
+			[groupItem(1, { projectId: 99 })],
+			"project",
+			ctx,
+		);
 		expect(groups.at(-1)?.key).toBe("project:none");
 		expect(groups.at(-1)?.items.map((i) => i.id)).toEqual([1]);
 	});
@@ -342,8 +345,18 @@ describe("groupItems", () => {
 		];
 		const groups = groupItems(items, "priority", context);
 
-		expect(groups.map((g) => g.label)).toEqual(["Urgent", "Low", "No priority"]);
+		expect(groups.map((g) => g.label)).toEqual([
+			"Urgent",
+			"Low",
+			"No priority",
+		]);
 		expect(groups[0]?.items.map((i) => i.id)).toEqual([3]);
 		expect(groups[2]?.items.map((i) => i.id)).toEqual([2]);
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });

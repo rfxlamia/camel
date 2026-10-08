@@ -1,5 +1,5 @@
 // Requires PostgreSQL with the current schema applied. Gated: RUN_INTEGRATION=1
-// Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/my-work.performance.integration.test.ts
+// Run: RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/my-work/my-work.performance.integration.test.ts
 import "dotenv/config";
 import express from "express";
 import request from "supertest";
@@ -70,6 +70,47 @@ app.use("/api", api);
 app.use(createErrorHandler());
 
 const integration = describe.skipIf(!process.env.RUN_INTEGRATION);
+
+function expectSafeRollupTelemetry(events: readonly unknown[]): void {
+	// Exact field equality rejects identity payloads. Numeric ID substrings can
+	// legitimately occur in measured latency and are not evidence of a leak.
+	for (const event of events) {
+		expect(event).toEqual({
+			event: "my_work_rollup",
+			latencyMs: expect.any(Number),
+			count: 50,
+			errorClass: "none",
+		});
+	}
+	const serializedTelemetry = JSON.stringify(events);
+	expect(serializedTelemetry).not.toContain("performance fixture item");
+	expect(serializedTelemetry).not.toContain("DATABASE_URL");
+	expect(serializedTelemetry).not.toContain(config.DATABASE_URL);
+}
+
+describe("My Work telemetry privacy assertions", () => {
+	const safeEvent = {
+		event: "my_work_rollup",
+		latencyMs: 16.747111000000018,
+		count: 50,
+		errorClass: "none",
+	};
+
+	it("allows latency digits that happen to contain the fixture user ID", () => {
+		expectSafeRollupTelemetry([safeEvent]);
+	});
+
+	it.each([
+		["userId", PERFORMANCE_USER_ID],
+		["workspaceId", PERFORMANCE_WORKSPACE_IDS[0]],
+		["title", "performance fixture item"],
+		["databaseUrl", config.DATABASE_URL],
+	])("rejects extra sensitive field %s", (field, value) => {
+		expect(() =>
+			expectSafeRollupTelemetry([{ ...safeEvent, [field]: value }]),
+		).toThrow();
+	});
+});
 
 function databaseMetadata(rawUrl: string) {
 	try {
@@ -246,19 +287,7 @@ integration("My Work real-DB performance boundary", () => {
 
 		const events = getMyWorkObservabilityEvents();
 		expect(events).toHaveLength(35);
-		for (const event of events) {
-			expect(event).toEqual({
-				event: "my_work_rollup",
-				latencyMs: expect.any(Number),
-				count: 50,
-				errorClass: "none",
-			});
-		}
-		const serializedTelemetry = JSON.stringify(events);
-		expect(serializedTelemetry).not.toContain("performance fixture item");
-		expect(serializedTelemetry).not.toContain(String(PERFORMANCE_USER_ID));
-		expect(serializedTelemetry).not.toContain("DATABASE_URL");
-		expect(serializedTelemetry).not.toContain(config.DATABASE_URL);
+		expectSafeRollupTelemetry(events);
 
 		const telemetrySnapshot = getMyWorkLatencySnapshot();
 		expect(telemetrySnapshot.count).toBe(35);

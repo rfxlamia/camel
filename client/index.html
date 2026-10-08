@@ -6,28 +6,48 @@
     <title>Camel — Kanban Board for Small & Growing Teams</title>
     <meta
       name="description"
-      content="Camel is a real-time kanban board for small and growing teams — with work-in-progress limits, live flow metrics, and built-in AI that researches and writes for you. Free to self-host."
+      content="Camel is a real-time kanban board for small and growing teams, with WIP limits, live flow metrics, and built-in AI that researches and writes for you."
     />
-    <meta
-      name="keywords"
-      content="kanban board, project management, small teams, WIP limits, flow metrics, real-time collaboration, AI agents, GitHub issues"
-    />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <link rel="canonical" href="https://camel.web.id/" />
     <meta name="theme-color" content="#172a3e" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
 
     <!-- Open Graph / social sharing -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Camel" />
+    <meta property="og:url" content="https://camel.web.id/" />
     <meta property="og:title" content="Camel — Kanban Board for Small & Growing Teams" />
     <meta
       property="og:description"
       content="A calm, real-time kanban board with work-in-progress limits, live flow metrics, and built-in AI that researches and writes for you."
     />
-    <meta property="og:image" content="/logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:image" content="https://camel.web.id/logo.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Camel logo" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Camel — Kanban Board for Small & Growing Teams" />
     <meta
       name="twitter:description"
       content="A calm, real-time kanban board with WIP limits, live flow metrics, and built-in AI that does the busywork for you."
     />
+    <meta name="twitter:image" content="https://camel.web.id/logo.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Camel",
+        "url": "https://camel.web.id/",
+        "image": "https://camel.web.id/logo.png",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": "Real-time kanban board for small and growing teams with WIP limits, live flow metrics, and built-in AI."
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -37,6 +57,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <h1>Move the work forward, calmly.</h1>
+      <p>
+        Camel is a kanban board for small and growing teams — work-in-progress limits that keep
+        everyone focused, live delivery metrics, real-time collaboration, and built-in AI that
+        works on repetitive tasks, so you don't have to.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

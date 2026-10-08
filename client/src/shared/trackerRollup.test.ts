@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
 	TrackerItem,
@@ -145,9 +147,9 @@ describe("isTaskOverdue", () => {
 
 	it("is false for canceled", () => {
 		vi.setSystemTime(new Date("2026-10-05T12:00:00"));
-		expect(
-			isTaskOverdue(taskItem("canceled", { endDate: "2026-09-20" })),
-		).toBe(false);
+		expect(isTaskOverdue(taskItem("canceled", { endDate: "2026-09-20" }))).toBe(
+			false,
+		);
 	});
 
 	it("is false with no end date", () => {
@@ -245,4 +247,10 @@ describe("isProjectOverdue", () => {
 		];
 		expect(isProjectOverdue(proj, items)).toBe(true);
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });

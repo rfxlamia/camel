@@ -1,8 +1,10 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import {
+	computePopoverPosition,
 	POPOVER_GAP,
 	POPOVER_WIDTH,
-	computePopoverPosition,
 } from "./popoverPlacement";
 
 const trigger = { top: 400, left: 100, right: 124, bottom: 424 };
@@ -59,4 +61,10 @@ describe("computePopoverPosition", () => {
 
 		expect(position.left).toBe(800 - POPOVER_WIDTH - 8);
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });

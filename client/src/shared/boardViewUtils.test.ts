@@ -1,4 +1,7 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+// @vitest-environment node
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Card } from "../types";
 import {
 	assigneeInitials,
 	formatDueDate,
@@ -6,7 +9,6 @@ import {
 	isDueOverdue,
 	todayISODate,
 } from "./boardViewUtils";
-import type { Card } from "../types";
 
 function card(partial: Partial<Card> = {}): Card {
 	return {
@@ -63,4 +65,10 @@ describe("boardViewUtils", () => {
 		expect(assigneeInitials("Jane Doe")).toBe("JD");
 		expect(assigneeInitials("cher")).toBe("CH");
 	});
+});
+
+it("environment contract: node without DOM", () => {
+	expect(typeof window).toBe("undefined");
+	expect(typeof document).toBe("undefined");
+	expect(process.env.NODE_ENV).toBe("test");
 });
