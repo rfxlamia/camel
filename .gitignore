@@ -56,8 +56,13 @@ deploy/.env.production
 deploy/deploy.sh
 deploy/deploy-ggf.sh
 deploy/.env.ggf.production
+deploy/.env.school.production
+deploy/deploy-school.sh
+deploy/docker-compose.school.yml
+deploy/nginx/camel-school.conf
 deploy/docker-compose.prod.yml
 deploy/docker-compose.ggf.yml
+deploy/deploy-school-static.sh
 
 # graph
 graphify-out/*
