@@ -72,3 +72,12 @@ Escalate when: restore is needed
 
 ## Carried from Phase 4 T12 (2026-10-07)
 - Run `ANALYZE cards; ANALYZE card_assignees; ANALYZE card_labels; ANALYZE card_events;` right after the gated merge commits (before reopening traffic). Stale planner stats (column_id null_frac = 0 from before the copy) made the My Work rollup ~5x slower in local testing; T12 hardened that query (`ANY(ARRAY(...))`), but other merged-table queries can hit the same misestimate.
+
+## T19 result — 2026-10-08 (executed by the main agent with the user present; user approved start, phase e-f and phase g-h separately)
+- Run in three gated segments with a new `--stop-after` option (added and audited read-only first): a-d (site live) -> e-f (maintenance ON, final dump, snapshot, gated merge, ANALYZE) -> g-h (verify, client swap, reopen). All exit 0; `date` tag 20261008; cutover timestamp 2026-10-08T06:24:30Z; old build 8f7f9eb-20261007065202 -> new build bc3a131-20261008061742.
+- Merge notices: 9 workspaces, 180 tracker rows -> 180 cards, `Schema applied.`, no `copy skipped`. Verify: `matches: true`, 0 mismatches. Counts match the T18 rehearsal exactly.
+- Maintenance verified from outside the host while ON (all 503, ELB health check 200 by design) and camel-server stopped.
+- User smoke test (screenshots): Board 28 cards, Tracker 81 items, My Work 16 active; detail panels route to Board/Tracker. Not directly observed: a card with a working attachment (known 404, accepted).
+- 30-minute watch clean (restarts 0, no tracker_items/column_id errors) EXCEPT the p95 `/work-items` threshold warning (320 ms, 12 samples; ADR threshold 100 ms). Follow-up: re-read p95 over a longer window; ADR Phase E re-evaluation is triggered if it stays > 100 ms.
+- Contract tasks (T20-T22) must NOT run before 2026-10-22. Pre-merge image `camel-server:pre-merge-20261008`, `/var/www/camel.pre-merge-20261008` and the backups must not be deleted. Final dump: `camel-pre-merge-20261008-final-20261008T062213Z.dump` (host).
+- Branch `feat/work-items-single-table` was NOT pushed before the cutover (user did not choose to); the image was built from local HEAD bc3a131.
