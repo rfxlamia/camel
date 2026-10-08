@@ -290,9 +290,10 @@
         {
           "id": "T18",
           "name": "Rehearsal on a production dump (main agent only)",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T17",
-          "file": "execution-plan/tasks/T18-rehearsal-on-a-production-dump-main-agent-only.md"
+          "file": "execution-plan/tasks/T18-rehearsal-on-a-production-dump-main-agent-only.md",
+          "done_sha": "5552f8c08debda669dcc2cde0d7f5434a871a354"
         },
         {
           "id": "T19",
