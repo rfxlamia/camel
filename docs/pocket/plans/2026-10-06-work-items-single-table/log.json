@@ -254,7 +254,7 @@
     {
       "order": 5,
       "file": "execution-plan/phase-5.md",
-      "status": "BLOCKED",
+      "status": "REVIEW",
       "tasks": [
         {
           "id": "T13",

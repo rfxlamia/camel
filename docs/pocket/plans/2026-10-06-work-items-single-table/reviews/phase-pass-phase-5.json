@@ -1,7 +1,7 @@
 {
   "phase_key": "phase-5",
   "phase_file": "execution-plan/phase-5.md",
-  "timestamp": "2026-10-08T02:08:42Z",
+  "timestamp": "2026-10-08T03:24:12Z",
   "reviewer_mode": "read-only",
   "t17_files_hash_match": true,
   "inputs": {
@@ -257,15 +257,29 @@
       "fix": "Make the remote string tolerate no match, for example '... 2>/dev/null | head -n 1 || true', or a glob loop: 'for d in <dir>/<date>.restored-*; do [ -e \"$d\" ] && { echo \"$d\"; break; }; done; true'. Add a self-check case that runs check_date_policy's remote string, and ideally every policy-path rout/rcmd string (other_merge_dirs, get_var_in), through bash -c \"${RPRE}...\" against a temp cutover-state dir, with and without a <date>.restored-* archive. Assert rc 0 and empty output without an archive, and a refusal with one.",
       "defer_ok": true,
       "defer_to": "T18",
-      "defer_note": "Host-file fix (git-ignored, not a correction commit). It must land before the T18 rehearsal, whose first --execute would otherwise abort at startup. It blocks T19."
+      "defer_note": "Host-file fix (git-ignored, not a correction commit). It must land before the T18 rehearsal, whose first --execute would otherwise abort at startup. It blocks T19.",
+      "resolution": "Resolved (retry-3 confirm, content-hash audited): check_date_policy uses a glob loop that returns rc 0 with empty output when no archive exists and prints the archive when one does. Independently reproduced old-fails/new-passes in 5 states; mutation test restoring the old line makes the new self-check fail (8 failed, 149 ok). Sweep of all rout/rcmd sites in cutover-ggf.sh and restore-ggf.sh found no other spurious abort under RPRE."
+    },
+    {
+      "id": "P5-F12",
+      "category": "hygiene",
+      "severity": "Minor",
+      "for_task": "T17",
+      "files": [
+        "deploy/cutover-ggf.sh"
+      ],
+      "description": "Pre-existing: line ~661 mktemp -t cutover-merge.XXXXXX, reached through the self-check run_f stubbed phase_f runs, leaves 6 cutover-merge.* files in TMPDIR per --self-check run. Not caused by the P5-F11 diff (the .orig leaks the same).",
+      "fix": "Inside self_check, remove the logs run_f creates or point TMPDIR at the self-check tmp dir while run_f runs.",
+      "defer_ok": true,
+      "defer_to": "T18"
     }
   ],
   "loop_info": {
-    "current_cycle": 4,
+    "current_cycle": 2,
     "max_cycles": 2,
-    "cycles_remaining": 0
+    "cycles_remaining": 1
   },
-  "status": "PHASE_BLOCKED",
+  "status": "PHASE_PASS_RESOLVED",
   "history": [
     {
       "cycle": 2,
@@ -309,16 +323,38 @@
       "timestamp": "2026-10-08T02:08:42Z",
       "status": "PHASE_BLOCKED",
       "note": "Recovery confirm: hashes match; self-check PASS (145); dry-run makes zero remote calls in every mode. P5-F9 resolved in logic: the printed restore names only the marker dir's dump, or the placeholder (fake-remote harness, all scenarios). P5-F10 logic is in place. New Important P5-F11: the P5-F10 remote check '| head -n 1; true' under RPRE pipefail/errexit aborts every --execute run at POINT 9 before any phase. Fail-closed, but the cutover cannot run, and it masks every other path. P5-F1/F5/F6/F7/F8 remain resolved in logic. P5-F2..F4 remain deferred to T18."
+    },
+    {
+      "event": "retry",
+      "approved_by_user": true,
+      "date": "2026-10-08",
+      "prior": "PHASE_BLOCKED phase-audit-failed on P5-F11"
+    },
+    {
+      "cycle": "retry-3",
+      "timestamp": "2026-10-08T03:24:12Z",
+      "status": "PHASE_PASS_RESOLVED",
+      "note": "Retry confirm (Opus, read-only): hashes match (cutover-ggf.sh 74b5ef91..., others unchanged); self-check PASS (155); dry-run zero remote calls in every mode, dry-run output identical to pre-fix apart from script path; shim calls.log 0 bytes. P5-F11 resolved and independently reproduced. P5-F1/F5-F10 not regressed. New Minor P5-F12 (pre-existing self-check temp-file leak) deferred to T18. P5-F2..F4 remain deferred to T18."
     }
   ],
-  "outstanding_findings": [
-    "P5-F11"
+  "outstanding_findings": [],
+  "recovery_attempt_consumed": false,
+  "retry": [
+    {
+      "approved_by_user": true,
+      "date": "2026-10-08",
+      "prior_block": "phase-audit-failed (P5-F6)"
+    },
+    {
+      "approved_by_user": true,
+      "date": "2026-10-08",
+      "prior_block": "phase-audit-failed (P5-F11)"
+    }
   ],
-  "recovery_attempt_consumed": true,
-  "retry": {
-    "approved_by_user": true,
-    "date": "2026-10-08",
-    "prior_block": "phase-audit-failed (P5-F6)"
-  },
-  "blocked_category": "phase-audit-failed"
+  "t17_files_hash": {
+    "deploy/cutover-ggf.sh": "74b5ef917c7c9b79259207913f0b916d883a1d6db0817533c16ca60d691060ca",
+    "deploy/restore-ggf.sh": "e2f2aecbdf742f7ebab87a0f812e410c8e99c7a7fa46f437488135cd257d9fff",
+    "deploy/CUTOVER-CHECKLIST.md": "90784503af3248d249c4e94b11198ddc4ef9bf3bfb36974ae909a8df7b711d96",
+    "deploy/docker-compose.ggf.yml": "9ab89940323edb3badc7cb93869bcc95bad7abe7902d9480a6152b7023f50cd2"
+  }
 }

@@ -9,12 +9,12 @@
   },
   "reviewed_sha": "65aadc058ef34d70bc9017b9c9cf22265d40379f",
   "reviewed_files": {
-    "deploy/cutover-ggf.sh": "f78e38e6aa3da3d1cb5e3ae160adda319fc2bfb0de26ba9791b0ebae9d3f3f15",
+    "deploy/cutover-ggf.sh": "74b5ef917c7c9b79259207913f0b916d883a1d6db0817533c16ca60d691060ca",
     "deploy/restore-ggf.sh": "e2f2aecbdf742f7ebab87a0f812e410c8e99c7a7fa46f437488135cd257d9fff",
     "deploy/CUTOVER-CHECKLIST.md": "90784503af3248d249c4e94b11198ddc4ef9bf3bfb36974ae909a8df7b711d96",
     "deploy/docker-compose.ggf.yml": "9ab89940323edb3badc7cb93869bcc95bad7abe7902d9480a6152b7023f50cd2"
   },
-  "audit_input_note": "T17 deliverables are git-ignored host files (deploy/*-ggf.sh in .gitignore); audited by content hash, not git range. Phase-5 phase-pass recovery fix (P5-F9/P5-F10) audited; all four hashes matched the controller values (cutover-ggf.sh is 1331 lines).",
+  "audit_input_note": "T17 deliverables are git-ignored host files (deploy/*-ggf.sh in .gitignore); audited by content hash, not git range. Phase-5 phase-pass recovery fix (P5-F9/P5-F10) audited; all four hashes matched the controller values (cutover-ggf.sh is 1331 lines). Retry-3: P5-F11 fix audited by Opus confirm pass; cutover-ggf.sh hash now 74b5ef91....",
   "timestamp": "2026-10-08T01:59:50Z",
   "reviewer_mode": "read-only",
   "reviewer_config": "batch-parallel",
@@ -127,8 +127,8 @@
     "cycles_remaining": 2
   },
   "phase_pass_fix": {
-    "finding": "P5-F9/P5-F10",
-    "round": "phase-pass recovery",
-    "note": "host files are git-ignored; no correction commit \u2014 fix audited by content hash"
+    "finding": "P5-F11",
+    "round": "phase-pass retry-3",
+    "note": "host files are git-ignored; no correction commit — fix audited by content hash (cutover-ggf.sh 74b5ef91...)"
   }
 }
