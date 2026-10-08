@@ -1,0 +1,103 @@
+{
+  "phase_key": "phase-3",
+  "phase_file": "execution-plan/phase-3.md",
+  "timestamp": "2026-10-07T08:06:45Z",
+  "reviewer_mode": "read-only",
+  "reviewer_model": "opus",
+  "findings": [
+    {
+      "id": "P3-F1",
+      "severity": "Important",
+      "for_task": "T6",
+      "files": [
+        "server/src/modules/activity/activity.ts",
+        "server/src/db/work-item-merge.sql"
+      ],
+      "description": "After T7 copy, GET /activity shows copied tracker_item_* and tracker_vocabulary_created events (null titles); T6 excluded only project/phase; breaks spec B.3 'today's behavior'. LIKE underscores unescaped.",
+      "recommended_fix": "Shared predicate excluding all tracker-prefixed types (escaped), composed test: copy then /activity."
+    },
+    {
+      "id": "P3-F2",
+      "severity": "Important",
+      "for_task": "T6",
+      "files": [
+        "server/src/modules/chat/tools/factory.ts",
+        "server/src/modules/agent/service-deps-activity.ts"
+      ],
+      "description": "Appendix C chat/agent fetchActivityEvents still unfiltered; after copy all tracker events reach the LLM and consume limit.",
+      "recommended_fix": "Apply the shared exclusion predicate to both queries; pin with test."
+    },
+    {
+      "id": "P3-F3",
+      "severity": "Important",
+      "for_task": "T7",
+      "files": [
+        "server/src/db/work-item-merge.sql",
+        "server/src/db/migrate.ts",
+        "deploy/deploy-ggf.sh",
+        "deploy/CUTOVER-CHECKLIST.md"
+      ],
+      "description": "No deploy gate: copy block runs on every applySchema; an early deploy (e.g. hotfix) would copy prematurely, double unified feed, leak events, and leave later tracker edits stale without parity failure. T8 guard is run-once, not a gate; its trigger would worsen early deploy.",
+      "recommended_fix": "In-repo gate: copy block (and later T8 trigger) no-op unless explicit setting on (e.g. WORK_ITEM_MERGE via SET LOCAL from migrate.ts), only cutover enables it; test skip path. Hazard note in checklist (done by main agent 2026-10-07)."
+    },
+    {
+      "id": "P3-F4",
+      "severity": "Important",
+      "for_task": "T17, T18 (plan carry-over)",
+      "files": [
+        "execution-plan/tasks/T17-*.md",
+        "execution-plan/tasks/T18-*.md",
+        "deploy/CUTOVER-CHECKLIST.md"
+      ],
+      "description": "Gate carry-over missed T17 (cutover script) and T18 (rehearsal); checklist lacked the command and had stale HAZARD wording.",
+      "recommended_fix": "Append notes to T17/T18 with gated one-off migrate + abort conditions; record command in checklist; update HAZARD.",
+      "resolution": "Main agent appended notes to T17, T18 (and T9 heads-up) and updated CUTOVER-CHECKLIST 2026-10-07; plan-doc bookkeeping, no code correction."
+    },
+    {
+      "id": "P3-F5",
+      "severity": "Important",
+      "for_task": "T7 (gate code) / T17-T19 notes",
+      "files": [
+        "server/src/db/migrate.ts"
+      ],
+      "description": "migrate() attaches no pg 'notice' listener, so RAISE NOTICE lines never reach stdout; T17/T18/T19/checklist abort conditions based on notices cannot work.",
+      "recommended_fix": "Option A: client.on('notice') logging in migrate(), pinned by test."
+    }
+  ],
+  "candidates_judged_summary": [
+    "released rewrite: no reader of payload.released; no finding.",
+    "No static cross-file regressions (typecheck, lint, feature-modules green).",
+    "Unified feed double-count between T7 and T9 transient on branch; prod impact only via P3-F3."
+  ],
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "status": "PHASE_PASS_RESOLVED",
+  "corrections": [
+    {
+      "sha": "2e8da2c8b82114db5723b599a2f9d2ddc8233f15",
+      "fixes": "P3-F3"
+    },
+    {
+      "sha": "eafddf1b830b84acb07baf900f866e96a370a577",
+      "fixes": "P3-F1,P3-F2"
+    },
+    {
+      "sha": "5b2d572e0df1091b59babc098510fa855a103b2b",
+      "fixes": "P3-F5"
+    }
+  ],
+  "resolved": [
+    "P3-F1",
+    "P3-F2",
+    "P3-F3",
+    "P3-F4",
+    "P3-F5"
+  ],
+  "recovery_attempt_consumed": true,
+  "confirm_notes": [
+    "Recovery confirm (opus): P3-F4 and P3-F5 resolved; detection strings match code; entrypoint stdout reaches docker logs; exit-code rule copied to checklist and T19; pipefail hint added to T17."
+  ]
+}

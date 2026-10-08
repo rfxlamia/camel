@@ -14,6 +14,7 @@ import SettingsPage from "./pages/SettingsPage";
 import LoadingCamel from "./shared/LoadingCamel";
 import { PresenceProvider } from "./shared/PresenceContext";
 import { ToastProvider } from "./shared/ToastContext";
+import { useBuildReload } from "./shared/useBuildReload";
 import { useWorkspace, WorkspaceProvider } from "./shared/WorkspaceContext";
 import type { User } from "./types";
 
@@ -159,6 +160,8 @@ export default function App() {
 	const [user, setUser] = useState<User | null>(null);
 	const [authChecked, setAuthChecked] = useState(false);
 	const [oauthError, setOauthError] = useState<string | null>(null);
+
+	useBuildReload();
 
 	// Session check on first load.
 	useEffect(() => {

@@ -1,5 +1,7 @@
 import type { CardTimestamps } from "../../../core/metrics.js";
 import { db } from "../../../db/kysely.js";
+import { excludeTrackerEvents } from "../../../lib/board-feed-filter.js";
+import { resolveEventTitle } from "../../../lib/event-title.js";
 import type { Tool } from "../../../lib/llm/tool-types.js";
 import {
 	type ActivityItem,
@@ -34,12 +36,28 @@ async function defaultFetchCardTimestamps(
 		.select(["created_at", "started_at", "done_at"])
 		.where("workspace_id", "=", workspaceId)
 		.where("deleted_at", "is", null)
+		.where("column_id", "is not", null)
 		.execute();
 	return rows.map((r) => ({
 		createdAt: r.created_at,
 		startedAt: r.started_at,
 		doneAt: r.done_at,
 	}));
+}
+
+type ActivityRow = {
+	event_type: string;
+	payload: unknown;
+	created_at: Date;
+	current_card_title: string | null;
+};
+
+export function toActivityItem(r: ActivityRow): ActivityItem {
+	return {
+		type: r.event_type,
+		cardTitle: r.current_card_title ?? resolveEventTitle(r.payload),
+		at: r.created_at.toISOString(),
+	};
 }
 
 async function defaultFetchActivityEvents(
@@ -58,18 +76,12 @@ async function defaultFetchActivityEvents(
 			"c.title as current_card_title",
 		])
 		.where("e.workspace_id", "=", workspaceId)
+		.where(excludeTrackerEvents)
 		.orderBy("e.created_at", "desc")
 		.orderBy("e.id", "desc")
 		.limit(limit)
 		.execute();
-	return rows.map((r) => {
-		const payload = r.payload as { cardTitle?: string } | null;
-		return {
-			type: r.event_type,
-			cardTitle: r.current_card_title ?? payload?.cardTitle ?? null,
-			at: r.created_at.toISOString(),
-		};
-	});
+	return rows.map(toActivityItem);
 }
 
 function makeChatQueryBoardData(ctx: ChatToolFactoryCtx): Tool {

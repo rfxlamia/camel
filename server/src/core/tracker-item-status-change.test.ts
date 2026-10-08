@@ -51,7 +51,7 @@ function makeTrackerTrx(
 	const trx = {
 		selectFrom: vi.fn((table: string) => {
 			tableQueries.push(table);
-			if (table === "tracker_items" || table === "tracker_items as ti") {
+			if (table === "cards as c") {
 				return chainable(persistedItem);
 			}
 			if (table === "tracker_vocabularies") {
@@ -113,14 +113,13 @@ const targetInputs = {
 	],
 };
 
-const mockRecordTrackerActivity = vi.fn();
-vi.mock("../lib/tracker-activity.js", () => ({
-	recordTrackerActivity: (...args: unknown[]) =>
-		mockRecordTrackerActivity(...args),
+const mockRecordActivity = vi.fn();
+vi.mock("../lib/helpers.js", () => ({
+	recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
 }));
 
 beforeEach(() => {
-	mockRecordTrackerActivity.mockReset();
+	mockRecordActivity.mockReset();
 });
 
 describe("applyTrackerItemStatusChange", () => {
@@ -137,7 +136,7 @@ describe("applyTrackerItemStatusChange", () => {
 		});
 
 		const existingCompletedAt = new Date("2026-09-10T12:30:00.000Z");
-		const { trx, updateCalls, persistedItem } = makeTrackerTrx({
+		const { trx, updateCalls, persistedItem, tableQueries } = makeTrackerTrx({
 			completedAt: existingCompletedAt,
 		});
 		const result = await applyTrackerItemStatusChange(trx, {
@@ -157,17 +156,19 @@ describe("applyTrackerItemStatusChange", () => {
 				updated_at: expect.anything(),
 			}),
 		);
+		expect(tableQueries).not.toContain("tracker_items");
+		expect(updateCalls[0]).not.toHaveProperty("column_id");
 		expect(rawSql(updateCalls[0]?.completed_at)).toBe(
 			"COALESCE(completed_at, now())",
 		);
 		expect(persistedItem.completed_at).toBe(existingCompletedAt);
-		expect(mockRecordTrackerActivity).toHaveBeenCalledOnce();
-		expect(mockRecordTrackerActivity).toHaveBeenCalledWith(
+		expect(mockRecordActivity).toHaveBeenCalledOnce();
+		expect(mockRecordActivity).toHaveBeenCalledWith(
 			trx,
 			actor,
 			7,
 			"tracker_item_updated",
-			expect.objectContaining({ trackerItemId: 100 }),
+			expect.objectContaining({ cardId: 100 }),
 		);
 	});
 

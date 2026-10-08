@@ -12,7 +12,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 function chainable(result: unknown) {
 	const b: any = {};
-	for (const m of ["where", "returning", "orderBy", "select", "$if", "forUpdate"]) {
+	for (const m of [
+		"where",
+		"returning",
+		"orderBy",
+		"select",
+		"$if",
+		"forUpdate",
+	]) {
 		b[m] = vi.fn(() => b);
 	}
 	const isArray = Array.isArray(result);
@@ -28,7 +35,6 @@ const callLog: string[] = [];
 
 let sharedProjectCount = 0;
 let phaseRows: any[] = [];
-let itemRows: any[] = [];
 let cardRows: any[] = [];
 let lockChain: Promise<unknown> = Promise.resolve();
 
@@ -62,7 +68,6 @@ function makeTrx() {
 			return b;
 		}
 		if (table === "tracker_phases") return chainable(phaseRows);
-		if (table === "tracker_items") return chainable(itemRows);
 		if (table === "cards") return chainable(cardRows);
 		return chainable([]);
 	});
@@ -77,11 +82,11 @@ function makeTrx() {
 		set: vi.fn((values: unknown) => {
 			updatedSets.push({ table, values });
 			const rows =
-				table === "tracker_items"
-					? itemRows
-					: table === "cards"
-						? cardRows.map((card) => ({ id: card.id }))
-						: undefined;
+				table === "cards"
+					? cardRows
+							.filter((card) => card.column_id !== null)
+							.map((card) => ({ id: card.id }))
+					: undefined;
 			return chainable(rows);
 		}),
 	}));
@@ -107,11 +112,9 @@ vi.mock("../../middleware/workspace.js", () => ({
 }));
 vi.mock("../../realtime.js", () => ({ publishEvent: vi.fn() }));
 vi.mock("../../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
-vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
 
-import { publishEvent } from "../../realtime.js";
 import { recordActivity } from "../../lib/helpers.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
+import { publishEvent } from "../../realtime.js";
 import { trackerProjectsRouter } from "./tracker-projects.js";
 
 const app = express();
@@ -135,14 +138,12 @@ beforeEach(() => {
 	lockChain = Promise.resolve();
 	sharedProjectCount = 0;
 	phaseRows = [];
-	itemRows = [];
 	cardRows = [];
 	mockSelectFrom.mockReset();
 	mockUpdateTable.mockReset();
 	mockTransaction.mockReset();
 	vi.mocked(publishEvent).mockReset();
 	vi.mocked(recordActivity).mockReset();
-	vi.mocked(recordTrackerActivity).mockReset();
 });
 
 describe("POST /tracker/projects", () => {
@@ -229,65 +230,79 @@ describe("PATCH /tracker/projects/:id", () => {
 });
 
 describe("DELETE /tracker/projects/:id", () => {
+	// Column-less rows are Tracker items; rows with a column are board cards.
 	const releasedItems = [
 		{
 			id: 101,
+			title: "Item A",
+			column_id: null,
 			project_id: 3,
 			phase_id: 9,
-			version: 4,
-			updated_at: "2026-08-01T00:00:00Z",
 		},
 		{
 			id: 102,
+			title: "Item B",
+			column_id: null,
 			project_id: 3,
 			phase_id: 10,
-			version: 2,
-			updated_at: "2026-08-01T00:00:00Z",
 		},
 	];
 	const releasedCards = [
 		{
 			id: 201,
 			title: "Board card A",
+			column_id: 1,
 			project_id: 3,
 			phase_id: 9,
 		},
 		{
 			id: 202,
 			title: "Board card B",
+			column_id: 1,
 			project_id: 3,
 			phase_id: null,
 		},
 	];
+	// A column-less release never bumps the version; a board release does.
+	const columnLessRelease = () =>
+		updatedSets.find((u) => u.table === "cards" && !("version" in u.values));
+	const boardRelease = () =>
+		updatedSets.find((u) => u.table === "cards" && "version" in u.values);
 
 	beforeEach(() => {
-		itemRows = releasedItems;
-		cardRows = releasedCards;
+		cardRows = [...releasedItems, ...releasedCards];
 		phaseRows = [{ id: 9 }, { id: 10 }];
 		useTransactionalTrx();
 	});
 
 	it("soft-deletes the project and its phases and nulls project_id/phase_id on its tasks and cards", async () => {
-		const res = await request(app).delete("/workspaces/7/tracker/projects/3").send({});
+		const res = await request(app)
+			.delete("/workspaces/7/tracker/projects/3")
+			.send({});
 		expect(res.status).toBe(204);
 		expect(
-			updatedSets.find((u) => u.table === "tracker_projects")?.values.deleted_at,
+			updatedSets.find((u) => u.table === "tracker_projects")?.values
+				.deleted_at,
 		).toBeTruthy();
 		expect(
 			updatedSets.find((u) => u.table === "tracker_phases")?.values.deleted_at,
 		).toBeTruthy();
-		const itemRelease = updatedSets.find((u) => u.table === "tracker_items");
+		const itemRelease = columnLessRelease();
 		expect(itemRelease?.values.project_id).toBeNull();
 		expect(itemRelease?.values.phase_id).toBeNull();
-		const cardRelease = updatedSets.find((u) => u.table === "cards");
+		const cardRelease = boardRelease();
 		expect(cardRelease?.values.project_id).toBeNull();
 		expect(cardRelease?.values.phase_id).toBeNull();
 	});
 
-	it("writes exactly one tracker_events row carrying the released (itemId, projectId, phaseId) triples", async () => {
+	it("writes exactly one tracker_project_deleted event carrying the released (itemId, projectId, phaseId) triples", async () => {
 		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
-		expect(recordTrackerActivity).toHaveBeenCalledTimes(1);
-		const [, , , , opts] = vi.mocked(recordTrackerActivity).mock.calls[0] as any[];
+		const projectEvents = vi
+			.mocked(recordActivity)
+			.mock.calls.filter((call) => call[3] === "tracker_project_deleted");
+		expect(projectEvents).toHaveLength(1);
+		const [, , , , opts] = projectEvents[0] as any[];
+		expect(opts.cardId).toBeUndefined();
 		expect(opts.payload.released).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ itemId: 101, projectId: 3, phaseId: 9 }),
@@ -317,14 +332,17 @@ describe("DELETE /tracker/projects/:id", () => {
 
 	it("leaves version and updated_at unchanged on released tasks", async () => {
 		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
-		const itemRelease = updatedSets.find((u) => u.table === "tracker_items");
+		const itemRelease = columnLessRelease();
 		expect(itemRelease?.values).not.toHaveProperty("version");
 		expect(itemRelease?.values).not.toHaveProperty("updated_at");
 	});
 
 	it("records card activity for each released board card", async () => {
 		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
-		expect(recordActivity).toHaveBeenCalledTimes(releasedCards.length);
+		const cardActivity = vi
+			.mocked(recordActivity)
+			.mock.calls.filter((call) => call[3] === "update");
+		expect(cardActivity).toHaveLength(releasedCards.length);
 		expect(recordActivity).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ id: 1 }),
@@ -355,8 +373,7 @@ describe("DELETE /tracker/projects/:id", () => {
 
 	it("bumps version on released cards", async () => {
 		await request(app).delete("/workspaces/7/tracker/projects/3").send({});
-		const cardRelease = updatedSets.find((u) => u.table === "cards");
-		expect(cardRelease?.values).toHaveProperty("version");
+		expect(boardRelease()?.values).toHaveProperty("version");
 	});
 
 	it("locks project removal before dependent scans", async () => {
@@ -385,14 +402,6 @@ describe("DELETE /tracker/projects/:id", () => {
 					});
 					return b;
 				}
-				if (table === "tracker_items") {
-					const b = chainable(itemRows);
-					b.execute = vi.fn(async () => {
-						orchestrationLog.push("scan_items");
-						return itemRows;
-					});
-					return b;
-				}
 				if (table === "cards") {
 					const b = chainable(cardRows);
 					b.execute = vi.fn(async () => {
@@ -408,11 +417,11 @@ describe("DELETE /tracker/projects/:id", () => {
 					orchestrationLog.push(`update:${table}`);
 					updatedSets.push({ table, values });
 					const rows =
-						table === "tracker_items"
-							? itemRows
-							: table === "cards"
-								? cardRows.map((card) => ({ id: card.id }))
-								: undefined;
+						table === "cards"
+							? cardRows
+									.filter((card) => card.column_id !== null)
+									.map((card) => ({ id: card.id }))
+							: undefined;
 					return chainable(rows);
 				}),
 			}));
@@ -428,7 +437,6 @@ describe("DELETE /tracker/projects/:id", () => {
 
 		const workspaceLockIdx = orchestrationLog.indexOf("workspace_lock");
 		const projectLockIdx = orchestrationLog.indexOf("project_lock");
-		const scanItemsIdx = orchestrationLog.indexOf("scan_items");
 		const scanCardsIdx = orchestrationLog.indexOf("scan_cards");
 		const softDeleteProjectIdx = orchestrationLog.indexOf(
 			"update:tracker_projects",
@@ -436,11 +444,8 @@ describe("DELETE /tracker/projects/:id", () => {
 
 		expect(workspaceLockIdx).toBeGreaterThanOrEqual(0);
 		expect(projectLockIdx).toBeGreaterThan(workspaceLockIdx);
-		expect(scanItemsIdx).toBeGreaterThan(projectLockIdx);
 		expect(scanCardsIdx).toBeGreaterThan(projectLockIdx);
-		expect(softDeleteProjectIdx).toBeGreaterThan(scanItemsIdx);
 		expect(softDeleteProjectIdx).toBeGreaterThan(scanCardsIdx);
-		expect(recordTrackerActivity).toHaveBeenCalled();
 		expect(recordActivity).toHaveBeenCalled();
 	});
 });

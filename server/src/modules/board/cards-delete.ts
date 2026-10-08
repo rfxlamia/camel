@@ -13,6 +13,7 @@ import { optionalVersion } from "../../validators/schemas.js";
 import { cardIdParam } from "./board-schemas.js";
 import { removeAttachmentPairsBestEffort } from "./card-attachment-cleanup.js";
 import { publishCardWorkspaceEvent } from "./card-events.js";
+import { requireBoardCard } from "./require-board-card.js";
 
 export const cardsDeleteRouter = Router({ mergeParams: true });
 
@@ -35,19 +36,14 @@ cardsDeleteRouter.delete(
 			| {
 					kind: "ok";
 					title: string;
-					column_id: number;
+					column_id: number | null;
 					attachmentPairs: AttachmentPair[];
 			  };
 
 		const result: DeleteResult = await db.transaction().execute(async (trx) => {
-			const lockedCard = await trx
-				.selectFrom("cards")
-				.select(["id", "title", "column_id", "version"])
-				.where("id", "=", id)
-				.where("workspace_id", "=", workspaceId)
-				.where("deleted_at", "is", null)
-				.forUpdate()
-				.executeTakeFirst();
+			const lockedCard = await requireBoardCard(trx, workspaceId, id, {
+				lock: true,
+			});
 			if (!lockedCard) return { kind: "not_found" };
 			if (version !== undefined && lockedCard.version !== version) {
 				return { kind: "conflict" };

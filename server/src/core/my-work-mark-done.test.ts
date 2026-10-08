@@ -176,17 +176,18 @@ function makeTrackerDb(options: CommandDbOptions = {}) {
 						: { user_id: 42 },
 				);
 			}
-			if (table === "tracker_item_assignees") {
+			if (table === "card_assignees") {
 				return chainable(
 					options.trackerAssignment !== undefined
 						? options.trackerAssignment
-						: { tracker_item_id: 300 },
+						: { card_id: 300 },
 				);
 			}
-			if (table === "tracker_items" || table === "tracker_items as ti") {
+			if (table === "cards") {
 				return chainable(
 					options.trackerItem ?? {
 						id: 300,
+						column_id: null,
 						key_number: 4,
 						status_id: 101,
 						title: "Tracker work",
@@ -281,8 +282,19 @@ function makeMappingRaceDb(source: MappingRaceSource) {
 			tableQueries.push(table);
 			if (table === "workspace_members") return chainable({ user_id: 42 });
 			if (table === "card_assignees") return chainable({ card_id: 200 });
-			if (table === "tracker_item_assignees") {
-				return chainable({ tracker_item_id: 300 });
+			if (
+				(table === "cards" || table === "cards as c") &&
+				source === "tracker"
+			) {
+				return chainable({
+					id: 300,
+					key_number: 4,
+					column_id: null,
+					status_id: 101,
+					title: "Tracker work",
+					version: 2,
+					completed_at: null,
+				});
 			}
 			if (table === "cards") {
 				return chainable({
@@ -292,16 +304,6 @@ function makeMappingRaceDb(source: MappingRaceSource) {
 					status_id: 101,
 					title: "Board work",
 					version: 4,
-				});
-			}
-			if (table === "tracker_items" || table === "tracker_items as ti") {
-				return chainable({
-					id: 300,
-					key_number: 4,
-					status_id: 101,
-					title: "Tracker work",
-					version: 2,
-					completed_at: null,
 				});
 			}
 			if (table === "columns") {
@@ -442,7 +444,8 @@ describe("My Work Mark done command", () => {
 				version: 2,
 			}),
 		);
-		expect(tableQueries).not.toContain("cards");
+		expect(tableQueries).not.toContain("tracker_items");
+		expect(tableQueries).not.toContain("tracker_item_assignees");
 	});
 
 	it("returns not_found after membership revocation without a source write", async () => {
@@ -534,7 +537,8 @@ describe("My Work Mark done command", () => {
 		});
 
 		expect(result).toEqual({ kind: "conflict" });
-		expect(tableQueries).not.toContain("cards");
+		expect(tableQueries).not.toContain("tracker_items");
+		expect(tableQueries).not.toContain("tracker_item_assignees");
 	});
 
 	it("short-circuits an already canonical Board target without duplicate activity", async () => {
@@ -599,7 +603,8 @@ describe("My Work Mark done command", () => {
 			changed: false,
 		});
 		expect(trackerStatusChange).not.toHaveBeenCalled();
-		expect(tableQueries).not.toContain("cards");
+		expect(tableQueries).not.toContain("tracker_items");
+		expect(tableQueries).not.toContain("tracker_item_assignees");
 	});
 
 	it("rejects a Board mapping removal race before source or activity writes", async () => {
@@ -637,7 +642,8 @@ describe("My Work Mark done command", () => {
 		expect(
 			tableQueries.filter((table) => table === "tracker_vocabularies"),
 		).toHaveLength(2);
-		expect(tableQueries).not.toContain("cards");
+		expect(tableQueries).not.toContain("tracker_items");
+		expect(tableQueries).not.toContain("tracker_item_assignees");
 		expect(mockRecordCardActivity).not.toHaveBeenCalled();
 		expect(mockRecordTrackerActivity).not.toHaveBeenCalled();
 	});

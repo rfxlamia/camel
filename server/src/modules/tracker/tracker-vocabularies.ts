@@ -2,7 +2,7 @@ import { Router } from "express";
 import { sql } from "kysely";
 import { generateRandomPastelBorder } from "../../core/pastelColor.js";
 import { db } from "../../db/kysely.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
+import { recordActivity } from "../../lib/helpers.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 import { publishEvent } from "../../realtime.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
@@ -124,7 +124,7 @@ trackerVocabulariesRouter.post(
 					.returning(RETURNING_COLUMNS)
 					.executeTakeFirstOrThrow();
 
-				await recordTrackerActivity(
+				await recordActivity(
 					trx,
 					actor,
 					workspaceId,

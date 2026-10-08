@@ -7,6 +7,7 @@ import {
 } from "../../lib/attachment-storage.js";
 import { recordActivity } from "../../lib/helpers.js";
 import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
+import { requireBoardCard } from "./require-board-card.js";
 
 type UploadedFile = Express.Multer.File;
 export type PreparedAttachment = {
@@ -61,21 +62,14 @@ function toIso(value: Date | string): string {
 		: new Date(value).toISOString();
 }
 
-type LockedCard = { id: number; column_id: number };
+type LockedCard = { id: number; column_id: number | null };
 
 async function lockExistingCard(
 	trx: DBExecutor,
 	workspaceId: number,
 	cardId: number,
 ): Promise<LockedCard> {
-	const card = await trx
-		.selectFrom("cards")
-		.select(["id", "column_id"])
-		.where("id", "=", cardId)
-		.where("workspace_id", "=", workspaceId)
-		.where("deleted_at", "is", null)
-		.forUpdate()
-		.executeTakeFirst();
+	const card = await requireBoardCard(trx, workspaceId, cardId, { lock: true });
 	if (!card) throw Object.assign(new Error("Not found"), { statusCode: 404 });
 	return card;
 }

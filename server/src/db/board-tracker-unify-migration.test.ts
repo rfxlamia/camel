@@ -5,6 +5,10 @@ const schemaSql = readFileSync(
 	new URL("./schema.sql", import.meta.url),
 	"utf8",
 );
+const mergeSql = readFileSync(
+	new URL("./work-item-merge.sql", import.meta.url),
+	"utf8",
+);
 const typesTs = readFileSync(new URL("./types.ts", import.meta.url), "utf8");
 
 const unifyIndex = schemaSql.indexOf(
@@ -36,7 +40,9 @@ describe("board/tracker schema unification DDL", () => {
 		)?.[0];
 		expect(statusIdColumn).toBeTruthy();
 		expect(statusIdColumn).not.toMatch(/ON DELETE SET NULL/);
-		expect(schemaSql).toMatch(/DO \$cards_status_id_fk\$[\s\S]*?confdeltype = 'n'/);
+		expect(schemaSql).toMatch(
+			/DO \$cards_status_id_fk\$[\s\S]*?confdeltype = 'n'/,
+		);
 		expect(schemaSql).toMatch(
 			/ADD CONSTRAINT cards_status_id_fkey[\s\S]*?FOREIGN KEY \(status_id\) REFERENCES tracker_vocabularies\(id\);/,
 		);
@@ -105,7 +111,7 @@ describe("board/tracker schema unification DDL", () => {
 		);
 	});
 
-	it("does not add a card-level workspace/key unique constraint", () => {
+	it("keeps the card-level workspace/key unique index out of schema.sql and in work-item-merge.sql", () => {
 		const cardsBlock = schemaSql.slice(
 			schemaSql.indexOf("CREATE TABLE IF NOT EXISTS cards"),
 			schemaSql.indexOf("CREATE TABLE IF NOT EXISTS card_events"),
@@ -115,6 +121,12 @@ describe("board/tracker schema unification DDL", () => {
 		);
 		expect(unifySql).not.toMatch(
 			/CREATE UNIQUE INDEX IF NOT EXISTS[^;]*ON cards[^;]*key_number/i,
+		);
+		expect(schemaSql).not.toMatch(
+			/CREATE UNIQUE INDEX[^;]*ON cards\s*\(\s*workspace_id\s*,\s*key_number/i,
+		);
+		expect(mergeSql).toMatch(
+			/CREATE UNIQUE INDEX IF NOT EXISTS[^;]*ON cards\s*\(\s*workspace_id\s*,\s*key_number\s*\)/i,
 		);
 	});
 });

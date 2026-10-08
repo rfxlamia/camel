@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -37,7 +38,7 @@ function git(cwd, args) {
  * @param {(dir: string) => void} run
  */
 function withTempGitRepo(dirPrefix, run) {
-	const dir = mkdtempSync(join(repoRoot, dirPrefix));
+	const dir = mkdtempSync(join(tmpdir(), dirPrefix));
 	try {
 		git(dir, ["init"]);
 		git(dir, ["config", "user.email", "fm@test.local"]);
@@ -398,7 +399,7 @@ describe("Cycle D — composition root, missing index, work-items (unit)", () =>
 	});
 
 	it("flags module tree with files but no index.ts on disk", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-index-"));
+		const dir = mkdtempSync(join(tmpdir(), ".tmp-fm-index-"));
 		try {
 			const moduleDir = join(dir, "server/src/modules/board");
 			mkdirSync(moduleDir, { recursive: true });
@@ -413,7 +414,7 @@ describe("Cycle D — composition root, missing index, work-items (unit)", () =>
 	});
 
 	it("flags a module that only has a nested internal/index.ts", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-nested-index-"));
+		const dir = mkdtempSync(join(tmpdir(), ".tmp-fm-nested-index-"));
 		try {
 			const moduleDir = join(dir, "client/src/features/activity/internal");
 			mkdirSync(moduleDir, { recursive: true });
@@ -429,7 +430,7 @@ describe("Cycle D — composition root, missing index, work-items (unit)", () =>
 	});
 
 	it("flags client features/work-items as forbidden product module", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-work-items-"));
+		const dir = mkdtempSync(join(tmpdir(), ".tmp-fm-work-items-"));
 		try {
 			const featureDir = join(dir, "client/src/features/work-items");
 			mkdirSync(featureDir, { recursive: true });
@@ -554,7 +555,7 @@ import { ok } from "../modules/board/index.js";
 
 describe("Cycle F — scan scope and CLI exit 1 (integration)", () => {
 	it("collectImportViolations scans the full tree under scan roots", () => {
-		const dir = mkdtempSync(join(repoRoot, ".tmp-fm-import-scan-"));
+		const dir = mkdtempSync(join(tmpdir(), ".tmp-fm-import-scan-"));
 		try {
 			mkdirSync(join(dir, "server/src/routes"), { recursive: true });
 			writeFileSync(

@@ -1,0 +1,29 @@
+{
+  "task_id": "T18",
+  "task_name": "Rehearsal on a production dump (main agent only)",
+  "cycle": 1,
+  "timestamp": "2026-10-08T04:33:50Z",
+  "reviewer_mode": "main-agent",
+  "reviewer_config": "main-agent-only task; no repo files changed by the rehearsal itself",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "skip_reason": "no_file_changes",
+  "audit_input_note": "T18 is a main-agent-only structural task whose deliverable is evidence (rehearsal counts/timings in the git-ignored deploy/CUTOVER-CHECKLIST.md and the T18 task notes); no reviewer subagent judged the rehearsal itself. The pre-rehearsal carried items committed in the same range (d2fb026 P5-F2 test, 96287e3 P5-F4 snapshot preconditions) plus the P5-F12 host fix were audited read-only by an Opus subagent on 2026-10-08 (AUDIT_FINDINGS: no Critical/Important; 3 Minors M1-M3 skipped by the user and carried in the T18 notes). The range prev..done_sha also contains the merge of origin/main, which is not T18 work.",
+  "reviewed_sha": "5552f8c08debda669dcc2cde0d7f5434a871a354"
+}

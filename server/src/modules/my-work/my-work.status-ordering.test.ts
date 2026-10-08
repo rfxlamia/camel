@@ -11,6 +11,7 @@ import {
 	ATLAS,
 	capturedDb,
 	hydrateRows,
+	isTrackerRowsQuery,
 	NOW,
 	ORBIT,
 	sourceDeps,
@@ -122,11 +123,11 @@ describe("My Work status and ordering boundary", () => {
 		expect(second.nextCursor).toBeNull();
 
 		const trackerQueries = queries.filter((entry) =>
-			entry.sql.includes('from "tracker_items"'),
+			isTrackerRowsQuery(entry.sql),
 		);
 		expect(trackerQueries).toHaveLength(2);
-		expect(trackerQueries[0]?.sql).toContain('"ti"."key_number" asc');
-		expect(trackerQueries[1]?.sql).toContain('"ti"."key_number" =');
+		expect(trackerQueries[0]?.sql).toContain('"c"."key_number" asc');
+		expect(trackerQueries[1]?.sql).toContain('"c"."key_number" =');
 		expect(trackerQueries[1]?.parameters).toContain(2);
 		await executor.destroy();
 	});
@@ -146,7 +147,7 @@ describe("My Work status and ordering boundary", () => {
 		await source.listTrackerRows({ ...common, scope: "all" });
 
 		const trackerQueries = queries.filter((entry) =>
-			entry.sql.includes('from "tracker_items"'),
+			isTrackerRowsQuery(entry.sql),
 		);
 		expect(trackerQueries).toHaveLength(2);
 		expect(trackerQueries[0]?.sql).not.toContain("ILIKE");
@@ -195,9 +196,7 @@ describe("My Work status and ordering boundary", () => {
 			workspaceLocalDates: new Map([[ORBIT.id, "2026-09-11"]]),
 		});
 
-		const query = queries.find((entry) =>
-			entry.sql.includes('from "tracker_items"'),
-		);
+		const query = queries.find((entry) => isTrackerRowsQuery(entry.sql));
 		expect(query).toBeDefined();
 		const sqlText = query?.sql ?? "";
 		const fallbackGuard = sqlText.indexOf("st.category IS NULL");
@@ -229,12 +228,10 @@ describe("My Work status and ordering boundary", () => {
 			]),
 		});
 
-		const query = queries.find((entry) =>
-			entry.sql.includes('from "tracker_items"'),
-		);
+		const query = queries.find((entry) => isTrackerRowsQuery(entry.sql));
 		expect(query).toBeDefined();
-		expect(query?.sql).toContain('"ti"."key_number"');
-		expect(query?.sql).toContain('"ti"."workspace_id"');
+		expect(query?.sql).toContain('"c"."key_number"');
+		expect(query?.sql).toContain('"c"."workspace_id"');
 		expect(query?.parameters).toContain("%AT-17%");
 		expect(query?.parameters).toContain(17);
 		expect(query?.parameters).toContain(7);
@@ -257,8 +254,9 @@ describe("My Work status and ordering boundary", () => {
 			now: NOW,
 		});
 
-		const boardQuery = queries.find((entry) =>
-			entry.sql.includes('from "cards"'),
+		const boardQuery = queries.find(
+			(entry) =>
+				entry.sql.includes('from "cards"') && !isTrackerRowsQuery(entry.sql),
 		);
 		expect(boardQuery).toBeDefined();
 		expect(boardQuery?.sql).toContain('"c"."workspace_id" in');
@@ -267,12 +265,8 @@ describe("My Work status and ordering boundary", () => {
 		expect(boardQuery?.sql).toContain('"card_assignees"');
 		expect(boardQuery?.parameters).toContain(ATLAS.id);
 		expect(boardQuery?.parameters).toContain(4);
-		expect(
-			queries.some((entry) =>
-				entry.sql.includes('from "tracker_items" as "ti"'),
-			),
-		).toBe(false);
-		expect(boardQuery?.sql).toContain('"tracker_items" as "shadow_ti"');
+		expect(queries.some((entry) => isTrackerRowsQuery(entry.sql))).toBe(false);
+		expect(boardQuery?.sql).not.toContain("tracker_item");
 		await executor.destroy();
 	});
 });

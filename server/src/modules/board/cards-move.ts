@@ -20,6 +20,7 @@ import { cardIdParam } from "./board-schemas.js";
 import { emitCardAssigned, publishCardWorkspaceEvent } from "./card-events.js";
 import { batchUpdateCardPositions } from "./card-positions.js";
 import { hydrateCard } from "./card-read.js";
+import { requireBoardCard } from "./require-board-card.js";
 
 export const cardsMoveRouter = Router({ mergeParams: true });
 
@@ -66,21 +67,9 @@ cardsMoveRouter.post(
 			  };
 
 		const result: MoveResult = await db.transaction().execute(async (trx) => {
-			const card = await trx
-				.selectFrom("cards")
-				.select([
-					"id",
-					"column_id",
-					"title",
-					"version",
-					"started_at",
-					"done_at",
-				])
-				.where("id", "=", cardId)
-				.where("workspace_id", "=", workspaceId)
-				.where("deleted_at", "is", null)
-				.forUpdate()
-				.executeTakeFirst();
+			const card = await requireBoardCard(trx, workspaceId, cardId, {
+				lock: true,
+			});
 			if (!card) return { kind: "not_found_card" };
 
 			if (version !== undefined && card.version !== version) {

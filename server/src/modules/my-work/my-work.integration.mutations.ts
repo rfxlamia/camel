@@ -35,7 +35,7 @@ async function assertStaleBoardWrite(fixtures: Fixtures): Promise<void> {
 
 async function assertStaleTrackerWrite(fixtures: Fixtures): Promise<void> {
 	const initial = await trackerState(fixtures.orbitTracker.id);
-	await query("UPDATE tracker_items SET version = version + 1 WHERE id = $1", [
+	await query("UPDATE cards SET version = version + 1 WHERE id = $1", [
 		fixtures.orbitTracker.id,
 	]);
 	const response = await request(app)
@@ -80,7 +80,7 @@ export function registerMutationScenarios(): void {
 			status_id: number;
 			version: number;
 		}>(
-			"SELECT status_id, version FROM tracker_items WHERE workspace_id = $1 ORDER BY id",
+			"SELECT status_id, version FROM cards WHERE workspace_id = $1 AND column_id IS NULL ORDER BY id",
 			[ATLAS_ID],
 		);
 		const response = await request(app)
@@ -119,7 +119,7 @@ export function registerMutationScenarios(): void {
 		await expectNoTrackerEventsInWorkspace(ATLAS_ID);
 		expect(
 			await query<{ status_id: number; version: number }>(
-				"SELECT status_id, version FROM tracker_items WHERE workspace_id = $1 ORDER BY id",
+				"SELECT status_id, version FROM cards WHERE workspace_id = $1 AND column_id IS NULL ORDER BY id",
 				[ATLAS_ID],
 			),
 		).toEqual(beforeTrackerRows);
@@ -150,21 +150,21 @@ export function registerMutationScenarios(): void {
 		});
 		const trackerEvents = await query<{
 			event_type: string;
-			tracker_item_id: number | null;
+			card_id: number | null;
 			actor_id: number | null;
 		}>(
-			"SELECT event_type, tracker_item_id, actor_id FROM tracker_events WHERE tracker_item_id = $1",
-			[fixtures.orbitTracker.id],
+			"SELECT event_type, card_id, actor_id FROM card_events WHERE workspace_id = $1",
+			[ORBIT_ID],
 		);
 		expect(trackerEvents).toEqual([
 			{
 				event_type: "tracker_item_updated",
-				tracker_item_id: fixtures.orbitTracker.id,
+				card_id: fixtures.orbitTracker.id,
 				actor_id: ALICE_ID,
 			},
 		]);
 		expect(await boardState(fixtures.orbitBoard.id)).toEqual(beforeBoard);
-		await expectNoCardEventsInWorkspace(ORBIT_ID);
+		await expectNoCardEvents(fixtures.orbitBoard.id);
 	});
 
 	// Cycle 6 — stale conflict and no partial source/activity write.
@@ -202,7 +202,7 @@ export function registerMutationScenarios(): void {
 		expect(trackerRetry.status).toBe(200);
 		expect(trackerRetry.body).toMatchObject({ source: "tracker", key: "OR-4" });
 		expect(
-			await query("SELECT id FROM tracker_events WHERE tracker_item_id = $1", [
+			await query("SELECT id FROM card_events WHERE card_id = $1", [
 				fixtures.orbitTracker.id,
 			]),
 		).toHaveLength(1);

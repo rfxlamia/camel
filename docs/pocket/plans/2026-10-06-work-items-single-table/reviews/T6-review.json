@@ -1,0 +1,49 @@
+{
+  "task_id": "T6",
+  "task_name": "Event readers tolerate merged events",
+  "cycle": 2,
+  "timestamp": "2026-10-07T08:04:12Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Null cardTitle kept as JSON null: accepted (no literal 'undefined'; unchanged output).",
+      "Activity RED on leaked rows matches packet.",
+      "Module-local cycle-3 tests justified by FM-RULE-4.",
+      "P2-F3 cycle 4 verified.",
+      "Mapper extraction verbatim + re-export; file 251 lines.",
+      "Unchanged-output, no unified-feed/UNION/schema change; fixtures unique.",
+      "Fix 2ca1200 touches only title resolution; no query/schema/route changes.",
+      "P3-F5 correction 5b2d572 audited REVIEW_PASS: migrate() prints Postgres notices to stdout; listener detached before release; empirically verified on scratch DB."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "resolveEventTitle behavior-identical; precedence preserved",
+      "Helper used at all 3 former duplicate sites",
+      "FM-RULE-4 holds (lib imports nothing from modules)",
+      "Remaining thin wrappers are 2 occurrences, below the 3+ threshold; sharing would force lib->module import",
+      "No query changes"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/chat/tools/factory.column-less.integration.test.ts",
+        "line": 165,
+        "description": "Loose not.toContain('tracker_') substring assertion; acceptable with controlled fixture."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "5b2d572e0df1091b59babc098510fa855a103b2b"
+}

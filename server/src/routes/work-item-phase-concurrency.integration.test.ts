@@ -118,7 +118,9 @@ async function cleanupWorkspace(workspaceId: number): Promise<void> {
 	await pool.query("DELETE FROM tracker_projects WHERE workspace_id = $1", [
 		workspaceId,
 	]);
-	await pool.query("DELETE FROM columns WHERE workspace_id = $1", [workspaceId]);
+	await pool.query("DELETE FROM columns WHERE workspace_id = $1", [
+		workspaceId,
+	]);
 	await pool.query("DELETE FROM tracker_vocabularies WHERE workspace_id = $1", [
 		workspaceId,
 	]);
@@ -244,14 +246,17 @@ async function setupCleanupWorkspace(): Promise<PhaseFixtures> {
 	return { columnId, statusId, projectId, phaseId };
 }
 
+// Project/phase removal events carry a NULL card_id, so only card-bound events
+// count as board artifacts.
 async function assertNoBoardArtifacts(workspaceId: number): Promise<void> {
 	expect(
 		await query("SELECT id FROM cards WHERE workspace_id = $1", [workspaceId]),
 	).toHaveLength(0);
 	expect(
-		await query("SELECT id FROM card_events WHERE workspace_id = $1", [
-			workspaceId,
-		]),
+		await query(
+			"SELECT id FROM card_events WHERE workspace_id = $1 AND card_id IS NOT NULL",
+			[workspaceId],
+		),
 	).toHaveLength(0);
 }
 

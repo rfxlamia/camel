@@ -52,9 +52,10 @@ export async function endOfBucketPosition(
 	phaseId: number | null,
 ): Promise<number> {
 	let query = dbExec
-		.selectFrom("tracker_items")
-		.select(sql<number | null>`max(position)`.as("max_position"))
+		.selectFrom("cards")
+		.select(sql<number | null>`max(plan_position)`.as("max_position"))
 		.where("workspace_id", "=", workspaceId)
+		.where("column_id", "is", null)
 		.where("deleted_at", "is", null);
 	query =
 		projectId === null
@@ -70,13 +71,13 @@ export async function endOfBucketPosition(
 
 export async function syncLabels(
 	dbExec: DBExecutor,
-	trackerItemId: number,
+	cardId: number,
 	labelIds: number[],
 ): Promise<void> {
 	for (const vocabularyId of [...new Set(labelIds)]) {
 		await dbExec
-			.insertInto("tracker_item_labels")
-			.values({ tracker_item_id: trackerItemId, vocabulary_id: vocabularyId })
+			.insertInto("card_labels")
+			.values({ card_id: cardId, vocabulary_id: vocabularyId })
 			.onConflict((oc) => oc.doNothing())
 			.execute();
 	}

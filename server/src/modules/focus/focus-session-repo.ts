@@ -237,6 +237,7 @@ export function createFocusSessionRepo(executor = db): FocusSessionRepo {
 					.where("cards.id", "=", taskId)
 					.where("cards.workspace_id", "=", workspaceId)
 					.where("cards.deleted_at", "is", null)
+					.where("cards.column_id", "is not", null)
 					.executeTakeFirst();
 				if (!row) return null;
 				return {
@@ -247,18 +248,20 @@ export function createFocusSessionRepo(executor = db): FocusSessionRepo {
 				};
 			}
 
+			// Tracker items are the column-less rows of the merged `cards` table.
 			const row = await executor
-				.selectFrom("tracker_items")
-				.innerJoin("workspaces", "workspaces.id", "tracker_items.workspace_id")
+				.selectFrom("cards")
+				.innerJoin("workspaces", "workspaces.id", "cards.workspace_id")
 				.select([
-					"tracker_items.id",
-					"tracker_items.key_number",
-					"tracker_items.title",
+					"cards.id",
+					"cards.key_number",
+					"cards.title",
 					"workspaces.name as workspace_name",
 				])
-				.where("tracker_items.id", "=", taskId)
-				.where("tracker_items.workspace_id", "=", workspaceId)
-				.where("tracker_items.deleted_at", "is", null)
+				.where("cards.id", "=", taskId)
+				.where("cards.workspace_id", "=", workspaceId)
+				.where("cards.deleted_at", "is", null)
+				.where("cards.column_id", "is", null)
 				.executeTakeFirst();
 			if (!row) return null;
 			return {

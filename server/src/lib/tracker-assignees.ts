@@ -1,5 +1,5 @@
 import type { DBExecutor } from "../db/kysely.js";
-import { diffIds } from "../core/diff-ids.js";
+import { getCardAssigneeIds, syncCardAssignees } from "./card-assignees.js";
 
 export type TrackerItemAssignee = {
 	id: number;
@@ -7,6 +7,7 @@ export type TrackerItemAssignee = {
 	displayName: string;
 };
 
+// Legacy read over `tracker_item_assignees`; only My Work (T12) still uses it.
 export async function loadTrackerAssigneesForItems(
 	dbExec: DBExecutor,
 	trackerItemIds: number[],
@@ -36,17 +37,12 @@ export async function loadTrackerAssigneesForItems(
 	return map;
 }
 
+/** Tracker items are column-less cards rows, so assignees live in card_assignees. */
 export async function getTrackerItemAssigneeIds(
 	dbExec: DBExecutor,
 	trackerItemId: number,
 ): Promise<number[]> {
-	const rows = await dbExec
-		.selectFrom("tracker_item_assignees")
-		.select("user_id")
-		.where("tracker_item_id", "=", trackerItemId)
-		.orderBy("user_id")
-		.execute();
-	return rows.map((r) => r.user_id);
+	return getCardAssigneeIds(dbExec, trackerItemId);
 }
 
 export async function syncTrackerItemAssignees(
@@ -54,23 +50,5 @@ export async function syncTrackerItemAssignees(
 	trackerItemId: number,
 	assigneeIds: number[],
 ): Promise<{ prev: number[]; added: number[]; removed: number[] }> {
-	const prev = await getTrackerItemAssigneeIds(dbExec, trackerItemId);
-	const { added, removed } = diffIds(prev, assigneeIds);
-
-	if (removed.length > 0) {
-		await dbExec
-			.deleteFrom("tracker_item_assignees")
-			.where("tracker_item_id", "=", trackerItemId)
-			.where("user_id", "in", removed)
-			.execute();
-	}
-	for (const userId of added) {
-		await dbExec
-			.insertInto("tracker_item_assignees")
-			.values({ tracker_item_id: trackerItemId, user_id: userId })
-			.onConflict((oc) => oc.doNothing())
-			.execute();
-	}
-
-	return { prev, added, removed };
+	return syncCardAssignees(dbExec, trackerItemId, assigneeIds);
 }

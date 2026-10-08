@@ -1,22 +1,19 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
 import type { AuthUser } from "../../auth.js";
+import { allocateWorkItemKey } from "../../core/allocate-work-item-key.js";
 import { formatKey } from "../../core/tracker-key.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
 import { logger } from "../../lib/logger.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
+import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
 import { parseDateRange } from "../../lib/tracker-item-parsers.js";
 import {
 	type NormalizedTaskCreateMetadata,
 	type TaskCreateFieldErrors,
 	validateTaskCreateMetadata,
 } from "../../lib/work-item-create-metadata.js";
-import {
-	findTrackerItemByKeyNumber,
-	hydrateTrackerWorkItems,
-	legacyTrackerItemResponse,
-} from "../../lib/work-item-response.js";
+import { legacyTrackerItemResponse } from "../../lib/work-item-response.js";
 import { lockTaskCreateReferences } from "../../lib/workspace-mutation-lock.js";
 import { publishEvent } from "../../realtime.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
@@ -27,6 +24,7 @@ import {
 	syncLabels,
 	workspacePrefix,
 } from "./tracker-item-create-queries.js";
+import { resolveWorkItemByKey } from "./tracker-item-route-helpers.js";
 import { titleField } from "./tracker-schemas.js";
 
 function lockReferences(body: Record<string, unknown>, actorId: number) {
@@ -139,22 +137,22 @@ async function insertTrackerItem(
 		phaseId,
 	);
 	const category = await statusCategory(trx, input.workspaceId, statusId);
-	const counter = await trx
-		.updateTable("workspaces")
-		.set({ tracker_key_counter: sql`tracker_key_counter + 1` })
-		.where("id", "=", input.workspaceId)
-		.returning("tracker_key_counter")
-		.executeTakeFirstOrThrow();
+	const { keyNumber } = await allocateWorkItemKey(trx, {
+		workspaceId: input.workspaceId,
+	});
 	const values: Record<string, unknown> = {
 		workspace_id: input.workspaceId,
-		key_number: counter.tracker_key_counter,
+		key_number: keyNumber,
 		title: input.title,
 		description: input.description,
 		status_id: statusId,
 		priority_id: metadata.priorityId ?? null,
 		project_id: projectId,
 		phase_id: phaseId,
-		position,
+		// Board position is a never-read placeholder for column-less rows.
+		position: 0,
+		plan_position: position,
+		updated_at: sql`now()`,
 	};
 	if ("startDate" in input.body && !("error" in input.dates)) {
 		values.start_date = parsedDateValue(input.dates, "startDate");
@@ -164,11 +162,11 @@ async function insertTrackerItem(
 	}
 	if (category === "completed") values.completed_at = sql`now()`;
 	const inserted = await trx
-		.insertInto("tracker_items")
+		.insertInto("cards")
 		.values(values as never)
 		.returning("id")
 		.executeTakeFirstOrThrow();
-	return { id: inserted.id, keyNumber: counter.tracker_key_counter };
+	return { id: inserted.id, keyNumber };
 }
 
 async function hydrateCreatedItem(
@@ -183,26 +181,26 @@ async function hydrateCreatedItem(
 	if ((metadata.labelIds ?? []).length > 0) {
 		await syncLabels(trx, created.id, metadata.labelIds!);
 	}
-	await recordTrackerActivity(
+	await recordTrackerItemActivity(
 		trx,
 		input.actor,
 		input.workspaceId,
 		"tracker_item_created",
 		{
-			trackerItemId: created.id,
+			cardId: created.id,
 			payload: {
 				title: input.title,
 				key: formatKey(input.prefix, created.keyNumber),
 			},
 		},
 	);
-	const row = await findTrackerItemByKeyNumber(
+	const item = await resolveWorkItemByKey(
 		trx,
 		input.workspaceId,
 		created.keyNumber,
+		input.prefix,
 	);
-	if (!row) throw new Error("create failed");
-	const [item] = await hydrateTrackerWorkItems(trx, [row], input.prefix);
+	if (!item) throw new Error("create failed");
 	if ("startDate" in input.body) {
 		item.startDate = parsedDateValue(input.dates, "startDate");
 	}

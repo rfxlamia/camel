@@ -1,7 +1,8 @@
 import { type RawBuilder, sql } from "kysely";
 import type { AuthUser } from "../auth.js";
 import type { DBExecutor } from "../db/kysely.js";
-import { recordTrackerActivity } from "../lib/tracker-activity.js";
+import { recordTrackerItemActivity } from "../lib/tracker-item-activity.js";
+import { classifyColumnlessWriteFailure } from "./classify-columnless-write-failure.js";
 
 export type TrackerItemStatusChangeResult =
 	| { kind: "not_found" }
@@ -70,19 +71,14 @@ async function loadTrackerStatusChangeItem(
 	params: TrackerItemStatusChangeParams,
 ): Promise<TrackerStatusChangeItem | undefined> {
 	return trx
-		.selectFrom("tracker_items as ti")
-		.select([
-			"ti.id",
-			"ti.title",
-			"ti.status_id",
-			"ti.version",
-			"ti.completed_at",
-		])
-		.where("ti.id", "=", params.trackerItemId)
-		.where("ti.workspace_id", "=", params.workspaceId)
-		.where("ti.deleted_at", "is", null)
+		.selectFrom("cards as c")
+		.select(["c.id", "c.title", "c.status_id", "c.version", "c.completed_at"])
+		.where("c.id", "=", params.trackerItemId)
+		.where("c.workspace_id", "=", params.workspaceId)
+		.where("c.column_id", "is", null)
+		.where("c.deleted_at", "is", null)
 		.forUpdate()
-		.executeTakeFirst();
+		.executeTakeFirst() as Promise<TrackerStatusChangeItem | undefined>;
 }
 
 function hasTrackerVersionConflict(
@@ -106,27 +102,13 @@ async function loadTargetTrackerStatus(
 		.executeTakeFirst();
 }
 
-async function classifyTrackerUpdateFailure(
-	trx: DBExecutor,
-	params: TrackerItemStatusChangeParams,
-): Promise<Exclude<TrackerUpdateResult, { kind: "updated" }>> {
-	const current = await trx
-		.selectFrom("tracker_items as ti")
-		.select("ti.id")
-		.where("ti.id", "=", params.trackerItemId)
-		.where("ti.workspace_id", "=", params.workspaceId)
-		.where("ti.deleted_at", "is", null)
-		.executeTakeFirst();
-	return current ? { kind: "conflict" } : { kind: "not_found" };
-}
-
 async function updateTrackerStatus(
 	trx: DBExecutor,
 	params: TrackerItemStatusChangeParams,
 	targetStatus: TrackerTargetStatus,
 ): Promise<TrackerUpdateResult> {
 	let update = trx
-		.updateTable("tracker_items")
+		.updateTable("cards")
 		.set({
 			status_id: params.targetStatusId,
 			completed_at: completedAtForTrackerCategory(targetStatus.category),
@@ -135,13 +117,22 @@ async function updateTrackerStatus(
 		})
 		.where("id", "=", params.trackerItemId)
 		.where("workspace_id", "=", params.workspaceId)
+		.where("column_id", "is", null)
 		.where("deleted_at", "is", null);
 	if (params.version !== undefined) {
 		update = update.where("version", "=", params.version);
 	}
 
 	const updated = await update.returning(["id", "title"]).executeTakeFirst();
-	if (!updated) return classifyTrackerUpdateFailure(trx, params);
+	if (!updated) {
+		return {
+			kind: await classifyColumnlessWriteFailure(
+				trx,
+				params.workspaceId,
+				params.trackerItemId,
+			),
+		};
+	}
 	return { kind: "updated", id: updated.id, title: updated.title };
 }
 
@@ -150,13 +141,13 @@ async function recordTrackerStatusActivity(
 	params: TrackerItemStatusChangeParams,
 	item: TrackerStatusChangeItem,
 ): Promise<void> {
-	await recordTrackerActivity(
+	await recordTrackerItemActivity(
 		trx,
 		params.actor,
 		params.workspaceId,
 		"tracker_item_updated",
 		{
-			trackerItemId: params.trackerItemId,
+			cardId: params.trackerItemId,
 			payload: { title: item.title, changed: ["status"] },
 		},
 	);
@@ -166,8 +157,8 @@ async function recordTrackerStatusActivity(
  * Apply one optimistic-lock-protected Tracker status change.
  *
  * Callers own source selection and authorization. This primitive deliberately
- * only touches tracker_items and tracker_events, so Board work cannot leak
- * into the Tracker mutation path.
+ * only touches column-less `cards` rows and never assigns a column, so Board
+ * cards cannot leak into the Tracker mutation path.
  */
 export async function applyTrackerItemStatusChange(
 	trx: DBExecutor,

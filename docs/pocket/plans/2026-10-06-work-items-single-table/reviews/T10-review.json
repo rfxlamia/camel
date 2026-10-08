@@ -1,0 +1,79 @@
+{
+  "task_id": "T10",
+  "task_name": "Tracker item writes on the merged table",
+  "cycle": 1,
+  "reviewed_sha": "2e1fefb42ebfa9a363d8be1dec9db01ac4135247",
+  "timestamp": "2026-10-07T13:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Concern 1 (event-type union not widened): acceptable. recordTrackerItemActivity is a pure delegation to recordActivity with no card_events insert; the only writer stays recordActivity in helpers.ts (allowlisted), so check:event-write-routing sees no new writer. Event strings tracker_item_created/updated/deleted are unchanged and card_events.event_type is TEXT. The cast is a type-level bypass only (typecheck clean) and is contained to one 30-line file; the drift risk is Minor.",
+      "Concern 2 (legacy status shim for My Work mark-done): acceptable temporary shim, Minor. T12 step 3 explicitly owns the tracker branch of my-work-mark-done, and My Work reads still hit tracker_items until T12, so repointing mark-done at a legacy copy keeps that path self-consistent. The literal Must-not-have 'writes to tracker_items/tracker_events' is only reached via the My Work path, not any T10 Tracker route (grep: no tracker_items/tracker_events write left in modules/tracker item files). Duplication is 2 copies (not 3+) and is deleted by T21. Gap to carry to T12: until it lands, mark-done on a Tracker item created after T10 would target a stale tracker_items row; acceptable pre-cutover since code ships only at cutover. my-work-mark-done.ts was 303 lines before and after, edit is a 3-line import rename: trivial, not a non-trivial edit under 300-on-touch.",
+      "Concern 3 (shim re-export dropped): correct, closes the T9 Minor; My Work imports legacy-tracker-item-response directly.",
+      "Concern 4 (reorder no version/updated_at bump): matches old tracker reorder (old set only position, no version bump); pinned by unit test. Not a regression.",
+      "Concern 5 (assignees via syncCardAssignees, labels on card_labels): correct, scoped by a prior workspace-scoped guarded UPDATE in the same transaction.",
+      "Concern 6 (test edits): no assertion weakened. Mocks repointed to cards/recordActivity; added assertions (no tracker_items table access, no column_id in update, plan_position). Status-change test copy to legacy name is 186 lines of duplicated coverage for the shim.",
+      "Concern 7 (ordering): siblings filtered by workspace_id, column_id IS NULL, deleted_at IS NULL, same project/phase, ordered COALESCE(plan_position,1e15), id, FOR UPDATE. Rebalance writes only plan_position and only on RangeError (non-RangeError now rethrown, stricter than old bare catch).",
+      "Optimistic locking: create n/a; update, delete and status all use guarded UPDATE with version = ? and version+1 (update/delete/status), failure classified by classifyColumnlessWriteFailure: row live and column-less -> conflict (409), else not_found (404). Workspace scoped. Labels and assignees ride the update transaction and bump version via the same UPDATE.",
+      "Events: exactly one recordTrackerItemActivity per mutation inside the same transaction as the write (create, update, delete, status, reorder).",
+      "Column guard: trackerPatchColumnGuard rejects any column_id key (even null) with 400 {error, fieldErrors} via sendValidationError, before status-only branch; create/status never set column_id; update WHERE column_id IS NULL.",
+      "Keys come from allocateWorkItemKey (T1 allocator). check:event-write-routing and check:mutation-routing pass per controller."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "tracker-item-update.ts cut from 270 to 114 lines; write logic extracted to tracker-item-update-write.ts (133) and reorder to tracker-item-reorder-write.ts (157); all new files under 300 and functions under 50 lines",
+      "Shared tracker-item-merged-queries.ts removes duplicated find/classify/response code across routes",
+      "Integration test tracker-writes.merged covers all five cycles on real Postgres",
+      "tsc typecheck clean for server; .js extensions present"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/tracker-item-activity.ts",
+        "line": 22,
+        "description": "eventType is cast to Parameters<typeof recordActivity>[3]; the union in helpers.ts still lacks tracker_item_* strings, so type safety is bypassed. Widen the union when helpers.ts is next split (T11/T21) and drop the cast."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/core/legacy-tracker-item-status-change.ts",
+        "line": 1,
+        "description": "Temporary 151-line copy of the old status primitive plus a 186-line copied test; still writes tracker_items/tracker_events for My Work mark-done. Planned removal: T12 repoints my-work-mark-done to applyTrackerItemStatusChange, T21 deletes this file and its test. Verify in T12/T13 that nothing references it."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-item-create.ts",
+        "line": 153,
+        "description": "Inserts integer placeholder position: 0 on the board position column for column-less rows (pinned by a test). Never read, but violates the 'no integer positions' guidance in spirit; consider the column default or a documented constant."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/helpers.ts",
+        "line": 3,
+        "description": "Formatter-only import regrouping in a 623-line file (trivial edit, not a 300-on-touch trigger); unrelated diff noise."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/tracker/tracker-item-reorder-write.ts",
+        "line": 127,
+        "description": "Reorder takes no version and does not bump version/updated_at (same as pre-merge behavior); two concurrent reorders rely only on the FOR UPDATE row lock. Consider a follow-up if reorders should invalidate stale clients."
+      }
+    ],
+    "refactor_heuristics": {
+      "identical_logic_3plus": "none (status primitive duplicated twice, temporary)",
+      "files_over_300": "none among touched non-test files except pre-existing helpers.ts (623, import-only edit) and my-work-mark-done.ts (303, import-only edit)",
+      "functions_over_50": "none"
+    }
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  }
+}

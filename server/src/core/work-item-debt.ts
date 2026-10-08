@@ -25,6 +25,8 @@ export async function findKeyCollisions(
 		])
 		.where("c.deleted_at", "is", null)
 		.where("ti.deleted_at", "is", null)
+		// Migrated rows share their key with the card they were copied into.
+		.where("ti.migrated_to_id", "is", null)
 		.where("c.key_number", "is not", null)
 		.execute();
 

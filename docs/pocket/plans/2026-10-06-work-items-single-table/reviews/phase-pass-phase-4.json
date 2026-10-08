@@ -1,0 +1,69 @@
+{
+  "phase_key": "phase-4",
+  "phase_file": "execution-plan/phase-4.md",
+  "timestamp": "2026-10-07T13:16:03Z",
+  "reviewer_mode": "read-only",
+  "reviewed_range": "fb07196..ad4c2fe",
+  "findings": [
+    {
+      "id": "P4-F1",
+      "category": "integration",
+      "severity": "Minor",
+      "for_task": "T10",
+      "files": [
+        "server/src/lib/tracker-item-activity.ts",
+        "server/src/lib/helpers.ts",
+        "docs/pocket/plans/2026-10-06-work-items-single-table/execution-plan/tasks/T21-contract-remove-shim-code-checks-and-docs.md"
+      ],
+      "description": "T10 added recordTrackerItemActivity, which casts tracker_item_created/updated/deleted into recordActivity's eventType union (eventType as Parameters<typeof recordActivity>[3]). Its doc comment justifies the cast because helpers.ts was over the 300-line budget. T11 then split helpers.ts (now 227 lines) and widened the same union with tracker_project_*, tracker_phase_* and tracker_vocabulary_created, but not tracker_item_*. The two tasks did not compose: the union is now half-widened, the wrapper's rationale is false, and the precondition in the T21 carry note ('when helpers.ts is split, widen the union') is already met, though the note still cites '623 lines'. Behavior is correct: card_events.event_type is TEXT, recordActivity is still the only writer, and check:event-write-routing passes. Only type safety is bypassed.",
+      "fix": "Add 'tracker_item_created' | 'tracker_item_updated' | 'tracker_item_deleted' to the recordActivity eventType union in server/src/lib/helpers.ts. Remove the cast in server/src/lib/tracker-item-activity.ts and fix its doc comment. Either keep the wrapper as a typed narrowing (TrackerItemEventType) or inline it at its five call sites. If deferred, update the T21 carry note to say the precondition is met.",
+      "defer_ok": true,
+      "defer_to": "T21",
+      "resolution": "Deferred to T21 by user decision 2026-10-07 (defer_ok); note appended to T21 task file. No code correction."
+    },
+    {
+      "id": "P4-F2",
+      "category": "duplication",
+      "severity": "Minor",
+      "for_task": "T10",
+      "files": [
+        "server/src/modules/tracker/tracker-item-labels.ts",
+        "server/src/modules/board/card-labels.ts",
+        "server/src/modules/tracker/tracker-item-create-queries.ts",
+        "server/src/lib/tracker-assignees.ts"
+      ],
+      "description": "After the merge, Tracker labels and board labels live in the same card_labels table. T10 handled the two junctions differently. For assignees it delegated to the kernel syncCardAssignees/getCardAssigneeIds (lib/card-assignees.ts) through thin pass-throughs in lib/tracker-assignees.ts. For labels it re-implemented the board module's syncCardLabels/getCardLabelIds (modules/board/card-labels.ts) as syncTrackerItemLabels/getTrackerItemLabelIds (modules/tracker/tracker-item-labels.ts); the copy is line-for-line identical except for the return value. tracker-item-create-queries.ts syncLabels is a third card_labels insert path. Two modules now own identical write logic for one kernel table. This is borderline cross-task scope: it compares T10's code with pre-existing board code, and the duplication only became identical because the tables merged.",
+      "fix": "Move getCardLabelIds/syncCardLabels from modules/board/card-labels.ts into a kernel file, for example server/src/lib/card-labels.ts, next to lib/card-assignees.ts. Have modules/board and modules/tracker both import it, delete syncTrackerItemLabels/getTrackerItemLabelIds, and route create-time labels through the same helper. Drop the pass-through wrappers getTrackerItemAssigneeIds/syncTrackerItemAssignees in lib/tracker-assignees.ts together with loadTrackerAssigneesForItems.",
+      "defer_ok": true,
+      "defer_to": "T21",
+      "resolution": "Deferred to T21 by user decision 2026-10-07 (defer_ok); note appended to T21 task file. No code correction."
+    }
+  ],
+  "cross_task_checks": {
+    "1_no_legacy_table_writes": "CLEAN. No production code path (non-test, non-SQL) writes tracker_items, tracker_events, tracker_item_labels or tracker_item_assignees. recordTrackerActivity has zero callers; only its definition in lib/tracker-activity.ts remains (T21 deletes it; T13 scan pins it). Remaining production READERS: core/work-item-debt.ts (filters migrated_to_id IS NULL, owned by T21), plus the dead shims lib/legacy-tracker-item-response.ts and lib/tracker-assignees.ts loadTrackerAssigneesForItems (already carried to T21 by the T12 audit). db/tracker-contracts.smoke.ts is compile-only. The nightly debt-checks smoke only runs the read-only collision script. schema.sql:931 is an UPDATE on tracker_items, so the INSERT-only trigger does not fire on restart. seed.ts and tracker-vocabulary-seed touch vocabularies only. Agent, chat, notifications scheduler and focus read no tracker tables. check:event-write-routing, check:mutation-routing and check-feature-modules pass at HEAD.",
+    "2_event_semantics": "CONSISTENT. T10 writers and the T12 mark-done tracker branch write tracker_item_* with card_id = the new cards.id. T11 project/phase/vocabulary writers write tracker_project_*, tracker_phase_* and tracker_vocabulary_created with card_id NULL. T11 board-card releases write 'update' with card_id = the board card. T9 getWorkItemEvents maps column-less items through toTrackerEvent with trackerItemId = card_id. The unified feed derives source from c.id IS NULL OR c.column_id IS NULL and keeps item-less tracker_% events. board-feed-filter (NOT LIKE 'tracker\\_%') covers every new type and is applied in activity.ts, chat/tools/factory.ts and agent/service-deps-activity.ts. No non-tracker event type is written against a column-less card (focus events use card_id NULL).",
+    "3_ordering_positions": "COMPOSES. GET /work-items orders by created_at, id, but the Tracker client (TrackerProjectPage via api.listWorkItems, trackerUtils) sorts client-side by position, which T9 serializes from plan_position. T10 reorder, T10 create (endOfBucketPosition), T11 phase re-bucketing and T12 My Work all read or write plan_position. T10 mutation responses go through resolveWorkItemByKey, the same T9 serializer, so a reorder is visible on reload and in the optimistic rollback path.",
+    "4_updated_at": "CONSISTENT for API values. T10 create, update, delete, status change and T12 mark-done set cards.updated_at = now(). Board cards keep NULL (no default), so T9's 'stored wins, else computeCardUpdatedAt' fallback is correct for both kinds. T12's SQL sort-key divergence for NULL updated_at plus done_at/started_at was already judged (T12 Minor, carried to T21) and is not re-raised.",
+    "5_ids": "CONSISTENT. SSE trackerItemId, focus findTask('tracker') (cards, column_id IS NULL, deleted_at IS NULL), My Work, /work-items and events all use cards.id. The T7 remap sets focus_sessions.task_id = wim_map.new_id with task_source kept as 'tracker'. The T8 parity block asserts task_id = new_id and that the card exists in the workspace. The copied card is column-less by construction, so T12 findTask resolves it.",
+    "6_copy_vs_new_writer_shape": "MATCH. Copied rows (work-item-merge.sql) and T10-created rows agree on: column_id NULL; board position placeholder 0; plan_position set (copy uses COALESCE(ti.position, workspace row_number*1024), and the fallback is unreachable because schema.sql:931-943 backfills NULL tracker positions earlier in the same transaction); version (copied, or default 1, same default on both tables); updated_at non-null (tracker NOT NULL, or now()); completed_at (copied, or set when the status category is completed); status_id from tracker vocabularies; key_number; done_at/started_at NULL. Copied events have from/to columns NULL and card_id = the new id, the same as new writes. Migrated items and new items therefore behave the same.",
+    "7_duplication": "Assignee and label loaders are shared kernel functions (loadCardAssigneesForCards, loadCardLabelsForCards) across T9, T12 and the board. Label write duplication is recorded as P4-F2 and the activity cast as P4-F1. The dead shims were already carried to T21.",
+    "8_spec_gaps": "None found. Every Appendix C tracker-table user at fb07196 has moved or has an owner: work-item-debt.ts, the check-key-collisions script, tracker-activity.ts, the legacy shims and tracker-contracts.smoke.ts go to T21; schema statements, the guard SQL and the trigger function go to T20 (already in its carry note). The notifications scheduler still inner-joins columns, so behavior is unchanged: tracker items never got reminders."
+  },
+  "resolved_observations": [
+    "The five tracker-items.integration.test.ts tests that were red between T9 and T10 now pass at HEAD: 16/16, run with RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/tracker/tracker-items.integration.test.ts."
+  ],
+  "blocking": false,
+  "note": "All findings are Minor and defer_ok. None blocks the phase moving to REVIEW; the controller decides whether to fix them now as corrections or carry them to T21.",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "status": "PHASE_PASS_RESOLVED",
+  "resolved": [
+    "P4-F1",
+    "P4-F2"
+  ],
+  "resolved_note": "Both Minor findings deferred to T21 (user-approved); plan-doc bookkeeping only, no fix round consumed.",
+  "phase_gate_tests": "Full suite 2026-10-07: server 5 failed/1521 passed, client 1 failed/1117; every failure passed in isolation (work-items.merged 5/5, card-attachments-upload 7/7, routes.integration 22/22, client MyWorkPage 17/17 x2); my-work.performance verified vs baseline over 8 alternating runs (median ~25ms base vs ~31ms head)."
+}

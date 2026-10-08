@@ -4,7 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 function chain(result: unknown) {
 	const builder: any = {};
-	for (const m of ["innerJoin", "leftJoin", "select", "where", "orderBy", "$if"]) {
+	for (const m of [
+		"innerJoin",
+		"leftJoin",
+		"select",
+		"where",
+		"orderBy",
+		"$if",
+	]) {
 		builder[m] = vi.fn(() => builder);
 	}
 	const isArray = Array.isArray(result);
@@ -42,7 +49,9 @@ vi.mock("../../realtime.js", () => ({
 	workspacePresenceKey: vi.fn(),
 	workspacePresencePattern: vi.fn(),
 }));
-vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../lib/tracker-activity.js", () => ({
+	recordTrackerActivity: vi.fn(),
+}));
 
 import { trackerItemsRouter } from "./tracker-items.js";
 
@@ -78,7 +87,12 @@ const baseRow = {
 	start_date: "2026-09-01",
 	end_date: "2026-09-30",
 	completed_at: null,
-	position: 1024,
+	// Merged `cards` row: a column-less item has no column and keeps its Tracker
+	// order in plan_position.
+	column_id: null,
+	column_name: null,
+	position: 0,
+	plan_position: 1024,
 };
 
 describe("GET /tracker/items — serialization", () => {

@@ -27,6 +27,7 @@ export function buildBoardResponse(
 ) {
 	const cardsByColumn = new Map<number, CardRow[]>();
 	for (const c of cards) {
+		if (c.column_id == null) continue;
 		const list = cardsByColumn.get(c.column_id);
 		if (list) list.push(c);
 		else cardsByColumn.set(c.column_id, [c]);
@@ -110,6 +111,7 @@ boardRouter.get("/board", requireWorkspaceMember, async (req, res) => {
 		])
 		.where("c.workspace_id", "=", workspaceId)
 		.where("c.deleted_at", "is", null)
+		.where("c.column_id", "is not", null)
 		.orderBy("c.position")
 		.execute();
 	const cards = cardRows.map((c) => ({

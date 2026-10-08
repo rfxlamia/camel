@@ -136,9 +136,9 @@ async function insertTrackerItem(
 	statusId = workspace.statuses.inProgress,
 ): Promise<ItemFixture> {
 	const rows = await query<{ id: number; version: number }>(
-		`INSERT INTO tracker_items
-       (workspace_id, key_number, title, description, status_id, position)
-     VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO cards
+       (workspace_id, column_id, key_number, title, description, status_id, position, plan_position)
+     VALUES ($1, NULL, $2, $3, $4, $5, $6, $6)
      RETURNING id, version`,
 		[
 			workspace.id,
@@ -152,7 +152,7 @@ async function insertTrackerItem(
 	const item = rows[0]!;
 	for (const userId of assigneeIds) {
 		await pool.query(
-			"INSERT INTO tracker_item_assignees (tracker_item_id, user_id) VALUES ($1, $2)",
+			"INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)",
 			[item.id, userId],
 		);
 	}
@@ -166,11 +166,12 @@ async function insertTrackerItem(
 
 async function atlasItems(atlas: WorkspaceFixture) {
 	return {
+		// Unassigned filler card: occupies a done-column slot in the WIP scenario.
 		atlasShadow: await insertBoardCard(
 			atlas,
-			17,
-			"Atlas board shadow",
-			[ALICE_ID],
+			19,
+			"Atlas board filler",
+			[],
 			1024,
 		),
 		atlasBoard: await insertBoardCard(

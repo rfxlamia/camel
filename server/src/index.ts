@@ -1,15 +1,15 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import { cleanupExpiredSessions } from "./auth.js";
 import { config } from "./config.js";
-import { createOriginValidator } from "./core/cors.js";
 import {
-	getListLatencySnapshot,
-	startWorkItemLatencyReporter,
-} from "./core/work-item-latency.js";
+	startBackgroundJobs,
+	stopBackgroundJobs,
+} from "./core/background-jobs.js";
+import { createOriginValidator } from "./core/cors.js";
 import { pool } from "./db/pool.js";
 import { connectRedis } from "./db/redis.js";
+import { registerHealthRoutes } from "./lib/health.js";
 import { logger } from "./lib/logger.js";
 import {
 	csrfProtection,
@@ -32,12 +32,8 @@ import {
 	oauthRouter,
 } from "./modules/auth/index.js";
 import { createChatRouter } from "./modules/chat/index.js";
-import {
-	initNotificationService,
-	startDueDateScheduler,
-} from "./modules/notifications/index.js";
 import { UPLOADS_DIR } from "./modules/settings/index.js";
-import { initRealtime, shutdownRealtime } from "./realtime.js";
+import { shutdownRealtime } from "./realtime.js";
 import { api } from "./routes.js";
 
 const app = express();
@@ -73,6 +69,9 @@ app.use((req, res, next) => {
 	return requestTimeout(30000)(req, res, next);
 });
 
+// Unauthenticated and cookie-free: mounted before CSRF cookie middleware.
+registerHealthRoutes(app, { isShuttingDown: () => isShuttingDown });
+
 // Issue CSRF cookie on every response
 app.use(setCsrfToken);
 
@@ -99,11 +98,6 @@ app.use(
 	},
 	express.static(UPLOADS_DIR),
 );
-
-app.get("/health", (_req, res) => {
-	if (isShuttingDown) return res.status(503).json({ status: "shutting_down" });
-	res.json({ ok: true, workItemsListLatency: getListLatencySnapshot() });
-});
 
 // CSRF token endpoint for client to retrieve the token
 app.get("/api/csrf-token", (req, res) => {
@@ -133,8 +127,6 @@ app.use(createErrorHandler());
 
 // Module-scope flag so health endpoint and shutdown handler share state.
 let isShuttingDown = false;
-let cleanupInterval: ReturnType<typeof setInterval> | undefined;
-let latencyReporterInterval: ReturnType<typeof setInterval> | undefined;
 let server: ReturnType<typeof app.listen> | undefined;
 
 // Graceful shutdown: drain connections, close resources, then exit.
@@ -171,8 +163,7 @@ const shutdown = async () => {
 	}
 
 	server.close(async () => {
-		if (cleanupInterval) clearInterval(cleanupInterval);
-		if (latencyReporterInterval) clearInterval(latencyReporterInterval);
+		stopBackgroundJobs();
 		await pool.end();
 		clearTimeout(forceExit);
 		logger.info("Shutdown complete — exiting cleanly");
@@ -197,12 +188,5 @@ server = app.listen(port, async () => {
 	await connectRedis();
 	rateLimiterInstance = createAuthRateLimiter();
 
-	await initRealtime();
-	initNotificationService();
-	startDueDateScheduler();
-	latencyReporterInterval = startWorkItemLatencyReporter();
-
-	// Cleanup expired sessions on startup, then every 24 hours.
-	await cleanupExpiredSessions();
-	cleanupInterval = setInterval(cleanupExpiredSessions, 24 * 60 * 60 * 1000);
+	await startBackgroundJobs();
 });

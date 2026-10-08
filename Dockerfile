@@ -27,6 +27,8 @@ COPY --from=builder /app/server/dist ./server/dist
 
 # SQL files must live beside migrate.js (reads via import.meta.url)
 COPY server/src/db/schema.sql ./server/dist/db/schema.sql
+COPY server/src/db/work-item-merge.sql ./server/dist/db/work-item-merge.sql
+COPY server/src/db/work-item-merge-guard.sql ./server/dist/db/work-item-merge-guard.sql
 COPY server/src/db/agent-schema.sql ./server/dist/db/agent-schema.sql
 COPY server/src/db/chat-schema.sql ./server/dist/db/chat-schema.sql
 
@@ -35,6 +37,9 @@ RUN mkdir -p ./client/public/uploads ./server/private-uploads
 
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+ARG BUILD_ID
+ENV BUILD_ID=$BUILD_ID
 
 EXPOSE 3001
 

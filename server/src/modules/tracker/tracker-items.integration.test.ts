@@ -50,12 +50,12 @@ vi.mock("../../auth.js", async (importOriginal) => {
 });
 
 import { pool } from "../../db/pool.js";
+import * as helpers from "../../lib/helpers.js";
+import { workspaceAccessService } from "../../lib/helpers.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
 import { api } from "../../routes.js";
-import { workspaceAccessService } from "../../lib/helpers.js";
-import * as trackerActivity from "../../lib/tracker-activity.js";
 
-const recordSpy = vi.spyOn(trackerActivity, "recordTrackerActivity");
+const recordSpy = vi.spyOn(helpers, "recordActivity");
 
 const WORKSPACE_ID = 101; // Isolated — not 94/95/96/97/99
 const OTHER_WORKSPACE_ID = 102;
@@ -100,16 +100,10 @@ async function seedVocabularies(wid: number) {
 }
 
 async function cleanupWorkspace(wid: number) {
-	await pool.query("DELETE FROM tracker_events WHERE workspace_id = $1", [wid]);
-	await pool.query(
-		"DELETE FROM tracker_item_assignees WHERE tracker_item_id IN (SELECT id FROM tracker_items WHERE workspace_id = $1)",
-		[wid],
-	);
-	await pool.query(
-		"DELETE FROM tracker_item_labels WHERE tracker_item_id IN (SELECT id FROM tracker_items WHERE workspace_id = $1)",
-		[wid],
-	);
-	await pool.query("DELETE FROM tracker_items WHERE workspace_id = $1", [wid]);
+	// Tracker items are column-less `cards` rows; their events live in card_events.
+	// uq_cards_workspace_key is not partial, so rows must go before the counter resets.
+	await pool.query("DELETE FROM card_events WHERE workspace_id = $1", [wid]);
+	await pool.query("DELETE FROM cards WHERE workspace_id = $1", [wid]);
 	await pool.query(
 		"UPDATE workspaces SET tracker_key_counter = 0 WHERE id = $1",
 		[wid],
@@ -169,10 +163,10 @@ afterEach(async () => {
 afterAll(async () => {
 	await cleanupWorkspace(WORKSPACE_ID);
 	await cleanupWorkspace(OTHER_WORKSPACE_ID);
-	await pool.query("DELETE FROM workspace_members WHERE workspace_id IN ($1, $2)", [
-		WORKSPACE_ID,
-		OTHER_WORKSPACE_ID,
-	]);
+	await pool.query(
+		"DELETE FROM workspace_members WHERE workspace_id IN ($1, $2)",
+		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
+	);
 	await pool.query("DELETE FROM workspaces WHERE id IN ($1, $2)", [
 		WORKSPACE_ID,
 		OTHER_WORKSPACE_ID,
@@ -248,7 +242,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 		expect(res.body.redirectFrom).toBe("CA-1");
 	});
 
-	it("returns changelog events from tracker_events", async () => {
+	it("returns changelog events from card_events", async () => {
 		await request(app)
 			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/items`)
 			.send({ title: "Changelog test" });

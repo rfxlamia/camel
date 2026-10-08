@@ -44,4 +44,42 @@ describe("toCardTrackerEvent", () => {
 
 		expect(event.eventType).toBe("tracker_item_created");
 	});
+
+	it("passes tracker_* event types through unchanged", () => {
+		const event = toCardTrackerEvent({
+			id: 11,
+			event_type: "tracker_project_created",
+			payload: { title: "Roadmap" },
+			created_at: new Date("2026-08-01T10:00:00.000Z"),
+			card_id: null,
+			username: "bob",
+			display_name: "Bob",
+			current_card_title: null,
+			from_column_title: null,
+			to_column_title: null,
+		});
+
+		expect(event.eventType).toBe("tracker_project_created");
+		expect(event.title).toBe("Roadmap");
+	});
+
+	it("maps delete and plain update events as before", () => {
+		const base = {
+			id: 12,
+			payload: { cardTitle: "X" },
+			created_at: new Date("2026-08-01T10:00:00.000Z"),
+			card_id: 4,
+			username: null,
+			display_name: null,
+			current_card_title: null,
+			from_column_title: null,
+			to_column_title: null,
+		};
+		expect(
+			toCardTrackerEvent({ ...base, event_type: "delete" }).eventType,
+		).toBe("tracker_item_deleted");
+		expect(
+			toCardTrackerEvent({ ...base, event_type: "update" }).eventType,
+		).toBe("tracker_item_updated");
+	});
 });

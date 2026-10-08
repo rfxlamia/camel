@@ -66,3 +66,9 @@ graphify-out/*
 
 # generated file for attachment
 server/private-uploads/
+
+# Host-specific deploy files (never commit)
+deploy/*-ggf.sh
+deploy/nginx/*ggf*
+deploy/maintenance/
+deploy/CUTOVER-CHECKLIST.md

@@ -81,10 +81,10 @@ vi.mock("../../realtime.js", () => ({
 	publishEvent: vi.fn(),
 	clearPresence: vi.fn(),
 }));
-vi.mock("../../lib/tracker-activity.js", () => ({ recordTrackerActivity: vi.fn() }));
+vi.mock("../../lib/helpers.js", () => ({ recordActivity: vi.fn() }));
 
-import { trackerItemsRouter } from "./tracker-items.js";
 import { workItemsRouter } from "../../lib/work-items.js";
+import { trackerItemsRouter } from "./tracker-items.js";
 
 const app = express();
 app.use(express.json());
@@ -126,13 +126,17 @@ const itemC = {
 	start_date: null,
 	end_date: null,
 	completed_at: null,
-	position: 3072,
+	column_id: null,
+	column_name: null,
+	plan_position: 3072,
 };
 
 function mockDbSelect() {
 	mockSelectFrom.mockImplementation((table: string) => {
 		if (table === "workspaces") return chainable({ name: "Camel Team" });
-		if (table === "cards as c") return chainable(undefined);
+		if (table === "card_assignees as ca" || table === "card_labels as cl") {
+			return chainable([]);
+		}
 		return chainable(itemC);
 	});
 }
@@ -161,7 +165,7 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 		expect(res.status).toBe(200);
 		const move = updateCalls.find((c) => c.id === 3);
-		expect(move?.values.position).toBeCloseTo(1536);
+		expect(move?.values.plan_position).toBeCloseTo(1536);
 	});
 
 	it("leaves version and updated_at unchanged on a normal move", async () => {
@@ -339,14 +343,14 @@ describe("PATCH /tracker/items/:key/position", () => {
 
 		expect(res.status).toBe(200);
 		const move = updateCalls.find((c) => c.id === 3);
-		expect(move?.values.position).toBeDefined();
+		expect(move?.values.plan_position).toBeDefined();
 	});
 
 	it("rejects reordering a board item via the tracker position API", async () => {
 		mockSelectFrom.mockImplementation((table: string) => {
 			if (table === "workspaces") return chainable({ name: "Camel Team" });
 			if (table === "cards as c") {
-				return chainable({ id: 99, key_number: 3 });
+				return chainable({ id: 99, key_number: 3, column_id: 7 });
 			}
 			return chainable(undefined);
 		});

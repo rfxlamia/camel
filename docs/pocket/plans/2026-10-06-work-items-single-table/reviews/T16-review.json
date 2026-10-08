@@ -1,0 +1,52 @@
+{
+  "task_id": "T16",
+  "task_name": "Cutover snapshot and verify script",
+  "cycle": 2,
+  "timestamp": "2026-10-07T17:16:39Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "The cycle-1 Important finding is resolved. The placement exception is an exact set of only server/src/scripts/cutover-snapshot.ts and server/src/scripts/cutover-snapshot.integration.test.ts (scripts/feature-modules/placement.mjs:7-10,94-95); the new policy test permits those paths and rejects server/src/scripts/unrelated.ts. The feature-module gate was independently rerun at the pinned SHA and passed.",
+      "The Board deep imports are resolved: cutover-snapshot.ts imports buildBoardResponse and loadCardAttachmentsForCards from ../modules/board/index.js; index.ts exports both, and board.test.ts now imports buildBoardResponse from ./index.js. No deep Board imports remain in the T16 script.",
+      "The old snapshot query is read-only and filters deleted rows, excludes column-less cards via its columns join, excludes migrated tracker marker rows, and captures per-workspace keys plus Tracker, Board, in-progress, and done counts (cutover-snapshot.ts:70-123). applySchema always runs work-item-merge.sql's expand statements before the optional copy block, so migrated_to_id exists before cutover (db/migrate.ts:20-40; db/work-item-merge.sql:15). The integration test exercises both NULL-column and migrated-marker cases (cutover-snapshot.integration.test.ts:196-225).",
+      "Verification uses production readers and response assembly (cutover-snapshot.ts:125-169), compares the union of snapshot/current workspace IDs and all requested metrics (171-235), and the integration tests cover full match, isolated workspace mismatch/exit 1, and old-semantics edge cases (integration.test.ts:101-225). The snapshot contains only workspace IDs and metrics/keys, not customer or workspace names (18-30; test assertion at integration.test.ts:112-114).",
+      "CLI source returns 0 on parity, 1 on mismatch or operation failure, and 2 for usage errors (cutover-snapshot.ts:237-284). Database access in the script is read-only; the only write is the requested snapshot file. TypeScript includes src and excludes tests, so the production script compiles under dist/scripts; the supplied verification evidence reports the server build succeeds. The supplied exact integration command reports 3 tests passing; source and test behavior were independently inspected without rerunning database-writing integration tests.",
+      "The range's docs/pocket/plans/.../log.json and reviews/T13-review.json changes are T13 bookkeeping at c34a8c8 and were not attributed to T16. The remaining changed files are the T16 task files and the explicitly authorized narrow placement/public-API expansion."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The feature-module exception is narrowly limited to the two required T16 paths, with a test proving unrelated server scripts remain rejected; the guard independently passes at the reviewed SHA.",
+      "Board functionality is exposed through the module's public index, and the test import follows that public API.",
+      "Snapshot SQL uses old two-table semantics, performs no database writes, omits names, and handles deleted, column-less, and already-marked tracker rows as required.",
+      "Parity verification reuses production list and board readers, compares keys and every requested count across the union of workspaces, and reports mismatches by workspace ID.",
+      "The three integration scenarios exercise a complete match, a single-workspace mismatch with CLI exit 1, and NULL-column/already-migrated rows. The supplied evidence reports 3/3 integration tests, 8/8 Board tests, and the server build passing.",
+      "The production script is 288 lines and the integration test 227 lines; production functions remain below the approximately 50-line refactor threshold. No repeated logic reaches the 3+ duplication threshold."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The mode: 0o600 option only sets permissions when writeFile creates a new file; overwriting an existing snapshot does not tighten its existing permissions. If an operator reuses a group/world-readable path, the anonymized workspace IDs and keys remain readable under those old permissions. Consider enforcing private permissions or refusing an existing non-private file.",
+        "location": "server/src/scripts/cutover-snapshot.ts:247-249"
+      },
+      {
+        "severity": "Minor",
+        "description": "The verify CLI casts parsed JSON directly to CutoverSnapshot and does not reject an unsupported version. Current version-1 snapshots compare correctly, but a future snapshot format with additional required parity fields could be accepted while this verifier silently ignores them. Validate version and shape at the file boundary and fail closed for unknown versions.",
+        "location": "server/src/scripts/cutover-snapshot.ts:259-262"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "e167a523a9c5376864d8dd99542af839c8253d04"
+}

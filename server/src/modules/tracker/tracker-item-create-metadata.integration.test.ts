@@ -72,18 +72,15 @@ async function idFor(query: string, values: unknown[]): Promise<number> {
 }
 
 async function cleanup(): Promise<void> {
-	await pool.query(
-		"DELETE FROM tracker_item_assignees WHERE tracker_item_id IN (SELECT id FROM tracker_items WHERE workspace_id IN ($1, $2))",
-		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
-	);
-	await pool.query(
-		"DELETE FROM tracker_item_labels WHERE tracker_item_id IN (SELECT id FROM tracker_items WHERE workspace_id IN ($1, $2))",
-		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
-	);
-	await pool.query(
-		"DELETE FROM tracker_events WHERE workspace_id IN ($1, $2)",
-		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
-	);
+	// Tracker items are column-less cards rows (assignees/labels cascade).
+	await pool.query("DELETE FROM card_events WHERE workspace_id IN ($1, $2)", [
+		WORKSPACE_ID,
+		OTHER_WORKSPACE_ID,
+	]);
+	await pool.query("DELETE FROM cards WHERE workspace_id IN ($1, $2)", [
+		WORKSPACE_ID,
+		OTHER_WORKSPACE_ID,
+	]);
 	await pool.query(
 		"DELETE FROM tracker_phases WHERE project_id IN (SELECT id FROM tracker_projects WHERE workspace_id IN ($1, $2))",
 		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
@@ -92,10 +89,6 @@ async function cleanup(): Promise<void> {
 		"DELETE FROM tracker_projects WHERE workspace_id IN ($1, $2)",
 		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
 	);
-	await pool.query("DELETE FROM tracker_items WHERE workspace_id IN ($1, $2)", [
-		WORKSPACE_ID,
-		OTHER_WORKSPACE_ID,
-	]);
 	await pool.query(
 		"DELETE FROM tracker_vocabularies WHERE workspace_id IN ($1, $2)",
 		[WORKSPACE_ID, OTHER_WORKSPACE_ID],
@@ -174,7 +167,7 @@ async function setup(): Promise<Fixtures> {
 
 async function trackerCount(): Promise<number> {
 	const result = await pool.query<{ count: string }>(
-		"SELECT count(*)::text AS count FROM tracker_items WHERE workspace_id = $1",
+		"SELECT count(*)::text AS count FROM cards WHERE workspace_id = $1 AND column_id IS NULL",
 		[WORKSPACE_ID],
 	);
 	return Number(result.rows[0]!.count);
@@ -222,7 +215,7 @@ integration("strict Tracker item creation", () => {
 			start_date: string;
 			end_date: string;
 		}>(
-			"SELECT id, start_date::text, end_date::text FROM tracker_items WHERE workspace_id = $1",
+			"SELECT id, start_date::text, end_date::text FROM cards WHERE workspace_id = $1 AND column_id IS NULL",
 			[WORKSPACE_ID],
 		);
 		expect(item.rows[0]).toMatchObject({
@@ -231,22 +224,22 @@ integration("strict Tracker item creation", () => {
 		});
 		expect(item.rows).toHaveLength(1);
 		const labels = await pool.query(
-			"SELECT * FROM tracker_item_labels WHERE tracker_item_id = $1",
+			"SELECT * FROM card_labels WHERE card_id = $1",
 			[item.rows[0]!.id],
 		);
 		const assignees = await pool.query(
-			"SELECT * FROM tracker_item_assignees WHERE tracker_item_id = $1",
+			"SELECT * FROM card_assignees WHERE card_id = $1",
 			[item.rows[0]!.id],
 		);
 		expect(labels.rows).toHaveLength(1);
 		expect(assignees.rows).toHaveLength(1);
 		const events = await pool.query(
-			"SELECT * FROM tracker_events WHERE workspace_id = $1 AND tracker_item_id = $2",
+			"SELECT * FROM card_events WHERE workspace_id = $1 AND card_id = $2",
 			[WORKSPACE_ID, item.rows[0]!.id],
 		);
 		expect(events.rows).toHaveLength(1);
 		const cards = await pool.query(
-			"SELECT id FROM cards WHERE workspace_id = $1",
+			"SELECT id FROM cards WHERE workspace_id = $1 AND column_id IS NOT NULL",
 			[WORKSPACE_ID],
 		);
 		expect(cards.rows).toHaveLength(0);
@@ -287,9 +280,11 @@ integration("strict Tracker item creation", () => {
 		);
 		expect(await trackerCount()).toBe(0);
 		expect(
-			(await pool.query("SELECT * FROM tracker_events WHERE workspace_id = $1", [
-				WORKSPACE_ID,
-			])).rows,
+			(
+				await pool.query("SELECT * FROM card_events WHERE workspace_id = $1", [
+					WORKSPACE_ID,
+				])
+			).rows,
 		).toHaveLength(0);
 	});
 
@@ -310,7 +305,7 @@ integration("strict Tracker item creation", () => {
 		expect(
 			(
 				await pool.query(
-					"SELECT til.* FROM tracker_item_labels AS til JOIN tracker_items AS ti ON ti.id = til.tracker_item_id WHERE ti.workspace_id = $1",
+					"SELECT cl.* FROM card_labels AS cl JOIN cards AS c ON c.id = cl.card_id WHERE c.workspace_id = $1",
 					[WORKSPACE_ID],
 				)
 			).rows,
@@ -358,16 +353,20 @@ integration("strict Tracker item creation", () => {
 		const fixtures = await setup();
 		const statements: string[] = [];
 		const originalConnect = pool.connect.bind(pool);
-		const connectSpy = vi.spyOn(pool, "connect").mockImplementation((async () => {
-			const client = await originalConnect();
-			const originalQuery = client.query.bind(client);
-			(client as any).query = (...args: any[]) => {
-				const query = args[0];
-				statements.push(String(typeof query === "string" ? query : query.text));
-				return originalQuery(...args);
-			};
-			return client;
-		}) as any);
+		const connectSpy = vi
+			.spyOn(pool, "connect")
+			.mockImplementation((async () => {
+				const client = await originalConnect();
+				const originalQuery = client.query.bind(client);
+				(client as any).query = (...args: any[]) => {
+					const query = args[0];
+					statements.push(
+						String(typeof query === "string" ? query : query.text),
+					);
+					return originalQuery(...args);
+				};
+				return client;
+			}) as any);
 		try {
 			const res = await request(app)
 				.post(`/api/workspaces/${WORKSPACE_ID}/work-items`)
@@ -376,11 +375,15 @@ integration("strict Tracker item creation", () => {
 			const commitIndex = statements.findIndex((sql) => /^COMMIT/i.test(sql));
 			expect(commitIndex).toBeGreaterThan(-1);
 			const hydrationQueries = statements.filter((sql) =>
-				/SELECT .*tracker_(items|item_assignees|item_labels)/is.test(sql),
+				/SELECT .*from "cards" as "c".*inner join "tracker_vocabularies"/is.test(
+					sql,
+				),
 			);
 			expect(hydrationQueries.length).toBeGreaterThan(0);
 			const firstHydration = statements.findIndex((sql) =>
-				/SELECT .*tracker_(items|item_assignees|item_labels)/is.test(sql),
+				/SELECT .*from "cards" as "c".*inner join "tracker_vocabularies"/is.test(
+					sql,
+				),
 			);
 			expect(firstHydration).toBeLessThan(commitIndex);
 		} finally {

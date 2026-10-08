@@ -58,9 +58,8 @@ export function localDateForTimezone(
 	}
 }
 
-function sourceAlias(source: MyWorkSource): "ti" | "c" {
-	return source === "tracker" ? "ti" : "c";
-}
+/** Both sources read the merged `cards` table (`column_id IS NULL` = Tracker). */
+const ALIAS = "c";
 
 /** SQL status ordering kept in lockstep with response status normalization. */
 function statusGroupExpression() {
@@ -81,7 +80,7 @@ function localDateExpression(
 	source: MyWorkSource,
 	input: MyWorkSourceQueryInput,
 ) {
-	const alias = sourceAlias(source);
+	const alias = ALIAS;
 	const dates = [...(input.workspaceLocalDates ?? new Map())].filter(([id]) =>
 		input.workspaceIds.includes(id),
 	);
@@ -98,15 +97,15 @@ export function sourceOrderExpressions(
 	source: MyWorkSource,
 	input: MyWorkSourceQueryInput,
 ) {
-	const alias = sourceAlias(source);
+	const alias = ALIAS;
 	const group = statusGroupExpression();
 	const dueDate =
 		source === "tracker"
-			? sql<string | null>`ti.end_date::date`
+			? sql<string | null>`c.end_date::date`
 			: sql<string | null>`c.due_date::date`;
 	const rawUpdatedAt =
 		source === "tracker"
-			? sql<Date>`${sql.ref("ti.updated_at")}`
+			? sql<Date>`coalesce(${sql.ref("c.updated_at")}, ${sql.ref("c.created_at")})`
 			: sql<Date>`coalesce(
 				${sql.ref("c.done_at")},
 				${sql.ref("c.started_at")},
@@ -265,7 +264,7 @@ export function sourceSearchPredicate(
 	pattern: string,
 	tableAlias?: string,
 ): RawBuilder<boolean> {
-	const alias = tableAlias ?? sourceAlias(source);
+	const alias = tableAlias ?? ALIAS;
 	const canonicalKey = canonicalKeyInSearch(input.q);
 	const textPredicates = [
 		sql<boolean>`${sql.ref(`${alias}.title`)} ILIKE ${pattern} ESCAPE '\\'`,

@@ -1,6 +1,6 @@
 import type { AuthUser } from "../../auth.js";
 import { type DBExecutor } from "../../db/kysely.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
+import { recordActivity } from "../../lib/helpers.js";
 import {
 	formatDate,
 	formatTimestamp,
@@ -66,13 +66,7 @@ export async function recordProjectActivity(
 	eventType: ProjectActivityEvent,
 	opts: { payload?: Record<string, unknown> },
 ): Promise<void> {
-	await recordTrackerActivity(
-		dbExec,
-		actor,
-		workspaceId,
-		eventType as Parameters<typeof recordTrackerActivity>[3],
-		opts,
-	);
+	await recordActivity(dbExec, actor, workspaceId, eventType, opts);
 }
 
 export async function loadPhasesForProjects(

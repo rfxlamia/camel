@@ -3,7 +3,6 @@ import type { AuthUser } from "../../auth.js";
 import { positionBetween } from "../../core/position.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
 import { recordActivity } from "../../lib/helpers.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
 import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
 
 type PhaseActivityEvent =
@@ -18,13 +17,7 @@ export async function recordPhaseActivity(
 	eventType: PhaseActivityEvent,
 	opts: { payload?: Record<string, unknown> },
 ): Promise<void> {
-	await recordTrackerActivity(
-		dbExec,
-		actor,
-		workspaceId,
-		eventType as Parameters<typeof recordTrackerActivity>[3],
-		opts,
-	);
+	await recordActivity(dbExec, actor, workspaceId, eventType, opts);
 }
 
 export async function lookupPhaseInWorkspace(
@@ -43,19 +36,28 @@ export async function lookupPhaseInWorkspace(
 		.executeTakeFirst();
 }
 
+/**
+ * Moves the phase's live column-less items (Tracker items) to the end of the
+ * project's no-phase bucket, ordered by `plan_position`. Board cards are
+ * released separately in `deletePhaseTransaction`.
+ */
 async function releasePhaseItemsToNoPhase(
 	trx: DBExecutor,
+	workspaceId: number,
 	projectId: number,
 	phaseId: number,
 ): Promise<
 	Array<{ itemId: number; projectId: number; phaseId: number | null }>
 > {
 	const items = await trx
-		.selectFrom("tracker_items")
-		.select(["id", "project_id", "phase_id", "position"])
+		.selectFrom("cards")
+		.select(["id", "project_id", "phase_id"])
+		.where("workspace_id", "=", workspaceId)
+		.where("column_id", "is", null)
 		.where("phase_id", "=", phaseId)
 		.where("deleted_at", "is", null)
-		.orderBy("position", "asc")
+		.orderBy(sql`COALESCE(plan_position, 1e15)`)
+		.orderBy("id")
 		.execute();
 
 	const releasedTriples = items.map((item) => ({
@@ -65,8 +67,10 @@ async function releasePhaseItemsToNoPhase(
 	}));
 
 	const bucketRow = await trx
-		.selectFrom("tracker_items")
-		.select(sql<number | null>`max(position)`.as("max_position"))
+		.selectFrom("cards")
+		.select(sql<number | null>`max(plan_position)`.as("max_position"))
+		.where("workspace_id", "=", workspaceId)
+		.where("column_id", "is", null)
 		.where("project_id", "=", projectId)
 		.where("phase_id", "is", null)
 		.where("deleted_at", "is", null)
@@ -77,8 +81,8 @@ async function releasePhaseItemsToNoPhase(
 	for (const item of items) {
 		const newPosition = positionBetween(prevPosition, null);
 		await trx
-			.updateTable("tracker_items")
-			.set({ phase_id: null, position: newPosition })
+			.updateTable("cards")
+			.set({ phase_id: null, plan_position: newPosition })
 			.where("id", "=", item.id)
 			.execute();
 		prevPosition = newPosition;
@@ -135,12 +139,14 @@ export async function deletePhaseTransaction(
 			.selectFrom("cards")
 			.select(["id", "title", "project_id", "phase_id"])
 			.where("workspace_id", "=", workspaceId)
+			.where("column_id", "is not", null)
 			.where("phase_id", "=", phaseId)
 			.where("deleted_at", "is", null)
 			.execute();
 
 		const releasedTriples = await releasePhaseItemsToNoPhase(
 			trx,
+			workspaceId,
 			phase.project_id,
 			phaseId,
 		);
@@ -154,6 +160,7 @@ export async function deletePhaseTransaction(
 					version: sql`version + 1`,
 				})
 				.where("workspace_id", "=", workspaceId)
+				.where("column_id", "is not", null)
 				.where("phase_id", "=", phaseId)
 				.where("deleted_at", "is", null)
 				.returning(["id"])

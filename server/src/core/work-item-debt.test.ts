@@ -10,14 +10,16 @@ describe("findKeyCollisions", () => {
 						where: () => ({
 							where: () => ({
 								where: () => ({
-									execute: async () => [
-										{
-											workspace_id: 7,
-											key_number: 3,
-											card_id: 11,
-											tracker_item_id: 22,
-										},
-									],
+									where: () => ({
+										execute: async () => [
+											{
+												workspace_id: 7,
+												key_number: 3,
+												card_id: 11,
+												tracker_item_id: 22,
+											},
+										],
+									}),
 								}),
 							}),
 						}),
@@ -44,7 +46,9 @@ describe("findKeyCollisions", () => {
 						where: () => ({
 							where: () => ({
 								where: () => ({
-									execute: async () => [],
+									where: () => ({
+										execute: async () => [],
+									}),
 								}),
 							}),
 						}),

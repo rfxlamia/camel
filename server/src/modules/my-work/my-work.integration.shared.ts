@@ -147,7 +147,7 @@ export async function boardState(cardId: number): Promise<BoardState> {
 export async function trackerState(itemId: number): Promise<TrackerState> {
 	return (
 		await query<TrackerState>(
-			"SELECT status_id, version FROM tracker_items WHERE id = $1",
+			"SELECT status_id, version FROM cards WHERE id = $1 AND column_id IS NULL",
 			[itemId],
 		)
 	)[0]!;
@@ -159,12 +159,9 @@ export async function expectNoCardEvents(cardId: number): Promise<void> {
 	).toHaveLength(0);
 }
 
+/** Tracker activity lives in `card_events` (`tracker_item_*` types) after the merge. */
 export async function expectNoTrackerEvents(itemId: number): Promise<void> {
-	expect(
-		await query("SELECT id FROM tracker_events WHERE tracker_item_id = $1", [
-			itemId,
-		]),
-	).toHaveLength(0);
+	await expectNoCardEvents(itemId);
 }
 
 export async function expectNoCardEventsInWorkspace(
@@ -180,6 +177,12 @@ export async function expectNoCardEventsInWorkspace(
 export async function expectNoTrackerEventsInWorkspace(
 	workspaceId: number,
 ): Promise<void> {
+	expect(
+		await query(
+			"SELECT id FROM card_events WHERE workspace_id = $1 AND event_type LIKE 'tracker_item_%'",
+			[workspaceId],
+		),
+	).toHaveLength(0);
 	expect(
 		await query("SELECT id FROM tracker_events WHERE workspace_id = $1", [
 			workspaceId,

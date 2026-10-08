@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "../../db/kysely.js";
+import { excludeTrackerEvents } from "../../lib/board-feed-filter.js";
 import { getUnifiedWorkspaceActivity } from "../../lib/work-item-events.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
 
@@ -64,6 +65,7 @@ activityRouter.get("/activity", requireWorkspaceMember, async (req, res) => {
 	const rows = await activitySelect()
 		.where("e.workspace_id", "=", workspaceId)
 		.where("e.event_type", "<>", "focus_session")
+		.where(excludeTrackerEvents)
 		.orderBy("e.created_at", "desc")
 		.orderBy("e.id", "desc")
 		.limit(limit)
@@ -102,6 +104,7 @@ activityRouter.get(
 			.where("id", "=", cardId)
 			.where("workspace_id", "=", workspaceId)
 			.where("deleted_at", "is", null)
+			.where("column_id", "is not", null)
 			.executeTakeFirst();
 		if (!cardCheck) {
 			return res.status(404).json({ error: "Not found" });

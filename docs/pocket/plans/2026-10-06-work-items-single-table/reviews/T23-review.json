@@ -1,0 +1,53 @@
+{
+  "task_id": "T23",
+  "task_name": "Build-id reload hook for open tabs",
+  "cycle": 2,
+  "timestamp": "2026-10-07T04:05:30Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P2-F2 fixed by correction 5b04d40: /api/health returns {ok, buildId} only; /health keeps full payload.",
+      "isShuttingDown read live in both handlers; 503 shutting_down on both; no auth/CSRF/cookie change.",
+      "Single currentBuildId() keeps buildId identical on both routes; client hook unchanged."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Internal payload composes the public one; no drift.",
+      "Tests pin exact public key set, no latency, no set-cookie; internal route asserts full snapshot; source-contract and Dockerfile tests retained."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/health.test.ts",
+        "line": 41,
+        "description": "Carried: route tests gated by RUN_INTEGRATION; middleware order untested."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/lib/health.test.ts",
+        "line": 17,
+        "description": "No unit test for buildPublicHealthPayload(); public key contract only checked under RUN_INTEGRATION."
+      },
+      {
+        "severity": "Minor",
+        "file": "client/src/shared/useBuildReload.ts",
+        "line": 41,
+        "description": "Carried: no debounce; bounded by inFlight guard."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "5b04d40c4f324485a82308cb318171a5cd5680e2"
+}

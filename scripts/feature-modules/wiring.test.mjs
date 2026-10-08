@@ -7,8 +7,9 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { describe, it } from "node:test";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { DEEP_IMPORT_RULE_ID } from "./import-wall-rules.mjs";
@@ -49,7 +50,7 @@ function git(cwd, args) {
  * @param {(dir: string) => void} run
  */
 function withTempGitRepo(dirPrefix, run) {
-	const dir = mkdtempSync(join(repoRoot, dirPrefix));
+	const dir = mkdtempSync(join(tmpdir(), dirPrefix));
 	try {
 		git(dir, ["init"]);
 		git(dir, ["config", "user.email", "fm@test.local"]);
@@ -71,14 +72,8 @@ describe("Cycle 1 — package.json scripts (unit)", () => {
 		);
 
 		const testFm = scripts["test:feature-modules"];
-		assert.ok(
-			testFm,
-			"test:feature-modules script must exist",
-		);
-		assert.match(
-			testFm,
-			/node --test scripts\/feature-modules\/.*\.test\.mjs/,
-		);
+		assert.ok(testFm, "test:feature-modules script must exist");
+		assert.match(testFm, /node --test scripts\/feature-modules\/.*\.test\.mjs/);
 
 		const rootTest = scripts.test ?? "";
 		assert.match(
@@ -100,7 +95,10 @@ describe("Cycle A — live guard scan count (integration)", () => {
 			/(?:scanned-files|rules-evaluated|files-scanned)=(\d+)/,
 		);
 		assert.ok(countMatch, `expected scan count in stdout/stderr:\n${combined}`);
-		assert.ok(Number(countMatch[1]) > 0, `scan count must be > 0, got ${countMatch[1]}`);
+		assert.ok(
+			Number(countMatch[1]) > 0,
+			`scan count must be > 0, got ${countMatch[1]}`,
+		);
 	});
 });
 
@@ -109,8 +107,7 @@ describe("Cycle B — Makefile and CI (unit)", () => {
 		const makefile = readFileSync(makefilePath, "utf8");
 		assert.match(makefile, /check:mutation-routing/);
 		assert.match(makefile, /check:feature-modules/);
-		const checkRecipe =
-			makefile.match(/^check:.*(?:\n\t.*)*/m)?.[0] ?? "";
+		const checkRecipe = makefile.match(/^check:.*(?:\n\t.*)*/m)?.[0] ?? "";
 		assert.match(checkRecipe, /check:mutation-routing/);
 		assert.match(checkRecipe, /check:feature-modules/);
 		assert.ok(
@@ -147,7 +144,10 @@ describe("Cycle C — CLI fail path with three rule ids (integration)", () => {
 			const tooLongPath = "server/src/modules/board/too-long.ts";
 			writeFileSync(join(dir, tooLongPath), makeLines(301));
 
-			writeFileSync(join(dir, "server/src/modules/board/index.ts"), "export {};\n");
+			writeFileSync(
+				join(dir, "server/src/modules/board/index.ts"),
+				"export {};\n",
+			);
 			writeFileSync(
 				join(dir, "server/src/modules/board/cards-update.ts"),
 				"export {};\n",

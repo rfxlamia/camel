@@ -1,0 +1,330 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-10-06-work-items-single-table",
+    "plan_type": "phased",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-10-06",
+    "date_completed": null,
+    "baseline_sha": "2cc88feaeab5a17fa92282bacec3a6ebbee640a5",
+    "pipeline": 4,
+    "plan_file": "execution-plan/index.md"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Shared work-item key allocator",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T1-shared-work-item-key-allocator.md",
+          "done_sha": "2c4fd45b45e768f35ad6aba2879a2567d6fe254c"
+        },
+        {
+          "id": "T2",
+          "name": "Expand migration (nullable column_id, new columns, unique key, wiring)",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T2-expand-migration-nullable-column-id-new-columns-unique-key-wiring.md",
+          "done_sha": "4389455f6db2dcb94a3e69312fd1c80c8fcc8953"
+        },
+        {
+          "id": "T14",
+          "name": "BACKGROUND_JOBS switch",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T14-background-jobs-switch.md",
+          "done_sha": "d34bb8bd12fa7f41148cf5bc62a4e30b384340b4"
+        },
+        {
+          "id": "T15",
+          "name": "Maintenance mode config for camel-ggf nginx (local files)",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T15-maintenance-mode-config-for-camel-ggf-nginx-local-files.md",
+          "done_sha": "572d16a33f017ab9a6fac7261f00961d9cb39704"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "f8af006",
+          "files": [
+            "server/src/background-jobs.test.ts",
+            "server/src/background-jobs.ts",
+            "server/src/core/background-jobs.test.ts",
+            "server/src/core/background-jobs.ts",
+            "server/src/index.ts"
+          ],
+          "for_task": "T14"
+        },
+        {
+          "sha": "0d19eba",
+          "files": [
+            "server/src/modules/board/column-is-done-remap.ts",
+            "server/src/modules/board/column-remap-cards.ts"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "f9d54b4",
+          "files": [
+            "server/src/db/types-agent-chat.ts",
+            "server/src/db/types-tracker.ts",
+            "server/src/db/types.ts"
+          ],
+          "for_task": "T2"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan/phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T3",
+          "name": "Board scope filters on aggregate readers",
+          "status": "DONE",
+          "depends": "T2",
+          "file": "execution-plan/tasks/T3-board-scope-filters-on-aggregate-readers.md",
+          "done_sha": "e7ccc76bbd17de3ea3bfc806c9bc70e17e412d94"
+        },
+        {
+          "id": "T4",
+          "name": "Reject column-less items on /cards endpoints",
+          "status": "DONE",
+          "depends": "T2",
+          "file": "execution-plan/tasks/T4-reject-column-less-items-on-cards-endpoints.md",
+          "done_sha": "f789d40a69d2ab353703286b5785712bf7824495"
+        },
+        {
+          "id": "T5",
+          "name": "Reject column-less items in core paths",
+          "status": "DONE",
+          "depends": "T2",
+          "file": "execution-plan/tasks/T5-reject-column-less-items-in-core-paths.md",
+          "done_sha": "68baaaf0406085bfb5210cb104aa32157b705d0b"
+        },
+        {
+          "id": "T23",
+          "name": "Build-id reload hook for open tabs",
+          "status": "DONE",
+          "depends": "T2, T14",
+          "file": "execution-plan/tasks/T23-build-id-reload-hook-for-open-tabs.md",
+          "done_sha": "caa23b7d78a9c601a8c0d87ff68b3a2075f700c8"
+        },
+        {
+          "id": "T25",
+          "name": "Maintenance rehearsal on camel-ggf (main agent only)",
+          "status": "DONE",
+          "depends": "T15",
+          "file": "execution-plan/tasks/T25-maintenance-rehearsal-on-camel-ggf-main-agent-only.md",
+          "done_sha": "caa23b7d78a9c601a8c0d87ff68b3a2075f700c8"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "1432ab0d58631c9027c57faeabf1bafc6ae9a521",
+          "files": [
+            "server/src/modules/agent/service-deps-activity.column-less.integration.test.ts",
+            "server/src/modules/board/column-less-scope.integration.test.ts",
+            "server/src/modules/chat/tools/factory.column-less.integration.test.ts"
+          ],
+          "for_task": "T3"
+        },
+        {
+          "sha": "5b04d40c4f324485a82308cb318171a5cd5680e2",
+          "files": [
+            "server/src/lib/health.test.ts",
+            "server/src/lib/health.ts"
+          ],
+          "for_task": "T23"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan/phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T6",
+          "name": "Event readers tolerate merged events",
+          "status": "DONE",
+          "depends": "T3",
+          "file": "execution-plan/tasks/T6-event-readers-tolerate-merged-events.md",
+          "done_sha": "2ca1200899ea041c8de21295121d6c3fc690a719"
+        },
+        {
+          "id": "T7",
+          "name": "Copy block: tracker data into cards",
+          "status": "DONE",
+          "depends": "T24",
+          "file": "execution-plan/tasks/T7-copy-block-tracker-data-into-cards.md",
+          "done_sha": "72cff2806059a241a5f2fbd107593adfb8146326"
+        },
+        {
+          "id": "T24",
+          "name": "Deploy Phase A to camel-ggf (main agent only)",
+          "status": "DONE",
+          "depends": "T1, T2, T3, T4, T5, T6, T14, T23, T25",
+          "file": "execution-plan/tasks/T24-deploy-phase-a-to-camel-ggf-main-agent-only.md",
+          "done_sha": "2ca1200899ea041c8de21295121d6c3fc690a719"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "2e8da2c8b82114db5723b599a2f9d2ddc8233f15",
+          "files": [
+            "server/src/db/migrate.ts",
+            "server/src/db/work-item-merge-copy.integration.test.ts",
+            "server/src/db/work-item-merge.sql"
+          ],
+          "for_task": "T7"
+        },
+        {
+          "sha": "eafddf1b830b84acb07baf900f866e96a370a577",
+          "files": [
+            "server/src/lib/board-feed-filter.ts",
+            "server/src/modules/activity/activity-feed-merged.integration.test.ts",
+            "server/src/modules/activity/activity.ts",
+            "server/src/modules/agent/service-deps-activity.column-less.integration.test.ts",
+            "server/src/modules/agent/service-deps-activity.ts",
+            "server/src/modules/chat/tools/factory.column-less.integration.test.ts",
+            "server/src/modules/chat/tools/factory.ts"
+          ],
+          "for_task": "T6"
+        },
+        {
+          "sha": "5b2d572e0df1091b59babc098510fa855a103b2b",
+          "files": [
+            "server/src/db/migrate.test.ts",
+            "server/src/db/migrate.ts"
+          ],
+          "for_task": "T7"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "file": "execution-plan/phase-4.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T8",
+          "name": "Guard, parity assertions, counter repair and write trigger",
+          "status": "DONE",
+          "depends": "T7",
+          "file": "execution-plan/tasks/T8-guard-parity-assertions-counter-repair-and-write-trigger.md",
+          "done_sha": "c957abfab9d03ab0c3c1679caf6207974a5f0d0e"
+        },
+        {
+          "id": "T9",
+          "name": "Merged-table reads and the unified list",
+          "status": "DONE",
+          "depends": "T6, T8",
+          "file": "execution-plan/tasks/T9-merged-table-reads-and-the-unified-list.md",
+          "done_sha": "063e9d4449d003cb8f282b08be7c6721c1dbd2e5"
+        },
+        {
+          "id": "T10",
+          "name": "Tracker item writes on the merged table",
+          "status": "DONE",
+          "depends": "T1, T9",
+          "file": "execution-plan/tasks/T10-tracker-item-writes-on-the-merged-table.md",
+          "done_sha": "2e1fefb42ebfa9a363d8be1dec9db01ac4135247"
+        },
+        {
+          "id": "T11",
+          "name": "Project, phase, vocabulary and member-removal paths",
+          "status": "DONE",
+          "depends": "T9",
+          "file": "execution-plan/tasks/T11-project-phase-vocabulary-and-member-removal-paths.md",
+          "done_sha": "ffeb2dd299d0c59ae82fc59d9f6d67fe3a98f7c6"
+        },
+        {
+          "id": "T12",
+          "name": "My-work, focus and realtime ids on the merged table",
+          "status": "DONE",
+          "depends": "T9, T5",
+          "file": "execution-plan/tasks/T12-my-work-focus-and-realtime-ids-on-the-merged-table.md",
+          "done_sha": "ad4c2feeb299ed2e52d53a555c4eb9d4ec975474"
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "file": "execution-plan/phase-5.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T13",
+          "name": "Merged-table integration verification",
+          "status": "DONE",
+          "depends": "T10, T11, T12",
+          "file": "execution-plan/tasks/T13-merged-table-integration-verification.md",
+          "done_sha": "0af3eabb703aad999adcc4281f77074a7aaee18e"
+        },
+        {
+          "id": "T16",
+          "name": "Cutover snapshot and verify script",
+          "status": "DONE",
+          "depends": "T13",
+          "file": "execution-plan/tasks/T16-cutover-snapshot-and-verify-script.md",
+          "done_sha": "e167a523a9c5376864d8dd99542af839c8253d04"
+        },
+        {
+          "id": "T17",
+          "name": "Cutover and restore scripts plus checklist",
+          "status": "DONE",
+          "depends": "T14, T15, T16",
+          "file": "execution-plan/tasks/T17-cutover-and-restore-scripts-plus-checklist.md",
+          "done_sha": "838cc558432ad6a4101a4eb8dd91130468709d9e"
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "file": "execution-plan/phase-6.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T18",
+          "name": "Rehearsal on a production dump (main agent only)",
+          "status": "DONE",
+          "depends": "T17",
+          "file": "execution-plan/tasks/T18-rehearsal-on-a-production-dump-main-agent-only.md",
+          "done_sha": "5552f8c08debda669dcc2cde0d7f5434a871a354"
+        },
+        {
+          "id": "T19",
+          "name": "Cutover on camel-ggf (main agent only)",
+          "status": "DONE",
+          "depends": "T18, T24, T25",
+          "file": "execution-plan/tasks/T19-cutover-on-camel-ggf-main-agent-only.md",
+          "done_sha": "02df32778e0f1276e10c59b012127b2a48450bbd"
+        },
+        {
+          "id": "T20",
+          "name": "Contract: schema removal",
+          "status": "WAITING",
+          "depends": "T19",
+          "file": "execution-plan/tasks/T20-contract-schema-removal.md"
+        },
+        {
+          "id": "T21",
+          "name": "Contract: remove shim code, checks and docs",
+          "status": "WAITING",
+          "depends": "T20",
+          "file": "execution-plan/tasks/T21-contract-remove-shim-code-checks-and-docs.md"
+        },
+        {
+          "id": "T22",
+          "name": "Contract: rename cards to work_items",
+          "status": "WAITING",
+          "depends": "T21",
+          "file": "execution-plan/tasks/T22-contract-rename-cards-to-work-items.md"
+        }
+      ]
+    }
+  ]
+}

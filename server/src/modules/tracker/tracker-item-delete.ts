@@ -1,14 +1,15 @@
 import type { Request, Response } from "express";
 import { sql } from "kysely";
 import { db } from "../../db/kysely.js";
-import { recordTrackerActivity } from "../../lib/tracker-activity.js";
-import {
-	findBoardCardByKeyNumber,
-	findTrackerItemByKeyNumber,
-} from "../../lib/work-item-response.js";
+import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
+import { findBoardCardByKeyNumber } from "../../lib/work-item-response.js";
 import { publishEvent } from "../../realtime.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { optionalVersion } from "../../validators/schemas.js";
+import {
+	classifyWriteFailure,
+	findColumnlessItem,
+} from "./tracker-item-merged-queries.js";
 import { parseTrackerKey } from "./tracker-schemas.js";
 
 export async function deleteTrackerItemHandler(req: Request, res: Response) {
@@ -22,11 +23,7 @@ export async function deleteTrackerItemHandler(req: Request, res: Response) {
 	if (!parsedVersion.ok) return sendValidationError(res, parsedVersion.body);
 	const version = parsedVersion.data;
 
-	const existing = await findTrackerItemByKeyNumber(
-		db,
-		workspaceId,
-		parsed.keyNumber,
-	);
+	const existing = await findColumnlessItem(db, workspaceId, parsed.keyNumber);
 	if (!existing) {
 		const boardCard = await findBoardCardByKeyNumber(
 			db,
@@ -49,10 +46,11 @@ export async function deleteTrackerItemHandler(req: Request, res: Response) {
 
 	const result: DeleteResult = await db.transaction().execute(async (trx) => {
 		const row = await trx
-			.updateTable("tracker_items")
+			.updateTable("cards")
 			.set({ deleted_at: sql`now()`, updated_at: sql`now()` })
 			.where("id", "=", existing.id)
 			.where("workspace_id", "=", workspaceId)
+			.where("column_id", "is", null)
 			.where("deleted_at", "is", null)
 			.$if(version !== undefined, (qb) =>
 				qb.where("version", "=", version as number),
@@ -61,23 +59,18 @@ export async function deleteTrackerItemHandler(req: Request, res: Response) {
 			.executeTakeFirst();
 
 		if (!row) {
-			const current = await trx
-				.selectFrom("tracker_items")
-				.select("id")
-				.where("id", "=", existing.id)
-				.where("workspace_id", "=", workspaceId)
-				.where("deleted_at", "is", null)
-				.executeTakeFirst();
-			return current ? { kind: "conflict" } : { kind: "not_found" };
+			return {
+				kind: await classifyWriteFailure(trx, workspaceId, existing.id),
+			};
 		}
 
-		await recordTrackerActivity(
+		await recordTrackerItemActivity(
 			trx,
 			actor,
 			workspaceId,
 			"tracker_item_deleted",
 			{
-				trackerItemId: row.id,
+				cardId: row.id,
 				payload: { title: row.title },
 			},
 		);

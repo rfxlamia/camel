@@ -1,0 +1,59 @@
+{
+  "task_id": "T3",
+  "task_name": "Board scope filters on aggregate readers",
+  "cycle": 2,
+  "timestamp": "2026-10-07T04:04:22Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P2-F1 fixed by correction 1432ab0: agent/chat column-less tests moved to module-local files; no deep imports; no index.ts widened.",
+      "Coverage preserved with equivalent Given/When/Then; seeds identical; board file keeps metrics, GET /board loaders, listed-ids and 23505 assertions.",
+      "Fixture ids 3102/31020 and 3103/31030 unique; cleanup in beforeEach/afterAll; RUN_INTEGRATION gating kept; tests only."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Fix matches recommended approach; module-local, self-contained test files.",
+      "Regression-guard rationale carried into new files; .js imports."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/board/column-less-scope.integration.test.ts",
+        "line": "167-175",
+        "description": "Carried: labels spy never restored; add vi.restoreAllMocks() in afterAll."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/board/metrics.ts, server/src/modules/chat/tools/factory.ts, server/src/modules/agent/service-deps-activity.ts",
+        "line": "metrics.ts:12-17; factory.ts:33-37; service-deps-activity.ts:10-14",
+        "description": "Carried: three near-identical card-timestamp queries; follow-up shared reader."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/notifications/scheduler.column-less.integration.test.ts",
+        "line": "21-31, 100-135",
+        "description": "Carried: hour-boundary flake window."
+      },
+      {
+        "severity": "Minor",
+        "file": "server/src/modules/agent/service-deps-activity.column-less.integration.test.ts; server/src/modules/chat/tools/factory.column-less.integration.test.ts",
+        "line": "agent 1-139; chat 1-153",
+        "description": "Seed/cleanup helpers duplicated across three test files; acceptable for module isolation."
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "1432ab0d58631c9027c57faeabf1bafc6ae9a521"
+}

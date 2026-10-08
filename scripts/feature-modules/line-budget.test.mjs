@@ -7,6 +7,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -518,7 +519,7 @@ function git(cwd, args) {
  * @param {(dir: string) => void} run
  */
 function withTempGitRepo(dirPrefix, run) {
-	const dir = mkdtempSync(join(repoRoot, dirPrefix));
+	const dir = mkdtempSync(join(tmpdir(), dirPrefix));
 	try {
 		git(dir, ["init"]);
 		git(dir, ["config", "user.email", "fm@test.local"]);
