@@ -298,9 +298,10 @@
         {
           "id": "T19",
           "name": "Cutover on camel-ggf (main agent only)",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T18, T24, T25",
-          "file": "execution-plan/tasks/T19-cutover-on-camel-ggf-main-agent-only.md"
+          "file": "execution-plan/tasks/T19-cutover-on-camel-ggf-main-agent-only.md",
+          "done_sha": "02df32778e0f1276e10c59b012127b2a48450bbd"
         },
         {
           "id": "T20",
