@@ -88,3 +88,10 @@ Escalate when: any assertion fires
   - M3 no self-check for a failing snapshot (rc != 0 -> FAILURE POINT 1, no `merge_started`, prints `--from-phase d`).
 - T17 host-file hash after this round: `cutover-ggf.sh` sha256 `eed251105540fcab08b1cbe1460b02e1c3f942844df7141be540a6fc290a9d34` (others unchanged). Re-hash before rehearsal.
 - T18 must record the four snapshot precondition counts on the production copy (live cards with NULL key / NULL status / NULL column; tracker rows with `migrated_to_id`). ~273 old `cutover-merge.*` files sit in the macOS temp dir from earlier self-check runs; safe to delete.
+
+## T18 result — 2026-10-08 (user approved the dump and the read-only host checks)
+- Rehearsal on a production dump (316 KB custom-format, DB 13 MB, streamed to local scratch, never written on the host; dump + scratch DB deleted, scratch dir removed). Counts/timings are in `deploy/CUTOVER-CHECKLIST.md` (local only): workspaces 37; cards 486 -> 666 (+180); tracker_items 180 (all migrated); card_events 1944 -> 2474 (+530); tracker_events 530. Snapshot preconditions all 0. Migrate #1 1.25 s (9 workspace notices, no `copy skipped`, `Schema applied.` last), verify exit 0 / 0 mismatches 0.56 s, migrate #2 0.39 s no-op, verify still matches. No assertion fired.
+- Host read-only checks: ubuntu, bash 5.1, passwordless sudo, `/` free 1671 MB (>= MIN_FREE_MB 1024), compose v5.3.1, dotenv present in the running image, maintenance dir present, nginx -t ok, new compose differs from the current only by `BACKGROUND_JOBS: 'on'`.
+- Not covered (belongs to T19): `compose run` with the NEW image and trailing lines after `Schema applied.`; nginx maintenance mode on the host; disk headroom for the image tarball + new 438 MB image (1.7 GB free now).
+- Watch item: `/health` `workItemsListLatency` p95 171 ms (p50 80 ms, only 5 samples) on the pre-merge path vs the ADR threshold p95 > 100 ms (Phase E re-evaluation). Re-read after cutover.
+- `CUTOVER-CHECKLIST.md` sha256 is now `ffa8f16ff422…` (rehearsal record added); other T17 host hashes unchanged.
