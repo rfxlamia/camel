@@ -95,3 +95,16 @@ Escalate when: any assertion fires
 - Not covered (belongs to T19): `compose run` with the NEW image and trailing lines after `Schema applied.`; nginx maintenance mode on the host; disk headroom for the image tarball + new 438 MB image (1.7 GB free now).
 - Watch item: `/health` `workItemsListLatency` p95 171 ms (p50 80 ms, only 5 samples) on the pre-merge path vs the ADR threshold p95 > 100 ms (Phase E re-evaluation). Re-read after cutover.
 - `CUTOVER-CHECKLIST.md` sha256 is now `ffa8f16ff422…` (rehearsal record added); other T17 host hashes unchanged.
+
+## Pre-T19 clean-up of host-file Minors — done 2026-10-08 (user-ordered)
+- Fixed (cutover-ggf.sh / restore-ggf.sh / CUTOVER-CHECKLIST.md, git-ignored; self-check now 187 checks): M1 (`restored` marker refused), M2 (snapshot-precondition text), M3 (failing-snapshot self-check), merge rc >= 128 -> point 2, dry-run `merge_started` order, restore DB swap rollback + guard (verified against real Postgres 16 on scratch DBs), phase c `.partial` copy, missing value after `--from-phase`/`--date` exits 2.
+- Deliberately NOT changed (user, option 4): phase b backup row-count equality vs live can false-abort while the site is live. It aborts before any change; rerun. `final_backup` only does `test -s` + `pg_restore --list` (no row counts), so phase b is the only strict count check.
+- Opus audit (read-only): AUDIT_PASS, Minors only, skipped by decision, carried to T19 awareness:
+  1. `restore-ggf.sh:74` comment wrong: Postgres does roll back `ALTER DATABASE … RENAME` atomically inside `psql -1`; adding `-1` to the swap would remove the half-swap state (optional).
+  2. `restore-ggf.sh:97` recovery commands also print after a successful automatic rollback (the "undo" would fail then; prefix says "only if live is missing").
+  3. `restore-ggf.sh:88` guard advice lists several `*_post_merge_*` names after repeated restores: pick the newest.
+  4. `cutover-ggf.sh:689` (pre-existing): merge rc 1..127 is a clean point-1 rollback; if `docker compose run` returns 1 from a CLI/daemon error after the container started and the merge commits, point-1 advice would reopen the old image on a merged DB. The point-1 text says "if unsure use point 2"; next run's DB-first check catches it. If a merge ends with rc 1..127 during T19, check `db_merge_state` BEFORE following point-1 advice.
+  5. A skipped manual `mv` followed by a NEW `--date` dies in the cross-tag guard with "no restore was recorded" (fail-closed, wrong wording).
+  6. Checklist line ~131 does not mention the un-archived `restored` refusal or the restore guard.
+- Host hashes now: cutover-ggf.sh `2fece58c704a…`, restore-ggf.sh `4b5cbf05aa95…`, CUTOVER-CHECKLIST.md `6387c1d79dea…`, docker-compose.ggf.yml `9ab89940323e…` (unchanged). Re-hash before T19.
+- Incident: the audit's cleanup `pkill` crashed the LOCAL dev Postgres container once (auto-recovered in ~1 s, data intact). No host involved.
