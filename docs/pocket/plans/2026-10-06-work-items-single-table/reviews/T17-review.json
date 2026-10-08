@@ -1,109 +1,121 @@
 {
   "task_id": "T17",
   "task_name": "Cutover and restore scripts plus checklist",
-  "cycle": 6,
+  "cycle": 9,
   "retry": {
     "approved_by_user": true,
     "date": "2026-10-07",
     "prior_block": "audit-failed after cycle 2"
   },
-  "reviewed_sha": "5d044ea3dae4d0be1881856444697838b72932c6",
+  "reviewed_sha": "65aadc058ef34d70bc9017b9c9cf22265d40379f",
   "reviewed_files": {
-    "deploy/cutover-ggf.sh": "85d785d251a2ca3ed373c09839284383bf0b0ef8a4db7ee3895ef4ec3c314978",
-    "deploy/restore-ggf.sh": "af5c9d56761f4d8bdbf76bdd265a2326f89c02375f30616af56e656c97172c95",
-    "deploy/CUTOVER-CHECKLIST.md": "2165626c72a2e7a107ed282f450bf3f91847c29591f7ef39889b266b1912538a",
+    "deploy/cutover-ggf.sh": "f78e38e6aa3da3d1cb5e3ae160adda319fc2bfb0de26ba9791b0ebae9d3f3f15",
+    "deploy/restore-ggf.sh": "e2f2aecbdf742f7ebab87a0f812e410c8e99c7a7fa46f437488135cd257d9fff",
+    "deploy/CUTOVER-CHECKLIST.md": "90784503af3248d249c4e94b11198ddc4ef9bf3bfb36974ae909a8df7b711d96",
     "deploy/docker-compose.ggf.yml": "9ab89940323edb3badc7cb93869bcc95bad7abe7902d9480a6152b7023f50cd2"
   },
-  "audit_input_note": "T17 deliverables are git-ignored host files; audited by content hash, not git range. Phase-5 bounded recovery fix to P5-F5 (final-dump freshness guard) audited; all four hashes matched the controller values (cutover-ggf.sh is 848 lines).",
-  "timestamp": "2026-10-07T18:35:23Z",
+  "audit_input_note": "T17 deliverables are git-ignored host files (deploy/*-ggf.sh in .gitignore); audited by content hash, not git range. Phase-5 phase-pass recovery fix (P5-F9/P5-F10) audited; all four hashes matched the controller values (cutover-ggf.sh is 1331 lines).",
+  "timestamp": "2026-10-08T01:59:50Z",
   "reviewer_mode": "read-only",
   "reviewer_config": "batch-parallel",
   "stage_1": {
     "status": "PASS",
     "issues": [],
     "concerns_addressed": [
-      "Hashes: all four files re-hashed and matched. Gate under the shim: bash -n, shellcheck, dry-run, no-flag, restore dry-run and self-check all pass (77 ok lines, matching the printed count); calls.log stayed 0 bytes. No remote command is reachable without --execute (no Critical): rcmd, rout, lrun, remote_test_f and get_var are gated; the new container_identity and guard reads go through rout/get_var.",
-      "P5-F5 path 1 (final dump fails, then --from-phase f): final_backup.done is absent, assert_final_dump_fresh dies at point 1 before the snapshot. Path 2 (supersede mv ok, fresh dump fails): the marker is removed and final_backup_file is set to empty (or, if rm failed, the generation differs from the new stop_gen), so the guard dies. Path 3 (point-1 recovery reopens the site, manual stop, resume at f): the Id changes on force-recreate, StartedAt/FinishedAt change on a manual restart-and-stop, and the maintenance flag is checked; each dies at point 1 with 're-run --from-phase d'. Self-check drives the real phase_f for each condition.",
-      "restore-ggf.sh --dry-run on a *.superseded-* path exits 2 (also with a trailing component); gate dump still refused.",
-      "Mutations on scratchpad copies all make self-check exit 1: (k') guard call removed -> several FAILs; (m') identity compare removed -> 'container identity changed' FAIL (1 failed, 76 ok); (p) restore accepts superseded -> restore refusal FAIL (1 failed, 76 ok).",
-      "No false-fail on the normal first run: the identity is read after compose stop and the 'no container running' assertion; compose stop keeps the container (Id unchanged) and FinishedAt is written once at stop. A resume at f in the same window (including a retry after a clean rc 1 merge, where merge_started is cleared) keeps identity, flag, file and generation, so it passes.",
-      "The identity value survives the state round trip: it is written inside single quotes in the remote shell (the '|' is not interpreted) and read with grep '^name=' | tail -n 1 | cut -d= -f2-; the value has no '=' and a local simulation returned it byte-identical. No set -u hazard: the remote strings use only fixed variables, and the inspect template and test strings are single-quoted or escaped. The guard sits in the else branch of the merge/merge_started tests, so it never blocks a post-merge resume (merge.done present) and merge_started still dies at point 2 first.",
-      "Earlier fixes intact (self-check cases pass): rc 255 and the ERR trap, merge_started clear on clean rc 1, dist swap without && chain, deletion ban, final dump after the stop, gate dump refused, stop-generation reuse and supersede."
+      "Hashes: all four files re-hashed and matched. Gate under the new shim: bash -n, shellcheck, dry-run (62 printed ssh lines, none executed), --print-resume-policy, restore dry-run, self-check PASS (145 checks ok); calls.log stayed 0 bytes. No remote command is reachable without --execute (no Critical): check_date_policy returns before any remote call unless EXECUTE=1 (including the new restored-archive ls), compute_merge_state is reached only after the EXECUTE guard in enforce_resume_policy, get_var_in prints a <key> placeholder in dry-run, and the per-phase FINAL_BACKUP_FILE refresh in main is gated on EXECUTE.",
+      "P5-F9 cleared: the early load in main is gone (the only remaining load, in the phase loop, runs after enforce_resume_policy has resolved the state and reads this --date's own dir, which is authoritative once PRE/IN-FLIGHT/POST is resolved). compute_merge_state clears FINAL_BACKUP_FILE first and sets it only from get_var_in of the dir that holds the markers (exactly one other tag; or this tag with merge_started only), or from this --date's dir after resolution. Zero or several marker dirs print the <final-backup-path> placeholder plus 'identify the dir that holds merge.done'. Every die before the policy (check_date_policy, DB read failures, other_merge_dirs failure) uses POINT 9 or 0, which never prints a dump path; every point-1/2 print_recovery caller (policy dies, refuse_if_merge_started, phases e-h) runs after resolution, so it sees this dir's value, or the marker dir's value in the DB-merged branch. Scenario walk: Y (no markers) + X (merge.done) + DB merged -> n=1, only=X -> names X's dump and '--date X'; Y's day-1 dump is never printed (self-check P5-F9 case).",
+      "P5-F10 cleared: check_date_policy refuses a --date with a cutover-state/<date>.restored-* archive; a failing ls dies (POINT 9), i.e. fails closed; dry-run is unaffected. n1 cleared: restore step 8 is archive_state, a failing mv/ssh prints a WARNING with the manual mv and returns 0, never 'RESTORE FAILED' (self-check drives the real function via RESTORE_SOURCE_ONLY). n2 cleared: table_schema='public' added. n3 cleared: suffix is .restored-<YYYYMMDDHHMMSS> and the guards (other_merge_dirs, check_date_policy) match it.",
+      "Mutations on scratchpad copies: (y) branch uses this tag's dump instead of the marker dir's -> self-check exit 1 (1 failed, 142 ok); (y2) the FINAL_BACKUP_FILE clear removed (stale early value) -> exit 1 (2 failed); (z) P5-F10 refusal disabled -> exit 1 (1 failed). Unmutated: PASS, 145 ok.",
+      "New-defect review: RESTORE_SOURCE_ONLY defaults off, is set only inside a self-check subshell (never in production paths), and the guarded `return 0` sits after the function definitions and before argument parsing, so sourcing runs no remote command and normal execution is unchanged (if set while executing the script rather than sourcing it, bash errors under set -e: fail closed). get_var_in: the tag is either the validated 8-digit --date or a directory name read from the host listing, so quoting is safe in practice. archive_state returning 0 hides nothing: the warning names the exact manual mv and says to do it before any new cutover, and if the operator ignores it a same-date cutover reads NOT_MERGED + merge.done and is refused (fail-safe). Dry-run makes zero remote calls (shim calls.log empty).",
+      "Earlier fixes intact (self-check cases pass): DB-authoritative merge state, --date policy, resume policy table, rc 255 and ERR trap, dist swap, deletion ban, final dump after stop, gate and superseded dumps refused, stop-generation reuse, freshness guard."
     ]
   },
   "stage_2": {
     "status": "PASS",
     "strengths": [
-      "The guard is fail-closed on every condition (marker, non-empty matching generation, non-superseded non-empty file, maintenance flag, container identity) and gives each a specific point-1 message with the --from-phase d command.",
-      "Container identity of Id|StartedAt|FinishedAt catches recreate, restart, and restart-then-stop, which a single field would miss.",
-      "Self-check now drives the real phase_f with stubbed state for each guard branch and the three claimed mutations were each caught."
+      "One data table drives the dry-run printout, --print-resume-policy and the enforcement, so docs, output and behaviour cannot drift; the checklist reproduces the same table.",
+      "Defense in depth: the policy and the per-step refuse_if_merge_started are independent, and each has its own mutation-checked self-check cases (all 24 state x phase cells, plain resume variants, POST + e keeping the dump, phase_e refusing before flag/stop/set_var, structural check that main calls the policy before the loop).",
+      "Merge-state detection is fail-closed and die-propagating by construction (no command substitution around the marker reads).",
+      "DB-authoritative merge-state matrix with per-row behavioral self-check cases and mutation coverage for markers-only, DB-failure and date-policy regressions."
     ],
     "issues": [
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 351,
+        "line": 271,
+        "description": "New. Dry-run prints the policy table but cannot say whether the chosen --from-phase would be allowed, because the merge state needs host markers (correct: no remote calls without --execute). A wrong d/e start is only caught at the real run, before any phase. Document in the checklist that the verdict appears at the top of the --execute run, or print a hint in dry-run."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 629,
         "description": "New. phase_e records stop_container_id from container_identity() inside a command substitution used as an argument, so a failed docker inspect is swallowed and an empty identity is written. The run continues through the final dump and only phase f's guard then dies (fail-safe, but late and with a generic message). Check that the identity is non-empty in phase e and die there."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 326,
+        "line": 571,
         "description": "Reduced. The supersede is still 'mv file file.superseded-<ts> && rm -f marker' in one remote call. If mv succeeds and rm fails, the marker and final_backup_file still name a path that no longer exists; the guard now refuses this safely, but a re-run through phase e then fails at the mv until the marker is cleared by hand. Remove the marker first, or tolerate a missing source."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 332,
+        "line": 578,
         "description": "Carried forward, unfixed. The disk re-check aborts silently on failure (no free-space/required message) and stat -c%s and df -Pm are GNU-dependent (fails closed). The 2x gate dump + 64 MB threshold is not tied to the real post-merge need. T18 should confirm on the host."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 333,
+        "line": 579,
         "description": "Carried forward, unfixed. A .partial is removed only on a normal failure of the dump chain; if ssh drops mid-dump the next run uses a new timestamp and the old .partial stays. Remove stale camel-pre-merge-<date>-final-*.partial files (only that pattern) at the start of the final dump."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 420,
+        "line": 660,
         "description": "Carried forward, unfixed. The automatic merge_started clear and the 'nothing is committed' wording treat every rc other than 0 and 255 as a clean rollback, including rc >= 128 (signal-killed ssh, OOM kill) and an rc 1 from a COMMIT whose acknowledgement was lost. Treat rc >= 128 like 255 and leave the marker."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 433,
+        "line": 660,
         "description": "Carried forward, unfixed. Dry-run prints 'sub_mark merge_started' after the merge command line, but --execute writes it before the merge. The dry-run listing order is inverted relative to the real run."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 500,
+        "line": 741,
         "description": "Carried forward, unfixed. self_check assigns globals (rc, got, code, swap_script, FRC, stop_ln, fin_ln, gen_ln, id_ln, rec) instead of locals; harmless while self-check exits but fragile if reused."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 252,
+        "line": 498,
         "description": "Carried forward, unfixed. Phase b's row-count equality against LIVE data while the site still serves traffic can false-abort (card_events grows on every mutation). Consider requiring cards and tracker_items equal and restored events <= live."
       },
       {
         "severity": "Minor",
         "file": "deploy/restore-ggf.sh",
-        "line": 131,
-        "description": "Carried forward, unfixed. The terminate, rename-aside and rename-new steps are separate -c transactions; an interruption between them leaves no database under the production name and the re-run's first rename fails, contradicting 'every step is re-runnable'."
+        "line": 158,
+        "description": "Carried forward, unfixed. The terminate, rename-aside and rename-new steps are separate -c transactions in one psql call; an interruption between them leaves no database under the production name and the re-run's first rename fails, contradicting 'every step is re-runnable'."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 267,
+        "line": 510,
         "description": "Carried forward, unfixed. Phase c's 'test -e <copy> || sudo cp -a ...' leaves a partial copy that later counts as present if cp is interrupted; the same for the compose backup copy on the next line."
       },
       {
         "severity": "Minor",
         "file": "deploy/cutover-ggf.sh",
-        "line": 791,
+        "line": 1244,
         "description": "Carried forward, unfixed. '--from-phase' or '--date' as the last argument hits a bare second shift and exits through the ERR trap with an unhelpful message; '--from-phase ' silently behaves as no flag. MIN_FREE_MB=1024 vs about 846 MB free means preflight aborts today (correct fail-safe, T18 item)."
+      },
+      {
+        "severity": "Minor",
+        "file": "deploy/cutover-ggf.sh",
+        "line": 333,
+        "description": "New. When the single marker dir is another tag whose dir holds only merge_started (no merge.done), the message still says 'resume with --date X'. Resuming with X then dies with the 'merge committed but never recorded, do not resume' wording, so it is safe but contradictory. Say 'inspect' instead of 'resume' when that dir has no merge.done, or name both outcomes."
       }
     ]
   },
@@ -115,8 +127,8 @@
     "cycles_remaining": 2
   },
   "phase_pass_fix": {
-    "finding": "P5-F5",
-    "round": "recovery",
-    "note": "host files are git-ignored; no correction commit — fix audited by content hash"
+    "finding": "P5-F9/P5-F10",
+    "round": "phase-pass recovery",
+    "note": "host files are git-ignored; no correction commit \u2014 fix audited by content hash"
   }
 }
