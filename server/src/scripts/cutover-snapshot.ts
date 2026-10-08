@@ -5,6 +5,7 @@ import { derivePrefix } from "../core/tracker-key.js";
 import { type DBExecutor, db } from "../db/kysely.js";
 import { loadCardAssigneesForCards } from "../lib/card-assignees.js";
 import { loadCardLabelsForCards } from "../lib/card-response.js";
+import { findPreconditionViolations } from "../lib/cutover-snapshot-preconditions.js";
 import { getHumanColumns } from "../lib/helpers.js";
 import {
 	listMergedWorkItems,
@@ -243,6 +244,15 @@ export async function main(argv: string[]): Promise<number> {
 
 	try {
 		if (mode === "snapshot") {
+			const violations = await findPreconditionViolations(db);
+			if (violations.length > 0) {
+				for (const violation of violations) {
+					console.error(
+						`Cutover snapshot precondition failed: ${violation.precondition}, count=${violation.count}`,
+					);
+				}
+				return 1;
+			}
 			const snapshot = await takeSnapshot(db);
 			await writeFile(file, `${JSON.stringify(snapshot, null, 2)}\n`, {
 				mode: 0o600,
