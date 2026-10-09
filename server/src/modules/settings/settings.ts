@@ -1,323 +1,52 @@
-import { mkdirSync } from "node:fs";
-import { readFile, unlink } from "node:fs/promises";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-import { type RequestHandler, Router } from "express";
-import { sql } from "kysely";
-import { type DBExecutor, db } from "../../db/kysely.js";
-import { validateFileContent } from "../../lib/file-validator.js";
+import { Router } from "express";
+import { db } from "../../db/kysely.js";
 import { publishEvent } from "../../realtime.js";
+import { sendValidationError } from "../../validators/http.js";
+import { logoUploadHandler, logoUploadMiddleware } from "./settings-logo.js";
+import { parseSettingsPatch } from "./settings-patch.js";
+import {
+	batchUpsertSettings,
+	checkCanEditSettings,
+	generateDefaultSettings,
+	getCurrentGlobalVersion,
+	getMemberRole,
+	getSettingRows,
+	lockWorkspaceForSettingsWrite,
+} from "./settings-repo.js";
+import { parseWorkspaceId } from "./settings-schemas.js";
 
-export const VALID_SETTING_KEYS = new Set(["board_name", "logo_path"]);
-
-export const DEFAULT_SETTINGS = {
-	boardName: "Camel",
-	logoPath: "/logo.png",
-} as const;
-
-export function validateBoardName(
-	name: string,
-): { valid: false; error: string } | { valid: true; trimmed: string } {
-	const trimmed = name.trim();
-	if (trimmed === "") return { valid: false, error: "Name is required" };
-	if (trimmed.length > 15) return { valid: false, error: "Max 15 characters" };
-	return { valid: true, trimmed };
-}
-
-export function validateSettingKey(key: string): boolean {
-	return VALID_SETTING_KEYS.has(key);
-}
-
-export const MAX_LOGO_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
-
-export function validateLogoFile(mimetype: string): {
-	valid: boolean;
-	error?: string;
-} {
-	if (!ALLOWED_MIME_TYPES.has(mimetype)) {
-		return { valid: false, error: "Only .png and .jpg files are accepted" };
-	}
-	return { valid: true };
-}
-
-export function validateFileSize(size: number): {
-	valid: boolean;
-	error?: string;
-} {
-	if (size > MAX_LOGO_SIZE_BYTES) {
-		return { valid: false, error: "File size must be under 10MB" };
-	}
-	return { valid: true };
-}
-
-export function generateLogoFilename(mimetype: string): string {
-	const ext = mimetype === "image/jpeg" ? "jpg" : "png";
-	const timestamp = Date.now();
-	const random = Math.random().toString(36).substring(2, 8);
-	return `logo-${timestamp}-${random}.${ext}`;
-}
-
-export const UPLOADS_DIR = fileURLToPath(
-	new URL("../../../../client/public/uploads", import.meta.url),
-);
-mkdirSync(UPLOADS_DIR, { recursive: true });
-
-// Lazy multer instance: dynamic import ensures pure validator tests (which only import
-// the top-level pure functions) do not require the 'multer' package at collection time.
-type LogoUpload = { single: (field: string) => RequestHandler };
-let uploadPromise: Promise<LogoUpload> | null = null;
-
-async function getUpload() {
-	if (!uploadPromise) {
-		const multerMod = await import("multer");
-		const multer = multerMod.default ?? multerMod;
-
-		const storage = multer.diskStorage({
-			destination: (_req, _file, cb) => {
-				cb(null, UPLOADS_DIR);
-			},
-			filename: (_req, file, cb) => {
-				const name = generateLogoFilename(file.mimetype);
-				cb(null, name);
-			},
-		});
-
-		uploadPromise = Promise.resolve(
-			multer({
-				storage,
-				fileFilter: (_req, file, cb) => {
-					const v = validateLogoFile(file.mimetype);
-					if (!v.valid) {
-						return cb(new Error(v.error!));
-					}
-					cb(null, true);
-				},
-				limits: { fileSize: MAX_LOGO_SIZE_BYTES },
-			}),
-		);
-	}
-	return uploadPromise;
-}
-
-async function tryDeleteOldUploadedLogo(
-	currentLogoPath: string | null | undefined,
-) {
-	if (!currentLogoPath || !currentLogoPath.startsWith("/uploads/")) return;
-	const base = currentLogoPath.replace(/^\/uploads\//, "");
-	if (!base || base.includes("/") || base.includes("..")) return;
-	const absPath = path.join(UPLOADS_DIR, base);
-	if (!absPath.startsWith(UPLOADS_DIR)) return;
-	try {
-		await unlink(absPath);
-	} catch {
-		// best-effort cleanup; ignore ENOENT or permission errors for previous logo
-	}
-}
-
-export interface SettingRow {
-	key: string;
-	textValue: string | null;
-	boolValue: boolean | null;
-	version: number;
-	updatedAt: string;
-}
-
-type PgSettingRow = {
-	key: string;
-	text_value: string | null;
-	bool_value: boolean | null;
-	version: number;
-};
-
-function mapPgSettingRow(r: PgSettingRow): SettingRow {
-	return {
-		key: r.key,
-		textValue: r.text_value,
-		boolValue: r.bool_value,
-		version: r.version,
-		updatedAt: "",
-	};
-}
-
-export interface SettingsResponse {
-	boardName: string;
-	logoPath: string;
-	version: number;
-}
-
-export function generateDefaultSettings(rows: SettingRow[]): SettingsResponse {
-	const map = new Map(rows.map((r) => [r.key, r]));
-	const boardName =
-		map.get("board_name")?.textValue ?? DEFAULT_SETTINGS.boardName;
-	const logoPath = map.get("logo_path")?.textValue ?? DEFAULT_SETTINGS.logoPath;
-	const version = rows.reduce((max, r) => Math.max(max, r.version), 0);
-	return { boardName, logoPath, version };
-}
-
-export type SettingsAuthCheck =
-	| { allowed: true }
-	| { allowed: false; status: number; error: string };
-
-export function checkCanEditSettings(role: string): SettingsAuthCheck {
-	if (role === "admin" || role === "owner") return { allowed: true };
-	return { allowed: false, status: 403, error: "Forbidden" };
-}
-
-export type WorkspaceSettingsRepo = {
-	getMembership: (
-		workspaceId: number,
-		userId: number,
-	) => Promise<{ userId: number; role: string } | null>;
-	getSettings: (workspaceId: number) => Promise<SettingRow[]>;
-	updateSettings: (
-		workspaceId: number,
-		updates: Array<{ key: string; textValue: string; version: number }>,
-	) => Promise<unknown>;
-};
-
-export function createWorkspaceSettingsService(repo: WorkspaceSettingsRepo) {
-	return {
-		async getSettings({
-			userId,
-			workspaceId,
-		}: {
-			userId: number;
-			workspaceId: number;
-		}) {
-			const membership = await repo.getMembership(workspaceId, userId);
-			if (!membership) return { status: 404 as const, error: "Not found" };
-			const rows = await repo.getSettings(workspaceId);
-			return generateDefaultSettings(rows);
-		},
-
-		async updateSettings({
-			userId,
-			workspaceId,
-			updates,
-		}: {
-			userId: number;
-			workspaceId: number;
-			updates: Array<{ key: string; textValue: string; version: number }>;
-		}) {
-			const membership = await repo.getMembership(workspaceId, userId);
-			if (!membership) return { status: 404 as const, error: "Not found" };
-
-			const edit = checkCanEditSettings(membership.role);
-			if (!edit.allowed) {
-				return { status: edit.status, error: edit.error };
-			}
-
-			await repo.updateSettings(workspaceId, updates);
-			return { ok: true as const };
-		},
-	};
-}
+export { UPLOADS_DIR } from "./settings-logo.js";
+export {
+	batchUpsertSettings,
+	checkCanEditSettings,
+	createWorkspaceSettingsService,
+	DEFAULT_SETTINGS,
+	generateDefaultSettings,
+	type SettingRow,
+	type SettingsAuthCheck,
+	type SettingsResponse,
+	type WorkspaceSettingsRepo,
+} from "./settings-repo.js";
+export {
+	generateLogoFilename,
+	MAX_LOGO_SIZE_BYTES,
+	VALID_SETTING_KEYS,
+	validateBoardName,
+	validateFileSize,
+	validateLogoFile,
+	validateSettingKey,
+} from "./settings-validation.js";
 
 export function hasResetAppRoute(): boolean {
 	return false;
 }
 
-/**
- * Batch-upsert settings keys in a single atomic multi-row INSERT.
- * A single statement covering all keys avoids N sequential round trips
- * and ensures all-or-nothing writes.
- */
-export async function batchUpsertSettings(
-	workspaceId: number,
-	updates: Array<{ key: string; textValue: string }>,
-	newVersion: number,
-	dbExecutor: DBExecutor = db,
-): Promise<void> {
-	if (updates.length === 0) return;
-
-	await dbExecutor
-		.insertInto("settings")
-		.values(
-			updates.map((u) => ({
-				workspace_id: workspaceId,
-				key: u.key,
-				text_value: u.textValue,
-				version: newVersion,
-				updated_at: sql`now()`,
-			})),
-		)
-		.onConflict((oc) =>
-			oc.columns(["workspace_id", "key"]).doUpdateSet({
-				text_value: (eb) => eb.ref("excluded.text_value"),
-				version: (eb) => eb.ref("excluded.version"),
-				updated_at: sql`now()`,
-			}),
-		)
-		.execute();
-}
-
-function parseWorkspaceId(raw: string): number | null {
-	const workspaceId = Number(raw);
-	return Number.isInteger(workspaceId) ? workspaceId : null;
-}
-
-async function getMemberRole(
-	workspaceId: number,
-	userId: number,
-): Promise<string | undefined> {
-	const row = await db
-		.selectFrom("workspace_members")
-		.select("role")
-		.where("workspace_id", "=", workspaceId)
-		.where("user_id", "=", userId)
-		.executeTakeFirst();
-	return row?.role;
-}
-
-async function getSettingRows(workspaceId: number): Promise<SettingRow[]> {
-	const raw = await db
-		.selectFrom("settings")
-		.select(["key", "text_value", "bool_value", "version"])
-		.where("workspace_id", "=", workspaceId)
-		.execute();
-	return raw.map(mapPgSettingRow);
-}
-
-async function getCurrentGlobalVersion(
-	workspaceId: number,
-	dbExecutor: DBExecutor = db,
-): Promise<number> {
-	const verRows = await dbExecutor
-		.selectFrom("settings")
-		.select("version")
-		.where("workspace_id", "=", workspaceId)
-		.execute();
-	return verRows.reduce((max, r) => Math.max(max, r.version || 0), 0);
-}
-
-/** Serializes concurrent settings writes for a workspace: locks the
- * workspace row so the version read and the upsert happen atomically,
- * closing the read-then-write race between getCurrentGlobalVersion and
- * batchUpsertSettings. */
-async function lockWorkspaceForSettingsWrite(
-	trx: DBExecutor,
-	workspaceId: number,
-): Promise<void> {
-	await trx
-		.selectFrom("workspaces")
-		.select("id")
-		.where("id", "=", workspaceId)
-		.forUpdate()
-		.execute();
-}
-
-type WorkspaceRouteParams = { workspaceId: string };
-
 export const settingsRouter = Router({ mergeParams: true });
 
 settingsRouter.get("/", async (req, res) => {
-	const workspaceId = parseWorkspaceId(
-		(req.params as WorkspaceRouteParams).workspaceId,
-	);
-	if (workspaceId === null) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const workspace = parseWorkspaceId(req.params);
+	if (!workspace.ok) return sendValidationError(res, workspace.body);
+	const workspaceId = workspace.data;
 
 	const role = await getMemberRole(workspaceId, req.user!.id);
 	if (role === undefined) return res.status(404).json({ error: "Not found" });
@@ -328,12 +57,9 @@ settingsRouter.get("/", async (req, res) => {
 });
 
 settingsRouter.patch("/", async (req, res) => {
-	const workspaceId = parseWorkspaceId(
-		(req.params as WorkspaceRouteParams).workspaceId,
-	);
-	if (workspaceId === null) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const workspace = parseWorkspaceId(req.params);
+	if (!workspace.ok) return sendValidationError(res, workspace.body);
+	const workspaceId = workspace.data;
 
 	const role = await getMemberRole(workspaceId, req.user!.id);
 	if (role === undefined) return res.status(404).json({ error: "Not found" });
@@ -343,120 +69,9 @@ settingsRouter.patch("/", async (req, res) => {
 		return res.status(edit.status).json({ error: edit.error });
 	}
 
-	const updates: Array<{ key: string; textValue: string }> = [];
-	let clientVersion: number | undefined;
-
-	if (Array.isArray(req.body)) {
-		for (const item of req.body as Array<{
-			key?: string;
-			textValue?: string;
-			version?: number;
-		}>) {
-			if (typeof item.version === "number") clientVersion = item.version;
-			if (!item?.key || !validateSettingKey(item.key)) {
-				return res
-					.status(400)
-					.json({ error: `Invalid setting key: ${item?.key ?? ""}` });
-			}
-			if (item.key === "board_name") {
-				if (typeof item.textValue !== "string") {
-					return res
-						.status(400)
-						.json({ error: "board_name value must be a string" });
-				}
-				const vr = validateBoardName(item.textValue);
-				if (!vr.valid) return res.status(400).json({ error: vr.error });
-				updates.push({ key: "board_name", textValue: vr.trimmed });
-			} else if (item.key === "logo_path") {
-				if (typeof item.textValue !== "string") {
-					return res
-						.status(400)
-						.json({ error: "logo_path value must be a string" });
-				}
-				const trimmed = item.textValue.trim();
-				if (trimmed === "") {
-					return res.status(400).json({ error: "logo_path cannot be empty" });
-				}
-				updates.push({ key: "logo_path", textValue: trimmed });
-			}
-		}
-	} else {
-		const body = (req.body ?? {}) as {
-			version?: number;
-			boardName?: unknown;
-			logoPath?: unknown;
-			updates?: Array<{ key?: string; value?: string }>;
-		};
-		clientVersion = body.version;
-
-		if (body.boardName !== undefined) {
-			if (typeof body.boardName !== "string") {
-				return res.status(400).json({ error: "boardName must be a string" });
-			}
-			const vr = validateBoardName(body.boardName);
-			if (!vr.valid) {
-				return res.status(400).json({ error: vr.error });
-			}
-			updates.push({ key: "board_name", textValue: vr.trimmed });
-		}
-		if (body.logoPath !== undefined) {
-			if (typeof body.logoPath !== "string") {
-				return res.status(400).json({ error: "logoPath must be a string" });
-			}
-			const trimmed = body.logoPath.trim();
-			if (trimmed === "") {
-				return res.status(400).json({ error: "logoPath cannot be empty" });
-			}
-			updates.push({ key: "logo_path", textValue: trimmed });
-		}
-
-		// Support explicit updates array form (exercises validateSettingKey for unknown keys)
-		const maybeUpdates = body.updates;
-		if (Array.isArray(maybeUpdates)) {
-			for (const item of maybeUpdates) {
-				if (
-					!item ||
-					typeof item.key !== "string" ||
-					!validateSettingKey(item.key)
-				) {
-					return res
-						.status(400)
-						.json({ error: `Invalid setting key: ${item?.key ?? ""}` });
-				}
-				if (item.key === "board_name") {
-					if (typeof item.value !== "string") {
-						return res
-							.status(400)
-							.json({ error: "board_name value must be a string" });
-					}
-					const vr = validateBoardName(item.value);
-					if (!vr.valid) {
-						return res.status(400).json({ error: vr.error });
-					}
-					if (!updates.some((u) => u.key === "board_name")) {
-						updates.push({ key: "board_name", textValue: vr.trimmed });
-					}
-				} else if (item.key === "logo_path") {
-					if (typeof item.value !== "string") {
-						return res
-							.status(400)
-							.json({ error: "logo_path value must be a string" });
-					}
-					const trimmed = item.value.trim();
-					if (trimmed === "") {
-						return res.status(400).json({ error: "logo_path cannot be empty" });
-					}
-					if (!updates.some((u) => u.key === "logo_path")) {
-						updates.push({ key: "logo_path", textValue: trimmed });
-					}
-				}
-			}
-		}
-	}
-
-	if (typeof clientVersion !== "number" || !Number.isInteger(clientVersion)) {
-		return res.status(400).json({ error: "version must be an integer" });
-	}
+	const patch = parseSettingsPatch(req.body);
+	if (!patch.ok) return sendValidationError(res, patch.body);
+	const { updates, clientVersion } = patch.data;
 
 	// The array-body path allows the same key more than once (last one
 	// wins); a duplicate key reaching batchUpsertSettings's single
@@ -508,12 +123,9 @@ settingsRouter.patch("/", async (req, res) => {
 });
 
 settingsRouter.delete("/", async (req, res) => {
-	const workspaceId = parseWorkspaceId(
-		(req.params as WorkspaceRouteParams).workspaceId,
-	);
-	if (workspaceId === null) {
-		return res.status(400).json({ error: "workspaceId must be an integer" });
-	}
+	const workspace = parseWorkspaceId(req.params);
+	if (!workspace.ok) return sendValidationError(res, workspace.body);
+	const workspaceId = workspace.data;
 
 	const role = await getMemberRole(workspaceId, req.user!.id);
 	if (role === undefined) return res.status(404).json({ error: "Not found" });
@@ -534,110 +146,4 @@ settingsRouter.delete("/", async (req, res) => {
 	res.status(204).end();
 });
 
-settingsRouter.post(
-	"/logo",
-	async (req, res, next) => {
-		try {
-			const upload = await getUpload();
-			upload.single("logo")(req, res, (err: unknown) => {
-				if (err) {
-					const uploadErr = err as Error & { code?: string };
-					if (uploadErr.code === "LIMIT_FILE_SIZE") {
-						return res
-							.status(413)
-							.json({ error: "File size must be under 10MB" });
-					}
-					const msg = uploadErr.message || "Upload error";
-					if (msg.includes("Only .png and .jpg")) {
-						return res.status(400).json({ error: msg });
-					}
-					return res.status(400).json({ error: msg });
-				}
-				next();
-			});
-		} catch (e) {
-			next(e);
-		}
-	},
-	async (req, res) => {
-		const workspaceId = parseWorkspaceId(
-			(req.params as WorkspaceRouteParams).workspaceId,
-		);
-		if (workspaceId === null) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
-		}
-
-		const role = await getMemberRole(workspaceId, req.user!.id);
-		if (role === undefined) return res.status(404).json({ error: "Not found" });
-
-		const edit = checkCanEditSettings(role);
-		if (!edit.allowed) {
-			return res.status(edit.status).json({ error: edit.error });
-		}
-
-		if (!req.file) {
-			return res.status(400).json({ error: "No file uploaded" });
-		}
-
-		// Validate file content matches declared MIME type (H-002)
-		const fileBuffer = await readFile(req.file.path);
-		const validation = await validateFileContent(fileBuffer, req.file.mimetype);
-		if (!validation.valid) {
-			try {
-				await unlink(req.file.path);
-			} catch {
-				// Best-effort cleanup
-			}
-			return res.status(400).json({ error: validation.error });
-		}
-
-		const newRelativePath = `/uploads/${req.file.filename}`;
-
-		// Lock the workspace row for the read+write so a concurrent settings
-		// write can't read the same pre-write global version.
-		const oldLogoPath = await db.transaction().execute(async (trx) => {
-			await lockWorkspaceForSettingsWrite(trx, workspaceId);
-
-			const current = await trx
-				.selectFrom("settings")
-				.select("text_value")
-				.where("workspace_id", "=", workspaceId)
-				.where("key", "=", "logo_path")
-				.executeTakeFirst();
-			const oldPath = current?.text_value ?? null;
-
-			const currentGlobal = await getCurrentGlobalVersion(workspaceId, trx);
-			const newVersion = currentGlobal + 1;
-
-			await trx
-				.insertInto("settings")
-				.values({
-					workspace_id: workspaceId,
-					key: "logo_path",
-					text_value: newRelativePath,
-					version: newVersion,
-					updated_at: sql`now()`,
-				})
-				.onConflict((oc) =>
-					oc.columns(["workspace_id", "key"]).doUpdateSet({
-						text_value: (eb) => eb.ref("excluded.text_value"),
-						version: (eb) => eb.ref("excluded.version"),
-						updated_at: sql`now()`,
-					}),
-				)
-				.execute();
-
-			return oldPath;
-		});
-
-		await tryDeleteOldUploadedLogo(oldLogoPath);
-
-		await publishEvent(workspaceId, {
-			type: "settings.updated",
-			actor: req.user!,
-		});
-
-		const afterRows = await getSettingRows(workspaceId);
-		res.json(generateDefaultSettings(afterRows));
-	},
-);
+settingsRouter.post("/logo", logoUploadMiddleware, logoUploadHandler);
