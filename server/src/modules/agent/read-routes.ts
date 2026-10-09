@@ -1,6 +1,9 @@
 import type { Router } from "express";
+import { z } from "zod";
 import { requireAuth } from "../../auth.js";
 import { db } from "../../db/kysely.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { legacyIntegerParam } from "../../validators/schemas.js";
 import { buildArtifactDownload } from "./artifact-db.js";
 import {
 	getToolTrace,
@@ -8,7 +11,10 @@ import {
 	selectConversationHistory,
 } from "./board-db.js";
 import { assertWorkspaceMember } from "./membership.js";
+import { parseAgentBoardParams } from "./route-validation.js";
 import type { createAgentBoardService } from "./service.js";
+
+type AgentService = ReturnType<typeof createAgentBoardService>;
 
 const COLUMN_SLUG_RE = /^[\w-]{1,100}$/;
 
@@ -20,17 +26,25 @@ export function registerReadRoutes(
 	router: Router,
 	service: ReturnType<typeof createAgentBoardService>,
 ): void {
+	registerBoardList(router, service);
+	registerBoardDetail(router, service);
+	registerCardOutput(router, service);
+	registerArtifact(router, service);
+	registerArtifactDownload(router, service);
+}
+
+function registerBoardList(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			if (!Number.isInteger(workspaceId)) {
-				return res
-					.status(400)
-					.json({ error: "workspaceId must be an integer" });
-			}
+			const ws = parseWith(
+				legacyIntegerParam("workspaceId must be an integer"),
+				req.params.workspaceId,
+			);
+			if (!ws.ok) return sendValidationError(res, ws.body);
+			const workspaceId = ws.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -38,17 +52,21 @@ export function registerReadRoutes(
 			res.json(boards);
 		},
 	);
+}
 
+function registerBoardDetail(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:id ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:id",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.id);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.id,
+				res,
+			);
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -73,21 +91,27 @@ export function registerReadRoutes(
 			res.json({ ...result, columns, toolTrace, conversations });
 		},
 	);
+}
 
+function registerCardOutput(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/outputs/:columnSlug ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:boardId/outputs/:columnSlug",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			const columnSlug = req.params.columnSlug;
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
-			if (!isValidColumnSlug(columnSlug)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
+			);
+			if (!params) return;
+			const { workspaceId, boardId } = params;
+			const slug = parseWith(
+				z.custom<string>(isValidColumnSlug, { error: "Invalid params" }),
+				req.params.columnSlug,
+			);
+			if (!slug.ok) return sendValidationError(res, slug.body);
+			const columnSlug = slug.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -103,17 +127,21 @@ export function registerReadRoutes(
 			res.json(result);
 		},
 	);
+}
 
+function registerArtifact(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/artifact ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:boardId/artifact",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
+			);
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -125,17 +153,21 @@ export function registerReadRoutes(
 			res.json(result);
 		},
 	);
+}
 
+function registerArtifactDownload(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/artifact/download ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:boardId/artifact/download",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
+			);
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 

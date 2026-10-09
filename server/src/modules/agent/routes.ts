@@ -19,12 +19,18 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { requireAuth } from "../../auth.js";
 import { logger } from "../../lib/logger.js";
 import { llmTimeout } from "../../middleware/timeout.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { legacyIntegerParam } from "../../validators/schemas.js";
 import { assertWorkspaceMember } from "./membership.js";
-import { resolveMessageAction } from "./message-action.js";
 import { registerReadRoutes } from "./read-routes.js";
+import {
+	parseAgentBoardParams,
+	parseAgentMessageAction,
+} from "./route-validation.js";
 import {
 	type AgentBoardServiceDeps,
 	createAgentBoardService,
@@ -45,6 +51,8 @@ export {
 export { type MessageAction, resolveMessageAction } from "./message-action.js";
 export { defaultToolRegistry } from "./service-deps.js";
 
+type AgentService = ReturnType<typeof createAgentBoardService>;
+
 // ---------------------------------------------------------------------------
 // Router factory
 // ---------------------------------------------------------------------------
@@ -58,22 +66,37 @@ export function createAgentRouter(
 	// 2-minute socket timeout for agent routes (LLM calls can be slow)
 	router.use(llmTimeout(120000));
 
+	registerCreateBoard(router, service);
+	registerMessage(router, service);
+	registerApprove(router, service);
+	registerReadRoutes(router, service);
+	return router;
+}
+
+function registerCreateBoard(router: Router, service: AgentService): void {
 	// ---- POST /workspaces/:workspaceId/agent/boards ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			if (!Number.isInteger(workspaceId)) {
-				return res
-					.status(400)
-					.json({ error: "workspaceId must be an integer" });
-			}
+			const ws = parseWith(
+				legacyIntegerParam("workspaceId must be an integer"),
+				req.params.workspaceId,
+			);
+			if (!ws.ok) return sendValidationError(res, ws.body);
+			const workspaceId = ws.data;
 
-			const { intent } = req.body ?? {};
-			if (typeof intent !== "string" || !intent.trim()) {
-				return res.status(400).json({ error: "intent is required" });
-			}
+			const parsedIntent = parseWith(
+				z.custom<string>(
+					(value) => typeof value === "string" && !!value.trim(),
+					{
+						error: "intent is required",
+					},
+				),
+				(req.body ?? {}).intent,
+			);
+			if (!parsedIntent.ok) return sendValidationError(res, parsedIntent.body);
+			const intent = parsedIntent.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -91,23 +114,25 @@ export function createAgentRouter(
 			res.status(201).json(result);
 		},
 	);
+}
 
+function registerMessage(router: Router, service: AgentService): void {
 	// ---- POST /workspaces/:workspaceId/agent/boards/:boardId/message ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards/:boardId/message",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
+			);
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
-			const action = resolveMessageAction(req.body);
-
-			if (action.kind === "invalid") {
-				return res.status(400).json({ error: "message or action is required" });
-			}
+			const parsedAction = parseAgentMessageAction(req.body);
+			if (!parsedAction.ok) return sendValidationError(res, parsedAction.body);
+			const action = parsedAction.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -137,17 +162,21 @@ export function createAgentRouter(
 			res.json(result);
 		},
 	);
+}
 
+function registerApprove(router: Router, service: AgentService): void {
 	// ---- POST /workspaces/:workspaceId/agent/boards/:boardId/approve ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards/:boardId/approve",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
+			);
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -173,8 +202,4 @@ export function createAgentRouter(
 			res.json({ ok: true });
 		},
 	);
-
-	registerReadRoutes(router, service);
-
-	return router;
 }
