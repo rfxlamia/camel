@@ -1,0 +1,11 @@
+{
+	"schema": 1,
+	"adapter_contract": 1,
+	"argv": [
+		"/home/v-homelab/.nvm/versions/node/v22.23.3/bin/node",
+		"/home/v-homelab/.codex/plugins/cache/pocketto/pocketto/4.0.0/enterprise/dispatch.js",
+		"/home/v-homelab/tasks/camel"
+	],
+	"events": ["spec-approved", "phase-complete", "plan-closed"],
+	"timeout_ms": 30000
+}
