@@ -1,0 +1,40 @@
+{
+  "contract": 2,
+  "task_id": "T7",
+  "task_name": "Migrate notifications and activity 400s",
+  "cycle": 1,
+  "timestamp": "2026-10-09T18:28:04Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Implementer concerns: none. Claim that the emit payload is still title.trim() and parsedTitle.data is unused: confirmed at server/src/modules/notifications/router.ts:118-124. The whitespace-padded characterization pins payload title \"hello\".",
+      "Temporary mutation proof was not re-observed. Committed tests pin exact 400 bodies, reject-before-emit and reject-before-query, the trimmed emit, and a non-400 outcome for card id 1e2."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Notifications uses parseWith(trimmedRequired(\"title is required\"), title) only for ok/not-ok and sendValidationError. domainBus.emit still uses title: title.trim() (router.ts:124). parsedTitle.data is not passed downstream.",
+      "Activity card id uses legacyIntegerParam(\"card id must be an integer\") and parsedCardId.data (activity.ts:98-103), which equals the previous Number(req.params.id) on success. No workspaceIdParam or positiveIdParam. \"1e2\" is not a validation 400.",
+      "Both production files have zero status(400) matches. Failure bodies are {error} only. Tests pin them with toEqual. Invalid titles do not emit; invalid card ids do not call selectFrom. Validation stays after the existing admin check and before emit, and before the cards query.",
+      "Diff is only the four in-scope files. Messages are byte-identical to the replaced literals. NodeNext imports use .js. Modified files are 79-127 lines; touched handlers stay under ~50 lines; the parse/guard pair is not repeated 3+ times in scope.",
+      "Installed worktree packages: zod 4.4.3 (server/package.json ^4.4.3) and express 5.2.1 (server/package.json ^5.1.0). Direct safeParse of the same z.string transform/refine and z.unknown transform/refine pipelines returned exactly \"title is required\" / \"card id must be an integer\", trimmed \"hello\", and Number(\"1e2\") === 100. schemas.test.ts pins the same legacyIntegerParam and trimmedRequired contracts. Coordinator gate: targeted 8 passed; module suite 14 passed and 27 skipped; server typecheck and make check passed."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "d89f2b66be7149339058486f3268964de16db656"
+}

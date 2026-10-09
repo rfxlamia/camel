@@ -1,0 +1,130 @@
+{
+  "contract": 1,
+  "phase_key": "phase-2",
+  "phase_file": "execution-plan/phase-2.md",
+  "recorded_at": "2026-10-09T18:53:58Z",
+  "phase_verdict": "PHASE_PASS_CLEAN",
+  "tasks": [
+    {
+      "task_id": "T5",
+      "name": "Migrate auth routes (router.ts, oauth.ts)",
+      "done_sha": "f30d6c3aa2706678079f123d31efc0eb04b1b2dc",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T6",
+      "name": "Migrate realtime SSE workspace-id 400 (sse.ts)",
+      "done_sha": "0f69bec7b9290e846f01fa2ebb77987d648cac6d",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T7",
+      "name": "Migrate notifications and activity 400s",
+      "done_sha": "d89f2b66be7149339058486f3268964de16db656",
+      "verdict": "REVIEW_PASS"
+    }
+  ],
+  "verification": [
+    {
+      "check": "T5 exact commands in worktree task/T5",
+      "result": "PASS",
+      "evidence": "router.validation + oauth.validation 19 passed; src/modules/auth 39 passed / 15 skipped without RUN_INTEGRATION; server typecheck and make check passed. Implementer also reported RUN_INTEGRATION=1 on router.integration, oauth, and oauth-bridge.route: 15 passed. Coordinator did not re-run that extra command."
+    },
+    {
+      "check": "T6 exact commands in worktree task/T6",
+      "result": "PASS",
+      "evidence": "sse.validation 6 passed; src/realtime 23 passed; notifications/sse.test.ts 3 passed / 1 skipped; server typecheck and make check passed"
+    },
+    {
+      "check": "T7 exact commands in worktree task/T7",
+      "result": "PASS",
+      "evidence": "router.validation + activity.validation 8 passed; notifications+activity 14 passed / 27 skipped; server typecheck and make check passed"
+    },
+    {
+      "check": "npm run test (root) on merged tree",
+      "result": "TIMEOUT",
+      "evidence": "Timed out after 420s. Server suite had already passed (1312 tests passed, 390 skipped). Client and feature-module suites had not finished, so the root command is not a pass."
+    },
+    {
+      "check": "npm run test --workspace=server on merged tree",
+      "result": "PASS",
+      "evidence": "Observed inside the timed-out root run before timeout: 143 files passed, 74 skipped; 1312 tests passed, 390 skipped"
+    },
+    {
+      "check": "npm run test --workspace=client on merged tree",
+      "result": "PASS",
+      "evidence": "124 files passed; 1128 tests passed. Provider-missing stderr is from tests that assert those throws."
+    },
+    {
+      "check": "npm run test:feature-modules on merged tree",
+      "result": "PASS",
+      "evidence": "156 passed, 0 failed"
+    },
+    {
+      "check": "npm run typecheck on merged tree",
+      "result": "PASS",
+      "evidence": "Server and client tsc --noEmit exit 0"
+    },
+    {
+      "check": "make check on merged tree",
+      "result": "PASS",
+      "evidence": "Lint 924 files, mutation routing, event-write routing, and feature-module guard passed. DATABASE_URL was unset in the shell, so key-collision did not run."
+    },
+    {
+      "check": "git diff --check 63510672901aa9808d7ea77bd939b2eeaa6c99fd..HEAD",
+      "result": "PASS",
+      "evidence": "Exit 0"
+    },
+    {
+      "check": "Independent phase-level pass",
+      "result": "PASS",
+      "evidence": "reviews/phase-pass-phase-2.json status PHASE_PASS_CLEAN, findings empty"
+    }
+  ],
+  "obstacles": [
+    {
+      "summary": "T5 and T7 implementers aborted after green checks and before commit",
+      "resolution": "Resumed each implementer on its existing worktree to commit only in-scope files. T5 HEAD before merge was 3fe9acca68347b050de642f2c27f13477b167da9. T7 HEAD before merge was e227ec69d5c984f1a35037ffc9cbbd402e46def2.",
+      "evidence": [
+        "T5 and T7 implementer completion reports",
+        "reviews/T5-review.json",
+        "reviews/T7-review.json"
+      ]
+    },
+    {
+      "summary": "T5 auditor process aborted after writing the verdict file",
+      "resolution": "The written artifact was complete REVIEW_PASS at the worktree tip. Conflict-free merge later repinned reviewed_sha to the merge commit f30d6c3aa2706678079f123d31efc0eb04b1b2dc. No second auditor was dispatched.",
+      "evidence": [
+        "reviews/T5-review.json"
+      ]
+    },
+    {
+      "summary": "Worktrees had no server/.env, so existing suites exited on config import",
+      "resolution": "Copied the gitignored parent server/.env into each worktree. It was not staged or committed.",
+      "evidence": [
+        "T5 and T7 implementer reports"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "kind": "user",
+      "decision": "Execute Phase 2 only",
+      "rationale": "User supplied execution-plan/phase-2.md and did not authorize closeout or Phase 3",
+      "source": "User message pointing at docs/pocket/plans/2026-10-09-shared-400-validation-completion/execution-plan/phase-2.md"
+    },
+    {
+      "kind": "implementation",
+      "decision": "Run T5, T6, and T7 as a parallel group from HEAD 63510672901aa9808d7ea77bd939b2eeaa6c99fd",
+      "rationale": "Index execution flow and source plan Group B mark them parallel even though the task rows lack [parallel:] annotations",
+      "source": "execution-plan/index.md; execution-plan.md Group B; advisor guidance before dispatch"
+    },
+    {
+      "kind": "implementation",
+      "decision": "Keep notifications emit as title.trim(); use trimmedRequired only as an ok/not-ok gate",
+      "rationale": "T7's packet requires keeping the existing downstream expression title.trim() and forbids passing trimmedRequired output downstream. Avoiding an untrimmed raw title preserves today's payload. Replacing title.trim() with trimmedRequired's successful output would not by itself change that payload.",
+      "source": "T7 task file; advisor guidance before dispatch; reviews/T7-review.json"
+    }
+  ],
+  "recommendations": []
+}
