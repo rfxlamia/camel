@@ -1,0 +1,51 @@
+{
+  "task_id": "T4",
+  "task_name": "Key/status allocation and final status NOT NULL",
+  "cycle": 3,
+  "timestamp": "2026-08-31T05:19:50Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle-2 agent coverage is resolved: the real agent-board integration now requires five cards, exact sequential key numbers and formatted keys, joins every card to its allocated status, asserts the expected backlog/todo/in_progress geometry, and retains the zero card_events assertion (server/src/routes/cards-identity.integration.test.ts:242-319).",
+      "Cycle-2 seed coverage is resolved: the integration test executes seedDemoCards against a real workspace and verifies every demo row, unique key numbers 1-6, non-null status ids, and expected slots (server/src/routes/cards-identity.integration.test.ts:321-361).",
+      "Cycle-2 final-nullability coverage is resolved: both fresh and existing migration fixtures stage NULL status rows before the slot/backfill phase, execute the final guarded SET NOT NULL migration, and unconditionally assert a subsequent NULL insert fails with SQLSTATE 23502 (server/src/db/board-tracker-unify-migration.integration.test.ts:217-282, 304-317).",
+      "Cycle-1 migration fixture repair remains intact: live/deleted rows, prefilled values, timestamps, tracker keys, null-only backfill, and idempotent rerun/counter preservation remain asserted (server/src/db/board-tracker-unify-migration.integration.test.ts:284-383).",
+      "The complete T4 contract is present: transactional counter allocation and null-safe sibling mapping, human and agent identity writes, statusId rejection, soft-delete key retention, ordered idempotent final nullability, and no agent-schema/service/pipeline changes in the worktree diff."
+    ]
+  },
+  "stage_2": {
+    "status": "FAIL",
+    "strengths": [
+      "The shared allocator performs an atomic workspace counter UPDATE ... RETURNING and is called inside the human, agent, and seed transaction boundaries without activity or event side effects.",
+      "Agent integration assertions now inspect actual persisted key_number/status_id/status slot values and verify the five real board columns' position geometry rather than only checking card count.",
+      "Seed integration assertions execute the seed helper against PostgreSQL and validate every persisted demo row, not just seed source text.",
+      "Migration integration genuinely verifies NULL legacy rows before the final constraint and SQLSTATE 23502 rejection afterward, while preserving backfill, deleted-row, timestamp, and rerun assertions.",
+      "The static migration test checks additive DDL, slot seed, status/key backfill, and final SET NOT NULL order; the diff has no prohibited agent-schema, service, or pipeline edits."
+    ],
+    "issues": [
+      {
+        "severity": "Important",
+        "description": "The newly added card identity integration suite is 374 lines and remains a monolithic file over the approximately 300-line refactor threshold. Its agent scenario is also a long test callback (approximately 78 lines) combining asynchronous pipeline polling, database retrieval, geometry assertions, identity assertions, and activity assertions. Split the suite or extract focused setup/query/assertion helpers so the changed test structure stays below the threshold and the long callback has a single responsibility.",
+        "location": "server/src/routes/cards-identity.integration.test.ts:1-374 (agent scenario: 242-319)"
+      },
+      {
+        "severity": "Important",
+        "description": "The new seedDemoCards function is approximately 67 lines and combines demo-card declaration, transactional allocation/insertion, timestamp policy, and event insertion in one function, exceeding the approximately 50-line function threshold. Extract the card definitions and/or per-card transactional insertion into focused helpers while preserving the single transaction boundary.",
+        "location": "server/src/db/seed.ts:9-76"
+      }
+    ],
+    "assessment": "Request Changes"
+  },
+  "overall": "REVIEW_BLOCKED",
+  "blocked_category": "audit-failed",
+  "fix_instructions": "ESCALATE: The T4 round budget is exhausted (cycle 3, cycles_remaining 0). Before any later audit, split server/src/routes/cards-identity.integration.test.ts so the newly added suite is not a monolithic >300-line file and extract the long agent test callback, and split seedDemoCards in server/src/db/seed.ts so no function exceeds the approximately 50-line heuristic. Preserve all real agent, seed, migration, counter, status, activity, rerun, deleted-row, timestamp, and SQLSTATE 23502 assertions. Re-run the three exact T4 gate commands, then perform a new read-only audit; do not merge this blocked worktree.",
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "2e24c79909d38d425549fd43158d51815c5bc54f"
+}

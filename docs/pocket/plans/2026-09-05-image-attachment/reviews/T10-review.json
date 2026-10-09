@@ -1,0 +1,43 @@
+{
+  "task_id": "T10",
+  "task_name": "Build existing-card picker, paste, gallery, lightbox, and delete UI",
+  "cycle": 2,
+  "timestamp": "2026-09-06T16:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle 3 did not produce a RED failure — Observation (valid), not a missing requirement. Parent BoardContext already scheduleRefresh()s on attachment.* (BoardContext.tsx:711-736). CardAttachments reads live card.attachments; ContextPanel derives that card from findCardInColumns(columns). The integration test documents EventSource → board refresh → 3/3 gallery without extra production wiring, matching task step 15 ('only the component/test wiring needed'). Red-flag check: the test doubles EventSource/HTTP only, not BoardProvider internals.",
+      "Cycle-1 Important (nested Escape also closed ContextPanel) re-checked against HEAD 5f02e13: capture-phase preventDefault + stopImmediatePropagation on window while lightbox/delete is open; unit tests assert the parent window listener does not run and the Images region stays mounted."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Extracted attachment UI into CardAttachments without copying CardEditor; ContextPanel only composes and passes card/workspace/callbacks.",
+      "Native multiple file input, clipboard image blobs, T3 prepareImageAttachment, and exact batch copy vs persistent total (2 of 4… vs 3/3 from card.attachments.length).",
+      "Gallery/lightbox/download/delete have explicit accessible names; last-empty props render no-media copy; download uses /original/download.",
+      "Existing OKLCH/Tailwind tokens and focus-visible rings; no drag-and-drop, cover reorder, annotation, tracker/card field mutation, public upload URLs, T12 staging, or T13 tile cover.",
+      "SSE gallery refresh is the T9 attachment.* → refresh path plus live column card props; integration test does not mock BoardProvider state.",
+      "Fix 5f02e13 isolates nested Escape in capture phase and moves initial focus into Close/Cancel with restore on dismiss, matching ContextPanel's window bubble close listener."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Lightbox and delete confirmation still do not trap Tab. Initial focus now moves to Close/Cancel and is restored on dismiss, but Tab/Shift+Tab can leave the overlay and land on ContextPanel controls underneath. In-repo dialogs (TrackerConfirmDialog, FocusSwitchDialog) wrap Tab on the first/last focusable.",
+        "location": "client/src/components/CardAttachments.tsx:67-81"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "46a958d135736c873e698bd0faca138ccca4f7b6"
+}

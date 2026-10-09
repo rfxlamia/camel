@@ -1,0 +1,50 @@
+{
+  "task_id": "T8",
+  "task_name": "Reorder endpoint — bucket positions without version bumps",
+  "cycle": 1,
+  "timestamp": "2026-08-05T15:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "PATCH /tracker/items/:key/position implemented with beforeKey/afterKey neighbor semantics matching the plan",
+      "loadBucketSiblings uses COALESCE(position, 1e15) for defensive NULL ordering as required",
+      "Rebalance-on-RangeError follows cards.ts precedent; only position is written (no version or updated_at)",
+      "recordTrackerActivity and publishEvent called; cross-bucket body fields rejected with 400",
+      "All five plan tests pass (midpoint move, version/updated_at untouched, rebalance, cross-workspace 404, cross-bucket 400)",
+      "Commit message matches feat(tracker): convention"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Tests mock recordTrackerActivity but never assert it was called with changed: [\"position\"] — quality-bar must-have is implemented but untested",
+        "location": "server/src/routes/tracker-items.reorder.test.ts:67"
+      },
+      {
+        "severity": "Minor",
+        "description": "Handler returns 400 for neighbor-not-in-bucket but no test covers that path",
+        "location": "server/src/routes/tracker-items.ts:728"
+      },
+      {
+        "severity": "Minor",
+        "description": "Moved item row is read outside the transaction without forUpdate (cards.ts locks the moved row inside trx); low risk for reorder-only writes but slightly weaker concurrency safety",
+        "location": "server/src/routes/tracker-items.ts:656"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "27877fde6088bee1baf9574f7e2d201cac0d63f2"
+}

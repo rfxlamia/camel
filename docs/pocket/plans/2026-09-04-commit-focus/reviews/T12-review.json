@@ -1,0 +1,39 @@
+{
+  "task_id": "T12",
+  "task_name": "Workspace switch guard",
+  "cycle": 1,
+  "timestamp": "2026-09-04T16:11:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Guard precedence is centralized in getSwitchAttemptState (noop → hydration → active session → unsaved edits) with matching unit coverage",
+      "BoardContext routes focus-loading and focus-blocked through warning toasts without switching or persisting workspace id; no FocusSessionContext import",
+      "WorkspaceSwitcher forwards hasActiveFocusSession and focusSessionHydrated to the pure guard and closes the dropdown on focus statuses while keeping confirm-required open",
+      "Integration tests exercise the real guard end-to-end (no mock of getSwitchAttemptState) with separate cases for active-session block, hydrated allow, and hydration block",
+      "Refs mirror the existing hasUnsavedRef pattern to avoid stale closures in attemptSwitchWorkspace"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "getSwitchAttemptState is evaluated twice per sidebar selection (WorkspaceSwitcher for menu state, BoardContext for routing) — pre-existing pattern, not a policy duplicate, but worth noting for future consolidation",
+        "location": "client/src/layout/sidebar/WorkspaceSwitcher.tsx:117"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "fa9764b19b95d7ec2d4c7387f62545c592bba6de"
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "T6",
+  "task_name": "Focus session route — atomic switch",
+  "cycle": 1,
+  "timestamp": "2026-09-04T15:13:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "switchSession wraps guarded finish UPDATE + replacement INSERT in db.transaction().execute (focus-session-repo.ts:161-200)",
+      "Version guard: WHERE version = expectedVersion; null when no row matched — integration stale.expectedVersion proves A stays Running at v1 with zero B rows (focus-session.switch.integration.test.ts:204-241)",
+      "Insert failure rollback: duplicate PK on create.id rolls back finish — integration old.session.remains.Running proves A still running v1/360s (focus-session.switch.integration.test.ts:171-202)",
+      "Atomicity: exactly one non-finished row on B after switch — integration exactly.one.row (focus-session.switch.integration.test.ts:122-169)",
+      "Route switch: applyAction(snapshot, finish, now()) for accrual before switchSession; no route-level arithmetic (focus-session.ts:330-359)",
+      "HTTP 409 version_conflict when switchSession returns null; publish and recordFocusActivity skipped (focus-session.switch.test.ts:235-261)",
+      "Same-task no-op reuses targetsSameTask shared with focus branch — no switchSession/publish/audit (focus-session.switch.test.ts:263-285)",
+      "No active session: insert fallback, switchSession not called (focus-session.switch.test.ts:207-233)",
+      "Target not found: findTask null → 404 before applyAction/switchSession (focus-session.switch.test.ts:287-303)",
+      "Success: 201 carries created Ready session; publish(workspaceId, event) two-arg; recordFocusActivity action switch (focus-session.switch.test.ts:127-205)",
+      "buildReadySessionInput + targetsSameTask extracted once in focus-session-inputs.ts — no duplicate task_key/return_path derivation",
+      "Spec commit-focus.md Rule Switch task + Implementation Notes switch-focus atomicity via POST action switch satisfied",
+      "Mechanical gate verified: switch.test.ts 5/5, switch.integration.test.ts 3/3 (RUN_INTEGRATION=1), focus-session.test.ts 13/13 + lifecycle 8/8 regression green"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Atomicity guarantee lives in repo.switchSession — route calls once, not finish+insert as two repo methods",
+      "Integration tests prove PostgreSQL transaction semantics (rollback on insert failure, version guard) that fake repos cannot",
+      "404 guard runs before finish snapshot computation when target task missing — prevents finishing A into inaccessible task",
+      "Focus-session-inputs.ts extraction satisfies rule-of-three for Ready input and same-task predicate without cards/tracker_items writes",
+      "defaultRecordFocusActivity writes cardId null with namespaced focus_session payload — no focus_events table",
+      "Commit 2b939ad message matches conventional format feat(focus): add atomic focus session switch"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "focus-session.ts is 512 lines post-extraction; packet Step 19 suggested further splits when crossing ~300 lines — inputs moved but router file remains large",
+        "location": "server/src/routes/focus-session.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "Step 19 literal places targetsSameTask in focus-session.ts; implementation co-locates it in mapped focus-session-inputs.ts — behavior correct, location differs",
+        "location": "server/src/routes/focus-session-inputs.ts:8-15"
+      },
+      {
+        "severity": "Minor",
+        "description": "TDD red-green sequence not independently verifiable from single squashed commit; behavior proven by 5 unit + 3 integration assertions",
+        "location": "server/src/routes/focus-session.switch.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "Success-path unit test asserts injected recordFocusActivity spy args but not default seam cardId:null / kind payload shape (default impl at focus-session.ts:202-217 is correct)",
+        "location": "server/src/routes/focus-session.switch.test.ts:199-204"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "result": "clean PASS"
+  },
+  "reviewed_sha": "2b939ad25bd2ed143ceee28033601fa9989e21fc",
+  "prev_sha": "3455f809da283614428cfe6b355c736893efa406"
+}

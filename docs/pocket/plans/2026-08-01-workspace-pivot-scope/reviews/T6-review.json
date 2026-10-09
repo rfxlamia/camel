@@ -1,0 +1,64 @@
+{
+  "task_id": "T6",
+  "task_name": "Calendar drag-to-reschedule with version conflict UI",
+  "cycle": 1,
+  "timestamp": "2026-08-03T06:12:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "saveCard called with dueDate and version on drop to new date (CalendarView.tsx:234-237; CalendarView.drag.test.tsx)",
+      "Past-date drop sets dueDate via saveCard (CalendarView.drag.test.tsx)",
+      "Spillover September cell drop sets dueDate; August month label unchanged (CalendarView.drag.test.tsx)",
+      "409 conflict shows inline Updated elsewhere text for 3s then dismisses (CalendarConflictNotice.tsx; CalendarView.drag.test.tsx)",
+      "Same-date drop is no-op — saveCard not called (CalendarView.tsx:232; CalendarView.drag.test.tsx)",
+      "CalendarConflictNotice.tsx created; CalendarView wrapped in calendar-only DndContext with calendar-card-{id} and date-{iso} ids",
+      "No direct api.updateCard; patch omits position/column_id",
+      "Commit fa14ae1 with conventional message; 5/5 drag tests pass at reviewed SHA"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Calendar-only DndContext with PointerSensor activationConstraint distance 5 (CalendarView.tsx:173-175, 298)",
+      "handleDragEnd parses drag/drop ids, skips same-date no-op, always passes version from cardById (CalendarView.tsx:223-244)",
+      "CalendarConflictNotice inline chip text with 3s auto-dismiss and data-testid calendar-conflict-notice",
+      "Conflict path reuses saveCard which refresh()es board on version_conflict (BoardContext.tsx:590-597)",
+      "TDD: 5 runnable drag tests; T5 display tests still pass (13 total)",
+      "Diff scoped to CalendarConflictNotice.tsx, CalendarView.tsx, CalendarView.drag.test.tsx"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Date cells changed from native button (T5) to div role=button for dnd-kit — slightly weaker default keyboard/semantics vs prior implementation",
+        "location": "client/src/components/CalendarView.tsx:98-115"
+      },
+      {
+        "severity": "Minor",
+        "description": "CalendarConflictNotice useEffect depends on onDismiss; inline per-chip callback is recreated each render so post-conflict refresh can reset the 3s timer and extend notice duration",
+        "location": "client/src/components/CalendarConflictNotice.tsx:8-10"
+      },
+      {
+        "severity": "Minor",
+        "description": "Deliverable requires server state adopted on 409; implementation delegates to saveCard refresh but T6 tests assert only inline notice, not refreshed card position/date",
+        "location": "client/src/components/CalendarView.drag.test.tsx"
+      },
+      {
+        "severity": "Minor",
+        "description": "Only first MAX_VISIBLE_CHIPS (2) cards per cell are draggable; overflow cards behind +N more are not calendar-card chips and cannot be drag-rescheduled from the grid",
+        "location": "client/src/components/CalendarView.tsx:110-161"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "fa14ae1248256a46b915a5206b01965009be5fd1"
+}

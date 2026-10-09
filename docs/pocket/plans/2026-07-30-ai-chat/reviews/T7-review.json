@@ -1,0 +1,62 @@
+{
+  "task_id": "T7",
+  "task_name": "Chat page shell — assistant-ui, routing, nav",
+  "cycle": 1,
+  "timestamp": "2026-07-31T01:46:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "AGENT_NAV and AGENT_PATHS include /chat alongside /agent and /history; KANBAN_NAV excludes chat (client/src/layout/sidebar/navItems.ts:28-37)",
+      "getModeFromPath returns agent for /chat and /chat/:threadId — covered by navItems.test.ts",
+      "App.tsx lazy-loads ChatPage on both /chat and /chat/:threadId routes (client/src/App.tsx)",
+      "/chat index redirects to most-recent thread or creates one when empty (client/src/pages/ChatPage.tsx:41-55) — tested in ChatPage.test.tsx",
+      "Non-empty thread delete shows confirm before api.chat.deleteThread; empty threads skip confirm (client/src/pages/ChatPage.tsx:64-72) — non-empty case tested",
+      "@assistant-ui/react and assistant-stream installed; ChatPage uses Thread/Composer with LocalThread/LocalComposer fallbacks (client/package.json, client/src/pages/ChatPage.tsx)",
+      "Correction bleed ui.tsx (2ede5aeb) preserves ThreadPrimitive/ComposerPrimitive shell while wiring ChatMessageList for rehydration — does not break T7 routing/nav deliverables",
+      "All 12 T7 unit tests pass (navItems.test.ts + ChatPage.test.tsx)"
+    ],
+    "issues": [
+      {
+        "severity": "Important",
+        "description": "threadListAdapter.ts is orphaned dead code — useRemoteThreadListRuntime wiring present at T7 done_sha (42114f7) was removed when ChatRuntimeProvider was refactored for T8 streaming; violates QUALITY BAR must-have assistant-ui thread list integrated",
+        "location": "client/src/chat/ChatRuntimeProvider.tsx"
+      },
+      {
+        "severity": "Important",
+        "description": "Empty-thread immediate delete (no confirm) is implemented but not tested — deliverable behavior has no test coverage",
+        "location": "client/src/pages/ChatPage.test.tsx"
+      },
+      {
+        "severity": "Minor",
+        "description": "ui.tsx correction bleed couples T7 shell to T8 useChatStreamContext, ChatMessage, and unstable_useComposerInput — scope mixing across tasks",
+        "location": "client/src/chat/ui.tsx"
+      },
+      {
+        "severity": "Minor",
+        "description": "handleNewThread always calls api.chat.createThread without findEmptyThread dedup — spec Story 1 empty-thread focus behavior not implemented (out of T7 DELIVERABLE but adjacent gap)",
+        "location": "client/src/pages/ChatPage.tsx:58-62"
+      },
+      {
+        "severity": "Minor",
+        "description": "threadListAdapter.rename implemented but ChatPage sidebar has no rename UI",
+        "location": "client/src/chat/threadListAdapter.ts:22-24"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "2ede5aeb4db13aad1803df1ba76778d17d9979db"
+}

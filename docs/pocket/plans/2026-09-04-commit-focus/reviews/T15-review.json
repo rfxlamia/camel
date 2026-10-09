@@ -1,0 +1,42 @@
+{
+  "task_id": "T15",
+  "task_name": "Focus audit event type + activity feed exclusion",
+  "cycle": 1,
+  "timestamp": "2026-09-04T14:57:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Step 7 verified: getUnifiedWorkspaceActivity still carries AND e.card_id IS NOT NULL (server/src/routes/work-item-events.ts:276) — no change required",
+      "GET /cards/:id/activity filters by card_id; focus_session rows use card_id null and remain excluded by construction"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Minimal production diff: union member in recordActivity (server/src/routes/helpers.ts:510) and SQL predicate before limit in GET /activity (server/src/routes/activity.ts:66-69)",
+      "No JavaScript post-query filter; exclusion is a Kysely where on e.event_type applied before orderBy/limit",
+      "Integration tests exercise real activityRouter + PostgreSQL behind RUN_INTEGRATION, proving feed behavior for mixed and focus-only workspaces",
+      "Scope limited to three declared files; no schema/migration/focus_events table; recordActivity parameter shape unchanged",
+      "Conventional commit message matches task spec exactly"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "TDD red-green sequence not independently verifiable from the single squashed commit (tests and implementation land together); behavior is nonetheless proven by integration assertions",
+        "location": "server/src/routes/activity.focus-exclusion.integration.test.ts"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "54dc114cce3ef55ffca9f96cc34a345ab942fa82"
+}

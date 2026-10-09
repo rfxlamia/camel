@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T11",
+  "task_name": "Add the @image file-command variant",
+  "cycle": 2,
+  "timestamp": "2026-09-06T13:08:30Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "The cycle-1 cancellation finding is fixed: the native input boundary listens for the cancel event, clears filePickerCommand, and restores title focus without invoking the file callback.",
+      "The cancellation regression test verifies a plain unchanged title, no metadata dispatch, no file callback, removal of the picker input, and reopening the same @image definition."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The file-command variant remains additive and distinct from metadata field commands; existing field command behavior is preserved.",
+      "The hidden native input exposes multiple PNG/JPEG selection and selected files are delivered only through onFilesSelected, with no metadata or tracker mutation.",
+      "Cancellation is handled at the native input event boundary with cleanup, stale command reset, and focus restoration.",
+      "The focused TaskTitleEditor suite passes all 22 tests, including metadata-command coverage and cancel-then-reopen behavior; client typecheck and Biome checks pass.",
+      "The audited commit changes only the two task-scoped implementation/test files; no AGENTS.md or unrelated implementation files were changed."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "bef2be122b3c555ddf64182f9828200da45fd831"
+}

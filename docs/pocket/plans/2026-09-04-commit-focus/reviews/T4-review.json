@@ -1,0 +1,81 @@
+{
+  "task_id": "T4",
+  "task_name": "Focus session route — read + create",
+  "cycle": 1,
+  "timestamp": "2026-09-04T15:02:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "All 12 DELIVERABLE Given-When-Then scenarios verified in focus-session.test.ts (13 tests) and implementation",
+      "Router-level requireFocusModeEnabled + requireWorkspaceMember gate every verb (focus-session.ts:197-198)",
+      "Board focus: POST 201 ready session, returnPath /board/card/481, task_key CA-42 via formatKey(derivePrefix(...)) (focus-session.ts:265-278)",
+      "Tracker focus: returnPath /tracker/CA-42, source tracker (focus-session.test.ts:317-352)",
+      "Idempotent re-focus: 201 unchanged session, no insert/publish (focus-session.ts:244-250)",
+      "Finished-row revival prevented: findActive filters state <> finished (focus-session-repo.ts:110)",
+      "GET running session: stored accumulatedSeconds + runningSince ISO, no live total (focus-session.ts:64-76)",
+      "Non-member 404 and flag-off 404 on GET (focus-session.test.ts:137-161); POST inherits same router.use gates",
+      "409 session_active on different-task focus without mutating session A (focus-session.ts:253-257)",
+      "Auto-finish on read: applyAction finish, publish payload.session null, autoFinished task_missing (focus-session.ts:111-165)",
+      "Missing task 404 before insert (focus-session.ts:260-262)",
+      "POST body validation 400 with no findTask/insert/publish (focus-session.ts:98-108, 237-239)",
+      "Version-guard loss on auto-finish: 200 { session: null }, no publish/audit (focus-session.ts:141-142, 227)",
+      "focus_session.updated added to BoardEvent union; router mounted in routes.ts:68"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Scope limited to exactly 5 declared files; no PATCH/switch handlers, no cards/tracker_items mutations",
+      "FocusSessionRepo interface is the sole Kysely surface; repo is query + row mapping only (focus-session-repo.ts)",
+      "createFocusSessionRouter factory with injected repo, now, publish, recordFocusActivity — matches packet seam contract",
+      "RecordFocusActivity narrow domain type; defaultRecordFocusActivity sole db touch uses eventType focus_session (focus-session.ts:167-182)",
+      "Display key from derivePrefix + formatKey in core/tracker-key.ts; findTask branches on source with deleted_at IS NULL",
+      "publish called as publishEvent(workspaceId, event) with userId on every SSE publish",
+      "serializeFocusSession exported with camelCase DTO and ISO timestamps matching Shared Contract",
+      "Tests use supertest harness with req.user + req.workspace, fake repo, fixed clock, publisher/audit spies — no Kysely mock",
+      "Mechanical gate verified: focus-session.test.ts 13/13 PASS, typecheck PASS",
+      "Commit 6c8e158 message matches conventional format feat(focus): add focus session read and create endpoints"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Step 29 loadActiveSessionOr404 helper not extracted; only two handlers today and neither uses 404-if-none — acceptable deferral until T5/T6 adds PATCH",
+        "location": "server/src/routes/focus-session.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "focus-session.ts is 304 lines (packet target ~300); POST handler ~65 lines (packet target ~50)",
+        "location": "server/src/routes/focus-session.ts:233-297"
+      },
+      {
+        "severity": "Minor",
+        "description": "Gate tests exercise GET only for non-member and flag-off; POST coverage relies on router-level .use() inheritance (behavior correct, explicit POST gate tests absent)",
+        "location": "server/src/routes/focus-session.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "TDD red-green sequence not independently verifiable from single squashed commit; behavior nonetheless proven by 13 route assertions",
+        "location": "server/src/routes/focus-session.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "buildTaskKey declares unused source parameter",
+        "location": "server/src/routes/focus-session.ts:79-85"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "result": "clean PASS"
+  },
+  "reviewed_sha": "6c8e158daa59c8f713594e08e45c9052da50a1ca",
+  "prev_sha": "54dc114cce3ef55ffca9f96cc34a345ab942fa82"
+}

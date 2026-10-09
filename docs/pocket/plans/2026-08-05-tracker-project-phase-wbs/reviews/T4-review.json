@@ -1,0 +1,34 @@
+{
+  "task_id": "T4",
+  "task_name": "Vocabulary route — category on the wire, status vocabulary closed",
+  "cycle": 1,
+  "timestamp": "2026-08-05T14:30:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Both serialization sites updated: category in RETURNING_COLUMNS and serializeVocabulary type + mapping (tracker-vocabularies.ts:12-20,26-43)",
+      "Status lock is an early guard clause returning 400 before duplicate check or insert (tracker-vocabularies.ts:87-89)",
+      "Priority and label POST creation remain open; tracker-items.ts untouched",
+      "Correction isolates test user id 1100, eliminating collision with members-mutations.integration.test.ts",
+      "Test fixtures use seedTrackerVocabulary for realistic category data; category test asserts backlog value",
+      "All 7 integration tests pass; 3 consecutive cross-suite runs with members-mutations green"
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "3b3da0ff2600ee802580e5ee6c30b4b6f586b970"
+}

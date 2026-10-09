@@ -1,0 +1,138 @@
+{
+  "header": {
+    "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-07-01-linear-ticket-chat",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-07-02",
+    "date_completed": "2026-07-02",
+    "baseline_sha": "abec735e57a1133731aa6a3c9304166ba63ae4d1"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Linear API client + retry/backoff policy",
+          "status": "DONE",
+          "done_sha": "538719435a833e2a2e4459185410eefcec2c4378"
+        },
+        {
+          "id": "T2",
+          "name": "Structured extraction + completeness check + type classification",
+          "status": "DONE",
+          "done_sha": "4fb619baaa6cbee0bd02b9f22348dc80032bc231"
+        },
+        {
+          "id": "T3",
+          "name": "eventType extension + ticket history query helper",
+          "status": "DONE",
+          "done_sha": "89d6867cde05e3d7d2184fb9a76506f29f3ba8b4"
+        },
+        {
+          "id": "T4",
+          "name": "Rate limiting module",
+          "status": "DONE",
+          "done_sha": "46409124fd633c8311f1934612944d685b50f1ce"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T5",
+          "name": "Server router — chat-turn endpoint",
+          "status": "DONE",
+          "depends": "T2, T4",
+          "done_sha": "ae139a9e349bb453a1ef853cba0ef53ef45ccc1d"
+        },
+        {
+          "id": "T6",
+          "name": "Server router — submit + resubmit (async + SSE result)",
+          "status": "DONE",
+          "depends": "T1, T3, T4, T5",
+          "done_sha": "c9be35aa13b0e99b8604d09a5e02cfd72d49adbf"
+        },
+        {
+          "id": "T7",
+          "name": "Server router — ticket history endpoint",
+          "status": "DONE",
+          "depends": "T3, T6",
+          "done_sha": "1bf4863d4e81485038e14ee2e8c5f4fbbceab95d"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan-phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T8",
+          "name": "Client — api.ts additions + user-initiated tagging + auto-error bus",
+          "status": "DONE",
+          "depends": "T5, T6, T7",
+          "done_sha": "3fe486b63b6c59da230c315736cca0ec56e3e2fd"
+        },
+        {
+          "id": "T9",
+          "name": "Client — ticket-intake chat state machine hook",
+          "status": "DONE",
+          "depends": "T8",
+          "done_sha": "8af0c838913589ac69d063533d48f5f229c13bd7"
+        },
+        {
+          "id": "T10",
+          "name": "Client — chat + preview UI (floating button, ChatPanel, PreviewScreen)",
+          "status": "DONE",
+          "depends": "T9",
+          "done_sha": "3a61bde890e6d7b4048e60e6b3afb04571cbfede"
+        },
+        {
+          "id": "T11",
+          "name": "Client — ContextPanel integration (Report issue + ticket history)",
+          "status": "DONE",
+          "depends": "T9",
+          "done_sha": "f30b2341ee3ac16526a1af0ba473fa5a3f979d49"
+        },
+        {
+          "id": "T12",
+          "name": "Client — auto-error entry point wiring",
+          "status": "DONE",
+          "depends": "T8, T9",
+          "done_sha": "5199a1196c437410f3f9354ab7bddde5b0554c44"
+        },
+        {
+          "id": "T13",
+          "name": "Integration test — end-to-end ticket-intake flow",
+          "status": "DONE",
+          "depends": "T6, T7, T10, T11, T12",
+          "done_sha": "ae7f260460c9be28362091c495a1fd988ba3a01b"
+        },
+        {
+          "id": "T14",
+          "name": "Integration test — SSE submit-result → chat hook → preview UI (client, Story 6)",
+          "status": "DONE",
+          "depends": "T9, T10",
+          "done_sha": "7dad8b1d7f883716da2e9c830138a6f40f9b779c"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "ddbbc30",
+          "files": [
+            "client/src/components/ticketIntake/ChatPanel.tsx",
+            "client/src/hooks/useTicketIntakeChat.test.ts",
+            "client/src/hooks/useTicketIntakeChat.ts"
+          ],
+          "for_task": "T9"
+        }
+      ]
+    }
+  ]
+}

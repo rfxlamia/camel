@@ -1,0 +1,38 @@
+{
+  "task_id": "T6",
+  "task_name": "Column overlay and transactional is_done remap",
+  "cycle": 3,
+  "timestamp": "2026-08-31T04:32:34Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle-2 timestamp CASE coverage remains intact after extraction: first-column clearing preserves null started_at, non-first-column transitions start cards, done transitions set done_at, and pre-existing timestamps are preserved (server/src/routes/columns-is-done-remap.basic.test.ts:121-238).",
+      "Cycle-2 exact column.updated and card.updated payload/order assertions remain in the focused suites, and rollback still proves no publish occurs before a transaction that fails after card mutation and activity insertion (server/src/routes/columns-is-done-remap.basic.test.ts:75-118; server/src/routes/columns-is-done-remap.failure.test.ts:39-69).",
+      "Cycle-2 activity, no-tracker-event, concurrency/final-geometry, stale-409, and metadata-preservation assertions remain covered across the imported scenario suites (server/src/routes/columns-is-done-remap.edge.test.ts:69-168; server/src/routes/columns-is-done-remap.failure.test.ts:25-156).",
+      "The required integration entrypoint still imports and executes all three focused scenario suites, preserving all 11 integration scenarios (server/src/routes/columns-is-done-remap.integration.test.ts:39-46)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The pure remap plan applies is_done-wins geometry, excludes soft-deleted cards, omits unchanged slots, resolves only slotted status rows, and returns the original column id without any column move (server/src/core/remap-card-statuses.ts:34-73).",
+      "The transactional operation locks the workspace row, reads before/after human-column geometry, locks live cards, updates only planned card ids, applies the move-equivalent timestamp CASE expressions, and records each card activity through the transaction (server/src/routes/column-is-done-remap.ts:55-96, 131-243).",
+      "The route publishes each returned card.updated event before column.updated only after the transaction resolves; the failure suite verifies rollback leaves database, activity, tracker-event, and publish state unchanged (server/src/routes/columns.ts:268-302; server/src/routes/columns-is-done-remap.failure.test.ts:39-69).",
+      "POST remains append-right and does not invoke remapping, while metadata-only and rename PATCHes use the status-neutral path; the edge suite verifies existing card status/version and activity preservation (server/src/routes/columns.ts:64-83, 300-331; server/src/routes/columns-is-done-remap.edge.test.ts:103-168).",
+      "All three cycle-2 Important refactor findings are cleared: the required entrypoint is 46 lines, focused scenario suites are 241/167/156 lines, the shared test support is 211 lines, the transactional helper is focused with no oversized callback, and repeated position sorting is centralized in insertColumns (server/src/routes/columns-is-done-remap.integration.test.ts:1-46; server/src/routes/columns-is-done-remap.test-support.ts:105-127; server/src/routes/column-is-done-remap.ts:55-243)."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "7ad6253d51dd880fdea44856b611bfb2d1d9edc9"
+}

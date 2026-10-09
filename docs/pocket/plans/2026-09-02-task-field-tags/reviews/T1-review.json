@@ -1,0 +1,48 @@
+{
+  "task_id": "T1",
+  "task_name": "Client create and field-error contracts [prereq]",
+  "cycle": 4,
+  "timestamp": "2026-09-03T13:12:12Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cumulative range bbc94c8a1172a33eef86a8ea8d4b672050486ca4..b2b678a67bc2fcb5dd81a7c582083aff0a7c6ba0 changes exactly the four T1 files: client/src/lib/taskCreateContracts.ts, client/src/api.ts, client/src/api.test.ts, and client/src/api.tracker.test.ts.",
+      "T1-S01 is satisfied: BoardCreatePayload and api.createCard include assigneeIds, priorityId, labelIds, projectId, phaseId, and dueDate, while statusId is absent from the contract and serialized body (client/src/lib/taskCreateContracts.ts:1-11; client/src/api.ts:196-214; client/src/api.test.ts:144-172).",
+      "T1-S02 is satisfied: ApiError retains message, status, and typed optional fieldErrors through the shared request error path (client/src/api.ts:36-42, 82-113), with Board coverage at client/src/api.test.ts:175-198.",
+      "T1-S03 is satisfied: TrackerCreatePayload includes startDate and endDate, the public api.createWorkItem signature uses it, and JSON.stringify(body) forwards the accepted payload unchanged (client/src/lib/taskCreateContracts.ts:13-24; client/src/api.ts:477-481; client/src/api.tracker.test.ts:61-78). Title-only callers remain assignable.",
+      "T1-S04 is satisfied: Tracker structured errors use the same typed field-error model and preserve message, status, assigneeIds, phaseId, and statusId (client/src/api.tracker.test.ts:80-112).",
+      "The complete cumulative diff contains no OAuth redirect hardening or other OAuth scope drift. The window.location.href redirect at client/src/api.ts:325 is baseline behavior and is not a T1 finding.",
+      "The prior request-size finding is resolved: the modified request function is now 27 lines at client/src/api.ts:115-141, below the approximately 50-line threshold; error parsing is extracted to throwRequestError at client/src/api.ts:82-113.",
+      "The explicit human waiver is applied to the three pre-existing >300-line observations for client/src/api.ts, client/src/api.test.ts, and client/src/api.tracker.test.ts; they are not blocking findings for this audit."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All 60 tests in the T1 packet suite pass: client/src/api.test.ts and client/src/api.tracker.test.ts.",
+      "Client typecheck passes with the compile-time Tracker date contract assertion consumed without casts or suppressions.",
+      "Board serialization is additive and explicitly excludes statusId; title-only Board and Tracker calls remain compatible.",
+      "Shared request error handling preserves existing message, HTTP status, code, and retryAfterMs behavior while adding optional typed fieldErrors.",
+      "The request refactor is narrowly scoped and reduces the modified request function to 27 lines without changing public behavior."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Biome still reports non-blocking pre-existing organization/format diagnostics in the changed files: import ordering in api.ts and the two test files, plus an existing multiline-format diagnostic in api.tracker.test.ts. The latest formatter-only commit resolves the prior createWorkItem signature formatting concern, but does not make every changed file pass the repository's current Biome check.",
+        "location": "client/src/api.ts:1-34; client/src/api.test.ts:1; client/src/api.tracker.test.ts:1,255"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 3,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "b2b678a67bc2fcb5dd81a7c582083aff0a7c6ba0"
+}

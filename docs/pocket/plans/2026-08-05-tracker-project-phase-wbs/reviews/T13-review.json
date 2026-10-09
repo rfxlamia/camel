@@ -1,0 +1,45 @@
+{
+  "task_id": "T13",
+  "task_name": "Glyphs read the category column",
+  "cycle": 1,
+  "timestamp": "2026-08-05T23:27:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "CANCELLED = /cancel/i regex fully deleted, not retained as a fallback — verified by diff (TrackerGlyphs.tsx:9 removed) and by grep: no comparison against status.name participates in the glyph decision anywhere in statusGlyphSpec",
+      "Category-to-shape mapping expressed as a single lookup object CATEGORY_SHAPE (TrackerGlyphs.tsx:17-22), exactly as the packet's bounded 'refactor while green' step prescribes, instead of a conditional chain",
+      "The 'started' fill fraction is genuinely preserved: index / (flow.length - 1) over statuses filtered by category !== 'canceled' (TrackerGlyphs.tsx:41-45) reproduces the prior position-rank behaviour that the architecture rule flagged as a visual-regression risk",
+      "Null/undefined category handled defensively via status.category ?? null with an early pending return (TrackerGlyphs.tsx:33-34), satisfying the grandfathered-status path without throwing",
+      "Divide-by-zero guarded for a lone non-canceled started status (TrackerGlyphs.tsx:42), and the test asserts Number.isFinite on the fraction rather than a magic value",
+      "Test suite covers every DELIVERABLE scenario including the [must-not] clause — 'ignores a name containing cancel when its category is not canceled' (TrackerGlyphs.test.ts:95-103) is a true negative test that would fail if any name matching were reintroduced",
+      "Test names are descriptive behaviour statements, and the statusVocab/priorityVocab fixture helpers keep category explicit at every call site (TrackerGlyphs.test.ts:5-20)",
+      "Zero changes to SVG rendering or sizing — the diff stops at line ~45 and StatusGlyph/PriorityGlyph/LabelDot/Avatar are byte-identical, honouring the must-not-have",
+      "Scope discipline: git diff over 3bebd75..230bd55 touches only the two declared files (28 lines in .tsx, 80 in .test.ts); no out-of-scope edits despite five call sites consuming these helpers",
+      "Verified green: TrackerGlyphs.test.ts 15/15 pass, full client suite 471/471 across 63 files, npm run typecheck clean on both workspaces, biome check clean on both changed files",
+      "Commit message 'fix(tracker): derive status glyphs from category instead of the name' matches the required fix(tracker): … pattern"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The 'started' branch returns the string literal \"progress\" instead of the shape already resolved from CATEGORY_SHAPE on line 36, so CATEGORY_SHAPE.started is never actually read and the started-to-progress mapping exists in two places. If the mapping table were ever edited, the started path would silently ignore the change. Returning `shape` in both branches would keep the lookup object the single source of truth.",
+        "location": "client/src/components/tracker/TrackerGlyphs.tsx:42,45"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "230bd5520dc49a8749e24eb3df79ba17d68920a5"
+}

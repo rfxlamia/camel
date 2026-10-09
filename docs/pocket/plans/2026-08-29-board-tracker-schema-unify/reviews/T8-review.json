@@ -1,0 +1,62 @@
+{
+  "task_id": "T8",
+  "task_name": "PATCH card priority, labels, project, and phase",
+  "cycle": 1,
+  "timestamp": "2026-08-31T07:42:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "diffIds extracted to server/src/core/diff-ids.ts and imported by card-assignees, card-labels, tracker-items label sync, and tracker-assignees (import-only fallout from removing diffAssigneeIds).",
+      "PATCH /cards/:id wires priorityId, labelIds, projectId, and phaseId with parse-before-write, transactional syncCardLabels on card_labels, recordActivity to card_events, and preserved optional-version semantics (server/src/routes/cards.ts:393-612).",
+      "Board effective-project guard lives in parseCardProjectPhase using the card's current project_id for phase-only updates; parseProjectPhase body is unchanged (server/src/routes/tracker-item-parsers.ts:120-251).",
+      "HTTP integration suite covers set/clear, 409 stale version, cross-workspace/wrong-kind rejection paths, phase-only guards, projectId-null with phase, labels-only without version, and statusId rejection on POST/PATCH (server/src/routes/cards-taxonomy.integration.test.ts).",
+      "statusId remains rejected on PATCH; no status_id writes added to the taxonomy PATCH path."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "diffIds is shared across assignee sync (card-assignees, tracker-assignees), tracker item labels, and card labels — eliminating the misleading diffAssigneeIds reuse.",
+      "syncCardLabels writes only to card_labels with diff-based junction updates; no tracker_item_labels usage for cards.",
+      "parseCardProjectPhase correctly enforces effective-project semantics: phase-only rejected without a card project, allowed only when phase belongs to the card's project, and projectId:null with non-null phase rejected via unchanged parseProjectPhase.",
+      "Optional-version behavior is preserved: labels-only PATCH without a version key succeeds and bumps version; version-gated updates use the existing $if(version !== undefined) pattern in both hasSets and assignee-only branches.",
+      "Thirteen real HTTP integration scenarios exercise 4xx/409 contracts end-to-end with DB state assertions; unit suites for diffIds, parsers, and syncCardLabels all pass (30/30).",
+      "Tracker route semantics unchanged beyond diffIds import swap in tracker-items.ts and tracker-assignees.ts.",
+      "Conventional commit feat(board-tracker): add card taxonomy patch validation at reviewed SHA."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The grouped cross-workspace/wrong-kind HTTP bullet does not include explicit cases for cross-workspace label/phase or wrong-kind priority at the HTTP layer; label wrong-kind and cross-workspace priority/project are covered, and parser unit tests cover priority/label kind filtering.",
+        "location": "server/src/routes/cards-taxonomy.integration.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "diffIds behavior is duplicated between server/src/core/diff-ids.test.ts and server/src/routes/cards.assignees.test.ts with near-identical cases.",
+        "location": "server/src/routes/cards.assignees.test.ts:4-48"
+      },
+      {
+        "severity": "Minor",
+        "description": "tracker-item-parsers.ts grew to 305 lines (from 232) after adding parsePriorityId and parseCardProjectPhase; growth is spec-mandated but crosses the ~300-line refactor heuristic.",
+        "location": "server/src/routes/tracker-item-parsers.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "cards.assignees.test.ts and tracker-assignees.ts are outside the task file list but required to update imports after removing diffAssigneeIds; changes are import-only with no behavioral delta.",
+        "location": "server/src/routes/tracker-assignees.ts:2"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "d1bef41ed7767fb9669b55deb709908a15ad6f3c"
+}

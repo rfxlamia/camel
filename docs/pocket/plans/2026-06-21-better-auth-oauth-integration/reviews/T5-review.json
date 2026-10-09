@@ -1,0 +1,59 @@
+{
+  "task_id": "T5",
+  "task_name": "Client Auth UI — OAuth Buttons, PickUsername & EmailGate Screens",
+  "cycle": 1,
+  "timestamp": "2026-06-21T21:24:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "First-pass review of the original done_sha (81d82fc0) flagged DELIVERABLE scenario 7: oauth_error=cancelled message not rendering because setOauthError ran only in the api.me() success branch while a cancelled OAuth makes api.me() reject with 401. Correction commit d78c1b0 ('fix: set oauthError before api.me() so cancelled prop reaches AuthPage on 401') resolves exactly this — setOauthError now runs before/independently of the api.me() chain, so AuthPage receives oauthError='cancelled' on the user=null path. App.test.tsx now covers both the cancelled and no-error paths. Verdict re-evaluated against the union of original range + correction d78c1b0."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All must-haves verified: OAuth buttons use api.startOAuth which sets window.location.href (api.ts:177-181, not fetch); User type extended with username:string|null, emailVerified:boolean, needsUsername:boolean (types.ts:24-31); App.tsx state machine checks BOTH needsUsername then emailVerified in correct order (App.tsx:107-110)",
+      "Single api.me() effect confirmed — the new session-check useEffect (App.tsx:92-104) replaces the old one; me() does not fire twice",
+      "AuthPage renders 'Login cancelled — try again' on oauthError (AuthPage.tsx:163-167); PickUsernamePage calls api.setUsername then api.me then onComplete (PickUsernamePage.tsx:24-26); EmailGatePage has Link Google + Link GitHub calling api.startOAuth (EmailGatePage.tsx)",
+      "SettingsPage set-password section gated on user.emailVerified with >=8 char validation and ApiError handling (SettingsPage.tsx:277-296, 479-521)",
+      "Correction d78c1b0 correctly moves setOauthError before api.me() so the cancelled prop reaches AuthPage even when me() rejects with 401; App.test.tsx covers both paths",
+      "make typecheck passes (noUnusedLocals/noUnusedParameters clean); all client tests pass via npm run test --workspace=client",
+      "No must-not violations: no manual email entry form, no unlink button, no client-side token storage; email gate is server-authoritative",
+      "Design-system adherence: components use brand Tailwind tokens (primary-600/700, neutral-300, rounded-md, focus-visible outline), Work Sans inherited globally"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Dead mock: vi.mock(\"../api\") resolves to client/api (nonexistent) but App.tsx imports \"./api\" (client/src/api). The mock never intercepts App's import. Test passes only because the real api.me() rejects in jsdom, coincidentally driving the same catch→AuthPage path. Mock should target the resolved module or be removed.",
+        "location": "client/src/App.test.tsx:14-29"
+      },
+      {
+        "severity": "Minor",
+        "description": "'Login cancelled' renders on any truthy oauthError ({oauthError && ...}) rather than strictly oauthError === 'cancelled' as stated in the plan. Behavior equivalent since the server only emits oauth_error=cancelled, but the guard is looser than specified.",
+        "location": "client/src/components/AuthPage.tsx:163"
+      },
+      {
+        "severity": "Minor",
+        "description": "Inconsistent error-text color: AuthPage and PickUsernamePage use text-error-900 for inline error text, while SettingsPage uses text-error-600 and the creative-brief specifies error-600. Cosmetic inconsistency.",
+        "location": "client/src/components/AuthPage.tsx:164, client/src/components/PickUsernamePage.tsx:80"
+      },
+      {
+        "severity": "Minor",
+        "description": "EmailGatePage Props declares onComplete but it is never used (component relies on full OAuth redirect to drive state). Intentional API symmetry with PickUsernamePage; harmless.",
+        "location": "client/src/components/EmailGatePage.tsx:5-8"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "d78c1b0c0c2d5f867b17b65ddef1545dd3d8a63b"
+}

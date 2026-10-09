@@ -1,0 +1,62 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-06-14-agentic-kanban-phase2-pipeline",
+    "plan_type": "flat",
+    "status": "DONE",
+    "date_started": "2026-06-14",
+    "date_completed": "2026-06-15",
+    "baseline_sha": "5ded7d1492c1caaab4631edb08f8a1c05f323e19"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Pure resolver layer in templates.ts",
+          "status": "DONE",
+          "done_sha": "38263994a438763b62549962c9fdd07eef69d912"
+        },
+        {
+          "id": "T2",
+          "name": "runPipeline loop in service.ts",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "fb4fe27200ba1bc2e66615163b87b2f674d00bf3"
+        },
+        {
+          "id": "T3",
+          "name": "routes.ts wiring — getColumns dep + call-site update",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "d00f440e1c2c8b0136251c4d5ce53809112b3d8f"
+        },
+        {
+          "id": "T4",
+          "name": "Headless live-LLM integration test",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "3c8a7e77b4301daf199dd9efe982f4a77b476125"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "721d851f406a3d1d8198163f026b59e4ae1ea8c9",
+          "files": [
+            "server/src/agent/templates.test.ts"
+          ],
+          "for_task": "T1"
+        },
+        {
+          "sha": "4505a19843f7c4bc60b0b74d6ce2dbf5e8851b42",
+          "files": [
+            "server/src/agent/templates.test.ts"
+          ],
+          "for_task": "T1"
+        }
+      ]
+    }
+  ]
+}

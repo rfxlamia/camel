@@ -1,0 +1,39 @@
+{
+  "task_id": "T9",
+  "task_name": "Wire assignee/label pickers into TrackerRow + TrackerPage",
+  "cycle": 2,
+  "timestamp": "2026-08-29T06:51:31Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Implementer concern (cycle 1, still accurate): the 409 mid-queue UI assertion for a stable [Alice, Dave] frame was replaced with Carol's PATCH { assigneeIds: [7, 10, 9], version: 9 }. Classified as Observation — justified test-strategy adaptation, not a missing requirement. Spec Story 4 and the packet DELIVERABLE require revert + toast + refetch, then the remaining toggle computed against refetched state; the packet's own test-strategy-audit finding names that exact PATCH as the distinguishing assertion. After Bob's 409, applyItemPatch rollbacks assignees, toasts, and awaits loadData() which synchronously replaceItems() into itemsRef before returning; Carol's queued builder then runs in the same turn and applyItemPatch immediately writes optimistic [Alice, Dave, Carol], so an [Alice, Dave]-only React frame is not a stable integration-test surface. The test asserts the toast, the refetch (listTrackerItems called twice), and the exact PATCH, which cannot pass unless Carol reads the refetched [Alice, Dave]/version=9 state rather than [Alice], [Alice, Bob], or a dropped toggle.",
+      "Previous Important (cycle 1): TrackerRow.tsx 280→393 crossed ~300. Confirmed cleared at HEAD 15fcd61: wc reports 289 lines. Assignee/label option builders and picker/fallback blocks live in declared helper TrackerRowMemberLabel.tsx (176 lines). Four props remain optional on TrackerRow (members/labels/onAssigneeToggle/onLabelToggle). TrackerPhaseSection.tsx is unmodified in this range and still omits the four props.",
+      "Previous Minor (cycle 1) biome-ignore on TrackerPage workspace-reset effect and loadData: classified resolved-as-required, not re-emitted. Removing the comments fails Biome useExhaustiveDependencies (pre-commit). The workspace-reset effect (TrackerPage.tsx:133-137) lists activeWorkspaceId as an intentional trigger without reading it in the body — same pattern as the pre-existing location.key ignore at :119. loadData (TrackerPage.tsx:176) calls inlined loadAuxiliary keyed by loadSeqRef; adding it to the dependency array would recreate loadData every render. T9's deliverable did not restructure those T7 hooks; the ignores are required to land the in-scope TrackerPage.tsx changes."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "TrackerRow.tsx is back under ~300 (289 lines) after extracting builders and picker/fallback blocks into TrackerRowMemberLabel.tsx; OpenPicker still includes assignees/labels; the four new props stay optional",
+      "changeAssignee/changeLabel enqueue first and let applyItemPatch read itemsRef.current at execution time; they never capture item.assignees/item.labels before enqueue",
+      "resolveToggle is imported from trackerUtils and used for both add and remove, not re-implemented",
+      "Optimistic assignees are { id: member.userId, username, displayName } TrackerItemAssignee objects; unresolved ids return null and skip the patch",
+      "Ordinary failures roll back only assignees or only labels; the 409 tail awaits loadData() so itemsRef is updated before the next queued toggle",
+      "members, labels, onAssigneeToggle, and onLabelToggle are optional on TrackerRow; TrackerSection binds item at the Row call-site; TrackerPhaseSection.tsx is unmodified and still omits the four props",
+      "Integration suite covers add, remove, live-state race, label add/remove, and the exact 409 PATCH { assigneeIds: [7, 10, 9], version: 9 }"
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "15fcd61d331c10d8a99681e52bf960df6527a7a7"
+}

@@ -1,0 +1,39 @@
+{
+  "task_id": "T15",
+  "task_name": "Verify cross-boundary attachment mutation, SSE, and create flow",
+  "cycle": 2,
+  "timestamp": "2026-09-06T17:10:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Implementer concern that server/private-uploads/ is an untracked leftover from local fixture storage — classified as observation. Confirmed at 2a44280: range 329e78b..2a44280 does not add or track that directory; tests still write under a UUID subdir of ATTACHMENTS_DIR and remove it in fixture cleanup (attachments-system.support.ts:121-129; create-support.ts:122-137, 243-254).",
+      "Implementer concern that server/tsconfig.json excludes the client-bridge from server tsc because it is a runtime-only import of client code — classified as observation/scope. Confirmed in 2a44280: attachments-system.client-bridge.ts remains test-only, uses @ts-nocheck, and the exclude is the typecheck seam for invokeClientCreateCard; it does not replace the card-create route with a mock.",
+      "Cycle 1 Important 1 (support.ts 470 lines) — cleared: vi.mock(\"../auth.js\") and Express app stay in attachments-system.support.ts (217 lines); create-flow HTTP server helpers plus system fixture wrappers live in attachments-system.create-support.ts (279 lines). Both files are under the ~300-line heuristic.",
+      "Cycle 1 Important 2 (createAttachmentViewerHarness ~87 lines) — cleared: factory is 29 lines in attachments-system.harness.ts:31-59; fetch/EventSource adapter extracted to attachments-system.harness-adapters.ts (140 lines), with createHarnessFetchRouter at 33 lines.",
+      "Cycle 1 Minor (unused readdir import) — cleared: attachments-system.support.ts:3 imports only mkdir and rm from node:fs/promises."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Mutation→SSE test hits the public upload route with supertest, then observes real sseHandler data: frames for viewer B after DB/file commit — not a publishEvent spy (attachments-system.integration.test.ts:27-75, support.ts:135-165, create-support.ts:238-256).",
+      "Viewer test mounts real BoardProvider and CardAttachments, delivers attachment.added through the EventSource adapter, and asserts 1/3→2/3 plus the new thumbnail control without invoking onUpload (attachments-system.integration.test.tsx:159-192; harness.ts:61-70; harness-adapters.ts:17-20, 40-72).",
+      "Staged create sends client api.createCard FormData to an in-process HTTP server mounting the production /api router and inspects both the hydrated card summary and isolated DB card/attachment rows (integration.test.ts:77-100, client-bridge.ts:13-27, api.ts:299-310, create-support.ts:42-56, 258-279).",
+      "Harness split kept public boundaries real: Redis null publisher/subscriber, temp LocalAttachmentStorage, and browser/network adapters remain the only doubles; persistCreatedCard is not imported; no Playwright/Cypress dependency; tracker tables/routes are untouched. vi.mock(auth)+app stay in one module as required.",
+      "Refactor heuristics on the new split files: support.ts 217, create-support.ts 279, harness.ts 76 with factory 29 lines, harness-adapters.ts 140. No in-scope file remains over ~300 lines; createAttachmentViewerHarness is under ~50."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "2a44280967c842981b319a19fc3aed81c7107702"
+}

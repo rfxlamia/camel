@@ -1,0 +1,87 @@
+{
+  "header": {
+    "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-06-29-sidebar-inbox",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-06-30",
+    "date_completed": "2026-06-30",
+    "baseline_sha": "83d3ae5aedb8080368dc3be702c29c299c243b6e"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "DB Schema Migration",
+          "status": "DONE",
+          "done_sha": "3751d9e845b44f722e56163f0f1774d80dbf1b4d"
+        },
+        {
+          "id": "T2",
+          "name": "Domain Event Bus",
+          "status": "DONE",
+          "done_sha": "9a561c9b51c1c98a3021c8a5f8dc7d44e955c51e"
+        },
+        {
+          "id": "T3",
+          "name": "Notification Service Core",
+          "status": "DONE",
+          "depends": "T1, T2",
+          "done_sha": "557fd6f0dddc6d9359e338acdaf5dbc7404aed04"
+        },
+        {
+          "id": "T4",
+          "name": "Route Event Emitters",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "6b35d1734ab7a20a5422af8be184861863b99468"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T5",
+          "name": "Notification REST API + SSE Hub",
+          "status": "DONE",
+          "depends": "T3",
+          "done_sha": "9897ebddfa820ba1417d4395215d87667436d857"
+        },
+        {
+          "id": "T6",
+          "name": "Due Date Reminder Scheduler",
+          "status": "DONE",
+          "depends": "T3",
+          "done_sha": "f0542405b42714e7b65737941a278c82c49fe935"
+        },
+        {
+          "id": "T7",
+          "name": "Client Notifications Hook + API Layer",
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "0441aa4fcce54f2f15a5e404853a627b04f95d9b"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan-phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T8",
+          "name": "InboxPage + Sidebar Wiring",
+          "status": "DONE",
+          "depends": "T7",
+          "done_sha": "cde69a17a4ef7b7f0066ee345c91b934f240dca5"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "task_id": "T1",
+  "task_name": "Add the My Work wire contract and Fuse.js dependency",
+  "cycle": 2,
+  "timestamp": "2026-09-12T09:05:04Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "correction_sha": "d0077fac02d8cd2801d9b72869fd258a2d0be306",
+  "correction_finding": "P1-003",
+  "audited_head": "d0077fac02d8cd2801d9b72869fd258a2d0be306",
+  "parent_sha": "2a691d94c5c72d6b33c14f08ce7f71f72b519f72",
+  "affected_tasks": ["T1", "T2"],
+  "bleed": ["T1"],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P1-003 is resolved at the T1 API boundary: listActiveMyWorkCandidates requests scope=active pages without q, while the existing listMyWork method continues to serialize q for the All path.",
+      "Active candidate aggregation follows opaque nextCursor values, preserves workspaceId/source/limit on every page, stops on null or repeated cursors, and caps requests at 20 pages.",
+      "The 73-item typo regression exercises the public api.listActiveMyWorkCandidates facade and the unchanged T4 searchMyWorkCandidates helper; the match beyond the first 50 items is retained.",
+      "The pre-existing OAuth redirect observation in client/src/api.ts remains unchanged and outside this correction scope.",
+      "The original T1 done_sha d1d59038ffbf9e2e3fc61c40f8975fdb7fc6d409 remains unchanged; reviewed_sha is the newest owned correction."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The correction diff contains exactly the two T1-owned client files plus the three CLI-attributed T2 files; no page/T6 implementation, T4 artifact, log, phase-pass, or unrelated file is changed.",
+      "listActiveMyWorkCandidates uses the existing shared request boundary, strips q intentionally, follows opaque cursors with a repeated-cursor guard, and applies a bounded 20-page candidate budget without client authorization or membership discovery.",
+      "The public API regression uses 50 first-page items and a title match at item 73, verifies two requests, verifies workspace/source/limit preservation, and asserts q is absent from every Active URL before passing the candidates to T4 Fuse search.",
+      "Existing All behavior remains q-bearing through listMyWork, including the encoded q URL contract; composite identity/detail/version behavior remains unchanged.",
+      "Independent verification passed: the focused client API suite (5/5), the full repository test suite (834 server passed with 273 skipped; 971 client passed), client/server typechecks, root Biome lint, and git diff --check."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "d0077fac02d8cd2801d9b72869fd258a2d0be306"
+}

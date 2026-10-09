@@ -1,0 +1,57 @@
+{
+  "task_id": "T8",
+  "task_name": "Race-safe member removal",
+  "cycle": 1,
+  "timestamp": "2026-09-03T21:12:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Diff e7b7921..95b93d0 touches only the three OBJECTIVE files; no out-of-scope client, schema, dependency, or migration changes.",
+      "T8-S02 production change: lockWorkspaceMutation(trx, workspaceId) runs before DELETE workspace_members inside the default removeMember transaction (helpers.ts:353-358); signable-column, card-assignee, tracker-assignee cleanup and publication path preserved.",
+      "T8-C01 scenario 'Reject a revoked assignee' implemented for Board POST /cards and Tracker POST /work-items with assigneeIds fieldErrors and assertNo*Artifacts guards (work-item-member-concurrency.integration.test.ts:357-389).",
+      "T8-C02 scenario 'Resolve a concurrent reference deletion atomically' interleaves real removal and create via holdWorkspaceRow + waitForPeerWaitingOnWorkspaceLock for both Board and Tracker, accepting 201|400 and asserting complete-or-empty outcomes (work-item-member-concurrency.integration.test.ts:391-448).",
+      "T8-S02 scenario 'waits on workspace lock before deleting membership' proves removal blocks on workspace row then allows membership FOR UPDATE NOWAIT before completion (work-item-member-concurrency.integration.test.ts:450-475).",
+      "Integration suite gated by RUN_INTEGRATION=1, uses Supertest + real PostgreSQL; only redis/realtime/auth mocked per packet.",
+      "workspaceAccess.test.ts adds service-layer 404 regression when getWorkspace returns null before deps.removeMember (workspaceAccess.test.ts:136-156).",
+      "Conventional commit fix(workspaces): serialize member removal with task create exists at reviewed SHA."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Minimal production diff: one lock call reuses existing lockWorkspaceMutation primitive shared with task-create locking.",
+      "Integration helpers (holdWorkspaceRow, lockMembershipNowait, waitForPeerWaitingOnWorkspaceLock) directly exercise the workspace-first vs membership-first ordering proof required by T8-S02.",
+      "Dedicated workspace IDs and thorough cleanup keep Board/Tracker fixtures isolated; assertComplete*Outcome enforces no-partial-state on rejection paths.",
+      "Server import uses .js extension for workspace-mutation-lock.js; unit test follows existing createWorkspaceAccessService mock harness."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "waitForPeerWaitingOnWorkspaceLock matches any peer Lock wait_event, not specifically the workspaces-row lock; could false-positive under unrelated DB contention though --no-file-parallelism mitigates",
+        "location": "server/src/routes/work-item-member-concurrency.integration.test.ts:286"
+      },
+      {
+        "severity": "Minor",
+        "description": "assertCompleteBoardOutcome / assertCompleteTrackerOutcome on 201 success paths verify card/item + one activity row but not assignee relation rows; T8-C02 partial-state invariant could regress undetected on success branch",
+        "location": "server/src/routes/work-item-member-concurrency.integration.test.ts:247"
+      },
+      {
+        "severity": "Minor",
+        "description": "helpers.ts is 529 lines, well above the packet ~300-line refactor heuristic; only two lines added here and splitting would need undeclared files",
+        "location": "server/src/routes/helpers.ts:1"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "95b93d0da787ecac7ec86c69a12c5687586c9d7c"
+}

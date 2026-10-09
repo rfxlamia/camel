@@ -1,0 +1,159 @@
+{
+  "header": {
+    "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-09-04-commit-focus",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-09-04",
+    "date_completed": "2026-09-05",
+    "baseline_sha": "9a8376dd6f5a519f8a919334c311161ac166425e",
+    "pipeline": 4,
+    "plan_file": "execution-plan/index.md"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "`focus_sessions` schema + Kysely types",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T1-focus-sessions-schema-kysely-types.md",
+          "done_sha": "26ed90d7425b6d0aeed456129c430fb8966e982e"
+        },
+        {
+          "id": "T2",
+          "name": "Focus session domain core — state machine + active-time math",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T2-focus-session-domain-core-state-machine-active-time-math.md",
+          "done_sha": "9825d0147f1e81fac477e0b4a8b82bbd7d551e2a"
+        },
+        {
+          "id": "T3",
+          "name": "`FOCUS_MODE_ENABLED` flag + client visibility",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T3-focus-mode-enabled-flag-client-visibility.md",
+          "done_sha": "d69023669b292688a988cd67c428eb913ff2233f"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan/phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T15",
+          "name": "Focus audit event type + activity feed exclusion",
+          "status": "DONE",
+          "depends": "T3",
+          "file": "execution-plan/tasks/T15-focus-audit-event-type-activity-feed-exclusion.md",
+          "done_sha": "54dc114cce3ef55ffca9f96cc34a345ab942fa82"
+        },
+        {
+          "id": "T4",
+          "name": "Focus session route — read + create",
+          "status": "DONE",
+          "depends": "T1, T2, T3, T15",
+          "file": "execution-plan/tasks/T4-focus-session-route-read-create.md",
+          "done_sha": "6c8e158daa59c8f713594e08e45c9052da50a1ca"
+        },
+        {
+          "id": "T5",
+          "name": "Focus session route — lifecycle transitions + optimistic locking",
+          "status": "DONE",
+          "depends": "T4",
+          "file": "execution-plan/tasks/T5-focus-session-route-lifecycle-transitions-optimistic-locking.md",
+          "done_sha": "3455f809da283614428cfe6b355c736893efa406"
+        },
+        {
+          "id": "T6",
+          "name": "Focus session route — atomic switch",
+          "status": "DONE",
+          "depends": "T5",
+          "file": "execution-plan/tasks/T6-focus-session-route-atomic-switch.md",
+          "done_sha": "2b939ad25bd2ed143ceee28033601fa9989e21fc"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan/phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T7",
+          "name": "Client focus session model — `FocusSessionProvider` + SSE seams",
+          "status": "DONE",
+          "depends": "T6",
+          "file": "execution-plan/tasks/T7-client-focus-session-model-focussessionprovider-sse-seams.md",
+          "done_sha": "7eeb616a740d5a326555aa2e77a6af434518e238"
+        },
+        {
+          "id": "T8",
+          "name": "`FocusTimer` — duration display + lifecycle controls",
+          "status": "DONE",
+          "depends": "T7",
+          "file": "execution-plan/tasks/T8-focustimer-duration-display-lifecycle-controls.md",
+          "done_sha": "ff046f17eee4b9eaf534f23137c343d6a28e9009"
+        },
+        {
+          "id": "T11",
+          "name": "Global \"Focus active\" nav indicator",
+          "status": "DONE",
+          "depends": "T7",
+          "file": "execution-plan/tasks/T11-global-focus-active-nav-indicator.md",
+          "done_sha": "9ccdbc01de889b9472c385a0c9cc4a77e0e1a6fd"
+        },
+        {
+          "id": "T12",
+          "name": "Workspace switch guard",
+          "status": "DONE",
+          "depends": "T7",
+          "file": "execution-plan/tasks/T12-workspace-switch-guard.md",
+          "done_sha": "fa9764b19b95d7ec2d4c7387f62545c592bba6de"
+        },
+        {
+          "id": "T14",
+          "name": "Server-side membership revocation finalization",
+          "status": "DONE",
+          "depends": "T6, T15",
+          "file": "execution-plan/tasks/T14-server-side-membership-revocation-finalization.md",
+          "done_sha": "7efc39f298dd7b030a68b8a27117c509a640c20a"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "file": "execution-plan/phase-4.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T9",
+          "name": "`/focus` route + `FocusPage`",
+          "status": "DONE",
+          "depends": "T8",
+          "file": "execution-plan/tasks/T9-focus-route-focuspage.md",
+          "done_sha": "45cdd83b0c5b198b2ce962486d17137adb75d61f"
+        },
+        {
+          "id": "T10",
+          "name": "Entry points — \"Focus on this task\" + confirm-switch",
+          "status": "DONE",
+          "depends": "T6, T9",
+          "file": "execution-plan/tasks/T10-entry-points-focus-on-this-task-confirm-switch.md",
+          "done_sha": "fd31d17f6caf86a2a039976118ada768e2526cd5"
+        },
+        {
+          "id": "T13",
+          "name": "Live auto-finish guards — task deleted, access revoked",
+          "status": "DONE",
+          "depends": "T12, T14",
+          "file": "execution-plan/tasks/T13-live-auto-finish-guards-task-deleted-access-revoked.md",
+          "done_sha": "9b9e6e6634999fcf1a2eb9450063df371010551c"
+        }
+      ]
+    }
+  ]
+}

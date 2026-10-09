@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "phase_key": "phase-3",
+  "phase_file": "execution-plan/phase-3.md",
+  "timestamp": "2026-09-13T11:05:36Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "phase-level-cross-task",
+  "tasks_reviewed": ["T9", "T11", "T8", "T10"],
+  "task_ranges": [
+    {
+      "task_id": "T9",
+      "range": "342b99e53f5069e2fbc8040b94dcfc327d5e6e4d..6bba3aab7fbe2ddfba3ca970740214c302613995"
+    },
+    {
+      "task_id": "T11",
+      "range": "6bba3aab7fbe2ddfba3ca970740214c302613995..597a0cea2db3b58036f86d80d7ebe77af4dcb211"
+    },
+    {
+      "task_id": "T8",
+      "range": "597a0cea2db3b58036f86d80d7ebe77af4dcb211..6f0b1f8c57b55cbde888a79841b415585f2d5418"
+    },
+    {
+      "task_id": "T10",
+      "range": "6f0b1f8c57b55cbde888a79841b415585f2d5418..fd93cc339d5852bcab558c956709f6c4037512c9"
+    }
+  ],
+  "corrections_reviewed": [
+    {
+      "id": "P3-001",
+      "sha": "7043346afa8728823f12c1586814ce57c1a942ff",
+      "parent_sha": "fd93cc339d5852bcab558c956709f6c4037512c9",
+      "for_task": "T11",
+      "affected_tasks": ["T11", "T9"],
+      "files": [
+        "server/src/routes.ts",
+        "server/src/routes/my-work-router.ts",
+        "server/src/routes/my-work.observability.integration.test.ts"
+      ],
+      "commit_subject": "fix(my-work): observe unauthorized rollups",
+      "scope_check": "PASS — exactly the three listed files; log.json absent"
+    },
+    {
+      "id": "P3-002",
+      "sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+      "parent_sha": "7043346afa8728823f12c1586814ce57c1a942ff",
+      "for_task": "T8",
+      "affected_tasks": ["T11", "T8", "T9"],
+      "files": [
+        "client/src/components/my-work/MyWorkDoneAction.test.tsx",
+        "client/src/components/my-work/myWorkDoneActionState.ts",
+        "server/src/routes/my-work-router.ts",
+        "server/src/routes/my-work.integration.authorization.ts",
+        "server/src/routes/my-work.integration.mutations.ts"
+      ],
+      "commit_subject": "fix(my-work): align mark done error contracts",
+      "scope_check": "PASS — exactly the five listed files; log.json absent"
+    }
+  ],
+  "per_task_verdicts": [
+    {
+      "task_id": "T9",
+      "overall": "REVIEW_PASS",
+      "stage_1": "PASS",
+      "stage_2": "PASS",
+      "reviewed_sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca"
+    },
+    {
+      "task_id": "T11",
+      "overall": "REVIEW_PASS",
+      "stage_1": "PASS",
+      "stage_2": "PASS",
+      "reviewed_sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+      "minor_concern": "parallel-suite resource contention is environment-only"
+    },
+    {
+      "task_id": "T8",
+      "overall": "REVIEW_PASS",
+      "stage_1": "PASS",
+      "stage_2": "PASS",
+      "reviewed_sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca"
+    },
+    {
+      "task_id": "T10",
+      "overall": "REVIEW_PASS",
+      "stage_1": "PASS",
+      "stage_2": "PASS",
+      "reviewed_sha": "fd93cc339d5852bcab558c956709f6c4037512c9"
+    }
+  ],
+  "fanout_validation": {
+    "done_sha_unchanged": {
+      "T9": "6bba3aab7fbe2ddfba3ca970740214c302613995",
+      "T11": "597a0cea2db3b58036f86d80d7ebe77af4dcb211",
+      "T8": "6f0b1f8c57b55cbde888a79841b415585f2d5418",
+      "T10": "fd93cc339d5852bcab558c956709f6c4037512c9"
+    },
+    "commit_time_order": [
+      {
+        "sha": "6bba3aab7fbe2ddfba3ca970740214c302613995",
+        "commit_time": "2026-09-13T12:37:13+07:00"
+      },
+      {
+        "sha": "597a0cea2db3b58036f86d80d7ebe77af4dcb211",
+        "commit_time": "2026-09-13T13:10:27+07:00"
+      },
+      {
+        "sha": "6f0b1f8c57b55cbde888a79841b415585f2d5418",
+        "commit_time": "2026-09-13T15:30:37+07:00"
+      },
+      {
+        "sha": "fd93cc339d5852bcab558c956709f6c4037512c9",
+        "commit_time": "2026-09-13T16:44:49+07:00"
+      },
+      {
+        "sha": "7043346afa8728823f12c1586814ce57c1a942ff",
+        "commit_time": "2026-09-13T17:24:51+07:00"
+      },
+      {
+        "sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+        "commit_time": "2026-09-13T17:43:32+07:00"
+      }
+    ],
+    "expected_latest_owned_sha": {
+      "T9": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+      "T11": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+      "T8": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+      "T10": "fd93cc339d5852bcab558c956709f6c4037512c9"
+    },
+    "result": "PASS — refreshed verdict reviewed_sha values match the max-by-commit-time owned SHA for every task"
+  },
+  "cross_task_checks": [
+    {
+      "check": "P3-001 global auth/middleware composition",
+      "status": "PASS",
+      "evidence": "server/src/routes.ts mounts the My Work pre-auth observer before the API-wide requireAuth. The observer records only when req.user is absent and the delegated response status is 401, then delegates to the original res.status. The real production-stack regression preserves the no-cookie 401 body and asserts exactly one sanitized my_work_rollup event. The expired-session branch in server/src/auth.ts also returns res.status(401) while req.user remains unset, so it traverses the same observer; authorized requests set req.user before any route status and retain the existing query/response path. The route-local auth observer is not reached after global auth rejects, preventing duplicate events. Telemetry accepts only aggregate latency/count/status-derived error class fields and the regression rejects task, workspace, user, credential, and DATABASE_URL content."
+    },
+    {
+      "check": "P3-002 T3/T9 source-aware server contract composed with T8 client classification",
+      "status": "PASS",
+      "evidence": "server/src/routes/my-work-router.ts now returns code=wip_limit_reached for WIP 409 responses, while client/src/components/my-work/myWorkDoneActionState.ts treats only coded version_conflict/conflict 409 responses as version conflicts. Board and Tracker unmappable responses retain status_column_unmappable but use source-correct Board columns versus Tracker statuses copy. T9 real-DB regressions cover Board WIP, Board/Tracker unmappable no-write/activity invariants, version conflicts, source isolation, and idempotent activity counts; T8 component regressions cover coded and uncoded WIP rendering, rollback, refresh, and re-enabled action."
+    },
+    {
+      "check": "T9 server writes compose with T11 telemetry and T8/T10 optimistic recovery",
+      "status": "PASS",
+      "evidence": "T9's real HTTP/database boundary keeps Board and Tracker writes split with exactly-once source activity, while T11's instrumentation observes the list boundary without changing response/query semantics. T8's mutation router still sends workspace/source/key/version through markMyWorkDone and changed only the conflict predicate; T10's exact 12-test integration command observes POST execution, optimistic removal, coded version-conflict rollback, page/detail refresh, newer snapshot retention, and suppression of the older snapshot."
+    },
+    {
+      "check": "T10 URL/query/cursor/navigation coverage remains compatible with T9 wire contracts",
+      "status": "PASS",
+      "evidence": "The T10 harness exercises scope=all, limit=50, cursor forwarding, query reset, URL/detail/back restoration, activeWorkspaceId preservation, both Board and Tracker guarded navigation outcomes, and the 390px bottom sheet. These requests align with T9's list/detail and source-aware mutation routes; no cross-file or source-identity mismatch remains."
+    },
+    {
+      "check": "Privacy, telemetry sanitization, dual-table routing, rollback/refresh/race/source/no-write behavior",
+      "status": "PASS",
+      "evidence": "P3-001 telemetry is aggregate-only and the production unauthorized regression checks sanitized output. P3-002 preserves source-aware server responses, client rollback/refresh, race precedence, idempotent activity behavior, and no-write paths. T9/T8/T10 verdict artifacts and the ADR-aligned mutation guard show no direct My Work table-specific write or dual-table boundary regression."
+    }
+  ],
+  "findings": [
+    {
+      "id": "P3-ENV-001",
+      "severity": "Minor",
+      "category": "environment-contention",
+      "affected_tasks": ["T10", "T11"],
+      "locations": [
+        "root npm run test parallel client runner",
+        "client/src/pages/MyWorkPage.integration.test.tsx"
+      ],
+      "verification": "After the corrections, root parallel npm run test exited 1 because one T10 MyWorkPage.integration.test.tsx test exceeded its 5s timeout. The exact T10 command immediately passed all 12 tests in 1.49s, the full serial client suite passed 114 files/1,032 tests, and the exact affected T9/T11/T8 commands passed. Before corrections, the same environment already showed parallel resource contention (including the retained T11 Minor concern and parallel server benchmark/existing failures), while controlled serial server integration passed 151 files/1,137 tests with 2 skipped/10 skipped.",
+      "classification": "Existing resource-contention environment candidate; no cross-task Critical/Important reliability defect is demonstrated.",
+      "required_action": "Do not hide the root-parallel failure or promote it to a source correction. Retain as a non-blocking environment/debt candidate and use isolated/serial or controlled CI evidence for the acceptance suites."
+    }
+  ],
+  "validation": {
+    "correction_ancestry": "PASS — fd93cc339d5852bcab558c956709f6c4037512c9 -> 7043346afa8728823f12c1586814ce57c1a942ff -> becea2ba459aa2df473c4f162573b319c9f2b2ca",
+    "correction_scope": "PASS — git show --stat and diff inspection list only the declared source/test files; neither correction includes log.json",
+    "before_corrections": {
+      "root_default": "PASS; server 862 passed / 51 skipped, client 1,030 passed",
+      "server_integration_serial": "PASS; 150 files / 2 skipped, 1,135 passed / 10 skipped",
+      "client_serial": "PASS; 114 files / 1,030 passed",
+      "server_integration_parallel": "Six existing/benchmark failures and T11 p95=134.97ms; retained as the pre-existing environment contention concern, not a new cross-task finding"
+    },
+    "after_corrections": {
+      "server_integration_serial": "PASS; 151 files / 1,137 passed, 2 skipped / 10 skipped",
+      "client_serial": "PASS; 114 files / 1,032 passed",
+      "exact_t10": "PASS; 12/12 in 1.49s",
+      "exact_affected_suites": "PASS; exact T9, T11, and T8 regression/guard commands passed",
+      "root_parallel": "EXIT 1; one T10 MyWorkPage.integration.test.tsx test timed out at 5s under parallel contention, while the same exact T10 command and full serial client suite passed"
+    },
+    "phase_result": "All cross-task Critical/Important findings from cycle 1 (P3-001 and P3-002) are resolved and correction fan-out is fresh."
+  },
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "status": "PHASE_PASS_RESOLVED"
+}

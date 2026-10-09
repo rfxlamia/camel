@@ -1,0 +1,88 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-06-16-agent-live-thinking-stream",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-06-16",
+    "date_completed": "2026-06-16",
+    "baseline_sha": "5f66d58ccbeed6f882c045dbd3eb1fb7f0148059"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Shared agent event types (thinking + boardId)",
+          "status": "DONE",
+          "done_sha": "93659b66cf17a7e38979421ca8abe0238c6a695a"
+        },
+        {
+          "id": "T2",
+          "name": "LLM extended thinking + live streaming (producer)",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "09b95cdba237f63bad653061de4137fef1180d0d"
+        },
+        {
+          "id": "T4",
+          "name": "Client live-stream derive + content-source helpers (consumer)",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "c739704125d9c77d05e6ce305f171341667c84e4"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T3",
+          "name": "service.runPipeline SSE thinking events (producer)",
+          "status": "DONE",
+          "depends": "T1, T2",
+          "done_sha": "2fb6c90c4b74acb3c75acff97cc71c70aec794c3"
+        },
+        {
+          "id": "T5",
+          "name": "Live-event lifecycle — accumulate + clear on switch/load (consumer)",
+          "status": "DONE",
+          "depends": "T1, T4",
+          "done_sha": "c40ac702c158676399a8c19d27ffb2f9b0b64d75"
+        },
+        {
+          "id": "T6",
+          "name": "AgentCardDetail live render (consumer)",
+          "status": "DONE",
+          "depends": "T4, T5",
+          "done_sha": "a2034eac0acc09e9cc3b2739fd2471f08c596231"
+        },
+        {
+          "id": "T8",
+          "name": "Opt-in live-LLM thinking integration check",
+          "status": "DONE",
+          "depends": "T2, T3",
+          "done_sha": "cf35a98421ad5d67b5a79b077a4192a88c9930cb"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan-phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T7",
+          "name": "AgentBoardVisual clickable active/pending/failed columns (consumer)",
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "d0b518ad4aeb3a700cd55ea43ccb11eaad284a8c"
+        }
+      ]
+    }
+  ]
+}

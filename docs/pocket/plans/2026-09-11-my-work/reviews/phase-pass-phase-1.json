@@ -1,0 +1,185 @@
+{
+  "phase_key": "phase-1",
+  "phase_file": "execution-plan/phase-1.md",
+  "timestamp": "2026-09-12T09:57:16Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "deep",
+  "tasks_reviewed": ["T1", "T2", "T4", "T5"],
+  "ranges_reviewed": [
+    "cbf5b931a085b7cac656045170662e794a87b29b..d1d59038ffbf9e2e3fc61c40f8975fdb7fc6d409",
+    "d1d59038ffbf9e2e3fc61c40f8975fdb7fc6d409..c0fff7987547d7e418326539dbe6d74bfa5f9120",
+    "c0fff7987547d7e418326539dbe6d74bfa5f9120..5324e7f4d4205d560cba736d03a40197a0b70707",
+    "5324e7f4d4205d560cba736d03a40197a0b70707..df65dcbf9edfcde53c110557b9f860c3ee982255"
+  ],
+  "corrections_reviewed": [
+    {
+      "sha": "f0265fd7ae83160a14bdc55056cf31fc8bc8c6d4",
+      "for_task": "T4",
+      "finding_ids": ["P1-001", "P1-002"],
+      "files": ["client/src/lib/myWorkUtils.test.ts", "client/src/lib/myWorkUtils.ts"]
+    },
+    {
+      "sha": "0004331994cb3a412818a7d5793b8d02777631de",
+      "for_task": "T4",
+      "finding_ids": ["P1-001", "P1-002"],
+      "purpose": "Preserved the C1 due/order behavior while splitting the helper and test modules into bounded files.",
+      "files": [
+        "client/src/lib/myWorkOrdering.test.ts",
+        "client/src/lib/myWorkOrdering.ts",
+        "client/src/lib/myWorkStatus.ts",
+        "client/src/lib/myWorkTestSupport.ts",
+        "client/src/lib/myWorkUtils.test.ts",
+        "client/src/lib/myWorkUtils.ts"
+      ]
+    },
+    {
+      "sha": "2a691d94c5c72d6b33c14f08ce7f71f72b519f72",
+      "for_task": "T5",
+      "finding_ids": ["P1-004"],
+      "files": [
+        "client/src/layout/sidebar/useSidebarMode.test.tsx",
+        "client/src/layout/sidebar/useSidebarMode.ts"
+      ]
+    },
+    {
+      "sha": "d0077fac02d8cd2801d9b72869fd258a2d0be306",
+      "for_task": "T2",
+      "affected_tasks": ["T1", "T2"],
+      "finding_ids": ["P1-003"],
+      "files": [
+        "client/src/api.my-work.test.ts",
+        "client/src/api/myWork.ts",
+        "server/src/routes/my-work-data-source-list.ts",
+        "server/src/routes/my-work-service-list.ts",
+        "server/src/routes/my-work.status-ordering.test.ts"
+      ]
+    },
+    {
+      "sha": "5deb3f7874e8ec6b56bceedd6623405fee5bca00",
+      "for_task": "T2",
+      "finding_ids": ["P1-005"],
+      "files": [
+        "server/src/core/my-work-done-target.test.ts",
+        "server/src/core/my-work-done-target.ts",
+        "server/src/routes/my-work-capability.test.ts",
+        "server/src/routes/my-work-response-hydration.ts",
+        "server/src/routes/my-work-response-serialization.ts"
+      ]
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "P1-001",
+      "severity": "Important",
+      "affected_tasks": ["T1", "T2", "T4"],
+      "locations": [
+        "server/src/routes/my-work-query.ts:99-119",
+        "server/src/routes/my-work-response-pagination.ts:13-17, 42-64",
+        "client/src/lib/myWorkOrdering.ts:63-82",
+        "client/src/lib/myWorkOrdering.test.ts:73-95",
+        "server/src/routes/my-work-pagination-assertions.ts:32-65"
+      ],
+      "verification": "The server query and response pagination both select tracker.endDate versus board.dueDate, apply the same workspace-local overdue date, and use the same status-terminal suppression. The client ordering helper now selects the same source-specific fields. The cross-source client regression and the 73-item server pagination controls cover the Asia/Jakarta boundary, Tracker Other overdue rows, due-today behavior, and rendered ordering."
+    },
+    {
+      "id": "P1-002",
+      "severity": "Important",
+      "affected_tasks": ["T2", "T4"],
+      "locations": [
+        "server/src/routes/my-work-query.ts:207-242",
+        "server/src/routes/my-work-response-pagination.ts:98-118",
+        "client/src/lib/myWorkOrdering.ts:97-122",
+        "server/src/routes/my-work.status-ordering.test.ts:80-124",
+        "client/src/lib/myWorkOrdering.test.ts:97-144"
+      ],
+      "verification": "The server cursor predicate and response comparator use workspace id, Board-before-Tracker source rank, numeric key suffix, and numeric id after the shared group/urgency/due/updated tuple. The client comparator mirrors that tuple. Tests cover OR-2 versus OR-10, workspace ids 2 versus 10, source rank, and page boundaries."
+    },
+    {
+      "id": "P1-003",
+      "severity": "Important",
+      "affected_tasks": ["T2", "T4"],
+      "locations": [
+        "client/src/api/myWork.ts:37-81",
+        "client/src/api.my-work.test.ts:141-182",
+        "server/src/routes/my-work-data-source-list.ts:72-76, 135-137",
+        "server/src/routes/my-work-service-list.ts:98-125, 157-172",
+        "client/src/lib/myWorkSearch.ts:53-96",
+        "server/src/routes/my-work.status-ordering.test.ts:133-180"
+      ],
+      "verification": "The dedicated Active candidate API omits q, preserves workspace/source/limit filters, follows opaque nextCursor values with a repeated-cursor guard, and bounds the drain at 20 pages. The server applies q only to All in both SQL and service filtering. T4 search is a pure Fuse candidate-window helper with no network or authorization discovery. The API regression keeps a typo match at item 73 after the first 50 and asserts q is absent from every Active URL, while All remains q-bearing through listMyWork."
+    },
+    {
+      "id": "P1-004",
+      "severity": "Important",
+      "affected_tasks": ["T5"],
+      "locations": [
+        "client/src/layout/sidebar/useSidebarMode.ts:6-26",
+        "client/src/layout/sidebar/useSidebarMode.test.tsx:77-142",
+        "client/src/layout/sidebar/Sidebar.tsx:51-78",
+        "client/src/layout/sidebar/MobileNav.tsx:55-85"
+      ],
+      "verification": "The mode-neutral predicate matches only /my-work and slash-delimited descendants, so /my-workbench is excluded. The effect preserves the current Agent or Kanban mode on entry, resumes URL-driven synchronization on all seven mode-route exits, and leaves the existing exact /settings discriminator intact. T5 keeps the link in the global desktop/mobile section outside mode navigation."
+    },
+    {
+      "id": "P1-005",
+      "severity": "Important",
+      "affected_tasks": ["T1", "T2"],
+      "future_consumers": ["T3", "T8"],
+      "locations": [
+        "client/src/types/myWork.ts:25-48",
+        "server/src/core/my-work-done-target.ts:63-148",
+        "server/src/routes/my-work-response-hydration.ts:71-144, 190-225",
+        "server/src/routes/my-work-response-serialization.ts:133-165, 185-231",
+        "server/src/routes/my-work-service-detail.ts:60-102",
+        "server/src/routes/my-work-capability.test.ts:135-254",
+        "server/src/core/my-work-done-target.test.ts:31-129"
+      ],
+      "verification": "List and reauthorized detail both use the same hydrated serializer and expose canMarkDone/markDoneReason. The pure canonical resolver reuses the existing Board column resolver and Tracker slot=done vocabulary, scopes inputs by workspace/board, and chooses deterministic position/id targets. Terminal completed/canceled status wins before mapping lookup; nonterminal missing mappings return missing_done_mapping and valid mappings return true/null without inventing pending. Mapping inputs are loaded in one columns query and one done-vocabulary query per candidate set, with tests proving list/detail parity and no per-row mapping queries. The exported resolver and response capability fields are available to the future T3/T8 consumers without implementing their mutation/UI responsibilities in Phase 1."
+    }
+  ],
+  "cross_task_checks": [
+    {
+      "check": "T1 client API/types compose with T2 server routes and response shape",
+      "status": "PASS",
+      "evidence": "client/src/api.ts:1-2, 287-289 and client/src/api/myWork.ts:49, 87-101 use /api/my-work list/detail/done paths; server/src/routes.ts:52 and server/src/routes/my-work-router.ts:74-84 mount the authenticated /my-work read boundary; server serializers provide the source-specific WorkItem fields and capability fields declared in client/src/types/myWork.ts."
+    },
+    {
+      "check": "T2 status, overdue, cursor, and pagination representations compose with T4 derivation/order/search",
+      "status": "PASS",
+      "evidence": "server/src/routes/my-work-query.ts:99-119, server/src/routes/my-work-response-pagination.ts:13-17, 98-118, client/src/lib/myWorkStatus.ts:17-59, client/src/lib/myWorkOrdering.ts:63-148, and client/src/lib/myWorkSearch.ts:53-96 use compatible source fields, status fallback rules, timezone dates, numeric identity tuple, and bounded candidate semantics."
+    },
+    {
+      "check": "T5 navigation composes with later page/detail routes without changing workspace selection",
+      "status": "PASS",
+      "evidence": "client/src/layout/sidebar/navItems.ts:16-24 defines a global /my-work entry; Sidebar.tsx and MobileNav.tsx render GLOBAL_NAV separately from mode lists; useSidebarMode.ts:6-26 changes only mode state and never reads or writes activeWorkspaceId. The route-level hook tests cover exact/nested My Work, mode exits, and the /my-workbench negative case."
+    },
+    {
+      "check": "No cross-task duplicate request boundary, mapping algorithm, search/pagination responsibility, or authorization decision",
+      "status": "PASS",
+      "evidence": "T1 owns the client request/type façade, T2 owns server authorization/query/serialization and the reusable done-target resolver, T4 owns pure client derivation/Fuse ranking, and T5 owns global navigation/mode state. The correction commit file lists contain no page, Mark done mutation, or direct client-to-database implementation. Mirrored server/client ordering is the required wire-contract parity rather than an additional request or authorization boundary."
+    },
+    {
+      "check": "Phase 1 leaves later-phase responsibilities intact",
+      "status": "PASS",
+      "evidence": "The Phase 1 task membership is exactly T1/T2/T4/T5. The merged Phase 1 file set contains no T3 Mark done implementation, T6 page, T7 detail sheet, T8 client action, T9/T10 acceptance integration, or T11 observability/performance implementation; their packets remain the later consumers and owners."
+    }
+  ],
+  "validation": {
+    "merged_main_head": "5deb3f7874e8ec6b56bceedd6623405fee5bca00",
+    "focused_suites": [
+      "T1 API 5/5",
+      "T2 capability and server suites 31/31",
+      "T4 helper suites 14/14",
+      "T5 hook/navigation 21/21"
+    ],
+    "root_validation": "server 844 passed with 273 skipped; client 971 passed; typecheck, lint, and diff-check passed",
+    "status": "PASS"
+  },
+  "findings": [],
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "status": "PHASE_PASS_RESOLVED"
+}

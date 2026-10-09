@@ -1,0 +1,53 @@
+{
+  "task_id": "T10",
+  "task_name": "Canonical migration smoke, fixture sweep, and final regression gate",
+  "cycle": 1,
+  "timestamp": "2026-08-31T08:23:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Canonical migration order matches migrate.ts: applyCanonicalMigration runs schema.sql → agent-schema.sql → chat-schema.sql inside BEGIN/COMMIT (server/src/db/full-migration.integration.test.ts:113-124; server/src/db/migrate.ts:14-18).",
+      "Fresh and existing legacy fixtures exercise backfill, key allocation, partial identity, soft-deleted cards, agent boards, and tracker keys; assertMigration verifies every post-migration card has a numeric status_id and expected slot/key_number (server/src/db/full-migration.integration.test.ts:292-310, 413-439).",
+      "Idempotent rerun verified via assertRerun — second applyCanonicalMigration produces identical cards and tracker_key_counter (server/src/db/full-migration.integration.test.ts:386-395, 419, 438).",
+      "NOT NULL constraint evidenced: information_schema check expects is_nullable=NO and direct null insert rejects with code 23502 (server/src/db/full-migration.integration.test.ts:231-245, 247-255).",
+      "Fixture sweep: all changed direct card inserts supply slotted status_id via seedTrackerVocabulary + vocabulary lookup (routes.integration.test.ts:222, cards-mutations.integration.test.ts:214-317, notifications/service.test.ts:98, notifications/scheduler.test.ts:91/124/160, cards.notification.test.ts:68-71, agent/routes.test.ts:413, agent/ticket-intake/history.test.ts:62).",
+      "Pre-migration null status_id inserts in migration tests and cards-identity rejection test are intentional legacy/rejection fixtures, not skipped production fixtures (full-migration.integration.test.ts:198-208, 240-244; cards-identity.integration.test.ts:448-456).",
+      "columns-is-done-remap test-support addCard always inserts status_id (server/src/routes/columns-is-done-remap.test-support.ts:186-193); 87dfbfb aligns mockTestUser actor shape (email, emailVerified, needsUsername) with auth payload for SSE assertions.",
+      "Quality gate commands all green at reviewed SHA: npm run test (661 server + 673 client), npm run lint, npm run typecheck, npm run build, RUN_INTEGRATION=1 npm run test:integration:routes --workspace=server (843 passed), RUN_INTEGRATION=1 full-migration.integration.test.ts (2 passed)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "full-migration.integration.test.ts is substantive end-to-end proof — not marker-only — with real PostgreSQL transaction boundaries, isolated schemas, and artifact checks (tables, index, NOT NULL).",
+      "Fixture updates reuse established seedTrackerVocabulary + slot lookup pattern consistently across integration and notification tests.",
+      "columns-is-done-remap mock hoisting to test-support.ts deduplicates vi.mock blocks and exports shared mockTestUser for failure/integration entrypoints.",
+      "Migration test preserves fixture intent: timestamps/columns unchanged via preserve comparator; counter expectations explicit (fresh=1, existing=15).",
+      "Second commit (87dfbfb) is a focused actor-shape fix with no scope creep beyond is-done remap expectations."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Fresh-path canonical migration test does not assert intermediate schema staging (e.g. columns.board_id absent before agent-schema.sql, chat tables absent before chat-schema.sql) within the transaction; only final assertMigrationArtifacts covers end-state presence. Existing-path setup stages agent schema earlier but per-stage appearance is still implicit.",
+        "location": "server/src/db/full-migration.integration.test.ts:321-337, 413-420"
+      },
+      {
+        "severity": "Minor",
+        "description": "tracker-vocabularies.test.ts seed-order change (seed after cleanup in beforeEach) is outside the declared T10 file list but is a legitimate fixture-hygiene fix tied to vocabulary seeding.",
+        "location": "server/src/routes/tracker-vocabularies.test.ts:97-101"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "87dfbfb8d9003b2fcac89ebf7ed282e725157b72"
+}

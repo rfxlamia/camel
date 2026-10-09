@@ -1,0 +1,44 @@
+{
+  "task_id": "T10",
+  "task_name": "Mobile kebab menu",
+  "cycle": 2,
+  "timestamp": "2026-08-29T07:06:35Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "GWT 1: kebab open with all handlers lists all 6 properties — panel role=dialog named `More properties for ${item.key}` (TrackerRowKebabMenu.tsx:63-64); date/project/phase/priority/assignee/label triggers render when handlers exist (TrackerRowKebabMenuFields.tsx:76-231). Test scopes queries inside that labeled panel (TrackerRowKebabMenu.test.tsx:152-172). Viewport is CSS-only: kebab trigger has lg:hidden (TrackerRowKebabTrigger.tsx:80; TrackerRow.test.tsx:113-119). No matchMedia / JS breakpoint boolean.",
+      "GWT 2: empty labels/members + handlers show exact copy, not hidden — `No members in this workspace` and `No labels in this workspace` when handler is present and the array is empty (TrackerRowKebabMenuFields.tsx:161-195, 197-231; TrackerRowKebabMenu.test.tsx:197-205). Does not replicate TrackerProperties.tsx:167,192 length>0 omission.",
+      "GWT 3: missing field handler omits only that field — each of the 6 blocks is gated on its callback; Step 4a regression omits onPhaseChange and keeps the other five (TrackerRowKebabMenu.test.tsx:174-194; e.g. onPhaseChange at TrackerRowKebabMenuFields.tsx:115).",
+      "GWT 4: date-child close/containment — requestField closes date (activeField→null) before opening another field (trackerRowKebabMenuChrome.ts:48-56); commit-once covered (TrackerRowKebabMenu.test.tsx:207-225). Outside mousedown treats `[data-tracker-row-date-popover=${idPrefix}]` as inside (trackerRowKebabMenuChrome.ts:96-99; test:227-239). Close/Escape/outside all call closePanel(); when activeField is date, pendingCloseRef defers onOpenChange(false) until after the date child's mounted true→false cycle (trackerRowKebabMenuChrome.ts:58-81, 90-113; tests:241-285). Date idPrefix is the menu prefix (TrackerRowKebabMenuFields.tsx:81).",
+      "GWT 5: TrackerRow kebab trigger present with lg:hidden — aria-label `More properties`, data-testid `row-more-${item.key}`, class contains lg:hidden, inside pointer-events-auto, OpenPicker includes `kebab` (TrackerRow.tsx:25-34; TrackerRowKebabTrigger.tsx:10-19, 69-88; TrackerRow.test.tsx:113-119).",
+      "Also: TrackerPhaseSection still has no kebab — call site unmodified. hasKebabHandlers is false unless at least one of the 6 field handlers is defined (TrackerRowKebabTrigger.tsx:57-66). Out of scope; unmodified.",
+      "Cycle-1 Important close-contract: Close/Escape/outside no longer unmount the date child in the same tick as onOpenChange(false). closePanel() sets pendingCloseRef and activeField=null first; the activeField effect then calls onOpenChange(false) (trackerRowKebabMenuChrome.ts:58-81). Tests assert commit-once plus onOpenChange(false) for Close and Escape (TrackerRowKebabMenu.test.tsx:241-285).",
+      "Cycle-1 Important focus-restore: focus runs only on open true→false via prevOpenRef (trackerRowKebabMenuChrome.ts:38, 83-88), same pattern as TrackerRowDatePopover.tsx:102-107. Initial mount with open=false does not focus.",
+      "Five DELIVERABLE GWTs unchanged and still met. QUALITY BAR must-haves present; must-not-haves absent (no matchMedia; handlers passed through; new files are in-scope extracts from TrackerRow / TrackerRowKebabMenu)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Cycle-1 file-size findings cleared: TrackerRowKebabMenu.tsx 386→106; TrackerRow.tsx 305→277. Chrome (position/dismiss/close+focus) lives in useTrackerRowKebabMenuChrome (trackerRowKebabMenuChrome.ts); six field rows in TrackerRowKebabMenuFields.tsx; kebab trigger wiring in TrackerRowKebabTrigger.tsx. All files under ~300.",
+      "TrackerRowKebabMenu is a thin portal shell (74 lines) after the requested chrome/fields split; remaining body is required dialog JSX plus the chrome hook call — not an unsplit mixed-concern function.",
+      "TrackerRowKebabMenu is pure composition: no api.updateTrackerItem and no mutation-queue logic; Row-level callbacks are passed through unchanged (TrackerRowKebabTrigger.tsx:94-99; TrackerRowKebabMenu.tsx:96-101; TrackerRowKebabMenuFields.tsx:86, 109, 134, 153-155, 185, 221)",
+      "One activeField union; panel portaled and positioned from required anchorRef via computePopoverPosition (trackerRowKebabMenuChrome.ts:34, 115-143; TrackerRowKebabMenu.tsx:60-70)",
+      "Close/Escape/outside honor the date child's close contract before onOpenChange(false); focus restore is true→false only",
+      "Declared helpers stay in listed scope plus mandated refactor extracts; tests cover all 5 DELIVERABLE GWTs plus Close/Escape date-commit and the zero-handler omission case, with real TrackerRowDatePopover / TrackerPropertyPicker (no component mocks)"
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "1a912c0dc5f332116f4976eb0fdaa38687dac7e6"
+}

@@ -1,0 +1,58 @@
+{
+  "task_id": "T9",
+  "task_name": "Race-safe project removal",
+  "cycle": 1,
+  "timestamp": "2026-09-04T05:46:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Diff bdeb628..4039376 touches only the three OBJECTIVE files; no out-of-scope client, schema, dependency, or migration changes.",
+      "T9-S01: DELETE handler calls real lockWorkspaceMutation(trx, workspaceId) before dependent work, then SELECT tracker_projects FOR UPDATE revalidation, then item/card scans, release, activity, and soft-delete (tracker-projects.ts:325-334).",
+      "T9-S01 unit test 'locks project removal before dependent scans' asserts workspace_lock → project_lock → scan_items/scan_cards → update:tracker_projects ordering via orchestration log without mocking workspace-mutation-lock (tracker-projects.test.ts:362-445).",
+      "T9-S02 regression 'serializes Board create against project removal' interleaves holdWorkspaceRow barrier with concurrent DELETE project and POST /cards; accepts 201|400 and asserts complete-or-empty via assertCompleteBoardOutcome / assertNoBoardArtifacts (work-item-project-concurrency.integration.test.ts:325-361).",
+      "T9-S03 regression 'serializes Tracker create against project removal' mirrors Board pattern for POST /work-items with assertCompleteTrackerOutcome / assertNoTrackerItemArtifacts (work-item-project-concurrency.integration.test.ts:363-401).",
+      "Integration suite gated by RUN_INTEGRATION=1 via describe.skipIf; uses Supertest + real PostgreSQL with only redis/realtime/auth mocked per packet.",
+      "Conventional commit fix(projects): serialize project removal with task create exists at reviewed SHA.",
+      "publishEvent remains post-transaction; no pre-commit realtime publication introduced."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Minimal production diff: two lines (lockWorkspaceMutation import/call + FOR UPDATE on project revalidation) reuse the T3 workspace lock primitive consistent with T6/T7/T8.",
+      "Unit test keeps route orchestration and real lockWorkspaceMutation while mocking only Kysely transaction chains, matching packet test-double guidance.",
+      "Integration helpers (holdWorkspaceRow, waitForPeerWaitingOnWorkspaceLock) follow the established T8 concurrency-test pattern; dedicated workspace IDs and thorough cleanup isolate Board vs Tracker fixtures.",
+      "Server import retains .js extension (workspace-mutation-lock.js); packet suite commands verified green (unit + RUN_INTEGRATION=1 integration)."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "waitForPeerWaitingOnWorkspaceLock matches any peer Lock wait_event, not specifically the workspaces-row lock; could false-positive under unrelated DB contention though --no-file-parallelism mitigates",
+        "location": "server/src/routes/work-item-project-concurrency.integration.test.ts:272"
+      },
+      {
+        "severity": "Minor",
+        "description": "Unit orchestration test asserts project_lock before scans but does not explicitly assert project_revalidate (executeTakeFirst) sits between lock and dependent scans",
+        "location": "server/src/routes/tracker-projects.test.ts:437"
+      },
+      {
+        "severity": "Minor",
+        "description": "tracker-projects.ts is 443 lines (was 439 pre-change), above the packet ~300-line refactor heuristic; only four lines added and splitting would need undeclared files",
+        "location": "server/src/routes/tracker-projects.ts:1"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "8ef34be730daf8e0717a37d3e72a5515922510d1",
+  "sha_pin_note": "Conflict-free parallel merge: reviewed_sha aligned to done_sha (merge commit); worktree audit at 4039376 covered identical tree."
+}

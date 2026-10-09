@@ -1,0 +1,38 @@
+{
+  "task_id": "T4",
+  "task_name": "Wire date popover into TrackerRow + TrackerPage",
+  "cycle": 1,
+  "timestamp": "2026-08-29T03:11:26Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycles 2–3 (409 revert+toast+refetch; no-op close sends no PATCH) are labeled regression checks in the packet after Step 3's first implementation. GREEN without a separate RED run matches that labeling and the plan TDD convention (regression-only tests must not be described as the source of new implementation). Assertions lock the specified behavior: toast + loadData via mockListTrackerItems called twice and display back to 'Date: Set date' (TrackerPage.test.tsx:406-450); mockUpdateTrackerItem never called on close-without-edits (TrackerPage.test.tsx:386-404). Not a spec miss and not a Critical TDD miss.",
+      "Standing rewrite of the test command path (workspace-relative client vitest include vs packet repo-relative path) is not a spec miss in the audited files.",
+      "Cycle 1 GWT is present as a failing-test-shaped integration test (sets both dates → one PATCH both keys + version 3 → 'Date: 6–26 Aug') plus the packet's switch-picker clause as its own test. Single commit at Step 12 is the packet's commit step; not treated as missing tests-before-implementation for cycle 1."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "formatDateRange is imported from trackerUtils and used for triggerLabel (null → 'Set date'); not reimplemented (TrackerRow.tsx:2, 59-61, 154).",
+      "onDateChange is optional on TrackerRow and required on TrackerSection; TrackerPage supplies it at the one TrackerSection call-site; TrackerPhaseSection still omits it and keeps the createdAt <time> fallback (TrackerRow.tsx:26-29, 149-168; TrackerSection.tsx:21-24, 108; TrackerPage.tsx:604; TrackerPhaseSection.tsx:106-111).",
+      "requestPicker closes date first (setOpenPicker(null)) so TrackerRowDatePopover's parent-close contract (open true→false → close({ notifyParent: false })) commits the draft before the pending picker opens (TrackerRow.tsx:63-78, 157). Integration test clicks status while the date draft is dirty and asserts one PATCH then the status options (TrackerPage.test.tsx:452-494).",
+      "changeDate/applyDateMutation mirror changeStatus/applyStatusMutation: queue enqueue, recoveryBlockedItemIdsRef early-return, itemsRef live read, optimistic field update, PATCH with version, hydrate, field-scoped rollback, identical 409 toast + await loadData(), distinct ordinary-error copy. Second copy only; packet defers applyItemPatch to T5 (TrackerPage.tsx:271-350 vs 352-421).",
+      "Editable date column dropped w-12; uses pointer-events-auto, min-w-[9rem] shrink-0 truncate so the title column yields first. Read-only createdAt path retains w-12 (TrackerRow.tsx:149-168).",
+      "Scope is exact: four listed files, one packet commit 31701b7. No TrackerRowDatePopover.tsx / TrackerPhaseSection.tsx / TrackerProjectPage.tsx. applyDateMutation 49 lines, changeDate 30; TrackerRow.tsx 171 and TrackerSection.tsx 115 stay under the ~300-line file heuristic. TrackerPage.tsx was already a hub file; T4 added the 2nd handler without extracting the shared helper."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "31701b750fab1632f3e82e3e148925647a68e516"
+}

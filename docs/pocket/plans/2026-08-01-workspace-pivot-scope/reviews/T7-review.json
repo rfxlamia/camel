@@ -1,0 +1,52 @@
+{
+  "task_id": "T7",
+  "task_name": "Unscheduled tray bidirectional drag",
+  "cycle": 1,
+  "timestamp": "2026-08-03T06:12:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Tray drop-back no-op implemented: handleDragEnd returns early when drag.source is tray or card.dueDate is null (CalendarView.tsx:254-255)",
+      "Done exclusion uses doneAt via isCardDone, not column name (UnscheduledTray.tsx:65)"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "UnscheduledTray mounted inside CalendarView DndContext — single drag context for calendar and tray",
+      "parseCardDragId extended with tray source; tray drop and date drop share one handleDragEnd with version on every saveCard call",
+      "Reuses CalendarConflictNotice for tray chip conflicts via conflictCardIds from parent",
+      "Eight tests match plan TDD contract (3 display + 5 drag); conventional commit present",
+      "cardsByDate skips dueDate=null so unscheduled cards render in tray only, not on grid (CalendarView.tsx:199)"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "No CalendarView integration test that unscheduled card appears in tray and absent from all date cells — deliverable GWT and spec Story 4 Example A",
+        "location": "client/src/components/UnscheduledTray.test.tsx"
+      },
+      {
+        "severity": "Minor",
+        "description": "Tray conflict test checks notice appears but does not advance timers to verify 3s auto-dismiss (T6 drag test does); deliverable cites inline text 3s",
+        "location": "client/src/components/UnscheduledTray.test.tsx:216"
+      },
+      {
+        "severity": "Minor",
+        "description": "saveCard and onConflict props required on UnscheduledTray but unused (_saveCard, _onConflict) — dead interface surface; drag writes handled in CalendarView parent",
+        "location": "client/src/components/UnscheduledTray.tsx:45-46"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "7c4e7a1a88480dd2b5d60c16589e80dc75899fc1"
+}

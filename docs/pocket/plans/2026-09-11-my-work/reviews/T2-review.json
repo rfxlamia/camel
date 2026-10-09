@@ -1,0 +1,47 @@
+{
+  "task_id": "T2",
+  "task_name": "Implement the server-side personal rollup and global detail read",
+  "cycle": 10,
+  "timestamp": "2026-09-12T09:42:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "correction_sha": "5deb3f7874e8ec6b56bceedd6623405fee5bca00",
+  "correction_finding": "P1-005",
+  "audited_head": "5deb3f7874e8ec6b56bceedd6623405fee5bca00",
+  "parent_sha": "d0077fac02d8cd2801d9b72869fd258a2d0be306",
+  "affected_tasks": ["T2"],
+  "bleed": [],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P1-005 is resolved with a pure reusable resolver in server/src/core/my-work-done-target.ts. Board resolution delegates to mapColumnSlots and resolveColumnForStatusChange over workspace-and-board-scoped columns, then resolves the required kind=status slot=done vocabulary. Tracker resolution uses the workspace kind=status slot=done vocabulary.",
+      "Board done columns and Tracker done vocabularies are loaded in at most one batched query each, with unique workspace IDs and deterministic position/id ordering; no per-row mapping query is introduced.",
+      "The mapping loader runs after the authorized candidate set is obtained. Default list/detail source queries retain membership and assignee predicates, and detail performs the existing reauthorization checks before hydration and capability serialization.",
+      "List and detail both flow through hydrateMyWorkRows and serializeMyWorkCandidate, so capability fields use the same resolver and response shape.",
+      "Capability precedence is exact: normalized completed/canceled status returns false/terminal before mapping lookup; nonterminal candidates return false/missing_done_mapping when no valid target exists and true/null when a target resolves. No server pending state is invented.",
+      "The correction changes only the five T2-attributed server resolver, hydration, serialization, and test files. It adds no T3 mutation, T8 UI, client mapping guess, schema/SSE/navigation/OAuth change, or log/review mutation beyond this T2 artifact."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The canonical resolver is side-effect-free and reuses the existing Board resolver rather than reproducing column-slot rules. It scopes sibling columns by workspace and board, and selects Tracker status targets deterministically by position then id.",
+      "Hydration deduplicates workspace IDs and performs one columns query plus one done-vocabulary query per candidate set, while existing assignee/label hydration remains set-based. The actual Kysely Postgres seam test observes exactly two mapping queries across multiple workspaces and 24 rows.",
+      "Terminal filtering is performed before mapping hydration, and serialization checks terminal precedence before resolving a target. Existing auth, assignment, soft-delete, deduplication, source boundaries, and error behavior are untouched by the correction.",
+      "List/detail parity is exercised through the same default service hydration path, including current authorized detail rechecks and matching canMarkDone/markDoneReason output.",
+      "Tests cover valid and missing Board column/status mappings, Board isolation across boards, valid/missing and multiple deterministic Tracker targets, workspace isolation, terminal precedence without pending, list/detail parity, multiple workspaces, and bounded query count.",
+      "Independent verification passed: targeted resolver/capability tests (10/10), full server tests (844 passed, 273 skipped), full repository tests (844 server passed/273 skipped and 971 client passed), server and client typechecks, root Biome lint, mutation-routing check, and git diff --check."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 10,
+    "max_cycles": 7,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "5deb3f7874e8ec6b56bceedd6623405fee5bca00"
+}

@@ -1,0 +1,77 @@
+{
+  "task_id": "T16",
+  "task_name": "Date fields and project/phase pickers on input surfaces",
+  "cycle": 1,
+  "timestamp": "2026-08-05T23:30:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The project→phase reset invariant is enforced structurally, not just by convention: the project picker submits `{projectId, phaseId: null}` in one request (TrackerDetailPage.tsx:568-570) and the phase options are derived exclusively from `selectedProject.phases` (TrackerDetailPage.tsx:410-416), so a cross-project pair is unrepresentable from the UI even under a stale-render race",
+      "Shared TrackerDateFields is created unconditionally as the packet required, and both surfaces render it — neither inlined its own date markup (TrackerCreateModal.tsx:397-403, TrackerDetailPage.tsx:533-540)",
+      "No client-side duplication of the server's date rules: neither surface compares start against end; both send raw YYYY-MM-DD and render the server's 400 inline (TrackerCreateModal.tsx:201-205, TrackerDetailPage.tsx:346-349)",
+      "The detail-page save patch only includes startDate/endDate when the draft actually differs from the server baseline (TrackerDetailPage.tsx:312-317), keeping the existing minimal-PATCH shape and not disturbing the version-conflict path",
+      "Date drafts were correctly threaded through every existing draft lifecycle hook — applyItem's unsaved-draft preservation (111-116), `dirty` (281-286), discardDraft (360-368) — rather than bolted on beside them",
+      "No new picker was built; both rail selectors reuse TrackerPropertyPicker with its existing prop contract",
+      "Scope was respected exactly: the two commits touch only the five files listed in the packet",
+      "Verified green: the two target test files pass (27 tests), the full client suite passes (471 tests, 63 files), `npm run typecheck` and `npm run lint` both clean"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The inline 400 renders the server's raw string verbatim ('end date must not precede start date' — server/src/routes/tracker-item-parsers.ts:228), which is lowercase and unpunctuated, unlike the surrounding client copy ('Couldn't save the tracker item. Check your connection and try again.'). The QUALITY BAR asks for the brief's neutral-friendly register; the packet also asked for the returned message to be rendered inline, and the server copy is out of T16's scope, so this is noted rather than blocking.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:347"
+      },
+      {
+        "severity": "Minor",
+        "description": "saveError is cleared only on a successful save or Discard, not when the user edits the offending date fields. After a 400 the stale message stays visible while the member corrects the range.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:331,367"
+      },
+      {
+        "severity": "Minor",
+        "description": "Picker-driven mutations still report any 400 as a connection failure toast. Now that project/phase pickers exist, a stale-data 400 (phase deleted or moved between load and pick) surfaces as 'Check your connection and try again' rather than inline validation, unlike the save path corrected in f6ba459.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:273-276"
+      },
+      {
+        "severity": "Minor",
+        "description": "The phase picker renders even when the item has no project, showing an empty popover ('No matches') with an onSelect that returns early — a dead affordance. There is also no 'No project' / 'No phase' option, so assignment cannot be cleared from this surface, though unassignment is not part of the DELIVERABLE.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:572-595"
+      },
+      {
+        "severity": "Minor",
+        "description": "A queued project change is not reflected in phaseOptions until its PATCH resolves, so picking a phase during that window submits the old (still consistent) project/phase pair and silently reverts the project change. The must-not invariant is not violated — the pair is always internally consistent — but the interaction is surprising.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:403-416"
+      },
+      {
+        "severity": "Minor",
+        "description": "TrackerDetailPage.tsx grew from 460 to 611 lines and handleSave is now ~70 lines. Splitting was not available to the implementer: the packet's must-not-have forbids creating or modifying files outside the listed scope, and the file was already past the size guidance before this task.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:288-358"
+      },
+      {
+        "severity": "Minor",
+        "description": "`npx biome format` reports drift in TrackerDetailPage.tsx (lines 80-82, 249-256, 404) and TrackerDetailPage.test.tsx (line 563). This matches the repo baseline — 19 other client/server files drift the same way and the pre-commit hook runs only lint + typecheck, not format — so it is a convention gap rather than a T16 regression.",
+        "location": "client/src/pages/TrackerDetailPage.tsx:80-82"
+      },
+      {
+        "severity": "Minor",
+        "description": "Rail inputs carry both a wrapping <label> and a redundant aria-label with the same text, and the overdue marker puts aria-label='Overdue' on a <p> whose text content is already 'Overdue' (aria-label is not reliably honoured on role=paragraph). Both work in jsdom and the tests pass; the extra attributes are redundant.",
+        "location": "client/src/components/tracker/TrackerDateFields.tsx:29-50"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "f6ba4599d81e5e6b22d0bbc7dc1048a64b78bf67"
+}

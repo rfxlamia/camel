@@ -1,0 +1,52 @@
+{
+  "task_id": "T9",
+  "task_name": "Relocate board wave-1 (no ContextPanel)",
+  "cycle": 1,
+  "timestamp": "2026-09-21T05:35:29Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "(1) Exclusion boundary holds: client/src/components/ContextPanel.tsx:1-35 still exists at HEAD, keeps leftover FocusEntryButton import (ContextPanel.tsx:33); both ContextPanel tests remain (ContextPanel.test.tsx:82, ContextPanel.attachments.test.tsx:16) with vi.mock retargeted to ../features/board; BoardPage stays at client/src/pages/BoardPage.tsx:1-40; tracker stubs remain (components/tracker/TrackerTabs.tsx, TrackerChangelog.tsx, TrackerRow.tsx); leftover BoardContext/cards absences asserted in scripts/feature-modules/git-diff.test.mjs:782-830",
+      "(2) Fat files moved specifier-only, never split: cards.ts 999->1006 lines rename server/src/routes/cards.ts => server/src/modules/board/cards.ts (97% similarity; rename-aware diff is import-depth + biome import-sort only); BoardContext.tsx 492->489 lines rename client/src/context/BoardContext.tsx => client/src/features/board/BoardContext.tsx (96% similarity; only depth + useCallback reflow); no god-file split; LINE_BUDGET_MAX still 300",
+      "(3) cardAttachments.ts (util) renamed to client/src/features/board/cardAttachmentUtils.ts (85% similarity; only types depth change) with 3 importer retargets (CardAttachments.tsx:15, CardView.tsx:12, features/board/index.ts:39); zero lib/cardAttachments references remain; CardAttachments.tsx + cardAttachmentUtils.ts no longer collide on case-insensitive APFS; minimal scope, justified",
+      "(4) cards-identity.integration.test.ts + helper correctly stay under server/src/routes/ (server/src/routes/cards-identity.integration.test.ts:13-46, :44-46); moving into modules/board would violate the one-way wall (agent/routes.ts:40 imports board index; board files must not import ../../agent/routes.js); only mock-path depth changes plus biome reflows",
+      "(5) T1/T2 Cycle Map expectation updates are legitimate maintenance, not matcher edits: scripts/feature-modules/git-diff.test.mjs:255-272 (CardAttachments home), :389-401 (board.ts/cards.ts/card-create.ts homes), :821-830 (BoardContext home); each asserts new home AND leftover absence",
+      "(6) Guard generalizations preserve must-not-have, both directions tested: line-budget-hunks.mjs comma-rule (drop ALL commas in other-subset, arity still caught via residual tokens), import-block contextual split (splitImportSubset), argument-literal guard, inline-type normalization; Cycle M has 5 tests (line-budget.test.mjs:692-818) with pass AND violation directions; Cycle K retains both directions; biome.json CalendarView.tsx 1-file formatter/organizeImports exemption is grandfather-identical in kind to existing test/config exemptions",
+      "(7) Message is refactor(board): relocate board into feature modules + refs #131, no closes/Closes/Fixes line (git log 8d62e21)"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Pure relocation at scale: 160 files, all outside-importers use barrel index only (client ../features/board, server ../modules/board/index.js); zero deep imports into features/board/* or modules/board/* from outside (grep-verified at HEAD)",
+      "Mutation-routing allowlist correctly moved to client/src/features/board/BoardContext.tsx (scripts/check-work-item-mutation-routing.mjs:4-10); server routes.ts:7-13 re-exports board routers from modules/board/index.js with no routing change",
+      "BoardContext keeps features/agent index import (BoardContext.tsx:24 shouldClearOnWorkspaceChange from ../agent) instead of type-folders; no new agent/chat one-way violations",
+      "No dual-table behavior change, no second FEATURES name, no #115/#121/#131 close; mechanical gates reported green",
+      "Guard tests added alongside guard changes (Cycle M, imports.test.mjs board allowlist + deep-import flag tests) so generalizations are pinned by tests in both directions"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "All-commas-dropped fingerprint has no same-function negative test with identical identifier sets at different arities (e.g. f(a) vs f(a,b)); arity safety rests on code comment plus Cycle M renamed-binding tests, not a direct comma-swallowing test",
+        "location": "scripts/feature-modules/line-budget.test.mjs:692"
+      },
+      {
+        "severity": "Minor",
+        "description": "CalendarView.tsx biome formatter + organizeImports exemption is file-scoped and justified (import-sort churn on the moved file) but adds a second exemption precedent alongside the test/config block; watch that future moves do not accumulate per-file exemptions instead of fixing order at move time",
+        "location": "biome.json:112"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "8d62e21"
+}

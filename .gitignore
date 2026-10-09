@@ -38,14 +38,13 @@ _bmad-output/
 piolium/
 .commandcode/
 
-# Documentation (local only) — un-ignore pocket ADR/spec deliverables for this repo
+# Documentation (local, except shared pocket/superpowers deliverables)
 docs/**
 !docs/pocket/
-!docs/pocket/adr/
-!docs/pocket/adr/**
-!docs/pocket/spec/
-!docs/pocket/spec/2026-09-work-items-api-addendum.md
-!docs/pocket/spec/work-items-migration-spike.md
+!docs/pocket/**
+!docs/superpowers/
+!docs/superpowers/**
+docs/**/.DS_Store
 /server/private-uploads/
 
 # Vite/Vitest config compilation cache

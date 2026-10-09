@@ -1,0 +1,33 @@
+{
+  "task_id": "T14",
+  "task_name": "Tracker home — project cards, search into projects, new realtime",
+  "cycle": 1,
+  "timestamp": "2026-08-06T02:10:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Empty-state condition accounts for all three match sources via trackerSearch.ts",
+      "All six new SSE types reload via loadData() with no payload merging",
+      "Rollup imported from trackerRollup.ts; brief-compliant colours",
+      "Unassigned behaviour preserved; cap treatment mirrors workspaceSwitcher",
+      "524 client tests, typecheck and biome check green"
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "b98fadaa4974f2ffecdc06baa7a2e8c7049be7d7"
+}

@@ -1,0 +1,114 @@
+{
+  "header": {
+    "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-07-30-ai-chat",
+    "plan_type": "flat",
+    "status": "DONE",
+    "date_started": "2026-07-30",
+    "date_completed": "2026-07-31",
+    "baseline_sha": "c7c953ca33147e5bc715064b90c0cef2e5b8e7c3"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Chat database schema and migration",
+          "status": "DONE",
+          "done_sha": "6675db66b93af78b1007bda21aae6c2297bf5447"
+        },
+        {
+          "id": "T2",
+          "name": "Extract runChatTurn from llm.ts",
+          "status": "DONE",
+          "done_sha": "7f551b65f5b7882c82b7f98bd93a6c198284222e"
+        },
+        {
+          "id": "T3",
+          "name": "Chat service — thread and message CRUD",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "e0a55969cbd13ad55027fa54beedd7188b4a4bbd"
+        },
+        {
+          "id": "T4",
+          "name": "Chat tools — createChatFile and tool factory",
+          "status": "DONE",
+          "depends": "T1, T3",
+          "done_sha": "913e0fac6582547f16693a0da628d2db8f25b552"
+        },
+        {
+          "id": "T5",
+          "name": "Chat HTTP routes and streaming endpoint",
+          "status": "DONE",
+          "depends": "T2, T3, T4",
+          "done_sha": "0d55fdf1f440b6fd59c228f5d439e946058c70f0"
+        },
+        {
+          "id": "T6",
+          "name": "Client API client and chat types",
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "c8d3a2abe448ed0f4f65a0cf214cbf1496f174e7"
+        },
+        {
+          "id": "T7",
+          "name": "Chat page shell — assistant-ui, routing, nav",
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "42114f76ccbd3a74421ed9f4ee0a3179db47aa0c"
+        },
+        {
+          "id": "T8",
+          "name": "Streaming hook — queue, error/retry, ToolTrace, thinking, attachments",
+          "status": "DONE",
+          "depends": "T7",
+          "done_sha": "3bf2f5248686d26a88b2bddcd36299dbb3d68b01"
+        },
+        {
+          "id": "T9",
+          "name": "Integration test — chat end-to-end flow",
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "d9ac2be736f4ed88f8a19749b28a8507e69ffb77"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "2ede5aeb4db13aad1803df1ba76778d17d9979db",
+          "files": [
+            "client/src/chat/ChatRuntimeProvider.tsx",
+            "client/src/chat/ui.tsx",
+            "client/src/hooks/useChatStream.test.ts",
+            "client/src/hooks/useChatStream.ts"
+          ],
+          "for_task": "T8"
+        },
+        {
+          "sha": "8f47d5767075cbb7c74cb2e6c88c748b97f7665e",
+          "files": [
+            "server/src/chat/routes.ts",
+            "server/src/chat/service.test.ts",
+            "server/src/chat/service.ts",
+            "server/src/chat/tools/createChatFile.test.ts",
+            "server/src/chat/tools/createChatFile.ts",
+            "server/src/chat/tools/factory.ts",
+            "server/src/chat/types.ts"
+          ],
+          "for_task": "T3"
+        },
+        {
+          "sha": "bb7db3fdec21362fea75b04915761507f41faf9b",
+          "files": [
+            "client/src/components/chat/ChatMessage.test.tsx",
+            "client/src/hooks/useChatStream.test.ts",
+            "client/src/hooks/useChatStream.ts"
+          ],
+          "for_task": "T8"
+        }
+      ]
+    }
+  ]
+}

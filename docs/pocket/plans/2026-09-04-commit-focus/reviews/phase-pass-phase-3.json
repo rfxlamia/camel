@@ -1,0 +1,70 @@
+{
+  "phase_key": "phase-3",
+  "phase_file": "execution-plan/phase-3.md",
+  "timestamp": "2026-09-04T16:16:30Z",
+  "reviewer_mode": "read-only",
+  "tasks": [
+    {
+      "task_id": "T7",
+      "overall": "REVIEW_PASS",
+      "range": "2b939ad25bd2ed143ceee28033601fa9989e21fc..7eeb616a740d5a326555aa2e77a6af434518e238",
+      "done_sha": "7eeb616a740d5a326555aa2e77a6af434518e238"
+    },
+    {
+      "task_id": "T14",
+      "overall": "REVIEW_PASS",
+      "range": "7eeb616a740d5a326555aa2e77a6af434518e238..7efc39f298dd7b030a68b8a27117c509a640c20a",
+      "done_sha": "7efc39f298dd7b030a68b8a27117c509a640c20a"
+    },
+    {
+      "task_id": "T8",
+      "overall": "REVIEW_PASS",
+      "range": "7efc39f298dd7b030a68b8a27117c509a640c20a..ff046f17eee4b9eaf534f23137c343d6a28e9009",
+      "done_sha": "ff046f17eee4b9eaf534f23137c343d6a28e9009"
+    },
+    {
+      "task_id": "T11",
+      "overall": "REVIEW_PASS",
+      "range": "ff046f17eee4b9eaf534f23137c343d6a28e9009..9ccdbc01de889b9472c385a0c9cc4a77e0e1a6fd",
+      "done_sha": "9ccdbc01de889b9472c385a0c9cc4a77e0e1a6fd"
+    },
+    {
+      "task_id": "T12",
+      "overall": "REVIEW_PASS",
+      "range": "9ccdbc01de889b9472c385a0c9cc4a77e0e1a6fd..fa9764b19b95d7ec2d4c7387f62545c592bba6de",
+      "done_sha": "fa9764b19b95d7ec2d4c7387f62545c592bba6de"
+    }
+  ],
+  "cross_task_checks": {
+    "duplication": [
+      "T7 owns FocusSessionProvider, BoardContext SSE seams, and hasActiveFocusSession/focusSessionHydrated setters; T8/T11/T12 consume via useFocusSession() or context flags — no second provider or duplicate guard logic",
+      "T12 extends getSwitchAttemptState once in workspaceSwitcher.ts; BoardContext and WorkspaceSwitcher both forward the same two flags — intentional dual-caller pattern from the task packet, not a second gate",
+      "T8 focusDuration.ts (display formatting) is presentation-only; T2 server active-time math remains the accrual authority — no field-level drift across layers",
+      "FOCUS_LOADING_TOAST and FOCUS_BLOCKED_TOAST centralized in workspaceSwitcher.ts; toast routing lives only in BoardContext.attemptSwitchWorkspace"
+    ],
+    "integration_mismatch": [
+      "T7 isActiveSession (state !== finished) drives hasActiveFocusSession; T12 guard and T11 indicator both align on ready/running/paused — server SSE finish publishes session: null, so finished rows do not linger client-side",
+      "T7 BoardProvider→FocusSessionProvider mount order preserved; T12 consumes setter plumbing without importing FocusSessionContext, matching the task packet wiring contract",
+      "T14 publishes focus_session.updated (session null) before membership.removed after commit; T7 FocusSessionProvider adoptSession(null) clears hasActiveFocusSession before BoardContext redirect on removal — event order verified in workspaceAccess.test.ts and members.focus-session.integration.test.ts",
+      "T11 navigates to /focus before T9 wires the route — planned phase-4 decomposition, not a phase-3 integration gap",
+      "T8 FocusTimer is presentational-only (props API, no useFocusSession) — T9 page wiring is explicitly deferred; no premature coupling"
+    ],
+    "regression": [
+      "Unfiltered npm run test at HEAD fa9764b: server 781 passed (239 skipped), client 814 passed",
+      "T12 BoardContext changes are additive guard branches on attemptSwitchWorkspace — T7 SSE seam tests (BoardContext.focusSeams.test.tsx) and T12 guard tests (BoardContext.focusGuard.test.tsx) both pass without conflict",
+      "Parallel merge commits (ff046f1, 9ccdbc0, fa9764b) are content merges only — no diff between feature SHAs and merge SHAs for owned files"
+    ],
+    "spec_gaps": [
+      "Phase 3 gate satisfied: T7→T14 sequential then T8/T11/T12 parallel on T7 foundation; five conventional commits; provider + guard + indicator + timer + server finalization compose cleanly",
+      "T13 client live auto-finish on access revoked and T9 /focus page wiring are Phase 4 scope — T7 subscribeMembershipEvents and subscribeCardEvents seams exist as hooks; no uncovered cross-task scenario within Phase 3"
+    ]
+  },
+  "findings": [],
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "status": "PHASE_PASS_CLEAN",
+  "terminal_sha": "fa9764b19b95d7ec2d4c7387f62545c592bba6de"
+}

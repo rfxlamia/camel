@@ -1,0 +1,72 @@
+{
+  "task_id": "T10",
+  "task_name": "Entry points — \"Focus on this task\" + confirm-switch",
+  "cycle": 1,
+  "timestamp": "2026-09-04T17:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "reviewed_sha": "fd31d17f6caf86a2a039976118ada768e2526cd5",
+  "parent_sha": "9b9e6e6634999fcf1a2eb9450063df371010551c",
+  "commits_reviewed": [
+    "fd31d17f6caf86a2a039976118ada768e2526cd5"
+  ],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "deliverable_checks": {
+      "board_card_focus_and_navigate": "PASS — focus({ source: 'board', taskId }) then navigate('/focus')",
+      "tracker_source_preserved": "PASS — focus({ source: 'tracker', taskId: 77 })",
+      "same_task_reentry_no_dialog": "PASS — isSameTask short-circuit; focus/switchTo uncalled; no dialog",
+      "running_confirm_switch": "PASS — dialog precedes switchTo; version from active session (5)",
+      "paused_cancel_untouched": "PASS — Cancel closes dialog; switchTo and navigate uncalled",
+      "session_active_409_dialog": "PASS — ApiError(409, session_active) opens dialog; no toast",
+      "flag_off_hidden": "PASS — focusModeEnabled false renders null",
+      "switchTo_not_before_confirm": "PASS — asserted in Running and session_active tests",
+      "scope_files_only": "PASS — 4 files in 9b9e6e6..fd31d17",
+      "feat_commit_exists": "PASS — fd31d17 feat(focus): add focus entry points with confirm-switch"
+    },
+    "test_results": {
+      "FocusEntryButton.test.tsx": "7/7 PASS",
+      "client_typecheck": "PASS"
+    }
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Shared FocusEntryButton mounted in ContextPanel (board) and TrackerDetailPage header strip (tracker); mount sites add only import + element",
+      "Exact spec button copy \"Focus on this task\"; secondary styling (bg-neutral-100, text-primary-700, border-neutral-300, rounded-md) matches creative brief and ticketIntake sibling button",
+      "Three-way click branch: isSameTask → navigate only; no session → focus then navigate; session_active 409 → accessible dialog before switchTo",
+      "switchTo passes active session version (not target task version) per Step 10/12 contract",
+      "FocusSwitchDialog uses role=dialog, aria-modal, Cancel/Switch focus buttons; Escape and focus trap implemented",
+      "No direct api.focus calls — all provider access via useFocusSession(); no browser confirm()",
+      "focusModeEnabled gate at outer wrapper returns null (rollback-plan client half)",
+      "FocusEntryButton.tsx 206 lines — under Step 23 ~300-line cap; FocusSwitchDialog kept inline as simple confirm",
+      "All 7 DELIVERABLE scenarios covered with accessible role/name queries"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "taskKey prop is accepted on FocusEntryButtonProps and passed from both mount sites but not used in FocusEntryButtonInner (only source and taskId drive behavior). Harmless for T10 scope.",
+        "location": "client/src/components/FocusEntryButton.tsx:124-127"
+      },
+      {
+        "severity": "Minor",
+        "description": "Same-task re-entry test covers Ready state only; deliverable specifies Ready — Running/Paused re-entry relies on isSameTask being state-agnostic (correct by implementation).",
+        "location": "client/src/components/FocusEntryButton.test.tsx:127-158"
+      },
+      {
+        "severity": "Minor",
+        "description": "version_conflict and other ApiError paths show a generic toast with no dedicated test; Step 18 distinction is implemented (session_active → dialog, else toast) but not exercised in tests.",
+        "location": "client/src/components/FocusEntryButton.tsx:166-176"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  }
+}

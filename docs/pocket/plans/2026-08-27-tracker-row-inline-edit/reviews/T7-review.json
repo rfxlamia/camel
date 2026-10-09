@@ -1,0 +1,49 @@
+{
+  "task_id": "T7",
+  "task_name": "Labels/members isolated eager fetch",
+  "cycle": 2,
+  "timestamp": "2026-08-29T06:36:24Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "GWT 1: labels fetch succeeds and is called with (workspaceId, \"label\") \u2014 loadAuxiliary uses listTrackerVocabularies(workspaceId, \"label\") (TrackerPage.tsx:161-163); test asserts mockListTrackerVocabularies(7, \"label\") and tracker-aux-labels is Feature,Bug (TrackerPage.test.tsx:1931-1939).",
+      "GWT 2: labels fetch fails \u2192 labels [], item list still renders, no full-page load failure \u2014 per-fetch .catch(() => []) (TrackerPage.tsx:163); loadFailed only in the primary catch (TrackerPage.tsx:203-212); test keeps CA-1 visible, no \"couldn't load the tracker\", aux-labels empty (TrackerPage.test.tsx:1942-1954).",
+      "GWT 3: members fetch fails \u2192 members [], item list still renders \u2014 getWorkspaceMembers(...).then(r => r.members).catch(() => []) (TrackerPage.tsx:164-167); test keeps CA-1 visible and aux-members empty (TrackerPage.test.tsx:1956-1962).",
+      "GWT 4: stale older auxiliary load discarded \u2014 both results awaited, then a single `if (seq !== loadSeqRef.current) return` before setLabels/setMembers (TrackerPage.tsx:169-171). Test starts a second sequence via the registered refresh callback with manually-controlled promises and distinct Sequence-A/Sequence-B names, then flushes React after resolving the stale pair (TrackerPage.test.tsx:1964-2085).",
+      "GWT 5: workspace change clears previous labels/members before the next aux resolves \u2014 effect on activeWorkspaceId calls setLabels([])/setMembers([]) (TrackerPage.tsx:132-135) and does not run on same-workspace refresh. Test rerenders workspace 7\u21928, asserts empty probes before resolving either workspace, flushes after resolving A, then commits only B (TrackerPage.test.tsx:2087-2195).",
+      "Story 4 Rule 2 Example C is the labels-failure isolation above. Example D (empty-state picker/kebab copy) is T9/T10; T7 only owns eager fetch + state.",
+      "Must-not-have: labels/members are not joined into Promise.all([statuses, priorities, projects, items]) (TrackerPage.tsx:185-191). Diff is exactly the two scoped files.",
+      "Implementer concern (hidden data-testid): pickers are unwired until T9, and client noUnusedLocals would reject unused labels/members state. tracker-aux-labels / tracker-aux-members (TrackerPage.tsx:536-541) are test probes, not product UI. Not extra work.",
+      "TDD: packet Step 6 is a single commit (f8deca8) of tests + implementation, same convention as T4/T5/T6. Refactor commit 28387b4 is tests + extraction only. All five RED-cycle cases exist matching packet Step 1."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Cycle-1 Important cleared: local sibling loadAuxiliary(seq) exists (TrackerPage.tsx:157-172); void loadAuxiliary(seq) runs after setLoading(false) only when primaryOk (TrackerPage.tsx:214-218); loadData is 174-221 (~48 lines, under ~50); independent .catch(() => []) on each fetch; single loadSeqRef check before committing both results (TrackerPage.tsx:169).",
+      "Cycle-1 Important cleared: after resolving stale/workspace-A aux promises, tests flush React via await act(async () => { await Promise.resolve(); }) before asserting Sequence-B / empty probes (TrackerPage.test.tsx:2075-2077 and 2178-2180).",
+      "Auxiliary requests start in finally after setLoading(false) and only when primaryOk; they never call setLoading or setLoadFailed (TrackerPage.tsx:213-219, 157-172).",
+      "Workspace clear is keyed only on activeWorkspaceId, not on ordinary refresh (TrackerPage.tsx:132-135).",
+      "No new files; aux loader stays in TrackerPage.tsx. Packet forbids a generic fetch framework; extraction stayed in-file as Step 5 required."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Hidden data-testid probes in production render are justified until T9 wires pickers (and until then they consume labels/members for noUnusedLocals). Remove or replace them when row UI reads that state.",
+        "location": "client/src/pages/TrackerPage.tsx:536"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "69b4d27b0bef88fd69e407caec5dd9bc84eeba67"
+}

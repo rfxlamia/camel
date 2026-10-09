@@ -1,0 +1,176 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-09-19-issue-131-relocation-close",
+    "plan_type": "phased",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-09-19",
+    "date_completed": null,
+    "baseline_sha": "676867b250ecad5bd9714235ed2a9e80c022c65a",
+    "pipeline": 4,
+    "plan_file": "execution-plan/index.md"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Extract client kernel chrome and cross-cutting files",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T1-extract-client-kernel-chrome-and-cross-cutting-files.md",
+          "done_sha": "726999408d64cfda8afff2c4276c24869de0eda7"
+        },
+        {
+          "id": "T2",
+          "name": "Extract server kernel card-assignees and card-response",
+          "status": "DONE",
+          "depends": "T1",
+          "file": "execution-plan/tasks/T2-extract-server-kernel-card-assignees-and-card-response.md",
+          "done_sha": "560a035f846bf392847afc7f1fcf522793055508"
+        },
+        {
+          "id": "T3",
+          "name": "Move auth screens into pages",
+          "status": "DONE",
+          "depends": "T2",
+          "file": "execution-plan/tasks/T3-move-auth-screens-into-pages.md",
+          "done_sha": "5645effa533209deb4f39b55c1a1e42170255d69"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan/phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T4",
+          "name": "Relocate my-work feature module",
+          "status": "DONE",
+          "depends": "T3",
+          "file": "execution-plan/tasks/T4-relocate-my-work-feature-module.md",
+          "done_sha": "175d72aac6815aca170ae057c72426398ac07d35"
+        },
+        {
+          "id": "T5",
+          "name": "Relocate focus wave-1 (no leftover context importers)",
+          "status": "DONE",
+          "depends": "T4",
+          "file": "execution-plan/tasks/T5-relocate-focus-wave-1-no-leftover-context-importers.md",
+          "done_sha": "680359390a70896618290b9bc5dc1590473d7fb1"
+        },
+        {
+          "id": "T6",
+          "name": "Relocate client chat",
+          "status": "DONE",
+          "depends": "T5",
+          "file": "execution-plan/tasks/T6-relocate-client-chat.md",
+          "done_sha": "83b491d9d7a692200e78ef18113235156bdef884"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan/phase-3.md",
+      "status": "REVIEW",
+      "tasks": [
+        {
+          "id": "T7",
+          "name": "Relocate agent wave-1 (no BoardContext importers)",
+          "status": "DONE",
+          "depends": "T6",
+          "file": "execution-plan/tasks/T7-relocate-agent-wave-1-no-boardcontext-importers.md",
+          "done_sha": "6b05119acea490b486e0fa8bf76ef1b4599c1260"
+        },
+        {
+          "id": "T8",
+          "name": "Relocate server chat",
+          "status": "DONE",
+          "depends": "T7",
+          "file": "execution-plan/tasks/T8-relocate-server-chat.md",
+          "done_sha": "c6817ebdae79c6f3ca169afaabba89464fa31186"
+        },
+        {
+          "id": "T9",
+          "name": "Relocate board wave-1 (no ContextPanel)",
+          "status": "DONE",
+          "depends": "T8",
+          "file": "execution-plan/tasks/T9-relocate-board-wave-1-no-contextpanel.md",
+          "done_sha": "8d62e21b7056ec92e143db0f8e593a6c593f12ba"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "file": "execution-plan/phase-4.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T10",
+          "name": "Relocate focus wave-2 (BoardContext consumers)",
+          "status": "WAITING",
+          "depends": "T9",
+          "file": "execution-plan/tasks/T10-relocate-focus-wave-2-boardcontext-consumers.md"
+        },
+        {
+          "id": "T11",
+          "name": "Relocate board wave-2 (ContextPanel)",
+          "status": "WAITING",
+          "depends": "T10",
+          "file": "execution-plan/tasks/T11-relocate-board-wave-2-contextpanel.md"
+        },
+        {
+          "id": "T12",
+          "name": "Relocate agent wave-2 (BoardContext consumers + llm cluster)",
+          "status": "WAITING",
+          "depends": "T11",
+          "file": "execution-plan/tasks/T12-relocate-agent-wave-2-boardcontext-consumers-llm-cluster.md"
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "file": "execution-plan/phase-5.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T13",
+          "name": "Relocate settings feature module",
+          "status": "WAITING",
+          "depends": "T12",
+          "file": "execution-plan/tasks/T13-relocate-settings-feature-module.md"
+        },
+        {
+          "id": "T14",
+          "name": "Relocate workspaces feature module",
+          "status": "WAITING",
+          "depends": "T13",
+          "file": "execution-plan/tasks/T14-relocate-workspaces-feature-module.md"
+        },
+        {
+          "id": "T15",
+          "name": "Relocate notifications feature module",
+          "status": "WAITING",
+          "depends": "T14",
+          "file": "execution-plan/tasks/T15-relocate-notifications-feature-module.md"
+        },
+        {
+          "id": "T16",
+          "name": "Relocate activity feature module",
+          "status": "WAITING",
+          "depends": "T15",
+          "file": "execution-plan/tasks/T16-relocate-activity-feature-module.md"
+        },
+        {
+          "id": "T17",
+          "name": "Relocate auth module and close #131",
+          "status": "WAITING",
+          "depends": "T16",
+          "file": "execution-plan/tasks/T17-relocate-auth-module-and-close-131.md"
+        }
+      ]
+    }
+  ]
+}

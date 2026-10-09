@@ -1,0 +1,44 @@
+{
+  "task_id": "T4",
+  "task_name": "Key/status allocation and final status NOT NULL",
+  "cycle": 5,
+  "timestamp": "2026-08-31T06:50:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "The correction commit changes only the human card-create lock acquisition and adds the requested cross-task race scenario; it does not alter T4 allocation, WIP, activity, signable, or statusId-rejection contracts.",
+      "The human POST now locks the workspace row before the column row and before allocateCardIdentity, matching the workspace-first order used by is_done remapping (server/src/routes/cards.ts:265-308).",
+      "The new regression uses real Supertest HTTP requests and the real PostgreSQL pool, races POST /cards against PATCH /columns/:id with isDone, and asserts committed column, card identity/status, version, uniqueness, and activity state (server/src/routes/columns-is-done-remap.failure.test.ts:71-133).",
+      "The complete remap integration entrypoint still imports all existing basic, edge, and failure scenarios; the composed suite passed all 12 tests."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The lock order is unified as workspace -> columns -> allocator: POST explicitly locks workspaces, then its target column, and allocateCardIdentity performs the counter update while the workspace lock is already held (server/src/routes/cards.ts:265-308; server/src/core/allocate-card-identity.ts:17-32).",
+      "The correction preserves the existing human transaction boundary, WIP check, identity allocation, insert fields, activity recording, publish event, hydration, and signable-assignee behavior; no production file besides cards.ts is changed.",
+      "The remap path remains workspace-first and continues to update columns/cards, record activity, and publish only after its transaction succeeds (server/src/routes/column-is-done-remap.ts:55-78; server/src/routes/columns.ts:268-289).",
+      "The race test has no sleeps, retries, or lock-order workaround. It asserts both HTTP success, the single done column, committed key/status/version/deleted state, unique key count, and the create activity event.",
+      "The correction commit contains exactly server/src/routes/cards.ts and server/src/routes/columns-is-done-remap.failure.test.ts; log.json and unrelated files are absent. Integration tests, root lint, and typecheck pass."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The added integration test block has inconsistent indentation/formatting and npx biome check reports that the file would be reformatted. This is non-blocking because the project lint, typecheck, and composed integration suite pass.",
+        "location": "server/src/routes/columns-is-done-remap.failure.test.ts:98-133"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 5,
+    "max_cycles": 3,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "383e64362caccc812fa45474cfd065e3fd51cb42"
+}

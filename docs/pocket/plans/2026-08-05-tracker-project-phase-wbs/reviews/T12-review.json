@@ -1,0 +1,53 @@
+{
+  "task_id": "T12",
+  "task_name": "Rollup and schedule derivation helper",
+  "cycle": 1,
+  "timestamp": "2026-08-05T23:27:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Three-branch discriminated RollupResult (`percent` / `no-active-work` / `no-tasks`) exactly as the spec's 'never 0%, never 100%' carve-out requires (client/src/lib/trackerRollup.ts:8-11, 21-39); denominator excludes canceled (client/src/lib/trackerRollup.ts:26-32)",
+      "Per-field date fallback via `??` in phaseBounds, so an explicit start combines with a derived end rather than all-or-nothing (client/src/lib/trackerRollup.ts:67-70)",
+      "All date comparisons are lexical ISO string compares against `todayISODate()` imported read-only from boardViewUtils; no date-fns, no React, no fetching, no side effects (client/src/lib/trackerRollup.ts:6, 44, 83)",
+      "Phase-overdue carve-out is correct including the empty-phase case: `allTasksDoneOrCanceled` requires `items.length > 0`, so a zero-task phase past its explicit end is overdue (client/src/lib/trackerRollup.ts:73-89)",
+      "No range-violation helper exists anywhere in the module, satisfying the [must-not] 'derived bounds can never flag a task as outside the range'",
+      "Bounded refactor honoured: `isCompleted` / `isCanceled` extracted as module-local predicates and reused across all five exported functions, no speculative `isLive` added (client/src/lib/trackerRollup.ts:13-19)",
+      "Scope discipline: `git diff --stat 5aaad1c..3bebd75` shows only the three declared files, 426 insertions, zero edits to boardViewUtils.ts or trackerUtils.ts",
+      "Verified green: `npm run test --workspace=client -- src/lib/trackerRollup.test.ts src/lib/trackerUtils.test.ts` → 2 files, 21 tests passed; `npm run typecheck --workspace=client` clean; `npm run lint` clean",
+      "Commit 507e6e0 message matches the required `feat(tracker): …` form"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Biome formatting deviations — `npx biome check` reports the multi-line type import should collapse to one line (trackerRollup.ts:1-5), `allTasksDoneOrCanceled`'s return expression exceeds line width (trackerRollup.ts:75), `isPhaseOverdue`'s signature should wrap (trackerRollup.ts:79), and one `expect(...)` in the canceled-task test should reflow (trackerRollup.test.ts:147-149). Not gated by any hook — root `npm run lint` is `biome lint .` (format-only rules excluded) and .husky/pre-commit runs lint + typecheck, so this slipped through. `npm run lint:fix` resolves it.",
+        "location": "client/src/lib/trackerRollup.ts:1-5,75,79; client/src/lib/trackerRollup.test.ts:147-149"
+      },
+      {
+        "severity": "Minor",
+        "description": "The caller-scoped contract is undocumented. `rollup`, `phaseBounds` and `isPhaseOverdue` all require the caller to pre-filter `items` to the phase/project (only `isProjectOverdue` filters internally at :95,:99), and passing an unscoped list silently yields wrong bounds or progress. The neighbouring module documents its invariants with JSDoc (trackerUtils.ts:3,10) and boardViewUtils.ts:47 explains the lexical-compare trick; trackerRollup.ts carries no comments at all, which is a maintainability gap for the module the spec designates as the single place rollup correctness lives.",
+        "location": "client/src/lib/trackerRollup.ts:21,47,79"
+      },
+      {
+        "severity": "Minor",
+        "description": "Tests-before-implementation (a QUALITY BAR must-have) cannot be verified from history: the range collapses to one implementation commit (507e6e0) plus a merge, because the packet's step 6 prescribes a single `git add` of all three files, and log.json records only `done_sha` with no RED/GREEN evidence. Circumstantial support is strong — both test files reproduce the packet's prescribed test blocks verbatim and trackerUtils.test.ts carries the packet's 'No implementation change is made here' header (trackerUtils.test.ts:1-4) — so this is recorded as an audit-trail observation, not a violation.",
+        "location": "client/src/lib/trackerRollup.test.ts:1"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "3bebd758607cea94be55505fb051d7968a710fd6"
+}

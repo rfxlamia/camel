@@ -1,0 +1,38 @@
+{
+  "task_id": "T6",
+  "task_name": "Priority inline edit",
+  "cycle": 1,
+  "timestamp": "2026-08-29T03:26:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "All 5 DELIVERABLE GWTs are present and match Story 3 + Story 6 Rule 2 Example C: new priority PATCH {priorityId:11, version:2} (TrackerPage.test.tsx:1422-1456); No priority PATCH {priorityId:null, version:2} (TrackerPage.test.tsx:1458-1492); current re-pick High sends no PATCH (TrackerPage.test.tsx:1494-1514); grouped-by-priority auto-uncollapse of collapsed Low (TrackerPage.test.tsx:1576-1624); project then priority sequential versions 4 then 5 with no 409 (TrackerPage.test.tsx:1626-1693); live no-op race Low-then-original-High fires second PATCH {priorityId:10, version:3} (TrackerPage.test.tsx:1516-1574).",
+      "priority:none destination: changePriority passes the nullable selected id through priorityGroupKey(priorityId) (TrackerPage.tsx:437); priorityGroupKey(null) returns 'priority:none' (trackerUtils.ts:158-159); direct unit test maps null to that bucket (trackerUtils.test.ts:207-209). Sentinel mapping is NO_PRIORITY → null at the picker (TrackerRow.tsx:151-153).",
+      "applyItemPatch reuse: changePriority only supplies a builder (live no-op, request, optimistic vocabulary-or-null, priority-scoped rollback) plus the ordinary-error toast; 409/toast/refetch stay inside applyItemPatch (TrackerPage.tsx:284-326, 432-460). ItemPatchBuild gained optional priorityId — type extension only, not a new mutation pattern.",
+      "TDD cycle classification: packet commit is a single Step 18 SHA (169cc98), same as T4/T5. Cycles 1/5/8/10a/11/16 have dedicated tests that encode the new picker behavior. Cycles 5/8/10a/16 are labeled regression after the handler exists. Priority PATCH (packet Step 1 Expected RED) and auto-uncollapse (packet Step 11 Expected RED) exist in the same commit as implementation; the packet has no intermediate commit, so those are not treated as missing tests-before-implementation."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "changePriority reuses applyItemPatch and uncollapseGroupFor; no third optimistic-update path and no second group-uncollapse implementation. changeProject was switched onto the same helper (TrackerPage.tsx:271-282, 410, 432-460). applyItemPatch is 43 lines; changePriority is 29; uncollapseGroupFor is 12 — under the ~50-line handler heuristic.",
+      "NO_PRIORITY has one definition in trackerUtils.ts; TrackerProperties, TrackerCreateModal, and TrackerRow import it; both previous local const NO_PRIORITY = 'none' literals are gone (trackerUtils.ts:121; TrackerProperties.tsx:3,81,160; TrackerCreateModal.tsx:4; TrackerRow.tsx:3,117,152).",
+      "onPriorityChange is optional on TrackerRow and TrackerSection; TrackerPage supplies it at the TrackerSection call-site; TrackerPhaseSection still omits it and keeps the read-only glyph (TrackerRow.tsx:31,137-162; TrackerSection.tsx:25,107-109; TrackerPage.tsx:668-670; TrackerPhaseSection.tsx:106-111).",
+      "Live no-op compares c.priority?.id ?? null inside the applyItemPatch builder after the itemsRef read, not a pre-enqueue capture (TrackerPage.tsx:441-443). Cross-field test locks project version 4 then priority version 5 (TrackerPage.test.tsx:1670-1693).",
+      "Scope is exact: the seven listed files, one packet commit 169cc98. TrackerPhaseSection, trackerItemMutationQueue, and kebab are untouched. TrackerRow.tsx is 280 lines (under ~300). Diff-introduced handlers stay under ~50 lines; no 3+ duplicated logic in scope."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "169cc984ffc90e3c3df85157e93cbb3b7e7992cb"
+}

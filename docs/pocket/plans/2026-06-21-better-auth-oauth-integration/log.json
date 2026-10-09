@@ -1,0 +1,63 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-06-21-better-auth-oauth-integration",
+    "plan_type": "flat",
+    "status": "DONE",
+    "date_started": "2026-06-21",
+    "date_completed": "2026-06-21",
+    "baseline_sha": "915dee8585dd8cb5c377c8fa001d33c748880d42"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "DB Schema Migration",
+          "status": "DONE",
+          "done_sha": "441195f3cba5ef218d5d5587c5c0c45021de8db7"
+        },
+        {
+          "id": "T2",
+          "name": "Better Auth OAuth Bridge",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "474d73e8dc9451ee3949a9ba41a15e14f3c6d12e"
+        },
+        {
+          "id": "T3",
+          "name": "Email Gate Middleware",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "20402d6f3fcfa5e5d32a3044675e60f7a55b40d7"
+        },
+        {
+          "id": "T4",
+          "name": "OAuth Routes — Set-Username & Set-Password",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "e2366431fe5d051fdc6db3a00af6a612ea360779"
+        },
+        {
+          "id": "T5",
+          "name": "Client Auth UI — OAuth Buttons, PickUsername & EmailGate Screens",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "81d82fc07318976192a02ec47de3b2ced24679e5"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "d78c1b0c0c2d5f867b17b65ddef1545dd3d8a63b",
+          "files": [
+            "client/src/App.test.tsx",
+            "client/src/App.tsx"
+          ],
+          "for_task": "T5"
+        }
+      ]
+    }
+  ]
+}

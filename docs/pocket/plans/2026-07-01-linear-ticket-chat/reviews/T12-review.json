@@ -1,0 +1,39 @@
+{
+  "task_id": "T12",
+  "task_name": "Client — auto-error entry point wiring",
+  "cycle": 1,
+  "timestamp": "2026-07-02T10:00:00.000Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "DELIVERABLE 1 (auto-open with prefill on 500+): AutoErrorListener subscribes to the bus via subscribeAutoError in useEffect; on event, calls chat.open({ variant: 'autoError', prefill: { endpoint, status, errorMessage, timestamp, userAction } }). The hook's autoError variant sends a sendMessage with autoError: true, causing the server to skip the classifier and return a ready: true response with Bug type. PASS.",
+      "DELIVERABLE 2 [must-not] (no auto-submit): AutoErrorListener contains zero references to confirm() or any submit logic. The hook's autoError path initializes panelOpen: true and triggers sendMessage, but confirm() is never called — the preview screen with explicit confirm button is the only way to submit. PASS.",
+      "DELIVERABLE 3 (activeWorkspaceId null suppresses): The subscription callback checks `if (activeWorkspaceId === null) return` before calling chat.open. The render guard `if (activeWorkspaceId === null || !chat.panelOpen || chat.activeVariant !== 'autoError') return null` prevents any partial/flashing UI. Test explicitly verifies mockOpen is not called when activeWorkspaceId is null. PASS.",
+      "DELIVERABLE 4 (background/passive calls never published): Task 8's upstream tagging (only updateCard/createCard/moveCard get userInitiated: true) guarantees no background call ever publishes to this bus. AutoErrorListener relies on subscribeAutoError which only fires when publishAutoError is called. PASS."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Clean separation of concerns: AutoErrorListener is a thin wiring component that subscribes to a bus and forwards to a hook's open function — no state machine logic duplicated.",
+      "Both subscription callback and render guard check activeWorkspaceId === null, providing defense-in-depth against partial UI.",
+      "AppLayout correctly mounts <AutoErrorListener /> alongside <FloatingChatButton /> with proper import ordering.",
+      "AutoErrorListener passes the chat object as a prop to ChatPanel, allowing ChatPanel to accept an override while also maintaining its own internal fallback — good composability pattern.",
+      "autoErrorDetailToPrefill correctly maps all five bus fields (endpoint, status, message→errorMessage, timestamp, userAction) to the hook's TicketIntakePrefill shape.",
+      "Test coverage is solid: two tests covering both the happy path (bus fires → open called with correct prefill) and the null-workspace suppression path."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "5199a1196c437410f3f9354ab7bddde5b0554c44"
+}

@@ -1,0 +1,85 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-06-17-agent-multi-turn-conversation",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-06-17",
+    "date_completed": "2026-06-17",
+    "baseline_sha": "c432df55eac5e2351cf36230a5d28994d0e8ccc1"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "classifyFollowUpIntent + Scope Guard Prompt",
+          "status": "DONE",
+          "done_sha": "4afd1e840715aa6971c5966b865d20b6590e50f2"
+        },
+        {
+          "id": "T2",
+          "name": "Service sendMessage Upgrade + regenerateBoard",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "69f9226f3bccc9d6c4110b07a8cd4c7842f2afb7"
+        },
+        {
+          "id": "T3",
+          "name": "Routes Structured Payload Handling",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "af0d278733fe59f5016689f350554f91e34fdbf7"
+        },
+        {
+          "id": "T4",
+          "name": "Client AgentPage Follow-Up UI",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "debbe3c7007ed808d0814bd565cca0f10d26bf40"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T5",
+          "name": "Client API + Stream Support Updates",
+          "status": "DONE",
+          "depends": "T3, T4",
+          "done_sha": "3c43fe6daeb5927a774b69289c5ea3d7ee837092"
+        },
+        {
+          "id": "T6",
+          "name": "Integration — Follow-Up Message Flow",
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "cf89e6a6720492666c1fb7c5ef23fb6dbbc11c27"
+        },
+        {
+          "id": "T7",
+          "name": "Integration — Regenerate Confirmation Flow",
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "210376cd878098f05b6272233c53bcbc0e42b9a8"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "46e67bd",
+          "files": [
+            "server/src/agent/llm.ts",
+            "server/src/agent/routes.ts",
+            "server/src/agent/service.ts"
+          ],
+          "for_task": "T5"
+        }
+      ]
+    }
+  ]
+}

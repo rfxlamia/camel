@@ -1,0 +1,226 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-09-05-image-attachment",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-09-06",
+    "date_completed": "2026-09-07",
+    "baseline_sha": "7d8ce656f67b9753ee6cb5d280b4142cfa705010",
+    "pipeline": 4,
+    "plan_file": "execution-plan/index.md"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Add attachment schema and Kysely contract",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T1-add-attachment-schema-and-kysely-contract.md",
+          "done_sha": "72534f5bdb478b2405bc5cda21240daa087a6882"
+        },
+        {
+          "id": "T2",
+          "name": "Add configurable private storage and multipart upload foundation",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T2-add-configurable-private-storage-and-multipart-upload-foundation.md",
+          "done_sha": "ec3907ba1d9c316dee5421d74d2ff434785a27ff"
+        },
+        {
+          "id": "T3",
+          "name": "Extend image validation and client thumbnail preprocessing",
+          "status": "DONE",
+          "depends": "T2",
+          "file": "execution-plan/tasks/T3-extend-image-validation-and-client-thumbnail-preprocessing.md",
+          "done_sha": "5f84a6cb7cd2c3462fa9992db90da9715dd08993"
+        },
+        {
+          "id": "T4",
+          "name": "Define attachment response hydration and realtime contract",
+          "status": "DONE",
+          "depends": "T1",
+          "file": "execution-plan/tasks/T4-define-attachment-response-hydration-and-realtime-contract.md",
+          "done_sha": "4920f7a4e29e9ceeff19cbed4d4b7e90983dc149"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "55bf20c",
+          "files": [
+            "server/src/routes/settings.test.ts"
+          ],
+          "for_task": "T3"
+        },
+        {
+          "sha": "6f05584",
+          "files": [
+            "server/src/lib/attachment-storage.test.ts",
+            "server/src/lib/attachment-upload.ts"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "b05981f",
+          "files": [
+            "server/src/routes/attachment-activity.integration.test.ts",
+            "server/src/routes/helpers.ts"
+          ],
+          "for_task": "T4"
+        },
+        {
+          "sha": "b132fb6",
+          "files": [
+            "server/src/realtime.test.ts",
+            "server/src/realtime.ts"
+          ],
+          "for_task": "T4"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan/phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T5",
+          "name": "Add shared ownership guard and authenticated cached delivery",
+          "status": "DONE",
+          "depends": "T2, T4",
+          "file": "execution-plan/tasks/T5-add-shared-ownership-guard-and-authenticated-cached-delivery.md",
+          "done_sha": "04468c61dff2988928e614b230de05471eef5c2e"
+        },
+        {
+          "id": "T6",
+          "name": "Implement existing-card upload, DB lock/count guard, activity, and SSE",
+          "status": "DONE",
+          "depends": "T3, T4, T5",
+          "file": "execution-plan/tasks/T6-implement-existing-card-upload-db-lock-count-guard-activity-and-sse.md",
+          "done_sha": "08ba5093cb025942a191f543b850d7a682c1a2cd"
+        },
+        {
+          "id": "T7",
+          "name": "Delete attachments and clean up soft-deleted cards",
+          "status": "DONE",
+          "depends": "T2, T4, T5, T6",
+          "file": "execution-plan/tasks/T7-delete-attachments-and-clean-up-soft-deleted-cards.md",
+          "done_sha": "20c7e05bbb93dfa1ac2247809f9cde9871ea903d"
+        },
+        {
+          "id": "T8",
+          "name": "Add multipart card-create atomicity",
+          "status": "DONE",
+          "depends": "T2, T3, T4",
+          "file": "execution-plan/tasks/T8-add-multipart-card-create-atomicity.md",
+          "done_sha": "cb0ea10c2a76101bcef8aa7176d8735b65eebcad"
+        },
+        {
+          "id": "T11",
+          "name": "Add the `@image` file-command variant",
+          "status": "DONE",
+          "depends": "T3",
+          "file": "execution-plan/tasks/T11-add-the-image-file-command-variant.md",
+          "done_sha": "bef2be122b3c555ddf64182f9828200da45fd831"
+        },
+        {
+          "id": "T14",
+          "name": "Wire self-host deployment, private volume, and upload body size",
+          "status": "DONE",
+          "depends": "T2, T5, T6, T8",
+          "file": "execution-plan/tasks/T14-wire-self-host-deployment-private-volume-and-upload-body-size.md",
+          "done_sha": "fe0c83dd6e1391d15766c9fe7eae13495ece5014"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "5b1266a",
+          "files": [
+            "server/src/routes.ts"
+          ],
+          "for_task": "T5"
+        },
+        {
+          "sha": "c590516",
+          "files": [
+            "server/src/lib/attachment-upload.ts",
+            "server/src/lib/attachment-validation.ts",
+            "server/src/routes/card-attachment-upload.ts",
+            "server/src/routes/card-attachments-upload.integration.test.ts",
+            "server/src/routes/card-attachments-upload.support.ts",
+            "server/src/routes/card-create-attachments.test-support.ts",
+            "server/src/routes/card-create-attachments.validation.ts",
+            "server/src/routes/card-create.ts"
+          ],
+          "for_task": "T8"
+        },
+        {
+          "sha": "5307b00",
+          "files": [
+            "server/src/routes/card-attachments-delete.integration.test.ts",
+            "server/src/routes/card-attachments-upload.integration.test.ts",
+            "server/src/routes/card-create-attachments.creation.ts",
+            "server/src/routes/card-create.ts"
+          ],
+          "for_task": "T8"
+        },
+        {
+          "sha": "8c81d6d",
+          "files": [
+            "deploy/docker-compose.prod.yml"
+          ],
+          "for_task": "T14"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan/phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T9",
+          "name": "Add client attachment API, SSE refresh, and activity descriptions",
+          "status": "DONE",
+          "depends": "T4, T6, T7, T8",
+          "file": "execution-plan/tasks/T9-add-client-attachment-api-sse-refresh-and-activity-descriptions.md",
+          "done_sha": "8c9a0c3c55128e0e5e81adea8cb6ac9a897f1f62"
+        },
+        {
+          "id": "T10",
+          "name": "Build existing-card picker, paste, gallery, lightbox, and delete UI",
+          "status": "DONE",
+          "depends": "T3, T9",
+          "file": "execution-plan/tasks/T10-build-existing-card-picker-paste-gallery-lightbox-and-delete-ui.md",
+          "done_sha": "46a958d135736c873e698bd0faca138ccca4f7b6"
+        },
+        {
+          "id": "T12",
+          "name": "Stage images and submit create-card requests from AddCard",
+          "status": "DONE",
+          "depends": "T9, T11, T8",
+          "file": "execution-plan/tasks/T12-stage-images-and-submit-create-card-requests-from-addcard.md",
+          "done_sha": "a9cdd4bb074692f51ec213198534ddb1d93225f9"
+        },
+        {
+          "id": "T13",
+          "name": "Render board cover thumbnails and overflow badge",
+          "status": "DONE",
+          "depends": "T4, T9",
+          "file": "execution-plan/tasks/T13-render-board-cover-thumbnails-and-overflow-badge.md",
+          "done_sha": "329e78b2a36069395d9d3df9108752863ecc9ddf"
+        },
+        {
+          "id": "T15",
+          "name": "Verify cross-boundary attachment mutation, SSE, and create flow",
+          "status": "DONE",
+          "depends": "T6, T8, T9, T10, T12, T13",
+          "file": "execution-plan/tasks/T15-verify-cross-boundary-attachment-mutation-sse-and-create-flow.md",
+          "done_sha": "2a44280967c842981b319a19fc3aed81c7107702"
+        }
+      ]
+    }
+  ]
+}

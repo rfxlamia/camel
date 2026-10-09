@@ -1,0 +1,40 @@
+{
+  "task_id": "T8",
+  "task_name": "Toggle-diff resolver helper",
+  "cycle": 1,
+  "timestamp": "2026-08-29T06:29:08Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "GWT 1: id absent is appended \u2014 resolveToggle([1], 2) \u2192 [1, 2] (trackerUtils.ts:287-291; trackerUtils.test.ts:45-47).",
+      "GWT 2: id present is removed \u2014 resolveToggle([1, 2], 2) \u2192 [1] (trackerUtils.ts:287-289; trackerUtils.test.ts:49-51).",
+      "GWT 3: empty list + any id \u2192 single-element list \u2014 resolveToggle([], 5) \u2192 [5] (trackerUtils.ts:290; trackerUtils.test.ts:53-55).",
+      "TrackerDetailPage.resolvePropertyPatch now calls resolveToggle for assignees and labels; previous inline includes/filter/spread is gone (TrackerDetailPage.tsx:23, 218-224). enqueueMutation / changeProperty request path is unchanged.",
+      "TrackerCreateModal deleted local toggle and both onSelect handlers call resolveToggle (TrackerCreateModal.tsx:4, 399-400, 425-426). No leftover duplicate toggle implementation in either consumer.",
+      "TDD: packet Step 6 is a single commit (a8aca76) of tests + helper + consumers. The three RED-cycle cases exist in that commit matching packet Step 1 exactly. Same single-commit convention as T4/T5/T6 \u2014 not treated as missing tests-before-implementation."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Signature is exactly (currentIds: number[], toggledId: number) => number[] with no tracker-domain types (trackerUtils.ts:287).",
+      "resolveToggle body has no TrackerItem / assignees / labels by name; one-liner matches the packet (trackerUtils.ts:287-291).",
+      "Consumers import the shared helper; local toggle in TrackerCreateModal and inline toggle-diff in resolvePropertyPatch are gone (TrackerCreateModal.tsx:4, 399-400, 425-426; TrackerDetailPage.tsx:23, 220, 224).",
+      "Scope is exact: four listed files, +27/\u221212. Detail page 611\u2192608 and create modal 532\u2192529 shrank. trackerUtils.ts 285\u2192291 stays under ~300. resolveToggle is 5 lines (under ~50). Implementation exists once \u2014 call sites are reuse, not 3+ duplicated logic.",
+      "Tests lock the three packet examples through resolveToggle directly with no mocks (trackerUtils.test.ts:44-56)."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "1eeea76a5ddebd822722c9a9aef2e5263e92504a"
+}

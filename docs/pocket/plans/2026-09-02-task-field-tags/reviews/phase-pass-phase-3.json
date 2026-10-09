@@ -1,0 +1,49 @@
+{
+  "phase_key": "phase-3",
+  "phase_file": "execution-plan/phase-3.md",
+  "timestamp": "2026-09-03T23:08:30Z",
+  "reviewer_mode": "read-only",
+  "task_ranges": [
+    { "task_id": "T9", "range": "95b93d0da787ecac7ec86c69a12c5687586c9d7c..8ef34be730daf8e0717a37d3e72a5515922510d1" },
+    { "task_id": "T10", "range": "8ef34be730daf8e0717a37d3e72a5515922510d1..3e2bf0aa67343f0bc8adf345c09503c96862b0be" },
+    { "task_id": "T11", "range": "3e2bf0aa67343f0bc8adf345c09503c96862b0be..64e26017c41f45d9705797499cd97214e1d45929" },
+    { "task_id": "T12", "range": "64e26017c41f45d9705797499cd97214e1d45929..68b381aab127ae195baa356596d14d05773d2007" }
+  ],
+  "post_task_note": "Commit bdeb628 (client task-entry typecheck fix) appears in T9 diff range from parallel merge ancestry; already reviewed in phase-2 pass with no behavioral regression. T9/T10 independently duplicate holdWorkspaceRow/waitForPeerWaitingOnWorkspaceLock helpers following the T8 pattern — acceptable per-task isolation, not an integration defect.",
+  "findings": [
+    {
+      "id": "P3-F01",
+      "category": "cross-file-regression",
+      "severity": "important",
+      "for_task": "T12",
+      "bleed_tasks": ["T11"],
+      "title": "T12 TaskTitleEditor aria-label change breaks T11 Board Add Card tests",
+      "description": "T12 (2645cd2) changed TaskTitleEditor textarea aria-label from the hardcoded string \"Task title\" to aria-label={placeholder}. AddCard (T11) passes placeholder=\"What needs doing?\", so the combobox accessible name is now \"What needs doing?\" while T11's AddCard.test.tsx and BoardPage.test.tsx still query getByRole(\"combobox\", { name: \"Task title\" }). At phase HEAD, AddCard.test.tsx fails 6/6 and BoardPage.test.tsx fails 9/20 on those selectors; TrackerCreateModal.test.tsx passes because it already queries \"Item title\". TaskTitleEditor.test.tsx passes via the default placeholder \"Task title\". This is a later-task mutation on a shared T4 component breaking an earlier parallel task's packet suite.",
+      "affected_files": [
+        "client/src/components/task-entry/TaskTitleEditor.tsx",
+        "client/src/components/AddCard.test.tsx",
+        "client/src/pages/BoardPage.test.tsx"
+      ],
+      "evidence": {
+        "introduced_in": "2645cd26ae583a0ceb738740ab72e8850ea571f0",
+        "regression_diff": "aria-label=\"Task title\" → aria-label={placeholder}",
+        "addcard_placeholder": "What needs doing?",
+        "verified_commands": [
+          "npm run test --workspace=client -- src/components/AddCard.test.tsx → 6 passed",
+          "npm run test --workspace=client -- src/pages/BoardPage.test.tsx → 20 passed",
+          "npm run test --workspace=client -- src/components/tracker/TrackerCreateModal.test.tsx → 27 passed"
+        ]
+      },
+      "fix_instructions": "Restore a stable combobox accessible name for Board consumers without regressing Tracker. Preferred: add an optional ariaLabel prop to TaskTitleEditor (default placeholder) and pass it from AddCard, or update T11/BoardPage test selectors to match AddCard's \"What needs doing?\" placeholder. Record as a phase-level --correction attributed to T12 with T11 bleed; fan out verdict refresh to both tasks after the fix commit.",
+      "resolution": "resolved",
+      "resolved_in": "e9bcf7aa650325a00000ee333d9fdf31f3ecacfd",
+      "resolution_note": "Correction e9bcf7a added optional ariaLabel prop to TaskTitleEditor and passes ariaLabel=\"Task title\" from AddCard, restoring stable combobox accessible name for Board without changing Tracker placeholder behavior. Re-run cycle 2 verification: AddCard.test.tsx 6/6 passed, BoardPage.test.tsx 20/20 passed."
+    }
+  ],
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "status": "PHASE_PASS_RESOLVED"
+}
