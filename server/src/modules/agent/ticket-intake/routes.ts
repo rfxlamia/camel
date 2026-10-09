@@ -1,7 +1,12 @@
-import { Router } from "express";
+import { type Response, Router } from "express";
 import { requireAuth } from "../../../auth.js";
 import { db } from "../../../db/kysely.js";
 import { lookupMembership } from "../../../lib/helpers.js";
+import { parseWith, sendValidationError } from "../../../validators/http.js";
+import {
+	legacyIntegerParam,
+	trimmedRequired,
+} from "../../../validators/schemas.js";
 import {
 	checkCompleteness,
 	inferTypeFromClassifierAnswer,
@@ -11,7 +16,7 @@ import { getTicketHistory } from "./history.js";
 import { isTicketIntakeConfigured } from "./linear-client.js";
 import { extractTicketFields } from "./llm.js";
 import { checkChatLimit, peekChatLimit } from "./rate-limits.js";
-import { handleSubmit } from "./submit.js";
+import { handleSubmit, validateTicketWorkspace } from "./submit.js";
 
 export const ticketIntakeRouter = Router();
 
@@ -47,6 +52,53 @@ function applyClassifierTypeFallback(
 	return extraction;
 }
 
+async function respondWithChatExtraction(
+	res: Response,
+	message: string,
+	autoError: unknown,
+	conversationHistory?: Array<{ role: string; content: string }>,
+) {
+	const extractionInput = buildExtractionInput(message, conversationHistory);
+
+	let extraction: TicketExtraction = applyClassifierTypeFallback(
+		await extractTicketFields(extractionInput),
+		message,
+		conversationHistory,
+	);
+
+	if (autoError) {
+		extraction = { ...extraction, type: "Bug" };
+	}
+
+	const completeness = checkCompleteness(extraction);
+
+	if (completeness.ready) {
+		return res.json({ ready: true, draft: extraction });
+	}
+
+	return res.json({
+		ready: false,
+		question: completeness.question ?? CLASSIFIER_QUESTION,
+	});
+}
+
+async function rejectLockedChat(
+	userId: number,
+	res: Response,
+): Promise<boolean> {
+	const rateLimit = await checkChatLimit(userId);
+	if (rateLimit.isLocked) {
+		res.status(429).json({
+			error: "Too many chat messages",
+			...(rateLimit.retryAfterMs !== undefined
+				? { retryAfterMs: rateLimit.retryAfterMs }
+				: {}),
+		});
+		return true;
+	}
+	return false;
+}
+
 ticketIntakeRouter.get("/ticket-intake/config", requireAuth, (_req, res) => {
 	res.json({ enabled: isTicketIntakeConfigured() });
 });
@@ -55,10 +107,8 @@ ticketIntakeRouter.get(
 	"/workspaces/:workspaceId/ticket-intake/chat-limit",
 	requireAuth,
 	async (req, res) => {
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
-		}
+		const workspaceId = validateTicketWorkspace(req, res);
+		if (workspaceId === null) return;
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
 		if (!membership) {
@@ -83,16 +133,18 @@ ticketIntakeRouter.post(
 			return res.status(503).json({ error: "Ticket intake is not configured" });
 		}
 
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
-		}
+		const workspaceId = validateTicketWorkspace(req, res);
+		if (workspaceId === null) return;
 
 		const { message, isFirstTurn, autoError, conversationHistory } =
 			req.body ?? {};
 
-		if (typeof message !== "string" || !message.trim()) {
-			return res.status(400).json({ error: "message is required" });
+		const parsedMessage = parseWith(
+			trimmedRequired("message is required"),
+			message,
+		);
+		if (!parsedMessage.ok) {
+			return sendValidationError(res, parsedMessage.body);
 		}
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
@@ -107,41 +159,14 @@ ticketIntakeRouter.post(
 			});
 		}
 
-		const rateLimit = await checkChatLimit(req.user!.id);
-		if (rateLimit.isLocked) {
-			return res.status(429).json({
-				error: "Too many chat messages",
-				...(rateLimit.retryAfterMs !== undefined
-					? { retryAfterMs: rateLimit.retryAfterMs }
-					: {}),
-			});
-		}
+		if (await rejectLockedChat(req.user!.id, res)) return;
 
-		const extractionInput = buildExtractionInput(
-			message.trim(),
+		return respondWithChatExtraction(
+			res,
+			parsedMessage.data,
+			autoError,
 			conversationHistory,
 		);
-
-		let extraction: TicketExtraction = applyClassifierTypeFallback(
-			await extractTicketFields(extractionInput),
-			message.trim(),
-			conversationHistory,
-		);
-
-		if (autoError) {
-			extraction = { ...extraction, type: "Bug" };
-		}
-
-		const completeness = checkCompleteness(extraction);
-
-		if (completeness.ready) {
-			return res.json({ ready: true, draft: extraction });
-		}
-
-		return res.json({
-			ready: false,
-			question: completeness.question ?? CLASSIFIER_QUESTION,
-		});
 	},
 );
 
@@ -161,15 +186,17 @@ ticketIntakeRouter.get(
 	"/workspaces/:workspaceId/ticket-intake/history",
 	requireAuth,
 	async (req, res) => {
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
-		}
+		const workspaceId = validateTicketWorkspace(req, res);
+		if (workspaceId === null) return;
 
-		const cardId = Number(req.query.cardId);
-		if (!Number.isInteger(cardId)) {
-			return res.status(400).json({ error: "cardId must be an integer" });
+		const parsedCardId = parseWith(
+			legacyIntegerParam("cardId must be an integer"),
+			req.query.cardId,
+		);
+		if (!parsedCardId.ok) {
+			return sendValidationError(res, parsedCardId.body);
 		}
+		const cardId = parsedCardId.data;
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
 		if (!membership) {
