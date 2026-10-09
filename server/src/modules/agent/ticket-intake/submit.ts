@@ -4,6 +4,8 @@ import { db } from "../../../db/kysely.js";
 import { lookupMembership, recordActivity } from "../../../lib/helpers.js";
 import { logger } from "../../../lib/logger.js";
 import { publishEvent } from "../../../realtime.js";
+import { parseWith, sendValidationError } from "../../../validators/http.js";
+import { legacyIntegerParam } from "../../../validators/schemas.js";
 import {
 	createLinearComment,
 	createLinearIssue,
@@ -162,15 +164,19 @@ export async function handleSubmit(
 		return;
 	}
 
-	const workspaceId = Number(req.params.workspaceId);
-	if (!Number.isInteger(workspaceId)) {
-		res.status(400).json({ error: "workspaceId must be an integer" });
+	const parsedWorkspaceId = parseWith(
+		legacyIntegerParam("workspaceId must be an integer"),
+		req.params.workspaceId,
+	);
+	if (!parsedWorkspaceId.ok) {
+		sendValidationError(res, parsedWorkspaceId.body);
 		return;
 	}
+	const workspaceId = parsedWorkspaceId.data;
 
 	const body = parseSubmitBody(req.body);
 	if (!body) {
-		res.status(400).json({ error: "Invalid submit body" });
+		sendValidationError(res, { error: "Invalid submit body" });
 		return;
 	}
 

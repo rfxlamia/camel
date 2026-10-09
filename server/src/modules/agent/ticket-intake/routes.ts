@@ -2,6 +2,11 @@ import { Router } from "express";
 import { requireAuth } from "../../../auth.js";
 import { db } from "../../../db/kysely.js";
 import { lookupMembership } from "../../../lib/helpers.js";
+import { parseWith, sendValidationError } from "../../../validators/http.js";
+import {
+	legacyIntegerParam,
+	trimmedRequired,
+} from "../../../validators/schemas.js";
 import {
 	checkCompleteness,
 	inferTypeFromClassifierAnswer,
@@ -55,10 +60,14 @@ ticketIntakeRouter.get(
 	"/workspaces/:workspaceId/ticket-intake/chat-limit",
 	requireAuth,
 	async (req, res) => {
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
+		const parsedWorkspaceId = parseWith(
+			legacyIntegerParam("workspaceId must be an integer"),
+			req.params.workspaceId,
+		);
+		if (!parsedWorkspaceId.ok) {
+			return sendValidationError(res, parsedWorkspaceId.body);
 		}
+		const workspaceId = parsedWorkspaceId.data;
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
 		if (!membership) {
@@ -83,16 +92,24 @@ ticketIntakeRouter.post(
 			return res.status(503).json({ error: "Ticket intake is not configured" });
 		}
 
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
+		const parsedWorkspaceId = parseWith(
+			legacyIntegerParam("workspaceId must be an integer"),
+			req.params.workspaceId,
+		);
+		if (!parsedWorkspaceId.ok) {
+			return sendValidationError(res, parsedWorkspaceId.body);
 		}
+		const workspaceId = parsedWorkspaceId.data;
 
 		const { message, isFirstTurn, autoError, conversationHistory } =
 			req.body ?? {};
 
-		if (typeof message !== "string" || !message.trim()) {
-			return res.status(400).json({ error: "message is required" });
+		const parsedMessage = parseWith(
+			trimmedRequired("message is required"),
+			message,
+		);
+		if (!parsedMessage.ok) {
+			return sendValidationError(res, parsedMessage.body);
 		}
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
@@ -118,13 +135,13 @@ ticketIntakeRouter.post(
 		}
 
 		const extractionInput = buildExtractionInput(
-			message.trim(),
+			parsedMessage.data,
 			conversationHistory,
 		);
 
 		let extraction: TicketExtraction = applyClassifierTypeFallback(
 			await extractTicketFields(extractionInput),
-			message.trim(),
+			parsedMessage.data,
 			conversationHistory,
 		);
 
@@ -161,15 +178,23 @@ ticketIntakeRouter.get(
 	"/workspaces/:workspaceId/ticket-intake/history",
 	requireAuth,
 	async (req, res) => {
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			return res.status(400).json({ error: "workspaceId must be an integer" });
+		const parsedWorkspaceId = parseWith(
+			legacyIntegerParam("workspaceId must be an integer"),
+			req.params.workspaceId,
+		);
+		if (!parsedWorkspaceId.ok) {
+			return sendValidationError(res, parsedWorkspaceId.body);
 		}
+		const workspaceId = parsedWorkspaceId.data;
 
-		const cardId = Number(req.query.cardId);
-		if (!Number.isInteger(cardId)) {
-			return res.status(400).json({ error: "cardId must be an integer" });
+		const parsedCardId = parseWith(
+			legacyIntegerParam("cardId must be an integer"),
+			req.query.cardId,
+		);
+		if (!parsedCardId.ok) {
+			return sendValidationError(res, parsedCardId.body);
 		}
+		const cardId = parsedCardId.data;
 
 		const membership = await lookupMembership(req.user!.id, workspaceId);
 		if (!membership) {
