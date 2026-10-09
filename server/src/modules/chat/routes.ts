@@ -21,6 +21,7 @@ import {
 } from "../../validators/schemas.js";
 import { attachmentContentType, getUserId } from "./chat-helpers.js";
 import { createPostMessageHandler } from "./message-stream.js";
+import { validateThreadId } from "./route-validation.js";
 import { createChatService } from "./service.js";
 
 export {
@@ -45,13 +46,30 @@ export function createChatRouter(): Router {
 		res.json(thread);
 	});
 
+	registerThreadRoutes(router, service);
+	registerAttachmentRoutes(router, service);
+
+	router.post(
+		"/api/chat/threads/:id/messages",
+		requireAuth,
+		createPostMessageHandler(service),
+	);
+
+	return router;
+}
+
+type ChatService = ReturnType<typeof createChatService>;
+
+function registerThreadRoutes(router: Router, service: ChatService) {
+	registerThreadRead(router, service);
+	registerThreadRename(router, service);
+	registerThreadDelete(router, service);
+}
+
+function registerThreadRead(router: Router, service: ChatService) {
 	router.get("/api/chat/threads/:id", requireAuth, async (req, res) => {
-		const parsedId = parseWith(
-			legacyIntegerParam("thread id must be an integer"),
-			req.params.id,
-		);
-		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
-		const threadId = parsedId.data;
+		const threadId = validateThreadId(req, res);
+		if (threadId === undefined) return;
 
 		const thread = await service.getThread(getUserId(req), threadId);
 		if (!thread) {
@@ -71,14 +89,12 @@ export function createChatRouter(): Router {
 			})),
 		});
 	});
+}
 
+function registerThreadRename(router: Router, service: ChatService) {
 	router.patch("/api/chat/threads/:id", requireAuth, async (req, res) => {
-		const parsedId = parseWith(
-			legacyIntegerParam("thread id must be an integer"),
-			req.params.id,
-		);
-		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
-		const threadId = parsedId.data;
+		const threadId = validateThreadId(req, res);
+		if (threadId === undefined) return;
 
 		const { title } = req.body ?? {};
 		const parsedTitle = parseWith(trimmedRequired("title is required"), title);
@@ -94,14 +110,12 @@ export function createChatRouter(): Router {
 		}
 		res.json(updated);
 	});
+}
 
+function registerThreadDelete(router: Router, service: ChatService) {
 	router.delete("/api/chat/threads/:id", requireAuth, async (req, res) => {
-		const parsedId = parseWith(
-			legacyIntegerParam("thread id must be an integer"),
-			req.params.id,
-		);
-		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
-		const threadId = parsedId.data;
+		const threadId = validateThreadId(req, res);
+		if (threadId === undefined) return;
 
 		const deleted = await service.deleteThread(getUserId(req), threadId);
 		if (!deleted) {
@@ -109,7 +123,9 @@ export function createChatRouter(): Router {
 		}
 		res.status(204).send();
 	});
+}
 
+function registerAttachmentRoutes(router: Router, service: ChatService) {
 	router.get("/api/chat/attachments/:id", requireAuth, async (req, res) => {
 		const parsedId = parseWith(
 			legacyIntegerParam("attachment id must be an integer"),
@@ -133,12 +149,4 @@ export function createChatRouter(): Router {
 		res.setHeader("Content-Type", attachmentContentType(attachment.format));
 		res.send(attachment.content);
 	});
-
-	router.post(
-		"/api/chat/threads/:id/messages",
-		requireAuth,
-		createPostMessageHandler(service),
-	);
-
-	return router;
 }
