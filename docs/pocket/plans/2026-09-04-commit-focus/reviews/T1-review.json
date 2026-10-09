@@ -1,0 +1,36 @@
+{
+  "task_id": "T1",
+  "task_name": "`focus_sessions` schema + Kysely types",
+  "cycle": 1,
+  "timestamp": "2026-09-04T14:18:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Scope limited to exactly 3 files: schema.sql, types.ts, focus-session-schema.test.ts",
+      "Partial unique index idx_focus_sessions_active_unique on (user_id, workspace_id) WHERE state <> 'finished' enforces single active session at DB level",
+      "History lookup index idx_focus_sessions_history on (user_id, workspace_id, finished_at) present for session history reads",
+      "task_id INTEGER NOT NULL with no REFERENCES clause — correct per ADR #103 dual-table shim",
+      "All DDL idempotent (CREATE TABLE IF NOT EXISTS, CREATE INDEX IF NOT EXISTS)",
+      "FocusSessions interface uses alphabetical field order and Generated<T>/Timestamp | null conventions matching TrackerItems",
+      "Test file mirrors board-tracker-unify-migration.test.ts regex-over-file pattern with 3/3 tests passing",
+      "Conventional commit message feat(focus): add focus_sessions schema and Kysely types"
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "26ed90d7425b6d0aeed456129c430fb8966e982e"
+}

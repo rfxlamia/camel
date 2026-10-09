@@ -1,0 +1,42 @@
+{
+  "task_id": "T11",
+  "task_name": "TrackerRow.test.tsx — unit regression suite",
+  "cycle": 1,
+  "timestamp": "2026-08-29T07:16:19Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "GWT 1: same-row mutex — it.each table is the exact 8-pair cycle status→date, date→project, project→phase, phase→priority, priority→assignees, assignees→labels, labels→kebab, kebab→status (TrackerRow.test.tsx:243-256). Each pair clicks source then destination and waitFor-asserts source closed + destination open (258-286). Date source with draftDateEdit asserts onDateChange exactly once with { startDate: '2026-08-06', endDate: null } before waitFor destination (267-281). labels→kebab scopes Date: Set date inside the labeled dialog (288-297).",
+      "GWT 2: two rows independent — two TrackerRow mounts with keys CA-1/CA-2; both assignee triggers open (2× Assign to… comboboxes); choosing Alice on Row B calls only onAssigneeToggleB(7) and leaves Row A's combobox open (TrackerRow.test.tsx:347-414).",
+      "GWT 3: no project — makeRowItem({ projectId: null, phaseId: null }) shows clickable 'Set project' and opens Set project to… (TrackerRow.test.tsx:302-318).",
+      "GWT 4: no phase — makeRowItem({ phaseId: null }) shows clickable 'Set phase' and opens Set phase to… (TrackerRow.test.tsx:320-336).",
+      "GWT 5: both dates unset — 'Set date' placeholder present (TrackerRow.test.tsx:338-345). Story 1 Example H.",
+      "GWT 6: read-only without onDateChange — createdAt <time> visible; no Date: trigger (TrackerRow.test.tsx:416-428).",
+      "GWT 7: new trigger clicks leave mockNavigate unused — date/project/phase/priority/assignees/labels/kebab clicked on the editable remount; mockNavigate.not.toHaveBeenCalled (TrackerRow.test.tsx:430-464). Triggers sit under pointer-events-auto, including kebab parentElement (same span that wraps the labeled panel) and the date wrapper (466-484).",
+      "Spec Story 6 Rule 1 Examples A/B, Story 2 Examples A/C, Story 1 Example H covered. Range is test-only (no TrackerRow.tsx); mutex already green so no conditional production fix. No implementer concerns in this cycle."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Every test mounts TrackerRow directly; TrackerPage is not imported. jsdom harness + hoisted mockNavigate (TrackerRow.test.tsx:1-35, 187-203, 351-387).",
+      "Mutex matrix covers all 8 OpenPicker values, date commit-before-switch, and kebab child queries scoped with within(panel) (TrackerRow.test.tsx:242-299).",
+      "makeRowItem(overrides) extracted; 3+ fixture constructions share it (TrackerRow.test.tsx:86-105). Test-only range; production ~300/~50 heuristics do not apply.",
+      "No API/queue/mutation retesting; on* doubles are vi.fn() only. Diff is TrackerRow.test.tsx only — in listed scope.",
+      "T10 kebab-class tests preserved; T11 adds placeholders, two-row independence, read-only createdAt, and navigation isolation without production changes."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "d088459feff4dfdb3efc13d03bb453b691706fe0"
+}

@@ -1,0 +1,95 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-06-13-multi-workspace",
+    "plan_type": "phased",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-06-13",
+    "date_completed": null,
+    "baseline_sha": "162e7f48d0a2547a3ad5430153e7eb6fc7dccf99"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Workspace schema and idempotent migration foundation",
+          "status": "DONE",
+          "done_sha": "f92a453b1478dd9a2734e6bd806fbeb484938892"
+        },
+        {
+          "id": "T2",
+          "name": "Workspace bootstrap in auth and shared membership helpers",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "62902688e5a791e9000be2dcf5076b7aa40343b5"
+        },
+        {
+          "id": "T3",
+          "name": "Workspace and membership management API",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "bdf0f12b685999ec61243f74e7ccceecca848b44"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T4",
+          "name": "Workspace-scoped board, metrics, activity, and card APIs",
+          "status": "DONE",
+          "depends": "T3",
+          "done_sha": "4caca2614e204a04f892b0a8514c2c1fa0a22331"
+        },
+        {
+          "id": "T5",
+          "name": "Per-workspace realtime, presence, and removal events",
+          "status": "DONE",
+          "depends": "T3",
+          "done_sha": "4caca2614e204a04f892b0a8514c2c1fa0a22331"
+        },
+        {
+          "id": "T6",
+          "name": "Client workspace selection state and scoped data context",
+          "status": "DONE",
+          "depends": "T4, T5",
+          "done_sha": "6ded09ba745277dfc0bc3edb2f9d497a6f0a2a3b"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan-phase-3.md",
+      "status": "REVIEW",
+      "tasks": [
+        {
+          "id": "T7",
+          "name": "Workspace picker, switcher, invites, and create flow UI",
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "cc55af456c6205559c7da9da2a8a72dbde1c0db5"
+        },
+        {
+          "id": "T8",
+          "name": "Workspace-scoped settings, permissions, and delete replacement",
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "bee1e6e67c7d8b94522972a23d9ff3f57ab5c23d"
+        },
+        {
+          "id": "T9",
+          "name": "End-to-end integration validation and legacy route cleanup",
+          "status": "DONE",
+          "depends": "T7, T8",
+          "done_sha": "12db8702c2c0e6c33d521d77a9f4cf5392bd43b5"
+        }
+      ]
+    }
+  ]
+}

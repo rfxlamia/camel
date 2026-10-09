@@ -1,0 +1,64 @@
+{
+  "task_id": "T10",
+  "task_name": "Race-safe phase removal",
+  "cycle": 1,
+  "timestamp": "2026-09-04T05:46:00+07:00",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Diff bdeb628a..1f812812 touches only the three OBJECTIVE files; no out-of-scope client, schema, dependency, or migration changes.",
+      "T10-S01: DELETE handler acquires lockWorkspaceMutation, then FOR UPDATE on owning tracker_projects, then FOR UPDATE on tracker_phases, before card/tracker_item dependent scans (tracker-phases.ts:334-384); unit test locks phase removal before dependent scans asserts workspace → project → phase → scan order (tracker-phases.test.ts:423-448).",
+      "T10-S02: serializes Board create against phase removal via holdWorkspaceRow + waitForPeerWaitingOnWorkspaceLock, accepts 204|201|400, and assertCompleteBoardPhaseOutcome enforces complete-or-empty (work-item-phase-concurrency.integration.test.ts:423-457).",
+      "T10-S03: serializes Tracker create against phase removal with phaseId fieldErrors on 400 and assertCompleteTrackerPhaseOutcome (work-item-phase-concurrency.integration.test.ts:459-498).",
+      "T10-S04: clears Board card phase_id, preserves project_id, increments version, writes card_events update via recordActivity, and publishes post-commit card.updated (tracker-phases.ts:386-440; work-item-phase-concurrency.integration.test.ts:500-567).",
+      "Dual-table routing preserved: tracker_items released via releasePhaseItemsToNoPhase + tracker_events; cards updated via cards table + card_events + card.updated SSE.",
+      "publishEvent for card.updated and tracker.phase.deleted runs after transaction commit; recordActivity runs inside transaction.",
+      "Conventional commit fix(phases): serialize phase removal with task create exists at reviewed SHA."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Minimal production change reuses existing lockWorkspaceMutation primitive and mirrors T8 concurrency-test patterns.",
+      "Lock sequence is explicit and test-proven: workspace → owning project → phase → dependent scans → release/cleanup.",
+      "Integration suite gated by RUN_INTEGRATION=1, uses real Supertest + PostgreSQL with redis/realtime/auth spies only.",
+      "Board card cleanup correctly preserves project_id, clears phase_id, bumps version, and records activity before soft-deleting the phase.",
+      "All packet tests green: 15 unit + 3 integration tests in scoped files; server imports retain .js extensions."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "waitForPeerWaitingOnWorkspaceLock matches any peer Lock wait_event, not specifically the workspaces-row lock; could false-positive under unrelated DB contention though --no-file-parallelism mitigates",
+        "location": "server/src/routes/work-item-phase-concurrency.integration.test.ts:371"
+      },
+      {
+        "severity": "Minor",
+        "description": "assertNoTrackerArtifacts is defined but never called; dead helper code",
+        "location": "server/src/routes/work-item-phase-concurrency.integration.test.ts:258"
+      },
+      {
+        "severity": "Minor",
+        "description": "DELETE transaction callback is ~96 lines, above the ~50-line refactor heuristic; logic is cohesive and packet limits helper extraction to rule-of-three within scoped files",
+        "location": "server/src/routes/tracker-phases.ts:333"
+      },
+      {
+        "severity": "Minor",
+        "description": "work-item-phase-concurrency.integration.test.ts is 568 lines, above the ~300-line heuristic; it is the dedicated new integration file declared in the task packet",
+        "location": "server/src/routes/work-item-phase-concurrency.integration.test.ts:1"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "3e2bf0aa67343f0bc8adf345c09503c96862b0be",
+  "sha_pin_note": "Conflict-free parallel merge: reviewed_sha aligned to done_sha (merge commit); worktree audit at 1f81281 covered identical T10 changes."
+}

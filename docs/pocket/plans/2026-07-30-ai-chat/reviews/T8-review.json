@@ -1,0 +1,67 @@
+{
+  "task_id": "T8",
+  "task_name": "Streaming hook — queue, error/retry, ToolTrace, thinking, attachments",
+  "cycle": 1,
+  "timestamp": "2026-07-31T01:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Reuses agentQueue submit/settle for queue-during-stream via acquireTurn, drainQueue, and runModelTurn — matches useAgentChat pattern",
+      "workspaceId forwarded from ChatPage through ChatRuntimeProvider to api.chat.sendMessage (useChatStream.ts:255-257, ChatPage.tsx:129-133)",
+      "NDJSON stream handler covers token, thinking, tool_event, done, and error events with partial-assistant removal on error (useChatStream.ts:262-332)",
+      "Context overflow (413) shows OVERFLOW_MESSAGE, restores composer text via overflowMessage, disables retry, and removes unsaved user bubble (useChatStream.ts:350-360, ui.tsx:49-53)",
+      "Retry path calls api.chat.retryMessage without duplicating user bubble (addUserMessage: false) — tested",
+      "Correction commits wire custom ChatMessageList with ToolTrace, collapsible thinking, and attachment download; rehydrates from getMessages on load and fetches attachments on done",
+      "deriveChatToolTrace maps failed tool events with errorCode for live ToolTrace badges",
+      "All 9 T8 unit tests pass (useChatStream.test.ts + ChatMessage.test.tsx)"
+    ],
+    "issues": [
+      {
+        "severity": "Important",
+        "description": "HTTP-level send failures (catch path, non-413) add error bubble with canRetry=true but omit retryMessageId and do not sync via getMessages — Retry button hidden because onRetry requires retryMessageId (ui.tsx:25-27)",
+        "location": "client/src/hooks/useChatStream.ts:361-374"
+      },
+      {
+        "severity": "Important",
+        "description": "useChatStream.ts is ~482 lines — exceeds ~300-line guideline; consider extracting stream consumption and message-state helpers",
+        "location": "client/src/hooks/useChatStream.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "consumeNdjsonStream JSON.parse has no try/catch — malformed NDJSON line would throw uncaught",
+        "location": "client/src/hooks/useChatStream.ts:89"
+      },
+      {
+        "severity": "Minor",
+        "description": "ChatAttachment download handler has no error catch — failed downloads fail silently",
+        "location": "client/src/components/chat/ChatAttachment.tsx:13-25"
+      },
+      {
+        "severity": "Minor",
+        "description": "No test for live tool_event failed phase during stream followed by done (static ToolTrace error badge tested in ChatMessage.test.tsx only)",
+        "location": "client/src/hooks/useChatStream.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "ChatRuntimeProvider correction removed useRemoteThreadListRuntime/threadListAdapter integration — thread list remains in ChatPage sidebar but assistant-ui remote thread runtime no longer used",
+        "location": "client/src/chat/ChatRuntimeProvider.tsx"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "bb7db3fdec21362fea75b04915761507f41faf9b"
+}

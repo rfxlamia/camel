@@ -1,0 +1,71 @@
+{
+  "task_id": "T5",
+  "task_name": "Focus session route — lifecycle transitions + optimistic locking",
+  "cycle": 1,
+  "timestamp": "2026-09-04T15:10:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Ready → Start: runningSince=T0 ISO, accumulatedSeconds=0, repo.update expectedVersion 1, publish(3, event) two-arg, recordFocusActivity action start (focus-session.lifecycle.test.ts:160-210)",
+      "Running → Pause after 10m: accumulatedSeconds 600, runningSince null, recordFocusActivity action pause (focus-session.lifecycle.test.ts:213-248)",
+      "Paused 600s → Resume T1 → Pause T1+300s: accumulatedSeconds 900, recordFocusActivity resume then pause (focus-session.lifecycle.test.ts:250-304)",
+      "Running → Finish: state finished accumulatedSeconds 420 finished_at from clock, HTTP 200 carries finished session, publish payload.session null, no findTask/insert (focus-session.lifecycle.test.ts:306-365)",
+      "Stale version: repo.update null → 409 { code version_conflict, session } at version 4, publish not called (focus-session.lifecycle.test.ts:367-398)",
+      "Illegal transition: Running + start → 409 { code invalid_transition, session }, no update/publish (focus-session.lifecycle.test.ts:400-419)",
+      "Unknown action switch → 400 Invalid request body, no update/publish (focus-session.lifecycle.test.ts:421-437)",
+      "No active session → 404 Not found, no update/publish (focus-session.lifecycle.test.ts:439-451)",
+      "All time math delegated to applyAction; buildLifecyclePatch maps core snapshot only (focus-session.ts:136-149, 360-367)",
+      "Single PATCH handler parameterized for start/pause/resume/finish (focus-session.ts:340-412)",
+      "Router-level requireFocusModeEnabled + requireWorkspaceMember unchanged — PATCH gated by construction (focus-session.ts:238-239)",
+      "Mechanical gate verified: focus-session.lifecycle.test.ts 8/8 PASS, focus-session.test.ts 13/13 PASS"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Scope limited to exactly 2 declared files; no cards/tracker_items/settings writes",
+      "Thin handler: load → applyAction → update → publish → serialize → audit in one path",
+      "InvalidFocusTransitionError and version guard both return 409 with current session for single-round-trip reconciliation",
+      "Finish publishes payload.session null while HTTP response retains finished row for returnPath navigation",
+      "parseFocusPatchBody rejects switch and non-integer version with 400 before core delegation",
+      "Tests use supertest harness with req.user + req.workspace, fake repo, injected clock, publisher/audit spies — core/focus-session.ts not mocked",
+      "Commit 3455f809 message matches conventional format feat(focus): add focus session lifecycle transitions with optimistic locking"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "focus-session.ts is 419 lines; packet Step 20 suggested serializer extraction when approaching ~300 lines — deferred, acceptable for T6 to revisit",
+        "location": "server/src/routes/focus-session.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "loadActiveSessionOr404 helper not extracted; findActive + 404 preamble duplicated in PATCH (T4 deferred until T5/T6)",
+        "location": "server/src/routes/focus-session.ts:351-354"
+      },
+      {
+        "severity": "Minor",
+        "description": "TDD red-green sequence not independently verifiable from single squashed commit; behavior nonetheless proven by 8 lifecycle route assertions",
+        "location": "server/src/routes/focus-session.lifecycle.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "version_conflict and invalid_transition tests assert publish/update absence but do not spy assert recordFocusActivity was not called",
+        "location": "server/src/routes/focus-session.lifecycle.test.ts:367-419"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "result": "clean PASS"
+  },
+  "reviewed_sha": "3455f809da283614428cfe6b355c736893efa406",
+  "prev_sha": "6c8e158daa59c8f713594e08e45c9052da50a1ca"
+}

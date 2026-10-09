@@ -1,0 +1,62 @@
+{
+  "task_id": "T5",
+  "task_name": "Chat HTTP routes and streaming endpoint",
+  "cycle": 1,
+  "timestamp": "2026-07-31T01:46:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Complete REST surface: thread CRUD, streaming POST /messages, and attachment download with requireAuth on all routes",
+      "NDJSON stream-protocol.ts defines token/thinking/tool_event/done/error events; routes wire runChatTurn callbacks and persist thinking+tool_trace on success",
+      "Spec-critical guards: checkChatLimit 429, context overflow 413 before persistence, lookupMembership on workspaceId, IDOR 404 via getThread/getMessage/getAttachment",
+      "Retry flow deletes prior assistant row and inserts only one new assistant placeholder (no duplicate user message)",
+      "index.ts mounts createChatRouter() under global CSRF middleware and exempts /chat/ from 30s timeout",
+      "Correction bleed (8f47d57) correctly passes userId to insertMessage, insertAttachment, autoTitleThread with null-guards on write paths",
+      "CHAT_SYSTEM_PROMPT instructs workspace clarification before query_board_data when context is ambiguous",
+      "routes.test.ts: 9/9 passing — covers list, NDJSON stream, retry, attachments, rate limit, IDOR 404, context overflow"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "routes.ts is 486 lines — exceeds plan refactor threshold (~300) but remains readable; helper extraction deferred",
+        "location": "server/src/chat/routes.ts:1"
+      },
+      {
+        "severity": "Minor",
+        "description": "No route tests for error stream event emission, mid-stream failure assistant cleanup, auto-title-only-on-success, workspace membership 404, or tool_event/RATE_LIMIT graceful degradation — code paths exist but untested",
+        "location": "server/src/chat/routes.test.ts:1"
+      },
+      {
+        "severity": "Minor",
+        "description": "Content-Disposition embeds attachment.filename without RFC 5987 encoding — quoted filenames with special characters could break header",
+        "location": "server/src/chat/routes.ts:276"
+      },
+      {
+        "severity": "Minor",
+        "description": "Empty no-op comment block in catch handler (streamed && send) adds noise",
+        "location": "server/src/chat/routes.ts:471"
+      },
+      {
+        "severity": "Minor",
+        "description": "service.deleteMessage/updateMessage lack userId ownership checks — mitigated because routes only pass IDs from prior ownership-verified operations",
+        "location": "server/src/chat/service.ts:231"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "8f47d5767075cbb7c74cb2e6c88c748b97f7665e"
+}

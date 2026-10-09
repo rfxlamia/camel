@@ -1,0 +1,46 @@
+{
+  "task_id": "T3",
+  "task_name": "Email Gate Middleware",
+  "cycle": 1,
+  "timestamp": "2026-06-21T13:36:49Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "requireEmailVerified is a single pure middleware (server/src/middleware/email-gate.ts:3-17) matching the spec implementation exactly — server-enforced 403 JSON, not a redirect",
+      "Correct ordering in routes.ts: api.use(requireAuth) then the gate, so req.user.emailVerified is populated by requireAuth before the gate reads it; all board routers are mounted on `api` after the gate so none can bypass it",
+      "Gate is wrapped in its own dedicated flag `if (config.EMAIL_GATE_ENABLED === \"true\")` (routes.ts:41-43), independent of OAUTH_ENABLED, per spec Rollback Plan",
+      "req.user undefined falls through to next() (email-gate.ts:8-11), correctly leaving 401 handling to requireAuth — the [must-not] unauthenticated-403 case is satisfied",
+      "set-username/set-password bypass the gate: mounted on the separate /api/auth oauthRouter (index.ts:93), not on the `api` Router",
+      "No email_verified backfill introduced — the gate, not a data mutation, is the control (spec Scope + Rule 3)",
+      "Tests written and all 3 pass; they assert the exact `{ needsEmailVerification: true }` body, covering false/true/undefined branches"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Observation (not a T3 violation): the SHA range bundles T4 changes — index.ts (oauthRouter mount), routes/oauth.ts, and routes/oauth.test.ts are out of T3 scope. config.ts adds EMAIL_GATE_ENABLED, a legitimate T3 dependency (QUALITY BAR requires reading config.EMAIL_GATE_ENABLED; key was absent at T2 tip). The three strictly in-scope T3 files contain no out-of-scope edits.",
+        "location": "server/src/index.ts, server/src/routes/oauth.ts, server/src/routes/oauth.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "Observation on bypass scope: gate applied only to the `api` Router. The sibling createAgentRouter() is also mounted at /api (index.ts:96) and is NOT behind the gate. Outside T3's DELIVERABLE (which scopes /api/workspaces board routes) and does not affect this verdict, but noted because the verification target is 'cannot be bypassed' — agent routes are a separate surface not covered by this middleware.",
+        "location": "server/src/index.ts:96"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "20402d6f3fcfa5e5d32a3044675e60f7a55b40d7"
+}

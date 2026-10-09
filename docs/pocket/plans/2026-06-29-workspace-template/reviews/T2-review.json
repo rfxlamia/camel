@@ -1,0 +1,49 @@
+{
+  "task_id": "T2",
+  "task_name": "Client template preset module",
+  "cycle": 1,
+  "timestamp": "2026-06-29T06:26:45Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All 5 templates (Software Dev, Firmware/Hardware, Management/Ops, Purchasing, Bug Tracker) match the spec Appendix verbatim: titles, colors, wip limits, policy text, and done-flags all exact (templates.ts:29-240)",
+      "Forward-compatible type honored correctly: signable fields are optional, never required (templates.ts:18-19)",
+      "Palette locked via 'as const' COLUMN_COLORS with a derived ColumnColor union, so non-palette colors fail typecheck (templates.ts:1-10)",
+      "Each template has exactly one isDone column; pure client data with no server/DB storage",
+      "TDD test is verbatim from the plan and passes green (4/4)"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Plan step 3 said 'isSignable intentionally omitted'; implementer added optional isSignable and signableAssigneeId. Non-blocking — the QUALITY BAR/DELIVERABLE explicitly sanction the optional form ('signable optional/omitted, NOT required'), so this satisfies the acceptance bar even though it diverges from the plan's prose.",
+        "location": "client/src/lib/templates.ts:18-19"
+      },
+      {
+        "severity": "Minor",
+        "description": "Plan said 'reuse the ColumnColor union' from ColumnView; implementer redefined COLUMN_COLORS locally. Acceptable since Task 3 ('Extract shared column-color map') exists to dedupe this — the local copy should be consumed when T3 lands.",
+        "location": "client/src/lib/templates.ts:2-10"
+      },
+      {
+        "severity": "Minor",
+        "description": "The test guards only invariants (count, palette membership, one done-column, non-empty strings) and does not assert exact titles/policy text/wip limits against the spec. The 'exact content from Appendix' guarantee rests on manual review, not CI — future policy-text drift would not be caught automatically.",
+        "location": "client/src/lib/templates.test.ts:12-42"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "48afa057c43130de9eeb090cd573f95e543e7dbd"
+}

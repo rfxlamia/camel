@@ -1,0 +1,217 @@
+{
+  "header": {
+    "plan_dir": "/Users/rfxlamia/project/camel/docs/pocket/plans/2026-09-11-my-work",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-09-12",
+    "date_completed": "2026-09-13",
+    "baseline_sha": "cbf5b931a085b7cac656045170662e794a87b29b",
+    "pipeline": 4,
+    "plan_file": "execution-plan/index.md"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Add the My Work wire contract and Fuse.js dependency",
+          "file": "execution-plan/tasks/T1-add-the-my-work-wire-contract-and-fuse-js-dependency.md",
+          "status": "DONE",
+          "done_sha": "d1d59038ffbf9e2e3fc61c40f8975fdb7fc6d409"
+        },
+        {
+          "id": "T2",
+          "name": "Implement the server-side personal rollup and global detail read",
+          "file": "execution-plan/tasks/T2-implement-the-server-side-personal-rollup-and-global-detail-read.md",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "c0fff7987547d7e418326539dbe6d74bfa5f9120"
+        },
+        {
+          "id": "T4",
+          "name": "Build My Work normalization, ordering, pagination, and Fuse search helpers",
+          "file": "execution-plan/tasks/T4-build-my-work-normalization-ordering-pagination-and-fuse-search-helpers.md",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "5324e7f4d4205d560cba736d03a40197a0b70707"
+        },
+        {
+          "id": "T5",
+          "name": "Add global My Work navigation",
+          "file": "execution-plan/tasks/T5-add-global-my-work-navigation.md",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "df65dcbf9edfcde53c110557b9f860c3ee982255"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "f0265fd7ae83160a14bdc55056cf31fc8bc8c6d4",
+          "files": [
+            "client/src/lib/myWorkUtils.test.ts",
+            "client/src/lib/myWorkUtils.ts"
+          ],
+          "for_task": "T4"
+        },
+        {
+          "sha": "0004331994cb3a412818a7d5793b8d02777631de",
+          "files": [
+            "client/src/lib/myWorkOrdering.test.ts",
+            "client/src/lib/myWorkOrdering.ts",
+            "client/src/lib/myWorkStatus.ts",
+            "client/src/lib/myWorkTestSupport.ts",
+            "client/src/lib/myWorkUtils.test.ts",
+            "client/src/lib/myWorkUtils.ts"
+          ],
+          "for_task": "T4"
+        },
+        {
+          "sha": "2a691d94c5c72d6b33c14f08ce7f71f72b519f72",
+          "files": [
+            "client/src/layout/sidebar/useSidebarMode.test.tsx",
+            "client/src/layout/sidebar/useSidebarMode.ts"
+          ],
+          "for_task": "T5"
+        },
+        {
+          "sha": "d0077fac02d8cd2801d9b72869fd258a2d0be306",
+          "files": [
+            "client/src/api.my-work.test.ts",
+            "client/src/api/myWork.ts",
+            "server/src/routes/my-work-data-source-list.ts",
+            "server/src/routes/my-work-service-list.ts",
+            "server/src/routes/my-work.status-ordering.test.ts"
+          ],
+          "for_task": "T2"
+        },
+        {
+          "sha": "5deb3f7874e8ec6b56bceedd6623405fee5bca00",
+          "files": [
+            "server/src/core/my-work-done-target.test.ts",
+            "server/src/core/my-work-done-target.ts",
+            "server/src/routes/my-work-capability.test.ts",
+            "server/src/routes/my-work-response-hydration.ts",
+            "server/src/routes/my-work-response-serialization.ts"
+          ],
+          "for_task": "T2"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan/phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T3",
+          "name": "Extract and implement the source-aware Mark done command",
+          "file": "execution-plan/tasks/T3-extract-and-implement-the-source-aware-mark-done-command.md",
+          "status": "DONE",
+          "depends": "T2",
+          "done_sha": "7d6e8db40f1b12e59728c96c235bb522033cc599"
+        },
+        {
+          "id": "T6",
+          "name": "Build the My Work page, list, filters, errors, and responsive rows",
+          "file": "execution-plan/tasks/T6-build-the-my-work-page-list-filters-errors-and-responsive-rows.md",
+          "status": "DONE",
+          "depends": "T2, T4, T5",
+          "done_sha": "66a81c328b6bbd1cd81d32c9f4875550dafb6903"
+        },
+        {
+          "id": "T7",
+          "name": "Add global detail sheet and explicit source navigation",
+          "file": "execution-plan/tasks/T7-add-global-detail-sheet-and-explicit-source-navigation.md",
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "ef1d3dfecc3b28cb1f4e7f00a1bcc1f83a8e1c00"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "59c8f268246c92d7b614f2b1105600568a6a8e1f",
+          "files": [
+            "client/src/components/my-work/MyWorkDetailSheet.test.tsx",
+            "client/src/layout/sidebar/MobileNav.tsx",
+            "client/src/layout/sidebar/Sidebar.tsx",
+            "client/src/layout/sidebar/WorkspaceModals.tsx",
+            "client/src/layout/sidebar/WorkspaceSwitcher.tsx"
+          ],
+          "for_task": "T7"
+        },
+        {
+          "sha": "9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+          "files": [
+            "client/src/components/my-work/MyWorkDetailSheet.test.tsx",
+            "client/src/layout/sidebar/WorkspaceSwitcher.tsx"
+          ],
+          "for_task": "T7"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan/phase-3.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T9",
+          "name": "Verify cross-unit server acceptance",
+          "file": "execution-plan/tasks/T9-verify-cross-unit-server-acceptance.md",
+          "status": "DONE",
+          "depends": "T2, T3",
+          "done_sha": "6bba3aab7fbe2ddfba3ca970740214c302613995"
+        },
+        {
+          "id": "T11",
+          "name": "Add My Work observability and performance verification",
+          "file": "execution-plan/tasks/T11-add-my-work-observability-and-performance-verification.md",
+          "status": "DONE",
+          "depends": "T3, T6",
+          "done_sha": "597a0cea2db3b58036f86d80d7ebe77af4dcb211"
+        },
+        {
+          "id": "T8",
+          "name": "Add client Mark done action and optimistic mutation behavior",
+          "file": "execution-plan/tasks/T8-add-client-mark-done-action-and-optimistic-mutation-behavior.md",
+          "status": "DONE",
+          "depends": "T3, T7",
+          "done_sha": "6f0b1f8c57b55cbde888a79841b415585f2d5418"
+        },
+        {
+          "id": "T10",
+          "name": "Verify cross-component client acceptance",
+          "file": "execution-plan/tasks/T10-verify-cross-component-client-acceptance.md",
+          "status": "DONE",
+          "depends": "T8",
+          "done_sha": "fd93cc339d5852bcab558c956709f6c4037512c9"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "7043346afa8728823f12c1586814ce57c1a942ff",
+          "files": [
+            "server/src/routes.ts",
+            "server/src/routes/my-work-router.ts",
+            "server/src/routes/my-work.observability.integration.test.ts"
+          ],
+          "for_task": "T11"
+        },
+        {
+          "sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+          "files": [
+            "client/src/components/my-work/MyWorkDoneAction.test.tsx",
+            "client/src/components/my-work/myWorkDoneActionState.ts",
+            "server/src/routes/my-work-router.ts",
+            "server/src/routes/my-work.integration.authorization.ts",
+            "server/src/routes/my-work.integration.mutations.ts"
+          ],
+          "for_task": "T8"
+        }
+      ]
+    }
+  ]
+}

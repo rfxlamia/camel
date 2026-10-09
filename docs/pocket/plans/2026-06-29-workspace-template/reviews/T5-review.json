@@ -1,0 +1,44 @@
+{
+  "task_id": "T5",
+  "task_name": "api method + BoardPage wiring",
+  "cycle": 1,
+  "timestamp": "2026-06-29T00:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All 8 must-haves verified against actual code: empty board renders TemplatePicker (BoardPage.tsx:511-527); applyTemplate POSTs to /workspaces/:id/columns/batch with {templateName, columns} (api.ts:137-144, confirmed by api.test.ts:438-465); 409 -> silent refetch + idle, no toast (BoardPage.tsx:467-469); non-409 -> error toast + picker stays (BoardPage.tsx:470-476); 'Start blank instead' -> manual AddColumn, applyTemplate not called (onStartBlank BoardPage.tsx:448-450 + branch 513-519); no new realtime event type; client bundler resolution (extensionless imports).",
+      "409 STOP red flag is genuinely clean: no showToast in the 409 branch; err instanceof ApiError branches correctly because both prod and test resolve ApiError from ../api.",
+      "Apply flow mirrors the onAddColumn mutate-then-refresh convention (cancelScheduledRefresh -> api call -> refresh), with loading->success->board state machine matching the plan (~2s success dwell, then refresh).",
+      "TDD honored: api.test.ts and BoardPage.test.tsx cover all four wiring scenarios.",
+      "useCallback dependency arrays are complete and correct (onApplyTemplate deps: activeWorkspaceId, cancelScheduledRefresh, refresh, showToast; onStartBlank: []), satisfying useExhaustiveDependencies."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Out-of-scope file in SHA range: server/src/validators/column.ts was modified (commit 56dca95, separate from the T5 commit 1951bcd). Determination: STRAY but BENIGN, no action required. It is a one-line type-narrowing fix to T1's validator (wipLimit ?? null -> typeof wipLimit === 'number' ? wipLimit : null), functionally equivalent for valid inputs and an improvement for TS narrowing. T5's declared scope is api.ts + BoardPage.tsx + tests only; per spec-compliance protocol this out-of-scope change is noted as an observation, not a deliverable failure, and the QUALITY BAR maps 'work outside listed files' to a concern, not a STOP.",
+        "location": "server/src/validators/column.ts:87"
+      },
+      {
+        "severity": "Minor",
+        "description": "Success-path window.setTimeout(2000) calls refresh() and setPickerState without cleanup or a mounted-guard; if BoardPage unmounts within the 2s window this can trigger a state update on an unmounted component. Harmless in practice (empty-board transient state) and optional to address.",
+        "location": "client/src/pages/BoardPage.tsx:463-465"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "1951bcd22d54034c5138312cd382da7d7233f118"
+}

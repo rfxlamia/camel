@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T7",
+  "task_name": "Add global detail sheet and explicit source navigation",
+  "cycle": 7,
+  "timestamp": "2026-09-13T03:26:19Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "correction_sha": "9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+  "correction_finding": "P2-F02",
+  "audited_head": "9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+  "parent_sha": "59c8f268246c92d7b614f2b1105600568a6a8e1f",
+  "affected_tasks": ["T7"],
+  "bleed": [],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P2-F02 is fixed at the root cause: a renderConfirmation=false WorkspaceSwitcher now closes its local list when switchConfirm.open becomes true, without calling cancelPendingSwitch (client/src/layout/sidebar/WorkspaceSwitcher.tsx:121-123). The outside-mousedown listener is therefore cleaned up before pointer users activate the external confirmation (client/src/layout/sidebar/WorkspaceSwitcher.tsx:152-162).",
+      "The app-shell confirmation remains mounted from the existing BoardContext state through WorkspaceOverlays, independent of Sidebar or MobileNav visibility, and it continues to use the existing confirmPendingSwitch/cancelPendingSwitch callbacks (client/src/layout/sidebar/WorkspaceModals.tsx:221-255; client/src/layout/sidebar/WorkspaceSwitcher.tsx:52-93).",
+      "The correction tests exercise real BoardProvider, WorkspaceOverlays, Sidebar, and MobileNav components in the same overlay-to-sidebar-to-mobile order as AppLayout (client/src/components/my-work/MyWorkDetailSheet.test.tsx:291-325,350-390; client/src/layout/AppLayout.tsx:75-90). Desktop pointer Cancel keeps the external dialog present through mousedown and preserves active workspace 999 plus the full My Work detail URL (client/src/components/my-work/MyWorkDetailSheet.test.tsx:822-863).",
+      "Open mobile pointer confirmation remains actionable and confirmPendingSwitch changes to workspace 7 while preserving the detail URL; source-action regressions cover desktop Board -> /board/card/17 and mobile Tracker -> /tracker/OR-4 (client/src/components/my-work/MyWorkDetailSheet.test.tsx:865-960).",
+      "The previously fixed closed-MobileNav path still renders one app-shell confirmation, preserves workspace/detail state after Cancel, and completes the guarded Board transition after Switch (client/src/components/my-work/MyWorkDetailSheet.test.tsx:753-820).",
+      "The correction adds no second guard decision, direct workspace mutation, timer/test-only exemption, or source-route change: T7 source navigation still calls attemptSwitchWorkspace once and stores the existing pending route, while BoardContext remains the owner of confirm/cancel and workspace switching (client/src/lib/myWorkSourceNavigation.ts:82-115; client/src/context/BoardContext.tsx:459-499).",
+      "The commit is attributed only to T7 and contains only MyWorkDetailSheet.test.tsx plus WorkspaceSwitcher.tsx; T7 done_sha remains ef1d3dfecc3b28cb1f4e7f00a1bcc1f83a8e1c00 and no log/review/phase artifact changed."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The one-line production correction is cohesive and preserves the existing separation: renderConfirmation=false shell switchers close their list on entry to the external guard, while the shared WorkspaceSwitchConfirmation remains the sole action surface and retains the existing PopoverShell focus, Tab, and Escape ownership (client/src/layout/sidebar/WorkspaceSwitcher.tsx:121-123,255-260; client/src/layout/sidebar/shared.tsx:21-130).",
+      "The external confirmation is rendered at the app-shell z-[60] layer and remains visible after the local list is closed; pointer mousedown tests explicitly prove the external Cancel and Switch buttons are not removed before their click callbacks run (client/src/layout/sidebar/WorkspaceModals.tsx:221-255; client/src/components/my-work/MyWorkDetailSheet.test.tsx:822-960).",
+      "The regression harness is an exact relevant shell composition rather than a direct WorkspaceSwitcher mock: it mounts real BoardProvider, WorkspaceOverlays, Sidebar, MobileNav, My Work detail, and route probes; only the unrelated NotificationsContext hook is mocked because the harness does not mount the production provider.",
+      "Normal no-confirm selection still closes the list and forwards the existing guard inputs (client/src/layout/sidebar/WorkspaceSwitcher.test.tsx:82-101); existing keyboard ownership and T7 detail focus/URL/guard tests remain green. No timers, duplicated navigation, or direct workspace bypass were introduced.",
+      "Independent verification passed: focused shell/detail/sidebar suites 3 files and 20 tests; full client suite 111 files and 999 tests; T3 server Mark done suite 3 files and 25 tests; client/server typecheck; root Biome lint; mutation-routing check; and git diff --check.",
+      "The correction scope is limited to two client files and leaves T6 list code, T3 server Mark done code, and the client mutation router untouched."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The detail suite still does not assert the pending loading presentation or a loading-to-ready/unavailable transition, although the implementation exposes the loading branch with aria-live and clears cached content before each request.",
+        "location": "client/src/components/my-work/MyWorkDetailContent.tsx:68-95; client/src/components/my-work/MyWorkDetailSheet.test.tsx:318-667"
+      },
+      {
+        "severity": "Minor",
+        "description": "The mobile bottom sheet still applies the shared panel-in animation, which translates from the right rather than entering/exiting along the bottom-sheet's vertical axis.",
+        "location": "client/src/components/my-work/MyWorkDetailSheet.tsx:17-20; client/src/index.css:159-169"
+      },
+      {
+        "severity": "Minor",
+        "description": "The implementer reported one exploratory command targeting a nonexistent SignOutPopover test; this is a process-only observation and does not affect the exact T7 mechanical commands, which passed.",
+        "location": "mechanical evidence (reported exploratory command)"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 7,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d"
+}

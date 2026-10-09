@@ -1,0 +1,48 @@
+{
+  "task_id": "T11",
+  "task_name": "Client contracts — types and API surface",
+  "cycle": 1,
+  "timestamp": "2026-08-05T15:46:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "TrackerProject, TrackerPhase, TrackerStatusCategory, and enriched TrackerItem/TrackerVocabulary types align with server payloads — raw foreign keys only, no embedded names, progress, rollup, or overdue fields",
+      "All project, phase, reorder, and extended updateTrackerItem API methods follow the existing request<T> pattern and match shipped server routes (including flat /tracker/phases/:id for phase PATCH/DELETE)",
+      "18 client tracker API tests pass; commit 5aaad1c uses feat(tracker): message and touches only the three scoped files",
+      "Typecheck passes with noUnusedLocals/noUnusedParameters constraints"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "TrackerItem new fields use optional nullable (projectId?: number | null) rather than required nullable as the plan specified; callers may omit keys that the server always serializes",
+        "location": "client/src/types.ts:348-353"
+      },
+      {
+        "severity": "Minor",
+        "description": "updateTrackerPhase patch type supports startDate/endDate but the test only asserts name/version forwarding; date body serialization is untested",
+        "location": "client/src/api.tracker.test.ts:384-400"
+      },
+      {
+        "severity": "Minor",
+        "description": "TrackerVocabulary.category is optional (category?:) rather than required nullable; acceptable for priority/label vocab but looser than the four-value union spec wording for statuses",
+        "location": "client/src/types.ts:333"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "5aaad1c0433475db5c00ab8eb3fceb37617b91d1"
+}

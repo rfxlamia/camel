@@ -1,0 +1,107 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-06-15-agent-tool-system",
+    "plan_type": "phased",
+    "status": "DONE",
+    "date_started": "2026-06-15",
+    "date_completed": "2026-06-15",
+    "baseline_sha": "e76a5ff9f425028d7f622b6928575a1e397b4e64"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan-phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Tool interface + registry foundation",
+          "status": "DONE",
+          "done_sha": "caa8312e764b4788cf1c7b9deaadf71b164d7c4c"
+        },
+        {
+          "id": "T2",
+          "name": "DB schema + template tool assignment",
+          "status": "DONE",
+          "done_sha": "5fbf9b5115a122c431ab6e92663265f229494430"
+        },
+        {
+          "id": "T3",
+          "name": "web_search tool (Tavily)",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "735136b534e666aca967c9c43b4d4e48c12ae982"
+        },
+        {
+          "id": "T4",
+          "name": "Tool execution loop in executeCard",
+          "status": "DONE",
+          "depends": "T1",
+          "done_sha": "725cc674137717640f1db46755aaf20105ab7479"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan-phase-2.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T5",
+          "name": "Wire service.ts — resolve tools, emit SSE, persist trace",
+          "status": "DONE",
+          "depends": "T2, T4",
+          "done_sha": "d77a426877e605ed2635e04d33ea614a929783be"
+        },
+        {
+          "id": "T6",
+          "name": "Routes — read tools/budget, persist + replay trace",
+          "status": "DONE",
+          "depends": "T5",
+          "done_sha": "58c961bde429ffc4b37e1952afd7f167672acf48"
+        },
+        {
+          "id": "T7",
+          "name": "Client — tool event types, collection, collapsible trace UI",
+          "status": "DONE",
+          "depends": "T6",
+          "done_sha": "4e2e7d61978fd02278155503abbbbe1a56371cf6"
+        }
+      ],
+      "corrections": [
+        {
+          "sha": "e317f14e9700c1a93a39a683847f4455fb752f47",
+          "files": [
+            "server/src/realtime.ts"
+          ],
+          "for_task": "T5"
+        },
+        {
+          "sha": "61476152cc8fc0da078d8f57cbee7b1ad0b390b2",
+          "files": [
+            "server/src/agent/routes.test.ts",
+            "server/src/agent/routes.ts"
+          ],
+          "for_task": "T6"
+        },
+        {
+          "sha": "982fc7aa800cf4ed11bb12090d1da97ccc6bb415",
+          "files": [
+            "client/src/components/ToolTrace.test.tsx",
+            "client/src/context/BoardContext.tsx",
+            "client/src/pages/AgentPage.tsx"
+          ],
+          "for_task": "T7"
+        },
+        {
+          "sha": "23ab8f509428adff4770ac4e0203ca4bb894685d",
+          "files": [
+            "client/src/components/ToolTrace.test.tsx",
+            "client/src/context/BoardContext.tsx"
+          ],
+          "for_task": "T7"
+        }
+      ]
+    }
+  ]
+}

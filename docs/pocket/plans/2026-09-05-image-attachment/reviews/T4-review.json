@@ -1,0 +1,41 @@
+{
+  "task_id": "T4",
+  "task_name": "Define attachment response hydration and realtime contract",
+  "cycle": 4,
+  "timestamp": "2026-09-06T09:20:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "PHASE-002 is resolved by correction commit b132fb6e809481f25d189c5967918fb573394b22: server attachment realtime events now use the client-compatible nested metadata-only payload shape, with competing top-level attachment fields removed."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "server/src/realtime.ts defines a narrow AttachmentEventPayload containing exactly attachmentId, mimeType, and createdAt, and requires it for both attachment.added and attachment.removed.",
+      "The discriminated BoardEvent union removes top-level attachmentId and attachment fields; the @ts-expect-error compile guard rejects both legacy fields while the nested payload remains accepted.",
+      "The local fan-out round-trip test verifies the metadata-only payload is delivered without bytes or storage paths, and the server realtime suite passes all 16 tests.",
+      "All existing BoardEvent type literals remain present, including workspace, agent, tracker, and focus events; the client attachment contract test passes and repository server/client typechecks are green.",
+      "Correction commit b132fb6 changes only server/src/realtime.ts and server/src/realtime.test.ts; client production code, tracker/routes, and log.json are unchanged."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The prior T4 correction integration test still has two formatter suggestions for line wrapping, so that correction file is not fully Biome-formatted even though its focused test and typecheck pass.",
+        "location": "server/src/routes/attachment-activity.integration.test.ts:102-106, 133-139"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "b132fb6e809481f25d189c5967918fb573394b22"
+}

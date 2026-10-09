@@ -1,0 +1,36 @@
+{
+  "task_id": "T3",
+  "task_name": "Build TrackerRowDatePopover + formatDateRange helper",
+  "cycle": 1,
+  "timestamp": "2026-08-29T02:27:09Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycles 7–8 are labeled regression-only in the packet after close-behavior implementation. Assertions exist and lock the specified behavior: no-op close never calls onCommit (TrackerRowDatePopover.test.tsx:155-166); invalid range stays open with 'End date must be on or after start date', no onCommit, no onOpenChange(false) (TrackerRowDatePopover.test.tsx:168-183). Not treated as a Critical TDD miss.",
+      "Standing test-path rewrite (workspace-relative client vitest include vs packet repo-relative path) is not a spec miss in the audited files.",
+      "Root npm run test was not used in the worktree because server/.env is gitignored and was not copied. Not a Stage 1 failure per dispatch."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "formatDateRange matches every Story 1 Rule 2 example: equal '6 Aug', same month '6–26 Aug' (U+2013), different month '28 Aug–3 Sep', different year '30 Dec 2026–3 Jan 2027', one-sided dates, neither-set null, reversed null (trackerUtils.ts:46-85; trackerUtils.test.ts:41-75). Parses YYYY-MM-DD via parseDateOnly; never new Date(iso) or toLocaleDateString.",
+      "All five close paths (explicit close, trigger toggle, outside mousedown, Escape, parent open true→false) share one idempotent close() with closeHandledRef (TrackerRowDatePopover.tsx:81-128, 182-185, 219). Commit emits both keys as string | null only when the draft differs; invalid non-empty range sets the specified message and skips onCommit/onOpenChange(false).",
+      "Controlled parent close calls close({ notifyParent: false }) so onCommit fires once without recursively calling the parent setter (TrackerRowDatePopover.tsx:102-107; test:116-153). Drafts passed to TrackerDateFields are strings (?? ''); portal root exposes data-tracker-row-date-popover={idPrefix} (TrackerRowDatePopover.tsx:194).",
+      "Scope is exact: four listed files, two packet commits, no TrackerRow.tsx/TrackerPage.tsx wiring, no hardcoded Set date in the component (triggerLabel only), no new dependencies or server changes. formatDateRange is 40 lines with formatOneDate extracted; file sizes stay under the ~300-line heuristic (popover 228, trackerUtils 274). Positioning mirrors TrackerPropertyPicker rather than adding a generic popover abstraction."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "966cd01a7c57b36ec90728a8ea66fe74a6498c85"
+}

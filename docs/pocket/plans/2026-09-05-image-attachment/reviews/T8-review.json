@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T8",
+  "task_name": "Add multipart card-create atomicity",
+  "cycle": 4,
+  "timestamp": "2026-09-06T15:42:05Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Correction 5307b00 was read in full. recordCreatedCardActivity iterates over every created attachment and passes prepared.column.id as toColumnId, so every staged attachment_added activity receives the created card's current column inside the DB transaction.",
+      "The persisted card-create assertion now verifies create and every attachment_added event's to_column_id against the destination column and requires metadata-only attachment payloads containing exactly attachmentId, createdAt, and mimeType.",
+      "The prior c590516 conclusions remain valid: shared validation covers both multipart entry points, equal MIME types are enforced, exact validation messages are used, and invalid input has no file/card/row/activity/event side effects.",
+      "Card/attachment row atomicity, accumulated-file cleanup, post-commit publication, positional pairing, hydrated responses, and the unchanged JSON create branch remain intact."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "recordCreatedCardActivity uses the prepared transaction result's column id and applies it in a loop to every attachment_added recordActivity call; no first-attachment-only propagation or nullable column is possible.",
+      "The attachment activity calls remain inside persistCreatedCard's transaction, while publishCreatedResult runs only after the transaction succeeds.",
+      "The persisted creation test proves the full cross-flow contract for multiple staged pairs: current-column metadata and exact metadata-only payloads are checked for every attachment activity, while publisher calls remain separate post-commit events.",
+      "The correction is a focused one-line source fix plus targeted persisted assertions; it introduces no duplicated policy, oversized function, or unrelated deployment/application change.",
+      "The prior T8 quality conclusions remain valid: DB-row atomicity is preserved without claiming filesystem two-phase commit, all written pairs are cleaned on failure, and normal JSON creation remains supported.",
+      "NodeNext imports, shared validation, positional multipart pairing, hydrated response behavior, and the existing integration/typecheck conclusions remain clean."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "5307b00"
+}

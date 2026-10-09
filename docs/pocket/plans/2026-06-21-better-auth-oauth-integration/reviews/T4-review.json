@@ -1,0 +1,43 @@
+{
+  "task_id": "T4",
+  "task_name": "OAuth Routes — Set-Username & Set-Password",
+  "cycle": 1,
+  "timestamp": "2026-06-21T20:38:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Username validation enforced via validateUsername + USERNAME_RE (3-32 chars, letters/numbers/underscore) before any DB work (oauth.ts:22-27); password strength enforced as >= 8 chars (oauth.ts:111)",
+      "Auth enforced: requireAuth middleware on both routes plus an explicit req.user null guard returning 401 (oauth.ts:16-17, 108-109)",
+      "Uniqueness handled at the DB level — UNIQUE(username) violation (PG code 23505) caught and mapped to 409 'Username already taken' (oauth.ts:96-100), correctly relying on the database for the concurrent-submission race rather than a check-then-insert TOCTOU",
+      "set-username strictly guarded to NULL-only (409 'Username already set' otherwise, oauth.ts:18-20); set-password strictly guarded to password_hash IS NULL (409 otherwise, oauth.ts:120-124) — no change-password logic, matching the must-not-have",
+      "Workspace provisioning wrapped in a proper transaction with BEGIN/COMMIT and ROLLBACK on error, client released in finally (oauth.ts:34-104)",
+      "Invite consumption correct: for each pending invite, INSERT workspace_members THEN DELETE the invite within the transaction (oauth.ts:83-91) — avoids the delete-only orphaning bug",
+      "createSignupWorkspacePlan reused from auth.ts (no duplication); USERNAME_RE and BCRYPT_ROUNDS imported as single source of truth",
+      "Router mounted on /api/auth (index.ts:93), outside the email-gate `api` Router, so completion routes bypass the email gate as specified",
+      "All 7 unit tests pass; server typecheck clean for oauth files; covers 200/400/409 paths for both routes including the 23505 unique-violation branch"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Import names from '../auth.js' are not alphabetically sorted, triggering Biome's organizeImports assist under `biome check`. Non-blocking: project lint gate is `biome lint .` (package.json:18), and `biome lint` passes clean on this file. Auto-fixable via `npm run lint:fix`.",
+        "location": "server/src/routes/oauth.ts:3-9"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "e2366431fe5d051fdc6db3a00af6a612ea360779"
+}

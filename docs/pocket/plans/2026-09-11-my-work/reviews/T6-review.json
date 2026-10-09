@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T6",
+  "task_name": "Build the My Work page, list, filters, errors, and responsive rows",
+  "cycle": 5,
+  "timestamp": "2026-09-12T16:33:33Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "The authenticated /my-work route is mounted under the existing authenticated App router at client/src/App.tsx:55-60; the logged-out router exposes the real /login AuthPage at client/src/App.tsx:136-153.",
+      "The page uses only the server-authorized personal API boundary: Active calls listActiveMyWorkCandidates with limit 50 and maxPages 20 at client/src/components/my-work/myWorkDataLoader.ts:71-76, and All calls listMyWork with server cursors at client/src/components/my-work/myWorkDataLoader.ts:79-109. The page/data hook and production my-work components do not read activeWorkspaceId, fan out per workspace, perform client authorization, request detail, or call source mutation APIs; the boundary test also guards against activeWorkspaceId leakage at client/src/pages/MyWorkPage.test.tsx:213-218.",
+      "The Active candidate drain is bounded and cursor-aware in client/src/api/myWork.ts:52-81, while All requests preserve the server cursor and 50-item limit in client/src/components/my-work/myWorkDataLoader.ts:88-104; the integration test verifies the cursor transition at client/src/pages/MyWorkPage.test.tsx:607-638.",
+      "URL-driven scope, workspace/source filters, query, and page state are parsed/serialized by client/src/lib/myWorkUtils.ts:44-88 and applied through client/src/pages/MyWorkPage.tsx:23-65 and :70-92. Active filtering/ranking/pagination and All response presentation are implemented at client/src/components/my-work/myWorkDataLoader.ts:112-150; grouped status rendering and page controls are at client/src/components/my-work/MyWorkList.tsx:161-195. Page tests cover URL state, filters, Active/All, ordering, and 50/23 pagination at client/src/pages/MyWorkPage.test.tsx:199-232 and :459-582.",
+      "Status normalization keeps backlog/started active, terminal categories historical, and unknown categories under Other through the existing helpers used by client/src/components/my-work/myWorkDataLoader.ts:117-124 and client/src/components/my-work/MyWorkList.tsx:172-174; workspace-timezone overdue and deterministic group/order behavior remain delegated to client/src/lib/myWorkOrdering.ts:60-79 and :121-144.",
+      "Loading clears the current result before each request and prevents stale state/error writes with the sequence guard at client/src/components/my-work/useMyWorkData.ts:118-158. Whole-page loading, transient retry, and actionable empty states are rendered at client/src/pages/MyWorkPage.tsx:105-138 and :139-275, with pending/no-row, transient/retry, and Active-empty coverage at client/src/pages/MyWorkPage.test.tsx:235-308.",
+      "Visibility refresh is fresh-request based and newest-request-wins through the visibility listener and sequence guard at client/src/components/my-work/useMyWorkData.ts:204-221 and :232-253; the racing response regression is exercised at client/src/pages/MyWorkPage.test.tsx:310-373. Manual Refresh invokes a fresh personal request without changing URL state at client/src/pages/MyWorkPage.tsx:43-55 and is covered at client/src/pages/MyWorkPage.test.tsx:431-457.",
+      "Auth/session errors are distinguished from transient errors at client/src/components/my-work/useMyWorkData.ts:25-54. The recovered action uses the existing BoardContext logout/session-reset seam at client/src/components/my-work/MyWorkList.tsx:11-16; BoardContext clears application auth through onSignedOut at client/src/context/BoardContext.tsx:821-828, then full-document navigation reaches /login. The route-boundary regression renders the real AuthPage Welcome back form and asserts /login after sign-out at client/src/pages/MyWorkPage.test.tsx:394-429, rather than asserting only a callback or string.",
+      "Board/Tracker key, title, status, workspace/source context, due metadata, and the read-only responsive row action are implemented at client/src/components/my-work/MyWorkRow.tsx:213-297 and covered for both sources in client/src/components/my-work/MyWorkRow.test.tsx:59-91. No detail, Mark done, bulk, inline-edit, or source mutation behavior is hidden in the list implementation."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The advisor-authorized helper scope is exactly three cohesive task-local modules: myWorkDataLoader.ts (187 lines), useMyWorkData.ts (270 lines), and MyWorkToolbarParts.tsx (266 lines). They separate request/pagination preparation, React request state/effects, and toolbar presentation without unrelated files or dumping-ground behavior.",
+      "The recovered surgical extraction leaves client/src/pages/MyWorkPage.tsx at 276 lines and client/src/components/my-work/MyWorkList.tsx at 199 lines; MyWorkRow.tsx is 298 lines and the remaining helper modules are below the approximately 300-line heuristic. Relevant production functions remain under the approximately 50-line heuristic, with no repeated three-copy logic requiring an Important refactor finding.",
+      "The auth recovery preserves the existing logout seam and performs full-document navigation to leave the authenticated wildcard router; the regression reaches the real AuthPage form (client/src/components/my-work/MyWorkList.tsx:11-36; client/src/App.tsx:136-153; client/src/pages/MyWorkPage.test.tsx:394-429).",
+      "Focus-visible outlines, readable contrast-oriented token classes, responsive min-width/truncation behavior, and reduced-motion overrides are retained across toolbar controls, loading/empty/error actions, pagination, and rows (client/src/components/my-work/MyWorkToolbarParts.tsx:21-22,62-75,231-266; client/src/pages/MyWorkPage.tsx:141-145,185-191,228-235,265-273; client/src/components/my-work/MyWorkList.tsx:133-156; client/src/components/my-work/MyWorkRow.tsx:246-275).",
+      "The row remains read-only and source-aware, with composite identity and no mutation/detail API calls (client/src/components/my-work/MyWorkRow.tsx:84-85,213-224,246-275).",
+      "Independent verification is green at the audited HEAD: the exact page command passed 13/13, the exact row command passed 2/2, npm run lint passed, npm run typecheck passed, and git diff --check reported no errors."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "The loading skeleton exposes aria-label on a generic div without a status/live role or aria-busy state, so assistive technology may not announce the pending request consistently. This is non-blocking and does not affect the deterministic no-row loading behavior.",
+        "location": "client/src/pages/MyWorkPage.tsx:141-145"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 5,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "66a81c328b6bbd1cd81d32c9f4875550dafb6903"
+}

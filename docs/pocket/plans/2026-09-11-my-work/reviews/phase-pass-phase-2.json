@@ -1,0 +1,138 @@
+{
+  "phase_key": "phase-2",
+  "phase_file": "execution-plan/phase-2.md",
+  "timestamp": "2026-09-13T03:36:41Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "phase-level-cross-task",
+  "tasks_reviewed": ["T3", "T6", "T7"],
+  "task_ranges": [
+    {
+      "task_id": "T3",
+      "range": "0612eebfa9e2e0bedfb3217b4cae9d93cd670931..7d6e8db40f1b12e59728c96c235bb522033cc599"
+    },
+    {
+      "task_id": "T6",
+      "range": "7d6e8db40f1b12e59728c96c235bb522033cc599..66a81c328b6bbd1cd81d32c9f4875550dafb6903"
+    },
+    {
+      "task_id": "T7",
+      "range": "66a81c328b6bbd1cd81d32c9f4875550dafb6903..ef1d3dfecc3b28cb1f4e7f00a1bcc1f83a8e1c00"
+    }
+  ],
+  "correction_ranges": [
+    {
+      "task_id": "T7",
+      "range": "ef1d3dfecc3b28cb1f4e7f00a1bcc1f83a8e1c00..59c8f268246c92d7b614f2b1105600568a6a8e1f",
+      "correction_sha": "59c8f268246c92d7b614f2b1105600568a6a8e1f",
+      "for_task": "T7",
+      "affected_tasks": ["T3", "T7"],
+      "files": [
+        "client/src/components/my-work/MyWorkDetailSheet.test.tsx",
+        "client/src/layout/sidebar/MobileNav.tsx",
+        "client/src/layout/sidebar/Sidebar.tsx",
+        "client/src/layout/sidebar/WorkspaceModals.tsx",
+        "client/src/layout/sidebar/WorkspaceSwitcher.tsx"
+      ]
+    },
+    {
+      "task_id": "T7",
+      "range": "59c8f268246c92d7b614f2b1105600568a6a8e1f..9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+      "correction_sha": "9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+      "for_task": "T7",
+      "affected_tasks": ["T7"],
+      "files": [
+        "client/src/components/my-work/MyWorkDetailSheet.test.tsx",
+        "client/src/layout/sidebar/WorkspaceSwitcher.tsx"
+      ]
+    }
+  ],
+  "findings": [],
+  "cross_task_checks": [
+    {
+      "check": "Task-boundary mutation ownership",
+      "status": "PASS",
+      "evidence": "T3 is the only Phase 2 implementation of the server Mark done command and source mutation primitives (server/src/core/my-work-mark-done.ts, server/src/core/tracker-item-status-change.ts, server/src/routes/my-work-router.ts). T6/T7 My Work page, list, detail, and navigation files contain no updateCard/updateTrackerItem/markDone calls; the mutation-routing guard also passed. The T3 correction fan-out changed only client shell/detail-test files and did not introduce a second mutation path."
+    },
+    {
+      "check": "Source-aware identity and route composition",
+      "status": "PASS",
+      "evidence": "Server serialization emits workspaceId/source/key identity and preserves source row id (server/src/routes/my-work-response-serialization.ts:216-225; server/src/routes/work-item-response.ts:229-275). T6 uses workspaceId:source:key row identity (client/src/components/my-work/MyWorkList.tsx:108; MyWorkRow.tsx:85), while T7 sends detail requests with that composite identity and maps explicit Board navigation to numeric item.id and Tracker navigation to encoded item.key (client/src/lib/myWorkSourceNavigation.ts:29-35, client/src/lib/myWorkNavigation.ts:98-125). Focused client and server route tests passed."
+    },
+    {
+      "check": "T3 authorization, error, activity, and event contracts compose with T6/T7",
+      "status": "PASS",
+      "evidence": "The Mark done route rechecks source membership/assignment, maps not_found/conflict/unmappable results to 404/409 before the unavailable catch-all, returns the refreshed authorized detail, and publishes tracker.updated or card.moved/card.updated plus CARD_ASSIGNED when applicable (server/src/routes/my-work-router.ts:127-229; server/src/core/my-work-mark-done.ts:59-265). T6/T7 remain read-only and use the existing detail authorization boundary. The server Mark done, Tracker extraction, and authorization suites passed 25/25."
+    },
+    {
+      "check": "T6 personal scope, URL state, and T7 detail restoration",
+      "status": "PASS",
+      "evidence": "MyWorkPage parses only route-driven view/detail state, loads the server-authorized personal response without activeWorkspaceId, and adds/removes detail parameters without dropping scope, filters, query, or page (client/src/pages/MyWorkPage.tsx:19-65; client/src/lib/myWorkNavigation.ts:43-95). The detail test preserved /my-work?scope=active&workspaceId=7&source=board&q=atlas&page=2 and active workspace 999 through open/close, and all client tests passed 999/999."
+    },
+    {
+      "check": "P2-F01 closed MobileNav composition",
+      "status": "PASS",
+      "evidence": "WorkspaceOverlays renders one app-shell WorkspaceSwitchConfirmationSurface while switchConfirm.open and MobileNav returns null when closed (client/src/layout/sidebar/WorkspaceModals.tsx:221-255; MobileNav.tsx:35-43). The real BoardProvider closed-mobile regression at MyWorkDetailSheet.test.tsx:753-820 verified visible confirmation, Cancel preservation of active workspace/detail URL, source-action re-enablement, and Switch completion of /board/card/17."
+    },
+    {
+      "check": "P2-F02 open desktop Sidebar and open MobileNav composition",
+      "status": "PASS",
+      "evidence": "Both production shell switchers disable their inline confirmation and the common renderConfirmation=false effect closes the local list as soon as switchConfirm.open becomes true without cancelPendingSwitch (client/src/layout/sidebar/Sidebar.tsx:108-112, MobileNav.tsx:121, WorkspaceSwitcher.tsx:121-123). The exact shell harness mounts BoardProvider, WorkspaceOverlays, Sidebar, and MobileNav in AppLayout order (MyWorkDetailSheet.test.tsx:291-325; AppLayout.tsx:75-90). Desktop Cancel and open-mobile Switch mousedown/click tests, plus parameterized desktop Board and mobile Tracker source transitions, passed without unmounting the external confirmation."
+    },
+    {
+      "check": "Final pointer and guard ownership matrix",
+      "status": "PASS",
+      "evidence": "The shared confirmation's Cancel and Switch handlers invoke only cancelPendingSwitch/confirmPendingSwitch (WorkspaceSwitcher.tsx:52-92); the outside-mousedown listener is removed when the open shell list closes (WorkspaceSwitcher.tsx:152-162). Tests cover closed-mobile Cancel then Switch (lines 786-815), open desktop Cancel (846-850), open mobile Switch (882-889), and open desktop/mobile source transitions (943-953), with URL/workspace assertions. Detail focus trapping/restoration and PopoverShell topmost Tab/Escape ownership remained green in the focused suite."
+    },
+    {
+      "check": "Correction integrity, fan-out freshness, and pinned done_sha",
+      "status": "PASS",
+      "evidence": "git diff-tree shows correction 59c8f268... contains exactly five client shell/detail-test files and correction 9e3be893... exactly two client files; neither contains log.json or any review artifact. log.json still pins T3=7d6e8db40f1b12e59728c96c235bb522033cc599, T6=66a81c328b6bbd1cd81d32c9f4875550dafb6903, and T7=ef1d3dfecc3b28cb1f4e7f00a1bcc1f83a8e1c00. Fan-out artifacts match newest owned SHAs: T3=59c8f268..., T6=66a81c328..., T7=9e3be893...."
+    },
+    {
+      "check": "Phase ordering and deferred Phase 3 responsibilities",
+      "status": "PASS",
+      "evidence": "The audited ranges are sequential T3 then T6 then T7, matching phase-2 dependencies; log.json records all three Phase 2 tasks DONE while Phase 3 T9/T11/T8/T10 remain WAITING. No Phase 3 client Mark done/optimistic mutation or verification implementation is present in the Phase 2 ranges."
+    }
+  ],
+  "validation": {
+    "phase_focused_client": {
+      "command": "npm run test --workspace=client -- src/components/my-work/MyWorkDetailSheet.test.tsx src/layout/sidebar/WorkspaceSwitcher.test.tsx src/layout/sidebar/myWorkNavigation.test.tsx",
+      "result": "3 files passed; 20 tests passed"
+    },
+    "phase_focused_server": {
+      "command": "npm run test --workspace=server -- src/core/my-work-mark-done.test.ts src/core/tracker-item-status-change.test.ts src/routes/my-work.authorization.test.ts",
+      "result": "3 files passed; 25 tests passed"
+    },
+    "full_root_suite": {
+      "command": "npm run test",
+      "result": "server: 100 files passed, 49 skipped; 860 passed, 273 skipped; client: 111 files passed; 999 passed"
+    },
+    "typecheck": {
+      "command": "npm run typecheck",
+      "result": "server and client typecheck passed"
+    },
+    "lint": {
+      "command": "npm run lint",
+      "result": "Biome checked 607 files; no fixes applied"
+    },
+    "mutation_routing": {
+      "command": "npm run check:mutation-routing",
+      "result": "passed"
+    },
+    "diff_check": {
+      "command": "git diff --check 0612eebfa9e2e0bedfb3217b4cae9d93cd670931..9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+      "result": "passed with no output"
+    },
+    "correction_scope": {
+      "command": "git diff-tree --no-commit-id --name-status -r 59c8f268246c92d7b614f2b1105600568a6a8e1f and 9e3be893b3cbb4671c9e3f9bc3efa9a283fbea0d",
+      "result": "only the declared client source/test files; no log.json or review artifact"
+    },
+    "working_tree_pre_artifact": "clean; only this phase-pass artifact is written by this audit"
+  },
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "status": "PHASE_PASS_RESOLVED"
+}

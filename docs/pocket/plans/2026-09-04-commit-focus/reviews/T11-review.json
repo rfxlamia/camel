@@ -1,0 +1,41 @@
+{
+  "task_id": "T11",
+  "task_name": "Global Focus active nav indicator",
+  "cycle": 1,
+  "timestamp": "2026-09-04T16:11:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Diff confined to the three scoped files (FocusIndicator.tsx, FocusIndicator.test.tsx, AppLayout.tsx)",
+      "FocusIndicator gates on loading, focusModeEnabled, and session === null — no always-visible chrome",
+      "Exact spec label \"Focus active\" on an accessible button role; click navigates to /focus only with no api import or lifecycle mutations",
+      "Ghost button styling (text-primary-600, hover:bg-primary-100, text-sm) matches existing client patterns (e.g. AddCard, BoardPage)",
+      "Tests cover re-entry navigation plus ready/running/paused visibility and null-session, loading, and flag-off absence (7/7 passing)",
+      "AppLayout change is minimal: import plus <FocusIndicator /> mounted before PresenceBar in the header cluster",
+      "Component is 23 lines — well under refactor thresholds"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Test suite does not assert that focus API methods are uncalled on click; behavior is guaranteed by implementation (navigate-only, no api import) but the DELIVERABLE must-not is not exercised in tests",
+        "location": "client/src/layout/FocusIndicator.test.tsx:73"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "9ccdbc01de889b9472c385a0c9cc4a77e0e1a6fd"
+}

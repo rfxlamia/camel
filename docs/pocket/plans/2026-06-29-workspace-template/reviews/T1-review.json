@@ -1,0 +1,47 @@
+{
+  "task_id": "T1",
+  "task_name": "Batch column endpoint + validator",
+  "cycle": 1,
+  "timestamp": "2026-06-29T00:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "FOR UPDATE row lock on the workspace precedes the empty-count guard (columns.ts:58-66), correctly serializing concurrent applies under READ COMMITTED per the sandwich-context mandate",
+      "recordActivity runs on the transaction client atomically with the inserts (columns.ts:94); publishEvent is post-commit and best-effort wrapped in try/catch (columns.ts:103-110), exactly matching the spec ordering",
+      "is_signable/signable_assignee_id are hardcoded to false/null in the INSERT (columns.ts:79) and never read by the validator — forward-compatible signable-not-persisted invariant guaranteed at two layers",
+      "Positions use i * POSITION_GAP from a zero base (columns.ts:83), avoiding integer positions per the fractional-positioning rule",
+      "Palette (COLUMN_COLORS, isValidColumnColor) cleanly extracted into validators/column.ts and re-imported by both batch and the unchanged PATCH/POST handlers — single source of truth as the OBJECTIVE required",
+      "validateColumnName reused; NodeNext .js import extensions throughout; PATCH single-done block (columns.ts:196-274) and columns schema left untouched",
+      "TDD honored (separate validator test/impl and integration test/impl commits) with conventional commit messages; unit tests cover empty-array, bad-color, >1-done, blank-title, and bad-wipLimit rejection plus the valid 5-column accept path",
+      "Correction commit 6ee3ea8 returns a 500 on tx failure instead of hanging, isolates batch tests to workspace 99 with scoped cleanup (no destructive TRUNCATE / pool.end), and wraps ROLLBACK defensively against an already-aborted tx"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Unused import 'afterEach' in the integration test (imported but never called). Cosmetic only — server noUnusedLocals is client-scoped per CLAUDE.md, so it is not a build break. Inherited from the plan's own template.",
+        "location": "server/src/routes/columns.batch.integration.test.ts:8"
+      },
+      {
+        "severity": "Minor",
+        "description": "The atomicity test was changed in correction 6ee3ea8 to fail via a mocked recordActivity rejection rather than the spec's literal 'insert fails on column 3' (Example C). Both exercise the identical catch -> ROLLBACK path so rollback coverage is preserved, but the specific mid-INSERT failure point is no longer directly simulated.",
+        "location": "server/src/routes/columns.batch.integration.test.ts:269-293"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "6ee3ea8526412e6b0462e783f8632d1141cd5a6a"
+}

@@ -1,0 +1,44 @@
+{
+  "task_id": "T9",
+  "task_name": "Project routes — CRUD, cap, and delete-with-release",
+  "cycle": 1,
+  "timestamp": "2026-08-05T15:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Router structure mirrors tracker-vocabularies.ts with requireWorkspaceMember on every route",
+      "Cap enforcement uses workspace FOR UPDATE lock before count-then-insert inside a transaction (tracker-projects.ts:197-219)",
+      "Delete runs atomically in one transaction: soft-delete project/phases, null item FKs without touching version/updated_at, single activity row, single SSE (tracker-projects.ts:340-407)",
+      "409 cap error mirrors getWorkspaceCapacity precedent with named limit message (tracker-projects.ts:10-11, 254)",
+      "Comprehensive test suite covers all DELIVERABLE scenarios including concurrent-create race with lock-before-count ordering"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "No explicit test asserting project payloads omit rollup/progress fields (DELIVERABLE must-not)",
+        "location": "server/src/routes/tracker-projects.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "Module is 412 lines; plan's optional ~300-line split threshold was not applied (delete transaction could be extracted)",
+        "location": "server/src/routes/tracker-projects.ts:328-410"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "0405fcbb1e554e3ce629ece233ac72aa1ca69705"
+}

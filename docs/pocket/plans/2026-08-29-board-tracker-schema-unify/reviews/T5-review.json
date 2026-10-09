@@ -1,0 +1,49 @@
+{
+  "task_id": "T5",
+  "task_name": "Card move updates status_id",
+  "cycle": 1,
+  "timestamp": "2026-08-31T07:26:22Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Diff range 5d140f78..d7a89107 includes parallel-group T7 client files and the prior T4 correction (383e643); T5's own commit d7a8910 touches only server/src/routes/cards.ts and server/src/routes/cards-identity.integration.test.ts as specified.",
+      "Human move GWT: To Do → In Review updates column_id and status_id to the destination in_progress slot, enforces WIP (409), increments version, sets startedAt, and rejects statusId in the move body with 400 (server/src/routes/cards-identity.integration.test.ts:248-351; server/src/routes/cards.ts:703-860).",
+      "Agent-board GWT: move between agent columns uses board_id IS NOT DISTINCT FROM sibling geometry and remaps backlog → todo (server/src/routes/cards-identity.integration.test.ts:353-446; server/src/routes/cards.ts:782-806).",
+      "No Roadmap reverse mapping or statusId acceptance on move; destination overlay is derived via T1 mapColumnSlots/statusIdForSlot only."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Reuses T1 helpers mapColumnSlots and statusIdForSlot with the same null-safe board_id sibling query pattern as allocateCardIdentity (server/src/routes/cards.ts:778-806; server/src/core/allocate-card-identity.ts:35-61).",
+      "status_id is applied in the same cards update as column_id, position, version, started_at CASE, and done_at CASE inside the existing db.transaction() — no separate status transaction (server/src/routes/cards.ts:847-860).",
+      "Same-column moves skip status remapping via isSameColumn guard; cross-column WIP, signable assignee, recordActivity, and optimistic version checks are unchanged (server/src/routes/cards.ts:774-807, 820-876).",
+      "Integration coverage exercises WIP blocking, version increment, startedAt transition, statusId body rejection, and agent-board sibling geometry end-to-end.",
+      "T5 commit is conventionally scoped and does not introduce client/UI changes."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "No integration assertion that a same-column reorder leaves status_id unchanged; the isSameColumn guard is correct in code but the red-flag scenario is not explicitly tested.",
+        "location": "server/src/routes/cards-identity.integration.test.ts"
+      },
+      {
+        "severity": "Minor",
+        "description": "Destination status resolution logic closely mirrors allocateCardIdentity (sibling query + mapColumnSlots + statusIdForSlot) but remains inline in the move transaction; duplication is two instances, below the 3+ refactor threshold.",
+        "location": "server/src/routes/cards.ts:776-806"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "d7a89107827e197a70b3726e68f8e2beb58ed1fc"
+}

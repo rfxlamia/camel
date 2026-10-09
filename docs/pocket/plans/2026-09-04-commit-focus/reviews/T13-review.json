@@ -1,0 +1,79 @@
+{
+  "task_id": "T13",
+  "task_name": "Live auto-finish guards — task deleted, access revoked",
+  "cycle": 2,
+  "timestamp": "2026-09-05T00:00:00+07:00",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "re-audit-after-fix",
+  "previous_verdict": "REVIEW_FAIL",
+  "previous_issue": "missing focusGuards.ts extraction (Step 9 bounded refactor)",
+  "reviewed_sha": "9b9e6e6634999fcf1a2eb9450063df371010551c",
+  "parent_sha": "fa9764b",
+  "commits_reviewed": [
+    "9b8fce38b474e3bdfc20371b3190b08981d7d89a",
+    "32452818d874aef631b70d5a64c5015234194c8d"
+  ],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "deliverable_checks": {
+      "matching_deletion_auto_finishes": "PASS — card + tracker cases in guards.test.tsx",
+      "membership_removed_auto_finishes": "PASS — including 404 rejection path",
+      "different_task_id_inert": "PASS — different.cardId + different.trackerItemId",
+      "different_user_membership_inert": "PASS",
+      "null_session_inert": "PASS — card, tracker, membership cases",
+      "adr103_board_tracker_collision": "PASS — colliding.tracker.deleted + colliding.card.deleted",
+      "updated_events_do_not_finish": "PASS — card.updated + tracker.updated",
+      "finish_reject_still_clears": "PASS — 409 + 5xx cases, no 409 body adoption",
+      "scope_files_only": "PASS — 4 files changed fa9764b..HEAD, BoardContext untouched",
+      "feat_commit_exists": "PASS — 9b8fce3 feat(focus): auto-finish focus session on task deletion or access loss"
+    },
+    "test_results": {
+      "FocusSessionContext.guards.test.tsx": "15/15 PASS",
+      "FocusSessionContext.test.tsx": "21/21 PASS",
+      "focusGuards.test.ts": "16/16 PASS",
+      "client_typecheck": "PASS"
+    }
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Prior Important gap resolved: client/src/lib/focusGuards.ts and focusGuards.test.ts exist in commit 3245281",
+      "deletionEventTargetsFocusedTask extracted verbatim — source-before-id ADR #103 logic unchanged vs 9b8fce3 inline version",
+      "membershipRemovalTargetsUser consolidates userId/workspaceId guard; behavior-equivalent to inline checks",
+      "autoFinishFromGuard helper retained in provider with settle-then-clear ordering (409/5xx/404 paths)",
+      "Rule-of-three satisfied: shared deletion predicate, membership predicate, single autoFinishFromGuard",
+      "focusGuards.test.ts covers all predicate branches including colliding ids, undefined trackerItemId, and *.updated rejection",
+      "Integration guards suite exercises full provider path through real subscription seams without mocking handlers"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "FocusSessionContext.tsx remains 331 lines (down from 351 pre-extraction). Step 9 ~300-line trigger required predicate extraction, not shrinking the provider below 300 — subscription effects and autoFinishFromGuard correctly stay in the provider.",
+        "location": "client/src/context/FocusSessionContext.tsx",
+        "resolved": true,
+        "resolution": "Predicates and toast constants moved to focusGuards.ts; line count reduction is sufficient per Step 9 intent."
+      }
+    ],
+    "step_9_assessment": {
+      "focusGuards_ts_exists": true,
+      "focusGuards_test_ts_exists": true,
+      "predicates_extracted": [
+        "deletionEventTargetsFocusedTask",
+        "membershipRemovalTargetsUser",
+        "isActiveFocusSession"
+      ],
+      "behavior_unchanged": true,
+      "important_finding_resolved": true,
+      "notes": "Guard subscription useEffects remain in FocusSessionContext by necessity (React hooks/sessionRef). Extraction target was pure predicates, not the effect wrappers — matches Step 9 wording ('covering the extracted predicates')."
+    },
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  }
+}

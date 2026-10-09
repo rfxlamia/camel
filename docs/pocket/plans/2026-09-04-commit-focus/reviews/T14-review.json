@@ -1,0 +1,67 @@
+{
+  "task_id": "T14",
+  "task_name": "Server-side membership revocation finalization",
+  "cycle": 1,
+  "timestamp": "2026-09-04T15:58:30Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "finishActiveFocusSessionForRemoval uses applyAction(..., \"finish\", now) with injected clock — no route-level accrual arithmetic (focus-session-membership.ts:26-34)",
+      "Running session unit case: version 4, 300s + 120s → update with state finished, accumulated_seconds 420, running_since null, finished_at NOW, expectedVersion 4 (focus-session-membership.test.ts:38-78)",
+      "No active row returns false without update or audit (focus-session-membership.test.ts:81-99)",
+      "Audit action membership_removed with removing admin as actor, not removed member (focus-session-membership.test.ts:73-78; members.focus-session.integration.test.ts:218-230)",
+      "FocusAuditAction union extended only with membership_removed in focus-session.ts (diff lines 28-32)",
+      "members.ts DELETE handler threads actor: req.user! beside actorId (members.ts:224-228)",
+      "createFocusSessionRepo(executor = db) binds to trx via createFocusSessionRepo(trx) inside removal transaction (focus-session-repo.ts:113; helpers.ts:375,394-401)",
+      "Focus finalization and workspace_members DELETE share one db.transaction().execute — no second transaction (helpers.ts:372-451)",
+      "focusSessionFinished marker returned from transaction; focus_session.updated payload.session null published only after commit, before membership.removed (helpers.ts:276-297; workspaceAccess.test.ts:178-221)",
+      "Normal removal with focusSessionFinished false emits only membership.removed (workspaceAccess.test.ts:223-254)",
+      "recordFocusActivity bound to trx writes eventType focus_session with cardId null and namespaced payload including removed userId — no card/task mutation or focus_events write (helpers.ts:376-391)",
+      "Integration case A: DELETE /workspaces/3/members/7 atomically removes membership, finishes focus row with accrued 420s, audits admin actor_id, publishes focus null then membership.removed (members.focus-session.integration.test.ts:177-244)",
+      "Integration case B: failAfterFocusFinalize rolls back membership and focus update; no events published (members.focus-session.integration.test.ts:246-287)",
+      "Commit 7efc39f message matches fix(focus): finalize sessions when membership is removed",
+      "Mechanical gate verified: focus-session-membership.test.ts 2/2, workspaceAccess.test.ts 23/23 (incl. new event-order cases), members.focus-session.integration.test.ts 2/2 (RUN_INTEGRATION=1)"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Clean orchestration layer: focus-session-membership.ts is Express/Kysely-free; repo stays query-only",
+      "Transaction-bound recordFocusActivity adapter correctly binds trx executor — audit seam matches T4/T15 pattern without widening RecordFocusActivity",
+      "failAfterFocusFinalize is test-only injection at precise post-finalize/pre-delete boundary — no production flag leakage",
+      "Integration tests prove PostgreSQL atomicity and post-commit event ordering that unit fakes cannot",
+      "Optimistic-lock conflict on focus update throws inside transaction, ensuring membership DELETE does not proceed on stale version"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "Supporting actor-field updates in members.mutations.test.ts and tracker-items.integration.test.ts are outside the packet file list but required for the widened removeMember API",
+        "location": "server/src/routes/members.mutations.test.ts:97,110"
+      },
+      {
+        "severity": "Minor",
+        "description": "Integration test calls setupFixtures() in beforeEach and again at test start — redundant double setup",
+        "location": "server/src/routes/members.focus-session.integration.test.ts:170,178"
+      },
+      {
+        "severity": "Minor",
+        "description": "TDD red-green sequence not independently verifiable from single squashed commit; behavior proven by 4 new unit cases + 2 integration assertions",
+        "location": "server/src/routes/focus-session-membership.test.ts"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "result": "clean PASS"
+  },
+  "reviewed_sha": "7efc39f298dd7b030a68b8a27117c509a640c20a",
+  "prev_sha": "7eeb616"
+}

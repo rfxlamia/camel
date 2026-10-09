@@ -1,0 +1,61 @@
+{
+  "phase_key": "phase-4",
+  "phase_file": "execution-plan/phase-4.md",
+  "timestamp": "2026-09-04T17:00:30Z",
+  "reviewer_mode": "read-only",
+  "tasks": [
+    {
+      "task_id": "T9",
+      "overall": "REVIEW_PASS",
+      "range": "fa9764b19b95d7ec2d4c7387f62545c592bba6de..45cdd83b0c5b198b2ce962486d17137adb75d61f",
+      "done_sha": "45cdd83b0c5b198b2ce962486d17137adb75d61f"
+    },
+    {
+      "task_id": "T13",
+      "overall": "REVIEW_PASS",
+      "range": "fa9764b19b95d7ec2d4c7387f62545c592bba6de..9b9e6e6634999fcf1a2eb9450063df371010551c",
+      "done_sha": "9b9e6e6634999fcf1a2eb9450063df371010551c"
+    },
+    {
+      "task_id": "T10",
+      "overall": "REVIEW_PASS",
+      "range": "9b9e6e6634999fcf1a2eb9450063df371010551c..fd31d17f6caf86a2a039976118ada768e2526cd5",
+      "done_sha": "fd31d17f6caf86a2a039976118ada768e2526cd5"
+    }
+  ],
+  "cross_task_checks": {
+    "duplication": [
+      "T9 FocusPage and T13 FocusSessionProvider both subscribe to subscribeCardEvents/subscribeTrackerEvents — deliberate per T13 packet: page refreshes on *.updated, provider auto-finishes on *.deleted; BoardContext multi-subscriber registry, not duplicate handlers",
+      "T13 focusGuards.ts owns deletion/membership predicates and TASK_MISSING_TOAST/ACCESS_REVOKED_TOAST; T12 workspace-switch toasts remain in workspaceSwitcher.ts (FOCUS_LOADING_TOAST, FOCUS_BLOCKED_TOAST) — distinct lifecycle concerns",
+      "T10 FocusEntryButton is the sole entry-point component mounted once each in ContextPanel and TrackerDetailPage; no second confirm-switch dialog elsewhere"
+    ],
+    "integration_mismatch": [
+      "Parallel [T9 ∥ T13] merge is clean: feature commits touch disjoint files (T9 → App.tsx/FocusPage; T13 → FocusSessionContext/focusGuards); merge SHAs 45cdd83 and 9b9e6e6 compose to a single /focus lazy route with no duplicate entries",
+      "T9 finishingRef contract explicitly anticipates T13: ref resets on failed finish so adoptSession(null) from autoFinishFromGuard triggers redirect; FocusPage.test.tsx 'failed.finish does not suppress redirect' exercises the handoff",
+      "T13 auto-finish on /focus clears session via provider (finishingRef unset) → FocusPage no-session effect navigates to /board; manual Finish still uses returnPath via handleFinish — correct split",
+      "T10 depends on T9 route: focus()/switchTo() resolve before navigate('/focus'); FocusPage guards !loading && session === null — entry flow and surface compose",
+      "T10 isSameTask short-circuit navigates without API when session already on target task; T9 surface loads that session — re-entry preserves timer per spec",
+      "T13 ADR #103 source-before-id predicates (deletionEventTargetsFocusedTask) align with T9 loadTask branching on session.source + taskId/taskKey — no cross-source id collision across page load vs guard finish",
+      "Phase 3 T11 /focus navigation and T12 workspace guard remain compatible: T9 wires the route T11 already targeted; T13 membership guard uses same SSE seam T14 server contract established"
+    ],
+    "regression": [
+      "Unfiltered npm run test at HEAD fd31d17: server 781 passed (239 skipped), client 866 passed (+52 vs phase-3 terminal fa9764b)",
+      "npm run typecheck at HEAD fd31d17: green (server + client)",
+      "T13 refactor commit 3245281 is predicate extraction only — guard subscription effects and autoFinishFromGuard settle-then-clear ordering unchanged vs 9b8fce3 feature commit",
+      "T10 mount-site edits in ContextPanel and TrackerDetailPage are additive (import + FocusEntryButton element); no regression to existing panel/detail flows"
+    ],
+    "spec_gaps": [
+      "Phase 4 dispatch order [T9 ∥ T13] → T10 satisfied: T10 done_sha fd31d17 is descendant of both parallel merge bases; three conventional commits (2947f70, 9b8fce3/3245281, fd31d17) plus merge commits",
+      "No end-to-end test mounts FocusPage under live FocusSessionProvider while firing card.deleted — covered by decomposition: T13 provider integration suite + T9 redirect-on-session-cleared unit test; cross-layer contract documented in T9 Step 3",
+      "T10 taskKey prop passed from mount sites but unused in button handler — tracker identity flows via server session.taskKey into T9 loadTask; harmless cross-task surface, not a lifecycle gap"
+    ]
+  },
+  "findings": [],
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "status": "PHASE_PASS_CLEAN",
+  "terminal_sha": "fd31d17f6caf86a2a039976118ada768e2526cd5"
+}

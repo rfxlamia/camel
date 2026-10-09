@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T3",
+  "task_name": "Extract and implement the source-aware Mark done command",
+  "cycle": 3,
+  "timestamp": "2026-09-12T20:06:19Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "correction_sha": "59c8f268246c92d7b614f2b1105600568a6a8e1f",
+  "correction_finding": "P2-F01",
+  "audited_head": "59c8f268246c92d7b614f2b1105600568a6a8e1f",
+  "parent_sha": "ef1d3dfecc3b28cb1f4e7f00a1bcc1f83a8e1c00",
+  "affected_tasks": ["T3", "T7"],
+  "bleed": ["T3"],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P2-F01 is resolved by an app-shell confirmation surface that is independent of the mobile menu: WorkspaceOverlays mounts WorkspaceSwitchConfirmationSurface while switchConfirm.open, while the desktop Sidebar and MobileNav switchers disable their inline confirmation renderer.",
+      "The closed-mobile BoardProvider regression exercises the real WorkspaceOverlays and MobileNav components and verifies one visible confirmation, cancel preservation of active workspace/detail URL, source-action re-enablement, and confirm completion of the exact Board route (client/src/components/my-work/MyWorkDetailSheet.test.tsx:663-729).",
+      "The correction changes only five client shell/guard presentation files and does not change the T3 server Mark done command, route, API mutation boundary, or any source-aware mutation implementation; the pinned T3 done_sha remains 7d6e8db40f1b12e59728c96c235bb522033cc599 in log.json."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "WorkspaceSwitchConfirmation reuses BoardContext confirmPendingSwitch/cancelPendingSwitch callbacks and PopoverShell focus, Tab, and Escape ownership without adding a second authorization or workspace decision (client/src/layout/sidebar/WorkspaceSwitcher.tsx:52-93; client/src/layout/sidebar/shared.tsx:21-130).",
+      "The correction diff is limited to source/test files; git diff-tree shows no log.json or review artifact, and the T3 source-aware Mark done/client mutation boundary is untouched.",
+      "Independent verification passed: focused My Work/detail/sidebar suites passed 16/16, the full client suite passed 111 files and 995 tests, the T3 server focused suite passed 16/16, client typecheck and targeted Biome lint passed, root lint passed, mutation-routing passed, and git diff --check passed.",
+      "The prior T3 acceptance remains intact: server Mark done behavior and mapping/activity/version boundaries were not re-litigated or changed by this mobile-shell correction."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "HTTP tests cover the Board moved event and generic error mappings, but do not assert the Tracker tracker.updated path, Board card.updated path, or CARD_ASSIGNED domain-event branch. The production branches remain present and unchanged; add focused route assertions when extending coverage.",
+        "location": "server/src/core/my-work-mark-done.test.ts:672-728"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "59c8f268246c92d7b614f2b1105600568a6a8e1f"
+}

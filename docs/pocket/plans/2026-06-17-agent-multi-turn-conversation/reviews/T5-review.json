@@ -1,0 +1,34 @@
+{
+  "task_id": "T5",
+  "task_name": "Client API + Stream Support Updates",
+  "cycle": 2,
+  "timestamp": "2026-06-17T15:55:30Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle-1 sole FAIL cause (out-of-scope server type changes in routes.ts/service.ts swapping inline Array<{role;content}> for named ConversationMessage) is fully reverted by correction commit 46e67bd; routes.ts:229, service.ts:195/205 now use inline type again",
+      "Residual ConversationMessage interface at server/src/agent/llm.ts:215 predates T5 (introduced by commit 4afd1e8) and is NOT attributable to T5 — T5 commit 3c43fe6 never modified llm.ts",
+      "All four in-scope client files are byte-identical to T5's original commit (git diff 3c43fe6..HEAD empty); deliverable remains intact",
+      "sendAgentBoardMessage union type + body branching present at client/src/api.ts:240-253; __notfirst__ filter present at client/src/lib/agentColumnState.ts:18",
+      "T5 is now effectively client-only"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Backward compatibility preserved: string payload still yields {message} body (api.ts:246-247)",
+      "Clean union-type handling via typeof discriminant, no casts (api.ts:245-248)",
+      "Correct one-line filter excluding columnSlug === '__notfirst__' (agentColumnState.ts:18)",
+      "30/30 client tests pass (agentColumnState.test.ts 11, api.test.ts 19); tests cover string vs action payloads and __notfirst__ exclusion"
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": { "current_cycle": 2, "max_cycles": 1, "cycles_remaining": 0 },
+  "reviewed_sha": "46e67bdf3a5fa5b202a6ff33a7c62b1599890d25"
+}

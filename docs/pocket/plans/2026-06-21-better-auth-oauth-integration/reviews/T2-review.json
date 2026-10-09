@@ -1,0 +1,51 @@
+{
+  "task_id": "T2",
+  "task_name": "Better Auth OAuth Bridge",
+  "cycle": 1,
+  "timestamp": "2026-06-21T20:40:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": []
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Better Auth handler mounted before express.json() and gated behind OAUTH_ENABLED, using Express 5 wildcard /api/auth/*splat (index.ts:33-36)",
+      "generateId returns JavaScript false for the user model so PostgreSQL SERIAL preserves integer users.id (oauth-bridge.ts:72-76)",
+      "CSRF exemption correctly narrowed to login/register plus only Better Auth sign-in/ and callback/ subpaths; set-username/set-password/logout retain CSRF (index.ts:59-65)",
+      "Link-collision (Rule 4) writes orphan event to auth_audit with exact payload shape, not card_events, avoiding the NOT NULL workspace_id violation (oauth-bridge.ts:118-128)",
+      "complete-oauth mints via the exported mintCamelSession and routes new users to /?oauth=pick-username vs / based on username state (oauth-bridge.ts:135-146)",
+      "fromNodeHeaders used to convert Express headers for auth.api.getSession instead of an unsafe cast (oauth-bridge.ts:97-99)",
+      "TDD honored: 7 pure-function tests written first; full server suite passes (406 passed, 26 skipped) with no auth.test.ts regression; server typecheck clean"
+    ],
+    "issues": [
+      {
+        "severity": "Important",
+        "description": "BETTER_AUTH_SECRET falls back to a hardcoded default 'dev-secret-change-in-production' with no production guard. Better Auth uses this secret to sign sessions and OAuth state; a predictable default in production enables forgeable tokens. Diverges from the codebase's own CSRF_SECRET pattern (middleware/csrf.ts:10-17) which throws when unset in NODE_ENV=production. Value is plan-mandated (spec-compliant), so this is a security hardening note, not a spec violation; recommend a production guard.",
+        "location": "server/src/config.ts:36"
+      },
+      {
+        "severity": "Minor",
+        "description": "getGitHubPrimaryEmail is exported and unit-tested but never called in the production path. The actual GitHub no-verified-email abort (DELIVERABLE scenario 2) is enforced by mapProfileToUser plus Better Auth's internal /user/emails fetch, so the tested function is not the live guard. Either wire it into the guard or note it as an intentionally-extracted pure helper.",
+        "location": "server/src/oauth-bridge.ts:9-14"
+      },
+      {
+        "severity": "Minor",
+        "description": "Observation (cross-task, not a T2 defect): EMAIL_GATE_ENABLED was listed in the T2 plan step 4 for config.ts but is absent at this done_sha. Verified it is added by T3's commit 20402d6, so the gate is not silently disabled; ownership simply moved to T3.",
+        "location": "server/src/config.ts"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "474d73e8dc9451ee3949a9ba41a15e14f3c6d12e"
+}

@@ -1,0 +1,56 @@
+{
+  "task_id": "T9",
+  "task_name": "Board panel pickers and dirty-state protection",
+  "cycle": 1,
+  "timestamp": "2026-08-31T07:58:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "BoardCardTaxonomyFields uses TrackerPropertyPicker and the same workspace loaders as tracker (api.listTrackerVocabularies for priority/label, api.listTrackerProjects) with merge/fallback helpers so selections survive loading/error/empty lists (client/src/components/BoardCardTaxonomyFields.tsx:81-219).",
+      "ContextPanel DetailsSection extends baselineRef, dirty detection, save patch, and SSE sync guard to priorityId, labelIds, projectId, and phaseId; cardTaxonomyKey drives server→form sync without clobbering dirty drafts (client/src/components/ContextPanel.tsx:38-235, 256-259).",
+      "api.ts saveCard PATCH types extended with taxonomy fields; no statusId anywhere in save path.",
+      "BoardContext.tsx (8 lines, not in task file list) mirrors saveCard patch types for TypeScript — required plumbing with no behavioral change; in-scope assessment: acceptable fallout, not scope creep.",
+      "Component and ContextPanel tests cover all four pickers, clear-to-null/[], versioned save + baseline adoption, SSE dirty/clean paths, non-destructive list states, and absence of status picker (18/18 passing)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Reuses TrackerPropertyPicker chrome (NO_PRIORITY, PriorityGlyph, LabelDot, Folder/Signpost icons, inline label picker) consistent with TrackerProperties and TrackerCreateModal.",
+      "Dirty/baseline/SSE semantics mirror existing title/assignee pattern — taxonomy folded into baselineRef and dual dirty checks without inventing a board-only picker.",
+      "Non-destructive list handling: mergeVocabulary/mergeLabels, synthetic selectedProject from fallback names, listHint for loading/error, conditional show*Picker guards.",
+      "Save sends only changed taxonomy fields plus baseline version; successful save updates baseline before clean SSE adoption.",
+      "Client tests (BoardCardTaxonomyFields.test.tsx, ContextPanel.test.tsx) and npm run typecheck --workspace=client both green at reviewed SHA.",
+      "Conventional commit feat(board-tracker): add board taxonomy panel fields."
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "ContextPanel does not pass projectName/phaseName to BoardCardTaxonomyFields; Card carries only projectId/phaseId so project/phase chip labels may be absent when project lists fail or are empty even though ids remain in draft state (BoardCardTaxonomyFields supports fallbacks but parent does not wire them).",
+        "location": "client/src/components/ContextPanel.tsx:341-356"
+      },
+      {
+        "severity": "Minor",
+        "description": "BoardCardTaxonomyFields.tsx is 339 lines — slightly above the ~300-line refactor heuristic though still a focused single component.",
+        "location": "client/src/components/BoardCardTaxonomyFields.tsx"
+      },
+      {
+        "severity": "Minor",
+        "description": "BoardContext.tsx patch-type extension is outside the declared task file list but required for client typecheck parity with api.ts; import-only type surface, no runtime delta.",
+        "location": "client/src/context/BoardContext.tsx:102-110"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "f8515de850edee7b83235af280cb7ab00bd33d79"
+}

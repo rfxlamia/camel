@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creative Brief Preview — Camel (Refine: Workspace Pivot)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font: "Work Sans", system-ui, sans-serif;
+    --primary-100: oklch(97.0% 0.020 250); --primary-200: oklch(92.0% 0.036 250);
+    --primary-300: oklch(84.0% 0.052 250); --primary-400: oklch(74.0% 0.068 250);
+    --primary-500: oklch(64.0% 0.080 250); --primary-600: oklch(55.0% 0.076 250);
+    --primary-700: oklch(46.0% 0.068 250); --primary-800: oklch(37.0% 0.056 250);
+    --primary-900: oklch(28.0% 0.044 250);
+    --accent-600: oklch(55.0% 0.076 40); --accent-700: oklch(46.0% 0.068 40);
+    --neutral-100: oklch(97.0% 0.003 250); --neutral-200: oklch(92.0% 0.005 250);
+    --neutral-300: oklch(84.0% 0.007 250); --neutral-400: oklch(74.0% 0.009 250);
+    --neutral-600: oklch(55.0% 0.009 250); --neutral-700: oklch(46.0% 0.009 250);
+    --neutral-900: oklch(28.0% 0.006 250);
+    --success-bg: oklch(95% 0.025 145); --success-solid: oklch(55% 0.100 145); --success-text: oklch(35% 0.085 145);
+    --warning-bg: oklch(95% 0.025 85); --warning-solid: oklch(55% 0.100 85); --warning-text: oklch(35% 0.085 85);
+    --error-bg: oklch(95% 0.025 25); --error-solid: oklch(55% 0.100 25); --error-text: oklch(35% 0.085 25);
+    --info-bg: oklch(95% 0.020 245); --info-solid: oklch(55% 0.080 245); --info-text: oklch(35% 0.068 245);
+    --radius: 6px;
+  }
+  body { font-family: var(--font); margin: 0; padding: 2rem; color: #111; background:#fff; line-height:1.5; max-width: 960px; }
+  h1,h2,h3 { font-weight:700; } h2 { margin-top:3rem; border-bottom:1px solid #eee; padding-bottom:.5rem; }
+  .note { color:#666; font-size:14px; }
+  .diffbox { background:var(--primary-100); border:1px solid var(--primary-300); border-radius:8px; padding:1rem 1.25rem; font-size:14px; }
+  .swatches { display:flex; flex-wrap:wrap; gap:1rem; }
+  .swatch { width:170px; border:1px solid #eee; border-radius:8px; overflow:hidden; font-size:12px; }
+  .swatch .chip { height:64px; }
+  .swatch .meta { padding:.5rem; }
+  .badge { display:inline-block; padding:1px 6px; border-radius:99px; font-weight:600; }
+  .badge.pass { background:#dcfce7; color:#166534; } .badge.fail { background:#fee2e2; color:#991b1b; }
+  .typerow { display:flex; align-items:baseline; gap:1rem; margin:.5rem 0; }
+  .typerow .label { width:64px; color:#888; font-size:12px; }
+  .stategrid { display:grid; grid-template-columns:repeat(5,1fr); gap:1rem; max-width:880px; margin-bottom:1.5rem;}
+  .stategrid .cell { text-align:center; font-size:12px; color:#888; }
+
+  .btn { font-family:var(--font); font-size:14px; font-weight:600; border-radius:var(--radius); padding:.5rem 1rem; border:none; cursor:pointer; }
+  .btn-primary { background:var(--primary-600); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.1); }
+  .btn-primary.is-hover { background:var(--primary-700); box-shadow:0 2px 4px rgba(0,0,0,.15); }
+  .btn-primary.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .btn-primary.is-disabled { background:var(--neutral-200); color:var(--neutral-400); cursor:not-allowed; }
+  .btn-primary.is-error { background:var(--error-solid); }
+
+  .btn-secondary { background:var(--neutral-100); color:var(--primary-700); border:1px solid var(--neutral-300); }
+  .btn-secondary.is-hover { background:var(--neutral-200); }
+  .btn-secondary.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .btn-secondary.is-disabled { color:var(--neutral-400); border:1px solid var(--neutral-200); cursor:not-allowed; }
+  .btn-secondary.is-error { background:var(--error-bg); color:var(--error-text); border:1px solid var(--error-solid); }
+
+  .btn-ghost { background:transparent; color:var(--primary-600); }
+  .btn-ghost.is-hover { background:var(--primary-100); color:var(--primary-700); }
+  .btn-ghost.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .btn-ghost.is-disabled { color:var(--neutral-400); cursor:not-allowed; }
+  .btn-ghost.is-error { color:var(--error-solid); }
+
+  .input { font-family:var(--font); font-size:14px; border-radius:var(--radius); padding:.5rem .75rem; border:1px solid var(--neutral-300); color:var(--neutral-900); width:150px; }
+  .input.is-hover { border-color:var(--neutral-400); }
+  .input.is-focus { border-color:var(--primary-600); box-shadow:0 0 0 3px oklch(55% 0.076 250 / 15%); }
+  .input.is-disabled { background:var(--neutral-100); color:var(--neutral-400); cursor:not-allowed; }
+  .input.is-error { border-color:var(--error-solid); box-shadow:0 0 0 3px oklch(55% 0.1 25 / 15%); }
+
+  .badge-pill { display:inline-block; font-size:12px; font-weight:600; padding:.2rem .6rem; border-radius:99px; background:var(--primary-100); color:var(--primary-800); }
+  .badge-pill.is-hover { filter:brightness(0.96); }
+  .badge-pill.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .badge-pill.is-disabled { background:var(--neutral-200); color:var(--neutral-400); }
+  .badge-pill.is-error { background:var(--error-bg); color:var(--error-text); }
+
+  .link { color:var(--primary-600); font-size:14px; text-decoration:none; cursor:pointer; }
+  .link.is-hover { color:var(--primary-700); text-decoration:underline; }
+  .link.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .link.is-disabled { color:var(--neutral-400); cursor:not-allowed; }
+  .link.is-error { color:var(--error-solid); }
+</style>
+</head>
+<body>
+  <h1>Creative Brief Preview — Camel</h1>
+  <p>All-in-one workspace: docs + kanban + task, buat tim kecil–menengah (tech &amp; non-tech) · Persona: Calm, Organized, Flexible, Trustworthy · Goal: user feels semua kerjaan (dokumen, task, board) ada di satu tempat — gak perlu app lain.</p>
+
+  <div class="diffbox">
+    <strong>Refine diff vs brief lama:</strong> Persona &amp; copy digeser dari "kanban + GitHub issue, micro-team" ke "unified workspace (docs+task+board), tim kecil–menengah tech &amp; non-tech". Warna (navy H=250 / accent orange H=40), chroma 0.08, radius 6px, font Work Sans, dan type ratio 1.25 <strong>tidak berubah</strong> — trust/calm menang di struktur (Gate: Conflict Resolution §2), fleksibilitas pivot diekspresikan lewat copy &amp; product scope, bukan lewat warna/radius.
+  </div>
+
+  <h2>Color System</h2>
+  <h3>Primary (unchanged)</h3>
+  <div class="swatches">
+    <div class="swatch"><div class="chip" style="background:var(--primary-600)"></div><div class="meta">primary-600<br>oklch(55% 0.076 250)<br>on white: 4.83:1 <span class="badge pass">AA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--primary-700)"></div><div class="meta">primary-700<br>oklch(46% 0.068 250)<br>on white: 7.10:1 <span class="badge pass">AAA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--primary-800)"></div><div class="meta">primary-800<br>oklch(37% 0.056 250)<br>on white: 10.40:1 <span class="badge pass">AAA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--primary-900)"></div><div class="meta">primary-900<br>oklch(28% 0.044 250)<br>on white: 14.56:1 <span class="badge pass">AAA</span></div></div>
+  </div>
+  <h3>Accent (unchanged)</h3>
+  <div class="swatches">
+    <div class="swatch"><div class="chip" style="background:var(--accent-600)"></div><div class="meta">accent-600<br>oklch(55% 0.076 40)<br>on white: 5.01:1 <span class="badge pass">AA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--accent-700)"></div><div class="meta">accent-700<br>oklch(46% 0.068 40)<br>on white: 7.33:1 <span class="badge pass">AAA</span></div></div>
+  </div>
+  <h3>Neutrals (unchanged)</h3>
+  <div class="swatches">
+    <div class="swatch"><div class="chip" style="background:var(--neutral-600)"></div><div class="meta">neutral-600<br>oklch(55% 0.009 250)<br>on white: 4.85:1 <span class="badge pass">AA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--neutral-900)"></div><div class="meta">neutral-900<br>oklch(28% 0.006 250)<br>on white: 14.59:1 <span class="badge pass">AAA</span></div></div>
+  </div>
+  <h3>Semantic (unchanged)</h3>
+  <div class="swatches">
+    <div class="swatch"><div class="chip" style="background:var(--success-solid)"></div><div class="meta">success<br>oklch(55% 0.100 145)<br>text-on-bg: 9.52:1 <span class="badge pass">AAA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--warning-solid)"></div><div class="meta">warning<br>oklch(55% 0.100 85)<br>text-on-bg: 9.81:1 <span class="badge pass">AAA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--error-solid)"></div><div class="meta">error<br>oklch(55% 0.100 25)<br>text-on-bg: 10.08:1 <span class="badge pass">AAA</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--info-solid)"></div><div class="meta">info<br>oklch(55% 0.080 245)<br>text-on-bg: 9.74:1 <span class="badge pass">AAA</span></div></div>
+  </div>
+
+  <h2>Typography Scale — base 16px · ratio 1.25 (unchanged)</h2>
+  <div class="typerow"><span class="label">xs 10</span><span style="font-size:10px">The quick brown fox</span></div>
+  <div class="typerow"><span class="label">sm 13</span><span style="font-size:13px">The quick brown fox</span></div>
+  <div class="typerow"><span class="label">base 16</span><span style="font-size:16px">The quick brown fox</span></div>
+  <div class="typerow"><span class="label">md 20</span><span style="font-size:20px">The quick brown fox</span></div>
+  <div class="typerow"><span class="label">lg 25</span><span style="font-size:25px">The quick brown fox</span></div>
+  <div class="typerow"><span class="label">xl 31</span><span style="font-size:31px">The quick brown fox</span></div>
+  <div class="typerow"><span class="label">2xl 39</span><span style="font-size:39px">The quick brown fox</span></div>
+
+  <h2>Atoms</h2>
+  <h3>Button — Primary</h3>
+  <div class="stategrid">
+    <div class="cell">Default<br><button class="btn btn-primary">New page</button></div>
+    <div class="cell">Hover<br><button class="btn btn-primary is-hover">New page</button></div>
+    <div class="cell">Focus<br><button class="btn btn-primary is-focus">New page</button></div>
+    <div class="cell">Disabled<br><button class="btn btn-primary is-disabled" disabled>New page</button></div>
+    <div class="cell">Error<br><button class="btn btn-primary is-error">Delete</button></div>
+  </div>
+
+  <h3>Button — Secondary</h3>
+  <div class="stategrid">
+    <div class="cell">Default<br><button class="btn btn-secondary">Not now</button></div>
+    <div class="cell">Hover<br><button class="btn btn-secondary is-hover">Not now</button></div>
+    <div class="cell">Focus<br><button class="btn btn-secondary is-focus">Not now</button></div>
+    <div class="cell">Disabled<br><button class="btn btn-secondary is-disabled" disabled>Not now</button></div>
+    <div class="cell">Error<br><button class="btn btn-secondary is-error">Remove</button></div>
+  </div>
+
+  <h3>Button — Ghost</h3>
+  <div class="stategrid">
+    <div class="cell">Default<br><button class="btn btn-ghost">Cancel</button></div>
+    <div class="cell">Hover<br><button class="btn btn-ghost is-hover">Cancel</button></div>
+    <div class="cell">Focus<br><button class="btn btn-ghost is-focus">Cancel</button></div>
+    <div class="cell">Disabled<br><button class="btn btn-ghost is-disabled" disabled>Cancel</button></div>
+    <div class="cell">Error<br><button class="btn btn-ghost is-error">Discard</button></div>
+  </div>
+
+  <h3>Input</h3>
+  <div class="stategrid">
+    <div class="cell">Default<br><input class="input" placeholder="Page title"></div>
+    <div class="cell">Hover<br><input class="input is-hover" placeholder="Page title"></div>
+    <div class="cell">Focus<br><input class="input is-focus" placeholder="Page title"></div>
+    <div class="cell">Disabled<br><input class="input is-disabled" placeholder="Page title" disabled></div>
+    <div class="cell">Error<br><input class="input is-error" placeholder="Page title"></div>
+  </div>
+
+  <h3>Badge</h3>
+  <div class="stategrid">
+    <div class="cell">Default<br><span class="badge-pill">In progress</span></div>
+    <div class="cell">Hover<br><span class="badge-pill is-hover">In progress</span></div>
+    <div class="cell">Focus<br><span class="badge-pill is-focus">In progress</span></div>
+    <div class="cell">Disabled<br><span class="badge-pill is-disabled">In progress</span></div>
+    <div class="cell">Error<br><span class="badge-pill is-error">Blocked</span></div>
+  </div>
+
+  <h3>Link</h3>
+  <div class="stategrid">
+    <div class="cell">Default<br><a class="link">Clear all</a></div>
+    <div class="cell">Hover<br><a class="link is-hover">Clear all</a></div>
+    <div class="cell">Focus<br><a class="link is-focus">Clear all</a></div>
+    <div class="cell">Disabled<br><a class="link is-disabled">Clear all</a></div>
+    <div class="cell">Error<br><a class="link is-error">Remove page</a></div>
+  </div>
+
+  <h2>Micro-copy (updated for workspace scope)</h2>
+  <p class="note">Register: Neutral-friendly (unchanged). Old GitHub-issue-specific strings dropped; broadened to docs + task + board.</p>
+  <ul>
+    <li><strong>CTA (primary):</strong> "Create page" · "New task" · "Add to board"</li>
+    <li><strong>Secondary:</strong> "Not now" · "Cancel"</li>
+    <li><strong>Validation error:</strong> "That name's already taken — try another."</li>
+    <li><strong>Action failed:</strong> "Couldn't save your changes. Check your connection and try again."</li>
+    <li><strong>Permission error:</strong> "You don't have access to this workspace."</li>
+    <li><strong>Placeholder:</strong> "Page title" · "Search your workspace..." · "Task name"</li>
+    <li><strong>Empty state:</strong> "Nothing here yet. Create your first page or task to get started."</li>
+    <li><strong>Success:</strong> "Page saved." · "Task created." · "Board updated."</li>
+  </ul>
+</body>
+</html>

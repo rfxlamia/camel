@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camel — List & Calendar Views (UI Mockup)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Camel tokens (creative-brief.md) ─────────────────────────── */
+    :root {
+      --font-sans: "Work Sans", system-ui, sans-serif;
+      --radius: 6px;
+
+      --primary-100: oklch(97% 0.02 250);
+      --primary-200: oklch(92% 0.036 250);
+      --primary-300: oklch(84% 0.052 250);
+      --primary-400: oklch(74% 0.068 250);
+      --primary-600: oklch(55% 0.076 250);
+      --primary-700: oklch(46% 0.068 250);
+      --primary-800: oklch(37% 0.056 250);
+      --primary-900: oklch(28% 0.044 250);
+
+      --neutral-100: oklch(97% 0.003 250);
+      --neutral-200: oklch(92% 0.005 250);
+      --neutral-300: oklch(84% 0.007 250);
+      --neutral-400: oklch(74% 0.009 250);
+      --neutral-500: oklch(64% 0.01 250);
+      --neutral-600: oklch(55% 0.009 250);
+      --neutral-700: oklch(46% 0.009 250);
+      --neutral-900: oklch(28% 0.006 250);
+
+      --success-100: oklch(95% 0.025 145);
+      --success-500: oklch(55% 0.1 145);
+      --success-900: oklch(35% 0.085 145);
+
+      --error-100: oklch(95% 0.025 25);
+      --error-500: oklch(55% 0.1 25);
+      --error-900: oklch(35% 0.085 25);
+
+      --info-100: oklch(95% 0.02 245);
+      --info-500: oklch(55% 0.08 245);
+
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--neutral-900);
+      background: var(--neutral-100);
+      min-height: 100vh;
+    }
+
+    /* ── App shell ─────────────────────────────────────────────────── */
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: 224px;
+      flex-shrink: 0;
+      background: white;
+      border-right: 1px solid var(--neutral-200);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 56px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--neutral-200);
+    }
+
+    .sidebar-logo {
+      width: 24px;
+      height: 24px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-800));
+    }
+
+    .sidebar-brand {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary-900);
+    }
+
+    .sidebar-nav {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--neutral-600);
+      text-decoration: none;
+    }
+
+    .nav-item.active {
+      background: var(--primary-100);
+      color: var(--primary-700);
+      font-weight: 500;
+    }
+
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      opacity: 0.7;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* ── Toolbar ───────────────────────────────────────────────────── */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      background: white;
+      border-bottom: 1px solid var(--neutral-200);
+    }
+
+    .stat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius);
+      border: 1px solid var(--neutral-200);
+      background: white;
+      font-size: 12px;
+      color: var(--neutral-600);
+    }
+
+    .stat-chip strong {
+      font-weight: 600;
+      color: var(--neutral-900);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .toolbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .flow-healthy {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius);
+      background: var(--success-100);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--success-900);
+    }
+
+    /* ── View switcher ─────────────────────────────────────────────── */
+    .view-switcher {
+      display: inline-flex;
+      padding: 3px;
+      background: var(--neutral-100);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      gap: 2px;
+    }
+
+    .view-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--neutral-600);
+      cursor: pointer;
+      transition: background 150ms, color 150ms, box-shadow 150ms;
+    }
+
+    .view-btn:hover {
+      color: var(--neutral-900);
+      background: white;
+    }
+
+    .view-btn.active {
+      background: white;
+      color: var(--primary-700);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .view-btn svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.8;
+    }
+
+    /* ── Canvas area ───────────────────────────────────────────────── */
+    .canvas {
+      flex: 1;
+      overflow: auto;
+      background-color: var(--neutral-100);
+      background-image: radial-gradient(
+        color-mix(in oklch, var(--neutral-300) 55%, transparent) 1px,
+        transparent 1.4px
+      );
+      background-size: 22px 22px;
+      background-position: -11px -11px;
+      padding: 24px;
+    }
+
+    .view-panel {
+      display: none;
+      animation: fadeIn 280ms ease both;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .view-panel { animation: none; }
+    }
+
+    /* ── Board view (simplified) ─────────────────────────────────── */
+    .board-columns {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .column {
+      width: 280px;
+      flex-shrink: 0;
+      background: white;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .column-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--neutral-200);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--neutral-900);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .column-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .column-cards {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 80px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      padding: 10px 12px 10px 14px;
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+      transition: border-color 150ms, box-shadow 150ms, transform 150ms;
+    }
+
+    .card:hover {
+      border-color: var(--neutral-300);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+      transform: translateY(-1px);
+    }
+
+    .card.draggable {
+      cursor: grab;
+    }
+
+    .card.draggable:active {
+      cursor: grabbing;
+    }
+
+    .card.dragging {
+      opacity: 0.5;
+      transform: rotate(2deg);
+      box-shadow: var(--shadow-md);
+      border-color: var(--primary-300);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--neutral-900);
+    }
+
+    .card-title.done {
+      color: var(--neutral-500);
+    }
+
+    .card-meta {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .due-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--neutral-100);
+      color: var(--neutral-600);
+    }
+
+    .due-badge.overdue {
+      background: var(--error-100);
+      color: var(--error-900);
+    }
+
+    .due-badge svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .avatar-stack {
+      margin-left: auto;
+      display: flex;
+    }
+
+    .avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid white;
+      background: var(--primary-100);
+      color: var(--primary-800);
+      font-size: 9px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: -6px;
+    }
+
+    .avatar:first-child { margin-left: 0; }
+
+    .done-check {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--success-100);
+      color: var(--success-900);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .done-check svg { width: 11px; height: 11px; }
+
+    /* ── List view (Linear-inspired, Camel light theme) ────────────── */
+    .list-shell {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .list-panel {
+      background: white;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .list-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--neutral-200);
+      background: white;
+    }
+
+    .list-toolbar-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--neutral-900);
+    }
+
+    .list-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .list-toolbar-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--neutral-500);
+      cursor: pointer;
+      transition: background 120ms, color 120ms;
+    }
+
+    .list-toolbar-btn:hover {
+      background: var(--neutral-100);
+      color: var(--neutral-900);
+    }
+
+    .list-col-headers {
+      display: grid;
+      grid-template-columns: 28px 64px 24px 1fr 140px 32px 72px;
+      gap: 0 12px;
+      padding: 6px 16px 6px 12px;
+      border-bottom: 1px solid var(--neutral-200);
+      background: var(--neutral-100);
+    }
+
+    .list-col-header {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--neutral-500);
+    }
+
+    .list-col-header.right { text-align: right; }
+    .list-col-header.center { text-align: center; }
+
+    .list-group {
+      border-bottom: 1px solid var(--neutral-200);
+    }
+
+    .list-group:last-child {
+      border-bottom: none;
+    }
+
+    .list-group-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: color-mix(in oklch, var(--neutral-100) 50%, white);
+      border-bottom: 1px solid var(--neutral-200);
+      cursor: pointer;
+      user-select: none;
+      transition: background 120ms;
+    }
+
+    .list-group-header:hover {
+      background: var(--neutral-100);
+    }
+
+    .list-chevron {
+      width: 16px;
+      height: 16px;
+      color: var(--neutral-400);
+      transition: transform 200ms ease;
+      flex-shrink: 0;
+    }
+
+    .list-group.collapsed .list-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .list-group.collapsed .list-group-body {
+      display: none;
+    }
+
+    .list-status-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      flex-shrink: 0;
+    }
+
+    .list-status-icon.todo { color: var(--info-500); }
+    .list-status-icon.progress { color: var(--primary-600); background: color-mix(in oklch, var(--primary-600) 25%, transparent); }
+    .list-status-icon.done { color: var(--success-500); background: var(--success-500); border-color: var(--success-500); }
+
+    .list-group-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--neutral-900);
+    }
+
+    .list-group-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--neutral-500);
+      margin-left: 2px;
+    }
+
+    .list-group-add {
+      margin-left: auto;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--neutral-400);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 120ms, background 120ms, color 120ms;
+    }
+
+    .list-group-header:hover .list-group-add {
+      opacity: 1;
+    }
+
+    .list-group-add:hover {
+      background: var(--neutral-200);
+      color: var(--neutral-700);
+    }
+
+    .list-row {
+      display: grid;
+      grid-template-columns: 28px 64px 24px 1fr 140px 32px 72px;
+      gap: 0 12px;
+      align-items: center;
+      padding: 0 16px 0 12px;
+      height: 40px;
+      border-bottom: 1px solid var(--neutral-200);
+      cursor: pointer;
+      transition: background 100ms;
+    }
+
+    .list-row:last-child {
+      border-bottom: none;
+    }
+
+    .list-row:hover {
+      background: color-mix(in oklch, var(--primary-100) 35%, white);
+    }
+
+    .list-grip {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--neutral-300);
+      opacity: 0;
+      transition: opacity 100ms, color 100ms;
+      cursor: default;
+    }
+
+    .list-row:hover .list-grip {
+      opacity: 1;
+      color: var(--neutral-400);
+    }
+
+    .list-grip svg {
+      width: 10px;
+      height: 14px;
+    }
+
+    .list-id {
+      font-size: 12px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--neutral-500);
+      letter-spacing: -0.01em;
+    }
+
+    .list-row:hover .list-id {
+      color: var(--neutral-600);
+    }
+
+    .list-row-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .list-row-status .list-status-icon {
+      width: 12px;
+      height: 12px;
+      border-width: 1.5px;
+    }
+
+    .list-row-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--neutral-900);
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-row-title.done {
+      color: var(--neutral-500);
+      text-decoration: line-through;
+      text-decoration-color: var(--neutral-300);
+    }
+
+    .list-labels {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: flex-end;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .list-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+      background: var(--neutral-100);
+      color: var(--neutral-700);
+    }
+
+    .list-label-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .list-label.feature { background: color-mix(in oklch, var(--primary-100) 80%, white); color: var(--primary-800); }
+    .list-label.feature .list-label-dot { background: var(--primary-500, var(--primary-600)); }
+    .list-label.bug { background: var(--error-100); color: var(--error-900); }
+    .list-label.bug .list-label-dot { background: var(--error-500); }
+    .list-label.design { background: oklch(95% 0.025 300); color: oklch(35% 0.085 300); }
+    .list-label.design .list-label-dot { background: oklch(55% 0.1 300); }
+
+    .list-assignee {
+      display: flex;
+      justify-content: center;
+    }
+
+    .list-assignee .avatar {
+      width: 22px;
+      height: 22px;
+      font-size: 9px;
+      margin-left: 0;
+    }
+
+    .list-assignee-empty {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px dashed var(--neutral-300);
+    }
+
+    .list-row-due {
+      text-align: right;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--neutral-500);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .list-row-due.overdue {
+      color: var(--error-500);
+    }
+
+    .list-row-due.none {
+      color: var(--neutral-400);
+      font-weight: 400;
+    }
+
+    @media (max-width: 860px) {
+      .list-col-headers { display: none; }
+      .list-row {
+        grid-template-columns: 24px 1fr auto;
+        grid-template-rows: auto auto;
+        height: auto;
+        padding: 10px 12px;
+        gap: 4px 10px;
+      }
+      .list-grip { display: none; }
+      .list-id { grid-column: 1; grid-row: 1; font-size: 11px; }
+      .list-row-status { display: none; }
+      .list-row-title { grid-column: 2 / -1; grid-row: 1; }
+      .list-labels { grid-column: 2; grid-row: 2; justify-content: flex-start; }
+      .list-assignee { grid-column: 3; grid-row: 2; }
+      .list-row-due { grid-column: 3; grid-row: 1; }
+    }
+
+    /* ── Calendar view ─────────────────────────────────────────────── */
+    .calendar-layout {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .calendar-month {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--neutral-900);
+    }
+
+    .calendar-nav {
+      display: flex;
+      gap: 4px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      background: white;
+      color: var(--neutral-600);
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .icon-btn:hover {
+      background: var(--neutral-100);
+      border-color: var(--neutral-300);
+      color: var(--neutral-900);
+    }
+
+    .calendar-grid {
+      background: white;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: var(--neutral-100);
+      border-bottom: 1px solid var(--neutral-200);
+    }
+
+    .calendar-weekday {
+      padding: 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--neutral-500);
+    }
+
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+
+    .calendar-cell {
+      min-height: 96px;
+      padding: 6px;
+      border-right: 1px solid var(--neutral-200);
+      border-bottom: 1px solid var(--neutral-200);
+      position: relative;
+      cursor: pointer;
+      transition: background 120ms;
+    }
+
+    .calendar-cell:nth-child(7n) { border-right: none; }
+    .calendar-days .calendar-cell:nth-last-child(-n+7) { border-bottom: none; }
+
+    .calendar-cell:hover {
+      background: color-mix(in oklch, var(--primary-100) 40%, white);
+    }
+
+    .calendar-cell.other-month {
+      background: color-mix(in oklch, var(--neutral-100) 60%, white);
+    }
+
+    .calendar-cell.other-month .cell-day {
+      color: var(--neutral-400);
+    }
+
+    .calendar-cell.today {
+      background: color-mix(in oklch, var(--primary-100) 55%, white);
+    }
+
+    .calendar-cell.overdue-day .cell-day-num {
+      color: var(--error-500);
+      font-weight: 700;
+    }
+
+    .calendar-cell.overdue-day::before {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--error-500);
+    }
+
+    .cell-day {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--neutral-700);
+      margin-bottom: 4px;
+      padding: 0 2px;
+    }
+
+    .cell-day.today-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: var(--radius);
+      background: var(--primary-600);
+      color: white;
+      font-weight: 600;
+    }
+
+    .cell-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .cell-card {
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: var(--primary-100);
+      color: var(--primary-800);
+      border: 1px solid var(--primary-200);
+      cursor: grab;
+      transition: transform 100ms, box-shadow 100ms;
+    }
+
+    .cell-card:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .cell-card:active {
+      cursor: grabbing;
+    }
+
+    .cell-card.done {
+      background: var(--neutral-100);
+      color: var(--neutral-500);
+      border-color: var(--neutral-200);
+    }
+
+    .cell-more {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--primary-600);
+      padding: 2px 4px;
+    }
+
+    /* ── Unscheduled tray ──────────────────────────────────────────── */
+    .tray {
+      background: white;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .tray-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--neutral-200);
+      background: var(--neutral-100);
+    }
+
+    .tray-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--neutral-900);
+    }
+
+    .tray-hint {
+      font-size: 11px;
+      color: var(--neutral-500);
+    }
+
+    .tray-body {
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 56px;
+      align-items: flex-start;
+    }
+
+    .tray-card {
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      border: 1px dashed var(--neutral-300);
+      background: white;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--neutral-700);
+      cursor: grab;
+      transition: border-color 120ms, background 120ms;
+    }
+
+    .tray-card:hover {
+      border-color: var(--primary-400);
+      background: var(--primary-100);
+      color: var(--primary-800);
+    }
+
+    .tray-empty {
+      font-size: 12px;
+      color: var(--neutral-400);
+      font-style: italic;
+    }
+
+    /* ── Modal ─────────────────────────────────────────────────────── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(39, 41, 44, 0.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: fadeIn 200ms ease;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      width: 100%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--neutral-200);
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius);
+      cursor: pointer;
+      color: var(--neutral-500);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      background: var(--neutral-100);
+      color: var(--neutral-900);
+    }
+
+    .modal-body {
+      padding: 8px 0;
+      overflow-y: auto;
+    }
+
+    .modal-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: background 120ms;
+    }
+
+    .modal-row:hover {
+      background: var(--neutral-100);
+    }
+
+    /* ── Conflict toast (inline demo) ──────────────────────────────── */
+    .conflict-demo {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 50;
+    }
+
+    .conflict-btn {
+      padding: 8px 14px;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius);
+      background: white;
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--neutral-600);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .conflict-btn:hover {
+      border-color: var(--neutral-300);
+    }
+
+    .conflict-inline {
+      display: none;
+      margin-top: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--warning-100, oklch(95% 0.025 85));
+      font-size: 10px;
+      font-weight: 500;
+      color: oklch(35% 0.085 85);
+      animation: fadeIn 200ms ease;
+    }
+
+    .conflict-inline.show {
+      display: block;
+    }
+
+    /* ── Mockup banner ─────────────────────────────────────────────── */
+    .mockup-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      background: var(--primary-900);
+      color: white;
+      text-align: center;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .mockup-banner kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.15);
+      font-size: 11px;
+      margin: 0 2px;
+    }
+
+    .app { padding-top: 32px; }
+
+    /* ── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .canvas { padding: 16px; }
+      .calendar-cell { min-height: 72px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-banner">
+    UI mockup — List &amp; Calendar views spec · Switch views with toolbar · Click <kbd>Aug 20</kbd> for multi-card modal ·
+    <button class="conflict-btn" style="margin-left:8px;padding:2px 8px;font-size:11px" onclick="showConflict()">Demo conflict text</button>
+  </div>
+
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo"></div>
+        <span class="sidebar-brand">Acme Workspace</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Board
+        </a>
+        <a class="nav-item" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Inbox
+        </a>
+        <a class="nav-item" href="#">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Settings
+        </a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <span class="stat-chip"><span class="stat-dot" style="background:var(--neutral-300)"></span><strong>14</strong> cards</span>
+        <span class="stat-chip"><span class="stat-dot" style="background:var(--primary-400)"></span><strong>5</strong> in progress</span>
+        <span class="stat-chip"><span class="stat-dot" style="background:var(--success-500)"></span><strong>4</strong> done</span>
+        <span style="color:var(--neutral-300)">·</span>
+        <span style="font-size:12px;color:var(--neutral-500)">3 columns</span>
+
+        <div class="toolbar-right">
+          <span class="flow-healthy">
+            <span class="stat-dot" style="background:var(--success-500)"></span>
+            Flow healthy
+          </span>
+
+          <div class="view-switcher" role="tablist" aria-label="Board view">
+            <button class="view-btn active" data-view="board" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="10" rx="1"/></svg>
+              Board
+            </button>
+            <button class="view-btn" data-view="list" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              List
+            </button>
+            <button class="view-btn" data-view="calendar" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Calendar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="canvas">
+        <!-- ═══ BOARD VIEW ═══ -->
+        <div id="view-board" class="view-panel active">
+          <div class="board-columns">
+            <div class="column">
+              <div class="column-header">
+                <span class="column-dot" style="background:var(--info-500)"></span>
+                To Do
+              </div>
+              <div class="column-cards">
+                <div class="card draggable">
+                  <div style="display:flex;gap:8px;align-items:flex-start">
+                    <p class="card-title">Design onboarding flow</p>
+                  </div>
+                  <div class="card-meta">
+                    <span class="due-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Aug 15</span>
+                    <div class="avatar-stack"><span class="avatar">JD</span></div>
+                  </div>
+                </div>
+                <div class="card draggable">
+                  <p class="card-title">Write API docs</p>
+                  <div class="card-meta"><span class="due-badge overdue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Aug 1</span></div>
+                </div>
+                <div class="card draggable">
+                  <p class="card-title">Research competitors</p>
+                </div>
+              </div>
+            </div>
+            <div class="column">
+              <div class="column-header">
+                <span class="column-dot" style="background:var(--primary-600)"></span>
+                In Progress
+              </div>
+              <div class="column-cards">
+                <div class="card draggable">
+                  <p class="card-title">Implement list view</p>
+                  <div class="card-meta">
+                    <span class="due-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Aug 8</span>
+                    <div class="avatar-stack"><span class="avatar">AK</span><span class="avatar">MR</span></div>
+                  </div>
+                </div>
+                <div class="card draggable">
+                  <p class="card-title">Calendar drag-and-drop</p>
+                  <div class="card-meta"><span class="due-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Aug 20</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="column">
+              <div class="column-header">
+                <span class="column-dot" style="background:var(--success-500)"></span>
+                Done
+              </div>
+              <div class="column-cards">
+                <div class="card">
+                  <div style="display:flex;gap:8px;align-items:flex-start">
+                    <p class="card-title done">Setup CI pipeline</p>
+                    <span class="done-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+                  </div>
+                  <div class="card-meta"><span class="due-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Jul 28</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ LIST VIEW (Linear-inspired) ═══ -->
+        <div id="view-list" class="view-panel">
+          <div class="list-shell">
+            <div class="list-panel">
+              <div class="list-toolbar">
+                <span class="list-toolbar-title">All tasks</span>
+                <div class="list-toolbar-actions">
+                  <button class="list-toolbar-btn" title="Filter">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                  </button>
+                  <button class="list-toolbar-btn" title="Search">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </button>
+                  <button class="list-toolbar-btn" title="Display options">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="list-col-headers">
+                <span></span>
+                <span class="list-col-header">ID</span>
+                <span class="list-col-header center"></span>
+                <span class="list-col-header">Title</span>
+                <span class="list-col-header right">Labels</span>
+                <span class="list-col-header center">Assignee</span>
+                <span class="list-col-header right">Due</span>
+              </div>
+
+              <!-- To Do -->
+              <div class="list-group" data-group>
+                <div class="list-group-header" onclick="toggleGroup(this)">
+                  <svg class="list-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  <span class="list-status-icon todo"></span>
+                  <span class="list-group-title">To Do</span>
+                  <span class="list-group-count">3</span>
+                  <button class="list-group-add" title="Add task" onclick="event.stopPropagation()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </div>
+                <div class="list-group-body">
+                  <div class="list-row">
+                    <span class="list-grip" title="Read-only in list view">
+                      <svg viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="8" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="8" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="8" cy="12" r="1.2"/></svg>
+                    </span>
+                    <span class="list-id">AC-14</span>
+                    <span class="list-row-status"><span class="list-status-icon todo"></span></span>
+                    <span class="list-row-title">Design onboarding flow</span>
+                    <span class="list-labels">
+                      <span class="list-label design"><span class="list-label-dot"></span>Design</span>
+                    </span>
+                    <span class="list-assignee"><span class="avatar">JD</span></span>
+                    <span class="list-row-due">Aug 15</span>
+                  </div>
+                  <div class="list-row">
+                    <span class="list-grip"><svg viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="8" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="8" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="8" cy="12" r="1.2"/></svg></span>
+                    <span class="list-id">AC-9</span>
+                    <span class="list-row-status"><span class="list-status-icon todo"></span></span>
+                    <span class="list-row-title">Write API docs</span>
+                    <span class="list-labels">
+                      <span class="list-label feature"><span class="list-label-dot"></span>Docs</span>
+                    </span>
+                    <span class="list-assignee"><span class="list-assignee-empty"></span></span>
+                    <span class="list-row-due overdue">Aug 1</span>
+                  </div>
+                  <div class="list-row">
+                    <span class="list-grip"><svg viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="8" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="8" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="8" cy="12" r="1.2"/></svg></span>
+                    <span class="list-id">AC-21</span>
+                    <span class="list-row-status"><span class="list-status-icon todo"></span></span>
+                    <span class="list-row-title">Research competitors</span>
+                    <span class="list-labels"></span>
+                    <span class="list-assignee"><span class="list-assignee-empty"></span></span>
+                    <span class="list-row-due none">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- In Progress -->
+              <div class="list-group" data-group>
+                <div class="list-group-header" onclick="toggleGroup(this)">
+                  <svg class="list-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  <span class="list-status-icon progress"></span>
+                  <span class="list-group-title">In Progress</span>
+                  <span class="list-group-count">2</span>
+                  <button class="list-group-add" title="Add task" onclick="event.stopPropagation()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </div>
+                <div class="list-group-body">
+                  <div class="list-row">
+                    <span class="list-grip"><svg viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="8" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="8" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="8" cy="12" r="1.2"/></svg></span>
+                    <span class="list-id">AC-32</span>
+                    <span class="list-row-status"><span class="list-status-icon progress"></span></span>
+                    <span class="list-row-title">Implement list view</span>
+                    <span class="list-labels">
+                      <span class="list-label feature"><span class="list-label-dot"></span>Feature</span>
+                    </span>
+                    <span class="list-assignee"><span class="avatar">AK</span></span>
+                    <span class="list-row-due">Aug 8</span>
+                  </div>
+                  <div class="list-row">
+                    <span class="list-grip"><svg viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="8" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="8" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="8" cy="12" r="1.2"/></svg></span>
+                    <span class="list-id">AC-33</span>
+                    <span class="list-row-status"><span class="list-status-icon progress"></span></span>
+                    <span class="list-row-title">Calendar drag-and-drop</span>
+                    <span class="list-labels">
+                      <span class="list-label feature"><span class="list-label-dot"></span>Feature</span>
+                    </span>
+                    <span class="list-assignee"><span class="avatar">MR</span></span>
+                    <span class="list-row-due">Aug 20</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Done -->
+              <div class="list-group" data-group>
+                <div class="list-group-header" onclick="toggleGroup(this)">
+                  <svg class="list-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  <span class="list-status-icon done"></span>
+                  <span class="list-group-title">Done</span>
+                  <span class="list-group-count">1</span>
+                  <button class="list-group-add" title="Add task" onclick="event.stopPropagation()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </div>
+                <div class="list-group-body">
+                  <div class="list-row">
+                    <span class="list-grip"><svg viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="8" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="8" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="8" cy="12" r="1.2"/></svg></span>
+                    <span class="list-id">AC-7</span>
+                    <span class="list-row-status"><span class="list-status-icon done"></span></span>
+                    <span class="list-row-title done">Setup CI pipeline</span>
+                    <span class="list-labels">
+                      <span class="list-label feature"><span class="list-label-dot"></span>Infra</span>
+                    </span>
+                    <span class="list-assignee"><span class="avatar">JD</span></span>
+                    <span class="list-row-due">Jul 28</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ CALENDAR VIEW ═══ -->
+        <div id="view-calendar" class="view-panel">
+          <div class="calendar-layout">
+            <div class="calendar-header">
+              <h2 class="calendar-month">August 2026</h2>
+              <div class="calendar-nav">
+                <button class="icon-btn" aria-label="Previous month">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <button class="icon-btn" aria-label="Today" title="Go to today" style="width:auto;padding:0 10px;font-size:12px;font-weight:500">Today</button>
+                <button class="icon-btn" aria-label="Next month">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="calendar-grid">
+              <div class="calendar-weekdays">
+                <div class="calendar-weekday">Sun</div>
+                <div class="calendar-weekday">Mon</div>
+                <div class="calendar-weekday">Tue</div>
+                <div class="calendar-weekday">Wed</div>
+                <div class="calendar-weekday">Thu</div>
+                <div class="calendar-weekday">Fri</div>
+                <div class="calendar-weekday">Sat</div>
+              </div>
+              <div class="calendar-days" id="calendar-days">
+                <!-- Generated by JS -->
+              </div>
+            </div>
+
+            <div class="tray">
+              <div class="tray-header">
+                <span class="tray-title">Unscheduled</span>
+                <span class="tray-hint">Drag onto a date to schedule · drag back here to clear</span>
+              </div>
+              <div class="tray-body">
+                <span class="tray-card">Research competitors</span>
+                <span class="tray-card">Update changelog</span>
+                <span class="tray-card">Review PR #142</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Multi-card modal -->
+  <div class="modal-backdrop" id="day-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">August 20 — 4 tasks</h3>
+        <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-row"><span class="list-row-title">Calendar drag-and-drop</span></div>
+        <div class="modal-row"><span class="list-row-title">QA regression pass</span></div>
+        <div class="modal-row"><span class="list-row-title">Deploy staging</span></div>
+        <div class="modal-row"><span class="list-row-title">Team standup notes</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── View switcher ────────────────────────────────────────────────
+    const viewBtns = document.querySelectorAll('.view-btn');
+    const viewPanels = document.querySelectorAll('.view-panel');
+
+    viewBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        viewBtns.forEach(b => {
+          b.classList.toggle('active', b === btn);
+          b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+        });
+        viewPanels.forEach(p => {
+          p.classList.toggle('active', p.id === `view-${view}`);
+        });
+      });
+    });
+
+    // ── List group collapse ──────────────────────────────────────────
+    function toggleGroup(header) {
+      header.closest('[data-group]').classList.toggle('collapsed');
+    }
+
+    // ── Calendar grid (August 2026, today = Aug 3) ───────────────────
+    const calendarDays = document.getElementById('calendar-days');
+    const year = 2026, month = 7; // August (0-indexed)
+    const today = 3;
+
+    const cardData = {
+      1: [{ title: 'Write API docs', overdue: true }],
+      8: [{ title: 'Implement list view' }],
+      15: [{ title: 'Design onboarding flow' }],
+      20: [
+        { title: 'Calendar drag-and-drop' },
+        { title: 'QA regression pass' },
+        { title: 'Deploy staging' },
+        { title: 'Team standup notes' },
+      ],
+      25: [{ title: 'Beta launch prep' }],
+    };
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    // Leading spillover from July
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const d = prevMonthDays - i;
+      calendarDays.appendChild(makeCell(d, true, false, false, null));
+    }
+
+    // August days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const isToday = d === today;
+      const cards = cardData[d] || [];
+      const hasOverdue = cards.some(c => c.overdue);
+      calendarDays.appendChild(makeCell(d, false, isToday, hasOverdue, cards));
+    }
+
+    // Trailing spillover into September
+    const totalCells = calendarDays.children.length;
+    const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let d = 1; d <= remaining; d++) {
+      calendarDays.appendChild(makeCell(d, true, false, false, d === 2 ? [{ title: 'Sprint planning' }] : null));
+    }
+
+    function makeCell(day, otherMonth, isToday, overdue, cards) {
+      const cell = document.createElement('div');
+      cell.className = 'calendar-cell';
+      if (otherMonth) cell.classList.add('other-month');
+      if (isToday) cell.classList.add('today');
+      if (overdue) cell.classList.add('overdue-day');
+
+      const dayEl = document.createElement('div');
+      dayEl.className = 'cell-day';
+      if (isToday) {
+        dayEl.innerHTML = `<span class="cell-day-num today-num">${day}</span>`;
+      } else {
+        dayEl.innerHTML = `<span class="cell-day-num">${day}</span>`;
+      }
+      cell.appendChild(dayEl);
+
+      if (cards && cards.length > 0) {
+        const wrap = document.createElement('div');
+        wrap.className = 'cell-cards';
+        const show = cards.slice(0, 2);
+        show.forEach(c => {
+          const chip = document.createElement('div');
+          chip.className = 'cell-card' + (c.done ? ' done' : '');
+          chip.textContent = c.title;
+          chip.draggable = true;
+          wrap.appendChild(chip);
+        });
+        if (cards.length > 2) {
+          const more = document.createElement('div');
+          more.className = 'cell-more';
+          more.textContent = `+${cards.length - 2} more`;
+          wrap.appendChild(more);
+        }
+        cell.appendChild(wrap);
+
+        if (cards.length > 1 || (cards.length === 1 && day === 20)) {
+          cell.addEventListener('click', (e) => {
+            if (e.target.classList.contains('cell-card')) return;
+            if (cards.length > 1) openModal(day, cards.length);
+          });
+        }
+      }
+
+      return cell;
+    }
+
+    // ── Modal ──────────────────────────────────────────────────────
+    function openModal(day, count) {
+      document.getElementById('modal-title').textContent = `August ${day} — ${count} tasks`;
+      document.getElementById('day-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('day-modal').classList.remove('open');
+    }
+
+    document.getElementById('day-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'day-modal') closeModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // ── Conflict inline demo ───────────────────────────────────────
+    function showConflict() {
+      const chip = document.querySelector('.cell-card');
+      if (!chip) return;
+      let el = chip.querySelector('.conflict-inline');
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'conflict-inline';
+        el.textContent = 'Updated elsewhere';
+        chip.appendChild(el);
+      }
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 3000);
+      // Switch to calendar view so it's visible
+      document.querySelector('[data-view="calendar"]').click();
+    }
+  </script>
+</body>
+</html>

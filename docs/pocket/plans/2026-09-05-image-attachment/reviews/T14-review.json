@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T14",
+  "task_name": "Wire self-host deployment, private volume, and upload body size",
+  "cycle": 4,
+  "timestamp": "2026-09-06T15:47:56Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "T14 remains pinned to done_sha fe0c83dd6e1391d15766c9fe7eae13495ece5014; this correction does not move the task's done_sha.",
+      "The prior bleed-only correction 5307b00 remains deployment-neutral and its T14 pass conclusions remain valid.",
+      "Commit 8c81d6d was read in full and changes only deploy/docker-compose.prod.yml: the camel_private_uploads target now uses the same resolved ATTACHMENTS_DIR expression passed to the server.",
+      "Default Compose rendering resolves ATTACHMENTS_DIR and camel_private_uploads to /app/server/private-uploads; the custom render resolves both to /srv/camel-private.",
+      "Both renders keep camel_uploads mounted at /app/client/public/uploads, keep the private mount distinct and outside that public path, and retain the unchanged nginx 35m limits on both API proxy surfaces."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The correction is narrowly scoped to the tracked production Compose file and contains no source, root Compose, ignored GGF Compose, credential, or log.json changes.",
+      "Environment-to-volume target equality is mechanically verified for both the documented default and ATTACHMENTS_DIR override renders.",
+      "The named camel_private_uploads volume is separate from the unchanged camel_uploads public volume, and both resolved private targets are outside client/public/uploads.",
+      "The existing Dockerfile private-directory creation, nginx 35m API limits, public static/cache configuration, and authenticated private-storage boundary remain unchanged from the previously approved T14 result.",
+      "The correction introduces no duplicated logic, oversized file/function, interpolation mismatch, public mount, or refactor-threshold issue; npm run typecheck passes for server and client."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 4,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "8c81d6d"
+}

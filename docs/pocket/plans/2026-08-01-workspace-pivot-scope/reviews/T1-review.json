@@ -1,0 +1,52 @@
+{
+  "task_id": "T1",
+  "task_name": "Add date-fns and shared board-view helpers",
+  "cycle": 1,
+  "timestamp": "2026-08-03T06:08:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "readBoardViewMode(7) returns \"board\" when no preference stored",
+      "readBoardViewMode falls back to \"board\" when localStorage getItem throws",
+      "isDueOverdue true for not-done card with past dueDate",
+      "isDueOverdue false for done card with past dueDate",
+      "buildMonthGrid(Aug 2026) returns 42 Sunday-start cells with spillover inMonth:false",
+      "assigneeInitials(\"Jane Doe\") returns \"JD\"",
+      "12/12 unit tests pass",
+      "Commit 10e6a4bf exists with conventional message"
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "date-fns ^4.4.0 added to client/package.json with root package-lock update",
+      "Per-workspace localStorage via BOARD_VIEW_STORAGE_KEY JSON map keyed by workspace id string",
+      "calendarGrid pins weekStartsOn: 0 (Sunday-start weeks)",
+      "CardView.tsx deduped — imports isCardDone, isDueOverdue, formatDueDate, assigneeInitials from boardViewUtils",
+      "isCardDone uses doneAt !== null only (no column-name Done detection)",
+      "Domain-scoped filenames (boardViewPrefs, boardViewUtils, calendarGrid) — no generic utils.ts",
+      "No server/schema/App.tsx changes",
+      "date-fns named imports are tree-shakeable",
+      "Test count matches plan (12 tests across 3 files)"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "readBoardViewMode returns raw localStorage values without validating against BoardViewMode union; corrupted or manual entries (e.g. \"foo\") pass through at runtime and could break downstream view routing in T2/T3",
+        "location": "client/src/lib/boardViewPrefs.ts:17-20"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 1,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "10e6a4bf54afbd280729d6d651293c899e6313de"
+}

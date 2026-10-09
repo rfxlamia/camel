@@ -1,0 +1,53 @@
+{
+  "task_id": "T4",
+  "task_name": "Relocate my-work feature module",
+  "cycle": 2,
+  "timestamp": "2026-09-20T12:00:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "standard",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Hub-to-leaf deviation (client/src/api.ts:1 imports ./features/my-work/myWork leaf instead of the barrel index): justified and behavior-preserving. The leaf head is type-only (import type from shared/myWorkTypes + types; zero runtime imports, verified), so the imported factory binding is identical; the change breaks the api->barrel->(myWorkNavigation/myWorkDataLoader/workItemMutations)->api cycle that split module identity under vi.mock (intake 2/2 + AppLayout 3/3 healed). Narrowly allowlisted (single HUB_TO_LEAF_ALLOWLIST entry with documented rationale) and regression-tested (allow + deny). Not extra work; answers the packet's open-question risk without logic change.",
+      "Guard-contract changes judged as part of THIS task's diff: (a) HUB_TO_LEAF_ALLOWLIST + enforcement in import-wall-rules.mjs + allow/deny test — narrowly scoped (exact importer+target match via stripExtension), still flags other deep imports, does not violate one-FEATURES or must-not-have rules; (b) order-insensitive fingerprint in line-budget-hunks.mjs — does NOT open the trivial path to logic changes: the isImportRelatedLine gate still requires every changed line to be import-related, and the Cycle H binding-change test proves a binding change ({b}->{c}) is still a touch; reorder-only and reorder+specifier-swap stay trivial, which is the correct specifier-only semantics. No Critical guard-loosening.",
+      "Timing observation referred to stage_2: full-diff scan of 04bea4a..175d72a finds no behavior-changing app-code line (all content deltas are specifier/path-depth retargets, required mock-path retargets, or formatter normalization), so the heavy-run-only MyWorkPage skeleton assertion failure is classified in stage_2 as Minor flake, not a regression."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Pure relocation preserved: single-commit range holds the ~70 git-mv renames; every inspected content delta is a specifier/path-depth retarget, required mock-path retarget, or light formatter normalization",
+      "Public barrels on both sides follow established conventions: client/src/features/my-work/index.ts (extensionless named exports) and server/src/modules/my-work/index.ts (.js re-exports consumed by routes.ts)",
+      "One FEATURES name only: client/src/features/chat absent, no chat/board/agent files in range (name filter returns NONE), MyWorkPage.tsx stays under client/src/pages/ with specifier-only edits, no leftover routes/my-work stubs",
+      "Test file count not reduced: 281 test files at both 04bea4a and 175d72a; 2 new guard regression tests (hub-to-leaf allow/deny, Cycle H reorder trio); commit message matches `refactor(my-work): relocate my-work into feature modules` with `refs #131` (not closes)",
+      "Guard additions are well-built: single-entry allowlist with rationale comment, exact-match enforcement with extension normalization, and order-insensitive fingerprint covered by passing reorder-only / reorder+specifier-swap / binding-change-still-touch tests"
+    ],
+    "issues": [
+      {
+        "severity": "Minor",
+        "description": "CARRIED FORWARD from cycle 1 (still present in 04bea4a..175d72a, verified HEAD lines 8-11): cosmetic intra-brace import order swap (type specifier before value specifier: `type MyWorkObservability` / `myWorkObservability`) while retargeting from ../core to ../../core in a 309-line fat file. Zero behavioral effect (full router file otherwise identical), but the packet's Refactor-while-green rule requires fat files to stay strictly specifier/path-only with biome import-order reverted. Leave as-is.",
+        "location": "server/src/modules/my-work/my-work-router.ts:8-11"
+      },
+      {
+        "severity": "Minor",
+        "description": "NEW biome import-order residue of the same class in a fat file: client/src/api.ts hunk combines the required leaf retarget with block reordering (ticketIntakeBus vs taskCreateContracts swap; FocusSession/FocusSessionGetResponse/User/WorkItem/WorkItemSource regroup). Zero behavioral effect (import-only lines in a 1000+ line hub), formatter-accepted, but the packet's fat-file rule requires import-order reverts on files over ~300 lines. Leave as-is.",
+        "location": "client/src/api.ts:1-10"
+      },
+      {
+        "severity": "Minor",
+        "description": "Load-sensitive timing flake aggravated by module-graph weight, not a T4 regression: `MyWorkPage.test.tsx > renders authorized personal work` (my-work-loading expected null; SKELETON_SHOW_DELAY_MS 200ms + MIN_VISIBLE 300ms) fails only in the heavy combined vitest invocation (90/91) but passes standalone (17/17), paired with integration (33/33), and in 4-file subset (27/27); the heavier triple on pristine base passes 108/108. No behavior-changing line in the diff explains it (leaf head is type-only; useDelayedLoading is a pure rename; router/logic identical), and the plausible mechanism is worker-load timing with the barrel subtree + fuse.js now in the api graph. No fix required; re-check if it ever fails standalone.",
+        "location": "client/src/pages/MyWorkPage.test.tsx"
+      }
+    ],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "175d72a"
+}

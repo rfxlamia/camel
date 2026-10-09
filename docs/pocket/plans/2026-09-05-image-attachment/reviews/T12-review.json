@@ -1,0 +1,39 @@
+{
+  "task_id": "T12",
+  "task_name": "Stage images and submit create-card requests from AddCard",
+  "cycle": 2,
+  "timestamp": "2026-09-06T16:45:00Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle 1 Important 2 verified in the 285af47..9813178 range: countStagedSlots is entries.length (addCardImageStaging.ts:45-48), stageFiles rejects inside the functional updater before prepareImageAttachment (useAddCardImageStaging.ts:59-72), and AddCard.test.tsx:259-288 holds three Preparing chips, shows Max 3 images per card, and keeps prepareImageAttachment at 3 calls for a fourth file while prepares are still pending.",
+      "Cycle 1 Minor verified resolved: the success test asserts onAddCard received attachments containing only a valid prepared pair (thumbnail + original File) (AddCard.test.tsx:371-380). addCardImageStaging.test.ts:28-58 also maps only valid and network-error entries.",
+      "Retry after server commit without an idempotency key can still duplicate a card — accepted v1 residual risk, not a defect. Spec Story 2 and QUALITY BAR must-not-have forbid idempotency-key infrastructure; Retry re-invokes submit/onAddCard with the same staged payload (useAddCardSubmit.ts:64-86; AddCard.tsx:117-119).",
+      "Cycle 1 Important 1 (file ~300 / function ~50 left unsplit): AddCard.tsx 451→122; requested extract of types, slot counting, payload mapping, and chips is present. Remaining AddCard() is 99 lines of hook composition plus two render branches (AddCard.tsx:24-122). Nested logic is at or under ~50 (stageFiles 53 lines at useAddCardImageStaging.ts:53-105; submit 36 lines). Extracted files are all under ~300. Per code-quality-review.md the bar is file >~300 or function >~50 left unsplit; two-stage-review.md uses the same thresholds. The 320-line AddCard blob was split, so the heuristic is cleared. Treating the 99-line orchestrator as a fresh Important would ignore 'left unsplit' after the mandated extract.",
+      "Helper modules (AddCardForm, AddCardImageChips, addCardImageStaging, useAddCardImageStaging, useAddCardSubmit) are the cycle-1 mandated extract, not extra product scope. Diff stays off tracker writes, second staging endpoints, idempotency keys, and T10/T13 UI."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "AddCard.tsx is 122 lines (was 451). Staging types, slot counting, payload mapping, chips, form, and submit lifecycle live in sibling helpers; no file in the T12 diff crosses ~300 lines (AddCardForm.tsx 113, useAddCardSubmit.ts 120, useAddCardImageStaging.ts 118, addCardImageStaging.ts 103, AddCardImageChips.tsx 70).",
+      "Hard stage-time cap includes in-flight loading slots: countStagedSlots uses entries.length (addCardImageStaging.ts:45-48); overlapping fourth selection is refused with Max 3 images per card and prepareImageAttachment is not called for the refused file (useAddCardImageStaging.ts:59-72; AddCard.test.tsx:259-288).",
+      "Submit loading replaces/hides the form for the full pending window; staged state and close run only after onAddCard resolves (useAddCardSubmit.ts:64-86; AddCardForm.tsx:50-60; AddCard.test.tsx:353-390).",
+      "Invalid T3 results stay as error chips, block onAddCard, keep the title editable, and are omitted from BoardCreatePayload.attachments (useAddCardSubmit.ts:65; addCardImageStaging.ts:50-61; AddCard.test.tsx:310-351).",
+      "Network failure restores the editable form, keeps the title, maps an error onto chips, and Retry re-invokes the create callback (useAddCardSubmit.ts:77-84; AddCard.test.tsx:392-422)."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1
+  },
+  "reviewed_sha": "a9cdd4bb074692f51ec213198534ddb1d93225f9"
+}

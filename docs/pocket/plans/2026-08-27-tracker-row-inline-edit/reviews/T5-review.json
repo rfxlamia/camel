@@ -1,0 +1,39 @@
+{
+  "task_id": "T5",
+  "task_name": "Project/phase inline edit",
+  "cycle": 1,
+  "timestamp": "2026-08-29T03:22:09Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "All 10 DELIVERABLE GWTs are present and match Story 2: Set project placeholder (TrackerPage.test.tsx:1182-1193); grouped-by-project still shows the trigger via the existing regroup test (TrackerPage.test.tsx:1057-1061); Set phase (TrackerPage.test.tsx:1195-1211); phase PATCH combined {projectId, phaseId, version} (TrackerPage.test.tsx:1214-1255); phase no-op (TrackerPage.test.tsx:1257-1275); project PATCH {projectId, phaseId:null, version} once (TrackerPage.test.tsx:1277-1317); project no-op leaves phase Ph1 (TrackerPage.test.tsx:1319-1340); No matches + zero role=option (TrackerPage.test.tsx:1401-1420); auto-uncollapse of collapsed P2 (TrackerPage.test.tsx:1422-1469); live-guard race P2-then-original-P1 fires second PATCH with version 3 (TrackerPage.test.tsx:1342-1399).",
+      "Combined PATCH contract: changeProject sends one {projectId, phaseId:null, version:c.version} (TrackerPage.tsx:404-411); changePhase sends {projectId:current.projectId??null, phaseId, version:current.version} (TrackerPage.tsx:428-435). Tests lock call count 1.",
+      "Live no-op contract: changeProject compares current.projectId inside the enqueued closure, not before enqueue (TrackerPage.tsx:390-393). Race test keeps the second pick queued until the first resolves, then asserts {projectId:P1, phaseId:null, version:3} — a stale pre-enqueue capture of P1 would have skipped that call.",
+      "TDD cycle classification: packet commit is a single Step 27 SHA (96ff27c), same as T4. Cycles 1/3/4/5 (Set project, Set phase, phase PATCH, phase no-op in the 12a red suite) and cycle 10 (live-guard race) have dedicated tests that encode the new behavior. Cycles 6–9 marked '—' by the implementer: project no-op (packet Step 17) and No matches (packet Step 21) are labeled regression after handlers existed — not a TDD miss. Project PATCH (packet Step 13 Expected RED) and auto-uncollapse (packet Step 22 Expected RED) exist in the same commit as implementation; the packet has no intermediate commit, so those are not treated as missing tests-before-implementation."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "TrackerRow Props replaced projectLabel with optional projects/onProjectChange/onPhaseChange; chips render only when projects !== undefined, so TrackerPhaseSection (unmodified) still compiles with no chips (TrackerRow.tsx:31-33, 138-187).",
+      "TrackerSection dropped showProjectChip/projectLabel suppression and passes projects through unconditionally (TrackerSection.tsx:25-27, 102-108). TrackerPage deleted the projectNames suppression Map and supplies projects plus both handlers (TrackerPage.tsx:630-634).",
+      "applyItemPatch is the shared helper: build(current) runs after an itemsRef read inside the helper, returns null for live no-op, and rollback(latest) restores only the changed fields (TrackerPage.tsx:269-311, 351-355, 383, 413-417, 437-440). applyItemPatch is 43 lines; changeDate/changeStatus/changeProject/changePhase are 38/26/33/23 — under the ~50-line handler heuristic this task put in scope.",
+      "changePhase reads current.phaseId and current.projectId inside the queued applyItemPatch build (TrackerPage.tsx:424-445). changeProject's no-op reads current.projectId inside enqueue (TrackerPage.tsx:390-393).",
+      "projectGroupKey/priorityGroupKey are the only constructors; group builders and changeProject uncollapse use them; unit tests cover numeric and null→project:none/priority:none (trackerUtils.ts:151-157, 194, 210, 224, 239; TrackerPage.tsx:397; trackerUtils.test.ts:192-210).",
+      "Empty phase list reuses TrackerPropertyPicker 'No matches' (no second empty-state UI). Diff is exactly the six scoped files; TrackerPropertyPicker, TrackerPhaseSection, and kebab are untouched."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2
+  },
+  "reviewed_sha": "96ff27cac0e5d2a86ad825680a7d8799dd8c6ae2"
+}

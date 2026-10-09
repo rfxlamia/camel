@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T8",
+  "task_name": "Add client Mark done action and optimistic mutation behavior",
+  "cycle": 6,
+  "timestamp": "2026-09-13T10:51:02Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "phase-correction",
+  "correction_sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+  "correction_finding": "P3-002",
+  "audited_head": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+  "parent_sha": "7043346afa8728823f12c1586814ce57c1a942ff",
+  "affected_tasks": ["T11", "T8", "T9"],
+  "bleed": [],
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "P3-002 is resolved at the My Work Mark done boundary: server/src/routes/my-work-router.ts:231-236 emits code=wip_limit_reached for Board WIP rejections, while client/src/components/my-work/myWorkDoneActionState.ts:57-63 now classifies only coded version_conflict/conflict 409 responses as version conflicts. Uncoded WIP 409 responses therefore render their WIP message instead of the stale-update warning.",
+      "Board and Tracker unmappable responses are source-correct: server/src/routes/my-work-router.ts:222-229 retains current board columns for Board and emits current Tracker statuses for Tracker. The real authorization integration regression asserts both exact messages, status_column_unmappable, unchanged source state, and no activity in server/src/routes/my-work.integration.authorization.ts:16-50.",
+      "Rendered non-conflict feedback remains accurate: the real MyWorkDoneAction component tests exercise both uncoded and coded WIP 409 responses and assert the WIP message, rollback, refresh, and re-enabled action in client/src/components/my-work/MyWorkDoneAction.test.tsx:114-159. Existing transient-error coverage exercises the same server-message rendering branch used by unmappable responses.",
+      "Version-conflict handling and recovery remain intact: the correction changes only the conflict predicate; the existing coded version-conflict rollback/refresh, optimistic race precedence, source/version routing, and no-write assertions remain in the audited client/server suites and are unchanged by the correction.",
+      "The correction contains exactly the five mechanically verified files, has no log.json, and leaves T8's original done_sha pinned; reviewed_sha is the newest owned correction anchor becea2ba459aa2df473c4f162573b319c9f2b2ca."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The contract change is focused: one narrow client predicate, explicit source-aware server response vocabulary, and targeted real-DB/component regressions; no duplicate mutation or fallback implementation was introduced.",
+      "The server keeps existing response ordering and transaction behavior: conflict, unmappable, and WIP results return before detail/event publication, so source writes, activity, rollback/refresh, and race precedence are unaffected.",
+      "The tests follow existing My Work integration and component patterns. Server acceptance passed 10/10, the client Mark done suites passed 17/17, and independent server Mark done unit tests passed 14/14.",
+      "Independent mechanical checks passed: mutation-routing guard, server/client typecheck, root Biome lint, and git diff --check. The commit subject is fix(my-work): align mark done error contracts and its scope excludes log/review state from the correction commit."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "current_cycle": 6,
+    "max_cycles": 2,
+    "cycles_remaining": 0
+  },
+  "reviewed_sha": "becea2ba459aa2df473c4f162573b319c9f2b2ca",
+  "recovery_reason": "user_triggered_post_block_2"
+}
