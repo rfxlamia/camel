@@ -1,6 +1,9 @@
 import type { Router } from "express";
+import { z } from "zod";
 import { requireAuth } from "../../auth.js";
 import { db } from "../../db/kysely.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { legacyIntegerParam } from "../../validators/schemas.js";
 import { buildArtifactDownload } from "./artifact-db.js";
 import {
 	getToolTrace,
@@ -25,12 +28,12 @@ export function registerReadRoutes(
 		"/workspaces/:workspaceId/agent/boards",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			if (!Number.isInteger(workspaceId)) {
-				return res
-					.status(400)
-					.json({ error: "workspaceId must be an integer" });
-			}
+			const ws = parseWith(
+				legacyIntegerParam("workspaceId must be an integer"),
+				req.params.workspaceId,
+			);
+			if (!ws.ok) return sendValidationError(res, ws.body);
+			const workspaceId = ws.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -44,11 +47,15 @@ export function registerReadRoutes(
 		"/workspaces/:workspaceId/agent/boards/:id",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.id);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseWith(
+				z.object({
+					workspaceId: legacyIntegerParam("Invalid params"),
+					boardId: legacyIntegerParam("Invalid params"),
+				}),
+				{ workspaceId: req.params.workspaceId, boardId: req.params.id },
+			);
+			if (!params.ok) return sendValidationError(res, params.body);
+			const { workspaceId, boardId } = params.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -79,15 +86,21 @@ export function registerReadRoutes(
 		"/workspaces/:workspaceId/agent/boards/:boardId/outputs/:columnSlug",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			const columnSlug = req.params.columnSlug;
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
-			if (!isValidColumnSlug(columnSlug)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseWith(
+				z.object({
+					workspaceId: legacyIntegerParam("Invalid params"),
+					boardId: legacyIntegerParam("Invalid params"),
+				}),
+				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			);
+			if (!params.ok) return sendValidationError(res, params.body);
+			const { workspaceId, boardId } = params.data;
+			const slug = parseWith(
+				z.custom<string>(isValidColumnSlug, { error: "Invalid params" }),
+				req.params.columnSlug,
+			);
+			if (!slug.ok) return sendValidationError(res, slug.body);
+			const columnSlug = slug.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -109,11 +122,15 @@ export function registerReadRoutes(
 		"/workspaces/:workspaceId/agent/boards/:boardId/artifact",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseWith(
+				z.object({
+					workspaceId: legacyIntegerParam("Invalid params"),
+					boardId: legacyIntegerParam("Invalid params"),
+				}),
+				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			);
+			if (!params.ok) return sendValidationError(res, params.body);
+			const { workspaceId, boardId } = params.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -131,11 +148,15 @@ export function registerReadRoutes(
 		"/workspaces/:workspaceId/agent/boards/:boardId/artifact/download",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseWith(
+				z.object({
+					workspaceId: legacyIntegerParam("Invalid params"),
+					boardId: legacyIntegerParam("Invalid params"),
+				}),
+				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			);
+			if (!params.ok) return sendValidationError(res, params.body);
+			const { workspaceId, boardId } = params.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 

@@ -19,9 +19,12 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { requireAuth } from "../../auth.js";
 import { logger } from "../../lib/logger.js";
 import { llmTimeout } from "../../middleware/timeout.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { legacyIntegerParam } from "../../validators/schemas.js";
 import { assertWorkspaceMember } from "./membership.js";
 import { resolveMessageAction } from "./message-action.js";
 import { registerReadRoutes } from "./read-routes.js";
@@ -63,17 +66,24 @@ export function createAgentRouter(
 		"/workspaces/:workspaceId/agent/boards",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			if (!Number.isInteger(workspaceId)) {
-				return res
-					.status(400)
-					.json({ error: "workspaceId must be an integer" });
-			}
+			const ws = parseWith(
+				legacyIntegerParam("workspaceId must be an integer"),
+				req.params.workspaceId,
+			);
+			if (!ws.ok) return sendValidationError(res, ws.body);
+			const workspaceId = ws.data;
 
-			const { intent } = req.body ?? {};
-			if (typeof intent !== "string" || !intent.trim()) {
-				return res.status(400).json({ error: "intent is required" });
-			}
+			const parsedIntent = parseWith(
+				z.custom<string>(
+					(value) => typeof value === "string" && !!value.trim(),
+					{
+						error: "intent is required",
+					},
+				),
+				(req.body ?? {}).intent,
+			);
+			if (!parsedIntent.ok) return sendValidationError(res, parsedIntent.body);
+			const intent = parsedIntent.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -97,17 +107,41 @@ export function createAgentRouter(
 		"/workspaces/:workspaceId/agent/boards/:boardId/message",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseWith(
+				z.object({
+					workspaceId: legacyIntegerParam("Invalid params"),
+					boardId: legacyIntegerParam("Invalid params"),
+				}),
+				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			);
+			if (!params.ok) return sendValidationError(res, params.body);
+			const { workspaceId, boardId } = params.data;
 
-			const action = resolveMessageAction(req.body);
-
-			if (action.kind === "invalid") {
-				return res.status(400).json({ error: "message or action is required" });
-			}
+			const parsedAction = parseWith(
+				z
+					.unknown()
+					.transform(resolveMessageAction)
+					.pipe(
+						z.custom<
+							Exclude<
+								ReturnType<typeof resolveMessageAction>,
+								{ kind: "invalid" }
+							>
+						>(
+							(action) =>
+								typeof action === "object" &&
+								action !== null &&
+								"kind" in action &&
+								action.kind !== "invalid",
+							{
+								error: "message or action is required",
+							},
+						),
+					),
+				req.body,
+			);
+			if (!parsedAction.ok) return sendValidationError(res, parsedAction.body);
+			const action = parsedAction.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -143,11 +177,15 @@ export function createAgentRouter(
 		"/workspaces/:workspaceId/agent/boards/:boardId/approve",
 		requireAuth,
 		async (req, res) => {
-			const workspaceId = Number(req.params.workspaceId);
-			const boardId = Number(req.params.boardId);
-			if (!Number.isInteger(workspaceId) || !Number.isInteger(boardId)) {
-				return res.status(400).json({ error: "Invalid params" });
-			}
+			const params = parseWith(
+				z.object({
+					workspaceId: legacyIntegerParam("Invalid params"),
+					boardId: legacyIntegerParam("Invalid params"),
+				}),
+				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			);
+			if (!params.ok) return sendValidationError(res, params.body);
+			const { workspaceId, boardId } = params.data;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
