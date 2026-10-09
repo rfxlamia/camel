@@ -34,6 +34,16 @@ export function positiveIdParam(message: string) {
 		});
 }
 
+/**
+ * Exists only to keep #197 behavior-preserving; replaced by workspaceIdParam in #198.
+ */
+export function legacyIntegerParam(message: string) {
+	return z
+		.unknown()
+		.transform((value) => Number(value))
+		.refine(Number.isInteger, { error: message });
+}
+
 /** Non-empty string after trim; returns the trimmed value. */
 export function trimmedRequired(message: string) {
 	return z

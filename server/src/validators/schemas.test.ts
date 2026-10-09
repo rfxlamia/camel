@@ -4,6 +4,7 @@ import {
 	finiteNumber,
 	intField,
 	intOrNullField,
+	legacyIntegerParam,
 	optionalVersion,
 	parsePositiveIntegerParam,
 	positiveIdParam,
@@ -11,6 +12,39 @@ import {
 	trimmedRequired,
 	workspaceIdParam,
 } from "./schemas.js";
+
+describe("legacyIntegerParam", () => {
+	const samples: unknown[] = [
+		"5",
+		"0",
+		"-1",
+		"1e2",
+		"",
+		" 1",
+		// Pin legacy leniency reachable only through query or JSON-sourced values.
+		null,
+		[],
+		true,
+		["1"],
+		"abc",
+		"1.5",
+		undefined,
+		{},
+	];
+
+	it.each(
+		samples.map((raw) => ({ raw })),
+	)("matches Number.isInteger(Number($raw))", ({ raw }) => {
+		const value = Number(raw);
+		const result = parseWith(legacyIntegerParam("m"), raw);
+		expect(result.ok).toBe(Number.isInteger(value));
+		expect(result).toEqual(
+			Number.isInteger(value)
+				? { ok: true, data: value }
+				: { ok: false, body: { error: "m" } },
+		);
+	});
+});
 
 describe("workspaceIdParam", () => {
 	it("coerces positive integer strings", () => {
