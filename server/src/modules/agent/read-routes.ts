@@ -11,7 +11,10 @@ import {
 	selectConversationHistory,
 } from "./board-db.js";
 import { assertWorkspaceMember } from "./membership.js";
+import { parseAgentBoardParams } from "./route-validation.js";
 import type { createAgentBoardService } from "./service.js";
+
+type AgentService = ReturnType<typeof createAgentBoardService>;
 
 const COLUMN_SLUG_RE = /^[\w-]{1,100}$/;
 
@@ -23,6 +26,14 @@ export function registerReadRoutes(
 	router: Router,
 	service: ReturnType<typeof createAgentBoardService>,
 ): void {
+	registerBoardList(router, service);
+	registerBoardDetail(router, service);
+	registerCardOutput(router, service);
+	registerArtifact(router, service);
+	registerArtifactDownload(router, service);
+}
+
+function registerBoardList(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards",
@@ -41,21 +52,21 @@ export function registerReadRoutes(
 			res.json(boards);
 		},
 	);
+}
 
+function registerBoardDetail(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:id ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:id",
 		requireAuth,
 		async (req, res) => {
-			const params = parseWith(
-				z.object({
-					workspaceId: legacyIntegerParam("Invalid params"),
-					boardId: legacyIntegerParam("Invalid params"),
-				}),
-				{ workspaceId: req.params.workspaceId, boardId: req.params.id },
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.id,
+				res,
 			);
-			if (!params.ok) return sendValidationError(res, params.body);
-			const { workspaceId, boardId } = params.data;
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -80,21 +91,21 @@ export function registerReadRoutes(
 			res.json({ ...result, columns, toolTrace, conversations });
 		},
 	);
+}
 
+function registerCardOutput(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/outputs/:columnSlug ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:boardId/outputs/:columnSlug",
 		requireAuth,
 		async (req, res) => {
-			const params = parseWith(
-				z.object({
-					workspaceId: legacyIntegerParam("Invalid params"),
-					boardId: legacyIntegerParam("Invalid params"),
-				}),
-				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
 			);
-			if (!params.ok) return sendValidationError(res, params.body);
-			const { workspaceId, boardId } = params.data;
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 			const slug = parseWith(
 				z.custom<string>(isValidColumnSlug, { error: "Invalid params" }),
 				req.params.columnSlug,
@@ -116,21 +127,21 @@ export function registerReadRoutes(
 			res.json(result);
 		},
 	);
+}
 
+function registerArtifact(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/artifact ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:boardId/artifact",
 		requireAuth,
 		async (req, res) => {
-			const params = parseWith(
-				z.object({
-					workspaceId: legacyIntegerParam("Invalid params"),
-					boardId: legacyIntegerParam("Invalid params"),
-				}),
-				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
 			);
-			if (!params.ok) return sendValidationError(res, params.body);
-			const { workspaceId, boardId } = params.data;
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -142,21 +153,21 @@ export function registerReadRoutes(
 			res.json(result);
 		},
 	);
+}
 
+function registerArtifactDownload(router: Router, service: AgentService): void {
 	// ---- GET /workspaces/:workspaceId/agent/boards/:boardId/artifact/download ----
 	router.get(
 		"/workspaces/:workspaceId/agent/boards/:boardId/artifact/download",
 		requireAuth,
 		async (req, res) => {
-			const params = parseWith(
-				z.object({
-					workspaceId: legacyIntegerParam("Invalid params"),
-					boardId: legacyIntegerParam("Invalid params"),
-				}),
-				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
 			);
-			if (!params.ok) return sendValidationError(res, params.body);
-			const { workspaceId, boardId } = params.data;
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 

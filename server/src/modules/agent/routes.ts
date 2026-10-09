@@ -26,8 +26,11 @@ import { llmTimeout } from "../../middleware/timeout.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { legacyIntegerParam } from "../../validators/schemas.js";
 import { assertWorkspaceMember } from "./membership.js";
-import { resolveMessageAction } from "./message-action.js";
 import { registerReadRoutes } from "./read-routes.js";
+import {
+	parseAgentBoardParams,
+	parseAgentMessageAction,
+} from "./route-validation.js";
 import {
 	type AgentBoardServiceDeps,
 	createAgentBoardService,
@@ -48,6 +51,8 @@ export {
 export { type MessageAction, resolveMessageAction } from "./message-action.js";
 export { defaultToolRegistry } from "./service-deps.js";
 
+type AgentService = ReturnType<typeof createAgentBoardService>;
+
 // ---------------------------------------------------------------------------
 // Router factory
 // ---------------------------------------------------------------------------
@@ -61,6 +66,14 @@ export function createAgentRouter(
 	// 2-minute socket timeout for agent routes (LLM calls can be slow)
 	router.use(llmTimeout(120000));
 
+	registerCreateBoard(router, service);
+	registerMessage(router, service);
+	registerApprove(router, service);
+	registerReadRoutes(router, service);
+	return router;
+}
+
+function registerCreateBoard(router: Router, service: AgentService): void {
 	// ---- POST /workspaces/:workspaceId/agent/boards ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards",
@@ -101,45 +114,23 @@ export function createAgentRouter(
 			res.status(201).json(result);
 		},
 	);
+}
 
+function registerMessage(router: Router, service: AgentService): void {
 	// ---- POST /workspaces/:workspaceId/agent/boards/:boardId/message ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards/:boardId/message",
 		requireAuth,
 		async (req, res) => {
-			const params = parseWith(
-				z.object({
-					workspaceId: legacyIntegerParam("Invalid params"),
-					boardId: legacyIntegerParam("Invalid params"),
-				}),
-				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
 			);
-			if (!params.ok) return sendValidationError(res, params.body);
-			const { workspaceId, boardId } = params.data;
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
-			const parsedAction = parseWith(
-				z
-					.unknown()
-					.transform(resolveMessageAction)
-					.pipe(
-						z.custom<
-							Exclude<
-								ReturnType<typeof resolveMessageAction>,
-								{ kind: "invalid" }
-							>
-						>(
-							(action) =>
-								typeof action === "object" &&
-								action !== null &&
-								"kind" in action &&
-								action.kind !== "invalid",
-							{
-								error: "message or action is required",
-							},
-						),
-					),
-				req.body,
-			);
+			const parsedAction = parseAgentMessageAction(req.body);
 			if (!parsedAction.ok) return sendValidationError(res, parsedAction.body);
 			const action = parsedAction.data;
 
@@ -171,21 +162,21 @@ export function createAgentRouter(
 			res.json(result);
 		},
 	);
+}
 
+function registerApprove(router: Router, service: AgentService): void {
 	// ---- POST /workspaces/:workspaceId/agent/boards/:boardId/approve ----
 	router.post(
 		"/workspaces/:workspaceId/agent/boards/:boardId/approve",
 		requireAuth,
 		async (req, res) => {
-			const params = parseWith(
-				z.object({
-					workspaceId: legacyIntegerParam("Invalid params"),
-					boardId: legacyIntegerParam("Invalid params"),
-				}),
-				{ workspaceId: req.params.workspaceId, boardId: req.params.boardId },
+			const params = parseAgentBoardParams(
+				req.params.workspaceId,
+				req.params.boardId,
+				res,
 			);
-			if (!params.ok) return sendValidationError(res, params.body);
-			const { workspaceId, boardId } = params.data;
+			if (!params) return;
+			const { workspaceId, boardId } = params;
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
@@ -211,8 +202,4 @@ export function createAgentRouter(
 			res.json({ ok: true });
 		},
 	);
-
-	registerReadRoutes(router, service);
-
-	return router;
 }
