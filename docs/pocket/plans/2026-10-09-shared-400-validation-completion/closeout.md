@@ -71,3 +71,60 @@ This journal records completed phases, review evidence, recorded obstacles and d
 ### Next
 
 Phase 2 — auth, realtime SSE, notifications and activity migration — remains `WAITING`; its Phase 1 prerequisite is now complete.
+
+## Phase 2 of 5 — Auth, SSE, notifications, and activity 400 migration
+<!-- pocket-closeout:phase-2 -->
+
+**Status:** Complete — `REVIEW` → `DONE`
+**Closed:** 2026-10-09T19:11:04Z
+
+### What was completed
+
+- **T5 — Migrate auth routes (router.ts, oauth.ts):** completed (`f30d6c3`). Register and oauth 400s now go through shared validation, keeping the router ASCII hyphen and the oauth en dash distinct.
+- **T6 — Migrate realtime SSE workspace-id 400 (sse.ts):** completed (`0f69bec`). The integer check stays before SSE headers and before the shutdown 503.
+- **T7 — Migrate notifications and activity 400s:** completed (`d89f2b6`). Title and card-id 400s use the shared helpers; the notification emit still uses the existing `title.trim()` expression.
+
+### Review and verification
+
+- All three current task verdicts are `REVIEW_PASS`; each reviewed SHA exactly matches its DONE SHA.
+- Phase-level review: `PHASE_PASS_CLEAN` (source: `reviews/phase-notes-phase-2.json`).
+- Phase corrections: None recorded.
+- No Minor issues recorded on T5, T6, or T7.
+- T5 worktree commands: PASS. Characterization 19 passed; auth suite 39 passed / 15 skipped without `RUN_INTEGRATION`; server typecheck and `make check` passed. The implementer also reported `RUN_INTEGRATION=1` on three DB suites (15 passed); that extra command was not re-run by the coordinator.
+- T6 worktree commands: PASS. SSE validation 6 passed; realtime 23 passed; notifications SSE 3 passed / 1 skipped; server typecheck and `make check` passed.
+- T7 worktree commands: PASS. Validation 8 passed; notifications and activity 14 passed / 27 skipped; server typecheck and `make check` passed.
+- Root `npm run test` on the merged tree: TIMEOUT after 420s. Not a pass. The server suite had already finished: 1312 passed / 390 skipped.
+- `npm run test --workspace=client`, run separately: PASS. 1128 passed.
+- `npm run test:feature-modules`, run separately: PASS. 156 passed.
+- `npm run typecheck`: PASS. Server and client `tsc --noEmit` exit 0.
+- `make check`: PASS. Lint 924 files, mutation routing, event-write routing, and the feature-module guard passed. Key-collision did not run because `DATABASE_URL` was unset in the shell.
+- `git diff --check 63510672901aa9808d7ea77bd939b2eeaa6c99fd..HEAD`: PASS. Exit 0.
+
+### Carried-forward review observations
+
+- No Minor issues or outstanding findings recorded.
+- T5 reviewer strength: Both router username checks are one schema; oauth reuses it with the en-dash message. Schemas wrap the existing validators and do not reimplement length, regex, or trim.
+- T5 reviewer strength: Register order stays username, then password, then displayName. `req.body ?? {}` is kept. Bodies are `{ error }` only.
+- T6 reviewer strength: The 400 returns before the shutdown 503, `writeHead`, SSE headers, and client registration. `legacyIntegerParam` is used; `"1e2"` and `"0"` are not validation 400s.
+- T7 reviewer strength: `trimmedRequired` is used only as ok/not-ok. The emit still uses `title.trim()`. Activity uses `legacyIntegerParam`, and `"1e2"` is not a validation 400.
+
+### Obstacles and resolution
+
+- T5 and T7 implementers aborted after green checks and before commit. Each was resumed on its existing worktree and committed only in-scope files. Source: phase notes; T5 pre-merge HEAD `3fe9acc`; T7 pre-merge HEAD `e227ec6`.
+- The T5 auditor process aborted after writing a complete `REVIEW_PASS` artifact. That artifact was kept and later repinned to merge SHA `f30d6c3`. No second auditor was dispatched. Source: `reviews/T5-review.json`.
+- Worktrees had no `server/.env`, so existing suites exited on config import. A gitignored copy of the parent env file was placed in each worktree and was not committed. Source: T5 and T7 implementer reports.
+
+### Decisions
+
+- User, at development time: execute Phase 2 only. Closeout and Phase 3 were not authorized then. Source: `reviews/phase-notes-phase-2.json`.
+- User, at closeout: close Phase 2. Source: explicit `pocket-closing` invocation for `execution-plan/phase-2.md`.
+- Implementation: run T5, T6, and T7 as a parallel group from `6351067`. Source: execution index, source-plan Group B, and advisor guidance recorded in the phase notes.
+- Implementation: keep the notification emit as `title.trim()` and use `trimmedRequired` only as the pass/fail gate. Source: T7 task file and `reviews/T7-review.json`.
+
+### Suggestions
+
+- No follow-up suggestion from the recorded review observations.
+
+### Next
+
+Phase 3 — inline-400 AST detection (`scanSource`), the guard CLI, and wiring — remains `WAITING`. Its Phase 2 prerequisite is now complete. This closeout does not start Phase 3.
