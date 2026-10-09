@@ -3,6 +3,8 @@ import { sql } from "kysely";
 import { db } from "../../db/kysely.js";
 import { domainBus, EVENTS } from "../../events.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { trimmedRequired } from "../../validators/schemas.js";
 import { registerPush } from "./service.js";
 import {
 	pushNotificationToUser,
@@ -113,9 +115,8 @@ notificationsRouter.post("/system-alert", async (req, res) => {
 		return res.status(403).json({ error: "Admin or owner required" });
 	}
 	const { title, body } = req.body ?? {};
-	if (typeof title !== "string" || !title.trim()) {
-		return res.status(400).json({ error: "title is required" });
-	}
+	const parsedTitle = parseWith(trimmedRequired("title is required"), title);
+	if (!parsedTitle.ok) return sendValidationError(res, parsedTitle.body);
 	domainBus.emit(EVENTS.SYSTEM_ALERT, {
 		type: EVENTS.SYSTEM_ALERT,
 		workspaceId,
