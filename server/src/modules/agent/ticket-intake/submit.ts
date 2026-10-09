@@ -154,6 +154,21 @@ export async function runSubmitInBackground(
 	}
 }
 
+export function validateTicketWorkspace(
+	req: Request,
+	res: Response,
+): number | null {
+	const parsedWorkspaceId = parseWith(
+		legacyIntegerParam("workspaceId must be an integer"),
+		req.params.workspaceId,
+	);
+	if (!parsedWorkspaceId.ok) {
+		sendValidationError(res, parsedWorkspaceId.body);
+		return null;
+	}
+	return parsedWorkspaceId.data;
+}
+
 export async function handleSubmit(
 	req: Request,
 	res: Response,
@@ -164,15 +179,8 @@ export async function handleSubmit(
 		return;
 	}
 
-	const parsedWorkspaceId = parseWith(
-		legacyIntegerParam("workspaceId must be an integer"),
-		req.params.workspaceId,
-	);
-	if (!parsedWorkspaceId.ok) {
-		sendValidationError(res, parsedWorkspaceId.body);
-		return;
-	}
-	const workspaceId = parsedWorkspaceId.data;
+	const workspaceId = validateTicketWorkspace(req, res);
+	if (workspaceId === null) return;
 
 	const body = parseSubmitBody(req.body);
 	if (!body) {
