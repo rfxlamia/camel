@@ -7,6 +7,8 @@ import {
 } from "../../lib/llm/run-chat-turn.js";
 import type { ToolEvent } from "../../lib/llm/tool-types.js";
 import { logger } from "../../lib/logger.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { legacyIntegerParam } from "../../validators/schemas.js";
 import {
 	buildAnthropicMessages,
 	CHAT_SYSTEM_PROMPT,
@@ -36,14 +38,18 @@ export function createPostMessageHandler(
 	service: ReturnType<typeof createChatService>,
 ) {
 	return async (req: Request, res: Response) => {
-		const threadId = Number(req.params.id);
-		if (!Number.isInteger(threadId)) {
-			return res.status(400).json({ error: "thread id must be an integer" });
-		}
+		const parsedId = parseWith(
+			legacyIntegerParam("thread id must be an integer"),
+			req.params.id,
+		);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const threadId = parsedId.data;
 
 		const action = resolveChatMessageAction(req.body);
 		if (action.kind === "invalid") {
-			return res.status(400).json({ error: "message or action is required" });
+			return sendValidationError(res, {
+				error: "message or action is required",
+			});
 		}
 
 		try {

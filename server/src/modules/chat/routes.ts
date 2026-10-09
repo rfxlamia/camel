@@ -14,6 +14,11 @@
 import express, { Router } from "express";
 import { requireAuth } from "../../auth.js";
 import { db } from "../../db/kysely.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import {
+	legacyIntegerParam,
+	trimmedRequired,
+} from "../../validators/schemas.js";
 import { attachmentContentType, getUserId } from "./chat-helpers.js";
 import { createPostMessageHandler } from "./message-stream.js";
 import { createChatService } from "./service.js";
@@ -41,10 +46,12 @@ export function createChatRouter(): Router {
 	});
 
 	router.get("/api/chat/threads/:id", requireAuth, async (req, res) => {
-		const threadId = Number(req.params.id);
-		if (!Number.isInteger(threadId)) {
-			return res.status(400).json({ error: "thread id must be an integer" });
-		}
+		const parsedId = parseWith(
+			legacyIntegerParam("thread id must be an integer"),
+			req.params.id,
+		);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const threadId = parsedId.data;
 
 		const thread = await service.getThread(getUserId(req), threadId);
 		if (!thread) {
@@ -66,20 +73,21 @@ export function createChatRouter(): Router {
 	});
 
 	router.patch("/api/chat/threads/:id", requireAuth, async (req, res) => {
-		const threadId = Number(req.params.id);
-		if (!Number.isInteger(threadId)) {
-			return res.status(400).json({ error: "thread id must be an integer" });
-		}
+		const parsedId = parseWith(
+			legacyIntegerParam("thread id must be an integer"),
+			req.params.id,
+		);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const threadId = parsedId.data;
 
 		const { title } = req.body ?? {};
-		if (typeof title !== "string" || !title.trim()) {
-			return res.status(400).json({ error: "title is required" });
-		}
+		const parsedTitle = parseWith(trimmedRequired("title is required"), title);
+		if (!parsedTitle.ok) return sendValidationError(res, parsedTitle.body);
 
 		const updated = await service.renameThread(
 			getUserId(req),
 			threadId,
-			title.trim(),
+			parsedTitle.data,
 		);
 		if (!updated) {
 			return res.status(404).json({ error: "Not found" });
@@ -88,10 +96,12 @@ export function createChatRouter(): Router {
 	});
 
 	router.delete("/api/chat/threads/:id", requireAuth, async (req, res) => {
-		const threadId = Number(req.params.id);
-		if (!Number.isInteger(threadId)) {
-			return res.status(400).json({ error: "thread id must be an integer" });
-		}
+		const parsedId = parseWith(
+			legacyIntegerParam("thread id must be an integer"),
+			req.params.id,
+		);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const threadId = parsedId.data;
 
 		const deleted = await service.deleteThread(getUserId(req), threadId);
 		if (!deleted) {
@@ -101,12 +111,12 @@ export function createChatRouter(): Router {
 	});
 
 	router.get("/api/chat/attachments/:id", requireAuth, async (req, res) => {
-		const attachmentId = Number(req.params.id);
-		if (!Number.isInteger(attachmentId)) {
-			return res
-				.status(400)
-				.json({ error: "attachment id must be an integer" });
-		}
+		const parsedId = parseWith(
+			legacyIntegerParam("attachment id must be an integer"),
+			req.params.id,
+		);
+		if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+		const attachmentId = parsedId.data;
 
 		const attachment = await service.getAttachment(
 			getUserId(req),
