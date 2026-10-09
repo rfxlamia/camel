@@ -5,11 +5,15 @@ import {
 	createSignupWorkspacePlan,
 	type PendingInvite,
 	requireAuth,
-	USERNAME_RE,
 } from "../../auth.js";
 import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
-import { validateUsername } from "../../validators/input-length.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import {
+	OAUTH_USERNAME_MESSAGE,
+	passwordSchema,
+	usernameSchema,
+} from "./auth-schemas.js";
 
 export const oauthRouter = Router();
 
@@ -20,13 +24,12 @@ oauthRouter.post("/set-username", requireAuth, async (req, res) => {
 		return res.status(409).json({ error: "Username already set." });
 	}
 	const { username, displayName } = req.body ?? {};
-	const validation = validateUsername(username ?? "");
-	if (!validation.valid || !USERNAME_RE.test(validation.trimmed ?? "")) {
-		return res.status(400).json({
-			error: "Username must be 3–32 characters: letters, numbers, underscore.",
-		});
-	}
-	const normalizedUsername = validation.trimmed!.toLowerCase();
+	const parsedUsername = parseWith(
+		usernameSchema(OAUTH_USERNAME_MESSAGE),
+		username,
+	);
+	if (!parsedUsername.ok) return sendValidationError(res, parsedUsername.body);
+	const normalizedUsername = parsedUsername.data.toLowerCase();
 	const displayNameFinal =
 		typeof displayName === "string" && displayName.trim()
 			? displayName.trim()
@@ -123,12 +126,9 @@ oauthRouter.post("/set-password", requireAuth, async (req, res) => {
 	if (!req.user)
 		return res.status(401).json({ error: "authentication required" });
 	const { password } = req.body ?? {};
-	if (typeof password !== "string" || password.length < 8) {
-		return res
-			.status(400)
-			.json({ error: "Password must be at least 8 characters." });
-	}
-	const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+	const parsedPassword = parseWith(passwordSchema, password);
+	if (!parsedPassword.ok) return sendValidationError(res, parsedPassword.body);
+	const hash = await bcrypt.hash(parsedPassword.data, BCRYPT_ROUNDS);
 	// Conditional on password_hash still being null: closes the TOCTOU
 	// window between a precheck and this write — a concurrent set-password
 	// must not be overwritten.
