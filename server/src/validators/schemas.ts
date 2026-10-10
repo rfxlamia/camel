@@ -4,13 +4,7 @@ const WORKSPACE_ID_MESSAGE = "workspaceId must be an integer";
 const VERSION_MESSAGE = "version must be an integer";
 
 /** `:workspaceId` route param: digits only, safe integer, greater than zero. */
-export const workspaceIdParam = z
-	.string({ error: WORKSPACE_ID_MESSAGE })
-	.regex(/^\d+$/, { error: WORKSPACE_ID_MESSAGE })
-	.transform(Number)
-	.refine((value) => Number.isSafeInteger(value) && value > 0, {
-		error: WORKSPACE_ID_MESSAGE,
-	});
+export const workspaceIdParam = positiveIdParam(WORKSPACE_ID_MESSAGE);
 
 /** Optional optimistic-lock `version` from a request body. */
 export const optionalVersion = z
@@ -32,6 +26,21 @@ export function positiveIdParam(message: string) {
 		.refine((value) => Number.isSafeInteger(value) && value > 0, {
 			error: message,
 		});
+}
+
+/** Array whose elements pass Number.isInteger, preserving order and duplicates. */
+export function integerIdArray(field: string) {
+	const message = `${field} must be an array of integers`;
+	return z.unknown().refine(
+		(value): value is number[] => {
+			if (!Array.isArray(value)) return false;
+			for (const id of value) {
+				if (!Number.isInteger(id)) return false;
+			}
+			return true;
+		},
+		{ error: message },
+	);
 }
 
 /**
