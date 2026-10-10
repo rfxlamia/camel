@@ -1,0 +1,107 @@
+{
+  "task_id": "T13",
+  "task_name": "Share the lock-reference extractor and pin create rejection",
+  "cycle": 2,
+  "timestamp": "2026-10-10T04:43:12.073426Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "contract": 2,
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "additional server typecheck initially unresolved existing better-auth / better-auth/node in oauth-bridge.ts; controller provisioned worktree links to already installed parent server deps and rerun typecheck PASS, no dependency/source changes.",
+      "Loaded the full original T13 packet, Phase 4/5 and approved spec (F1, amended Rule 3, Rule 4 and Update unchanged), and all four requested normative review references. Applied approved advisor corrections: actual cards/card_events persistence, differing create summaries, permitted existing auth/realtime harness mocks with real DB and real validators.",
+      "Independently verified task/T13 HEAD and correction commit 74508461fd5eabddb055cde1d01a041e74e6bba4 exist. Audited the full range 0d019fcf02382190c5ffac2525ba69e7e0579f3c..74508461fd5eabddb055cde1d01a041e74e6bba4 and read all eight changed files in full. Correction touches only the scoped tracker integration file; no production changes beyond the original helper substitution.",
+      "Create rejection matrices retain mixed member/string assignees, fractional labels, null labels and string assignees; absent/empty arrays retain 201 and empty returned refs (board cards-create-metadata.integration.test.ts:172-219; tracker tracker-item-create-metadata.integration.test.ts:189-229). Exact summaries remain Some card fields are invalid versus Some task fields are invalid, with exact fieldErrors and zero workspace cards/card_events before and after rejection.",
+      "PATCH matrices retain nonempty seeded labels/assignees, actual stored version submission, exact error-only bodies and full row/reference/event equality (board cards-taxonomy.integration.test.ts:330-379; tracker tracker-items.integration.test.ts:292-328). New snapshotTrackerItem at :122-144 selects the identical four tables with identical ordering/filters, substituting the explicit cardId parameter for captured id. No assertion, scenario or snapshot field was removed or relaxed.",
+      "Repository assumptions verified against implementation: tracker-item-create.ts:124-165 writes column-less cards; lib/tracker-item-activity.ts delegates to recordActivity/card_events; lib/work-items.ts aliases canonical work-items to tracker handlers. work-item-create-metadata.ts:118-146 invokes the real reference parsers, whose Array.isArray/Number.isInteger rejection is retained in lib/tracker-item-parsers.ts. Existing harness mocks do not replace DB, metadata validation or parsers. Current implementation, not stale dual-table wording, determines persistence proofs.",
+      "extractIntegerIds at integer-ids.ts:7-10 is equivalent to both removed local copies: lenient non-array fallback and Number.isInteger filtering without coercion, sorting, deduplication or safe-integer tightening. Both create paths retain raw metadata validation and original locking/order. Nine helper cases cover required inputs plus order, duplicates, frozen input, unsafe integers, zero/negative values and noncoercion. Non-test server source grep finds no local integerIds copies.",
+      "Controller-supplied mechanical gate for the pinned correction (not rerun by this read-only auditor): exact RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/board/cards-create-metadata.integration.test.ts src/modules/tracker/tracker-item-create-metadata.integration.test.ts src/modules/board/cards-taxonomy.integration.test.ts src/modules/tracker/tracker-items.integration.test.ts: 65 passed, 0 skipped. Exact npm run test --workspace=server -- src/lib/integer-ids.test.ts: 9 passed. Branch/commit checks additionally verified independently.",
+      "Prior characterization/liveness evidence and resolved dependency/typecheck concern are preserved in review_history. No implementation, log, commit, dependency or test-cache writes performed by this re-audit."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All QUALITY BAR must-haves satisfied: real DB zero-persistence/unchanged-state proofs and one extractor used by both create paths. Must-not-haves absent: no changed create status/messages and no use of extraction as validation. All eight diff paths are scoped.",
+      "Prior Important resolved: TypeScript AST function boundaries measure tracker PATCH callback at :298-328 (31 lines), versus prior 52; snapshotTrackerItem at :122-144 is 23 lines. Board added PATCH callback is :334-379 (46 lines). Cohesive in-file snapshot extraction clears the function threshold without assertion weakening.",
+      "Refactor heuristics fully reassessed: production files remain below 300 lines, new helper/test files are 10/48 lines, oversized integration tests are pre-existing and explicitly exempt from repository 300-on-touch. No newly introduced/expanded function exceeds ~50 lines; unchanged long production orchestration is not expanded. Snapshot scaffolding and create counts occur twice, not three or more times; no new triplicated logic.",
+      "Minimal production substitution preserves behavior and NodeNext .js imports; generic helper is in the shared kernel, with no board/tracker cross-feature dependency. Documentation clearly distinguishes lenient lock extraction from validation.",
+      "Behavioral tests preserve exact HTTP bodies and independently check persisted state, including version and nonempty references. Snapshot helper retains parameterized SQL and deterministic row ordering. Soft expectations still fail the test while allowing persistence assertions to execute.",
+      "No credentials, unsafe dynamic SQL, swallowed exceptions, new dependency/API behavior assumptions or out-of-scope edits introduced. git diff --check is clean. Prior verdict had no Minor findings; none require carry-forward and none found in this audit."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "strategies": [
+      "Round 1: extract cohesive in-file fixture/snapshot helper from newly added 52-line tracker PATCH characterization callback, preserve all assertions and rerun exact gates."
+    ],
+    "prior_windows": []
+  },
+  "reviewed_sha": "ee8c315aea4627027abd5390c311d946f0bc8c78",
+  "review_history": [
+    {
+      "task_id": "T13",
+      "task_name": "Share the lock-reference extractor and pin create rejection",
+      "cycle": 1,
+      "timestamp": "2026-10-10T04:37:45Z",
+      "reviewer_mode": "read-only",
+      "reviewer_config": "batch-parallel",
+      "contract": 2,
+      "stage_1": {
+        "status": "PASS",
+        "issues": [],
+        "concerns_addressed": [
+          "additional server typecheck initially unresolved existing better-auth / better-auth/node in oauth-bridge.ts; controller provisioned worktree links to already installed parent server deps and rerun typecheck PASS, no dependency/source changes.",
+          "Loaded the full T13 packet, Phase 4/5 files, approved shared-400-validation-completion spec, and all five normative review references. Applied the dispatch's approved packet repairs rather than the packet's obsolete tracker_items/tracker_events assumption.",
+          "Verified task/T13 HEAD d3be05a314a7d5cd229f6e13708fb3ade70a7d1f and both commits in the pinned range. 06c71136b366b3229f89ea23191d1451aeb227de modifies only the four characterization suites; d3be05a314a7d5cd229f6e13708fb3ade70a7d1f introduces the helper/tests and substitutes its calls in both create paths. Read all eight changed files in full. No tracked working-tree changes or out-of-scope diff files; existing untracked dependency links are not source changes.",
+          "Create pins cover mixed member/string assignees, fractional labels, null labels, string assignees, and absent/empty arrays: board cards-create-metadata.integration.test.ts:172-219; tracker tracker-item-create-metadata.integration.test.ts:189-229. Board uses its non-signable column and fixture member MAYA_ID; tracker uses fixture member ASSIGNEE_ID. Exact differing create summaries and fieldErrors are retained; both suites compare zero workspace cards/card_events before and after rejection.",
+          "PATCH pins seed nonempty labels and assignees, send the actual stored version, pin exact error-only bodies, and compare full persisted card rows (including version), label/assignee rows, and events: cards-taxonomy.integration.test.ts:330-379 and tracker-items.integration.test.ts:270-325.",
+          "Repository architecture verified: tracker-item-create.ts:124-165 inserts column-less cards; tracker-item-activity.ts delegates to recordActivity/card_events; lib/work-items.ts:14-25 rewrites canonical /work-items to the same tracker router. Real metadata validation calls parseLabelIds/parseAssigneeIds in work-item-create-metadata.ts:118-146; neither validator is mocked by these suites. Existing auth/realtime harness mocks comply with approved repairs.",
+          "Shared extraction remains lenient and byte-equivalent in semantics to both removed copies: integer-ids.ts:7-10 uses Array.isArray and Number.isInteger without coercion, safe-integer checking, deduplication, or sorting. Both call sites preserve raw metadata validation and lock/validation ordering. Unit tests cover all requested inputs plus frozen input, duplicate/order preservation, unsafe integers, zero/negative values, NaN/infinities, and noncoercion. No local integerIds definitions remain in non-test server source.",
+          "Controller-supplied mechanical evidence (not independently rerun by this read-only audit): exact RUN_INTEGRATION=1 npm run test --workspace=server -- src/modules/board/cards-create-metadata.integration.test.ts src/modules/tracker/tracker-item-create-metadata.integration.test.ts src/modules/board/cards-taxonomy.integration.test.ts src/modules/tracker/tracker-items.integration.test.ts yielded 65 passed, 0 skipped; exact npm run test --workspace=server -- src/lib/integer-ids.test.ts yielded 9 passed; server typecheck exited 0.",
+          "Controller-supplied characterization/TDD evidence: baseline 65 passed before edits; temporary create-validation bypass produced 8 failures; PATCH label bypass produced 4 failures and assignee bypass 2 failures; restored 65 passed before test-only commit; missing-helper-module RED then GREEN. Audit did not weaken validators or write test/build artifacts."
+        ]
+      },
+      "stage_2": {
+        "status": "FAIL",
+        "strengths": [
+          "QUALITY BAR must-haves satisfied: real DB persistence proofs and one shared extractor used by both create paths. Must-not-haves absent: no changed create status/message, no extractor used as validation. All changed files are explicitly in scope.",
+          "Minimal production substitution preserves transaction and validation ordering; explicit helper documentation guards against mistaking lock extraction for validation. ESM .js imports and kernel helper location follow repository conventions.",
+          "Tests assert observable HTTP and persisted behavior, not implementation source. Soft response assertions permit the independent persistence proof to run even when status/body regress.",
+          "Refactor heuristics inspected from the diff: production files are 231 and 268 lines; new helper/test files are 10 and 48 lines. The four integration files were already over 300 lines at baseline (407, 478, 393, 478) and repository 300-on-touch explicitly exempts tests. No identical logic occurs three or more times in the added scoped code; counts and snapshot scaffolding each occur twice. Existing long production functions were not introduced or expanded by this substitution.",
+          "No new credentials, dynamic SQL interpolation, exception swallowing, dependency changes, board/tracker cross-feature imports, or API assumption changes. git diff --check is clean."
+        ],
+        "issues": [
+          {
+            "severity": "Important",
+            "description": "The newly introduced tracker PATCH characterization callback spans 52 lines (274-325, measured using TypeScript AST function boundaries), crossing the normative function-length refactor heuristic (~50 lines). It combines fixture lookup/create, reference seeding, a nested four-table snapshot, request execution, and assertions. The normative two-stage-review contract requires a refactor round for a crossed heuristic; project exemption of test files from 300-on-touch does not exempt the function-length heuristic. Extract the snapshot or fixture setup into an in-file helper so the newly added callback falls below the threshold without weakening its assertions.",
+            "location": "server/src/modules/tracker/tracker-items.integration.test.ts:274-325"
+          }
+        ],
+        "assessment": "Request Changes"
+      },
+      "overall": "REVIEW_FAIL",
+      "fix_instructions": "1. [Important] In server/src/modules/tracker/tracker-items.integration.test.ts:274-325, extract the persisted-state snapshot or fixture/reference preparation into a small in-file helper, keeping the new PATCH callback below ~50 lines. Preserve real DB execution, nonempty initial refs, exact error-only bodies, stored-version submission, and whole-row/reference/event equality. Keep the correction within scoped files. 2. Re-run both exact packet commands (four-file RUN_INTEGRATION=1 suite with zero skipped tests and integer-ids unit suite), then have the controller dispatch a pinned read-only re-audit to confirm the refactor heuristic is cleared and behavior remains green.",
+      "loop_info": {
+        "recovery_window": 1,
+        "current_cycle": 1,
+        "max_cycles": 2,
+        "cycles_remaining": 1,
+        "strategies": [
+          "Round 1: extract cohesive in-file fixture/snapshot helper from newly added 52-line tracker PATCH characterization callback, preserve all assertions and rerun exact gates."
+        ],
+        "prior_windows": []
+      },
+      "reviewed_sha": "d3be05a314a7d5cd229f6e13708fb3ade70a7d1f"
+    }
+  ]
+}
