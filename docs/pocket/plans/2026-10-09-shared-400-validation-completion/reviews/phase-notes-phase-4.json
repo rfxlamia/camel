@@ -1,0 +1,34 @@
+{
+  "contract": 1,
+  "phase_key": "phase-4",
+  "phase_file": "execution-plan/phase-4.md",
+  "recorded_at": "2026-10-10T04:54:34Z",
+  "phase_verdict": "PHASE_PASS_CLEAN",
+  "tasks": [
+    { "task_id": "T11", "name": "Add integerIdArray and dedupe workspaceIdParam", "done_sha": "626443ea505f2b3c13682945045dffd5f84b1f41", "verdict": "REVIEW_PASS" },
+    { "task_id": "T12", "name": "Extract tracker reference parsers and use integerIdArray", "done_sha": "c660235efd95e3bd854aacdd4329203546ae3ae7", "verdict": "REVIEW_PASS" },
+    { "task_id": "T13", "name": "Share the lock-reference extractor and pin create rejection", "done_sha": "ee8c315aea4627027abd5390c311d946f0bc8c78", "verdict": "REVIEW_PASS" }
+  ],
+  "verification": [
+    { "check": "npm run test --workspace=server -- src/validators/schemas.test.ts", "result": "PASS", "evidence": "Controller T11 mechanical gate: 83 passed after correction commit 626443e." },
+    { "check": "npm run test --workspace=server -- src/modules/settings", "result": "PASS", "evidence": "Controller T11 mechanical gate: 54 passed, 6 skipped." },
+    { "check": "npm run test --workspace=server -- src/lib src/modules/tracker src/modules/board", "result": "PASS", "evidence": "Controller T12 worktree gate after dependency provisioning: 328 passed, 163 skipped; parser file 47 passed. Line counts 289 and 77." },
+    { "check": "RUN_INTEGRATION=1 four-file create/update pin suites", "result": "PASS", "evidence": "Controller T13 worktree and post-merge main tree: 65 passed, 0 skipped. Helper integer-ids.test.ts: 9 passed." },
+    { "check": "make check", "result": "PASS", "evidence": "Controller post-merge: lint 930 files, mutation/event-write/feature-module/inline-400 guards passed." },
+    { "check": "npm run typecheck", "result": "PASS", "evidence": "Controller post-merge on main tree: server and client tsc --noEmit exit 0." },
+    { "check": "Independent task audits and phase-level pass", "result": "PASS", "evidence": "T11-review.json, T12-review.json, T13-review.json: REVIEW_PASS; conflict-free merge SHAs match reviewed_sha; phase-pass-phase-4.json: PHASE_PASS_CLEAN." },
+    { "check": "Phase Completion Gate", "result": "PASS", "evidence": "Every task in this phase: status DONE; recorded tests and typecheck pass; commits created with conventional format; no task BLOCKED or NEEDS_CONTEXT." }
+  ],
+  "obstacles": [
+    { "summary": "T11 first audit failed because integerIdArray used a whole-array handwritten loop instead of element-level .refine(Number.isInteger).", "resolution": "One in-loop correction implemented the required Zod array and element refine; independent re-audit passed.", "evidence": ["reviews/T11-review.json", "commit 626443ea505f2b3c13682945045dffd5f84b1f41"] },
+    { "summary": "T12 and T13 worktrees could not typecheck because better-auth was missing from the supplied node_modules symlink.", "resolution": "Controller linked already-installed parent server dependencies; typecheck then passed. No source or package.json changes.", "evidence": ["reviews/T12-review.json", "reviews/T13-review.json"] },
+    { "summary": "T13 first audit failed a ~50-line function heuristic on a new tracker PATCH characterization callback (52 lines).", "resolution": "In-file snapshot helper extracted; callback reduced to 31 lines; independent re-audit passed.", "evidence": ["reviews/T13-review.json", "commit 74508461fd5eabddb055cde1d01a041e74e6bba4"] }
+  ],
+  "decisions": [
+    { "kind": "user", "decision": "Route clear-scope tasks to gpt-6-luna; complex tasks and audits to gpt-6.1-sol.", "rationale": "Explicit user model-routing request.", "source": "Session user instruction" },
+    { "kind": "user", "decision": "Authorize Phase 4 closeout.", "rationale": "Explicit continue-closing instruction after Phase 4 development.", "source": "Session user instruction: lanjutkan closing" },
+    { "kind": "implementation", "decision": "Keep T12/T13 helpers in server/src/lib as shared kernel taxonomy and lock-reference code; run T12 and T13 as a parallel group after T11.", "rationale": "Feature-module ADR and map already assign taxonomy/parsers to kernel; execution index Group C.", "source": "Fresh read-only architecture advisor report; execution-plan/index.md" },
+    { "kind": "implementation", "decision": "Pin tracker create persistence against column-less cards and card_events, not tracker_items/tracker_events.", "rationale": "Current tracker create writes cards and card_events.", "source": "Architecture advisor report and T13 packet repairs" }
+  ],
+  "recommendations": []
+}

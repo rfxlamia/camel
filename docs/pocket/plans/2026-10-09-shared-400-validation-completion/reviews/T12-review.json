@@ -1,0 +1,69 @@
+{
+  "contract": 2,
+  "task_id": "T12",
+  "task_name": "Extract tracker reference parsers and use integerIdArray",
+  "cycle": 1,
+  "timestamp": "2026-10-10T04:38:05Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Implementer DONE_WITH_CONCERNS: missing better-auth prevented server typecheck in the supplied worktree. Classified as resolved environment/provisioning concern, not an implementation defect: controller provisioned links to already-installed parent dependencies without source/dependency changes; auditor independently reran npm run typecheck --workspace=server successfully.",
+      "Approved spec Rule 4's absent-valid wording describes create callers, which gate absent fields; the T12 packet explicitly preserves direct-parser absent rejection and duplicate outputs with unique lookup counts. Actual code and characterization tests match the packet and advisor clarification.",
+      "Characterization baseline 47 PASS, expected-message mutation 1 FAIL, restored 47 PASS before edits is supplied controller/implementer evidence, not an independently replayed mutation. Read-only audit did not modify tests. Independent final characterization run: 47 PASS."
+    ],
+    "verified_requirements": [
+      "Exactly parsePriorityId, parseLabelIds and parseAssigneeIds were extracted; project/phase lookup helpers and remaining parser bodies/types stay unchanged in tracker-item-parsers.ts. Extraction 3e7c5fc4f139a646bd8610b324491b4931d95406 is a pure move plus characterization tests; schema replacement 16fd594efdb0ae570e266edf6f0df28d363096c3 is separate.",
+      "tracker-item-parsers.ts:4-8 preserves reference re-exports; all six runtime exports are pinned with sorted keys and function assertions at tracker-item-parsers.test.ts:216-231. DateRangeFieldErrors and DateRangeParseResult remain exported unchanged.",
+      "tracker-reference-parsers.ts:5-77 preserves explicit DBExecutor defaults and return signatures, priority semantics, workspace/kind/member checks, and miss messages. Label/assignee validation now uses parseWith(integerIdArray(...)); invalid input returns before database access, [] produces no lookups, duplicate outputs retain order and only unique IDs are looked up.",
+      "tracker-item-parsers.test.ts:254-322 covers invalid, absent, empty, duplicates/lookup counts, unsafe integers, misses, and all three injected executors using the actual barrel functions and only a DB-chain mock.",
+      "Only the three packet-scoped files changed in the pinned range. Existing board/tracker tests and mock-by-path imports remain unmodified; broad suite independently passed, including tracker-items.write.test.ts. Production source line counts are 289 and 77 (both <=300)."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Shared cross-board/tracker taxonomy parsers remain in the approved lib kernel; NodeNext .js imports and responsibility-based extraction comply with the architecture decision.",
+      "Full runtime and type API remains stable, including mock-by-path interception; no importer rewiring, deduplication of output, safe-integer restriction, changed messages or extra return keys were introduced.",
+      "Production functions remain below approximately 50 lines and files below 300; no identical logic repeated three times across the scoped files. Test files are excluded from the source line-budget rule. No mandatory refactor heuristic is triggered.",
+      "Tests exercise real parser behavior with isolated DB-chain doubles, exact error bodies, no-query assertions, unique lookup counts and explicit executor injection. Existing tests were retained.",
+      "Actual installed Zod 4.4.3 behavior verified against official current API documentation and installed implementation: z.number rejects NaN/Infinity but does not impose safe-integer bounds; refine(Number.isInteger) preserves legacy unsafe integers. z.array preserves element order and duplicates, and safeParse provides non-throwing validation."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "c660235efd95e3bd854aacdd4329203546ae3ae7",
+  "evidence": {
+    "worktree": "/home/v-homelab/tasks/camel/.worktree/T12",
+    "branch": "task/T12",
+    "range": "0d019fcf02382190c5ffac2525ba69e7e0579f3c..16fd594efdb0ae570e266edf6f0df28d363096c3",
+    "protocols": "Loaded full two-stage-review.md, spec-compliance-review.md, code-quality-review.md, review-report-template.md and parallel-group.md; full T12 packet, phase-4/phase-5 indexes and approved shared-400-validation-completion.md spec. Read all three changed files completely and inspected importers/path mock and the pure extraction commit.",
+    "commands": [
+      "npm run test --workspace=server -- src/lib/tracker-item-parsers.test.ts: 47 passed",
+      "npm run typecheck --workspace=server: exit 0",
+      "DATABASE_URL=postgres://test:test@localhost:5432/test ANTHROPIC_API_KEY=test npm run test --workspace=server -- src/lib src/modules/tracker src/modules/board: 328 passed, 163 skipped, 34 files passed, 30 skipped",
+      "wc -l server/src/lib/tracker-item-parsers.ts server/src/lib/tracker-reference-parsers.ts: 289 / 77",
+      "Read-only installed-Zod safeParse probe: rejects absent/null/non-array/mixed/fraction/NaN/Infinity with pinned message; accepts empty, ordered duplicates, MAX_SAFE_INTEGER+1"
+    ],
+    "environment_note": "Auditor's initial broad-suite invocation without required environment values failed in config validation, not parser assertions. Rerun with dummy DATABASE_URL and ANTHROPIC_API_KEY passed and matches controller gate evidence. No environment files or dependency links were changed by auditor; existing untracked node_modules and client/node_modules links were present at entry and remained unchanged.",
+    "api_sources": [
+      "https://zod.dev/api (retrieved during audit): Numbers accepts finite numbers and rejects NaN/Infinity; Integers explicitly restricts z.int to safe range, motivating number().refine(Number.isInteger).",
+      "Installed node_modules/zod/package.json: version 4.4.3 (resolved through supplied worktree node_modules link)",
+      "node_modules/zod/src/v4/core/schemas.ts:1120-1140 ($ZodNumber finite/type checks); 1637-1678 ($ZodArray ordered element parsing)",
+      "server/src/validators/schemas.ts:29-36 integerIdArray; server/src/validators/http.ts:27-50 parseWith safeParse/error-body mapping",
+      "server/src/modules/tracker/tracker-items.write.test.ts:100-105 barrel path mock; existing create/update importers continue using that exact barrel"
+    ]
+  }
+}

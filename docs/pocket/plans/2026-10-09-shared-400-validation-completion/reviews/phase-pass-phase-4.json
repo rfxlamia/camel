@@ -1,0 +1,40 @@
+{
+  "phase_key": "phase-4",
+  "phase_file": "execution-plan/phase-4.md",
+  "timestamp": "2026-10-10T04:45:41Z",
+  "reviewer_mode": "read-only",
+  "findings": [],
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "status": "PHASE_PASS_CLEAN",
+  "evidence": {
+    "contract": "/home/v-homelab/.pi/agent/npm/node_modules/pocketto-pi/skills/pocket-development/references/phase-level-pass.md",
+    "scope": "Independent cross-task duplication, composition, regression, spec-split and architecture/dependency assumption review only; no re-litigation of in-task judgments.",
+    "inputs": "Read complete T11, T12 and T13 packets, their complete current audit artifacts including history, approved shared-400-validation-completion spec, phase-4/phase-5 indexes, canonical log phase identity, and all three supplied server diff ranges. Current task verdicts are REVIEW_PASS and each reviewed_sha equals its DONE task's done_sha; conflict-free parallel merge repinning accepted as supplied normative evidence.",
+    "ranges": {
+      "T11": "97d8dd8f681e4aa68bee6659d9f29ca0a0203ebf..626443ea505f2b3c13682945045dffd5f84b1f41",
+      "T12": "626443ea505f2b3c13682945045dffd5f84b1f41..c660235efd95e3bd854aacdd4329203546ae3ae7",
+      "T13": "c660235efd95e3bd854aacdd4329203546ae3ae7..ee8c315aea4627027abd5390c311d946f0bc8c78"
+    },
+    "composition": [
+      "T12 consumes T11 integerIdArray through parseWith and preserves parser error-only return shapes, ordered duplicate outputs, unique membership/vocabulary lookups, and supplied DBExecutor parameters. Original barrel imports and mock-by-path interception remain available to create/update consumers; no importer rewiring was needed.",
+      "T13's one shared extractIntegerIds is deliberately lenient pre-lock plumbing, not a second validator. Both create paths still pass the original raw body to validateTaskCreateMetadata, which invokes the T12 barrel parsers and T11 schema before persistence. Absent fields are caller-gated and empty arrays are accepted; malformed arrays cannot become valid through filtering.",
+      "The four integration suites pin both create paths and both PATCH paths after composition, including exact fieldErrors/create summaries, error-only PATCH bodies, zero create persistence, and unchanged existing row/version/reference/event snapshots. Tracker POST /work-items aliases the actual tracker handler, which inserts column-less cards and logs through recordActivity/card_events; assertions target the actual repository persistence model rather than stale tracker_items/tracker_events packet wording.",
+      "Feature-module ADR explicitly assigns taxonomy/parsers and cross-feature platform code to kernel lib; scripts/feature-modules/map.mjs permits lib and validators. Shared schema/extractor/parser dependencies remain modules-to-kernel, not board-to-tracker or validators-to-feature dependencies.",
+      "Workspace strictness and username wording/client audit remain explicitly assigned to Phase 5 T14-T16. T11 only deduplicates the existing strict workspaceIdParam definition; the phase introduces no premature lenient-route tightening or wording change. No uncovered Phase 4 spec scenario or cross-task regression identified."
+    ],
+    "dependency_verification": {
+      "version": "Installed zod 4.4.3 independently verified via resolved package.json.",
+      "official_source": "https://zod.dev/api retrieved during this pass; documents finite z.number, safe-range z.int, and custom refinements. Current documentation is corroborative; installed-version implementation is definitive.",
+      "primary_source": "Read node_modules/zod/v4/core/schemas.js number finite/type checks, ordered per-index Array.isArray parsing, and custom-refinement handling. Independent read-only installed-Zod probe compared the exact composed schema with Array.isArray plus Number.isInteger across 28 labelIds/assigneeIds cases: empty/duplicate/unsafe/large integers accepted, absent/null/non-array/mixed/fraction/null-element/NaN/Infinity/sparse inputs rejected with exact field messages."
+    },
+    "mechanical_gates": "Accepted controller-supplied green exact task commands, post-merge RUN_INTEGRATION=1 four-suite result of 65 passed and 0 skipped, and make check PASS. These were not independently rerun. Controller full npm run test && npm run typecheck remains separately ongoing at dispatch; this artifact makes no completion or success claim for that pending process.",
+    "write_boundary": "Only this phase-pass artifact written; no implementation, log, task verdict, dependency, test-cache or commit changes. No advisor tool used."
+  }
+}

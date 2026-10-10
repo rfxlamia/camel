@@ -4,6 +4,7 @@ import type { AuthUser } from "../../auth.js";
 import { allocateWorkItemKey } from "../../core/allocate-work-item-key.js";
 import { formatKey } from "../../core/tracker-key.js";
 import { type DBExecutor, db } from "../../db/kysely.js";
+import { extractIntegerIds } from "../../lib/integer-ids.js";
 import { logger } from "../../lib/logger.js";
 import { syncTrackerItemAssignees } from "../../lib/tracker-assignees.js";
 import { recordTrackerItemActivity } from "../../lib/tracker-item-activity.js";
@@ -28,17 +29,13 @@ import { resolveWorkItemByKey } from "./tracker-item-route-helpers.js";
 import { titleField } from "./tracker-schemas.js";
 
 function lockReferences(body: Record<string, unknown>, actorId: number) {
-	const integerIds = (value: unknown): number[] =>
-		Array.isArray(value)
-			? value.filter((id): id is number => Number.isInteger(id))
-			: [];
 	return {
 		actorId,
-		assigneeIds: integerIds(body.assigneeIds),
+		assigneeIds: extractIntegerIds(body.assigneeIds),
 		vocabularyIds: [
 			body.statusId,
 			body.priorityId,
-			...integerIds(body.labelIds),
+			...extractIntegerIds(body.labelIds),
 		].filter((id): id is number => Number.isInteger(id)),
 		statusId: Number.isInteger(body.statusId)
 			? (body.statusId as number)

@@ -113,28 +113,31 @@
     {
       "order": 4,
       "file": "execution-plan/phase-4.md",
-      "status": "WAITING",
+      "status": "DONE",
       "tasks": [
         {
           "id": "T11",
           "name": "Add integerIdArray and dedupe workspaceIdParam",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T10",
-          "file": "execution-plan/tasks/T11-add-integeridarray-and-dedupe-workspaceidparam.md"
+          "file": "execution-plan/tasks/T11-add-integeridarray-and-dedupe-workspaceidparam.md",
+          "done_sha": "626443ea505f2b3c13682945045dffd5f84b1f41"
         },
         {
           "id": "T12",
           "name": "Extract tracker reference parsers and use integerIdArray",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T11",
-          "file": "execution-plan/tasks/T12-extract-tracker-reference-parsers-and-use-integeridarray.md"
+          "file": "execution-plan/tasks/T12-extract-tracker-reference-parsers-and-use-integeridarray.md",
+          "done_sha": "c660235efd95e3bd854aacdd4329203546ae3ae7"
         },
         {
           "id": "T13",
           "name": "Share the lock-reference extractor and pin create rejection",
-          "status": "WAITING",
+          "status": "DONE",
           "depends": "T11",
-          "file": "execution-plan/tasks/T13-share-the-lock-reference-extractor-and-pin-create-rejection.md"
+          "file": "execution-plan/tasks/T13-share-the-lock-reference-extractor-and-pin-create-rejection.md",
+          "done_sha": "ee8c315aea4627027abd5390c311d946f0bc8c78"
         }
       ]
     },

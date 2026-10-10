@@ -119,6 +119,30 @@ async function cleanupWorkspace(wid: number) {
 	}
 }
 
+async function snapshotTrackerItem(cardId: number) {
+	return {
+		row: (await pool.query("SELECT * FROM cards WHERE id = $1", [cardId])).rows,
+		labels: (
+			await pool.query(
+				"SELECT * FROM card_labels WHERE card_id = $1 ORDER BY vocabulary_id",
+				[cardId],
+			)
+		).rows,
+		assignees: (
+			await pool.query(
+				"SELECT * FROM card_assignees WHERE card_id = $1 ORDER BY user_id",
+				[cardId],
+			)
+		).rows,
+		events: (
+			await pool.query(
+				"SELECT * FROM card_events WHERE card_id = $1 ORDER BY id",
+				[cardId],
+			)
+		).rows,
+	};
+}
+
 async function setupFixtures() {
 	await pool.query(
 		`INSERT INTO users (id, username, display_name, password_hash)
@@ -265,6 +289,42 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 		expect(updated?.payload).toMatchObject({
 			changed: expect.arrayContaining(["title"]),
 		});
+	});
+
+	it.each([
+		["labelIds", [1.5]],
+		["labelIds", null],
+		["assigneeIds", [mockCurrentUser.id, "x"]],
+	])("reference update rejection: %s %j leaves persisted state unchanged", async (field, value) => {
+		const label = await pool.query<{ id: number }>(
+			"SELECT id FROM tracker_vocabularies WHERE workspace_id = $1 AND kind = 'label' ORDER BY id LIMIT 1",
+			[WORKSPACE_ID],
+		);
+		const labelId = label.rows[0]!.id;
+		const created = await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/tracker/items`)
+			.send({ title: "Existing references" });
+		expect(created.status).toBe(201);
+		const id = created.body.id;
+		await pool.query(
+			"INSERT INTO card_labels (card_id, vocabulary_id) VALUES ($1, $2)",
+			[id, labelId],
+		);
+		await pool.query(
+			"INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)",
+			[id, mockCurrentUser.id],
+		);
+		const before = await snapshotTrackerItem(id);
+		expect(before.labels).toHaveLength(1);
+		expect(before.assignees).toHaveLength(1);
+		const response = await request(app)
+			.patch(`/api/workspaces/${WORKSPACE_ID}/tracker/items/CA-1`)
+			.send({ version: before.row[0]!.version, [field as string]: value });
+		expect.soft(response.status).toBe(400);
+		expect
+			.soft(response.body)
+			.toEqual({ error: `${field} must be an array of integers` });
+		expect(await snapshotTrackerItem(id)).toEqual(before);
 	});
 
 	it("replaces labels on PATCH and records labels in activity", async () => {

@@ -327,6 +327,57 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(row[0]?.priority_id).toBeNull();
 		});
 
+		it.each([
+			["labelIds", [1.5]],
+			["labelIds", null],
+			["assigneeIds", [currentUser.id, "x"]],
+		])("reference update rejection: %s %j leaves persisted state unchanged", async (field, value) => {
+			const fixtures = await loadFixtures(WORKSPACE_ID);
+			const card = await createCard(fixtures);
+			const id = card.id;
+			const labelId = fixtures.bugLabelId;
+			await pool.query(
+				"INSERT INTO card_labels (card_id, vocabulary_id) VALUES ($1, $2)",
+				[id, labelId],
+			);
+			await pool.query(
+				"INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)",
+				[id, currentUser.id],
+			);
+			const snapshot = async () => ({
+				row: (await pool.query("SELECT * FROM cards WHERE id = $1", [id])).rows,
+				labels: (
+					await pool.query(
+						"SELECT * FROM card_labels WHERE card_id = $1 ORDER BY vocabulary_id",
+						[id],
+					)
+				).rows,
+				assignees: (
+					await pool.query(
+						"SELECT * FROM card_assignees WHERE card_id = $1 ORDER BY user_id",
+						[id],
+					)
+				).rows,
+				events: (
+					await pool.query(
+						"SELECT * FROM card_events WHERE card_id = $1 ORDER BY id",
+						[id],
+					)
+				).rows,
+			});
+			const before = await snapshot();
+			expect(before.labels).toHaveLength(1);
+			expect(before.assignees).toHaveLength(1);
+			const response = await request(app)
+				.patch(`/api/workspaces/${WORKSPACE_ID}/cards/${id}`)
+				.send({ version: before.row[0]!.version, [field as string]: value });
+			expect.soft(response.status).toBe(400);
+			expect
+				.soft(response.body)
+				.toEqual({ error: `${field} must be an array of integers` });
+			expect(await snapshot()).toEqual(before);
+		});
+
 		it("rejects wrong-kind vocabulary used as label before mutation", async () => {
 			const fixtures = await loadFixtures(WORKSPACE_ID);
 			const card = await createCard(fixtures);

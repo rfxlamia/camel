@@ -186,6 +186,48 @@ afterAll(async () => {
 const integration = describe.skipIf(!process.env.RUN_INTEGRATION);
 
 integration("strict Tracker item creation", () => {
+	it.each([
+		["assigneeIds", [ASSIGNEE_ID, "x"]],
+		["labelIds", [1.5]],
+		["labelIds", null],
+		["assigneeIds", "1,2"],
+	])("reference create rejection: %s %j persists nothing", async (field, value) => {
+		await setup();
+		const counts = async () =>
+			(
+				await pool.query(
+					"SELECT (SELECT count(*)::int FROM cards WHERE workspace_id = $1) AS cards, (SELECT count(*)::int FROM card_events WHERE workspace_id = $1) AS events",
+					[WORKSPACE_ID],
+				)
+			).rows;
+		const before = await counts();
+		expect(before).toEqual([{ cards: 0, events: 0 }]);
+		const response = await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/work-items`)
+			.send({ title: "Invalid reference", [field as string]: value });
+		// Soft assertions also exercise the independent no-persistence proof on regression.
+		expect.soft(response.status).toBe(400);
+		expect.soft(response.body).toEqual({
+			error: "Some task fields are invalid",
+			fieldErrors: {
+				[field as string]: `${field} must be an array of integers`,
+			},
+		});
+		expect(await counts()).toEqual(before);
+	});
+
+	it.each([
+		{},
+		{ assigneeIds: [], labelIds: [] },
+	])("reference create accepts absent or empty arrays: %j", async (references) => {
+		const response = await request(app)
+			.post(`/api/workspaces/${WORKSPACE_ID}/work-items`)
+			.send({ title: "Empty references", ...references });
+		expect(response.status).toBe(201);
+		expect(response.body.assignees).toEqual([]);
+		expect(response.body.labels).toEqual([]);
+	});
+
 	it("Create a fully configured Tracker item", async () => {
 		const fixtures = await setup();
 		const res = await request(app)

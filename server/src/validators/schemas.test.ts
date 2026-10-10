@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseWith } from "./http.js";
 import {
 	finiteNumber,
+	integerIdArray,
 	intField,
 	intOrNullField,
 	legacyIntegerParam,
@@ -46,7 +47,62 @@ describe("legacyIntegerParam", () => {
 	});
 });
 
+describe("integerIdArray", () => {
+	const schema = integerIdArray("labelIds");
+	const error = {
+		ok: false,
+		body: { error: "labelIds must be an array of integers" },
+	};
+
+	it.each(
+		[[], [1, 2], [1, 1]].map((value) => ({ value })),
+	)("accepts $value unchanged", ({ value }) => {
+		expect(parseWith(schema, value)).toEqual({ ok: true, data: value });
+	});
+
+	it.each(
+		[null, "1,2", {}, [1, "x"], [1.5], [null]].map((value) => ({ value })),
+	)("rejects $value with the field error", ({ value }) => {
+		expect(parseWith(schema, value)).toEqual(error);
+	});
+
+	it("rejects undefined", () => {
+		expect(parseWith(schema, undefined)).toEqual(error);
+	});
+
+	it.each(
+		[[-1], [0], [Number.MAX_SAFE_INTEGER + 1]].map((value) => ({ value })),
+	)("matches Number.isInteger acceptance for $value", ({ value }) => {
+		expect(parseWith(schema, value)).toEqual({ ok: true, data: value });
+	});
+
+	it.each(
+		[[Number.NaN], [Number.POSITIVE_INFINITY]].map((value) => ({ value })),
+	)("rejects non-integer number arrays $value", ({ value }) => {
+		expect(parseWith(schema, value)).toEqual(error);
+	});
+
+	it("rejects sparse arrays like the Number.isInteger loop", () => {
+		const sparse: unknown[] = [];
+		sparse.length = 1;
+		expect(parseWith(schema, sparse)).toEqual(error);
+	});
+});
+
 describe("workspaceIdParam", () => {
+	it("keeps strict positive digit-string behavior", () => {
+		for (const raw of ["1", "01"]) {
+			expect(parseWith(workspaceIdParam, raw)).toEqual({ ok: true, data: 1 });
+		}
+		for (const raw of ["0", "-1", "1e2", "", " 1", "abc", "9007199254740993"]) {
+			expect(parseWith(workspaceIdParam, raw)).toEqual({
+				ok: false,
+				body: { error: "workspaceId must be an integer" },
+			});
+		}
+		expect(parseWith(workspaceIdParam, undefined).ok).toBe(false);
+	});
+
 	it("coerces positive integer strings", () => {
 		expect(parseWith(workspaceIdParam, "42")).toEqual({ ok: true, data: 42 });
 	});
