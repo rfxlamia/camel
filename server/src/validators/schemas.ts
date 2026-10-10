@@ -31,14 +31,8 @@ export function positiveIdParam(message: string) {
 /** Array whose elements pass Number.isInteger, preserving order and duplicates. */
 export function integerIdArray(field: string) {
 	const message = `${field} must be an array of integers`;
-	return z.unknown().refine(
-		(value): value is number[] => {
-			if (!Array.isArray(value)) return false;
-			for (const id of value) {
-				if (!Number.isInteger(id)) return false;
-			}
-			return true;
-		},
+	return z.array(
+		z.number({ error: message }).refine(Number.isInteger, { error: message }),
 		{ error: message },
 	);
 }
