@@ -16,7 +16,7 @@ import {
 	displayNameSchema,
 	loginCredentialsSchema,
 	passwordSchema,
-	REGISTER_USERNAME_MESSAGE,
+	USERNAME_MESSAGE,
 	usernameSchema,
 } from "./auth-schemas.js";
 import {
@@ -35,7 +35,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 	auth.post("/register", async (req, res) => {
 		const { username, password, displayName } = req.body ?? {};
 		const parsedUsername = parseWith(
-			usernameSchema(REGISTER_USERNAME_MESSAGE),
+			usernameSchema(USERNAME_MESSAGE),
 			username,
 		);
 		if (!parsedUsername.ok)

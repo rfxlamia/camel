@@ -25,10 +25,10 @@ function setup() {
 
 describe("my-work route param validation", () => {
 	it.each([
-		["/my-work/abc/board/AT-1", "workspaceId must be a positive integer"],
-		["/my-work/0/board/AT-1", "workspaceId must be a positive integer"],
-		["/my-work/-3/board/AT-1", "workspaceId must be a positive integer"],
-		["/my-work/1e2/board/AT-1", "workspaceId must be a positive integer"],
+		["/my-work/abc/board/AT-1", "workspaceId must be an integer"],
+		["/my-work/0/board/AT-1", "workspaceId must be an integer"],
+		["/my-work/-3/board/AT-1", "workspaceId must be an integer"],
+		["/my-work/1e2/board/AT-1", "workspaceId must be an integer"],
 		["/my-work/7/sprint/AT-1", "source must be board or tracker"],
 		["/my-work/7/board/nope", "invalid work item key"],
 	])("GET %s -> 400 %s", async (path, error) => {
@@ -43,7 +43,7 @@ describe("my-work route param validation", () => {
 		const { app } = setup();
 		const res = await request(app).get("/my-work/abc/sprint/nope");
 		expect(res.body).toEqual({
-			error: "workspaceId must be a positive integer",
+			error: "workspaceId must be an integer",
 		});
 	});
 
@@ -63,12 +63,17 @@ describe("my-work route param validation", () => {
 		expect(service.markDone).not.toHaveBeenCalled();
 	});
 
-	it("GET / maps query parser errors to the shared 400 body", async () => {
+	it.each([
+		"1e2",
+		"",
+	])("GET / maps query parser errors to the shared 400 body for %j", async (id) => {
 		const { app, service } = setup();
-		const res = await request(app).get("/my-work?workspaceId=1e2");
+		const res = await request(app).get(
+			`/my-work?workspaceId=${encodeURIComponent(id)}`,
+		);
 		expect(res.status).toBe(400);
 		expect(res.body).toEqual({
-			error: "workspaceId must be a positive integer",
+			error: "workspaceId must be an integer",
 		});
 		expect(service.list).not.toHaveBeenCalled();
 	});
@@ -86,7 +91,7 @@ describe("parseMyWorkQuery workspaceId", () => {
 	])("rejects %j", (value) => {
 		expect(parseMyWorkQuery({ workspaceId: value })).toEqual({
 			ok: false,
-			error: "workspaceId must be a positive integer",
+			error: "workspaceId must be an integer",
 		});
 	});
 

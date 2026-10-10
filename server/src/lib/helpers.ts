@@ -23,7 +23,6 @@ export {
 	checkActorCanManage,
 	checkCanRemoveUser,
 	lookupMembership,
-	parseWorkspaceId,
 } from "./workspace-membership.js";
 
 // ---- Workspace list serialization -------------------------------------------

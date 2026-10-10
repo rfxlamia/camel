@@ -5,7 +5,7 @@ import { lookupMembership, recordActivity } from "../../../lib/helpers.js";
 import { logger } from "../../../lib/logger.js";
 import { publishEvent } from "../../../realtime.js";
 import { parseWith, sendValidationError } from "../../../validators/http.js";
-import { legacyIntegerParam } from "../../../validators/schemas.js";
+import { workspaceIdParam } from "../../../validators/schemas.js";
 import {
 	createLinearComment,
 	createLinearIssue,
@@ -158,10 +158,7 @@ export function validateTicketWorkspace(
 	req: Request,
 	res: Response,
 ): number | null {
-	const parsedWorkspaceId = parseWith(
-		legacyIntegerParam("workspaceId must be an integer"),
-		req.params.workspaceId,
-	);
+	const parsedWorkspaceId = parseWith(workspaceIdParam, req.params.workspaceId);
 	if (!parsedWorkspaceId.ok) {
 		sendValidationError(res, parsedWorkspaceId.body);
 		return null;

@@ -8,18 +8,13 @@ import {
 const PASSWORD_MESSAGE = "Password must be at least 8 characters.";
 const LOGIN_MESSAGE = "Username and password are required.";
 
-/** ASCII hyphen-minus. Do not unify with the oauth en dash. */
-export const REGISTER_USERNAME_MESSAGE =
+/** Shared register + oauth username 400. ASCII hyphen-minus (U+002D). */
+export const USERNAME_MESSAGE =
 	"Username must be 3-32 characters: letters, numbers, underscore.";
-
-/** EN DASH U+2013. Do not normalize to the register message. */
-export const OAUTH_USERNAME_MESSAGE =
-	"Username must be 3–32 characters: letters, numbers, underscore.";
 
 /**
  * Username field. Wraps `validateUsername` and `USERNAME_RE` — does not
  * reimplement their length or pattern rules. Returns the validator's trim.
- * The caller supplies the user-visible message so the two dashes stay distinct.
  */
 export function usernameSchema(message: string) {
 	return z

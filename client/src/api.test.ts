@@ -1092,3 +1092,83 @@ describe("card attachment API methods", () => {
 		expect(headers.get("Content-Type")).toBe("application/json");
 	});
 });
+
+describe("unified 400 body parsing", () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	it("surfaces workspaceId must be an integer from the error field", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () => Promise.resolve({ error: "workspaceId must be an integer" }),
+		});
+		const { api } = await import("./api");
+
+		await expect(api.getSettings(7)).rejects.toMatchObject({
+			message: "workspaceId must be an integer",
+			status: 400,
+		});
+	});
+
+	it("surfaces username hyphen wording from the error field", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () =>
+				Promise.resolve({
+					error:
+						"Username must be 3-32 characters: letters, numbers, underscore.",
+				}),
+		});
+		const { api } = await import("./api");
+
+		await expect(api.register("ab", "validpass1", "Abe")).rejects.toMatchObject(
+			{
+				message:
+					"Username must be 3-32 characters: letters, numbers, underscore.",
+				status: 400,
+			},
+		);
+	});
+
+	it("surfaces Invalid params from the error field", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () => Promise.resolve({ error: "Invalid params" }),
+		});
+		const { api } = await import("./api");
+
+		await expect(api.getSettings(7)).rejects.toMatchObject({
+			message: "Invalid params",
+			status: 400,
+		});
+	});
+
+	it("preserves fieldErrors for integer-array assigneeIds on ApiError", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () =>
+				Promise.resolve({
+					error: "x",
+					fieldErrors: {
+						assigneeIds: "assigneeIds must be an array of integers",
+					},
+				}),
+		});
+		const { api } = await import("./api");
+
+		await expect(
+			api.createCard(7, { columnId: 1, title: "Plan release" }),
+		).rejects.toMatchObject({
+			message: "x",
+			status: 400,
+			fieldErrors: {
+				assigneeIds: "assigneeIds must be an array of integers",
+			},
+		});
+	});
+});

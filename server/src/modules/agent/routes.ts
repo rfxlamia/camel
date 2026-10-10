@@ -24,7 +24,7 @@ import { requireAuth } from "../../auth.js";
 import { logger } from "../../lib/logger.js";
 import { llmTimeout } from "../../middleware/timeout.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
-import { legacyIntegerParam } from "../../validators/schemas.js";
+import { workspaceIdParam } from "../../validators/schemas.js";
 import { assertWorkspaceMember } from "./membership.js";
 import { registerReadRoutes } from "./read-routes.js";
 import {
@@ -79,10 +79,7 @@ function registerCreateBoard(router: Router, service: AgentService): void {
 		"/workspaces/:workspaceId/agent/boards",
 		requireAuth,
 		async (req, res) => {
-			const ws = parseWith(
-				legacyIntegerParam("workspaceId must be an integer"),
-				req.params.workspaceId,
-			);
+			const ws = parseWith(workspaceIdParam, req.params.workspaceId);
 			if (!ws.ok) return sendValidationError(res, ws.body);
 			const workspaceId = ws.data;
 

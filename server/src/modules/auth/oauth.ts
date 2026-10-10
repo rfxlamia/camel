@@ -10,8 +10,8 @@ import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import {
-	OAUTH_USERNAME_MESSAGE,
 	passwordSchema,
+	USERNAME_MESSAGE,
 	usernameSchema,
 } from "./auth-schemas.js";
 
@@ -24,10 +24,7 @@ oauthRouter.post("/set-username", requireAuth, async (req, res) => {
 		return res.status(409).json({ error: "Username already set." });
 	}
 	const { username, displayName } = req.body ?? {};
-	const parsedUsername = parseWith(
-		usernameSchema(OAUTH_USERNAME_MESSAGE),
-		username,
-	);
+	const parsedUsername = parseWith(usernameSchema(USERNAME_MESSAGE), username);
 	if (!parsedUsername.ok) return sendValidationError(res, parsedUsername.body);
 	const normalizedUsername = parsedUsername.data.toLowerCase();
 	const displayNameFinal =

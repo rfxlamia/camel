@@ -1,0 +1,40 @@
+{
+  "phase_key": "phase-5",
+  "phase_file": "execution-plan/phase-5.md",
+  "timestamp": "2026-10-10T09:15:19Z",
+  "reviewer_mode": "read-only",
+  "findings": [],
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "status": "PHASE_PASS_CLEAN",
+  "evidence": {
+    "contract": "/home/v-homelab/.pi/agent/npm/node_modules/pocketto-pi/skills/pocket-development/references/phase-level-pass.md",
+    "scope": "Independent cross-task duplication, composition, regression, spec-split and architecture/dependency assumption review only; no re-litigation of in-task judgments.",
+    "inputs": "Read complete T14, T15 and T16 packets, their complete current audit artifacts including history, approved shared-400-validation-completion spec (Rules 5–6 / F1 F2 / #198 AC), phase-5 index, example phase-pass-phase-4.json shape, and all three supplied diff ranges. Current task verdicts are REVIEW_PASS and each reviewed_sha equals its DONE task's done_sha.",
+    "ranges": {
+      "T14": "9592c3336f1631faece83d2d1bfe89766fbbf2ef..acbb470b24df782963cf3e5e9254032af92c1f28",
+      "T15": "acbb470b24df782963cf3e5e9254032af92c1f28..639ea5fb1ab310821073f6a52ae09a945ad7caa2",
+      "T16": "639ea5fb1ab310821073f6a52ae09a945ad7caa2..030853d0f9e4038842d1b18aa07e3a54c83b66c7"
+    },
+    "composition": [
+      "T14, T15 and T16 own disjoint files (agent/my-work/sse/helpers vs auth vs client/src/api.test.ts). Later ranges do not rewrite earlier-task files. T14's three behavior commits plus test-only correction remain intact after T15/T16.",
+      "T14 makes workspaceIdParam the single workspace-id schema: lenient parseWorkspaceId and helpers re-export deleted; parseWorkspaceIdValue removed; settings parseWorkspaceId stays a thin parseWith(workspaceIdParam) delegate from prior work. legacyIntegerParam is unused for workspace ids and remains only for non-workspace ids (board/thread/attachment/card). Combined member/invite positiveIdParam messages in workspace-params.ts are packet-excluded legacy combined checks, not a second workspace-id implementation.",
+      "T15 consumes T5 auth-schemas without touching T14 parsers: one USERNAME_MESSAGE (ASCII hyphen-minus) is shared by register and oauth set-username. No EN DASH remains in non-doc source. T16 pins that exact ASCII string plus T14's workspaceId / Invalid params bodies and Phase 4 fieldErrors through public api methods that call throwRequestError; client source is unchanged.",
+      "Client URL builders type workspaceId as number; EventSource paths interpolate numeric workspace ids; my-work client parsers already require digits-only > 0. T14's isolated tightening (0/-1/1e2/space/abc/unsafe) therefore does not meet a lenient client sender. Notifications Number() after requireWorkspaceMember is post-validation coercion, not a leftover lenient parser.",
+      "Rule 5–6 scenarios assigned to this phase are covered across the split: strict workspace matrix + Invalid params split (T14), oauth/register wording identity (T15), throwRequestError + workspace-id client audit + PR/issue drafts (T16). No cross-task duplicate parser or message constant. PR-5 file count is 20 (T14 15 + T15 4 + T16 1)."
+    ],
+    "dependency_verification": {
+      "version": "No new runtime dependency in this phase. Installed zod 4.4.3 continues to back workspaceIdParam / usernameSchema; T14/T15 only retarget existing schemas.",
+      "official_source": "Not re-probed; Phase 4 already verified zod v4 number/refine behavior. This phase does not introduce integerIdArray or new zod combinators.",
+      "primary_source": "Read validators/schemas.ts workspaceIdParam (digits-only /^\d+$/, safe integer, > 0, message workspaceId must be an integer) and auth-schemas.ts USERNAME_MESSAGE. Composed routes call parseWith(workspaceIdParam) or usernameSchema(USERNAME_MESSAGE); Express path params remain strings, matching the schema."
+    },
+    "mechanical_gates": "Accepted controller-supplied green exact task commands: T14 server strict+characterization 139 passed, my-work/settings/agent/realtime 448 passed, make check 0; T15 oauth.validation.test.ts 7 passed, modules/auth 41 passed / 15 skipped; T16 api.test.ts 46 passed, full client 1132 passed. These were not independently rerun.",
+    "write_boundary": "Only this phase-pass artifact written; no implementation, log, task verdict, dependency, test-cache or commit changes. No advisor tool used."
+  }
+}

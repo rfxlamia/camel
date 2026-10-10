@@ -140,6 +140,8 @@ describe("SSE workspace id validation", () => {
 	it.each([
 		"abc",
 		"1.5",
+		"0",
+		"1e2",
 	])("returns 400 not 503 after shutdown for %s", async (workspaceId) => {
 		const { app, manager, responses } = mount();
 		manager.shutdown();
@@ -151,9 +153,9 @@ describe("SSE workspace id validation", () => {
 	});
 
 	it.each([
-		"1e2",
-		"0",
-	])("opens an event stream for integer workspace id %s", async (workspaceId) => {
+		"01",
+		"7",
+	])("opens an event stream for digit workspace id %s", async (workspaceId) => {
 		await expectOpenStream(workspaceId);
 	});
 });

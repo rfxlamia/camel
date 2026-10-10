@@ -1,0 +1,110 @@
+{
+  "contract": 1,
+  "phase_key": "phase-5",
+  "phase_file": "execution-plan/phase-5.md",
+  "recorded_at": "2026-10-10T09:15:56Z",
+  "phase_verdict": "PHASE_PASS_CLEAN",
+  "tasks": [
+    {
+      "task_id": "T14",
+      "name": "Single strict workspace-id parser and tighten lenient routes",
+      "done_sha": "acbb470b24df782963cf3e5e9254032af92c1f28",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T15",
+      "name": "Unify username wording",
+      "done_sha": "639ea5fb1ab310821073f6a52ae09a945ad7caa2",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T16",
+      "name": "Verify client parsing; draft issue comment and PR text",
+      "done_sha": "030853d0f9e4038842d1b18aa07e3a54c83b66c7",
+      "verdict": "REVIEW_PASS"
+    }
+  ],
+  "verification": [
+    {
+      "check": "T14 npm run test --workspace=server -- src/validators/workspace-id.strict.test.ts src/modules/agent/routes.validation.test.ts src/modules/agent/ticket-intake/routes.validation.test.ts src/realtime/sse.validation.test.ts src/modules/my-work/my-work.validation.test.ts",
+      "result": "PASS",
+      "evidence": "5 files, 139 passed (mechanical gate after implementer and after sseHead extract)"
+    },
+    {
+      "check": "T14 npm run test --workspace=server -- src/modules/my-work src/modules/settings src/modules/agent src/realtime",
+      "result": "PASS",
+      "evidence": "448 passed, 51 skipped"
+    },
+    {
+      "check": "T14 make check",
+      "result": "PASS",
+      "evidence": "exit 0 (lint, mutation/event routing, feature-modules, inline-400); DATABASE_URL unset so key-collisions skipped"
+    },
+    {
+      "check": "T15 npm run test --workspace=server -- src/modules/auth/oauth.validation.test.ts",
+      "result": "PASS",
+      "evidence": "1 file, 7 passed"
+    },
+    {
+      "check": "T15 npm run test --workspace=server -- src/modules/auth",
+      "result": "PASS",
+      "evidence": "5 passed | 3 skipped; 41 passed | 15 skipped (router.integration.test.ts skipped without RUN_INTEGRATION=1)"
+    },
+    {
+      "check": "T16 npm run test --workspace=client -- src/api.test.ts",
+      "result": "PASS",
+      "evidence": "1 file, 46 passed"
+    },
+    {
+      "check": "T16 npm run test --workspace=client",
+      "result": "PASS",
+      "evidence": "124 files, 1132 passed"
+    },
+    {
+      "check": "Per-task in-loop audits T14 T15 T16",
+      "result": "PASS",
+      "evidence": "reviews/T14-review.json overall REVIEW_PASS reviewed_sha=acbb470b24df782963cf3e5e9254032af92c1f28; reviews/T15-review.json REVIEW_PASS reviewed_sha=639ea5fb1ab310821073f6a52ae09a945ad7caa2; reviews/T16-review.json REVIEW_PASS reviewed_sha=030853d0f9e4038842d1b18aa07e3a54c83b66c7"
+    },
+    {
+      "check": "Phase-level pass",
+      "result": "PASS",
+      "evidence": "reviews/phase-pass-phase-5.json status PHASE_PASS_CLEAN findings []"
+    }
+  ],
+  "obstacles": [
+    {
+      "summary": "T14 cycle-1 in-loop audit REVIEW_FAIL: sseHead was 59 lines (function-length heuristic ~50)",
+      "resolution": "Extracted in-file collectSseHead; sseHead 16 lines; re-audit cycle 2 REVIEW_PASS. In-loop fix commit acbb470, not a phase-level correction.",
+      "evidence": [
+        "reviews/T14-review.json cycle 1 Important at workspace-id.strict.test.ts:111-169",
+        "acbb470b24df782963cf3e5e9254032af92c1f28"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "kind": "user",
+      "decision": "Rule 6 wording table: oauth username message becomes ASCII 'Username must be 3-32 characters: letters, numbers, underscore.' (same as register)",
+      "rationale": "Approved spec wording table; T15 implements it as one USERNAME_MESSAGE constant",
+      "source": "docs/pocket/spec/2026-10-09-shared-400-validation-completion/shared-400-validation-completion.md Rule 6; T15 packet"
+    },
+    {
+      "kind": "implementation",
+      "decision": "Split combined Invalid params in parseAgentBoardParams (agent/route-validation.ts), not inline in read-routes.ts",
+      "rationale": "The combined schema lived in route-validation.ts; editing it was required for the T14 split, not extra product scope",
+      "source": "T14 packet / T14-review.json stage_1 concerns_addressed"
+    },
+    {
+      "kind": "implementation",
+      "decision": "T16 PR-5 description and #198 issue comment drafted in the task report only; not posted",
+      "rationale": "T16 must-not-have: no gh issue comment / any GitHub write; posting is outward-facing",
+      "source": "T16 packet STOP CONDITIONS; T16 implementer report"
+    }
+  ],
+  "recommendations": [
+    {
+      "suggestion": "Review and post the drafted PR-5 description and #198 issue comment from the T16 report (not committed, not posted).",
+      "evidence": "T16 DELIVERABLE required drafts in the task report; QUALITY BAR forbade gh writes. Drafts list T14 a/b/c, T15 wording, F1, Rule 6, and the client workspace-id audit."
+    }
+  ]
+}

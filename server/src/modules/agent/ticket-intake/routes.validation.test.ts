@@ -13,7 +13,7 @@ vi.mock("../../../db/kysely.js", () => ({ db: {} }));
 vi.mock("../../../realtime.js", () => ({ publishEvent: vi.fn() }));
 vi.mock("./rate-limits.js", () => ({
 	checkChatLimit: vi.fn(),
-	peekChatLimit: vi.fn(),
+	peekChatLimit: vi.fn().mockResolvedValue({ isLocked: false }),
 	peekSubmitLimit: vi.fn(),
 	recordSubmitSuccess: vi.fn(),
 }));
@@ -60,6 +60,27 @@ describe("ticket-intake validation response characterization", () => {
 			.send({});
 		expect(res.status).toBe(400);
 		expect(res.body).toEqual({ error: "workspaceId must be an integer" });
+	});
+
+	it.each([
+		"0",
+		"-1",
+		"1e2",
+		" 1",
+		"1.5",
+		"9007199254740993",
+	])("rejects non-digit workspace %s before ticket-intake handlers", async (id) => {
+		const encoded = encodeURIComponent(id);
+		const getRes = await request(app).get(
+			`${base}/${encoded}/ticket-intake/chat-limit`,
+		);
+		expect(getRes.status).toBe(400);
+		expect(getRes.body).toEqual({ error: "workspaceId must be an integer" });
+		const postRes = await request(app)
+			.post(`${base}/${encoded}/ticket-intake/submit`)
+			.send({});
+		expect(postRes.status).toBe(400);
+		expect(postRes.body).toEqual({ error: "workspaceId must be an integer" });
 	});
 
 	it.each([
