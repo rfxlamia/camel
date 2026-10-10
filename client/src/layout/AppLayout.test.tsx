@@ -95,7 +95,8 @@ describe("AppLayout My Work detail overlay", () => {
 		expect(shell?.classList.contains("overflow-hidden")).toBe(true);
 		expect(contentColumn?.classList.contains("overflow-hidden")).toBe(true);
 		expect(main?.classList.contains("overflow-auto")).toBe(true);
-		expect(main?.classList.contains("overscroll-contain")).toBe(true);
+		expect(main?.classList.contains("overscroll-y-contain")).toBe(true);
+		expect(main?.classList.contains("overscroll-contain")).toBe(false);
 	});
 
 	it("keeps focus mode scrollable within its own viewport", () => {

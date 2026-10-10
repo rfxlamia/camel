@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import type React from "react";
+import { useEffect, useRef } from "react";
 
 export type Mode = "kanban" | "agent";
 
@@ -100,12 +100,12 @@ export function PopoverShell({
 
 	const positionClasses =
 		placement === "right"
-			? "left-full ml-2 top-1/2 -translate-y-1/2"
+			? "left-full ml-2 bottom-0"
 			: "bottom-full mb-4 left-0";
 
 	const arrowClasses =
 		placement === "right"
-			? "absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 rotate-45 bg-white border-l border-b border-neutral-200"
+			? "absolute left-0 bottom-4 -translate-y-1/2 -translate-x-1 w-2 h-2 rotate-45 bg-white border-l border-b border-neutral-200"
 			: "absolute left-4 bottom-0 translate-y-1/2 w-2 h-2 rotate-45 bg-white border-r border-b border-neutral-200";
 
 	return (

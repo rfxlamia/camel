@@ -68,7 +68,10 @@ export function MobileNav({
 				</div>
 
 				{/* Nav items */}
-				<nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Main">
+				<nav
+					className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3"
+					aria-label="Main"
+				>
 					{activeNav.map(({ to, label, icon: Icon }) => (
 						<NavLink
 							key={to}
@@ -85,7 +88,7 @@ export function MobileNav({
 				</nav>
 
 				{/* Footer */}
-				<div className="border-t border-neutral-200 p-3 space-y-1">
+				<div className="shrink-0 border-t border-neutral-200 p-3 space-y-1">
 					<NavLink
 						to={SETTINGS_ITEM.to}
 						onClick={onClose}

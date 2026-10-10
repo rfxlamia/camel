@@ -125,7 +125,7 @@ export default function AppLayout() {
 					</header>
 
 					<main
-						className={`min-h-0 flex-1 ${onChat ? "flex flex-col overflow-hidden" : "overflow-auto overscroll-contain"}`}
+						className={`min-h-0 flex-1 ${onChat ? "flex flex-col overflow-hidden" : "overflow-auto overscroll-y-contain"}`}
 					>
 						<Outlet />
 					</main>
