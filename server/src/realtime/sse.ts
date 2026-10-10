@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { parseWith, sendValidationError } from "../validators/http.js";
+import { legacyIntegerParam } from "../validators/schemas.js";
 import type { PublishableEvent, SseClient } from "./types.js";
 
 const KEEP_ALIVE_MS = 25_000;
@@ -42,11 +44,15 @@ export function createSseManager() {
 	}
 
 	function handler(req: Request, res: Response): void {
-		const workspaceId = Number(req.params.workspaceId);
-		if (!Number.isInteger(workspaceId)) {
-			res.status(400).json({ error: "workspaceId must be an integer" });
+		const parsedWorkspaceId = parseWith(
+			legacyIntegerParam("workspaceId must be an integer"),
+			req.params.workspaceId,
+		);
+		if (!parsedWorkspaceId.ok) {
+			sendValidationError(res, parsedWorkspaceId.body);
 			return;
 		}
+		const workspaceId = parsedWorkspaceId.data;
 
 		if (isShuttingDown) {
 			res.status(503).json({ error: "Server is shutting down" });

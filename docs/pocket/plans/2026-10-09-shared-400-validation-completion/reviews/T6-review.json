@@ -1,0 +1,40 @@
+{
+  "contract": 2,
+  "task_id": "T6",
+  "task_name": "Migrate realtime SSE workspace-id 400 (sse.ts)",
+  "cycle": 1,
+  "timestamp": "2026-10-09T18:29:16Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Implementer concerns: none. Claims verified in the T6 worktree at c5c313b9237f87119f5563596a82393d7334bebb: the 400 returns at sse.ts:51-53 before isShuttingDown (sse.ts:57) and writeHead (sse.ts:62); only legacyIntegerParam is used; \"1e2\" and \"0\" are not validation 400s.",
+      "notifications/sse.test.ts skipIf(!RUN_INTEGRATION) is pre-existing and outside this diff. It is not treated as coverage of the SSE 400. The three non-integration cases in that file passed unmodified, and the new characterization tests cover the deliverable."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "handler parses with parseWith(legacyIntegerParam(\"workspaceId must be an integer\"), req.params.workspaceId) and sendValidationError, then returns, before the 503 shutdown check, writeHead, SSE headers, and addClient (server/src/realtime/sse.ts:46-76). Production sseHandler is that same handler (realtime/hub.ts sseHandler: sse.handler).",
+      "sse.ts has zero status(400) matches and does not reference workspaceIdParam or positiveIdParam. Imports use NodeNext .js extensions and stay in validators/; realtime/ does not import modules/. Diff is only the two listed files.",
+      "Tests pin the 400 body with toEqual({ error: \"workspaceId must be an integer\" }), assert JSON content-type and absence of text/event-stream and Cache-Control no-cache, and fanOut after \"abc\"/\"1.5\" to prove no client was registered. Shutdown-then-invalid expects 400 not 503. \"1e2\" and \"0\" use raw http.get, destroy the request, call shutdown(), and time out at 1500ms so supertest never waits on the open stream.",
+      "Installed worktree packages: zod 4.4.3 (server/package.json ^4.4.3) and express 5.2.1 (server/package.json ^5.1.0). parseWith(legacyIntegerParam(...)) on those versions returns exactly { error: \"workspaceId must be an integer\" } for \"abc\" and \"1.5\", and accepts \"1e2\" as 100 and \"0\" as 0, matching Number.isInteger(Number(raw)). workspaceIdParam rejects both \"1e2\" and \"0\", so the lenient helper is required. schemas.test.ts pins the same contract.",
+      "Refactor heuristics: sse.ts is 100 lines (was 94) and the test is 159; neither crosses ~300. handler is 37 lines and expectOpenStream is 47. createSseManager was already over ~50 before this diff (83 to 87) and was not pushed across a threshold. The parse/guard pair is not repeated 3+ times in scope."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "0f69bec7b9290e846f01fa2ebb77987d648cac6d"
+}

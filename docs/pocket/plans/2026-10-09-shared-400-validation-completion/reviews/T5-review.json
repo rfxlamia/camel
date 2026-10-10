@@ -1,0 +1,39 @@
+{
+  "contract": 2,
+  "task_id": "T5",
+  "task_name": "Migrate auth routes (router.ts, oauth.ts)",
+  "cycle": 1,
+  "timestamp": "2026-10-09T18:35:46Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Implementer concerns: none. Confirmed router username message is ASCII hyphen-minus U+002D and oauth username message is EN DASH U+2013, both byte-identical to base 63510672901aa9808d7ea77bd939b2eeaa6c99fd. No fieldErrors. No status(400) remains in router.ts or oauth.ts."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Both router username checks are one usernameSchema(REGISTER_USERNAME_MESSAGE); oauth reuses that wrapper with OAUTH_USERNAME_MESSAGE. Messages toEqual-pinned, including dashes (router test U+002D, oauth test U+2013 plus explicit \\u2013).",
+      "Schemas wrap validateUsername, USERNAME_RE, and validateDisplayName. They do not reimplement length, regex, or trim. Password stays untrimmed; login does not trim. Success path returns the validator trimmed username/displayName (empty displayName stays undefined so register still falls back to the trimmed username).",
+      "Zod 4.4.3 (server/package.json ^4.4.3, installed node_modules/zod 4.4.3): $ZodCustom.parse is identity and the check receives payload.value (v4/core/schemas.js). Pipe skips transform when the check fails. Reconstructed schema safeParse rejects [\"abc\"] instead of coercing it to \"abc\", so non-strings still reach the validators via value ?? \"\". { error: message } becomes the issue message through normalizeParams/finalizeIssue. parseWith is called without fieldErrors, so sendValidationError bodies are { error } only.",
+      "Register order is username, then password, then displayName, with req.body ?? {} kept on register, login, and oauth. First failure wins, covered by both-invalid and password-before-displayName cases.",
+      "Diff is only the five in-scope files. auth-schemas.ts is 83 lines, uses NodeNext .js imports, and is not exported from index.ts. oauth.test.ts is untouched. router.ts shrank 198 to 189 lines; no modified file crosses ~300 and no function newly exceeds ~50."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "f30d6c3aa2706678079f123d31efc0eb04b1b2dc"
+}

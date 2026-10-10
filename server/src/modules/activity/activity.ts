@@ -3,6 +3,8 @@ import { db } from "../../db/kysely.js";
 import { excludeTrackerEvents } from "../../lib/board-feed-filter.js";
 import { getUnifiedWorkspaceActivity } from "../../lib/work-item-events.js";
 import { requireWorkspaceMember } from "../../middleware/workspace.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
+import { legacyIntegerParam } from "../../validators/schemas.js";
 
 function activitySelect() {
 	return db
@@ -93,10 +95,12 @@ activityRouter.get(
 	async (req, res) => {
 		const { workspaceId } = req.workspace!;
 
-		const cardId = Number(req.params.id);
-		if (!Number.isInteger(cardId)) {
-			return res.status(400).json({ error: "card id must be an integer" });
-		}
+		const parsedCardId = parseWith(
+			legacyIntegerParam("card id must be an integer"),
+			req.params.id,
+		);
+		if (!parsedCardId.ok) return sendValidationError(res, parsedCardId.body);
+		const cardId = parsedCardId.data;
 
 		const cardCheck = await db
 			.selectFrom("cards")

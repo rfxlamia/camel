@@ -8,14 +8,17 @@ import {
 	requireAuth,
 	SESSION_COOKIE,
 	toUser,
-	USERNAME_RE,
 } from "../../auth.js";
 import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
+import { parseWith, sendValidationError } from "../../validators/http.js";
 import {
-	validateDisplayName,
-	validateUsername,
-} from "../../validators/input-length.js";
+	displayNameSchema,
+	loginCredentialsSchema,
+	passwordSchema,
+	REGISTER_USERNAME_MESSAGE,
+	usernameSchema,
+} from "./auth-schemas.js";
 import {
 	accountLockoutMiddleware,
 	clearLoginFailures,
@@ -31,32 +34,23 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 
 	auth.post("/register", async (req, res) => {
 		const { username, password, displayName } = req.body ?? {};
-		const usernameValidation = validateUsername(username ?? "");
-		if (!usernameValidation.valid) {
-			return res.status(400).json({
-				error:
-					"Username must be 3-32 characters: letters, numbers, underscore.",
-			});
+		const parsedUsername = parseWith(
+			usernameSchema(REGISTER_USERNAME_MESSAGE),
+			username,
+		);
+		if (!parsedUsername.ok)
+			return sendValidationError(res, parsedUsername.body);
+		const parsedPassword = parseWith(passwordSchema, password);
+		if (!parsedPassword.ok)
+			return sendValidationError(res, parsedPassword.body);
+		const parsedDisplayName = parseWith(displayNameSchema, displayName);
+		if (!parsedDisplayName.ok) {
+			return sendValidationError(res, parsedDisplayName.body);
 		}
-		if (!USERNAME_RE.test(usernameValidation.trimmed!)) {
-			return res.status(400).json({
-				error:
-					"Username must be 3-32 characters: letters, numbers, underscore.",
-			});
-		}
-		if (typeof password !== "string" || password.length < 8) {
-			return res
-				.status(400)
-				.json({ error: "Password must be at least 8 characters." });
-		}
-		const displayNameValidation = validateDisplayName(displayName ?? "");
-		if (!displayNameValidation.valid) {
-			return res.status(400).json({ error: displayNameValidation.error });
-		}
-		const name = displayNameValidation.trimmed ?? usernameValidation.trimmed!;
+		const name = parsedDisplayName.data ?? parsedUsername.data;
 
-		const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-		const normalizedUsername = usernameValidation.trimmed!.toLowerCase();
+		const hash = await bcrypt.hash(parsedPassword.data, BCRYPT_ROUNDS);
+		const normalizedUsername = parsedUsername.data.toLowerCase();
 		try {
 			const user = await db.transaction().execute(async (trx) => {
 				const inserted = await trx
@@ -139,12 +133,9 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 	});
 
 	auth.post("/login", accountLockoutMiddleware, async (req, res) => {
-		const { username, password } = req.body ?? {};
-		if (typeof username !== "string" || typeof password !== "string") {
-			return res
-				.status(400)
-				.json({ error: "Username and password are required." });
-		}
+		const credentials = parseWith(loginCredentialsSchema, req.body ?? {});
+		if (!credentials.ok) return sendValidationError(res, credentials.body);
+		const { username, password } = credentials.data;
 		const row = await db
 			.selectFrom("users")
 			.select([
