@@ -1,4 +1,6 @@
 import { type DBExecutor, db } from "../db/kysely.js";
+import { parseWith } from "../validators/http.js";
+import { integerIdArray } from "../validators/schemas.js";
 
 export async function parsePriorityId(
 	body: Record<string, unknown>,
@@ -33,17 +35,9 @@ export async function parseLabelIds(
 	workspaceId: number,
 	dbExec: DBExecutor = db,
 ): Promise<number[] | { error: string }> {
-	const raw = body.labelIds;
-	if (!Array.isArray(raw)) {
-		return { error: "labelIds must be an array of integers" };
-	}
-	const ids: number[] = [];
-	for (const id of raw) {
-		if (!Number.isInteger(id)) {
-			return { error: "labelIds must be an array of integers" };
-		}
-		ids.push(id as number);
-	}
+	const parsed = parseWith(integerIdArray("labelIds"), body.labelIds);
+	if (!parsed.ok) return parsed.body;
+	const ids = parsed.data;
 	for (const labelId of [...new Set(ids)]) {
 		const row = await dbExec
 			.selectFrom("tracker_vocabularies")
@@ -64,17 +58,9 @@ export async function parseAssigneeIds(
 	workspaceId: number,
 	dbExec: DBExecutor = db,
 ): Promise<number[] | { error: string }> {
-	const raw = body.assigneeIds;
-	if (!Array.isArray(raw)) {
-		return { error: "assigneeIds must be an array of integers" };
-	}
-	const ids: number[] = [];
-	for (const id of raw) {
-		if (!Number.isInteger(id)) {
-			return { error: "assigneeIds must be an array of integers" };
-		}
-		ids.push(id as number);
-	}
+	const parsed = parseWith(integerIdArray("assigneeIds"), body.assigneeIds);
+	if (!parsed.ok) return parsed.body;
+	const ids = parsed.data;
 	for (const userId of [...new Set(ids)]) {
 		const member = await dbExec
 			.selectFrom("workspace_members")
