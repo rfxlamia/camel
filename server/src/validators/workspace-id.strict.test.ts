@@ -108,6 +108,56 @@ function closeServer(server: Server): Promise<void> {
 	});
 }
 
+function collectSseHead(
+	port: number,
+	workspaceId: string,
+): Promise<{ status: number; body: unknown }> {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const finish = (
+			error?: Error,
+			value?: { status: number; body: unknown },
+		) => {
+			if (settled) return;
+			settled = true;
+			if (error) reject(error);
+			else resolve(value as { status: number; body: unknown });
+		};
+		const req = http.get(
+			{
+				hostname: "127.0.0.1",
+				port,
+				path: `/workspaces/${encodeWs(workspaceId)}/events/stream`,
+			},
+			(res) => {
+				req.setTimeout(0);
+				const status = res.statusCode ?? 0;
+				if (status !== 400) {
+					finish(undefined, { status, body: undefined });
+					req.destroy();
+					return;
+				}
+				const chunks: Buffer[] = [];
+				res.on("data", (chunk) => {
+					chunks.push(chunk as Buffer);
+				});
+				res.on("end", () => {
+					const raw = Buffer.concat(chunks).toString("utf8");
+					finish(undefined, { status, body: JSON.parse(raw) });
+				});
+			},
+		);
+		req.setTimeout(1500, () => {
+			req.destroy();
+			finish(new Error(`timed out waiting for SSE headers (${workspaceId})`));
+		});
+		req.on("error", (error: NodeJS.ErrnoException) => {
+			if (error.code === "ECONNRESET") return;
+			finish(error);
+		});
+	});
+}
+
 async function sseHead(
 	workspaceId: string,
 ): Promise<{ status: number; body: unknown }> {
@@ -118,50 +168,7 @@ async function sseHead(
 	const server = await listen(app);
 	try {
 		const address = server.address() as AddressInfo;
-		return await new Promise((resolve, reject) => {
-			let settled = false;
-			const finish = (
-				error?: Error,
-				value?: { status: number; body: unknown },
-			) => {
-				if (settled) return;
-				settled = true;
-				if (error) reject(error);
-				else resolve(value as { status: number; body: unknown });
-			};
-			const req = http.get(
-				{
-					hostname: "127.0.0.1",
-					port: address.port,
-					path: `/workspaces/${encodeWs(workspaceId)}/events/stream`,
-				},
-				(res) => {
-					req.setTimeout(0);
-					const status = res.statusCode ?? 0;
-					if (status !== 400) {
-						finish(undefined, { status, body: undefined });
-						req.destroy();
-						return;
-					}
-					const chunks: Buffer[] = [];
-					res.on("data", (chunk) => {
-						chunks.push(chunk as Buffer);
-					});
-					res.on("end", () => {
-						const raw = Buffer.concat(chunks).toString("utf8");
-						finish(undefined, { status, body: JSON.parse(raw) });
-					});
-				},
-			);
-			req.setTimeout(1500, () => {
-				req.destroy();
-				finish(new Error(`timed out waiting for SSE headers (${workspaceId})`));
-			});
-			req.on("error", (error: NodeJS.ErrnoException) => {
-				if (error.code === "ECONNRESET") return;
-				finish(error);
-			});
-		});
+		return await collectSseHead(address.port, workspaceId);
 	} finally {
 		manager.shutdown();
 		await closeServer(server);
