@@ -52,8 +52,3 @@ export async function lookupMembership(
 		.executeTakeFirst();
 	return row?.role;
 }
-
-export function parseWorkspaceId(raw: string): number | null {
-	const workspaceId = Number(raw);
-	return Number.isInteger(workspaceId) ? workspaceId : null;
-}
