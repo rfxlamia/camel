@@ -1,5 +1,6 @@
 // server/src/lib/tracker-item-parsers.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { type DBExecutor, db } from "../db/kysely.js";
 
 const { mockExecuteTakeFirst } = vi.hoisted(() => ({
 	mockExecuteTakeFirst: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("../db/kysely.js", () => ({
 }));
 
 import {
+	parseAssigneeIds,
 	parseDateRange,
 	parseLabelIds,
 	parsePriorityId,
@@ -202,5 +204,120 @@ describe("parseDateRange", () => {
 				endDate: "end date must not precede start date",
 			},
 		});
+	});
+});
+
+describe("reference parser characterization", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockExecuteTakeFirst.mockReset();
+	});
+
+	it("preserves the full runtime barrel API", async () => {
+		const exports = await import("./tracker-item-parsers.js");
+		const names = [
+			"parsePriorityId",
+			"parseLabelIds",
+			"parseAssigneeIds",
+			"parseProjectPhase",
+			"parseCardProjectPhase",
+			"parseDateRange",
+		];
+		expect(Object.keys(exports).sort()).toEqual(names.sort());
+		for (const value of Object.values(exports)) {
+			expect(value).toBeTypeOf("function");
+		}
+	});
+
+	for (const [field, parser, row, missMessage] of [
+		[
+			"labelIds",
+			parseLabelIds,
+			{ id: 1 },
+			"label must belong to this workspace",
+		],
+		[
+			"assigneeIds",
+			parseAssigneeIds,
+			{ role: "member" },
+			"assignee must be a member of this workspace",
+		],
+	] as const) {
+		describe(field, () => {
+			it.each([
+				null,
+				"1,2",
+				[1, "x"],
+				[1, 1.5],
+				[1, NaN],
+				[1, Infinity],
+			])("rejects invalid input %j before any DB lookup", async (input) => {
+				expect(await parser({ [field]: input }, 1)).toEqual({
+					error: `${field} must be an array of integers`,
+				});
+				expect(db.selectFrom).not.toHaveBeenCalled();
+			});
+
+			it("rejects an absent field before any DB lookup", async () => {
+				expect(await parser({}, 1)).toEqual({
+					error: `${field} must be an array of integers`,
+				});
+				expect(db.selectFrom).not.toHaveBeenCalled();
+			});
+
+			it("accepts an empty array without DB lookups", async () => {
+				expect(await parser({ [field]: [] }, 1)).toEqual([]);
+				expect(db.selectFrom).not.toHaveBeenCalled();
+			});
+
+			it("preserves duplicate output and looks up only unique ids", async () => {
+				mockExecuteTakeFirst.mockResolvedValue(row);
+				expect(await parser({ [field]: [2, 1, 2, 1] }, 7)).toEqual([
+					2, 1, 2, 1,
+				]);
+				expect(db.selectFrom).toHaveBeenCalledTimes(2);
+				expect(mockExecuteTakeFirst).toHaveBeenCalledTimes(2);
+			});
+
+			it("accepts integers outside the safe-integer range", async () => {
+				const id = Number.MAX_SAFE_INTEGER + 1;
+				mockExecuteTakeFirst.mockResolvedValue(row);
+				expect(await parser({ [field]: [id] }, 7)).toEqual([id]);
+				expect(mockExecuteTakeFirst).toHaveBeenCalledTimes(1);
+			});
+
+			it("keeps the workspace lookup miss message", async () => {
+				mockExecuteTakeFirst.mockResolvedValueOnce(undefined);
+				expect(await parser({ [field]: [999] }, 7)).toEqual({
+					error: missMessage,
+				});
+			});
+		});
+	}
+
+	it("uses the supplied executor for all three reference parsers", async () => {
+		const executeTakeFirst = vi
+			.fn()
+			.mockResolvedValue({ id: 1, role: "member" });
+		const chain = {
+			select: vi.fn(() => chain),
+			where: vi.fn(() => chain),
+			executeTakeFirst,
+		};
+		const executor = { selectFrom: vi.fn(() => chain) };
+		const dbExec = executor as unknown as DBExecutor;
+		expect(await parsePriorityId({ priorityId: 1 }, 7, dbExec)).toBe(1);
+		expect(await parseLabelIds({ labelIds: [1] }, 7, dbExec)).toEqual([1]);
+		expect(await parseAssigneeIds({ assigneeIds: [1] }, 7, dbExec)).toEqual([
+			1,
+		]);
+		expect(executor.selectFrom.mock.calls).toEqual([
+			["tracker_vocabularies"],
+			["tracker_vocabularies"],
+			["workspace_members"],
+		]);
+		expect(chain.where).toHaveBeenCalledWith("workspace_id", "=", 7);
+		expect(executeTakeFirst).toHaveBeenCalledTimes(3);
+		expect(db.selectFrom).not.toHaveBeenCalled();
 	});
 });
