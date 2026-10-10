@@ -1,0 +1,47 @@
+{
+  "task_id": "T9",
+  "task_name": "Add the guard CLI, tree walk and allowlist",
+  "cycle": 1,
+  "timestamp": "2026-10-10T03:48:32Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Loaded the full T9 packet, execution-plan/phase-3.md, the approved spec, and all four normative review references verbatim. Reviewed the non-empty pinned diff and both complete changed files at a0536b443f43ed0dfa6372592fed78ac6c0c8e1c.",
+      "Verified clean-tree and real-repository success: default root is derived from the script URL, an empty server/src yields no violations, and successful scans return 0 (scripts/check-inline-400.mjs:56,83-120; tests:106-112,163-166). Controller observed node --test scripts/check-inline-400.test.mjs 20/20 PASS and node scripts/check-inline-400.mjs exit 0.",
+      "Verified recursive .ts traversal, all three excluded suffixes, and pruning of every __tests__ directory (scripts/check-inline-400.mjs:58,64-81; tests:127-137).",
+      "Verified scanSource integration, repo-relative forward-slash path:line output on stdout, and exit 1 for violations (scripts/check-inline-400.mjs:105-117; tests:114-125).",
+      "Verified the allowlist contains exactly server/src/validators/http.ts; another validator is rejected; there is no baseline or ratchet (scripts/check-inline-400.mjs:57,108; tests:139-150).",
+      "Verified --root parsing and an explanatory nonzero missing-source-root result (scripts/check-inline-400.mjs:83-103; tests:152-161).",
+      "Only the two packet-scoped scripts changed. Guard wiring/documentation belong to T10, not T9. Existing T8 detector behavior was preserved. Controller supplied implementer-observed RED evidence for three CLI cases; this audit does not independently claim to have reproduced historical RED."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "CLI, tree traversal, and the pre-existing pure detector remain separate; importing the module does not scan the repository. A local import probe returned the expected [{\"line\":1}] for res.status(400).",
+      "Integration tests use real temporary directories and spawnSync, assert exit status and precise violation output, cover the full skip set and allowlist boundary, and clean up through finally (scripts/check-inline-400.test.mjs:12-32,106-166).",
+      "The packet-required header explicitly records the mirrored walk/skip pattern and deferred scripts/lib/walk.mjs extraction (scripts/check-inline-400.mjs:60-63). Shared-walk duplication is the approved packet deferral, not grounds to expand this task into sibling scripts.",
+      "Refactor heuristics checked: implementation file 124 lines; test file 166 lines; scanSource 43 lines including its nested visitor, walk 18 lines, runCli 38 lines. No function exceeds approximately 50 lines, neither file approaches 300 lines, and there is no undeferred identical logic repeated three times across the in-scope files.",
+      "Deterministic sorted output, explicit unknown/missing argument errors, and a missing server/src diagnostic follow the sibling guard style without silently passing invalid invocation. No credentials, SQL changes, extra allowlist entries, baseline mechanism, or out-of-scope implementation changes.",
+      "Installed-version assumptions verified through local primary sources: Node v22.23.3; node_modules/typescript/package.json reports TypeScript 5.9.3 and lib/typescript.js as its entry point; server/package.json:56 declares ^5.7.2. Local resolution points to the hoisted node_modules/typescript/lib/typescript.js. That implementation defines isNumericLiteral at line 30634, forEachChild at 32965, and createSourceFile at 33019, supporting the detector's actual API usage. No new external API assumption was introduced by T9.",
+      "Compared scripts/check-event-write-routing.mjs, scripts/check-work-item-mutation-routing.mjs and scripts/feature-modules/wiring.test.mjs for repository patterns. git diff --check on the pinned range passed. Mechanical test and real-tree success evidence is controller-observed, not inferred from implementer quality claims."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "a0536b443f43ed0dfa6372592fed78ac6c0c8e1c",
+  "audit_range": "8b7df4962f114e15b70f675e648e5aae4d823c15..a0536b443f43ed0dfa6372592fed78ac6c0c8e1c"
+}
