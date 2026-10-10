@@ -9,6 +9,53 @@ else
 	BASE=""
 fi
 
+# Inspect every ref being pushed before deciding whether application tests are needed.
+ZERO_SHA=0000000000000000000000000000000000000000
+SAW_REF=0
+TEST_RELEVANT=0
+RANGE_UNVERIFIED=0
+while IFS=' ' read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+	[ -n "$LOCAL_REF$LOCAL_SHA$REMOTE_REF$REMOTE_SHA" ] || continue
+	SAW_REF=1
+
+	# Deleting a remote ref does not push any new application code.
+	if [ "$LOCAL_SHA" = "$ZERO_SHA" ]; then
+		continue
+	fi
+	if [ "$LOCAL_SHA" != "$HEAD_SHA" ]; then
+		echo "❌ Ref $LOCAL_REF points to $LOCAL_SHA, not checked-out HEAD $HEAD_SHA." >&2
+		echo "   Check out that ref and push it separately so its tests run against the correct code." >&2
+		exit 1
+	fi
+
+	if [ "$REMOTE_SHA" = "$ZERO_SHA" ]; then
+		# New branch: compare against the shared mainline base.
+		if ! PUSH_BASE=$(git merge-base "$LOCAL_SHA" origin/main 2>/dev/null) || [ -z "$PUSH_BASE" ]; then
+			RANGE_UNVERIFIED=1
+			continue
+		fi
+		FROM_SHA=$PUSH_BASE
+	else
+		FROM_SHA=$REMOTE_SHA
+	fi
+
+	if git diff --quiet --no-renames "$FROM_SHA" "$LOCAL_SHA" -- client/ server/ package.json package-lock.json biome.json 2>/dev/null; then
+		:
+	else
+		DIFF_STATUS=$?
+		if [ "$DIFF_STATUS" -eq 1 ]; then
+			TEST_RELEVANT=1
+		else
+			RANGE_UNVERIFIED=1
+		fi
+	fi
+done
+
+# An empty or malformed push input is not safe evidence that tests can be skipped.
+if [ "$SAW_REF" -eq 0 ]; then
+	RANGE_UNVERIFIED=1
+fi
+
 echo "🔎 Running typecheck (full)..."
 npm run typecheck
 
@@ -21,8 +68,16 @@ else
 fi
 npm run test:feature-modules
 
-if [ "$HAS_ORIGIN_MAIN" -eq 1 ]; then
-	if [ "$BASE" = "$HEAD_SHA" ]; then
+if [ "$TEST_RELEVANT" -eq 1 ] || [ "$RANGE_UNVERIFIED" -eq 1 ]; then
+	if [ "$RANGE_UNVERIFIED" -eq 1 ]; then
+		echo "⚠️ Could not verify pushed ref range — running full tests..."
+	elif [ "$HAS_ORIGIN_MAIN" -eq 0 ]; then
+		echo "⚠️ origin/main unavailable — running full tests..."
+	fi
+
+	if [ "$RANGE_UNVERIFIED" -eq 1 ] || [ "$HAS_ORIGIN_MAIN" -eq 0 ]; then
+		npm test
+	elif [ "$BASE" = "$HEAD_SHA" ]; then
 		echo "⚠️ merge-base == HEAD (pushing main or up-to-date) — running full tests..."
 		npm test
 	else
@@ -31,8 +86,7 @@ if [ "$HAS_ORIGIN_MAIN" -eq 1 ]; then
 		npm run test --workspace=client -- --changed="$BASE" --passWithNoTests
 	fi
 else
-	echo "⚠️ origin/main unavailable — running full tests..."
-	npm test
+	echo "⏭ No client/server or shared test-input changes — skipping application test suites"
 fi
 
 echo "✓ Pre-push passed"
