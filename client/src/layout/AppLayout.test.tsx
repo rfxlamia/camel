@@ -86,6 +86,26 @@ describe("AppLayout My Work detail overlay", () => {
 		});
 	});
 
+	it("keeps My Work scrolling inside the main viewport", () => {
+		const { container } = renderLayout("/my-work");
+		const shell = container.querySelector(".flex.h-dvh");
+		const contentColumn = shell?.querySelector(".min-h-0.flex-1.flex-col");
+		const main = container.querySelector("main");
+
+		expect(shell?.classList.contains("overflow-hidden")).toBe(true);
+		expect(contentColumn?.classList.contains("overflow-hidden")).toBe(true);
+		expect(main?.classList.contains("overflow-auto")).toBe(true);
+		expect(main?.classList.contains("overscroll-contain")).toBe(true);
+	});
+
+	it("keeps focus mode scrollable within its own viewport", () => {
+		const { container } = renderLayout("/focus");
+		const focusShell = container.querySelector(".h-dvh.overflow-auto");
+
+		expect(focusShell).toBeTruthy();
+		expect(focusShell?.classList.contains("overflow-hidden")).toBe(false);
+	});
+
 	it("keeps the global issue FAB on My Work without an open detail", () => {
 		renderLayout("/my-work");
 
