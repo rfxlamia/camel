@@ -1,0 +1,95 @@
+{
+  "CONTRACT": 2,
+  "task_id": "T11",
+  "task_name": "Add integerIdArray and dedupe workspaceIdParam",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "strategies": [
+      "Round 1: replace whole-array hand-written loop with explicit Zod array and element-level Number.isInteger refinement, per auditor installed-version probe; retain oracle tests."
+    ],
+    "prior_windows": []
+  },
+  "cycle": 2,
+  "timestamp": "2026-10-10T04:27:51Z",
+  "reviewed_sha": "626443ea505f2b3c13682945045dffd5f84b1f41",
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Loaded the full T11 packet, Phase 4 and Phase 5 files, full approved spec (including Rules 4/5 and Design Decision), and all four normative review references verbatim. Read both changed files completely plus validators/http.ts and tracker-item-parsers.ts as repository context. Audited initial implementation plus correction 1 only: 97d8dd8f681e4aa68bee6659d9f29ca0a0203ebf..626443ea505f2b3c13682945045dffd5f84b1f41; HEAD equals the pinned tip and only the two scoped source/test files differ.",
+      "Previous Important misunderstanding at schemas.ts:34-41 is resolved. Correction 1 replaces the whole-array hand-written loop with z.array(z.number({ error: message }).refine(Number.isInteger, { error: message }), { error: message }) at schemas.ts:32-38. It now meets both the explicit element-level refinement requirement and the approved Zod design decision, without .int(), coercion, positivity/safe-integer constraints or deduplication.",
+      "Exact T11 acceptance oracle verified through actual schemas.ts and http.ts loaded by in-memory TypeScript transpilation, using installed Zod: 54 independent assertions passed. For labelIds and assigneeIds, [], [1,2], [1,1], negative/zero/-0/unsafe integers and 1e100 succeed with equal data; null, strings, objects, mixed/string elements, fractions, null elements, undefined, NaN, infinities, sparse arrays and undefined/boolean/bigint elements fail with precisely {error: \"<field> must be an array of integers\"}. This matches Array.isArray plus Number.isInteger per element in tracker-item-parsers.ts:62-120. Absence remains caller-owned; this schema correctly rejects undefined.",
+      "workspaceIdParam at schemas.ts:7 is exactly positiveIdParam(WORKSPACE_ID_MESSAGE). Its hoisted function declaration at :22-30 preserves string type, digit regex, Number transform, safe-positive check and error wording. Exact packet table independently verified: \"1\"/\"01\" -> 1; \"0\", \"-1\", \"1e2\", \"\", \" 1\", \"abc\", \"9007199254740993\" and undefined fail with workspaceId must be an integer. Existing workspaceIdParam tests remain untouched; only new coverage was added (schemas.test.ts:93-106). No caller changes.",
+      "Installed dependency independently resolved from repository root to node_modules/zod/index.cjs; package.json reports Zod 4.4.3. Current official https://zod.dev/api documentation confirms number schemas reject NaN/Infinity and documents arrays/refinements; because current docs advertise a newer release, installed-version implementation is the definitive evidence: v4/core/schemas.js:497-510 finite-number validation, :680-711 Array.isArray and per-index element parsing (holes become undefined), :2209-2247 predicate/falsy refinement handling and custom error propagation; v4/classic/schemas.js:1342-1344 refine delegation. Actual installed-version oracle also verifies unsafe integers are accepted.",
+      "Controller-supplied mechanical gate evidence accepted as supplied, not independently rerun: reported commit exists; exact npm run test --workspace=server -- src/validators/schemas.test.ts passed 83 tests; exact npm run test --workspace=server -- src/modules/settings passed 54 with 6 skipped. Prior audit recorded expected missing-export RED. No advisor tool used. Review is limited to T11, not future T12-T16 parser/caller migrations."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Completed Stage 2 now that Stage 1 passes; all packet QUALITY BAR items satisfied: prior workspaceIdParam tests unchanged, no .int() for array elements, no duplicate rejection, no caller changes and no out-of-scope source edits.",
+      "Compact kernel-only schema uses established Zod error/refine conventions and delegates workspace-id validation to the existing helper. Imports retain server ESM .js conventions in tests, and validators introduce no module/lib dependency.",
+      "Field-specific errors are attached to both array and numeric element validation and refinement, so every invalid case reaches parseWith with the requested message and body shape; output is inferred as number[].",
+      "Table-driven behavioral tests exercise parseWith, pin duplicates and strict workspace-id equivalence, and include unsafe-integer, nonfinite and sparse-array regression coverage. Existing tests are preserved rather than weakened.",
+      "Refactor heuristics clear: schemas.ts is 80 lines, schemas.test.ts is 255 lines; no changed function exceeds roughly 50 lines and no identical implementation logic appears 3+ times in the scoped diff. No security-sensitive operations, secrets, SQL or new external side effects were introduced."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "review_history": [
+    {
+      "CONTRACT": 2,
+      "task_id": "T11",
+      "task_name": "Add integerIdArray and dedupe workspaceIdParam",
+      "cycle": 1,
+      "timestamp": "2026-10-10T04:23:51Z",
+      "reviewer_mode": "read-only",
+      "reviewer_config": "batch-parallel",
+      "stage_1": {
+        "status": "FAIL",
+        "issues": [
+          {
+            "type": "misunderstanding",
+            "severity": "Important",
+            "description": "The T11 OBJECTIVE explicitly requires .refine(Number.isInteger) on elements. Instead integerIdArray uses z.unknown().refine with an Array.isArray check and a hand-written element loop. This satisfies the requested runtime acceptance cases but does not implement the specified schema construction; the approved Design Decision also rejects the shared hand-written loop approach in favor of Zod array validation. This is a bounded implementation-method/spec deviation, not a demonstrated runtime correctness failure.",
+            "location": "server/src/validators/schemas.ts:34-41"
+          }
+        ],
+        "concerns_addressed": [
+          "Loaded the complete T11 packet, Phase 4 and Phase 5 files, full approved spec (Rules 4 and 5 and Design Decision), and all four normative review references verbatim. Audited only 97d8dd8f681e4aa68bee6659d9f29ca0a0203ebf..2765fec823d55dd909cc9e94164296873837968e; HEAD equals the pinned tip. Read both changed files in full and the existing HTTP wrapper and tracker parser implementation as context.",
+          "All requested runtime cases are implemented and tested through parseWith: [] and integer arrays accepted, duplicates preserved, undefined/null/non-arrays/bad elements rejected with the exact field message. Additional tests pin negative/zero/unsafe integers, NaN/Infinity and sparse arrays (schemas.test.ts:50-90). The implementation uses Array.isArray and for-of plus Number.isInteger exactly like the existing parser loops (tracker-item-parsers.ts:62-120), so holes yield undefined and reject; no coercion, positivity restriction, safe-integer restriction or duplicate rejection was added.",
+          "workspaceIdParam is exactly positiveIdParam(WORKSPACE_ID_MESSAGE) at schemas.ts:7; the helper preserves the previous string/regex/Number/safe-positive checks and error text. Existing workspaceIdParam tests are untouched; the additional equivalence table covers 1/01 and every requested rejection (schemas.test.ts:93-106). No callers changed; the range contains only the two allowed files.",
+          "Installed Zod version independently verified as 4.4.3. Official https://zod.dev/api snapshot /tmp/camel-zod-api-phase4.html confirms refinement falsy/error behavior and safe-integer limits of int. Installed source verifies unknown pass-through (node_modules/zod/v4/core/schemas.js:619-622), custom-refinement execution and error handling (same file:2209-2247), and refine API delegation (node_modules/zod/v4/classic/schemas.js:1342-1344). Installed schemas.d.ts:38 supports predicate-based output narrowing in this version, so the current type predicate was not incorrectly flagged as returning unknown.",
+          "An independent read-only Node probe using installed Zod 4.4.3 verified that z.array(z.number({error: message}).refine(Number.isInteger, {error: message}), {error: message}) accepts [], duplicates, negative/zero values, MAX_SAFE_INTEGER+1 and 1e100, while rejecting all packet invalid cases, undefined, NaN, Infinity and Array(1) with the requested message. Thus the explicit element-refinement requirement can be met without unsafe-integer or sparsity regressions.",
+          "Controller supplied mechanical-gate evidence: commit exists; exact schema command passed 83 tests; settings command passed 54 with 6 skipped. Expected missing-export RED was recorded by implementer. These suite results are supplied gate evidence, not independently rerun tests. No advisor tool was available; controller was consulted as stated in dispatch. Review does not extend to future T12-T16 deliveries."
+        ]
+      },
+      "stage_2": {
+        "status": "SKIPPED",
+        "strengths": [],
+        "issues": [],
+        "assessment": "N/A"
+      },
+      "overall": "REVIEW_FAIL",
+      "fix_instructions": "1. [Important] In server/src/validators/schemas.ts:34-41, implement the packet's explicit element-level .refine(Number.isInteger) requirement using a Zod array and a number element schema, setting the same field-specific error on both array and element validation. Do not use .int(), safe-integer/positive constraints, coercion or deduplication. Preserve rejection of sparse arrays and acceptance of unsafe integers. Keep existing workspaceIdParam tests and all callers unchanged. 2. Rerun both exact packet commands: npm run test --workspace=server -- src/validators/schemas.test.ts and npm run test --workspace=server -- src/modules/settings; commit and request independent re-audit. Stage 2 was skipped by the mandatory Stage 1 circuit breaker; there are no Critical findings.",
+      "loop_info": {
+        "recovery_window": 1,
+        "current_cycle": 2,
+        "max_cycles": 2,
+        "cycles_remaining": 1,
+        "strategies": [
+          "Round 1: replace whole-array hand-written loop with explicit Zod array and element-level Number.isInteger refinement, per auditor installed-version probe; retain oracle tests."
+        ],
+        "prior_windows": []
+      },
+      "reviewed_sha": "2765fec823d55dd909cc9e94164296873837968e"
+    }
+  ]
+}
