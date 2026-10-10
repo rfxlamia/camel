@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { parseWith, sendValidationError } from "../validators/http.js";
-import { legacyIntegerParam } from "../validators/schemas.js";
+import { workspaceIdParam } from "../validators/schemas.js";
 import type { PublishableEvent, SseClient } from "./types.js";
 
 const KEEP_ALIVE_MS = 25_000;
@@ -45,7 +45,7 @@ export function createSseManager() {
 
 	function handler(req: Request, res: Response): void {
 		const parsedWorkspaceId = parseWith(
-			legacyIntegerParam("workspaceId must be an integer"),
+			workspaceIdParam,
 			req.params.workspaceId,
 		);
 		if (!parsedWorkspaceId.ok) {

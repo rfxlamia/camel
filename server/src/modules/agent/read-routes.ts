@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../../auth.js";
 import { db } from "../../db/kysely.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
-import { legacyIntegerParam } from "../../validators/schemas.js";
+import { workspaceIdParam } from "../../validators/schemas.js";
 import { buildArtifactDownload } from "./artifact-db.js";
 import {
 	getToolTrace,
@@ -39,10 +39,7 @@ function registerBoardList(router: Router, service: AgentService): void {
 		"/workspaces/:workspaceId/agent/boards",
 		requireAuth,
 		async (req, res) => {
-			const ws = parseWith(
-				legacyIntegerParam("workspaceId must be an integer"),
-				req.params.workspaceId,
-			);
+			const ws = parseWith(workspaceIdParam, req.params.workspaceId);
 			if (!ws.ok) return sendValidationError(res, ws.body);
 			const workspaceId = ws.data;
 

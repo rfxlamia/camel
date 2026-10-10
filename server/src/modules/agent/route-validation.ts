@@ -1,23 +1,31 @@
 import type { Response } from "express";
 import { z } from "zod";
 import { parseWith, sendValidationError } from "../../validators/http.js";
-import { legacyIntegerParam } from "../../validators/schemas.js";
+import {
+	legacyIntegerParam,
+	workspaceIdParam,
+} from "../../validators/schemas.js";
 import { resolveMessageAction } from "./message-action.js";
-
-const boardParams = z.object({
-	workspaceId: legacyIntegerParam("Invalid params"),
-	boardId: legacyIntegerParam("Invalid params"),
-});
 
 export function parseAgentBoardParams(
 	workspaceId: unknown,
 	boardId: unknown,
 	res: Response,
 ) {
-	const parsed = parseWith(boardParams, { workspaceId, boardId });
-	if (parsed.ok) return parsed.data;
-	sendValidationError(res, parsed.body);
-	return undefined;
+	const parsedWorkspace = parseWith(workspaceIdParam, workspaceId);
+	if (!parsedWorkspace.ok) {
+		sendValidationError(res, parsedWorkspace.body);
+		return undefined;
+	}
+	const parsedBoard = parseWith(legacyIntegerParam("Invalid params"), boardId);
+	if (!parsedBoard.ok) {
+		sendValidationError(res, parsedBoard.body);
+		return undefined;
+	}
+	return {
+		workspaceId: parsedWorkspace.data,
+		boardId: parsedBoard.data,
+	};
 }
 
 const messageAction = z

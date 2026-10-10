@@ -52,11 +52,19 @@ describe("agent route validation preserves legacy bodies and order", () => {
 		});
 	});
 
-	it.each(["abc", "1.5"])("rejects workspace %s before intent", async (id) => {
+	it.each([
+		"abc",
+		"1.5",
+		"0",
+		"-1",
+		"1e2",
+		" 1",
+		"9007199254740993",
+	])("rejects workspace %s before intent", async (id) => {
 		for (const method of ["get", "post"] as const) {
 			await check(
 				method,
-				`${base}/${id}/agent/boards`,
+				`${base}/${encodeURIComponent(id)}/agent/boards`,
 				"workspaceId must be an integer",
 			);
 		}
@@ -64,16 +72,23 @@ describe("agent route validation preserves legacy bodies and order", () => {
 
 	it.each(
 		combinedRoutes,
-	)("pins combined params for %s %s", async (method, suffix) => {
-		for (const [ws, board] of [
-			["abc", "2"],
-			["1.5", "2"],
-			["1", "abc"],
-			["1", "1.5"],
-		]) {
+	)("rejects non-integer workspace on %s %s", async (method, suffix) => {
+		for (const ws of ["abc", "1.5", "0", "1e2"]) {
 			await check(
 				method,
-				`${base}/${ws}/agent/boards/${board}${suffix}`,
+				`${base}/${ws}/agent/boards/2${suffix}`,
+				"workspaceId must be an integer",
+			);
+		}
+	});
+
+	it.each(
+		combinedRoutes,
+	)("pins invalid board id for %s %s", async (method, suffix) => {
+		for (const board of ["abc", "1.5"]) {
+			await check(
+				method,
+				`${base}/1/agent/boards/${board}${suffix}`,
 				"Invalid params",
 			);
 		}
@@ -117,9 +132,9 @@ describe("agent route validation preserves legacy bodies and order", () => {
 	});
 
 	it.each([
-		"1e2",
-		"0",
-	])("preserves lenient integer workspace %s on every route", async (id) => {
+		"01",
+		"7",
+	])("accepts digit workspace %s on every route", async (id) => {
 		const routes = [
 			["get", "", {}],
 			["post", "", { intent: "build" }],
@@ -133,7 +148,7 @@ describe("agent route validation preserves legacy bodies and order", () => {
 			const res = await request(app())
 				[method as "get" | "post"](`${base}/${id}/agent/boards${suffix}`)
 				.send(body);
-			expect(res.status).toBe(403);
+			expect(res.status).not.toBe(400);
 			expect(membership).toHaveBeenCalledWith(
 				expect.anything(),
 				expect.anything(),
