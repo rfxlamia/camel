@@ -128,3 +128,45 @@ Phase 2 — auth, realtime SSE, notifications and activity migration — remains
 ### Next
 
 Phase 3 — inline-400 AST detection (`scanSource`), the guard CLI, and wiring — remains `WAITING`. Its Phase 2 prerequisite is now complete. This closeout does not start Phase 3.
+
+## Phase 3 of 5 — Inline-400 AST guard and CI wiring
+<!-- pocket-closeout:phase-3 -->
+
+**Status:** Complete — `REVIEW` → `DONE`
+**Closed:** 2026-10-10T04:15:25Z
+
+### What was completed
+
+- **T8 — Implement inline-400 AST detection (scanSource):** completed (`8b7df49`). Added literal-400 detection through the TypeScript AST, including multiline and alternate method forms.
+- **T9 — Add the guard CLI, tree walk and allowlist:** completed (`a0536b4`). Added repository scanning, test/declaration skips, temporary-root support, and the single `validators/http.ts` allowlist entry.
+- **T10 — Wire the guard into package.json, Makefile, CI and CLAUDE.md:** completed (`e5561b0`). Added guard execution and self-tests to the existing checks and documented the validation rule.
+
+### Review and verification
+
+- All three current task verdicts are `REVIEW_PASS`; each reviewed SHA exactly matches its DONE SHA. Completed Phase 1 and Phase 2 verdict freshness was also reconciled before closing.
+- Phase-level review: `PHASE_PASS_CLEAN` (source: `reviews/phase-notes-phase-3.json`).
+- Corrections: None recorded. No Minor issues or outstanding findings recorded.
+- Controller detector/CLI mechanical gates passed: T8 14/14 tests; T9 20/20 tests; real-tree guard exit 0.
+- Controller wiring test passed; combined guard tests passed 21/21.
+- Controller `make check` passed: lint and mutation, event-write, feature-module, and inline-400 guards.
+- Controller `npm run test && npm run typecheck` passed with exit 0 after 421s (process `proc_e59d`); full root test chain and server/client typechecks completed. Final feature-module suite passed 156/156. The implementer independently reported a successful full `npm test` run.
+- Evidence source: `reviews/phase-notes-phase-3.json` and current `T8-review.json`, `T9-review.json`, `T10-review.json`.
+
+### Obstacles and resolution
+
+- The initial background verification shell could not resolve npm (process `proc_1add`, exit 127). Verification was rerun with the installed Node v22.23.3 bin directory explicitly prepended to PATH; process `proc_e59d` then exited 0. This was an environment obstacle, not a test failure. Source: Phase 3 notes.
+
+### Decisions
+
+- User: route clear-scope tasks to `gpt-6-luna`, and complex tasks and audits to `gpt-6.1-sol`. Source: explicit development request and Phase 3 notes.
+- Implementation: T8 used `gpt-6.1-sol` for AST/token-line reasoning; T9 and T10 used `gpt-6-luna`; all independent audits used `gpt-6.1-sol`. Source: Phase 3 notes.
+- Implementation: prepend `test:guards` while preserving the existing root test-chain suffix and command ordering. Source: Phase 3 notes and T10 verdict.
+- User: authorize Phase 3 closeout through the current `pocket-closing` invocation.
+
+### Suggestions
+
+- No follow-up suggestion from the recorded review observations.
+
+### Next
+
+Phase 4 — shared integer-id-array schema and parser/reference extraction (T11–T13) — remains `WAITING`. Its Phase 3 prerequisite is now complete. This closeout does not start Phase 4.

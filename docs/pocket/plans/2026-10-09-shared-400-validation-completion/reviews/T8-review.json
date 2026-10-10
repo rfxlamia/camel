@@ -1,0 +1,45 @@
+{
+  "task_id": "T8",
+  "task_name": "Implement inline-400 AST detection (scanSource)",
+  "cycle": 1,
+  "timestamp": "2026-10-10T03:42:43Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Loaded the complete T8 packet, execution-plan/phase-3.md, and the approved shared-400-validation-completion spec; assessed Rule 2's detector requirements only. CLI, walk, allowlist and wiring belong to T9/T10 and are correctly absent.",
+      "Reviewed pinned range d89f2b66be7149339058486f3268964de16db656..8b7df4962f114e15b70f675e648e5aae4d823c15 and both complete in-scope files. Earlier phase-2 review/closeout metadata is not T8 implementation scope creep; T8 commit changes only the two scoped scripts.",
+      "Verified property-access and string-literal element-access calls for status/sendStatus/writeHead with first-argument NumericLiteral value 400 (scripts/check-inline-400.mjs:18-36). No receiver-name restriction, constant evaluation, raw-text regex or baseline mechanism is introduced.",
+      "Verified 1-based method-token lines via getStart(source) and line + 1 (scripts/check-inline-400.mjs:38-42); tests pin ordinary, multiline, element-access, comment-trivia and multiple-result cases (scripts/check-inline-400.test.mjs:16-45,59-63).",
+      "Verified comments, strings and template literal text are ignored, while 404/409/500, dynamic codes and arithmetic expressions are not flagged (scripts/check-inline-400.test.mjs:30-40). Header documents the dynamic-code limitation (scripts/check-inline-400.mjs:3-5).",
+      "Independent execution of node --test scripts/check-inline-400.test.mjs passed 14/14. Controller reports missing-module RED evidence; the resolution test is independent of detector import and genuinely checks createSourceFile (scripts/check-inline-400.test.mjs:4-8).",
+      "Architecture/API evidence: installed TypeScript is 5.9.3, resolving to root node_modules/typescript/lib/typescript.js; server/package.json declares ^5.7.2. Installed implementation confirms file-extension ScriptKind inference (typescript.js:22506-22529), NumericLiteral/StringLiteral kind predicates (30634-30642), property/element/call predicates (30871-30879), token-leaf termination in forEachChild (32965-32970), createSourceFile parsing (33019-33065), and getStart delegating to trivia-skipping getTokenPosOfNode (151827-151830,16621 onward). This verifies the actual installed API without assuming behavior from an unavailable Context7 tool.",
+      "Additional read-only probes confirmed alternate numeric literal representations 0x190/4e2 are caught, bigint 400n is ignored, template interpolation calls are caught while literal text is ignored, both alternate method names work through string element access, and regex/comment text produces no findings. Import exports only scanSource and performs no CLI/filesystem work."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "All QUALITY BAR must-haves are satisfied: every required rule has behavioral test coverage and the dynamic-code limitation is explicit.",
+      "All must-not-haves are absent: no baseline/ratchet counts, no 404/409/500 detection, and no added npm dependencies. TypeScript resolution is directly tested rather than silently falling back.",
+      "The implementation is a small, pure AST traversal with a centralized method-name set, precise literal guards, and no import-time CLI side effects; it follows plain ESM script conventions.",
+      "Tests assert exact result arrays and line locations, including useful optional-chain, TSX and comment-trivia edge cases without adding implementation scope.",
+      "Refactor heuristics are clear: implementation file is 50 lines, scanSource is 43 lines, nested visit is 30 lines, test file is 74 lines, and no identical logic is repeated three or more times. No extraction round is required."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "8b7df4962f114e15b70f675e648e5aae4d823c15"
+}

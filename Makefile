@@ -58,6 +58,7 @@ check: ## Lint + architecture guards (+ key collision if DATABASE_URL set)
 	@$(NPM) run check:mutation-routing
 	@$(NPM) run check:event-write-routing
 	@$(NPM) run check:feature-modules
+	@$(NPM) run check:inline-400
 	@if [ -n "$$DATABASE_URL" ]; then $(NPM) run check:key-collisions --workspace=server; fi
 
 # ---- Database & Services ---------------------------------------------------

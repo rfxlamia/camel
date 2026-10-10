@@ -1,0 +1,31 @@
+{
+  "contract": 1,
+  "phase_key": "phase-3",
+  "phase_file": "execution-plan/phase-3.md",
+  "recorded_at": "2026-10-10T04:08:49Z",
+  "phase_verdict": "PHASE_PASS_CLEAN",
+  "tasks": [
+    { "task_id": "T8", "name": "Implement inline-400 AST detection (scanSource)", "done_sha": "8b7df4962f114e15b70f675e648e5aae4d823c15", "verdict": "REVIEW_PASS" },
+    { "task_id": "T9", "name": "Add the guard CLI, tree walk and allowlist", "done_sha": "a0536b443f43ed0dfa6372592fed78ac6c0c8e1c", "verdict": "REVIEW_PASS" },
+    { "task_id": "T10", "name": "Wire the guard into package.json, Makefile, CI and CLAUDE.md", "done_sha": "e5561b02d73a21af2525a98ac01db79b05e8f19b", "verdict": "REVIEW_PASS" }
+  ],
+  "verification": [
+    { "check": "node --test scripts/check-inline-400.test.mjs", "result": "PASS", "evidence": "Controller mechanical gate: T8 14/14; T9 20/20. Implementers recorded expected RED before implementation." },
+    { "check": "node scripts/check-inline-400.mjs", "result": "PASS", "evidence": "Controller T9 mechanical gate: real repository exit 0." },
+    { "check": "node --test scripts/check-inline-400.wiring.test.mjs", "result": "PASS", "evidence": "Controller T10 mechanical gate passed; implementer recorded missing-wiring RED." },
+    { "check": "node --test scripts/*.test.mjs", "result": "PASS", "evidence": "Controller T10 mechanical gate: 21/21 passed." },
+    { "check": "make check", "result": "PASS", "evidence": "Controller T10 mechanical gate: lint and mutation/event/feature-module/inline-400 guards passed." },
+    { "check": "npm run test && npm run typecheck", "result": "PASS", "evidence": "Controller process proc_e59d exit 0 after 421s with explicit Node PATH; full root test chain and server/client typecheck completed. Final feature-module suite 156/156 passed. Implementer independently reported npm test exit 0." },
+    { "check": "Independent task audits and phase-level pass", "result": "PASS", "evidence": "T8-review.json, T9-review.json, T10-review.json: REVIEW_PASS without findings; phase-pass-phase-3.json: PHASE_PASS_CLEAN." },
+    { "check": "Phase Completion Gate", "result": "PASS", "evidence": "Every task in this phase: status DONE; All tests pass; All commits created with correct format; No task has status BLOCKED or NEEDS_CONTEXT." }
+  ],
+  "obstacles": [
+    { "summary": "Background process shell could not resolve npm (proc_1add exit 127).", "resolution": "Reran verification with /home/v-homelab/.nvm/versions/node/v22.23.3/bin prepended to PATH; proc_e59d exited 0.", "evidence": ["Controller process proc_1add stderr", "Controller process proc_e59d success notification and logs"] }
+  ],
+  "decisions": [
+    { "kind": "user", "decision": "Route clear-scope tasks to gpt-6-luna; complex tasks and audits to gpt-6.1-sol.", "rationale": "Explicit user model-routing request.", "source": "Session user instruction: /pocket-development phase-3.md" },
+    { "kind": "implementation", "decision": "T8 implemented by gpt-6.1-sol; T9/T10 by gpt-6-luna; all independent audits and phase-level pass by gpt-6.1-sol.", "rationale": "AST/token-line edge cases require deeper reasoning; CLI and configuration tasks have bounded explicit contracts.", "source": "Controller dispatch packets and subagent reports" },
+    { "kind": "implementation", "decision": "Prepend test:guards to the root test chain while retaining its existing suffix.", "rationale": "Preserves the existing feature-module wiring assertion and existing command ordering.", "source": "T10 dispatch steering and T10-review.json" }
+  ],
+  "recommendations": []
+}

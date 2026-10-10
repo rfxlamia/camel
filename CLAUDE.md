@@ -27,7 +27,7 @@ This file provides guidance to agents when working with code in this repository.
 
 **Optimistic locking**: Cards have `version` field. Stale writes return HTTP 409 (not 500).
 
-**Request validation (issue #117)**: New/touched routes validate input with zod via [`server/src/validators/http.ts`](server/src/validators/http.ts) (`parseWith`, `sendValidationError`) and shared primitives in `validators/schemas.ts`. Every 400 body is `{ error: string; fieldErrors?: Record<string,string> }` (the client `throwRequestError` already reads it). Pass `{ message }` to keep a legacy string pinned by tests; never throw zod errors into `error-handler.ts` (they would become 500s). Migrate remaining inline 400s incrementally; do not `closes #117` until done.
+**Request validation (issue #117)**: New/touched routes validate input with zod via [`server/src/validators/http.ts`](server/src/validators/http.ts) (`parseWith`, `sendValidationError`) and shared primitives in `validators/schemas.ts`. Every 400 body is `{ error: string; fieldErrors?: Record<string,string> }` (the client `throwRequestError` already reads it). Pass `{ message }` to keep a legacy string pinned by tests; never throw zod errors into `error-handler.ts` (they would become 500s). The `check:inline-400` guard means a new inline `res.status(400)` in `server/src/**` fails `make check`/CI; only `validators/http.ts` may send 400.
 
 **Activity logging**: Every mutation MUST call `recordActivity()` to write `card_events` (not automatic). Only `recordActivity` / `recordTrackerActivity` may insert into `card_events` / `tracker_events` — enforced by `npm run check:event-write-routing` (allowlist: helpers, tracker-activity, seed).
 
