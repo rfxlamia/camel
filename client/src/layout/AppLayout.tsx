@@ -73,7 +73,7 @@ export default function AppLayout() {
 	if (onFocus) {
 		return (
 			<NotificationsProvider>
-				<div className="h-screen overflow-auto">
+				<div className="h-dvh overflow-auto">
 					{/* Kept: without it a user with no workspace selected gets a
 					    blank screen and no picker, since the sidebar is gone. */}
 					<WorkspaceOverlays />
@@ -87,7 +87,7 @@ export default function AppLayout() {
 
 	return (
 		<NotificationsProvider>
-			<div className="flex h-screen">
+			<div className="flex h-dvh min-h-0 overflow-hidden">
 				<WorkspaceOverlays />
 				<Sidebar
 					collapsed={collapsed}
@@ -102,7 +102,7 @@ export default function AppLayout() {
 					onModeChange={setMode}
 				/>
 
-				<div className="flex min-w-0 flex-1 flex-col">
+				<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 					<header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 md:px-6">
 						<div className="flex items-center gap-3">
 							<button
@@ -125,7 +125,7 @@ export default function AppLayout() {
 					</header>
 
 					<main
-						className={`min-h-0 flex-1 ${onChat ? "flex flex-col overflow-hidden" : "overflow-auto"}`}
+						className={`min-h-0 flex-1 ${onChat ? "flex flex-col overflow-hidden" : "overflow-auto overscroll-contain"}`}
 					>
 						<Outlet />
 					</main>
