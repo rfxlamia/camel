@@ -1,6 +1,4 @@
 import type { Request } from "express";
-import { parseWith } from "../../validators/http.js";
-import { positiveIdParam } from "../../validators/schemas.js";
 import type { MyWorkScope, MyWorkSource } from "./my-work-types.js";
 
 export type QueryParseResult<T> =
@@ -41,22 +39,6 @@ export function parseSourceValue(
 		return { ok: false, error: "source must be board or tracker" };
 	}
 	return { ok: true, value };
-}
-
-// Not `workspaceIdParam`: that schema says "workspaceId must be an integer",
-// while My Work's query contract says "...a positive integer". Wording changes
-// are out of scope here, so it shares the digits-only primitive instead.
-const queryWorkspaceId = positiveIdParam(
-	"workspaceId must be a positive integer",
-);
-
-export function parseWorkspaceIdValue(
-	value: string | null,
-): QueryParseResult<number | undefined> {
-	if (value === null) return { ok: true, value: undefined };
-	const parsed = parseWith(queryWorkspaceId, value);
-	if (!parsed.ok) return { ok: false, error: parsed.body.error };
-	return { ok: true, value: parsed.data };
 }
 
 export function parseLimitValue(

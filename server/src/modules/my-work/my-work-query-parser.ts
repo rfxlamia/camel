@@ -1,9 +1,10 @@
 import type { Request } from "express";
+import { parseWith } from "../../validators/http.js";
+import { workspaceIdParam } from "../../validators/schemas.js";
 import {
 	parseLimitValue,
 	parseScopeValue,
 	parseSourceValue,
-	parseWorkspaceIdValue,
 	scalarQueryError,
 } from "./my-work-query-parser-helpers.js";
 import { decodeMyWorkCursor } from "./my-work-response-pagination.js";
@@ -27,8 +28,17 @@ export function parseMyWorkQuery(
 	if (!scope.ok) return scope;
 	const source = parseSourceValue(queryString(query.source));
 	if (!source.ok) return source;
-	const workspaceId = parseWorkspaceIdValue(queryString(query.workspaceId));
-	if (!workspaceId.ok) return workspaceId;
+	const workspaceIdRaw = queryString(query.workspaceId);
+	let workspaceId: number | undefined;
+	if (workspaceIdRaw === null) {
+		workspaceId = undefined;
+	} else {
+		const parsedWorkspace = parseWith(workspaceIdParam, workspaceIdRaw);
+		if (!parsedWorkspace.ok) {
+			return { ok: false, error: parsedWorkspace.body.error };
+		}
+		workspaceId = parsedWorkspace.data;
+	}
 	const limit = parseLimitValue(queryString(query.limit));
 	if (!limit.ok) return limit;
 
@@ -41,9 +51,7 @@ export function parseMyWorkQuery(
 		value: {
 			scope: scope.value === "all" ? "all" : "active",
 			q: queryString(query.q)?.trim() ?? "",
-			...(workspaceId.value === undefined
-				? {}
-				: { workspaceId: workspaceId.value }),
+			...(workspaceId === undefined ? {} : { workspaceId }),
 			...(source.value === null ? {} : { source: source.value }),
 			cursor: cursor || null,
 			limit: limit.value,

@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { parseKeyFromUrl } from "../../core/tracker-key.js";
-import { positiveIdParam } from "../../validators/schemas.js";
+import { workspaceIdParam } from "../../validators/schemas.js";
 
 /** Validates `:workspaceId/:source/:key`; issues surface in this field order. */
 export const workItemParams = z
 	.object({
-		workspaceId: positiveIdParam("workspaceId must be a positive integer"),
+		workspaceId: workspaceIdParam,
 		source: z.enum(["board", "tracker"], {
 			error: "source must be board or tracker",
 		}),
