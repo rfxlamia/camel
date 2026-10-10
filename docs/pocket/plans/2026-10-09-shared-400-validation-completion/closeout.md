@@ -170,3 +170,55 @@ Phase 3 — inline-400 AST detection (`scanSource`), the guard CLI, and wiring �
 ### Next
 
 Phase 4 — shared integer-id-array schema and parser/reference extraction (T11–T13) — remains `WAITING`. Its Phase 3 prerequisite is now complete. This closeout does not start Phase 4.
+
+## Phase 4 of 5 — Shared integer-id-array schema and reference extraction
+<!-- pocket-closeout:phase-4 -->
+
+**Status:** Complete — `REVIEW` → `DONE`
+**Closed:** 2026-10-10T04:55:11Z
+
+### What was completed
+
+- **T11 — Add integerIdArray and dedupe workspaceIdParam:** completed (`626443e`). Shared array schema matches `Number.isInteger` element checks; `workspaceIdParam` now reuses `positiveIdParam`.
+- **T12 — Extract tracker reference parsers and use integerIdArray:** completed (`c660235`). Priority, label, and assignee parsers moved to a kernel helper and still export from the original path; array checks now use the shared schema.
+- **T13 — Share the lock-reference extractor and pin create rejection:** completed (`ee8c315`). One lenient lock-reference helper replaced both local copies; create and update rejection of bad ids is pinned against real DB rows and events.
+
+### Review and verification
+
+- All three current task verdicts are `REVIEW_PASS`; each reviewed SHA exactly matches its DONE SHA. Completed Phase 1–3 verdict freshness was also reconciled before closing.
+- Phase-level review: `PHASE_PASS_CLEAN` (source: `reviews/phase-notes-phase-4.json`).
+- Corrections: None recorded. No Minor issues or outstanding findings recorded.
+- T11 controller gates: schema tests 83 passed; settings tests 54 passed / 6 skipped.
+- T12 controller gates after worktree dependency provisioning: parser tests 47 passed; board/tracker/lib suite 328 passed / 163 skipped; production files 289 and 77 lines.
+- T13 and post-merge controller gates: four integration suites 65 passed / 0 skipped; helper tests 9 passed.
+- Controller `make check` passed after merge: lint 930 files plus mutation, event-write, feature-module, and inline-400 guards.
+- Controller `npm run typecheck` passed after merge: server and client `tsc --noEmit` exit 0.
+- Evidence source: `reviews/phase-notes-phase-4.json` and current `T11-review.json`, `T12-review.json`, `T13-review.json`.
+
+### Carried-forward review observations
+
+- No Minor issues or outstanding findings recorded.
+- T11 reviewer strength: Zod array plus element `.refine(Number.isInteger)` matches the packet method and the existing parser loops, including unsafe integers, duplicates, and sparse arrays.
+- T12 reviewer strength: All six runtime exports remain on the original barrel path; duplicate outputs are preserved while lookups are unique; mock-by-path tests still intercept.
+- T13 reviewer strength: The extractor is lock plumbing only; create still rejects malformed ids with the existing card versus task summaries and writes no cards or card_events.
+
+### Obstacles and resolution
+
+- T11 first audit failed because the schema used a whole-array handwritten loop. One correction implemented element-level refine; the re-audit passed. Source: `reviews/T11-review.json`; commit `626443e`.
+- T12 and T13 worktrees could not typecheck until already-installed parent `better-auth` links were provided. No source or dependency edits. Source: Phase 4 notes; `reviews/T12-review.json`; `reviews/T13-review.json`.
+- T13 first audit failed a ~50-line function heuristic on a new PATCH characterization callback. An in-file snapshot helper reduced it to 31 lines; the re-audit passed. Source: `reviews/T13-review.json`; commit `7450846`.
+
+### Decisions
+
+- User: route clear-scope tasks to `gpt-6-luna`, and complex tasks and audits to `gpt-6.1-sol`. Source: explicit development request and Phase 4 notes.
+- User: authorize Phase 4 closeout. Source: explicit continue-closing instruction.
+- Implementation: keep T12/T13 helpers in `server/src/lib` as shared kernel code and run T12 and T13 in parallel after T11. Source: architecture advisor report and execution index Group C.
+- Implementation: pin tracker create persistence against column-less `cards` and `card_events`. Source: architecture advisor report and T13 packet repairs.
+
+### Suggestions
+
+- No follow-up suggestion from the recorded review observations.
+
+### Next
+
+Phase 5 — strict workspace-id parser, username wording, and client/PR verification (T14–T16) — remains `WAITING`. Its Phase 4 prerequisite is now complete. This closeout does not start Phase 5.
