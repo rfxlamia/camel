@@ -1,0 +1,42 @@
+{
+  "task_id": "T16",
+  "task_name": "Verify client parsing; draft issue comment and PR text",
+  "cycle": 1,
+  "timestamp": "2026-10-10T09:11:13Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Range 639ea5fb1ab310821073f6a52ae09a945ad7caa2..030853d0f9e4038842d1b18aa07e3a54c83b66c7 is one commit: test(client): pin error parsing for unified 400 bodies. Only client/src/api.test.ts (+80). api.ts and throwRequestError unchanged; throwRequestError is not imported or called in tests.",
+      "Given each changed 400 body, When a public api method that uses request()/throwRequestError receives it, Then the thrown message equals body.error: workspaceId must be an integer via api.getSettings(7) (api.test.ts:1101-1113); ASCII username hyphen wording via api.register (1115-1134); Invalid params via api.getSettings(7) (1136-1148); {error:x, fieldErrors.assigneeIds} via api.createCard (1150-1173) with fieldErrors preserved on ApiError.",
+      "Given the drafts (not in git by design), When judged from the implementer report text, Then PR-5 lists T14 (a) unused lenient copies, (b) isolated tightening 0bd19c6 on agent list/create, parseAgentBoardParams split, ticket-intake, SSE with PATH 0/-1/1e2/space/abc/1.5/unsafe -> 400, 01/7 pass, empty path 404, split Invalid params, (c) my-work wording, T15 oauth ASCII hyphen, tests listed, and client audit greps. #198 comment records F1 (no 201->400), Rule 6 wording table, lenient-client-id audit negative, leading-zero 01 follows workspaceIdParam.",
+      "Given the audit claim, When checked against the repo, Then workspace ids in api.ts URL builders are typed number (not free text/empty/0). Real switcher is client/src/shared/workspaceSwitcher.ts (targetWorkspaceId: number); missing client/src/lib/workspaceSwitcher.ts is not a spec miss.",
+      "Mechanical gate treated as already green (not rerun): npm run test --workspace=client -- src/api.test.ts 46 passed; full client suite 124 files, 1132 passed."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Must-have: four 400 bodies exercised through public api methods that call throwRequestError via request() (getSettings ~516, register ~439, createCard ~305); fieldErrors asserted where ApiError exposes it.",
+      "Must-have: drafts cover every T14/T15 behavior/wording change plus F1 and Rule 6 answers.",
+      "Must-not-haves absent: no client source edits; no GitHub write in the commit; no -t multi-word test filters in the change.",
+      "Red flags absent: no work outside client/src/api.test.ts; tests do not call throwRequestError (not exported, api.ts:110).",
+      "New tests follow existing api.test.ts fetch-stub + dynamic import(\"./api\") pattern. Tests are exempt from 300-on-touch; no new function >~50 lines. Repeated mock setup matches the file's existing style rather than a new 3+ copy helper."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "030853d0f9e4038842d1b18aa07e3a54c83b66c7"
+}

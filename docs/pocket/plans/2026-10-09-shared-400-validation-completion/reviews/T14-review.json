@@ -1,0 +1,43 @@
+{
+  "task_id": "T14",
+  "task_name": "Single strict workspace-id parser and tighten lenient routes",
+  "cycle": 2,
+  "timestamp": "2026-10-10T08:46:36Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Cycle 2 re-audit of 9592c3336f1631faece83d2d1bfe89766fbbf2ef..acbb470b24df782963cf3e5e9254032af92c1f28 (acb46c9, 0bd19c6, c4f7be8, correction acbb470). Loaded spec-compliance-review.md, code-quality-review.md, review-report-template.md, T14 packet, spec Rules 5–6 / F1/F2 / #198 AC / rollback verbatim. Read the range diff and every changed file in full; correction only extracts collectSseHead in workspace-id.strict.test.ts.",
+      "workspaceIdParam (validators/schemas.ts:7) remains the single workspace-id schema. grep function parseWorkspaceId|parseWorkspaceIdValue finds only settings-schemas.ts:8, a thin parseWith(workspaceIdParam, ...) delegate. Lenient Number/isInteger parseWorkspaceId and helpers.ts re-export deleted in acb46c9; parseWorkspaceIdValue deleted in c4f7be8.",
+      "Invalid params split still in parseAgentBoardParams (route-validation.ts:10-29): invalid workspaceId -> workspaceId must be an integer; valid ws + invalid boardId still legacyIntegerParam(\"Invalid params\"). Valid ws + invalid columnSlug remains Invalid params in read-routes.ts:106-110. getBoardById dynamic res.status(statusCode) passthrough in read-routes.ts:70-79 is unchanged.",
+      "legacyIntegerParam remains for non-workspace ids (boardId, chat thread/attachment, ticket-intake cardId, activity card id) and is unused for workspace ids. workspace-params.ts was not migrated. No client source edits. Ticket-intake workspace parsing is validateTicketWorkspace in submit.ts:157-167 (routes.ts already calls it).",
+      "Absent my-work query short-circuit: my-work-query-parser.ts:31-34 maps non-string/absent workspaceId (queryString -> null) to undefined without calling workspaceIdParam. Empty string is query/unit only (QUERY_IDS); PATH_IDS omit \"\". \"01\"/\"7\" pass and map to 1/7. Wording change positive integer -> an integer is isolated in c4f7be8; tightening listed in 0bd19c6. No PR/gh. Mechanical gate treated as already green (not rerun): 5 files/139 passed, 448 passed/51 skipped, make check exit 0."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "QUALITY BAR must-haves: three un-squashed commits with the required subjects — (a) unused lenient duplicate removal with no behavior change, (b) isolated tightening + Invalid params split, (c) my-work wording; tests named in commit (b)/(c); NodeNext .js imports; absent-query null short-circuit preserved. Correction acbb470 is test-only.",
+      "Must-not-haves absent: no getBoardById status passthrough change; workspaceIdParam not used for board/thread/card/attachment ids; no silent unlisted wording; legacyIntegerParam kept while still used; workspace-params.ts untouched; no client edits; no gh/PR.",
+      "Red flags for second/lenient parser and passing null into workspaceIdParam for absent query are absent. Production files remain under 300 lines (read-routes 184, routes 202, submit 207, sse 100, route-validation 49, my-work-query-parser 62). parseMyWorkQuery is 40 lines. Test file 286 lines.",
+      "Cycle-1 Important cleared: sseHead is 16 lines (161-176) with manager.shutdown() in finally; collectSseHead is 49 lines (111-159), under ~50. No other T14-diff function newly exceeds ~50 lines. PATH_IDS 400 body, 01/7 not 400, destroy-without-waiting on non-400, and shutdown preserved. Shared schema (not a third parser) is used at agent/SSE/my-work/settings sites; rollback remains revert (b) then (c)."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "strategies": [
+      "Extract SSE http.get header/body collection into in-file collectSseHead helper so sseHead is under ~50 lines"
+    ],
+    "prior_windows": []
+  },
+  "reviewed_sha": "acbb470b24df782963cf3e5e9254032af92c1f28"
+}

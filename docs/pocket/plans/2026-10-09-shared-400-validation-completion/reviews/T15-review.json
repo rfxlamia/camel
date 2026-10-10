@@ -1,0 +1,41 @@
+{
+  "task_id": "T15",
+  "task_name": "Unify username wording",
+  "cycle": 1,
+  "timestamp": "2026-10-10T08:52:12Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "batch-parallel",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Range acbb470b24df782963cf3e5e9254032af92c1f28..639ea5fb1ab310821073f6a52ae09a945ad7caa2 is one commit: fix(server): unify username validation wording. Files: auth-schemas.ts, oauth.ts, oauth.validation.test.ts, router.ts — all in T15 scope. No client source edits.",
+      "Given invalid oauth username, When submitted, Then ASCII-hyphen message: oauth.ts:27 parseWith(usernameSchema(USERNAME_MESSAGE), username); USERNAME_MESSAGE is ASCII 3-32 (auth-schemas.ts:12-13). oauth.validation.test.ts:65-73 toEquals that body, hyphenCharCode 45, and not U+2013.",
+      "Given register vs oauth with the same invalid username, When compared, Then identical bodies: both routes pass USERNAME_MESSAGE into usernameSchema (router.ts:37-40, oauth.ts:27). Test it.each too-short/illegal (oauth.validation.test.ts:86-99) asserts oauthRes.body === registerRes.body === { error: USERNAME_MESSAGE }.",
+      "Given grep 3–32, When run, Then zero matches in server/src and client/src. OAUTH_USERNAME_MESSAGE and REGISTER_USERNAME_MESSAGE are gone. Production USERNAME_MESSAGE exists once in auth-schemas.ts; test files pin the same ASCII literal. Commit lists oauth.validation.test.ts as the only prior U+2013 pin.",
+      "No new validation rules: usernameSchema still wraps validateUsername + USERNAME_RE. Password/displayName/login messages unchanged. Mechanical gate treated as already green (not rerun): oauth.validation.test.ts 7 passed; modules/auth 41 passed / 15 skipped."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Must-have: one exported USERNAME_MESSAGE (auth-schemas.ts:12) used by both oauth set-username and register; oauth 400 uses hyphen-minus char code 45.",
+      "Must-have: the only test that pinned EN DASH was updated (oauth.validation.test.ts) and listed in the commit body. Register pin in router.validation.test.ts already used ASCII and needed no change.",
+      "Must-not-haves absent: no new validation rules; field-specific messages (password, displayName, login, Invalid params) untouched; no client edits; no files outside the packet.",
+      "Red flags absent: no remaining 3–32 EN DASH in non-doc source; not two production username-message constants. Files stay under ~300 lines (auth-schemas 78, oauth 145, router 189, oauth.validation.test 101); no function newly over ~50; no 3+ identical-logic copies."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "639ea5fb1ab310821073f6a52ae09a945ad7caa2"
+}

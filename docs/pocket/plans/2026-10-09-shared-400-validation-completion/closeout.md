@@ -222,3 +222,59 @@ Phase 4 — shared integer-id-array schema and parser/reference extraction (T11�
 ### Next
 
 Phase 5 — strict workspace-id parser, username wording, and client/PR verification (T14–T16) — remains `WAITING`. Its Phase 4 prerequisite is now complete. This closeout does not start Phase 5.
+
+## Phase 5 of 5 — Strict workspace-id parser, username wording, and client verification
+<!-- pocket-closeout:phase-5 -->
+
+**Status:** Complete — `REVIEW` → `DONE`
+**Closed:** 2026-10-10T09:29:37Z
+
+### What was completed
+
+- **T14 — Single strict workspace-id parser and tighten lenient routes:** completed (`acbb470`). One digits-only `workspaceIdParam` now owns workspace ids on agent and SSE routes; unused lenient copies were removed; my-work wording matches the shared message.
+- **T15 — Unify username wording:** completed (`639ea5f`). Oauth and register share one ASCII username message constant.
+- **T16 — Verify client parsing; draft issue comment and PR text:** completed (`030853d`). Client tests pin the unified 400 bodies; PR-5 and #198 drafts stayed in the task report (not posted).
+
+### Review and verification
+
+- All three current task verdicts are `REVIEW_PASS`; each reviewed SHA exactly matches its DONE SHA. Completed Phase 1–4 verdict freshness was also reconciled before closing.
+- Phase-level review: `PHASE_PASS_CLEAN` (source: `reviews/phase-notes-phase-5.json`).
+- Corrections: None recorded. No Minor issues or outstanding findings recorded.
+- T14 controller gates: strict+characterization tests 139 passed; my-work/settings/agent/realtime 448 passed / 51 skipped; `make check` exit 0 (lint, mutation/event routing, feature-modules, inline-400; key-collisions skipped because `DATABASE_URL` was unset).
+- T15 controller gates: oauth validation 7 passed; auth module 41 passed / 15 skipped (`router.integration.test.ts` skipped without `RUN_INTEGRATION=1`).
+- T16 controller gates: `api.test.ts` 46 passed; full client suite 1132 passed.
+- Evidence source: `reviews/phase-notes-phase-5.json` and current `T14-review.json`, `T15-review.json`, `T16-review.json`.
+
+### Carried-forward review observations
+
+- No Minor issues or outstanding findings recorded.
+- T14 reviewer strength: three un-squashed commits — unused lenient duplicate removal, isolated tightening plus `Invalid params` split, my-work wording; `legacyIntegerParam` kept for non-workspace ids.
+- T15 reviewer strength: one exported `USERNAME_MESSAGE` used by oauth set-username and register; oauth 400 uses hyphen-minus char code 45.
+- T16 reviewer strength: four 400 bodies exercised through public `api` methods; drafts cover T14/T15 changes plus F1 and Rule 6 answers; no client source edits.
+
+### Obstacles and resolution
+
+- T14 cycle-1 in-loop audit failed because new `sseHead` was 59 lines (function-length heuristic ~50). An in-file `collectSseHead` helper reduced `sseHead` to 16 lines; cycle-2 re-audit passed. This was an in-loop fix (`acbb470`), not a phase-level correction. Source: `reviews/T14-review.json`; `reviews/phase-notes-phase-5.json`.
+
+### Decisions
+
+- User: Rule 6 wording table — oauth username message becomes ASCII `Username must be 3-32 characters: letters, numbers, underscore.` (same as register). Source: approved spec Rule 6; T15 packet; Phase 5 notes.
+- Implementation: split combined `Invalid params` in `parseAgentBoardParams` (`agent/route-validation.ts`), not inline in `read-routes.ts`. Source: T14 packet; `reviews/T14-review.json`.
+- Implementation: T16 PR-5 description and #198 issue comment drafted in the task report only; not posted. Source: T16 packet; Phase 5 notes.
+
+### Suggestions
+
+- Suggestion (from Phase 5 notes): review and post the drafted PR-5 description and #198 issue comment from the T16 report (not committed, not posted). Evidence: T16 DELIVERABLE required those drafts; QUALITY BAR forbade `gh` writes.
+
+### Next
+
+All phases are complete; the plan is being finalized.
+
+## Plan closed
+<!-- pocket-closeout:plan-closed -->
+
+**Result:** Complete — all 5 phases are `DONE`
+**Closed:** 2026-10-10
+**Work reviewed:** 16 tasks — all current verdicts are `REVIEW_PASS`
+
+The phase-by-phase record above contains completed work, review outcomes, documented obstacles and decisions, and evidence-based suggestions.
