@@ -1,0 +1,164 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-10-09-shared-400-validation-completion",
+    "plan_type": "phased",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-10-10",
+    "date_completed": null,
+    "baseline_sha": "834c023ec1ff7d5661f885d9687d356764eb464f",
+    "pipeline": 5,
+    "plan_file": "execution-plan/index.md"
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/phase-1.md",
+      "status": "DONE",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Add legacyIntegerParam primitive",
+          "status": "DONE",
+          "file": "execution-plan/tasks/T1-add-legacyintegerparam-primitive.md",
+          "done_sha": "a58b4e3234156ab344c02493486a8668b75e2a2e"
+        },
+        {
+          "id": "T2",
+          "name": "Migrate agent board routes (read-routes.ts, routes.ts)",
+          "status": "DONE",
+          "depends": "T1",
+          "file": "execution-plan/tasks/T2-migrate-agent-board-routes-read-routes-ts-routes-ts.md",
+          "done_sha": "cc6ebe9bbbdc4febe68cb18fe7cb876d90324d71"
+        },
+        {
+          "id": "T3",
+          "name": "Migrate agent ticket-intake routes (routes.ts, submit.ts)",
+          "status": "DONE",
+          "depends": "T1",
+          "file": "execution-plan/tasks/T3-migrate-agent-ticket-intake-routes-routes-ts-submit-ts.md",
+          "done_sha": "d94eabd7bebb00d673199896fcfcbad98fb495c2"
+        },
+        {
+          "id": "T4",
+          "name": "Migrate chat routes (routes.ts, message-stream.ts)",
+          "status": "DONE",
+          "depends": "T1",
+          "file": "execution-plan/tasks/T4-migrate-chat-routes-routes-ts-message-stream-ts.md",
+          "done_sha": "33a00e6f7e52b5fcbb07d3119011e2f0b18ef8f8"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "file": "execution-plan/phase-2.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T5",
+          "name": "Migrate auth routes (router.ts, oauth.ts)",
+          "status": "WAITING",
+          "depends": "T2, T3, T4",
+          "file": "execution-plan/tasks/T5-migrate-auth-routes-router-ts-oauth-ts.md"
+        },
+        {
+          "id": "T6",
+          "name": "Migrate realtime SSE workspace-id 400 (sse.ts)",
+          "status": "WAITING",
+          "depends": "T2, T3, T4",
+          "file": "execution-plan/tasks/T6-migrate-realtime-sse-workspace-id-400-sse-ts.md"
+        },
+        {
+          "id": "T7",
+          "name": "Migrate notifications and activity 400s",
+          "status": "WAITING",
+          "depends": "T2, T3, T4",
+          "file": "execution-plan/tasks/T7-migrate-notifications-and-activity-400s.md"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "file": "execution-plan/phase-3.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T8",
+          "name": "Implement inline-400 AST detection (scanSource)",
+          "status": "WAITING",
+          "depends": "T5, T6, T7",
+          "file": "execution-plan/tasks/T8-implement-inline-400-ast-detection-scansource.md"
+        },
+        {
+          "id": "T9",
+          "name": "Add the guard CLI, tree walk and allowlist",
+          "status": "WAITING",
+          "depends": "T8",
+          "file": "execution-plan/tasks/T9-add-the-guard-cli-tree-walk-and-allowlist.md"
+        },
+        {
+          "id": "T10",
+          "name": "Wire the guard into package.json, Makefile, CI and CLAUDE.md",
+          "status": "WAITING",
+          "depends": "T9",
+          "file": "execution-plan/tasks/T10-wire-the-guard-into-package-json-makefile-ci-and-claude-md.md"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "file": "execution-plan/phase-4.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T11",
+          "name": "Add integerIdArray and dedupe workspaceIdParam",
+          "status": "WAITING",
+          "depends": "T10",
+          "file": "execution-plan/tasks/T11-add-integeridarray-and-dedupe-workspaceidparam.md"
+        },
+        {
+          "id": "T12",
+          "name": "Extract tracker reference parsers and use integerIdArray",
+          "status": "WAITING",
+          "depends": "T11",
+          "file": "execution-plan/tasks/T12-extract-tracker-reference-parsers-and-use-integeridarray.md"
+        },
+        {
+          "id": "T13",
+          "name": "Share the lock-reference extractor and pin create rejection",
+          "status": "WAITING",
+          "depends": "T11",
+          "file": "execution-plan/tasks/T13-share-the-lock-reference-extractor-and-pin-create-rejection.md"
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "file": "execution-plan/phase-5.md",
+      "status": "WAITING",
+      "tasks": [
+        {
+          "id": "T14",
+          "name": "Single strict workspace-id parser and tighten lenient routes",
+          "status": "WAITING",
+          "depends": "T12, T13",
+          "file": "execution-plan/tasks/T14-single-strict-workspace-id-parser-and-tighten-lenient-routes.md"
+        },
+        {
+          "id": "T15",
+          "name": "Unify username wording",
+          "status": "WAITING",
+          "depends": "T14",
+          "file": "execution-plan/tasks/T15-unify-username-wording.md"
+        },
+        {
+          "id": "T16",
+          "name": "Verify client parsing; draft issue comment and PR text",
+          "status": "WAITING",
+          "depends": "T14, T15",
+          "file": "execution-plan/tasks/T16-verify-client-parsing-draft-issue-comment-and-pr-text.md"
+        }
+      ]
+    }
+  ]
+}
