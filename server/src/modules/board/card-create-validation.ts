@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { checkWipLimit } from "../../core/wip.js";
 import type { DBExecutor } from "../../db/kysely.js";
 import { validateAttachmentPairs } from "../../lib/attachment-validation.js";
+import { extractIntegerIds } from "../../lib/integer-ids.js";
 import { validateTaskCreateMetadata } from "../../lib/work-item-create-metadata.js";
 import { lockTaskCreateReferences } from "../../lib/workspace-mutation-lock.js";
 import {
@@ -20,11 +21,6 @@ import type {
 	UploadedFile,
 } from "./card-create-types.js";
 
-function integerIds(value: unknown): number[] {
-	if (!Array.isArray(value)) return [];
-	return value.filter((id): id is number => Number.isInteger(id));
-}
-
 function metadataReferences(body: CreateBody) {
 	const priorityId = Number.isInteger(body.priorityId)
 		? [body.priorityId as number]
@@ -33,11 +29,15 @@ function metadataReferences(body: CreateBody) {
 		? [body.statusId as number]
 		: [];
 	return {
-		assigneeIds: integerIds(body.assigneeIds),
-		vocabularyIds: [...statusId, ...priorityId, ...integerIds(body.labelIds)],
+		assigneeIds: extractIntegerIds(body.assigneeIds),
+		vocabularyIds: [
+			...statusId,
+			...priorityId,
+			...extractIntegerIds(body.labelIds),
+		],
 		statusId: statusId[0] ?? null,
 		priorityId: priorityId[0] ?? null,
-		labelIds: integerIds(body.labelIds),
+		labelIds: extractIntegerIds(body.labelIds),
 		projectId: Number.isInteger(body.projectId)
 			? (body.projectId as number)
 			: null,
