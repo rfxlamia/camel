@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "plan": {
+    "plan_id": "2026-10-10-agent-spend-kill-switch",
+    "spec_dir": "docs/pocket/spec/2026-10-10-agent-spend-kill-switch",
+    "plan_dir": null,
+    "branch": null,
+    "state": {
+      "approval": "APPROVED",
+      "phase_status": {},
+      "status": "IN_PROGRESS"
+    },
+    "revision": 1
+  },
+  "events": [
+    {
+      "event_id": "2026-10-10-agent-spend-kill-switch:spec-approved:r1",
+      "plan_id": "2026-10-10-agent-spend-kill-switch",
+      "type": "spec-approved",
+      "revision": 1,
+      "occurred_at": "2026-10-10T16:38:25.448Z",
+      "artifact_refs": [
+        {
+          "root": "spec",
+          "kind": "markdown",
+          "path": "spend-kill-switch.md",
+          "sha256": "702c7d66f6eb5137fb220aa42cb524893bb734f570e2d831e51ff76c4910f2ed",
+          "revision": 1
+        }
+      ],
+      "payload_hash": "833468bdea13deee413e1b1067a5a50b74c113e74f68b3e653ff710313c612b5",
+      "proof_ref": null,
+      "proof_hash": null,
+      "delivery": {
+        "status": "pending",
+        "attempts": 0
+      }
+    }
+  ]
+}
