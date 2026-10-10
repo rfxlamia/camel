@@ -42,7 +42,7 @@ export default function Sidebar({
 
 	return (
 		<aside
-			className={`hidden shrink-0 flex-col border-r border-neutral-200 bg-white transition-[width] duration-200 md:flex ${
+			className={`hidden min-h-0 shrink-0 flex-col border-r border-neutral-200 bg-white transition-[width] duration-200 md:flex ${
 				collapsed ? "w-14" : "w-14 lg:w-56"
 			}`}
 		>
@@ -66,7 +66,10 @@ export default function Sidebar({
 			)}
 
 			{/* Nav items */}
-			<nav className="flex flex-1 flex-col gap-1 p-2" aria-label="Main">
+			<nav
+				className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2"
+				aria-label="Main"
+			>
 				{activeNav.map(({ to, label, icon: Icon }) => (
 					<NavLink
 						key={to}
@@ -90,7 +93,7 @@ export default function Sidebar({
 			</nav>
 
 			{/* Footer */}
-			<div className="border-t border-neutral-200 p-2 space-y-1">
+			<div className="shrink-0 border-t border-neutral-200 p-2 space-y-1">
 				{/* Workspace switcher */}
 				<WorkspaceSwitcher
 					collapsed={collapsed}
