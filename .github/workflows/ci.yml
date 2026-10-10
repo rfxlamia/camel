@@ -37,6 +37,7 @@ jobs:
       - run: npm run check:mutation-routing
       - run: npm run check:event-write-routing
       - run: npm run check:feature-modules
+      - run: npm run check:inline-400
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
