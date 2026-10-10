@@ -119,6 +119,30 @@ async function cleanupWorkspace(wid: number) {
 	}
 }
 
+async function snapshotTrackerItem(cardId: number) {
+	return {
+		row: (await pool.query("SELECT * FROM cards WHERE id = $1", [cardId])).rows,
+		labels: (
+			await pool.query(
+				"SELECT * FROM card_labels WHERE card_id = $1 ORDER BY vocabulary_id",
+				[cardId],
+			)
+		).rows,
+		assignees: (
+			await pool.query(
+				"SELECT * FROM card_assignees WHERE card_id = $1 ORDER BY user_id",
+				[cardId],
+			)
+		).rows,
+		events: (
+			await pool.query(
+				"SELECT * FROM card_events WHERE card_id = $1 ORDER BY id",
+				[cardId],
+			)
+		).rows,
+	};
+}
+
 async function setupFixtures() {
 	await pool.query(
 		`INSERT INTO users (id, username, display_name, password_hash)
@@ -290,28 +314,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 			"INSERT INTO card_assignees (card_id, user_id) VALUES ($1, $2)",
 			[id, mockCurrentUser.id],
 		);
-		const snapshot = async () => ({
-			row: (await pool.query("SELECT * FROM cards WHERE id = $1", [id])).rows,
-			labels: (
-				await pool.query(
-					"SELECT * FROM card_labels WHERE card_id = $1 ORDER BY vocabulary_id",
-					[id],
-				)
-			).rows,
-			assignees: (
-				await pool.query(
-					"SELECT * FROM card_assignees WHERE card_id = $1 ORDER BY user_id",
-					[id],
-				)
-			).rows,
-			events: (
-				await pool.query(
-					"SELECT * FROM card_events WHERE card_id = $1 ORDER BY id",
-					[id],
-				)
-			).rows,
-		});
-		const before = await snapshot();
+		const before = await snapshotTrackerItem(id);
 		expect(before.labels).toHaveLength(1);
 		expect(before.assignees).toHaveLength(1);
 		const response = await request(app)
@@ -321,7 +324,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)("tracker items CRUD", () => {
 		expect
 			.soft(response.body)
 			.toEqual({ error: `${field} must be an array of integers` });
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshotTrackerItem(id)).toEqual(before);
 	});
 
 	it("replaces labels on PATCH and records labels in activity", async () => {
