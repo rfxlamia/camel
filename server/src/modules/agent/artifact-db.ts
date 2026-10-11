@@ -56,16 +56,6 @@ export const realArtifactDeps = {
 			content: row.content,
 		};
 	},
-
-	deleteArtifactForBoard: async (
-		dbExec: DBExecutor,
-		boardId: number,
-	): Promise<void> => {
-		await dbExec
-			.deleteFrom("agent_artifacts")
-			.where("board_id", "=", boardId)
-			.execute();
-	},
 };
 
 export function buildArtifactDownload(data: {

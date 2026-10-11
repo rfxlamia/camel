@@ -407,10 +407,7 @@ export function useAgentChat(config: UseAgentChatConfig) {
 
 	// Filter batched stream chunks from the log.
 	const logEvents = columnAgentEvents.filter(
-		(e) =>
-			e.type !== "agent.card.token" &&
-			e.type !== "agent.card.thinking" &&
-			e.type !== "agent.connection.opened",
+		(e) => e.type !== "agent.card.token" && e.type !== "agent.card.thinking",
 	);
 	const tokenCount = columnAgentEvents.filter(
 		(e) => e.type === "agent.card.token",

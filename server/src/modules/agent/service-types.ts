@@ -3,6 +3,7 @@ import type { Tool } from "../../lib/llm/tool-types.js";
 import type { ActivityItem } from "./tools/queryBoardData.js";
 
 export interface AgentBoardRecord {
+	retryOfBoardId?: number | null;
 	id: number;
 	status: string;
 	workspaceId: number;
@@ -14,6 +15,7 @@ export interface AgentBoardRecord {
 }
 
 export interface BoardListItem {
+	retryOfBoardId?: number | null;
 	id: number;
 	originalIntent: string;
 	templateId: string;
@@ -41,6 +43,15 @@ export interface ColumnInfo {
 }
 
 export interface AgentBoardServiceDeps {
+	retryBoardAtomic?: (data: {
+		boardId: number;
+		workspaceId: number;
+		userId: number;
+	}) => Promise<
+		| { status: 403 | 404 | 409; message?: string }
+		| { boardId: number; created: boolean }
+	>;
+	failRunningBoard?: (boardId: number, workspaceId: number) => Promise<boolean>;
 	classifyIntent?: (
 		intent: string,
 	) => Promise<{ templateId: string | null; explanation: string }>;
@@ -183,11 +194,7 @@ export interface AgentBoardServiceDeps {
 
 	deleteOutputsForBoard?: (boardId: number) => Promise<void>;
 
-	deleteToolCallsForBoard?: (boardId: number) => Promise<void>;
-
 	deleteCardsForBoard?: (boardId: number) => Promise<void>;
-
-	deleteArtifactForBoard?: (boardId: number) => Promise<void>;
 
 	fetchCardTimestamps?: (workspaceId: number) => Promise<CardTimestamps[]>;
 

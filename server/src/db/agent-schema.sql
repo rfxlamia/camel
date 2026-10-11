@@ -14,6 +14,12 @@ CREATE TABLE IF NOT EXISTS agent_boards (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Additive upgrade for existing populated installations; rerunnable.
+ALTER TABLE agent_boards ADD COLUMN IF NOT EXISTS retry_of_board_id
+  INTEGER REFERENCES agent_boards(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_boards_retry_of
+  ON agent_boards(retry_of_board_id) WHERE retry_of_board_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS agent_conversations (
   id         SERIAL PRIMARY KEY,
   board_id   INTEGER NOT NULL REFERENCES agent_boards(id) ON DELETE CASCADE,

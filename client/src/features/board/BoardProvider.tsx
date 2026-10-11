@@ -46,6 +46,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 	const [activity, setActivity] = useState<ActivityEvent[]>([]);
 	const [loadError, setLoadError] = useState(false);
 	const [refreshTick, setRefreshTick] = useState(0);
+	const [connectionRevision, setConnectionRevision] = useState(0);
 	const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
 	const [ticketIntakeEvents, setTicketIntakeEvents] = useState<
 		TicketIntakeResultEvent[]
@@ -189,6 +190,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 		reloadWorkspaces,
 		scheduleRefresh,
 		setAgentEvents,
+		setConnectionRevision,
 		setTicketIntakeEvents,
 		showToast,
 		switchWorkspace,
@@ -271,6 +273,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 				saveCard,
 				deleteCard,
 				agentEvents,
+				connectionRevision,
 				clearAgentEvents,
 				clearFollowUpAgentEvents,
 				ticketIntakeEvents,

@@ -41,16 +41,6 @@ describe("shouldRefetchBoardOnSyncEvent", () => {
 		});
 	});
 
-	it("fetches the active board when the SSE connection reopens", () => {
-		const reconnect = {
-			type: "agent.connection.opened",
-		} as AgentEvent;
-		expect(shouldRefetchBoardOnSyncEvent([reconnect], -1)).toEqual({
-			shouldFetch: true,
-			eventIndex: 0,
-		});
-	});
-
 	it("fetches when artifact becomes ready after execution completes", () => {
 		const events = [
 			{ type: "agent.execution.done", boardId: 1 },
@@ -80,6 +70,22 @@ describe("shouldRefetchBoardOnSyncEvent", () => {
 		] as AgentEvent[];
 
 		expect(shouldRefetchBoardOnSyncEvent(events, -1)).toEqual({
+			shouldFetch: false,
+			eventIndex: -1,
+		});
+	});
+
+	it("finds a matching board event before a later token event", () => {
+		const events = [
+			{ type: "agent.board.failed", boardId: 1 },
+			{ type: "agent.card.token", boardId: 1, columnSlug: "x", token: "x" },
+		] as AgentEvent[];
+
+		expect(shouldRefetchBoardOnSyncEvent(events, -1, 1)).toEqual({
+			shouldFetch: true,
+			eventIndex: 0,
+		});
+		expect(shouldRefetchBoardOnSyncEvent(events, -1, 2)).toEqual({
 			shouldFetch: false,
 			eventIndex: -1,
 		});

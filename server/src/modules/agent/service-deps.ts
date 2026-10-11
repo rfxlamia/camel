@@ -6,6 +6,7 @@ import {
 	executeCard as realExecuteCard,
 	generateClarificationQuestion as realGenerateClarificationQuestion,
 } from "./llm.js";
+import { retryDeps } from "./retry-db.js";
 import type { AgentBoardServiceDeps } from "./service.js";
 import { activityDeps } from "./service-deps-activity.js";
 import { boardDeps } from "./service-deps-board.js";
@@ -27,6 +28,7 @@ export const realDeps: AgentBoardServiceDeps = {
 		event: Record<string, unknown>,
 	) => Promise<void>,
 
+	...retryDeps,
 	...boardDeps,
 	...outputDeps,
 	...activityDeps,

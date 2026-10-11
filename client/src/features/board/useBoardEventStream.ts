@@ -3,6 +3,7 @@ import {
 	type MutableRefObject,
 	type SetStateAction,
 	useEffect,
+	useRef,
 } from "react";
 import type { useShowToast } from "../../shared/ToastContext";
 import type { TicketIntakeResultEvent } from "../../shared/useTicketIntakeChat";
@@ -28,6 +29,7 @@ export function useBoardEventStream({
 	reloadWorkspaces,
 	scheduleRefresh,
 	setAgentEvents,
+	setConnectionRevision,
 	setTicketIntakeEvents,
 	showToast,
 	switchWorkspace,
@@ -47,6 +49,7 @@ export function useBoardEventStream({
 	reloadWorkspaces: ReturnType<typeof useWorkspace>["reloadWorkspaces"];
 	scheduleRefresh: () => void;
 	setAgentEvents: Dispatch<SetStateAction<AgentEvent[]>>;
+	setConnectionRevision: Dispatch<SetStateAction<number>>;
 	setTicketIntakeEvents: Dispatch<SetStateAction<TicketIntakeResultEvent[]>>;
 	showToast: ReturnType<typeof useShowToast>;
 	switchWorkspace: ReturnType<typeof useWorkspace>["switchWorkspace"];
@@ -58,12 +61,17 @@ export function useBoardEventStream({
 		ReturnType<typeof useWorkspace>["workspaces"]
 	>;
 }) {
+	const workspaceRef = useRef(activeWorkspaceId);
+	workspaceRef.current = activeWorkspaceId;
 	// Board realtime wiring scoped to the active workspace (EventSource + membership redirect).
 	// biome-ignore lint/correctness/useExhaustiveDependencies: registries and refs are stable for the provider lifetime.
 	useEffect(() => {
 		if (activeWorkspaceId === null) return;
 
 		void refresh();
+		let closed = false;
+		const isCurrent = () =>
+			!closed && workspaceRef.current === activeWorkspaceId;
 
 		const stream = new EventSource(
 			`/api/workspaces/${activeWorkspaceId}/events/stream`,
@@ -73,10 +81,12 @@ export function useBoardEventStream({
 		// loadError=true until the next board event arrived. Agent boards also
 		// re-sync because the server may have recovered an interrupted run.
 		stream.onopen = () => {
+			if (!isCurrent()) return;
 			void refresh();
-			setAgentEvents((prev) => [...prev, { type: "agent.connection.opened" }]);
+			setConnectionRevision((revision) => revision + 1);
 		};
 		stream.onmessage = (e) => {
+			if (!isCurrent()) return;
 			try {
 				const data = JSON.parse(e.data) as {
 					type?: string;
@@ -118,6 +128,7 @@ export function useBoardEventStream({
 						showToast(redirect.toast, "warning");
 						void reloadWorkspaces()
 							.then(() => {
+								if (!isCurrent()) return;
 								switchWorkspace(redirect.nextWorkspaceId);
 							})
 							.catch((err) => {
@@ -172,6 +183,7 @@ export function useBoardEventStream({
 		};
 
 		return () => {
+			closed = true;
 			// Cancel pending debounced refresh — the new effect will call refresh()
 			// on mount, so no event is truly lost.
 			if (refreshTimer.current) {

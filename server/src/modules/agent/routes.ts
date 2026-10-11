@@ -27,6 +27,7 @@ import { parseWith, sendValidationError } from "../../validators/http.js";
 import { workspaceIdParam } from "../../validators/schemas.js";
 import { assertWorkspaceMember } from "./membership.js";
 import { registerReadRoutes } from "./read-routes.js";
+import { registerRetryRoute } from "./retry-routes.js";
 import {
 	parseAgentBoardParams,
 	parseAgentMessageAction,
@@ -82,6 +83,7 @@ export function createAgentRouter(
 	registerCreateBoard(router, service);
 	registerMessage(router, service);
 	registerApprove(router, service);
+	registerRetryRoute(router, service);
 	registerReadRoutes(router, service);
 	return router;
 }

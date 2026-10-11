@@ -11,6 +11,7 @@ export interface AgentArtifacts {
 }
 
 export interface AgentBoards {
+	retry_of_board_id: number | null;
 	created_at: Generated<Timestamp>;
 	execution_status: Generated<string>;
 	id: Generated<number>;

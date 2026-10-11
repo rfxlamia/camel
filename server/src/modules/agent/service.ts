@@ -12,6 +12,7 @@ import { logger } from "../../lib/logger.js";
 import { createBoardConversation } from "./board-conversation.js";
 import { createBoardQueries } from "./board-queries.js";
 import { createPipeline } from "./pipeline.js";
+import { createBoardRetry } from "./retry.js";
 import type { AgentBoardServiceDeps } from "./service-types.js";
 import { assertAgentSpendAllowed } from "./spend-kill-switch.js";
 import { getTemplate } from "./templates.js";
@@ -119,6 +120,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (!board) return { status: 404 as const };
 			if (board.workspaceId !== workspaceId) return { status: 404 as const };
 			if (board.userId !== userId) return { status: 403 as const };
+			if (board.status !== "pending") return { status: 409 as const };
 
 			assertAgentSpendAllowed();
 
@@ -144,11 +146,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}
 
-			const isFailedRetry =
-				board.status === "approved" && board.executionStatus === "failed";
-
-			// Atomic status transition: only one concurrent request wins. The DB
-			// predicate is authoritative for pending approvals and failed retries.
+			// Atomic pending-only approval: only one concurrent request wins.
 			if (deps.approveBoardAtomic) {
 				const { rowCount } = await deps.approveBoardAtomic(boardId);
 				if (rowCount === 0) return { status: 409 as const };
@@ -161,31 +159,6 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				});
 			}
 
-			if (isFailedRetry) {
-				try {
-					await deps.deleteOutputsForBoard?.(boardId);
-					await deps.deleteToolCallsForBoard?.(boardId);
-					await deps.deleteCardsForBoard?.(boardId);
-					await deps.deleteArtifactForBoard?.(boardId);
-				} catch (error) {
-					try {
-						await deps.updateBoard?.(boardId, {
-							execution_status: "failed",
-						});
-					} catch (stateError) {
-						logger.error(
-							{ stateError, boardId },
-							"Failed to restore agent board state after retry cleanup error",
-						);
-					}
-					await deps.publishEvent?.(workspaceId, {
-						type: "agent.board.failed",
-						boardId,
-					});
-					throw error;
-				}
-			}
-
 			await deps.publishEvent?.(workspaceId, {
 				type: "agent.board.generating",
 			});
@@ -194,5 +167,6 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		...pipeline,
 		...conversation,
 		...queries,
+		...createBoardRetry(deps),
 	};
 }

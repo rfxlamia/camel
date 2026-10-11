@@ -91,6 +91,8 @@ interface BoardContextValue {
 	) => Promise<SaveCardResult>;
 	deleteCard: (id: number) => Promise<void>;
 	agentEvents: AgentEvent[];
+	/** Increments on each real SSE open/reconnect; not an agent log event. */
+	connectionRevision: number;
 	clearAgentEvents: () => void;
 	clearFollowUpAgentEvents: () => void;
 	ticketIntakeEvents: TicketIntakeResultEvent[];
