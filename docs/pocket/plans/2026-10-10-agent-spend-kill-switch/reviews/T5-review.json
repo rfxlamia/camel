@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T5",
+  "task_name": "Guard ticket extraction but preserve classifier question",
+  "cycle": 2,
+  "timestamp": "2026-10-11T10:01:28Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "standard",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Audited task/T5 at exact tip c2738407e3886f1fb9aa6e47a87d96dd5ffb0f0f, including the two-line correction delta from the prior audited SHA 14efc016cefa0ab61d6681ed2f228bcafb8ab3b6. The typed-error response now returns both exact contract fields (`error: \"Agent spend is disabled by kill switch\"` and `code: \"AGENT_SPEND_KILL_SWITCH\"`) at server/src/modules/agent/ticket-intake/routes.ts:172-175; the route test uses toEqual with exactly those two fields at routes.test.ts:219-222. The previous Stage 1 finding is resolved.",
+      "Verified typed-only mapping: the route catches only AgentSpendKillSwitchError via instanceof and rethrows unrelated errors (routes.ts:169-171). The assertion sits after configured check, workspace/message validation, membership, first-turn branch, and rate limit, and immediately before extraction (routes.ts:123-180).",
+      "The first-turn regression asserts the exact classifier question and verifies rate-limit, guard, and extraction are not called (routes.test.ts:177-204). The blocked valid extraction case verifies HTTP 503 exact body, guard call, and extractor-not-called (routes.test.ts:206-224).",
+      "Verified earlier outcomes remain ahead of the guard: not-configured 503 exact existing body (routes.test.ts:147-160), malformed workspace/message 400 (routes.test.ts:162-175), non-member 404 (routes.test.ts:264-279), and locked rate-limit 429 with retryAfterMs (routes.test.ts:420-443); these paths assert no guard/extraction as relevant. Default-off valid extraction still reaches extraction and returns the existing ready/draft response (routes.test.ts:226-247). Submit, resubmit, history, config, and chat-limit routes remain ungated.",
+      "Reviewed the approved spend-kill-switch spec and the feature-module convention ADR. The change is within the ticket-intake agent module, uses the existing public guard import, and introduces no out-of-scope route gating. No Minor findings existed in the prior artifact to carry forward.",
+      "Mechanical-gate evidence supplied for this pinned tip: exact focused ticket-intake test command passed with 18 tests; git diff --check passed."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The correction is minimal and fixes the exact JSON contract without broadening error handling or changing route precedence.",
+      "The denial test checks the exact body rather than partial fields and proves extraction was not invoked.",
+      "Existing no-spend first-turn behavior, configured/validation/member/rate-limit precedence, and default-off extraction behavior remain covered. The change introduces no refactor-threshold, placement, or maintainability concern."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 2,
+    "max_cycles": 2,
+    "cycles_remaining": 1,
+    "strategies": [
+      "Correction round 1: include stable AGENT_SPEND_KILL_SWITCH code in ticket denial JSON and assert the exact response body; rerun scoped test and audit."
+    ],
+    "prior_windows": []
+  },
+  "reviewed_sha": "6c832e94d9dd595014ec51d9b03d08adf9615475"
+}

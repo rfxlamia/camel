@@ -1,0 +1,40 @@
+{
+  "task_id": "T3",
+  "task_name": "Map agent guard errors to stable HTTP 503",
+  "cycle": 1,
+  "timestamp": "2026-10-11T09:44:18Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "standard",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Verified the pinned diff fd62b880a1bc94cec160882ae5c53961bed337b6..9abf5e4097b331f599b3b6f50daf57b681bd8673 contains only the in-scope routes.ts and routes.test.ts changes.",
+      "Confirmed mapping is gated by AgentSpendKillSwitchError instanceof identity; unrelated exceptions are rethrown to the existing global handler.",
+      "Verified production-mode HTTP cases for create, approval, spend-bearing message, and pending confirmation assert the exact 503 body and side-effect spies; no-pending confirmation and switch-off create regressions are also covered.",
+      "Verified auth 401, malformed input 400, non-member/missing-board 404, owner 403, switch-off invalid-state 409, unrelated global 500, and default-off 201 behavior in route tests."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "Narrow route-boundary helper in routes.ts:57-67 maps only the typed kill-switch error; the three handler catches at lines 120-123, 179-182, and 215-218 rethrow unrelated errors without changing global error-handler semantics.",
+      "The try/catch blocks surround only the service invocations and preserve auth, parsing, membership checks, response-result handling, and post-approval pipeline dispatch ordering (routes.ts:89-130, 135-188, 192-230).",
+      "Route-level denial tests use the real router/service guard and injected dependency spies, with production-mode exact-response assertions and no DB/network requirement (routes.test.ts:878-1006). Existing database-dependent skips do not affect these cases.",
+      "No 300-on-touch or placement concern: routes.ts remains below 300 lines, tests are excluded by the ADR, and changes stay in the agent module."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 1,
+    "max_cycles": 2,
+    "cycles_remaining": 2,
+    "strategies": [],
+    "prior_windows": []
+  },
+  "reviewed_sha": "9abf5e4097b331f599b3b6f50daf57b681bd8673"
+}

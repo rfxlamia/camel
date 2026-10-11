@@ -1,0 +1,62 @@
+{
+  "header": {
+    "plan_dir": "docs/pocket/plans/2026-10-10-agent-spend-kill-switch",
+    "plan_type": "flat",
+    "status": "IN_PROGRESS",
+    "date_started": "2026-10-11",
+    "date_completed": null,
+    "baseline_sha": "847020669df5ab84661f00151fff74f6200856dd",
+    "pipeline": 5
+  },
+  "phases": [
+    {
+      "order": 1,
+      "file": "execution-plan/index.md",
+      "status": "REVIEW",
+      "tasks": [
+        {
+          "id": "T1",
+          "name": "Define startup config and shared spend guard",
+          "file": "execution-plan/tasks/T1-define-startup-config-and-shared-spend-guard.md",
+          "status": "DONE",
+          "done_sha": "2e5a16981b37b0a81949a89e68088248c285ee6a"
+        },
+        {
+          "id": "T2",
+          "name": "Guard agent spend entrances before side effects",
+          "file": "execution-plan/tasks/T2-guard-agent-spend-entrances-before-side-effects.md",
+          "status": "DONE",
+          "done_sha": "ca068fcfd4ef6b5b40740ca4f554c37925b20114"
+        },
+        {
+          "id": "T3",
+          "name": "Map agent guard errors to stable HTTP 503",
+          "file": "execution-plan/tasks/T3-map-agent-guard-errors-to-stable-http-503.md",
+          "status": "DONE",
+          "done_sha": "9abf5e4097b331f599b3b6f50daf57b681bd8673"
+        },
+        {
+          "id": "T4",
+          "name": "Reject chat send and retry before streaming",
+          "file": "execution-plan/tasks/T4-reject-chat-send-and-retry-before-streaming.md",
+          "status": "DONE",
+          "done_sha": "ba679e3f0c67f199353fc2decf92356a2fee563e"
+        },
+        {
+          "id": "T5",
+          "name": "Guard ticket extraction but preserve classifier question",
+          "file": "execution-plan/tasks/T5-guard-ticket-extraction-but-preserve-classifier-question.md",
+          "status": "DONE",
+          "done_sha": "6c832e94d9dd595014ec51d9b03d08adf9615475"
+        },
+        {
+          "id": "T6",
+          "name": "Wire production Compose env and operator runbook",
+          "file": "execution-plan/tasks/T6-wire-production-compose-env-and-operator-runbook.md",
+          "status": "DONE",
+          "done_sha": "fd62b880a1bc94cec160882ae5c53961bed337b6"
+        }
+      ]
+    }
+  ]
+}
