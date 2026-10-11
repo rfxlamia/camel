@@ -44,6 +44,11 @@ docs/**
 !docs/pocket/**
 !docs/superpowers/
 !docs/superpowers/**
+docs/**/.env
+docs/**/.env.*
+docs/**/*.log
+docs/**/*.pem
+docs/**/node_modules/
 docs/**/.DS_Store
 /server/private-uploads/
 
