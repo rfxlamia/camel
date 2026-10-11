@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { listIntegrationTests } from "./list-integration-tests.mjs";
+import {
+	listIntegrationTests,
+	listSkipIfGatedTests,
+} from "./list-integration-tests.mjs";
 
 const cliScript = fileURLToPath(
 	new URL("./list-integration-tests.mjs", import.meta.url),
@@ -48,13 +51,24 @@ test("selects every server .test.ts containing RUN_INTEGRATION, including mixed 
 		writeServerFile(
 			root,
 			"nested/columns-remap.scenarios.ts",
-			"const key = 'RUN_INTEGRATION';",
+			'describe.skipIf(!process.env.RUN_INTEGRATION)("remap", () => {});',
+		);
+		writeServerFile(
+			root,
+			"nested/unimported.scenarios.ts",
+			'describe.skipIf(!process.env.RUN_INTEGRATION)("unimported", () => {});',
+		);
+		writeServerFile(
+			root,
+			"nested/remap.integration.test.ts",
+			'import "./columns-remap.scenarios.js";\n',
 		);
 		writeFileSync(join(root, "server", "package.json"), '"RUN_INTEGRATION"');
 
 		const expected = [
 			"src/nested/db.integration.test.ts",
 			"src/nested/mixed.test.ts",
+			"src/nested/remap.integration.test.ts",
 			"src/root.test.ts",
 		];
 		assert.deepEqual(listIntegrationTests(root), expected);
@@ -87,4 +101,25 @@ test("returns an empty list when server/src is missing", () => {
 	withTempRoot((root) => {
 		assert.deepEqual(listIntegrationTests(root), []);
 	});
+});
+
+test("real repo selects skipIf-gated tests including imported scenario suites", () => {
+	const selected = listIntegrationTests();
+	assert.ok(
+		selected.includes(
+			"src/modules/board/columns-is-done-remap.integration.test.ts",
+		),
+		"columns-is-done-remap.integration.test.ts must be selected via scenario imports",
+	);
+	const gated = listSkipIfGatedTests();
+	for (const file of gated) {
+		assert.ok(
+			selected.includes(file),
+			`${file} is skipIf-gated but not selected for DB`,
+		);
+	}
+	assert.ok(
+		selected.length >= 81,
+		`expected at least 81 selected files, got ${selected.length}`,
+	);
 });

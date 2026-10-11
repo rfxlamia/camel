@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const RELATIVE_IMPORT = /(?:from|import)\s+["'](\.\.?\/[^"']+)["']/g;
+const SKIP_IF_GATE = "skipIf(!process.env.RUN_INTEGRATION)";
 
 function walk(directory, files = []) {
 	let entries;
@@ -25,13 +27,75 @@ function walk(directory, files = []) {
 	return files;
 }
 
-export function listIntegrationTests(root = REPO_ROOT) {
+function readText(path) {
+	try {
+		return readFileSync(path, "utf8");
+	} catch (error) {
+		if (error.code === "ENOENT") return null;
+		throw error;
+	}
+}
+
+function isInside(root, path) {
+	const relativePath = relative(root, path);
+	return (
+		relativePath !== "" &&
+		!relativePath.startsWith(`..${sep}`) &&
+		!relativePath.startsWith("..") &&
+		!relativePath.startsWith(sep)
+	);
+}
+
+function resolveRelativeImport(fromFile, specifier, sourceRoot) {
+	const raw = resolve(dirname(fromFile), specifier);
+	const candidates = specifier.endsWith(".js")
+		? [raw.slice(0, -3) + ".ts", raw]
+		: [raw, `${raw}.ts`];
+	for (const candidate of candidates) {
+		if (!isInside(sourceRoot, candidate)) continue;
+		if (readText(candidate) !== null) return candidate;
+	}
+	return null;
+}
+
+function oneHopImports(fromFile, text, sourceRoot) {
+	const imports = [];
+	for (const match of text.matchAll(RELATIVE_IMPORT)) {
+		const resolved = resolveRelativeImport(fromFile, match[1], sourceRoot);
+		if (resolved) imports.push(resolved);
+	}
+	return imports;
+}
+
+function fileMentions(path, needle) {
+	const text = readText(path);
+	return Boolean(text?.includes(needle));
+}
+
+function testFileMatches(path, sourceRoot, needle) {
+	const text = readText(path);
+	if (!text) return false;
+	if (text.includes(needle)) return true;
+	return oneHopImports(path, text, sourceRoot).some((imported) =>
+		fileMentions(imported, needle),
+	);
+}
+
+function listMatchingTests(root, needle) {
 	const serverRoot = join(root, "server");
 	const sourceRoot = join(serverRoot, "src");
 	return walk(sourceRoot)
-		.filter((path) => readFileSync(path, "utf8").includes("RUN_INTEGRATION"))
+		.filter((path) => testFileMatches(path, sourceRoot, needle))
 		.map((path) => relative(serverRoot, path).split(sep).join("/"))
 		.sort();
+}
+
+export function listIntegrationTests(root = REPO_ROOT) {
+	return listMatchingTests(root, "RUN_INTEGRATION");
+}
+
+export function listSkipIfGatedTests(root = REPO_ROOT) {
+	return listMatchingTests(root, SKIP_IF_GATE);
 }
 
 function runCli(args) {
