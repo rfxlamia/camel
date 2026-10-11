@@ -15,6 +15,7 @@ import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
 import { setAttachmentStorageForTests } from "../../lib/attachment-storage.js";
 import { createErrorHandler } from "../../middleware/error-handler.js";
+import { deleteToolCallsForBoard } from "./board-db.js";
 
 const routeTestState = vi.hoisted(() => ({
 	authenticated: true,
@@ -68,6 +69,7 @@ import {
 	selectConversationHistory,
 	validateBoardColumns,
 } from "./routes.js";
+import { boardDeps } from "./service-deps-board.js";
 
 describe("defaultToolRegistry", () => {
 	it("resolves web_search for production wiring", () => {
@@ -207,6 +209,46 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		afterAll(async () => {
 			await db.deleteFrom("workspaces").where("id", "=", workspaceId).execute();
 			await db.deleteFrom("users").where("id", "=", userId).execute();
+		});
+
+		it("allows exactly one atomic claim for an approved failed-board retry", async () => {
+			const failedBoard = await db
+				.insertInto("agent_boards")
+				.values({
+					workspace_id: workspaceId,
+					user_id: userId,
+					original_intent: "retry intent",
+					template_id: "research-report",
+					status: "approved",
+					execution_status: "failed",
+				})
+				.returning("id")
+				.executeTakeFirstOrThrow();
+
+			try {
+				const claims = await Promise.all([
+					boardDeps.approveBoardAtomic(failedBoard.id),
+					boardDeps.approveBoardAtomic(failedBoard.id),
+				]);
+				expect(claims.map((claim) => claim.rowCount).sort()).toEqual([0, 1]);
+				const row = await db
+					.selectFrom("agent_boards")
+					.select(["status", "execution_status"])
+					.where("id", "=", failedBoard.id)
+					.executeTakeFirstOrThrow();
+				expect(row).toEqual({
+					status: "approved",
+					execution_status: "running",
+				});
+				expect(await boardDeps.approveBoardAtomic(failedBoard.id)).toEqual({
+					rowCount: 0,
+				});
+			} finally {
+				await db
+					.deleteFrom("agent_boards")
+					.where("id", "=", failedBoard.id)
+					.execute();
+			}
 		});
 
 		describe("loadAgentBoardColumns", () => {
@@ -606,6 +648,20 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				const result = await realArtifactDeps.getArtifact(db, boardId);
 				expect(result).toMatchObject({ filename: "title3.md" });
 			});
+
+			it("deleteArtifactForBoard removes only the selected board artifact", async () => {
+				await realArtifactDeps.insertArtifact(db, {
+					boardId,
+					workspaceId,
+					filename: "retry.md",
+					format: "md",
+					content: "old artifact",
+				});
+
+				await realArtifactDeps.deleteArtifactForBoard(db, boardId);
+
+				expect(await realArtifactDeps.getArtifact(db, boardId)).toBeNull();
+			});
 		});
 
 		describe("realDeps SQL wiring", () => {
@@ -648,6 +704,26 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 				const rows = await db
 					.selectFrom("agent_card_outputs")
+					.selectAll()
+					.where("board_id", "=", boardId)
+					.execute();
+				expect(rows).toHaveLength(0);
+			});
+
+			it("deleteToolCallsForBoard removes only the selected board trace", async () => {
+				await db
+					.insertInto("agent_tool_calls")
+					.values({
+						board_id: boardId,
+						column_slug: "research",
+						tool_name: "web_search",
+					})
+					.execute();
+
+				await deleteToolCallsForBoard(db, boardId);
+
+				const rows = await db
+					.selectFrom("agent_tool_calls")
 					.selectAll()
 					.where("board_id", "=", boardId)
 					.execute();

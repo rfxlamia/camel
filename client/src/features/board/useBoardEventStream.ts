@@ -70,8 +70,12 @@ export function useBoardEventStream({
 		);
 		// Re-fetch board data whenever the SSE connection (re)opens — covers the
 		// startup race where the server wasn't ready on first connect, leaving
-		// loadError=true until the next board event arrived.
-		stream.onopen = () => void refresh();
+		// loadError=true until the next board event arrived. Agent boards also
+		// re-sync because the server may have recovered an interrupted run.
+		stream.onopen = () => {
+			void refresh();
+			setAgentEvents((prev) => [...prev, { type: "agent.connection.opened" }]);
+		};
 		stream.onmessage = (e) => {
 			try {
 				const data = JSON.parse(e.data) as {

@@ -5,7 +5,7 @@ import { useShowToast } from "../../shared/ToastContext";
 import { useWorkspace } from "../../shared/WorkspaceContext";
 import type { AgentArtifact, AgentBoard } from "../../types";
 import { useBoard } from "../board";
-import { shouldRefetchBoardOnTerminalEvent } from "./agentBoardSync";
+import { shouldRefetchBoardOnSyncEvent } from "./agentBoardSync";
 
 export function useAgentBoard() {
 	const { activeWorkspaceId } = useWorkspace();
@@ -68,7 +68,7 @@ export function useAgentBoard() {
 		const boardId = boardRef.current?.id;
 		if (!boardId) return;
 
-		const { shouldFetch, eventIndex } = shouldRefetchBoardOnTerminalEvent(
+		const { shouldFetch, eventIndex } = shouldRefetchBoardOnSyncEvent(
 			agentEvents,
 			lastSyncedTerminalIdxRef.current,
 		);

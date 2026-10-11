@@ -25,7 +25,14 @@ const mockIsTicketIntakeConfigured = vi.fn().mockReturnValue(true);
 const mockExtractTicketFields = vi.fn();
 const mockAssertAgentSpendAllowed = vi.fn();
 const { MockAgentSpendKillSwitchError } = vi.hoisted(() => ({
-	MockAgentSpendKillSwitchError: class extends Error {},
+	MockAgentSpendKillSwitchError: class extends Error {
+		readonly code: string;
+
+		constructor(message: string, code = "AGENT_SPEND_KILL_SWITCH") {
+			super(message);
+			this.code = code;
+		}
+	},
 }));
 vi.mock("../spend-kill-switch.js", () => ({
 	assertAgentSpendAllowed: (...args: unknown[]) =>
@@ -211,7 +218,8 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 		});
 		mockAssertAgentSpendAllowed.mockImplementation(() => {
 			throw new MockAgentSpendKillSwitchError(
-				"Agent spend is disabled by kill switch",
+				"Typed spend-denial message",
+				"AGENT_SPEND_KILL_SWITCH",
 			);
 		});
 
@@ -224,7 +232,7 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 
 		expect(res.status).toBe(503);
 		expect(res.body).toEqual({
-			error: "Agent spend is disabled by kill switch",
+			error: "Typed spend-denial message",
 			code: "AGENT_SPEND_KILL_SWITCH",
 		});
 		expect(mockCheckChatLimit).toHaveBeenCalledTimes(1);

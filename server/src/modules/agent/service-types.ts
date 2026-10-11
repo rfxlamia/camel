@@ -183,7 +183,11 @@ export interface AgentBoardServiceDeps {
 
 	deleteOutputsForBoard?: (boardId: number) => Promise<void>;
 
+	deleteToolCallsForBoard?: (boardId: number) => Promise<void>;
+
 	deleteCardsForBoard?: (boardId: number) => Promise<void>;
+
+	deleteArtifactForBoard?: (boardId: number) => Promise<void>;
 
 	fetchCardTimestamps?: (workspaceId: number) => Promise<CardTimestamps[]>;
 

@@ -13,8 +13,8 @@ import { createBoardConversation } from "./board-conversation.js";
 import { createBoardQueries } from "./board-queries.js";
 import { createPipeline } from "./pipeline.js";
 import type { AgentBoardServiceDeps } from "./service-types.js";
-import { getTemplate } from "./templates.js";
 import { assertAgentSpendAllowed } from "./spend-kill-switch.js";
+import { getTemplate } from "./templates.js";
 
 export type {
 	AgentBoardRecord,
@@ -144,7 +144,11 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 				}
 			}
 
-			// Atomic status transition: only one concurrent request wins
+			const isFailedRetry =
+				board.status === "approved" && board.executionStatus === "failed";
+
+			// Atomic status transition: only one concurrent request wins. The DB
+			// predicate is authoritative for pending approvals and failed retries.
 			if (deps.approveBoardAtomic) {
 				const { rowCount } = await deps.approveBoardAtomic(boardId);
 				if (rowCount === 0) return { status: 409 as const };
@@ -155,6 +159,31 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 					status: "approved",
 					execution_status: "running",
 				});
+			}
+
+			if (isFailedRetry) {
+				try {
+					await deps.deleteOutputsForBoard?.(boardId);
+					await deps.deleteToolCallsForBoard?.(boardId);
+					await deps.deleteCardsForBoard?.(boardId);
+					await deps.deleteArtifactForBoard?.(boardId);
+				} catch (error) {
+					try {
+						await deps.updateBoard?.(boardId, {
+							execution_status: "failed",
+						});
+					} catch (stateError) {
+						logger.error(
+							{ stateError, boardId },
+							"Failed to restore agent board state after retry cleanup error",
+						);
+					}
+					await deps.publishEvent?.(workspaceId, {
+						type: "agent.board.failed",
+						boardId,
+					});
+					throw error;
+				}
 			}
 
 			await deps.publishEvent?.(workspaceId, {

@@ -99,7 +99,15 @@ export const boardDeps: Pick<
 				updated_at: sql`now()`,
 			})
 			.where("id", "=", boardId)
-			.where("status", "=", "pending")
+			.where((eb) =>
+				eb.or([
+					eb("status", "=", "pending"),
+					eb.and([
+						eb("status", "=", "approved"),
+						eb("execution_status", "=", "failed"),
+					]),
+				]),
+			)
 			.executeTakeFirst();
 		return { rowCount: Number(result.numUpdatedRows ?? 0) };
 	},
