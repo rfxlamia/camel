@@ -225,6 +225,7 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 		expect(res.status).toBe(503);
 		expect(res.body).toEqual({
 			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
 		});
 		expect(mockCheckChatLimit).toHaveBeenCalledTimes(1);
 		expect(mockAssertAgentSpendAllowed).toHaveBeenCalledTimes(1);
