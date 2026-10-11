@@ -65,7 +65,7 @@ This file provides guidance to agents when working with code in this repository.
 - `server/` — Express 5 backend (Kysely, Redis, Anthropic SDK)
 - `camel-lottie/` — Standalone Lottie subproject (excluded from root lint)
 - `deploy/` — Deployment configs
-- `docs/` — Documentation (separate git remote)
+- `docs/` — Pocket/Superpowers documentation tracked in this repository; other docs stay local
 
 ### Conventions
 

@@ -104,21 +104,16 @@ clean: ## ⚠️  Remove node_modules, dist, and stop containers (destructive)
 	@$(DOCKER_COMPOSE) down -v 2>/dev/null || true
 	@echo "✓ Cleaned"
 
-# ---- Docs (separate remote) -----------------------------------------------
+# ---- Docs (tracked in the main repository) -------------------------------
 
-.PHONY: docs-commit docs-push docs-pull docs-sync
+.PHONY: docs-commit
 
-docs-commit: ## Commit all docs changes (auto-generate message via comma)
-	@cd docs && git add -A && comma
-
-docs-push: ## Push docs to remote
-	@cd docs && git push
-
-docs-pull: ## Pull docs from remote
-	@cd docs && git pull
-
-docs-sync: ## Pull then push docs (sync with remote)
-	@cd docs && git pull --rebase && git push
+export DOCS_COMMIT_MESSAGE
+# Example: DOCS_COMMIT_MESSAGE='docs: update architecture notes' make docs-commit
+docs-commit: ## Commit docs changes (requires DOCS_COMMIT_MESSAGE in environment)
+	@case "$$DOCS_COMMIT_MESSAGE" in *[![:space:]]*) ;; *) echo 'Set a non-empty DOCS_COMMIT_MESSAGE' >&2; exit 2;; esac
+	@git add docs/
+	@printf '%s\n' "$$DOCS_COMMIT_MESSAGE" | git commit --only --cleanup=verbatim -F - -- docs/
 
 # ---- Help ------------------------------------------------------------------
 
