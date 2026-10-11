@@ -110,10 +110,15 @@ clean: ## ⚠️  Remove node_modules, dist, and stop containers (destructive)
 
 export DOCS_COMMIT_MESSAGE
 # Example: DOCS_COMMIT_MESSAGE='docs: update architecture notes' make docs-commit
-docs-commit: ## Commit docs changes (requires DOCS_COMMIT_MESSAGE in environment)
+docs-commit: ## Commit Pocket/Superpowers docs (requires DOCS_COMMIT_MESSAGE in environment)
 	@case "$$DOCS_COMMIT_MESSAGE" in *[![:space:]]*) ;; *) echo 'Set a non-empty DOCS_COMMIT_MESSAGE' >&2; exit 2;; esac
-	@git add docs/
-	@printf '%s\n' "$$DOCS_COMMIT_MESSAGE" | git commit --only --cleanup=verbatim -F - -- docs/
+	@git add docs/pocket/ docs/superpowers/
+	@status=0; git diff --cached --quiet -- docs/pocket/ docs/superpowers/ || status=$$?; \
+	case "$$status" in \
+		0) echo 'No docs changes to commit.' ;; \
+		1) printf '%s' "$$DOCS_COMMIT_MESSAGE" | git commit --only --cleanup=verbatim -F - -- docs/pocket/ docs/superpowers/ ;; \
+		*) exit "$$status" ;; \
+	esac
 
 # ---- Help ------------------------------------------------------------------
 
