@@ -7,6 +7,7 @@ export default defineConfig({
 		// Browser tests use jsdom by default; audited pure suites opt into Node
 		// with a per-file @vitest-environment directive.
 		environment: "jsdom",
+		setupFiles: ["./src/shared/testSetup.ts"],
 		include: ["src/**/*.test.{ts,tsx}"],
 		env: {
 			NODE_ENV: "test",

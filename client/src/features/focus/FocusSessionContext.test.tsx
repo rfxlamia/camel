@@ -33,15 +33,14 @@ vi.mock("../../api", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../../api")>();
 	return {
 		...actual,
-		api: {
-			...actual.api,
+		api: Object.assign(actual.api, {
 			focus: {
 				...actual.api.focus,
 				get: (...args: unknown[]) => mockFocusGet(...args),
 				post: (...args: unknown[]) => mockFocusPost(...args),
 				patch: (...args: unknown[]) => mockFocusPatch(...args),
 			},
-		},
+		}),
 	};
 });
 
@@ -135,23 +134,28 @@ vi.mock("../../shared/ToastContext", () => ({
 	useShowToast: () => mockShowToast,
 }));
 
-vi.mock("../board", () => ({
-	useBoard: () => ({
-		subscribeFocusEvents: (
-			handler: (event: {
-				type: "focus_session.updated";
-				userId: number;
-				workspaceId: number;
-				payload: { session: FocusSession | null };
-			}) => void,
-		) => {
-			focusEventHandlers.add(handler);
-			return () => {
-				focusEventHandlers.delete(handler);
-			};
-		},
-	}),
-}));
+vi.mock("../board", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../board")>();
+	vi.spyOn(actual, "useBoard").mockImplementation(
+		() =>
+			({
+				subscribeFocusEvents: (
+					handler: (event: {
+						type: "focus_session.updated";
+						userId: number;
+						workspaceId: number;
+						payload: { session: FocusSession | null };
+					}) => void,
+				) => {
+					focusEventHandlers.add(handler);
+					return () => {
+						focusEventHandlers.delete(handler);
+					};
+				},
+			}) as ReturnType<typeof actual.useBoard>,
+	);
+	return actual;
+});
 
 describe("FocusSessionProvider", () => {
 	beforeEach(() => {

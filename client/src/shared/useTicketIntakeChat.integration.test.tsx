@@ -30,8 +30,7 @@ vi.mock("../api", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../api")>();
 	return {
 		...actual,
-		api: {
-			...actual.api,
+		api: Object.assign(actual.api, {
 			getWorkspaces: (...args: unknown[]) => mockGetWorkspaces(...args),
 			getBoard: (...args: unknown[]) => mockGetBoard(...args),
 			getMetrics: (...args: unknown[]) => mockGetMetrics(...args),
@@ -47,7 +46,7 @@ vi.mock("../api", async (importOriginal) => {
 			focus: {
 				getConfig: vi.fn().mockResolvedValue({ enabled: false }),
 			},
-		},
+		}),
 	};
 });
 

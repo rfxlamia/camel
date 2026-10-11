@@ -15,8 +15,7 @@ vi.mock("../api", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../api")>();
 	return {
 		...actual,
-		api: {
-			...actual.api,
+		api: Object.assign(actual.api, {
 			ticketIntake: {
 				sendMessage: (...args: unknown[]) => mockSendMessage(...args),
 				submit: (...args: unknown[]) => mockSubmit(...args),
@@ -25,7 +24,7 @@ vi.mock("../api", async (importOriginal) => {
 				getChatLimit: (...args: unknown[]) => mockGetChatLimit(...args),
 				getConfig: vi.fn(),
 			},
-		},
+		}),
 	};
 });
 

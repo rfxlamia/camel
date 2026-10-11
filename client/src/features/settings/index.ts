@@ -1,3 +1,6 @@
+import { createSettingsApi } from "./settingsApi";
+
+// Load transport factories before UI re-exports, which can import the facade.
 export { default as LogoCropper } from "./LogoCropper";
 export {
 	default as ManageMembersSection,
@@ -10,3 +13,4 @@ export {
 	validateUnsavedChanges,
 	validateWorkspaceName,
 } from "./settingsValidation";
+export { createSettingsApi };

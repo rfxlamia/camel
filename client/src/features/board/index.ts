@@ -1,3 +1,12 @@
+import {
+	type CardAttachmentUploadResponse,
+	cardAttachmentDownloadUrl,
+	cardAttachmentOriginalUrl,
+	cardAttachmentThumbnailUrl,
+	createBoardApi,
+} from "./boardApi";
+
+// Load transport factories before UI re-exports, which can import the facade.
 export { AssigneePicker } from "./AssigneePicker";
 export { default as BoardCardTaxonomyFields } from "./BoardCardTaxonomyFields";
 export {
@@ -29,3 +38,10 @@ export {
 	type WorkspaceTemplate,
 } from "./templates";
 export { default as ViewSwitcher } from "./ViewSwitcher";
+export {
+	type CardAttachmentUploadResponse,
+	cardAttachmentDownloadUrl,
+	cardAttachmentOriginalUrl,
+	cardAttachmentThumbnailUrl,
+	createBoardApi,
+};
