@@ -6,6 +6,285 @@ import type { AgentBoardServiceDeps, ColumnInfo } from "./service.js";
 import { createAgentBoardService } from "./service.js";
 import { createToolRegistry } from "./tools/registry.js";
 import { webSearch } from "./tools/webSearch.js";
+import * as spendGuard from "./spend-kill-switch.js";
+
+afterEach(() => vi.restoreAllMocks());
+
+// T2 characterization baselines: these DB-only/no-op paths stay available when
+// the spend switch is enabled, while default-off spend paths remain unchanged.
+describe("T2 spend guard characterization baselines", () => {
+	it("allows running-board message storage", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => { throw new spendGuard.AgentSpendKillSwitchError(); });
+		const insertConversation = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({
+				id: 1, status: "approved", executionStatus: "running", workspaceId: 1,
+				userId: 1, originalIntent: "research",
+			})),
+			insertConversation,
+		});
+		const result = await service.sendMessage({ boardId: 1, userId: 1, workspaceId: 1, message: "hello" });
+		expect(result).toMatchObject({ boardUpdated: false, explanation: expect.stringContaining("eksekusi") });
+		expect(insertConversation).toHaveBeenCalledWith({ boardId: 1, role: "user", content: "hello" });
+		expect(assertion).not.toHaveBeenCalled();
+	});
+
+	it("allows cancel-regenerate", async () => {
+		const insertConversation = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 1, status: "approved", workspaceId: 1, userId: 1, originalIntent: "research" })),
+			insertConversation,
+		});
+		await service.cancelRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 });
+		expect(insertConversation).toHaveBeenCalledWith(expect.objectContaining({ content: "Regeneration cancelled." }));
+	});
+
+	it("keeps confirmation without pending intent as a success no-op", async () => {
+		const updateBoard = vi.fn();
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 1, status: "approved", workspaceId: 1, userId: 1, originalIntent: "research" })),
+			updateBoard,
+		});
+		expect(await service.confirmRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 })).toEqual({ ok: true });
+		expect(updateBoard).not.toHaveBeenCalled();
+	});
+
+	it("allows at most one of two concurrent confirmations to claim pending intent", async () => {
+		const updateBoard = vi.fn(async () => {});
+		const deleteOutputsForBoard = vi.fn(async () => {});
+		const deleteCardsForBoard = vi.fn(async () => {});
+		const getColumns = vi.fn(async () => []);
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 1, status: "approved", executionStatus: "done", workspaceId: 1, userId: 1, originalIntent: "research" })),
+			getArtifact: vi.fn(async () => null), getColumns,
+			classifyFollowUpIntent: vi.fn(async () => ({ intent: "NEW_DIRECTION" as const, response: "confirm", confidence: 1 })),
+			getConversationHistory: vi.fn(async () => []), insertConversation: vi.fn(async () => {}),
+			updateBoard, deleteOutputsForBoard,
+			deleteCardsForBoard, publishEvent: vi.fn(async () => {}),
+		});
+		// Establish a real pending intent; the in-memory map remains service-owned.
+		await service.sendMessage({ boardId: 1, userId: 1, workspaceId: 1, message: "new direction" });
+		const [a, b] = await Promise.all([
+			service.confirmRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 }),
+			service.confirmRegenerateBoard({ boardId: 1, userId: 1, workspaceId: 1 }),
+		]);
+		expect(a).toEqual({ ok: true }); expect(b).toEqual({ ok: true });
+		expect(updateBoard).toHaveBeenCalledTimes(1);
+		expect(deleteOutputsForBoard).toHaveBeenCalledTimes(1);
+		expect(deleteCardsForBoard).toHaveBeenCalledTimes(1);
+		expect(getColumns).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps default-off create behavior", async () => {
+		const classifyIntent = vi.fn(async () => ({ templateId: null, explanation: "unsupported" }));
+		const service = createAgentBoardService({ classifyIntent, insertBoard: vi.fn() });
+		expect(await service.createBoard({ workspaceId: 1, userId: 1, intent: "x" })).toMatchObject({ status: 422 });
+		expect(classifyIntent).toHaveBeenCalledOnce();
+	});
+
+	it("keeps default-off approval behavior", async () => {
+		const detectReportPeriod = vi.fn(async () => ({ hasPeriod: true }));
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 1, status: "pending", templateId: "status-report", workspaceId: 1, userId: 1, originalIntent: "report" })),
+			detectReportPeriod, approveBoardAtomic: vi.fn(async () => ({ rowCount: 1 })),
+		});
+		expect(await service.approveBoard({ boardId: 1, userId: 1, workspaceId: 1 })).toBeUndefined();
+		expect(detectReportPeriod).toHaveBeenCalledOnce();
+	});
+
+	it("keeps default-off clarification/follow-up behavior", async () => {
+		const clarify = vi.fn(async () => "clarified");
+		const classify = vi.fn(async () => ({ intent: "OFF_TOPIC" as const, response: "off topic", confidence: 1 }));
+		const pendingService = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 1, status: "pending", workspaceId: 1, userId: 1, originalIntent: "research" })),
+			insertConversation: vi.fn(async () => {}), generateClarificationQuestion: clarify,
+		});
+		expect(await pendingService.sendMessage({ boardId: 1, userId: 1, workspaceId: 1, message: "more" })).toMatchObject({ explanation: "clarified" });
+		const doneService = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 1, status: "approved", executionStatus: "done", workspaceId: 1, userId: 1, originalIntent: "research" })),
+			getArtifact: vi.fn(async () => null), getConversationHistory: vi.fn(async () => []), classifyFollowUpIntent: classify,
+			insertConversation: vi.fn(async () => {}),
+		});
+		expect(await doneService.sendMessage({ boardId: 1, userId: 1, workspaceId: 1, message: "more" })).toMatchObject({ explanation: "off topic" });
+		expect(clarify).toHaveBeenCalledOnce(); expect(classify).toHaveBeenCalledOnce();
+	});
+});
+
+describe("T2 spend denial ordering", () => {
+	it("rejects board creation before classifier, persistence, and events", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => {
+			throw new spendGuard.AgentSpendKillSwitchError();
+		});
+		const classifyIntent = vi.fn(async () => ({ templateId: "research-report", explanation: "classified" }));
+		const insertBoard = vi.fn(async () => ({ id: 2 }));
+		const insertConversation = vi.fn(async () => {});
+		const publishEvent = vi.fn();
+		const service = createAgentBoardService({ classifyIntent, insertBoard, insertConversation, insertColumns: vi.fn(), publishEvent });
+		await expect(service.createBoard({ workspaceId: 1, userId: 1, intent: "research" }))
+			.rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(classifyIntent).not.toHaveBeenCalled();
+		expect(insertBoard).not.toHaveBeenCalled(); expect(insertConversation).not.toHaveBeenCalled();
+		expect(publishEvent).not.toHaveBeenCalled();
+		assertion.mockRestore();
+	});
+
+	it("approval denial precedes detection and mutation while access errors win", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => {
+			throw new spendGuard.AgentSpendKillSwitchError();
+		});
+		const detectReportPeriod = vi.fn(async () => ({ hasPeriod: true }));
+		const approveBoardAtomic = vi.fn(async () => ({ rowCount: 1 }));
+		const publishEvent = vi.fn();
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 3, status: "pending", templateId: "status-report", workspaceId: 1, userId: 7, originalIntent: "report" })),
+			detectReportPeriod, approveBoardAtomic, publishEvent,
+		});
+		await expect(service.approveBoard({ boardId: 3, userId: 7, workspaceId: 1 })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(detectReportPeriod).not.toHaveBeenCalled();
+		expect(approveBoardAtomic).not.toHaveBeenCalled(); expect(publishEvent).not.toHaveBeenCalled();
+
+		for (const [board, userId, workspaceId, expected] of [
+			[null, 7, 1, 404],
+			[{ id: 3, workspaceId: 2, userId: 7 }, 7, 1, 404],
+			[{ id: 3, workspaceId: 1, userId: 99 }, 7, 1, 403],
+		] as const) {
+			const unauthorized = createAgentBoardService({ getBoard: vi.fn(async () => board), detectReportPeriod });
+			expect(await unauthorized.approveBoard({ boardId: 3, userId, workspaceId })).toMatchObject({ status: expected });
+		}
+		expect(assertion).toHaveBeenCalledOnce();
+	});
+
+	it("rejects pending-board clarification before message writes or LLM", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => { throw new spendGuard.AgentSpendKillSwitchError(); });
+		const insertConversation = vi.fn(async () => {});
+		const updateBoard = vi.fn(async () => {});
+		const generateClarificationQuestion = vi.fn(async () => "clarify");
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 4, status: "pending", workspaceId: 1, userId: 7, originalIntent: "research" })),
+			insertConversation, updateBoard, generateClarificationQuestion,
+		});
+		await expect(service.sendMessage({ boardId: 4, userId: 7, workspaceId: 1, message: "more detail" })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(insertConversation).not.toHaveBeenCalled();
+		expect(updateBoard).not.toHaveBeenCalled(); expect(generateClarificationQuestion).not.toHaveBeenCalled();
+	});
+
+	it("rejects completed-board follow-up before classification and writes", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => { throw new spendGuard.AgentSpendKillSwitchError(); });
+		const classifyFollowUpIntent = vi.fn(async () => ({ intent: "NEW_DIRECTION" as const, response: "confirm", confidence: 1 }));
+		const insertConversation = vi.fn(async () => {});
+		const publishEvent = vi.fn();
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 5, status: "approved", executionStatus: "done", workspaceId: 1, userId: 7, originalIntent: "research" })),
+			getArtifact: vi.fn(async () => null), getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent, insertConversation, publishEvent,
+		});
+		await expect(service.sendMessage({ boardId: 5, userId: 7, workspaceId: 1, message: "different topic" })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(classifyFollowUpIntent).not.toHaveBeenCalled();
+		expect(insertConversation).not.toHaveBeenCalled(); expect(publishEvent).not.toHaveBeenCalled();
+	});
+
+	it("rejects regenerate before consuming pending intent and allows later confirmation", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed")
+			.mockImplementationOnce(() => {})
+			.mockImplementationOnce(() => { throw new spendGuard.AgentSpendKillSwitchError(); })
+			.mockImplementation(() => {});
+		const updateBoard = vi.fn(async () => {});
+		const deleteOutputsForBoard = vi.fn(async () => {});
+		const deleteCardsForBoard = vi.fn(async () => {});
+		const insertConversation = vi.fn(async () => {});
+		const publishEvent = vi.fn();
+		const getColumns = vi.fn(async () => []);
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 6, status: "approved", executionStatus: "done", workspaceId: 1, userId: 7, originalIntent: "research" })),
+			getArtifact: vi.fn(async () => null), getConversationHistory: vi.fn(async () => []),
+			classifyFollowUpIntent: vi.fn(async () => ({ intent: "NEW_DIRECTION" as const, response: "confirm", confidence: 1 })),
+			insertConversation, updateBoard, deleteOutputsForBoard, deleteCardsForBoard, publishEvent, getColumns,
+		});
+		await service.sendMessage({ boardId: 6, userId: 7, workspaceId: 1, message: "new direction" });
+		await expect(service.confirmRegenerateBoard({ boardId: 6, userId: 7, workspaceId: 1 })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledTimes(2);
+		expect(updateBoard).not.toHaveBeenCalled(); expect(deleteOutputsForBoard).not.toHaveBeenCalled();
+		expect(deleteCardsForBoard).not.toHaveBeenCalled(); expect(insertConversation).toHaveBeenCalledTimes(2);
+		expect(publishEvent).not.toHaveBeenCalled(); expect(getColumns).not.toHaveBeenCalled();
+		await service.confirmRegenerateBoard({ boardId: 6, userId: 7, workspaceId: 1 });
+		expect(updateBoard).toHaveBeenCalledOnce(); expect(deleteOutputsForBoard).toHaveBeenCalledOnce();
+		expect(deleteCardsForBoard).toHaveBeenCalledOnce(); expect(getColumns).toHaveBeenCalledOnce();
+	});
+
+	it("rejects direct runPipeline before reads, execution, writes, and events", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => { throw new spendGuard.AgentSpendKillSwitchError(); });
+		const getBoard = vi.fn(async () => null); const getColumns = vi.fn(async () => []);
+		const executeCard = vi.fn(); const updateBoard = vi.fn(); const publishEvent = vi.fn();
+		const service = createAgentBoardService({ getBoard, getColumns, executeCard, updateBoard, publishEvent });
+		await expect(service.runPipeline({ boardId: 7, workspaceId: 1 })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(getBoard).not.toHaveBeenCalled(); expect(getColumns).not.toHaveBeenCalled();
+		expect(executeCard).not.toHaveBeenCalled(); expect(updateBoard).not.toHaveBeenCalled(); expect(publishEvent).not.toHaveBeenCalled();
+	});
+
+	it("rejects direct triggerExecution outside its error-catching execution block", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => { throw new spendGuard.AgentSpendKillSwitchError(); });
+		const getBoard = vi.fn(async () => null); const getFirstCard = vi.fn(async () => null);
+		const executeCard = vi.fn(); const updateBoard = vi.fn(); const publishEvent = vi.fn();
+		const service = createAgentBoardService({ getBoard, getFirstCard, executeCard, updateBoard, publishEvent });
+		await expect(service.triggerExecution({ boardId: 8, workspaceId: 1 })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(getBoard).not.toHaveBeenCalled(); expect(getFirstCard).not.toHaveBeenCalled();
+		expect(executeCard).not.toHaveBeenCalled(); expect(updateBoard).not.toHaveBeenCalled(); expect(publishEvent).not.toHaveBeenCalled();
+	});
+
+	it("asserts once at runPipeline entry and does not interrupt deferred card work", async () => {
+		let release!: (value: { output: string }) => void;
+		let markStarted!: () => void;
+		const started = new Promise<void>((resolve) => { markStarted = resolve; });
+		const deferred = new Promise<{ output: string }>((resolve) => { release = resolve; });
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementationOnce(() => {}).mockImplementation(() => { throw new Error("guard called during active pipeline"); });
+		const executeCard = vi.fn(() => { markStarted(); return deferred; });
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 9, status: "approved", workspaceId: 1, userId: 7, originalIntent: "research", templateId: "research-report" })),
+			getColumns: vi.fn(async () => [{ columnId: 10, columnSlug: "research-specialist", systemPrompt: "Research {original_intent}", reasoning: false }]),
+			executeCard, insertOutput: vi.fn(async () => {}), updateBoard: vi.fn(async () => {}), publishEvent: vi.fn(async () => {}),
+		});
+		const run = service.runPipeline({ boardId: 9, workspaceId: 1 });
+		expect(assertion).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(executeCard).toHaveBeenCalledOnce());
+		await started;
+		expect(assertion).toHaveBeenCalledOnce(); expect(executeCard).toHaveBeenCalledOnce();
+		release({ output: "finished" });
+		await run;
+		expect(assertion).toHaveBeenCalledOnce();
+	});
+
+	it("rejects status-report period detection before writes or detector", async () => {
+		const assertion = vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => { throw new spendGuard.AgentSpendKillSwitchError(); });
+		const detectReportPeriod = vi.fn(async () => ({ hasPeriod: true }));
+		const insertConversation = vi.fn(async () => {}); const updateBoard = vi.fn(async () => {});
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 10, status: "pending", templateId: "status-report", workspaceId: 1, userId: 7, originalIntent: "report" })),
+			detectReportPeriod, insertConversation, updateBoard,
+		});
+		await expect(service.sendMessage({ boardId: 10, userId: 7, workspaceId: 1, message: "last month" })).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+		expect(assertion).toHaveBeenCalledOnce(); expect(detectReportPeriod).not.toHaveBeenCalled();
+		expect(insertConversation).not.toHaveBeenCalled(); expect(updateBoard).not.toHaveBeenCalled();
+	});
+
+	it("falls back when the no-period assistant message insertion fails", async () => {
+		const fallback = "Which time period should this status report cover?";
+		const insertConversation = vi.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce(new Error("assistant insertion failed"))
+			.mockResolvedValueOnce(undefined);
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 11, status: "pending", templateId: "status-report", workspaceId: 1, userId: 7, originalIntent: "report" })),
+			detectReportPeriod: vi.fn(async () => ({ hasPeriod: false, question: "Which quarter?" })),
+			insertConversation,
+		});
+
+		await expect(service.sendMessage({ boardId: 11, userId: 7, workspaceId: 1, message: "report" }))
+			.resolves.toMatchObject({ explanation: fallback, boardUpdated: false });
+		expect(insertConversation).toHaveBeenCalledTimes(3);
+		expect(insertConversation).toHaveBeenNthCalledWith(2, { boardId: 11, role: "assistant", content: "Which quarter?" });
+		expect(insertConversation).toHaveBeenNthCalledWith(3, { boardId: 11, role: "assistant", content: fallback });
+	});
+});
 
 // ---- T1 scaffold: board isolation ----
 
