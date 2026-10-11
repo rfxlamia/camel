@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,16 +11,49 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
-  primary:
-    name: Lint, Typecheck & Test
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      server: ${{ steps.filter.outputs.server }}
+      client: ${{ steps.filter.outputs.client }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/**'
+              - 'biome.json'
+              - '.nvmrc'
+              - 'Dockerfile'
+              - 'docker-compose.yml'
+            server:
+              - 'server/**'
+            client:
+              - 'client/**'
+            scripts:
+              - 'scripts/**'
+              - '.husky/**'
+
+  guards-lint-typecheck:
+    name: Guards, Lint & Typecheck
+    needs: [changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.client == 'true' || needs.changes.outputs.scripts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # Fallback values for unit tests — tests mock DB/LLM, so these are never
-      # used for real connections. Required because config.ts validates at
-      # import.
       DATABASE_URL: postgres://localhost:5432/camel_kanban
       ANTHROPIC_API_KEY: test-not-a-real-key
     steps:
@@ -38,13 +70,52 @@ jobs:
       - run: npm run check:event-write-routing
       - run: npm run check:feature-modules
       - run: npm run check:inline-400
+      - run: npm run test:guards
+      - run: npm run test:feature-modules
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+
+  server-unit:
+    name: Server Unit Tests
+    needs: [changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgres://localhost:5432/camel_kanban
+      ANTHROPIC_API_KEY: test-not-a-real-key
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test --workspace=server -- --maxWorkers=4
+
+  client-unit:
+    name: Client Unit Tests
+    needs: [changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.client == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test --workspace=client -- --maxWorkers=2
 
   db-integration:
     name: DB & Route Integration Tests
-    needs: [primary]
+    needs: [changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -75,7 +146,6 @@ jobs:
       DATABASE_URL: postgres://camel:camel@localhost:5432/camel_kanban
       REDIS_URL: redis://localhost:6379
       RUN_INTEGRATION: "1"
-      # Required by config.ts at import — route tests do not call the LLM.
       ANTHROPIC_API_KEY: test-not-a-real-key
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -87,11 +157,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:migrate
-      - run: npm run test:integration:routes --workspace=server
+      - name: Run selected DB integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected_files="$(node scripts/list-integration-tests.mjs)"
+          mapfile -t integration_files <<< "$selected_files"
+          printf 'Selected integration test files: %s\n' "${#integration_files[@]}"
+          npm run test:integration:routes --workspace=server -- "${integration_files[@]}"
 
   llm-integration:
     name: LLM Integration Tests
-    needs: [primary]
+    needs: [changes]
+    if: github.event_name == 'push' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -147,3 +225,29 @@ jobs:
       - name: Run LLM integration tests
         if: steps.check-secret.outputs.skip != 'true'
         run: npm run test:integration --workspace=server
+
+  ci-ok:
+    name: ci-ok
+    needs:
+      - changes
+      - guards-lint-typecheck
+      - server-unit
+      - client-unit
+      - db-integration
+      - llm-integration
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if a required job failed or was cancelled
+        if: >-
+          needs.changes.result == 'failure' || needs.changes.result == 'cancelled' ||
+          needs.guards-lint-typecheck.result == 'failure' || needs.guards-lint-typecheck.result == 'cancelled' ||
+          needs.server-unit.result == 'failure' || needs.server-unit.result == 'cancelled' ||
+          needs.client-unit.result == 'failure' || needs.client-unit.result == 'cancelled' ||
+          needs.db-integration.result == 'failure' || needs.db-integration.result == 'cancelled' ||
+          needs.llm-integration.result == 'failure' || needs.llm-integration.result == 'cancelled'
+        run: |
+          echo "::error::A CI job failed or was cancelled."
+          exit 1
+      - name: Accept successful or intentionally skipped jobs
+        run: echo "All CI jobs succeeded or were intentionally skipped."

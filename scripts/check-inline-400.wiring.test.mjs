@@ -27,9 +27,11 @@ describe("inline 400 guard wiring (unit)", () => {
 		assert.match(checkRecipe, /\$\(NPM\) run check:inline-400/);
 
 		const ci = readRepoFile(".github/workflows/ci.yml");
-		const primaryBlock =
-			ci.match(/^ {2}primary:\n([\s\S]*?)^ {2}db-integration:/m)?.[0] ?? "";
-		assert.match(primaryBlock, /- run: npm run check:inline-400/);
+		const guardsBlock =
+			ci.match(
+				/^ {2}guards-lint-typecheck:\n([\s\S]*?)^ {2}server-unit:/m,
+			)?.[0] ?? "";
+		assert.match(guardsBlock, /- run: npm run check:inline-400/);
 
 		const claude = readRepoFile("CLAUDE.md");
 		const requestValidationParagraph =
