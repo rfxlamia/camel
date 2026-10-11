@@ -40,7 +40,7 @@ Marketing copy is all a logged-out visitor sees. The board is the product. The c
 - Card add, edit (title, description), move (drag, cross-column and within-column), delete (trash zone). Column add, rename, set WIP limit. Fractional positions, WIP rules, per-card version.
 - Client-owned fixture, persistence in `localStorage`, Reset with confirmation, "stored only in this browser" notice.
 - `/demo` shows the demo for everyone, including logged-in and unverified users.
-- Landing page link to `/demo` (link only; copy decided in planning).
+- Landing page link to `/demo` and a demo-side link to `/signup`, both as full page loads (`<a href>`), because a client-side `navigate("/demo")` inside the public router would hit its `*` → `/` fallback.
 
 ### Out-of-Scope
 - Save-after-signup and import into a real account (assumption: later phase; user said "tanpa signup" and "tidak perlu di store ke db").
@@ -128,7 +128,7 @@ Scenario: Demo does not open realtime stream
 > As a visitor, I want to add, edit, move, and delete cards and tweak columns, so that trying the product feels real.
 
 **Rule 2.1:** Card add/edit/move/delete and column add/rename/WIP edit mutate in-memory state and write to `localStorage`.
-**Rule 2.2 (WIP parity):** WIP limit is a positive integer or null (0 and 1.5 rejected, old value kept). Add is disabled when the column is full. A cross-column move into a full column is rejected with toast "WIP limit reached — finish something first." and nothing is written. Within-column reorder in a full column is allowed. Lowering a limit below the card count is allowed (over-limit style).
+**Rule 2.2 (WIP parity):** WIP limit is a positive integer or null (0 and 1.5 sent to the data source are rejected, old value kept; the column form converts invalid input to null before sending, as on the real board). Add is disabled when the column is full. A cross-column move into a full column is rejected with toast "WIP limit reached — finish something first." and nothing is written. Within-column reorder in a full column is allowed. Lowering a limit below the card count is allowed (over-limit style).
 **Rule 2.3 (positions):** Fractional positions only. `POSITION_GAP = 1024`, `MIN_SPACING = 1e-9` (same values as `server/src/core/position.ts`). When neighbors are closer than `MIN_SPACING`, the column is rebalanced to `(i+1)*1024` and the dropped card keeps its slot between the same neighbors. Rebalancing rewrites positions but does not bump versions.
 **Rule 2.4 (version):** Card `version` starts at 1 and increases by 1 per successful edit or move of that card. An update carrying an expected version different from the stored one is rejected and not applied (data-source level; no user-visible conflict UI).
 **Rule 2.5 (ids):** User-created cards get `id = nextId`, key `DEMO-<id>`; `nextId` only increases (never below 7) and lives in the payload. User-created ids are never reused after a delete.
@@ -171,9 +171,14 @@ Scenario: Delete a card
   When  the visitor drops a card on the trash zone
   Then  the card is removed from state and localStorage
 
-Scenario: Invalid WIP limit
+Scenario: Invalid WIP limit in the column form
   Given a column with wip 3
-  When  the visitor saves wip 0 (or 1.5)
+  When  the visitor saves the column form with wip 0 (or 1.5)
+  Then  the form clears the limit (existing real-board behavior: invalid input becomes "no limit")
+
+Scenario: Invalid WIP limit sent to the data source
+  Given a column with wip 3
+  When  the data source receives updateColumn with wipLimit 0 (or 1.5)
   Then  it is rejected and wip stays 3
 
 Scenario: Payload would exceed 512 KB
@@ -277,8 +282,8 @@ Scenario: Shared view-mode key says calendar
 ### Story 5: Isolation from product surfaces
 > As the product team, I want per-user features absent in the demo, so that nothing reaches the server or a real workspace.
 
-**Rule 5.1:** ViewSwitcher, AI intake, attachments and image staging, presence, tracker fields, focus, activity feed, assignees, due dates are not rendered.
-**Rule 5.2:** Board links use a base path from a small `BoardEnv` context (default `/board`, demo `/demo`). Only `/demo` and `/demo/card/:cardId` exist; any other `/demo/*` redirects to `/demo`. The route param is the numeric id. Unknown or non-numeric ids keep the URL, show the board, panel closed. Back from a card returns to `/demo`.
+**Rule 5.1:** ViewSwitcher, AI intake, attachments and image staging, presence, tracker fields, focus, activity feed, assignees, due dates are not rendered. The add-card form shows only the title editor (no field chips, including due date). Column settings show only name, WIP limit and color (no policy, done, signable, auto-assign).
+**Rule 5.2:** Board links use a base path from a small `BoardEnv` context (default `/board`, demo `/demo`). Only `/demo` and `/demo/card/:cardId` exist; any other `/demo/*` redirects to `/demo`. The route param is the numeric id. Unknown or non-numeric ids do a silent replace-redirect to `/demo` (existing `getMissingCardRedirect` + `ContextPanelSurface` behavior, with the base path swapped). Back from a card returns to `/demo`.
 **Rule 5.3:** Demo state never reaches a real workspace.
 
 ```gherkin
@@ -289,9 +294,9 @@ Scenario: Open card panel
   And   the panel shows title, description, column; no attachment, AI, assignee or due-date controls
 
 Scenario: Unknown card id
-  Given the demo board
+  Given the demo board has loaded
   When  the visitor opens /demo/card/99999 (or /demo/card/abc)
-  Then  the URL stays, the board renders, the panel is closed, no error page
+  Then  the URL is replaced with /demo, the board renders, the panel is closed, no error page and no toast
 
 Scenario: Deep link on hard reload
   Given the payload contains card 3
@@ -300,8 +305,13 @@ Scenario: Deep link on hard reload
 
 Scenario: Delete the open card
   Given /demo/card/3 is open
+  When  the visitor deletes card 3 from the panel's danger zone
+  Then  the card is removed from state and localStorage, the panel closes and the URL is /demo
+
+Scenario: Drop the open card on the trash zone
+  Given /demo/card/3 is open
   When  the visitor drops card 3 on the trash zone
-  Then  the panel closes and the URL is /demo
+  Then  the card is removed, the panel closes and the URL is /demo
 
 Scenario: Unknown demo route
   Given a visitor
@@ -349,13 +359,13 @@ Date: 2026-10-11 | Scope confirmed: from the user's request; import-after-signup
 Rule: Access and isolation (1.x, 5.x)
   ✓ Given a visitor, When opening /demo, Then the fixture renders with the notice, with no /api/* request (including /api/health, /api/auth/me) and no EventSource
   ✓ Given a logged-in, unverified or expired user, When opening /demo, Then the demo renders with no redirect
-  ✓ Given /demo/card/<unknown or non-numeric>, Then the URL stays and the panel is closed
+  ✓ Given /demo/card/<unknown or non-numeric>, Then the URL is replaced with /demo and the panel is closed
   ✗ Given /demo/foo, When opened, Then redirect to /demo
 
 Rule: Board behavior parity (2.x)
   ✓ add, move, delete persist; user ids monotonic; positions fractional with rebalance
   ✓ WIP: add disabled when full; cross-column move rejected with the toast; reorder allowed
-  ✗ wip 0 or 1.5; empty, whitespace or over-cap title or name; stale expected version → rejected, nothing written
+  ✗ wip 0 or 1.5 sent to the data source; empty, whitespace or over-cap title or name; stale expected version → rejected, nothing written (the column form itself turns invalid wip into no limit, as on the real board)
 
 Rule: Persistence and reset (3.x, 4.x)
   ✓ reload keeps edits; confirmed reset restores DEMO-1..6, closes panel, URL /demo
@@ -371,9 +381,16 @@ Rule: Authenticated board unchanged (6.x)
 
 ## Design Decision
 
-**Chosen option:** Option B — data-source injection.
+**Chosen option:** Option B — data-source injection (amended 2026-10-11 during planning, see below).
 
 **Summary:** Extract a `BoardDataSource` interface (the ~15 board calls). `BoardProvider` takes the data source plus explicit props (`workspaceId`, `user`, `enabled` for realtime). Two implementations: `apiBoardDataSource` (calls `api.*`) and `memoryBoardDataSource` in `features/demo/`. Board components read a narrow `BoardEnv` (`workspaceId`, `boardBasePath`, feature flags, forced view mode) instead of `useWorkspace()`. The `/demo` branch is mounted above `App` so `useBuildReload` and `api.me()` never run. Demo supplies its own `ToastProvider` and an empty task-metadata catalog.
+
+**Amendment (planning, 2026-10-11): how the seam is wired.** Existing board tests mock `../../shared/WorkspaceContext` with partial factories (`{ useWorkspace: () => ({ activeWorkspaceId: null }) }`), so no board file may change how it reads `useWorkspace()` or import any new symbol from that module. Therefore:
+- Board components keep calling `useWorkspace()`. The demo supplies a fully typed synthetic `WorkspaceContextValue` (`ticketIntakeEnabled: false`, `focusModeEnabled: false`, `boardViewMode: "board"`, no-op setters) through a small provider exported from `shared/WorkspaceContext.tsx`. Only `features/demo` imports that provider. The TypeScript completeness check on that value is the drift alarm when the context grows.
+- `BoardEnv` is a context with safe defaults (all flags on, `basePath: "/board"`, realtime on) carrying only feature flags, `basePath` and `realtime`. It does not replace `useWorkspace()`.
+- `BoardDataSourceContext` defaults to the API implementation. `BoardProvider`, `useBoardPageActions` and `useBoardDragInteractions` read the source from context; `<BoardProvider>` gains no required props, so existing tests are untouched. The API source calls `api.x(...)` inside each method body (never captures method references at import time), so `vi.mock("../../api")` keeps intercepting.
+- Fetches are gated by flags, not by `activeWorkspaceId` (the demo id is non-null): catalog provider, assignee members, taxonomy fields, attachments, ticket history, activity section, ColumnSettings members, add-card image command, ViewSwitcher.
+- The memory source throws real `ApiError` instances (409 for WIP, `code: "version_conflict"` for stale version) so existing toasts fire unchanged.
 
 **Rejected options:**
 - Option A (parallel `DemoBoardProvider` + stub contexts): rejected because WIP, position and version logic would be duplicated inside a second provider, and stubbing `WorkspaceContext` grows with every board change; fails the "no drift" intent behind Rules 2.2–2.4.
