@@ -38,7 +38,7 @@ _bmad-output/
 piolium/
 .commandcode/
 
-# Documentation (local, except shared pocket/superpowers deliverables)
+# Shared Pocket/Superpowers documentation is owned by this repository; other docs stay local.
 docs/**
 !docs/pocket/
 !docs/pocket/**
