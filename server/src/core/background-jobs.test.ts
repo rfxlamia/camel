@@ -119,8 +119,11 @@ describe("HTTP and SSE stay active under off (source contract)", () => {
 		expect(indexSrc).not.toContain("BACKGROUND_JOBS");
 	});
 
-	it("index.ts listens and mounts routes unconditionally", () => {
-		expect(indexSrc).toMatch(/^server = app\.listen\(/m);
+	it("index.ts recovers before listening and mounts routes unconditionally", () => {
+		expect(indexSrc).toMatch(
+			/^server = await listenAfterRecovery\(recoverInterruptedAgentBoards,/m,
+		);
+		expect(indexSrc).toMatch(/^\s*app\.listen\(port,/m);
 		expect(indexSrc).toMatch(/^app\.use\("\/api", api\);/m);
 		expect(indexSrc).toMatch(/^app\.use\(createChatRouter\(\)\);/m);
 		expect(indexSrc).toMatch(/^app\.use\("\/api", createAgentRouter\(\)\);/m);

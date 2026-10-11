@@ -17,6 +17,7 @@ export {
 	AgentSpendKillSwitchError,
 	assertAgentSpendAllowed,
 } from "./spend-kill-switch.js";
+export { recoverInterruptedAgentBoards } from "./startup-recovery.js";
 export {
 	buildVarsMap,
 	findUnresolvedPlaceholders,

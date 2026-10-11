@@ -18,4 +18,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --for
 The in-process guard blocks new spend-bearing work after startup; it does not
 cancel work that has already started. Applying the setting recreates/restarts the
 server container and may interrupt active runs. In-flight continuity is not
-guaranteed.
+guaranteed. At startup, the server marks any remaining `running` agent boards as
+`failed`; users can explicitly retry them after spend is enabled again. Recovery
+assumes **exactly one server process per database**: the production Compose file
+defines one `server` service, and it must not be scaled or run concurrently against
+the same database. A multi-instance deployment needs per-run ownership/lease
+coordination before using this recovery behavior.

@@ -116,6 +116,16 @@ export async function deleteOutputsForBoard(
 		.execute();
 }
 
+export async function deleteToolCallsForBoard(
+	dbExec: DBExecutor,
+	boardId: number,
+): Promise<void> {
+	await dbExec
+		.deleteFrom("agent_tool_calls")
+		.where("board_id", "=", boardId)
+		.execute();
+}
+
 export async function deleteCardsForBoard(
 	dbExec: typeof db,
 	boardId: number,

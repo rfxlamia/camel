@@ -1,13 +1,15 @@
 import type { AgentEvent } from "../../types";
 
-const BOARD_REFETCH_TERMINAL_TYPES = new Set<AgentEvent["type"]>([
+const BOARD_REFETCH_EVENT_TYPES = new Set<AgentEvent["type"]>([
+	"agent.board.failed",
 	"agent.card.failed",
 	"agent.execution.done",
 	"agent.artifact.ready",
+	"agent.connection.opened",
 ]);
 
-/** Whether a terminal agent event should trigger a one-time board re-fetch. */
-export function shouldRefetchBoardOnTerminalEvent(
+/** Whether an agent sync event should trigger a one-time board re-fetch. */
+export function shouldRefetchBoardOnSyncEvent(
 	agentEvents: AgentEvent[],
 	lastSyncedEventIndex: number,
 ): { shouldFetch: boolean; eventIndex: number } {
@@ -21,7 +23,7 @@ export function shouldRefetchBoardOnTerminalEvent(
 	}
 
 	const last = agentEvents[eventIndex];
-	if (!BOARD_REFETCH_TERMINAL_TYPES.has(last.type)) {
+	if (!BOARD_REFETCH_EVENT_TYPES.has(last.type)) {
 		return { shouldFetch: false, eventIndex: lastSyncedEventIndex };
 	}
 

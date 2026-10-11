@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../../types";
-import { shouldRefetchBoardOnTerminalEvent } from "./agentBoardSync";
+import { shouldRefetchBoardOnSyncEvent } from "./agentBoardSync";
 
-describe("shouldRefetchBoardOnTerminalEvent", () => {
+describe("shouldRefetchBoardOnSyncEvent", () => {
 	it("fetches once per new terminal event", () => {
 		const failed = {
 			type: "agent.card.failed",
@@ -11,14 +11,22 @@ describe("shouldRefetchBoardOnTerminalEvent", () => {
 			reason: "boom",
 		} as AgentEvent;
 
-		const first = shouldRefetchBoardOnTerminalEvent([failed], -1);
+		const first = shouldRefetchBoardOnSyncEvent([failed], -1);
 		expect(first).toEqual({ shouldFetch: true, eventIndex: 0 });
 
-		const repeat = shouldRefetchBoardOnTerminalEvent(
-			[failed],
-			first.eventIndex,
-		);
+		const repeat = shouldRefetchBoardOnSyncEvent([failed], first.eventIndex);
 		expect(repeat).toEqual({ shouldFetch: false, eventIndex: 0 });
+	});
+
+	it("fetches when board-level startup recovery marks an interrupted run failed", () => {
+		const recovered = {
+			type: "agent.board.failed",
+			boardId: 1,
+		} as AgentEvent;
+		expect(shouldRefetchBoardOnSyncEvent([recovered], -1)).toEqual({
+			shouldFetch: true,
+			eventIndex: 0,
+		});
 	});
 
 	it("fetches when pipeline execution completes", () => {
@@ -27,9 +35,19 @@ describe("shouldRefetchBoardOnTerminalEvent", () => {
 			{ type: "agent.execution.done", boardId: 1 },
 		] as AgentEvent[];
 
-		expect(shouldRefetchBoardOnTerminalEvent(events, -1)).toEqual({
+		expect(shouldRefetchBoardOnSyncEvent(events, -1)).toEqual({
 			shouldFetch: true,
 			eventIndex: 1,
+		});
+	});
+
+	it("fetches the active board when the SSE connection reopens", () => {
+		const reconnect = {
+			type: "agent.connection.opened",
+		} as AgentEvent;
+		expect(shouldRefetchBoardOnSyncEvent([reconnect], -1)).toEqual({
+			shouldFetch: true,
+			eventIndex: 0,
 		});
 	});
 
@@ -39,7 +57,7 @@ describe("shouldRefetchBoardOnTerminalEvent", () => {
 			{ type: "agent.artifact.ready", boardId: 1 },
 		] as AgentEvent[];
 
-		expect(shouldRefetchBoardOnTerminalEvent(events, 0)).toEqual({
+		expect(shouldRefetchBoardOnSyncEvent(events, 0)).toEqual({
 			shouldFetch: true,
 			eventIndex: 1,
 		});
@@ -50,7 +68,7 @@ describe("shouldRefetchBoardOnTerminalEvent", () => {
 			{ type: "agent.card.thinking", boardId: 1, token: "x" },
 		] as AgentEvent[];
 
-		expect(shouldRefetchBoardOnTerminalEvent(events, -1)).toEqual({
+		expect(shouldRefetchBoardOnSyncEvent(events, -1)).toEqual({
 			shouldFetch: false,
 			eventIndex: -1,
 		});
@@ -61,7 +79,7 @@ describe("shouldRefetchBoardOnTerminalEvent", () => {
 			{ type: "agent.card.done", boardId: 1, columnSlug: "col-a" },
 		] as AgentEvent[];
 
-		expect(shouldRefetchBoardOnTerminalEvent(events, -1)).toEqual({
+		expect(shouldRefetchBoardOnSyncEvent(events, -1)).toEqual({
 			shouldFetch: false,
 			eventIndex: -1,
 		});
@@ -73,11 +91,11 @@ describe("shouldRefetchBoardOnTerminalEvent", () => {
 			{ type: "agent.card.failed", boardId: 1, columnSlug: "col-b" },
 		] as AgentEvent[];
 
-		expect(shouldRefetchBoardOnTerminalEvent(events, -1)).toEqual({
+		expect(shouldRefetchBoardOnSyncEvent(events, -1)).toEqual({
 			shouldFetch: true,
 			eventIndex: 1,
 		});
-		expect(shouldRefetchBoardOnTerminalEvent(events, 1)).toEqual({
+		expect(shouldRefetchBoardOnSyncEvent(events, 1)).toEqual({
 			shouldFetch: false,
 			eventIndex: 1,
 		});

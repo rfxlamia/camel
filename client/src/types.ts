@@ -518,7 +518,8 @@ export interface AgentEvent {
 		| "agent.tool.result"
 		| "agent.tool.failed"
 		| "agent.artifact.ready"
-		| "agent.execution.done";
+		| "agent.execution.done"
+		| "agent.connection.opened";
 	columnSlug?: string;
 	token?: string;
 	boardId?: number;

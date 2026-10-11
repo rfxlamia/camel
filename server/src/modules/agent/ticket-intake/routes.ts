@@ -170,8 +170,8 @@ ticketIntakeRouter.post(
 		} catch (error) {
 			if (!(error instanceof AgentSpendKillSwitchError)) throw error;
 			return res.status(503).json({
-				error: "Agent spend is disabled by kill switch",
-				code: "AGENT_SPEND_KILL_SWITCH",
+				error: error.message,
+				code: error.code,
 			});
 		}
 

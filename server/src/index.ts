@@ -22,6 +22,7 @@ import { securityHeaders } from "./middleware/security-headers.js";
 import { requestTimeout, serverTimeout } from "./middleware/timeout.js";
 import {
 	createAgentRouter,
+	recoverInterruptedAgentBoards,
 	ticketIntakeRouter,
 } from "./modules/agent/index.js";
 import {
@@ -35,6 +36,7 @@ import { createChatRouter } from "./modules/chat/index.js";
 import { UPLOADS_DIR } from "./modules/settings/index.js";
 import { shutdownRealtime } from "./realtime.js";
 import { api } from "./routes.js";
+import { listenAfterRecovery } from "./startup.js";
 
 const app = express();
 // Trust the first proxy hop (reverse proxy / LB) so req.ip reflects the real client IP.
@@ -174,19 +176,21 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 const port = config.PORT;
-server = app.listen(port, async () => {
-	logger.info({ port }, "Camel Kanban API listening");
+server = await listenAfterRecovery(recoverInterruptedAgentBoards, () =>
+	app.listen(port, async () => {
+		logger.info({ port }, "Camel Kanban API listening");
 
-	// Configure server timeouts
-	serverTimeout(server!, {
-		timeout: 0, // no global socket timeout
-		keepAliveTimeout: 65000,
-		headersTimeout: 66000,
-	});
+		// Configure server timeouts
+		serverTimeout(server!, {
+			timeout: 0, // no global socket timeout
+			keepAliveTimeout: 65000,
+			headersTimeout: 66000,
+		});
 
-	// Connect Redis, then upgrade the rate limiter to use it.
-	await connectRedis();
-	rateLimiterInstance = createAuthRateLimiter();
+		// Connect Redis, then upgrade the rate limiter to use it.
+		await connectRedis();
+		rateLimiterInstance = createAuthRateLimiter();
 
-	await startBackgroundJobs();
-});
+		await startBackgroundJobs();
+	}),
+);
