@@ -1,8 +1,11 @@
 import "dotenv/config";
+import express from "express";
+import request from "supertest";
 import {
 	afterAll,
 	afterEach,
 	beforeAll,
+	beforeEach,
 	describe,
 	expect,
 	it,
@@ -11,8 +14,49 @@ import {
 import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
 import { setAttachmentStorageForTests } from "../../lib/attachment-storage.js";
+import { createErrorHandler } from "../../middleware/error-handler.js";
+
+const routeTestState = vi.hoisted(() => ({
+	authenticated: true,
+	member: true,
+	spendKillSwitch: undefined as string | undefined,
+}));
+
+vi.mock("../../auth.js", () => ({
+	requireAuth: (req: any, res: any, next: () => void) => {
+		if (!routeTestState.authenticated) {
+			res.status(401).json({ error: "Unauthorized" });
+			return;
+		}
+		req.user = { id: 7 };
+		next();
+	},
+}));
+vi.mock("./membership.js", () => ({
+	assertWorkspaceMember: async (_req: any, res: any) => {
+		if (!routeTestState.member) {
+			res.status(404).json({ error: "Not found" });
+			return false;
+		}
+		return true;
+	},
+}));
+vi.mock("../../config.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../config.js")>();
+	return {
+		...actual,
+		config: {
+			...actual.config,
+			get AGENT_SPEND_KILL_SWITCH() {
+				return routeTestState.spendKillSwitch;
+			},
+		},
+	};
+});
+
 import {
 	buildArtifactDownload,
+	createAgentRouter,
 	defaultToolRegistry,
 	deleteCardsForBoard,
 	deleteOutputsForBoard,
@@ -706,3 +750,278 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 	},
 );
+
+describe("agent HTTP spend guard route characterization", () => {
+	const board = {
+		id: 22,
+		workspaceId: 11,
+		userId: 7,
+		status: "pending",
+		originalIntent: "research the market",
+		templateId: "research-report",
+	};
+	const path = "/api/workspaces/11/agent/boards";
+	let previousNodeEnv: string | undefined;
+
+	function makeApp(overrides: Record<string, unknown> = {}) {
+		const app = express();
+		app.use(express.json());
+		app.use("/api", createAgentRouter(overrides as never));
+		app.use(createErrorHandler());
+		return app;
+	}
+
+	beforeAll(() => {
+		previousNodeEnv = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+	});
+	afterAll(() => {
+		if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+		else process.env.NODE_ENV = previousNodeEnv;
+	});
+	beforeEach(() => {
+		routeTestState.authenticated = true;
+		routeTestState.member = true;
+		routeTestState.spendKillSwitch = undefined;
+	});
+
+	it("keeps no-pending regenerate confirmation a successful no-op", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const res = await request(
+			makeApp({ getBoard: vi.fn().mockResolvedValue(board) }),
+		)
+			.post(`${path}/22/message`)
+			.send({ action: "confirm_regenerate" });
+		expect(res.status).toBe(200);
+		expect(res.body).toEqual({ ok: true });
+	});
+
+	it("returns the existing unauthorized response before service invocation", async () => {
+		routeTestState.spendKillSwitch = "true";
+		routeTestState.authenticated = false;
+		const getBoard = vi.fn();
+		const res = await request(makeApp({ getBoard }))
+			.post(`${path}/22/approve`)
+			.send({});
+		expect(res.status).toBe(401);
+		expect(res.body).toEqual({ error: "Unauthorized" });
+		expect(getBoard).not.toHaveBeenCalled();
+	});
+
+	it("returns malformed input as 400 before service invocation", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const getBoard = vi.fn();
+		const res = await request(makeApp({ getBoard }))
+			.post(`${path}/bad/approve`)
+			.send({});
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ error: "Invalid params" });
+		expect(getBoard).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		["non-member", false, 22],
+		["missing board", true, 999],
+	] as const)("returns 404 for %s before spend checks", async (_label, member, boardId) => {
+		routeTestState.spendKillSwitch = "true";
+		routeTestState.member = member;
+		const getBoard = vi.fn().mockResolvedValue(boardId === 999 ? null : board);
+		const res = await request(makeApp({ getBoard }))
+			.post(`${path}/${boardId}/approve`)
+			.send({});
+		expect(res.status).toBe(404);
+		expect(res.body).toEqual(member ? { status: 404 } : { error: "Not found" });
+		expect(getBoard).toHaveBeenCalledTimes(member ? 1 : 0);
+	});
+
+	it("returns 403 for non-owner before spend checks", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const getBoard = vi.fn().mockResolvedValue({ ...board, userId: 8 });
+		const res = await request(makeApp({ getBoard }))
+			.post(`${path}/22/approve`)
+			.send({});
+		expect(res.status).toBe(403);
+		expect(res.body).toEqual({ status: 403 });
+	});
+
+	it("keeps invalid-state approval at 409 when the switch is off", async () => {
+		const getBoard = vi
+			.fn()
+			.mockResolvedValue({ ...board, status: "approved" });
+		const res = await request(
+			makeApp({
+				getBoard,
+				approveBoardAtomic: vi.fn().mockResolvedValue({ rowCount: 0 }),
+			}),
+		)
+			.post(`${path}/22/approve`)
+			.send({});
+		expect(res.status).toBe(409);
+		expect(res.body).toEqual({ status: 409 });
+	});
+
+	it("leaves unrelated service failures to global error handling", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const res = await request(
+			makeApp({
+				getBoard: vi
+					.fn()
+					.mockRejectedValue(new Error("sensitive unrelated failure")),
+			}),
+		)
+			.post(`${path}/22/approve`)
+			.send({});
+		expect(res.status).toBe(500);
+		expect(res.body).toEqual({ error: "internal server error" });
+	});
+
+	it("maps real create-board guard denial to stable production 503 without writes", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const classifyIntent = vi.fn();
+		const insertBoard = vi.fn();
+		const insertConversation = vi.fn();
+		const insertColumns = vi.fn();
+		const publishEvent = vi.fn();
+		const res = await request(
+			makeApp({
+				classifyIntent,
+				insertBoard,
+				insertConversation,
+				insertColumns,
+				publishEvent,
+			}),
+		)
+			.post(path)
+			.send({ intent: "research the market" });
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
+		});
+		expect(classifyIntent).not.toHaveBeenCalled();
+		expect(insertBoard).not.toHaveBeenCalled();
+		expect(insertConversation).not.toHaveBeenCalled();
+		expect(insertColumns).not.toHaveBeenCalled();
+		expect(publishEvent).not.toHaveBeenCalled();
+	});
+
+	it("maps approval guard denial and does not start the pipeline", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const approveBoardAtomic = vi.fn();
+		const publishEvent = vi.fn();
+		const executeCard = vi.fn();
+		const res = await request(
+			makeApp({
+				getBoard: vi.fn().mockResolvedValue(board),
+				approveBoardAtomic,
+				publishEvent,
+				executeCard,
+			}),
+		)
+			.post(`${path}/22/approve`)
+			.send({});
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
+		});
+		expect(approveBoardAtomic).not.toHaveBeenCalled();
+		expect(publishEvent).not.toHaveBeenCalled();
+		expect(executeCard).not.toHaveBeenCalled();
+	});
+
+	it("maps spend-bearing message denial without messages or downstream effects", async () => {
+		routeTestState.spendKillSwitch = "true";
+		const insertConversation = vi.fn();
+		const updateBoard = vi.fn();
+		const publishEvent = vi.fn();
+		const executeCard = vi.fn();
+		const generateClarificationQuestion = vi.fn();
+		const res = await request(
+			makeApp({
+				getBoard: vi.fn().mockResolvedValue(board),
+				insertConversation,
+				updateBoard,
+				publishEvent,
+				executeCard,
+				generateClarificationQuestion,
+			}),
+		)
+			.post(`${path}/22/message`)
+			.send({ message: "add more detail" });
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
+		});
+		expect(insertConversation).not.toHaveBeenCalled();
+		expect(updateBoard).not.toHaveBeenCalled();
+		expect(publishEvent).not.toHaveBeenCalled();
+		expect(executeCard).not.toHaveBeenCalled();
+		expect(generateClarificationQuestion).not.toHaveBeenCalled();
+	});
+
+	it("maps pending regenerate confirmation denial without mutation or pipeline", async () => {
+		const insertConversation = vi.fn().mockResolvedValue(undefined);
+		const updateBoard = vi.fn().mockResolvedValue(undefined);
+		const publishEvent = vi.fn().mockResolvedValue(undefined);
+		const deleteOutputsForBoard = vi.fn().mockResolvedValue(undefined);
+		const deleteCardsForBoard = vi.fn().mockResolvedValue(undefined);
+		const classifier = vi.fn().mockResolvedValue({
+			intent: "NEW_DIRECTION",
+			response: "Confirm?",
+			confidence: 1,
+		});
+		const completed = { ...board, status: "approved", executionStatus: "done" };
+		const app = makeApp({
+			getBoard: vi.fn().mockResolvedValue(completed),
+			getArtifact: vi.fn().mockResolvedValue(null),
+			getConversationHistory: vi.fn().mockResolvedValue([]),
+			insertConversation,
+			updateBoard,
+			publishEvent,
+			deleteOutputsForBoard,
+			deleteCardsForBoard,
+			classifyFollowUpIntent: classifier,
+		});
+		const seed = await request(app)
+			.post(`${path}/22/message`)
+			.send({ message: "change direction" });
+		expect(seed.status).toBe(200);
+		const writesBefore = insertConversation.mock.calls.length;
+		routeTestState.spendKillSwitch = "true";
+		const res = await request(app)
+			.post(`${path}/22/message`)
+			.send({ action: "confirm_regenerate" });
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
+		});
+		expect(insertConversation).toHaveBeenCalledTimes(writesBefore);
+		expect(updateBoard).not.toHaveBeenCalled();
+		expect(publishEvent).not.toHaveBeenCalled();
+		expect(deleteOutputsForBoard).not.toHaveBeenCalled();
+		expect(deleteCardsForBoard).not.toHaveBeenCalled();
+	});
+
+	it("keeps switch-off create at 201", async () => {
+		const classifyIntent = vi.fn().mockResolvedValue({
+			templateId: "research-report",
+			explanation: "ready",
+		});
+		const res = await request(
+			makeApp({
+				classifyIntent,
+				insertBoard: vi.fn().mockResolvedValue({ id: 22 }),
+				insertConversation: vi.fn().mockResolvedValue(undefined),
+				insertColumns: vi.fn().mockResolvedValue(undefined),
+				publishEvent: vi.fn().mockResolvedValue(undefined),
+			}),
+		)
+			.post(path)
+			.send({ intent: "research the market" });
+		expect(res.status, JSON.stringify(res.body)).toBe(201);
+		expect(res.body).toEqual({ boardId: 22, explanation: "ready" });
+	});
+});
