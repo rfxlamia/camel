@@ -1,4 +1,5 @@
 import { finalizeArtifact } from "./pipeline-artifact.js";
+import { assertAgentSpendAllowed } from "./spend-kill-switch.js";
 import { runPipelineCard } from "./pipeline-card.js";
 import type { AgentBoardServiceDeps } from "./service-types.js";
 import { getTemplate } from "./templates.js";
@@ -18,6 +19,7 @@ export function createPipeline(deps: AgentBoardServiceDeps) {
 			boardId: number;
 			workspaceId: number;
 		}) {
+			assertAgentSpendAllowed();
 			// Load board — must use original_intent from DB, not from caller
 			const board = await deps.getBoard!(boardId);
 			if (!board) return;
@@ -153,6 +155,7 @@ export function createPipeline(deps: AgentBoardServiceDeps) {
 			boardId: number;
 			workspaceId: number;
 		}) {
+			assertAgentSpendAllowed();
 			const board = await deps.getBoard!(boardId);
 			if (!board) return;
 

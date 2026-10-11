@@ -14,6 +14,7 @@ import { createBoardQueries } from "./board-queries.js";
 import { createPipeline } from "./pipeline.js";
 import type { AgentBoardServiceDeps } from "./service-types.js";
 import { getTemplate } from "./templates.js";
+import { assertAgentSpendAllowed } from "./spend-kill-switch.js";
 
 export type {
 	AgentBoardRecord,
@@ -39,6 +40,7 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			userId: number;
 			intent: string;
 		}) {
+			assertAgentSpendAllowed();
 			const classifyResult = await deps.classifyIntent!(intent);
 
 			if (!classifyResult.templateId) {
@@ -117,6 +119,8 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 			if (!board) return { status: 404 as const };
 			if (board.workspaceId !== workspaceId) return { status: 404 as const };
 			if (board.userId !== userId) return { status: 403 as const };
+
+			assertAgentSpendAllowed();
 
 			if (board.templateId === "status-report" && deps.detectReportPeriod) {
 				try {
