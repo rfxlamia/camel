@@ -6,6 +6,47 @@ const REQUIRED_ENV = {
 	ANTHROPIC_API_KEY: "test-key",
 };
 
+describe("AGENT_SPEND_KILL_SWITCH config", () => {
+	const originalEnv = { ...process.env };
+	const requiredEnv = {
+		...REQUIRED_ENV,
+		NODE_ENV: "test",
+	};
+
+	beforeEach(() => {
+		vi.resetModules();
+		process.env = { ...originalEnv, ...requiredEnv };
+		delete process.env.AGENT_SPEND_KILL_SWITCH;
+	});
+
+	afterEach(() => {
+		process.env = { ...originalEnv };
+	});
+
+	it("defaults to false when the flag is absent", async () => {
+		const { resolveConfig } = await import("../config.js");
+		expect(resolveConfig(requiredEnv).AGENT_SPEND_KILL_SWITCH).toBe("false");
+	});
+
+	it.each([
+		"false",
+		"true",
+	] as const)("preserves explicit %s values", async (value) => {
+		const { resolveConfig } = await import("../config.js");
+		expect(
+			resolveConfig({ ...requiredEnv, AGENT_SPEND_KILL_SWITCH: value })
+				.AGENT_SPEND_KILL_SWITCH,
+		).toBe(value);
+	});
+
+	it("rejects any value other than true or false", async () => {
+		const { resolveConfig } = await import("../config.js");
+		expect(() =>
+			resolveConfig({ ...requiredEnv, AGENT_SPEND_KILL_SWITCH: "yes" }),
+		).toThrow();
+	});
+});
+
 describe("BETTER_AUTH_SECRET production guard", () => {
 	const originalEnv = { ...process.env };
 

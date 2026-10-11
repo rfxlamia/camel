@@ -57,6 +57,9 @@ const envSchema = z.object({
 	EMAIL_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
 	FOCUS_MODE_ENABLED: z.enum(["true", "false"]).default("false"),
 
+	// Startup-only global kill switch for agent spend.
+	AGENT_SPEND_KILL_SWITCH: z.enum(["true", "false"]).default("false"),
+
 	// Global kill switch for extended thinking. Set "false" when the configured
 	// ANTHROPIC_BASE_URL endpoint rejects or mishandles the `thinking` param.
 	// Per-column `reasoning` flags can only turn thinking off, never force it on.
