@@ -8,6 +8,10 @@ import {
 	trimmedRequired,
 } from "../../../validators/schemas.js";
 import {
+	AgentSpendKillSwitchError,
+	assertAgentSpendAllowed,
+} from "../spend-kill-switch.js";
+import {
 	checkCompleteness,
 	inferTypeFromClassifierAnswer,
 	type TicketExtraction,
@@ -160,6 +164,16 @@ ticketIntakeRouter.post(
 		}
 
 		if (await rejectLockedChat(req.user!.id, res)) return;
+
+		try {
+			assertAgentSpendAllowed();
+		} catch (error) {
+			if (!(error instanceof AgentSpendKillSwitchError)) throw error;
+			return res.status(503).json({
+				error: "Agent spend is disabled by kill switch",
+				code: "AGENT_SPEND_KILL_SWITCH",
+			});
+		}
 
 		return respondWithChatExtraction(
 			res,
