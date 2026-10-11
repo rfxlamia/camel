@@ -1,0 +1,140 @@
+{
+  "contract": 1,
+  "phase_key": "phase-1",
+  "phase_file": "execution-plan/index.md",
+  "recorded_at": "2026-10-11T11:23:26Z",
+  "phase_verdict": "PHASE_PASS_CLEAN",
+  "tasks": [
+    {
+      "task_id": "T1",
+      "name": "Define startup config and shared spend guard",
+      "done_sha": "2e5a16981b37b0a81949a89e68088248c285ee6a",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T2",
+      "name": "Guard agent spend entrances before side effects",
+      "done_sha": "ca068fcfd4ef6b5b40740ca4f554c37925b20114",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T3",
+      "name": "Map agent guard errors to stable HTTP 503",
+      "done_sha": "9abf5e4097b331f599b3b6f50daf57b681bd8673",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T4",
+      "name": "Reject chat send and retry before streaming",
+      "done_sha": "ba679e3f0c67f199353fc2decf92356a2fee563e",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T5",
+      "name": "Guard ticket extraction but preserve classifier question",
+      "done_sha": "6c832e94d9dd595014ec51d9b03d08adf9615475",
+      "verdict": "REVIEW_PASS"
+    },
+    {
+      "task_id": "T6",
+      "name": "Wire production Compose env and operator runbook",
+      "done_sha": "fd62b880a1bc94cec160882ae5c53961bed337b6",
+      "verdict": "REVIEW_PASS"
+    }
+  ],
+  "verification": [
+    {
+      "check": "npm run test --workspace=server -- src/__tests__/config.test.ts",
+      "result": "PASS",
+      "evidence": "Integrated-tree run: 9 passed."
+    },
+    {
+      "check": "npm run test --workspace=server -- src/modules/agent/spend-kill-switch.test.ts",
+      "result": "PASS",
+      "evidence": "Integrated-tree run: 3 passed."
+    },
+    {
+      "check": "npm run test --workspace=server -- src/modules/agent/service.test.ts",
+      "result": "PASS",
+      "evidence": "Integrated-tree run: 92 passed, 1 skipped."
+    },
+    {
+      "check": "npm run test --workspace=server -- src/modules/agent/routes.test.ts",
+      "result": "PASS",
+      "evidence": "Integrated-tree run: 23 passed, 12 skipped; database integration cases were skipped."
+    },
+    {
+      "check": "npm run test --workspace=server -- src/modules/chat/routes.test.ts",
+      "result": "PASS",
+      "evidence": "Integrated-tree run: 20 passed."
+    },
+    {
+      "check": "npm run test --workspace=server -- src/modules/agent/ticket-intake/routes.test.ts",
+      "result": "PASS",
+      "evidence": "Integrated-tree run: 18 passed."
+    },
+    {
+      "check": "make check",
+      "result": "PASS",
+      "evidence": "Integrated-tree run passed lint and all configured mutation-routing, event-write-routing, feature-module, and inline-400 checks."
+    },
+    {
+      "check": "npm run typecheck",
+      "result": "PASS",
+      "evidence": "Integrated-tree server and client typechecks passed."
+    },
+    {
+      "check": "Production Compose config rendering",
+      "result": "PASS",
+      "evidence": "T6 validation rendered server environment with AGENT_SPEND_KILL_SWITCH=false by default; see T6-review.json."
+    },
+    {
+      "check": "Independent phase-level pass",
+      "result": "PASS",
+      "evidence": "reviews/phase-pass-phase-1.json records PHASE_PASS_CLEAN with no findings."
+    }
+  ],
+  "obstacles": [
+    {
+      "summary": "T2's first independent audit requested extraction of the oversized modified sendMessage function; its re-audit then identified a status-report fallback behavior regression in the extraction.",
+      "resolution": "Two bounded in-loop corrections split the function into focused helpers and restored the awaited fallback behavior with regression coverage; final T2 audit passed.",
+      "evidence": [
+        "reviews/T2-review.json",
+        "4857b80921fdd045ca849e08658624890ead80de",
+        "038a7d4ded04084716d44d149960d2af75084577",
+        "ca068fcfd4ef6b5b40740ca4f554c37925b20114"
+      ]
+    },
+    {
+      "summary": "T5's first independent audit found the ticket-intake kill-switch response omitted the stable code field.",
+      "resolution": "Added the code field and exact two-field body assertion; the T5 re-audit passed.",
+      "evidence": [
+        "reviews/T5-review.json",
+        "c2738407e3886f1fb9aa6e47a87d96dd5ffb0f0f",
+        "6c832e94d9dd595014ec51d9b03d08adf9615475"
+      ]
+    },
+    {
+      "summary": "Isolated implementation worktrees lacked locally resolvable better-auth modules for typecheck attempts.",
+      "resolution": "The integrated main checkout's final npm run typecheck passed for both server and client.",
+      "evidence": [
+        "T2/T4/T5 implementation reports",
+        "Integrated-tree npm run typecheck result recorded in this phase note"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "kind": "user",
+      "decision": "Continue with the phase-level review using gpt-6.1-sol at high reasoning effort.",
+      "rationale": "Explicit user instruction in the continuation request.",
+      "source": "User message: 'oke, lanjutkan phase level review. untuk phase level review, gunakan model gpt 6.1 sol high ya'"
+    }
+  ],
+  "recommendations": [
+    {
+      "suggestion": "Confirm the production host's Docker Compose version against the documented activation command before an operator applies the switch; the deployment host version is not pinned in the repository.",
+      "evidence": "T6-review.json records local Compose validation and notes the deployment host version is unpinned."
+    }
+  ]
+}

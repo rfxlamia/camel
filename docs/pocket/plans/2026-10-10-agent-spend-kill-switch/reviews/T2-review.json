@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "task_id": "T2",
+  "task_name": "Guard agent spend entrances before side effects",
+  "cycle": 3,
+  "timestamp": "2026-10-11T09:25:09Z",
+  "reviewer_mode": "read-only",
+  "reviewer_config": "standard",
+  "stage_1": {
+    "status": "PASS",
+    "issues": [],
+    "concerns_addressed": [
+      "Audited task/T2 at exact tip 038a7d4ded04084716d44d149960d2af75084577. The correction delta from 4857b80921fdd045ca849e08658624890ead80de changes the no-period branch to `return await replyWithoutReportPeriod(...)` inside sendStatusReportMessage's try/catch and adds a focused test. The test makes the initial user insertion succeed, makes insertion of the detector's question reject, and verifies the catch inserts and returns the fallback question; the previously reported behavior regression is resolved (board-conversation.ts:42-52; service.test.ts:270-287).",
+      "Rechecked the T2 packet deliverables and quality bar against the actual service, conversation, pipeline, and test sources. Creation asserts before classification; approval performs board/workspace/owner checks before asserting and before period detection/atomic status mutation; pending clarification/status-report and completed-board follow-up assert before request-caused message writes or LLM calls. Running-board storage, cancellation, and no-pending regenerate confirmation remain ungated/no-op as specified. The service tests characterize these paths and default-off behavior (service.ts:43, 118-145; board-conversation.ts:11-23, 72-83, 124-160, 249-272; service.test.ts:15-111, 113-284).",
+      "Regenerate confirmation retains synchronous pending-intent get → assertion → delete with no intervening await; a rejecting assertion leaves the intent available for a later successful confirmation. Direct runPipeline and triggerExecution assert at entry, with triggerExecution's assertion before its catch; no assertion was introduced into card execution or later pipeline steps. The deferred-card regression verifies exactly one assertion through completion (board-conversation.ts:214-223; pipeline.ts:22, 158; service.test.ts:186-254).",
+      "The extraction leaves board-conversation.ts at 275 lines; the sendMessage routing body is split into focused helpers, and no remaining modified function crosses the ~50-line heuristic. Test files are excluded from the line budget. Reviewed the feature-module convention ADR for module/public-API and 300-on-touch requirements; this in-module guard import is valid. No remaining Minor findings were present in the prior verdict to carry forward.",
+      "Mechanical-gate evidence supplied for this pinned tip: exact targeted service suite 92 passed, 1 skipped; make check and git diff --check passed. Independent diff --check also passed. Typecheck remains unresolved only because of better-auth imports outside the task diff; this is not a T2 finding."
+    ]
+  },
+  "stage_2": {
+    "status": "PASS",
+    "strengths": [
+      "The helper extraction clears both the modified-file ~300-line threshold and the ~50-line function heuristic without moving behavior out of the agent module or adding unnecessary abstractions.",
+      "The regression test directly reproduces the insertion rejection that previously escaped the try/catch and verifies fallback insertion and returned response.",
+      "Spend guards preserve precedence and keep DB-only/no-spend entrances and already-started pipeline work available; direct entrypoints are independently guarded."
+    ],
+    "issues": [],
+    "assessment": "Approved"
+  },
+  "overall": "REVIEW_PASS",
+  "fix_instructions": "",
+  "loop_info": {
+    "recovery_window": 1,
+    "current_cycle": 3,
+    "max_cycles": 2,
+    "cycles_remaining": 0,
+    "strategies": [
+      "Correction round 1: refactor oversized modified sendMessage into focused helpers while preserving guard order and behavior; then rerun targeted tests and make check.",
+      "Correction round 2: restore awaited status-report no-period reply within its try/catch and add focused insertion-failure regression coverage; rerun targeted tests and mechanical checks."
+    ],
+    "prior_windows": []
+  },
+  "reviewed_sha": "ca068fcfd4ef6b5b40740ca4f554c37925b20114"
+}
