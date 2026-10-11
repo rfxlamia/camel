@@ -23,6 +23,15 @@ const mockCreateLinearComment = vi.fn();
 const mockGetLabelId = vi.fn().mockResolvedValue("label-bug-id");
 const mockIsTicketIntakeConfigured = vi.fn().mockReturnValue(true);
 const mockExtractTicketFields = vi.fn();
+const mockAssertAgentSpendAllowed = vi.fn();
+const { MockAgentSpendKillSwitchError } = vi.hoisted(() => ({
+	MockAgentSpendKillSwitchError: class extends Error {},
+}));
+vi.mock("../spend-kill-switch.js", () => ({
+	assertAgentSpendAllowed: (...args: unknown[]) =>
+		mockAssertAgentSpendAllowed(...args),
+	AgentSpendKillSwitchError: MockAgentSpendKillSwitchError,
+}));
 
 const mockGetTicketHistory = vi.fn();
 const mockCheckCompleteness = vi.fn(
@@ -122,11 +131,46 @@ app.use("/api", ticketIntakeRouter);
 describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 	beforeEach(() => {
 		mockExtractTicketFields.mockReset();
+		mockAssertAgentSpendAllowed.mockReset();
+		mockIsTicketIntakeConfigured.mockReset().mockReturnValue(true);
 		mockLookupMembership.mockReset().mockResolvedValue("member");
 		mockCheckChatLimit.mockReset().mockResolvedValue({ isLocked: false });
 	});
 
+	it("returns the existing not-configured 503 before guard or extraction", async () => {
+		mockIsTicketIntakeConfigured.mockReturnValueOnce(false);
+
+		const res = await request(app)
+			.post("/api/workspaces/1/ticket-intake/chat")
+			.send({ message: "follow up" });
+
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({ error: "Ticket intake is not configured" });
+		expect(mockAssertAgentSpendAllowed).not.toHaveBeenCalled();
+		expect(mockExtractTicketFields).not.toHaveBeenCalled();
+	});
+
+	it("returns 400 for malformed workspace and message before guard or extraction", async () => {
+		const malformedWorkspace = await request(app)
+			.post("/api/workspaces/not-a-number/ticket-intake/chat")
+			.send({ message: "valid" });
+		expect(malformedWorkspace.status).toBe(400);
+		expect(mockAssertAgentSpendAllowed).not.toHaveBeenCalled();
+
+		const malformedMessage = await request(app)
+			.post("/api/workspaces/1/ticket-intake/chat")
+			.send({ message: "   " });
+		expect(malformedMessage.status).toBe(400);
+		expect(mockAssertAgentSpendAllowed).not.toHaveBeenCalled();
+		expect(mockExtractTicketFields).not.toHaveBeenCalled();
+	});
+
 	it("asks a classifier-directing question on turn 1 for non-auto-error entry points", async () => {
+		mockAssertAgentSpendAllowed.mockImplementation(() => {
+			throw new MockAgentSpendKillSwitchError(
+				"Agent spend is disabled by kill switch",
+			);
+		});
 		mockExtractTicketFields.mockResolvedValueOnce({
 			title: "",
 			description: "kanban-nya aneh",
@@ -146,7 +190,45 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.body.ready).toBe(false);
-		expect(res.body.question).toMatch(/bug|feature|improvement/i);
+		expect(res.body).toEqual({
+			ready: false,
+			question:
+				"What kind of issue is this — a bug, a feature request, or an improvement?",
+		});
+		expect(mockCheckChatLimit).not.toHaveBeenCalled();
+		expect(mockAssertAgentSpendAllowed).not.toHaveBeenCalled();
+		expect(mockExtractTicketFields).not.toHaveBeenCalled();
+	});
+
+	it("returns the typed 503 denial before extracting a valid chat turn", async () => {
+		mockExtractTicketFields.mockResolvedValueOnce({
+			title: "Bug title",
+			description: "Description",
+			expected: "Expected",
+			actual: "Actual",
+			repro: "Repro",
+			type: "Bug",
+		});
+		mockAssertAgentSpendAllowed.mockImplementation(() => {
+			throw new MockAgentSpendKillSwitchError(
+				"Agent spend is disabled by kill switch",
+			);
+		});
+
+		const res = await request(app)
+			.post("/api/workspaces/1/ticket-intake/chat")
+			.send({
+				message: "More detail",
+				conversationHistory: [{ role: "user", content: "Bug" }],
+			});
+
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+		});
+		expect(mockCheckChatLimit).toHaveBeenCalledTimes(1);
+		expect(mockAssertAgentSpendAllowed).toHaveBeenCalledTimes(1);
+		expect(mockExtractTicketFields).not.toHaveBeenCalled();
 	});
 
 	it("returns ready:true with a draft when accumulated input is already detailed (fast path)", async () => {
@@ -170,6 +252,8 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 		expect(res.body.ready).toBe(true);
 		expect(res.body.draft).toBeDefined();
 		expect(res.body.question).toBeUndefined();
+		expect(mockAssertAgentSpendAllowed).toHaveBeenCalledTimes(1);
+		expect(mockExtractTicketFields).toHaveBeenCalledTimes(1);
 	});
 
 	it("asks a specific clarifying question when accumulated input is still vague (guided path)", async () => {
@@ -206,6 +290,9 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 			});
 
 		expect(res.status).toBe(404);
+		expect(res.body).toEqual({ error: "Not found" });
+		expect(mockAssertAgentSpendAllowed).not.toHaveBeenCalled();
+		expect(mockExtractTicketFields).not.toHaveBeenCalled();
 		expect(res.body.draft).toBeUndefined();
 	});
 
@@ -359,6 +446,8 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/submit", () => {
 
 describe("POST /api/workspaces/:workspaceId/ticket-intake/chat rate limit", () => {
 	beforeEach(() => {
+		mockAssertAgentSpendAllowed.mockReset();
+		mockExtractTicketFields.mockReset();
 		mockLookupMembership.mockReset().mockResolvedValue("member");
 		mockCheckChatLimit.mockReset().mockResolvedValue({ isLocked: false });
 	});
@@ -377,7 +466,12 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat rate limit", () =
 			});
 
 		expect(res.status).toBe(429);
-		expect(res.body.retryAfterMs).toBe(5000);
+		expect(res.body).toEqual({
+			error: "Too many chat messages",
+			retryAfterMs: 5000,
+		});
+		expect(mockAssertAgentSpendAllowed).not.toHaveBeenCalled();
+		expect(mockExtractTicketFields).not.toHaveBeenCalled();
 	});
 });
 
