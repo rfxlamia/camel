@@ -820,6 +820,14 @@ describe("Cycle Map — map data (unit)", () => {
 				"utf8",
 			).trim(),
 			[
+				"import {",
+				"\tcreateAgentApi,",
+				"\ttype TicketHistoryEntry,",
+				"\ttype TicketIntakeChatResponse,",
+				"\ttype TicketIntakeDraft,",
+				'} from "./agentApi";',
+				"",
+				"// Load transport factories before UI re-exports, which can import the facade.",
 				'export { default as AgentBoardHeader } from "./AgentBoardHeader";',
 				'export { default as AgentBoardVisual } from "./AgentBoardVisual";',
 				'export { default as AgentCardDetail } from "./AgentCardDetail";',
@@ -827,13 +835,29 @@ describe("Cycle Map — map data (unit)", () => {
 				'export { default as AgentComposer } from "./AgentComposer";',
 				'export { useAgentBoard } from "./useAgentBoard";',
 				'export { useAgentChat } from "./useAgentChat";',
+				"export {",
+				"\tcreateAgentApi,",
+				"\ttype TicketHistoryEntry,",
+				"\ttype TicketIntakeChatResponse,",
+				"\ttype TicketIntakeDraft,",
+				"};",
 			].join("\n"),
-			"agent index must expose only AgentPage's public API",
+			"agent index must expose the UI and extracted transport public API",
 		);
-		assert.doesNotMatch(
+		assert.match(
 			readFileSync(join(repoRoot, "client/vitest.config.ts"), "utf8"),
-			/setupFiles/,
-			"T7 must not add a global Vitest setup file",
+			/setupFiles: \["\.\/src\/shared\/testSetup\.ts"\]/,
+			"real API facade imports require the shared jsdom canvas shim",
+		);
+		const testSetup = readFileSync(
+			join(repoRoot, "client/src/shared/testSetup.ts"),
+			"utf8",
+		);
+		assert.match(testSetup, /HTMLCanvasElement\.prototype/);
+		assert.doesNotMatch(
+			testSetup,
+			/vi\.mock/,
+			"shared setup must not mock feature factories or UI",
 		);
 		assert.ok(
 			!existsSync(join(repoRoot, "client/test-setup.ts")),
@@ -1050,9 +1074,10 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected leftover client/src/components/${name} to be gone`,
 			);
 		}
-		assert.ok(
-			!existsSync(join(repoRoot, "client/src/features/auth")),
-			"expected client/src/features/auth/ to not exist yet",
+		assert.deepEqual(
+			readdirSync(join(repoRoot, "client/src/features/auth")).sort(),
+			["authApi.ts", "index.ts"],
+			"auth UI stays in pages; the feature owns its extracted API factory",
 		);
 	});
 
@@ -1141,9 +1166,10 @@ describe("Cycle Map — map data (unit)", () => {
 			existsSync(join(repoRoot, "server/src/routes/presence.ts")),
 			"expected presence.ts to stay beside the realtime kernel",
 		);
-		assert.ok(
-			!existsSync(join(repoRoot, "client/src/features/workspaces")),
-			"expected no empty client/src/features/workspaces tree",
+		assert.deepEqual(
+			readdirSync(join(repoRoot, "client/src/features/workspaces")).sort(),
+			["index.ts", "workspacesApi.ts"],
+			"workspace feature must own a public API factory, not an empty tree",
 		);
 	});
 
@@ -1226,9 +1252,10 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected ${page} to remain under client/src/pages/`,
 			);
 		}
-		assert.ok(
-			!existsSync(join(repoRoot, "client/src/features/activity")),
-			"expected no empty client/src/features/activity tree",
+		assert.deepEqual(
+			readdirSync(join(repoRoot, "client/src/features/activity")).sort(),
+			["activityApi.ts", "index.ts"],
+			"activity feature must own a public API factory, not an empty tree",
 		);
 	});
 
@@ -1290,11 +1317,11 @@ describe("Cycle Map — map data (unit)", () => {
 				`expected features/${name}/index.ts or modules/${name}/index.ts`,
 			);
 		}
-		// Server-only names must not grow an empty client tree.
+		// Previously server-only names now also own extracted client API factories.
 		for (const name of ["workspaces", "activity", "auth"]) {
 			assert.ok(
-				!existsSync(join(repoRoot, `client/src/features/${name}`)),
-				`expected no client/src/features/${name} tree`,
+				existsSync(join(repoRoot, `client/src/features/${name}/index.ts`)),
+				`expected public API for client/src/features/${name}`,
 			);
 		}
 
