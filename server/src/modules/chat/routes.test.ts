@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockRunChatTurn = vi.fn();
 const mockCheckChatLimit = vi.fn();
+const routeTestConfig = {
+	AGENT_SPEND_KILL_SWITCH: undefined as string | undefined,
+};
 const mockService = {
 	listThreads: vi.fn(),
 	createThread: vi.fn(),
@@ -21,6 +24,10 @@ const mockService = {
 	getAttachmentsForMessages: vi.fn(),
 	insertAttachment: vi.fn(),
 };
+
+vi.mock("../../config.js", () => ({
+	config: routeTestConfig,
+}));
 
 vi.mock("../../lib/chat-rate-limit.js", () => ({
 	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
@@ -68,6 +75,11 @@ describe("chat routes (mocked service + LLM)", () => {
 
 	beforeEach(async () => {
 		vi.clearAllMocks();
+		routeTestConfig.AGENT_SPEND_KILL_SWITCH = undefined;
+		const { estimateContextTokens } = await import(
+			"../../lib/llm/run-chat-turn.js"
+		);
+		vi.mocked(estimateContextTokens).mockReturnValue(100);
 		mockCheckChatLimit.mockResolvedValue({ isLocked: false });
 		mockService.listThreads.mockResolvedValue([{ id: 1, title: "Untitled" }]);
 		mockService.createThread.mockResolvedValue({ id: 2, title: "Untitled" });
@@ -238,5 +250,214 @@ describe("chat routes (mocked service + LLM)", () => {
 		expect(res.status).toBe(413);
 		expect(res.body.message).toContain("Thread too long");
 		expect(mockService.insertMessage).not.toHaveBeenCalled();
+	});
+
+	it("keeps thread read/list/create/rename/delete available with spend disabled", async () => {
+		routeTestConfig.AGENT_SPEND_KILL_SWITCH = "true";
+		mockService.renameThread.mockResolvedValue({ id: 1, title: "Renamed" });
+		mockService.deleteThread.mockResolvedValue(true);
+
+		const list = await request(app).get("/api/chat/threads");
+		const created = await request(app).post("/api/chat/threads");
+		const read = await request(app).get("/api/chat/threads/1");
+		const renamed = await request(app)
+			.patch("/api/chat/threads/1")
+			.send({ title: "Renamed" });
+		const deleted = await request(app).delete("/api/chat/threads/1");
+
+		expect(list.status).toBe(200);
+		expect(created.status).toBe(200);
+		expect(read.status).toBe(200);
+		expect(renamed.status).toBe(200);
+		expect(deleted.status).toBe(204);
+		expect(mockService.listThreads).toHaveBeenCalled();
+		expect(mockService.createThread).toHaveBeenCalled();
+		expect(mockService.getMessages).toHaveBeenCalledTimes(1);
+		expect(mockService.renameThread).toHaveBeenCalled();
+		expect(mockService.deleteThread).toHaveBeenCalled();
+		expect(mockRunChatTurn).not.toHaveBeenCalled();
+		expect(mockService.insertMessage).not.toHaveBeenCalled();
+	});
+
+	it("keeps valid default-off send and retry streaming with persistence", async () => {
+		mockRunChatTurn.mockResolvedValue({
+			output: "ok",
+			thinking: "",
+			toolTrace: [],
+		});
+		mockService.insertMessage
+			.mockResolvedValueOnce({ id: 20, role: "user", content: "Hi" })
+			.mockResolvedValueOnce({ id: 21, role: "assistant", content: "" })
+			.mockResolvedValueOnce({ id: 21, role: "assistant", content: "ok" })
+			.mockResolvedValueOnce({ id: 22, role: "assistant", content: "" })
+			.mockResolvedValueOnce({ id: 22, role: "assistant", content: "ok" });
+		mockService.getMessage.mockResolvedValue({
+			id: 11,
+			threadId: 1,
+			role: "assistant",
+			content: "old",
+		});
+
+		const send = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ message: "Hi" });
+		const retry = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ action: "retry", messageId: 11 });
+
+		expect(send.status).toBe(200);
+		expect(send.headers["content-type"]).toMatch(/application\/x-ndjson/);
+		expect(send.text).toContain('"type":"done"');
+		expect(retry.status).toBe(200);
+		expect(retry.headers["content-type"]).toMatch(/application\/x-ndjson/);
+		expect(retry.text).toContain('"type":"done"');
+		expect(mockRunChatTurn).toHaveBeenCalledTimes(2);
+		expect(mockService.insertMessage).toHaveBeenCalledTimes(3);
+		expect(mockService.deleteMessage).toHaveBeenCalledWith(11);
+	});
+
+	it("rejects enabled valid send with exact JSON before stream or persistence", async () => {
+		routeTestConfig.AGENT_SPEND_KILL_SWITCH = "true";
+		mockRunChatTurn.mockResolvedValue({
+			output: "ok",
+			thinking: "",
+			toolTrace: [],
+		});
+		mockService.insertMessage
+			.mockResolvedValueOnce({ id: 30, role: "user", content: "Hi" })
+			.mockResolvedValueOnce({ id: 31, role: "assistant", content: "" });
+
+		const res = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ message: "Hi", workspaceId: 7 });
+
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
+		});
+		expect(res.headers["content-type"]).not.toMatch(/application\/x-ndjson/);
+		expect(mockService.getThread).toHaveBeenCalled();
+		expect(mockCheckChatLimit).toHaveBeenCalled();
+		expect(mockService.getMessages).toHaveBeenCalled();
+		expect(mockService.insertMessage).not.toHaveBeenCalled();
+		expect(mockService.deleteMessage).not.toHaveBeenCalled();
+		expect(mockRunChatTurn).not.toHaveBeenCalled();
+	});
+
+	it("rejects enabled valid retry with exact JSON before stream or persistence", async () => {
+		routeTestConfig.AGENT_SPEND_KILL_SWITCH = "true";
+		mockService.getMessages.mockResolvedValue([
+			{ id: 10, threadId: 1, role: "user", content: "Hi" },
+			{ id: 11, threadId: 1, role: "assistant", content: "old" },
+		]);
+		mockService.getMessage.mockResolvedValue({
+			id: 11,
+			threadId: 1,
+			role: "assistant",
+			content: "old",
+		});
+		mockService.insertMessage.mockResolvedValue({
+			id: 31,
+			role: "assistant",
+			content: "",
+		});
+		mockRunChatTurn.mockResolvedValue({
+			output: "ok",
+			thinking: "",
+			toolTrace: [],
+		});
+
+		const res = await request(app)
+			.post("/api/chat/threads/1/messages")
+			.send({ action: "retry", messageId: 11 });
+
+		expect(res.status).toBe(503);
+		expect(res.body).toEqual({
+			error: "Agent spend is disabled by kill switch",
+			code: "AGENT_SPEND_KILL_SWITCH",
+		});
+		expect(res.headers["content-type"]).not.toMatch(/application\/x-ndjson/);
+		expect(mockService.getThread).toHaveBeenCalled();
+		expect(mockCheckChatLimit).toHaveBeenCalled();
+		expect(mockService.getMessages).toHaveBeenCalled();
+		expect(mockService.getMessage).toHaveBeenCalledWith(1, 11);
+		expect(mockService.insertMessage).not.toHaveBeenCalled();
+		expect(mockService.deleteMessage).not.toHaveBeenCalled();
+		expect(mockRunChatTurn).not.toHaveBeenCalled();
+	});
+
+	describe("enabled retry precedence baseline", () => {
+		beforeEach(() => {
+			routeTestConfig.AGENT_SPEND_KILL_SWITCH = "true";
+			mockService.getMessages.mockResolvedValue([
+				{ id: 10, threadId: 1, role: "user", content: "Hi" },
+				{ id: 11, threadId: 1, role: "assistant", content: "old" },
+			]);
+			mockService.getMessage.mockResolvedValue({
+				id: 11,
+				threadId: 1,
+				role: "assistant",
+				content: "old",
+			});
+		});
+
+		async function retry() {
+			return request(app)
+				.post("/api/chat/threads/1/messages")
+				.send({ action: "retry", messageId: 11 });
+		}
+
+		function expectNoStart(response: request.Response) {
+			expect(response.headers["content-type"]).not.toMatch(
+				/application\/x-ndjson/,
+			);
+			expect(mockService.insertMessage).not.toHaveBeenCalled();
+			expect(mockService.deleteMessage).not.toHaveBeenCalled();
+			expect(mockRunChatTurn).not.toHaveBeenCalled();
+		}
+
+		it("returns retry-target 404 before spend denial", async () => {
+			mockService.getMessage.mockResolvedValue(null);
+			const res = await retry();
+			expect(res.status).toBe(404);
+			expect(res.body).toEqual({ error: "Not found" });
+			expectNoStart(res);
+		});
+
+		it("returns inaccessible-thread 404 before spend denial", async () => {
+			mockService.getThread.mockResolvedValue(null);
+			const res = await retry();
+			expect(res.status).toBe(404);
+			expect(res.body).toEqual({ error: "Not found" });
+			expectNoStart(res);
+		});
+
+		it("returns locked-rate-limit 429 before spend denial", async () => {
+			mockCheckChatLimit.mockResolvedValue({
+				isLocked: true,
+				retryAfterMs: 5000,
+			});
+			const res = await retry();
+			expect(res.status).toBe(429);
+			expect(res.body).toEqual({
+				error: "Too many chat messages",
+				retryAfterMs: 5000,
+			});
+			expectNoStart(res);
+		});
+
+		it("returns oversized-context 413 before spend denial", async () => {
+			const { estimateContextTokens } = await import(
+				"../../lib/llm/run-chat-turn.js"
+			);
+			vi.mocked(estimateContextTokens).mockReturnValue(999_999);
+			const res = await retry();
+			expect(res.status).toBe(413);
+			expect(res.body).toEqual({
+				message: "Thread too long, start a new chat",
+			});
+			expectNoStart(res);
+		});
 	});
 });
