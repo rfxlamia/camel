@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import { logger } from "../../lib/logger.js";
 import { sendValidationError } from "../../validators/http.js";
+import {
+	AgentSpendKillSwitchError,
+	assertAgentSpendAllowed,
+} from "../agent/index.js";
 import { resolveChatMessageAction } from "./chat-helpers.js";
 import {
 	finishMessage,
@@ -43,10 +47,15 @@ export function createPostMessageHandler(service: Service) {
 				action,
 			);
 			if (!prepared) return;
+			assertAgentSpendAllowed();
 			setStreamHeaders(res);
 			res.status(200);
 			await streamMessage(service, res, threadId, action, access, prepared);
 		} catch (err) {
+			if (err instanceof AgentSpendKillSwitchError) {
+				res.status(503).json({ error: err.message, code: err.code });
+				return;
+			}
 			logger.error({ err, threadId }, "chat postMessage failed");
 			if (!res.headersSent)
 				res.status(500).json({ error: "Failed to send message" });
