@@ -1,5 +1,6 @@
 import { logger } from "../../lib/logger.js";
 import type { AgentBoardServiceDeps } from "./service-types.js";
+import { assertAgentSpendAllowed } from "./spend-kill-switch.js";
 
 export function createBoardConversation(
 	deps: AgentBoardServiceDeps,
@@ -49,6 +50,7 @@ export function createBoardConversation(
 			}
 
 			if (board.status === "pending") {
+				assertAgentSpendAllowed();
 				await deps.insertConversation!({
 					boardId,
 					role: "user",
@@ -103,6 +105,7 @@ export function createBoardConversation(
 			}
 
 			if (board.status === "approved" && board.executionStatus === "done") {
+				assertAgentSpendAllowed();
 				const artifact = await deps.getArtifact?.(boardId);
 				const history = (await deps.getConversationHistory?.(boardId)) ?? [];
 
@@ -196,7 +199,11 @@ export function createBoardConversation(
 			// Atomic claim: delete() returns true only for the first caller
 			// CRITICAL: get() and delete() must remain synchronous and adjacent — do not insert await between them
 			const newIntent = pendingRegenerate.get(boardId);
-			if (!newIntent || !pendingRegenerate.delete(boardId)) {
+			if (!newIntent) {
+				return { ok: true as const };
+			}
+			assertAgentSpendAllowed();
+			if (!pendingRegenerate.delete(boardId)) {
 				return { ok: true as const };
 			}
 
