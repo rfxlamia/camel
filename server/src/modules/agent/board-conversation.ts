@@ -41,7 +41,7 @@ async function sendStatusReportMessage(
 
 		const reply =
 			periodResult.question ?? "Which time period should this status report cover?";
-		return replyWithoutReportPeriod(deps, boardId, reply);
+		return await replyWithoutReportPeriod(deps, boardId, reply);
 	} catch (err) {
 		logger.error({ err }, "sendMessage: detectReportPeriod failed");
 		return replyWithoutReportPeriod(
