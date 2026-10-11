@@ -36,6 +36,7 @@ import {
 	createAgentBoardService,
 } from "./service.js";
 import { realDeps } from "./service-deps.js";
+import { AgentSpendKillSwitchError } from "./spend-kill-switch.js";
 
 export { buildArtifactDownload, realArtifactDeps } from "./artifact-db.js";
 export {
@@ -52,6 +53,18 @@ export { type MessageAction, resolveMessageAction } from "./message-action.js";
 export { defaultToolRegistry } from "./service-deps.js";
 
 type AgentService = ReturnType<typeof createAgentBoardService>;
+
+function sendSpendKillSwitchError(
+	error: unknown,
+	res: import("express").Response,
+): boolean {
+	if (!(error instanceof AgentSpendKillSwitchError)) return false;
+	res.status(503).json({
+		error: error.message,
+		code: error.code,
+	});
+	return true;
+}
 
 // ---------------------------------------------------------------------------
 // Router factory
@@ -97,11 +110,17 @@ function registerCreateBoard(router: Router, service: AgentService): void {
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
-			const result = await service.createBoard({
-				workspaceId,
-				userId: req.user!.id,
-				intent: intent.trim(),
-			});
+			let result: Awaited<ReturnType<AgentService["createBoard"]>>;
+			try {
+				result = await service.createBoard({
+					workspaceId,
+					userId: req.user!.id,
+					intent: intent.trim(),
+				});
+			} catch (error) {
+				if (sendSpendKillSwitchError(error, res)) return;
+				throw error;
+			}
 
 			if ("status" in result && typeof result.status === "number") {
 				return res.status(result.status).json({
@@ -133,25 +152,34 @@ function registerMessage(router: Router, service: AgentService): void {
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
-			const result =
-				action.kind === "confirm"
-					? await service.confirmRegenerateBoard({
-							boardId,
-							userId: req.user!.id,
-							workspaceId,
-						})
-					: action.kind === "cancel"
-						? await service.cancelRegenerateBoard({
+			let result:
+				| Awaited<ReturnType<AgentService["sendMessage"]>>
+				| Awaited<ReturnType<AgentService["confirmRegenerateBoard"]>>
+				| Awaited<ReturnType<AgentService["cancelRegenerateBoard"]>>;
+			try {
+				result =
+					action.kind === "confirm"
+						? await service.confirmRegenerateBoard({
 								boardId,
 								userId: req.user!.id,
 								workspaceId,
 							})
-						: await service.sendMessage({
-								boardId,
-								userId: req.user!.id,
-								workspaceId,
-								message: action.message,
-							});
+						: action.kind === "cancel"
+							? await service.cancelRegenerateBoard({
+									boardId,
+									userId: req.user!.id,
+									workspaceId,
+								})
+							: await service.sendMessage({
+									boardId,
+									userId: req.user!.id,
+									workspaceId,
+									message: action.message,
+								});
+			} catch (error) {
+				if (sendSpendKillSwitchError(error, res)) return;
+				throw error;
+			}
 
 			if ("status" in result && typeof result.status === "number") {
 				return res.status(result.status).json(result);
@@ -177,11 +205,17 @@ function registerApprove(router: Router, service: AgentService): void {
 
 			if (!(await assertWorkspaceMember(req, res, workspaceId))) return;
 
-			const result = await service.approveBoard({
-				boardId,
-				userId: req.user!.id,
-				workspaceId,
-			});
+			let result: Awaited<ReturnType<AgentService["approveBoard"]>>;
+			try {
+				result = await service.approveBoard({
+					boardId,
+					userId: req.user!.id,
+					workspaceId,
+				});
+			} catch (error) {
+				if (sendSpendKillSwitchError(error, res)) return;
+				throw error;
+			}
 
 			if (result && "status" in result && typeof result.status === "number") {
 				return res.status(result.status).json(result);
