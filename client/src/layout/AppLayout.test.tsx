@@ -36,11 +36,16 @@ vi.mock("../shared/PresenceContext", () => ({
 vi.mock("../shared/ToastContext", () => ({
 	useToastState: () => mockUseToastState(),
 }));
-vi.mock("../features/notifications", () => ({
-	NotificationsProvider: ({ children }: { children: ReactNode }) => (
-		<>{children}</>
-	),
-}));
+vi.mock("../features/notifications", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../features/notifications")>();
+	return {
+		...actual,
+		NotificationsProvider: ({ children }: { children: ReactNode }) => (
+			<>{children}</>
+		),
+	};
+});
 vi.mock("./FocusIndicator", () => ({
 	default: () => null,
 }));

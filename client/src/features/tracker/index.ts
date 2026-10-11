@@ -1,3 +1,7 @@
+import { createTrackerApi } from "./trackerApi";
+import { createWorkItemApi } from "./workItemApi";
+
+// Load transport factories before UI re-exports, which can import the facade.
 export { default as TrackerChangelog } from "./TrackerChangelog";
 export { default as TrackerConfirmDialog } from "./TrackerConfirmDialog";
 export {
@@ -60,3 +64,4 @@ export {
 	type OpenPicker,
 	useTrackerRowOpenPicker,
 } from "./useTrackerRowOpenPicker";
+export { createTrackerApi, createWorkItemApi };

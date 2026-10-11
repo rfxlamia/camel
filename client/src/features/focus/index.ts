@@ -1,3 +1,6 @@
+import { createFocusApi } from "./focusApi";
+
+// Load transport factories before UI re-exports, which can import the facade.
 export {
 	default as FocusEntryButton,
 	default,
@@ -18,3 +21,4 @@ export {
 	membershipRemovalTargetsUser,
 	TASK_MISSING_TOAST,
 } from "./focusGuards";
+export { createFocusApi };

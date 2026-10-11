@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 // Mock fetch globally for API tests
+
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
@@ -8,6 +9,200 @@ const mockPublishAutoError = vi.fn();
 vi.mock("./shared/ticketIntakeBus", () => ({
 	publishAutoError: (...args: unknown[]) => mockPublishAutoError(...args),
 }));
+
+describe("api compatibility surface", () => {
+	it("preserves all top-level and nested API method keys", async () => {
+		const { api } = await import("./api");
+		expect(Object.keys(api).sort()).toEqual(
+			[
+				"acceptInvite",
+				"addWorkspaceMember",
+				"agentArtifactDownloadUrl",
+				"approveAgentBoard",
+				"applyTemplate",
+				"chat",
+				"createAgentBoard",
+				"createCard",
+				"createColumn",
+				"createTrackerItem",
+				"createTrackerPhase",
+				"createTrackerProject",
+				"createTrackerVocabulary",
+				"createWorkItem",
+				"createWorkspace",
+				"declineInvite",
+				"deleteCard",
+				"deleteCardAttachment",
+				"deleteTrackerItem",
+				"deleteTrackerPhase",
+				"deleteTrackerProject",
+				"deleteWorkItem",
+				"deleteWorkspace",
+				"focus",
+				"getActivity",
+				"getAgentArtifact",
+				"getAgentBoard",
+				"getAgentBoards",
+				"getAgentCardOutput",
+				"getBoard",
+				"getCard",
+				"getCardActivity",
+				"getMetrics",
+				"getMetricsHistory",
+				"getMyWorkItem",
+				"getNotifications",
+				"getPresence",
+				"getSettings",
+				"getTrackerChangelog",
+				"getTrackerItem",
+				"getWorkItem",
+				"getWorkItemChangelog",
+				"getWorkspaceMembers",
+				"getWorkspaces",
+				"heartbeat",
+				"listActiveMyWorkCandidates",
+				"listMyWork",
+				"listTrackerItems",
+				"listTrackerProjects",
+				"listTrackerVocabularies",
+				"listWorkItems",
+				"login",
+				"logout",
+				"markAllNotificationsAsRead",
+				"markMyWorkDone",
+				"markNotificationAsRead",
+				"me",
+				"moveCard",
+				"register",
+				"removeWorkspaceMember",
+				"resetSettings",
+				"retryAgentBoard",
+				"reorderTrackerItem",
+				"reorderWorkItem",
+				"sendAgentBoardMessage",
+				"setPassword",
+				"setUsername",
+				"startOAuth",
+				"ticketIntake",
+				"transferWorkspaceOwnership",
+				"updateCard",
+				"updateColumn",
+				"updateSettings",
+				"updateTrackerItem",
+				"updateTrackerPhase",
+				"updateTrackerProject",
+				"updateWorkItem",
+				"updateWorkspace",
+				"updateWorkspaceMemberRole",
+				"uploadCardAttachments",
+				"uploadLogo",
+			].sort(),
+		);
+		expect(Object.keys(api.chat).sort()).toEqual(
+			[
+				"createThread",
+				"deleteThread",
+				"downloadAttachment",
+				"getMessages",
+				"listThreads",
+				"renameThread",
+				"retryMessage",
+				"sendMessage",
+			].sort(),
+		);
+		expect(Object.keys(api.focus).sort()).toEqual([
+			"get",
+			"getConfig",
+			"patch",
+			"post",
+		]);
+		expect(Object.keys(api.ticketIntake).sort()).toEqual([
+			"getChatLimit",
+			"getConfig",
+			"getHistory",
+			"resubmit",
+			"sendMessage",
+			"submit",
+		]);
+	});
+
+	it("exposes the compatibility runtime exports", async () => {
+		const facade = await import("./api");
+		expect(facade.ApiError).toBeTypeOf("function");
+		expect(facade.configureRequestBoundaryForTests).toBeTypeOf("function");
+		expect(facade.resetRequestBoundaryForTests).toBeTypeOf("function");
+		expect(facade.cardAttachmentThumbnailUrl(1, 2, 3)).toContain("/thumbnail");
+		expect(facade.cardAttachmentOriginalUrl(1, 2, 3)).toContain("/original");
+		expect(facade.cardAttachmentDownloadUrl(1, 2, 3)).toContain("/download");
+	});
+});
+
+describe("shared request boundary", () => {
+	it("retains the status in non-JSON logo upload failures", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 503,
+			json: () => Promise.reject(new SyntaxError("Not JSON")),
+		});
+		const { api, ApiError } = await import("./api");
+		const failure = api.uploadLogo(7, new File(["logo"], "logo.png"));
+		await expect(failure).rejects.toBeInstanceOf(ApiError);
+		await expect(failure).rejects.toMatchObject({
+			status: 503,
+			message: "Upload failed (503)",
+		});
+	});
+
+	it("routes OAuth through the boundary while retaining same-origin credentials", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({}),
+		});
+		const { api } = await import("./api");
+		await api.startOAuth("google");
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/auth/sign-in/social",
+			expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+		);
+	});
+
+	it("uses configured base URL and injected fetch, preserves 204, and parses ApiError", async () => {
+		const injectedFetch = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce({ ok: true, status: 204 } as Response)
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 422,
+				json: () =>
+					Promise.resolve({ error: "Invalid request", code: "invalid" }),
+			} as Response);
+		const {
+			api,
+			configureRequestBoundaryForTests,
+			resetRequestBoundaryForTests,
+		} = await import("./api");
+		configureRequestBoundaryForTests({
+			baseUrl: "https://camel.test",
+			fetchImpl: injectedFetch,
+		});
+		try {
+			await expect(api.logout()).resolves.toBeUndefined();
+			expect(injectedFetch).toHaveBeenNthCalledWith(
+				1,
+				"https://camel.test/api/auth/logout",
+				expect.objectContaining({ credentials: "include" }),
+			);
+			await expect(api.me()).rejects.toMatchObject({
+				status: 422,
+				message: "Invalid request",
+				code: "invalid",
+			});
+		} finally {
+			resetRequestBoundaryForTests();
+		}
+	});
+});
 
 describe("Settings API methods", () => {
 	it("getSettings returns SettingsMap", async () => {
@@ -413,6 +608,23 @@ describe("Agent API methods", () => {
 		);
 	});
 
+	it("retryAgentBoard POSTs to the dedicated retry endpoint and returns boardId", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ boardId: 12 }),
+		});
+		const { api } = await import("./api");
+
+		await expect(api.retryAgentBoard(7, 12)).resolves.toEqual({ boardId: 12 });
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/agent/boards/12/retry",
+			expect.objectContaining({ method: "POST" }),
+		);
+		expect((mockFetch.mock.calls[0][1] as RequestInit).body).toBeUndefined();
+	});
+
 	it("approveAgentBoard sends POST and returns void (204)", async () => {
 		mockFetch.mockClear();
 		mockFetch.mockResolvedValueOnce({
@@ -472,6 +684,7 @@ describe("Agent API methods", () => {
 					originalIntent: "Build a tracker",
 					status: "pending",
 					executionStatus: "idle",
+					retryOfBoardId: 9,
 					createdAt: "2026-06-14T00:00:00Z",
 					columns: [
 						{
@@ -490,6 +703,8 @@ describe("Agent API methods", () => {
 
 		const result = await api.getAgentBoard(7, 1);
 		expect(result.id).toBe(1);
+		expect(result.retryOfBoardId).toBe(9);
+		expectTypeOf(result.retryOfBoardId).toEqualTypeOf<number | null>();
 		expect(result.columns).toHaveLength(1);
 		expect(result.columns[0].slug).toBe("research");
 		expect(mockFetch).toHaveBeenCalledWith(
@@ -1170,5 +1385,271 @@ describe("unified 400 body parsing", () => {
 				assigneeIds: "assigneeIds must be an array of integers",
 			},
 		});
+	});
+});
+
+describe("specialized requests share the transport contract", () => {
+	it("retains OAuth redirect behavior even for non-success JSON responses", async () => {
+		const { api } = await import("./api");
+		const location = { href: "https://camel.test/login" };
+		vi.stubGlobal("window", { location });
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: () => Promise.resolve({ url: "https://provider.test/authorize" }),
+		});
+		try {
+			await api.startOAuth("google");
+			expect(location.href).toBe("https://provider.test/authorize");
+		} finally {
+			vi.unstubAllGlobals();
+			vi.stubGlobal("fetch", mockFetch);
+		}
+	});
+
+	it.each([
+		"upload",
+		"OAuth",
+	] as const)("still parses the specialized %s response on 204", async (kind) => {
+		const parseError = new SyntaxError("Unexpected end of JSON input");
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 204,
+			json: () => Promise.reject(parseError),
+		});
+		const { api } = await import("./api");
+		await expect(
+			kind === "upload"
+				? api.uploadLogo(7, new File(["logo"], "logo.png"))
+				: api.startOAuth("google"),
+		).rejects.toBe(parseError);
+	});
+
+	beforeEach(() => {
+		mockFetch.mockReset();
+		mockPublishAutoError.mockReset();
+		document.cookie = "csrf_token=csrf%20token";
+	});
+
+	it("uses configured fetch/base URL for stream, blob, upload, and OAuth", async () => {
+		const stream = new ReadableStream<Uint8Array>();
+		const blob = new Blob(["report"], { type: "text/plain" });
+		const injected = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				body: stream,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				blob: () => Promise.resolve(blob),
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve({ logoPath: "logo.png" }),
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				json: () => Promise.resolve({}),
+			} as Response);
+		const {
+			api,
+			configureRequestBoundaryForTests,
+			resetRequestBoundaryForTests,
+		} = await import("./api");
+		configureRequestBoundaryForTests({
+			baseUrl: "https://camel.test",
+			fetchImpl: injected,
+		});
+		try {
+			await expect(
+				api.chat.sendMessage(3, "hello", { workspaceId: 0 }),
+			).resolves.toBe(stream);
+			await expect(api.chat.downloadAttachment(5)).resolves.toBe(blob);
+			await expect(
+				api.uploadLogo(7, new File(["logo"], "logo.png")),
+			).resolves.toEqual({ logoPath: "logo.png" });
+			// OAuth deliberately parses even a non-success JSON response and only
+			// redirects when a URL exists, just like the original direct fetch.
+			await expect(api.startOAuth("github")).resolves.toBeUndefined();
+			expect(injected.mock.calls.map(([url]) => url)).toEqual([
+				"https://camel.test/api/chat/threads/3/messages",
+				"https://camel.test/api/chat/attachments/5",
+				"https://camel.test/api/workspaces/7/settings/logo",
+				"https://camel.test/api/auth/sign-in/social",
+			]);
+			const inits = injected.mock.calls.map(([, init]) => init!);
+			expect(inits.map((init) => init.credentials)).toEqual([
+				"include",
+				"include",
+				"same-origin",
+				"same-origin",
+			]);
+			expect(inits[0].method).toBe("POST");
+			expect(JSON.parse(inits[0].body as string)).toEqual({
+				message: "hello",
+				workspaceId: 0,
+			});
+			expect((inits[0].headers as Headers).get("X-CSRF-Token")).toBe(
+				"csrf token",
+			);
+			expect((inits[1].headers as Headers).get("X-CSRF-Token")).toBeNull();
+			expect((inits[1].headers as Headers).get("Content-Type")).toBe(
+				"application/json",
+			);
+			const upload = inits[2];
+			expect(upload.method).toBe("POST");
+			expect((upload.headers as Headers).get("Content-Type")).toBeNull();
+			expect((upload.headers as Headers).get("X-CSRF-Token")).toBe(
+				"csrf token",
+			);
+			expect([...(upload.body as FormData).keys()]).toEqual(["logo"]);
+			expect(((upload.body as FormData).get("logo") as File).name).toBe(
+				"logo.png",
+			);
+			expect((inits[3].headers as Headers).get("X-CSRF-Token")).toBe(
+				"csrf token",
+			);
+			expect(JSON.parse(inits[3].body as string)).toEqual({
+				provider: "github",
+				callbackURL: "/api/auth/complete-oauth",
+				redirect: false,
+			});
+			expect(mockFetch).not.toHaveBeenCalled();
+		} finally {
+			resetRequestBoundaryForTests();
+			stream.cancel();
+		}
+	});
+
+	it.each([
+		"stream",
+		"blob",
+		"upload",
+	] as const)("preserves shared structured JSON errors for %s", async (kind) => {
+		const session = { id: 9, state: "paused" };
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 503,
+			json: () =>
+				Promise.resolve({
+					error: "error",
+					message: "preferred message",
+					code: "busy",
+					retryAfterMs: 800,
+					fieldErrors: { title: "invalid" },
+					session,
+				}),
+		});
+		const { api, ApiError } = await import("./api");
+		const promise =
+			kind === "stream"
+				? api.chat.retryMessage(1, 2)
+				: kind === "blob"
+					? api.chat.downloadAttachment(2)
+					: api.uploadLogo(7, new File(["logo"], "logo.png"));
+		await expect(promise).rejects.toBeInstanceOf(ApiError);
+		await expect(promise).rejects.toMatchObject({
+			status: 503,
+			message: "preferred message",
+			code: "busy",
+			retryAfterMs: 800,
+			fieldErrors: { title: "invalid" },
+			session,
+		});
+		expect(mockPublishAutoError).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"stream",
+		"blob",
+	] as const)("retains non-JSON failure status for %s", async (kind) => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 502,
+			json: () => Promise.reject(new SyntaxError("HTML")),
+		});
+		const { api } = await import("./api");
+		await expect(
+			kind === "stream"
+				? api.chat.sendMessage(1, "hello")
+				: api.chat.downloadAttachment(2),
+		).rejects.toMatchObject({ status: 502, message: "Request failed (502)" });
+	});
+
+	it("rejects an empty stream without attempting JSON parsing", async () => {
+		const json = vi.fn();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			body: null,
+			json,
+		});
+		const { api } = await import("./api");
+		await expect(api.chat.sendMessage(1, "hello")).rejects.toMatchObject({
+			status: 200,
+			message: "Empty response body",
+		});
+		expect(json).not.toHaveBeenCalled();
+	});
+
+	it("retains both chat message response shapes", async () => {
+		const messages = [{ id: 1, role: "assistant", content: "hello" }];
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve(messages),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve({ id: 3, messages }),
+			});
+		const { api } = await import("./api");
+		await expect(api.chat.getMessages(3)).resolves.toBe(messages);
+		await expect(api.chat.getMessages(3)).resolves.toBe(messages);
+	});
+
+	it("preserves multipart tagged errors and all staged metadata", async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			json: () => Promise.resolve({ error: "failed" }),
+		});
+		const { api } = await import("./api");
+		const pair = {
+			thumbnail: new File(["thumb"], "thumb.png"),
+			original: new File(["original"], "original.png"),
+		};
+		const metadata = {
+			columnId: 1,
+			title: "Card",
+			description: "details",
+			assigneeIds: [2],
+			priorityId: 3,
+			labelIds: [4],
+			projectId: 5,
+			phaseId: 6,
+			dueDate: "2026-10-01",
+		};
+		await expect(
+			api.createCard(7, { ...metadata, attachments: [pair, pair] }),
+		).rejects.toMatchObject({ status: 500 });
+		const form = mockFetch.mock.calls[0][1].body as FormData;
+		expect(JSON.parse(form.get("metadata") as string)).toEqual(metadata);
+		expect(form.getAll("thumbnail")).toHaveLength(2);
+		expect(form.getAll("original")).toHaveLength(2);
+		expect(mockPublishAutoError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				endpoint: "/api/workspaces/7/cards",
+				userAction: "submit",
+				status: 500,
+			}),
+		);
 	});
 });

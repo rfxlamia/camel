@@ -1,3 +1,6 @@
+import { createChatApi } from "./chatApi";
+
+// Load transport factories before UI re-exports, which can import the facade.
 export { ChatAttachment } from "./ChatAttachment";
 export { ChatErrorBubble } from "./ChatErrorBubble";
 export { ChatMessage, type ChatMessageProps } from "./ChatMessage";
@@ -14,3 +17,4 @@ export {
 	type UseChatStreamOptions,
 	useChatStream,
 } from "./useChatStream";
+export { createChatApi };
