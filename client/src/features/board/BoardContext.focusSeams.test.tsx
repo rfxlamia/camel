@@ -193,13 +193,18 @@ describe("BoardContext focus SSE seams", () => {
 		vi.clearAllMocks();
 	});
 
-	it("notifies agent-board sync when the SSE connection opens or reconnects", async () => {
+	it("increments the connection revision without adding a synthetic agent event", async () => {
 		function Probe() {
-			const { agentEvents } = useBoard();
+			const { agentEvents, connectionRevision } = useBoard();
 			return (
-				<output data-testid="agent-events">
-					{JSON.stringify(agentEvents)}
-				</output>
+				<>
+					<output data-testid="agent-events">
+						{JSON.stringify(agentEvents)}
+					</output>
+					<output data-testid="connection-revision">
+						{connectionRevision}
+					</output>
+				</>
 			);
 		}
 
@@ -207,10 +212,12 @@ describe("BoardContext focus SSE seams", () => {
 		await act(async () => {
 			getEventSource().onopen?.();
 		});
+		await act(async () => {
+			getEventSource().onopen?.();
+		});
 
-		expect(screen.getByTestId("agent-events").textContent).toContain(
-			"agent.connection.opened",
-		);
+		expect(screen.getByTestId("connection-revision").textContent).toBe("2");
+		expect(screen.getByTestId("agent-events").textContent).toBe("[]");
 	});
 
 	it("focus_session.updated reaches subscribers without scheduling board refresh", async () => {

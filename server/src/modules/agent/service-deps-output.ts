@@ -3,7 +3,6 @@ import { realArtifactDeps } from "./artifact-db.js";
 import {
 	deleteCardsForBoard,
 	deleteOutputsForBoard,
-	deleteToolCallsForBoard,
 	selectConversationHistory,
 } from "./board-db.js";
 import type { AgentBoardServiceDeps } from "./service.js";
@@ -17,9 +16,7 @@ export const outputDeps: Pick<
 	| "getArtifact"
 	| "getConversationHistory"
 	| "deleteOutputsForBoard"
-	| "deleteToolCallsForBoard"
 	| "deleteCardsForBoard"
-	| "deleteArtifactForBoard"
 > = {
 	insertOutput: async (data) => {
 		await db
@@ -66,14 +63,9 @@ export const outputDeps: Pick<
 
 	getArtifact: (boardId) => realArtifactDeps.getArtifact(db, boardId),
 
-	deleteArtifactForBoard: (boardId) =>
-		realArtifactDeps.deleteArtifactForBoard(db, boardId),
-
 	getConversationHistory: (boardId) => selectConversationHistory(db, boardId),
 
 	deleteOutputsForBoard: (boardId) => deleteOutputsForBoard(db, boardId),
-
-	deleteToolCallsForBoard: (boardId) => deleteToolCallsForBoard(db, boardId),
 
 	deleteCardsForBoard: (boardId) => deleteCardsForBoard(db, boardId),
 };

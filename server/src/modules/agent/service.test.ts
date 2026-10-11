@@ -766,74 +766,17 @@ describe("intent classification", () => {
 	});
 });
 
-describe("interrupted-board retry", () => {
-	it("claims approved+failed once, then clears stale generated data before retry", async () => {
-		const order: string[] = [];
-		const assertion = vi
-			.spyOn(spendGuard, "assertAgentSpendAllowed")
-			.mockImplementation(() => {
-				order.push("guard");
-			});
-		const approveBoardAtomic = vi.fn(async () => {
-			order.push("claim");
-			return { rowCount: 1 };
-		});
-		const deleteOutputsForBoard = vi.fn(async () => {
-			order.push("outputs");
-		});
-		const deleteToolCallsForBoard = vi.fn(async () => {
-			order.push("tool-calls");
-		});
-		const deleteCardsForBoard = vi.fn(async () => {
-			order.push("cards");
-		});
-		const deleteArtifactForBoard = vi.fn(async () => {
-			order.push("artifact");
-		});
-		const service = createAgentBoardService({
-			getBoard: vi.fn(async () => ({
-				id: 42,
-				status: "approved",
-				executionStatus: "failed",
-				workspaceId: 1,
-				userId: 7,
-				originalIntent: "research",
-			})),
-			approveBoardAtomic,
-			deleteOutputsForBoard,
-			deleteToolCallsForBoard,
-			deleteCardsForBoard,
-			deleteArtifactForBoard,
-		});
-
-		await expect(
-			service.approveBoard({ boardId: 42, userId: 7, workspaceId: 1 }),
-		).resolves.toBeUndefined();
-		expect(order).toEqual([
-			"guard",
-			"claim",
-			"outputs",
-			"tool-calls",
-			"cards",
-			"artifact",
-		]);
-		expect(approveBoardAtomic).toHaveBeenCalledWith(42);
-		expect(deleteOutputsForBoard).toHaveBeenCalledWith(42);
-		expect(deleteToolCallsForBoard).toHaveBeenCalledWith(42);
-		expect(deleteCardsForBoard).toHaveBeenCalledWith(42);
-		expect(deleteArtifactForBoard).toHaveBeenCalledWith(42);
-		assertion.mockRestore();
-	});
-
+describe("approval is pending-only", () => {
 	it.each([
+		"failed",
 		"running",
 		"done",
-	])("does not claim or clean an approved board that is %s", async (executionStatus) => {
-		const approveBoardAtomic = vi.fn(async () => ({ rowCount: 0 }));
+		"idle",
+	])("rejects approved %s without touching persisted data", async (executionStatus) => {
+		const approveBoardAtomic = vi.fn(async () => ({ rowCount: 1 }));
 		const deleteOutputsForBoard = vi.fn();
-		const deleteToolCallsForBoard = vi.fn();
 		const deleteCardsForBoard = vi.fn();
-		const deleteArtifactForBoard = vi.fn();
+		const updateBoard = vi.fn();
 		const service = createAgentBoardService({
 			getBoard: vi.fn(async () => ({
 				id: 42,
@@ -845,82 +788,16 @@ describe("interrupted-board retry", () => {
 			})),
 			approveBoardAtomic,
 			deleteOutputsForBoard,
-			deleteToolCallsForBoard,
 			deleteCardsForBoard,
-			deleteArtifactForBoard,
+			updateBoard,
 		});
-
 		expect(
-			await service.approveBoard({
-				boardId: 42,
-				userId: 7,
-				workspaceId: 1,
-			}),
-		).toMatchObject({ status: 409 });
-		expect(approveBoardAtomic).toHaveBeenCalledOnce();
-		expect(deleteOutputsForBoard).not.toHaveBeenCalled();
-		expect(deleteToolCallsForBoard).not.toHaveBeenCalled();
-		expect(deleteCardsForBoard).not.toHaveBeenCalled();
-		expect(deleteArtifactForBoard).not.toHaveBeenCalled();
-	});
-
-	it("does not clean persisted data when the spend guard denies retry", async () => {
-		vi.spyOn(spendGuard, "assertAgentSpendAllowed").mockImplementation(() => {
-			throw new spendGuard.AgentSpendKillSwitchError();
-		});
-		const approveBoardAtomic = vi.fn(async () => ({ rowCount: 1 }));
-		const deleteOutputsForBoard = vi.fn();
-		const deleteCardsForBoard = vi.fn();
-		const deleteArtifactForBoard = vi.fn();
-		const service = createAgentBoardService({
-			getBoard: vi.fn(async () => ({
-				id: 42,
-				status: "approved",
-				executionStatus: "failed",
-				workspaceId: 1,
-				userId: 7,
-				originalIntent: "research",
-			})),
-			approveBoardAtomic,
-			deleteOutputsForBoard,
-			deleteCardsForBoard,
-			deleteArtifactForBoard,
-		});
-
-		await expect(
-			service.approveBoard({ boardId: 42, userId: 7, workspaceId: 1 }),
-		).rejects.toBeInstanceOf(spendGuard.AgentSpendKillSwitchError);
+			await service.approveBoard({ boardId: 42, userId: 7, workspaceId: 1 }),
+		).toEqual({ status: 409 });
 		expect(approveBoardAtomic).not.toHaveBeenCalled();
 		expect(deleteOutputsForBoard).not.toHaveBeenCalled();
 		expect(deleteCardsForBoard).not.toHaveBeenCalled();
-		expect(deleteArtifactForBoard).not.toHaveBeenCalled();
-	});
-
-	it("restores failed status if stale-data cleanup fails after the claim", async () => {
-		const updateBoard = vi.fn(async () => {});
-		const service = createAgentBoardService({
-			getBoard: vi.fn(async () => ({
-				id: 42,
-				status: "approved",
-				executionStatus: "failed",
-				workspaceId: 1,
-				userId: 7,
-				originalIntent: "research",
-			})),
-			approveBoardAtomic: vi.fn(async () => ({ rowCount: 1 })),
-			deleteOutputsForBoard: vi.fn(async () => {
-				throw new Error("cleanup failed");
-			}),
-			deleteCardsForBoard: vi.fn(),
-			updateBoard,
-		});
-
-		await expect(
-			service.approveBoard({ boardId: 42, userId: 7, workspaceId: 1 }),
-		).rejects.toThrow("cleanup failed");
-		expect(updateBoard).toHaveBeenCalledWith(42, {
-			execution_status: "failed",
-		});
+		expect(updateBoard).not.toHaveBeenCalled();
 	});
 });
 

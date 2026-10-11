@@ -57,6 +57,7 @@ export const boardDeps: Pick<
 				"original_intent",
 				"status",
 				"execution_status",
+				"retry_of_board_id",
 				"created_at",
 			])
 			.where("id", "=", boardId)
@@ -70,6 +71,7 @@ export const boardDeps: Pick<
 			originalIntent: r.original_intent,
 			status: r.status,
 			executionStatus: r.execution_status,
+			retryOfBoardId: r.retry_of_board_id,
 			createdAt: r.created_at.toISOString(),
 		};
 	},
@@ -99,15 +101,7 @@ export const boardDeps: Pick<
 				updated_at: sql`now()`,
 			})
 			.where("id", "=", boardId)
-			.where((eb) =>
-				eb.or([
-					eb("status", "=", "pending"),
-					eb.and([
-						eb("status", "=", "approved"),
-						eb("execution_status", "=", "failed"),
-					]),
-				]),
-			)
+			.where("status", "=", "pending")
 			.executeTakeFirst();
 		return { rowCount: Number(result.numUpdatedRows ?? 0) };
 	},
@@ -121,6 +115,7 @@ export const boardDeps: Pick<
 				"template_id",
 				"status",
 				"execution_status",
+				"retry_of_board_id",
 				"created_at",
 			])
 			.where("workspace_id", "=", workspaceId)
@@ -132,6 +127,7 @@ export const boardDeps: Pick<
 			templateId: r.template_id,
 			status: r.status,
 			executionStatus: r.execution_status,
+			retryOfBoardId: r.retry_of_board_id,
 			createdAt: r.created_at.toISOString(),
 		}));
 	},

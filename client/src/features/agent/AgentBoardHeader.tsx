@@ -1,6 +1,8 @@
 import { Check, Plus } from "lucide-react";
+import { Link } from "react-router";
 import type { AgentBoard } from "../../types";
 import { formatRelativeTime, templateName } from "../../types";
+import type { AgentBoardAttempt } from "./agentBoardTypes";
 
 // ---- Status pill ----
 
@@ -128,7 +130,7 @@ export default function AgentBoardHeader({
 	board,
 	onNewBoard,
 }: {
-	board: AgentBoard;
+	board: AgentBoardAttempt;
 	onNewBoard: () => void;
 }) {
 	return (
@@ -142,6 +144,14 @@ export default function AgentBoardHeader({
 						{templateName(board.templateId)} ·{" "}
 						{formatRelativeTime(board.createdAt)}
 					</p>
+					{board.retryOfBoardId != null && (
+						<Link
+							to={{ search: `?boardId=${board.retryOfBoardId}` }}
+							className="mt-1 inline-block rounded text-xs text-primary-600 hover:text-primary-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+						>
+							Previous attempt
+						</Link>
+					)}
 				</div>
 				<div className="flex shrink-0 items-center gap-2">
 					<StatusPill board={board} />

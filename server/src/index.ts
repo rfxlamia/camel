@@ -7,6 +7,7 @@ import {
 	stopBackgroundJobs,
 } from "./core/background-jobs.js";
 import { createOriginValidator } from "./core/cors.js";
+import { listenAfterRecovery } from "./core/startup.js";
 import { pool } from "./db/pool.js";
 import { connectRedis } from "./db/redis.js";
 import { registerHealthRoutes } from "./lib/health.js";
@@ -36,7 +37,6 @@ import { createChatRouter } from "./modules/chat/index.js";
 import { UPLOADS_DIR } from "./modules/settings/index.js";
 import { shutdownRealtime } from "./realtime.js";
 import { api } from "./routes.js";
-import { listenAfterRecovery } from "./startup.js";
 
 const app = express();
 // Trust the first proxy hop (reverse proxy / LB) so req.ip reflects the real client IP.
