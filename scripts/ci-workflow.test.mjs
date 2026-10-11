@@ -36,15 +36,21 @@ test("path-aware CI has the expected jobs and event filters", () => {
 			workflow.on.pull_request.branches === undefined,
 		"pull_request must not be limited to a base branch",
 	);
+	assert.deepEqual(workflow.on.pull_request?.types, [
+		"opened",
+		"synchronize",
+		"reopened",
+		"edited",
+	]);
 	assert.deepEqual(workflow.on.push.branches, ["main"]);
 	assert.match(workflowText, /dorny\/paths-filter@[0-9a-f]{40} # v3/);
 	assert.deepEqual(workflow.permissions, {
 		contents: "read",
 		"pull-requests": "read",
 	});
-	const filterConfig = yaml.load(
-		jobs.changes.steps.find((step) => step.id === "filter").with.filters,
-	);
+	const filterStep = jobs.changes.steps.find((step) => step.id === "filter");
+	const filterConfig = yaml.load(filterStep.with.filters);
+	assert.equal(filterStep.if, "github.event_name == 'pull_request'");
 	assert.deepEqual(filterConfig, {
 		shared: [
 			"package.json",
@@ -57,8 +63,20 @@ test("path-aware CI has the expected jobs and event filters", () => {
 		],
 		server: ["server/**"],
 		client: ["client/**"],
-		scripts: ["scripts/**", ".husky/**"],
+		scripts: [
+			"scripts/**",
+			".husky/**",
+			"Makefile",
+			"CLAUDE.md",
+			"AGENTS.md",
+			".gitignore",
+		],
+		integration_selector: ["scripts/list-integration-tests.mjs"],
 	});
+	assert.equal(
+		jobs.changes.outputs.integration_selector,
+		"${{ steps.filter.outputs.integration_selector }}",
+	);
 });
 
 test("every worker gates only on changes and forces execution on main pushes", () => {
@@ -84,6 +102,7 @@ test("every worker gates only on changes and forces execution on main pushes", (
 		["server-unit", "server"],
 		["client-unit", "client"],
 		["db-integration", "server"],
+		["db-integration", "integration_selector"],
 		["llm-integration", "server"],
 	]) {
 		assert.match(
