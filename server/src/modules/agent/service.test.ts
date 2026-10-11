@@ -265,6 +265,25 @@ describe("T2 spend denial ordering", () => {
 		expect(assertion).toHaveBeenCalledOnce(); expect(detectReportPeriod).not.toHaveBeenCalled();
 		expect(insertConversation).not.toHaveBeenCalled(); expect(updateBoard).not.toHaveBeenCalled();
 	});
+
+	it("falls back when the no-period assistant message insertion fails", async () => {
+		const fallback = "Which time period should this status report cover?";
+		const insertConversation = vi.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce(new Error("assistant insertion failed"))
+			.mockResolvedValueOnce(undefined);
+		const service = createAgentBoardService({
+			getBoard: vi.fn(async () => ({ id: 11, status: "pending", templateId: "status-report", workspaceId: 1, userId: 7, originalIntent: "report" })),
+			detectReportPeriod: vi.fn(async () => ({ hasPeriod: false, question: "Which quarter?" })),
+			insertConversation,
+		});
+
+		await expect(service.sendMessage({ boardId: 11, userId: 7, workspaceId: 1, message: "report" }))
+			.resolves.toMatchObject({ explanation: fallback, boardUpdated: false });
+		expect(insertConversation).toHaveBeenCalledTimes(3);
+		expect(insertConversation).toHaveBeenNthCalledWith(2, { boardId: 11, role: "assistant", content: "Which quarter?" });
+		expect(insertConversation).toHaveBeenNthCalledWith(3, { boardId: 11, role: "assistant", content: fallback });
+	});
 });
 
 // ---- T1 scaffold: board isolation ----
