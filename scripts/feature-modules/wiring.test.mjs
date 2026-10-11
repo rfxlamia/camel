@@ -116,13 +116,15 @@ describe("Cycle B — Makefile and CI (unit)", () => {
 		);
 	});
 
-	it("ci.yml primary job runs check:feature-modules beside mutation-routing with full checkout", () => {
+	it("ci.yml guards job runs check:feature-modules beside mutation-routing with full checkout", () => {
 		const ci = readFileSync(ciYamlPath, "utf8");
-		const primaryBlock =
-			ci.match(/^ {2}primary:\n([\s\S]*?)^ {2}db-integration:/m)?.[0] ?? "";
-		assert.match(primaryBlock, /npm run check:mutation-routing/);
-		assert.match(primaryBlock, /npm run check:feature-modules/);
-		assert.match(primaryBlock, /fetch-depth:\s*0/);
+		const guardsBlock =
+			ci.match(
+				/^ {2}guards-lint-typecheck:\n([\s\S]*?)^ {2}server-unit:/m,
+			)?.[0] ?? "";
+		assert.match(guardsBlock, /npm run check:mutation-routing/);
+		assert.match(guardsBlock, /npm run check:feature-modules/);
+		assert.match(guardsBlock, /fetch-depth:\s*0/);
 	});
 });
 
