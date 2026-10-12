@@ -5,8 +5,11 @@
 `AGENT_SPEND_KILL_SWITCH` controls whether the server accepts new work that would
 start an agent/LLM request. It is read when the server starts, not dynamically:
 changing `.env.production` alone does not change a running process. The default is
-`false` (off). Set it to `true` in `.env.production` to deny newly entered
-spend-bearing work, or set it back to `false` to allow that work again.
+`false` (off). Values are case-sensitive lowercase strings: use exactly `true`
+or `false`. Any other value (for example `True`) fails configuration validation
+and prevents the server from starting. Set it to `true` in `.env.production` to
+deny newly entered spend-bearing work, or set it back to `false` to allow that
+work again.
 
 Apply either value by recreating the server container from the `deploy/`
 directory:

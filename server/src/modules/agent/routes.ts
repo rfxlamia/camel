@@ -37,7 +37,10 @@ import {
 	createAgentBoardService,
 } from "./service.js";
 import { realDeps } from "./service-deps.js";
-import { AgentSpendKillSwitchError } from "./spend-kill-switch.js";
+import {
+	AGENT_SPEND_KILL_SWITCH_RESPONSE,
+	AgentSpendKillSwitchError,
+} from "./spend-kill-switch.js";
 
 export { buildArtifactDownload, realArtifactDeps } from "./artifact-db.js";
 export {
@@ -60,10 +63,7 @@ function sendSpendKillSwitchError(
 	res: import("express").Response,
 ): boolean {
 	if (!(error instanceof AgentSpendKillSwitchError)) return false;
-	res.status(503).json({
-		error: error.message,
-		code: error.code,
-	});
+	res.status(503).json(AGENT_SPEND_KILL_SWITCH_RESPONSE);
 	return true;
 }
 
@@ -225,12 +225,21 @@ function registerApprove(router: Router, service: AgentService): void {
 
 			// Fire-and-forget execution — client receives progress via SSE
 			const requestId = req.id;
-			service.runPipeline({ boardId, workspaceId }).catch((err) => {
-				logger.error(
-					{ err, boardId, workspaceId, requestId },
-					"agent runPipeline failed",
-				);
-			});
+			void Promise.resolve()
+				.then(() => service.runPipeline({ boardId, workspaceId }))
+				.catch(async (err) => {
+					logger.error(
+						{ err, boardId, workspaceId, requestId },
+						"agent runPipeline failed",
+					);
+					await service.handleRetryLaunchFailure({ boardId, workspaceId });
+				})
+				.catch((err) => {
+					logger.error(
+						{ err, boardId, workspaceId },
+						"agent runPipeline failure recovery failed",
+					);
+				});
 
 			res.json({ ok: true });
 		},

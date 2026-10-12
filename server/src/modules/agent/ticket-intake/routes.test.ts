@@ -35,6 +35,10 @@ const { MockAgentSpendKillSwitchError } = vi.hoisted(() => ({
 	},
 }));
 vi.mock("../spend-kill-switch.js", () => ({
+	AGENT_SPEND_KILL_SWITCH_RESPONSE: {
+		error: "Agent spend is disabled by kill switch",
+		code: "AGENT_SPEND_KILL_SWITCH",
+	},
 	assertAgentSpendAllowed: (...args: unknown[]) =>
 		mockAssertAgentSpendAllowed(...args),
 	AgentSpendKillSwitchError: MockAgentSpendKillSwitchError,
@@ -207,6 +211,47 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 		expect(mockExtractTicketFields).not.toHaveBeenCalled();
 	});
 
+	it("preserves the real chat quota across repeated spend denials", async () => {
+		const limiter =
+			await vi.importActual<typeof import("./rate-limits.js")>(
+				"./rate-limits.js",
+			);
+		limiter.resetRateLimitsForTesting();
+		mockCheckChatLimit.mockImplementation(limiter.checkChatLimit);
+		mockPeekChatLimit.mockImplementation(limiter.peekChatLimit);
+		mockExtractTicketFields.mockResolvedValue({
+			title: "Bug title",
+			description: "Description",
+			expected: "Expected",
+			actual: "Actual",
+			repro: "Repro",
+			type: "Bug",
+		});
+		mockAssertAgentSpendAllowed.mockImplementation(() => {
+			throw new MockAgentSpendKillSwitchError("Spend disabled");
+		});
+
+		const send = () =>
+			request(app)
+				.post("/api/workspaces/1/ticket-intake/chat")
+				.send({
+					message: "More detail",
+					conversationHistory: [{ role: "user", content: "Bug" }],
+				});
+		const denied = await send();
+		const retried = await send();
+		expect(denied.status).toBe(503);
+		expect(retried.status).toBe(503);
+		expect((await limiter.peekChatLimit(1)).isLocked).toBe(false);
+
+		mockAssertAgentSpendAllowed.mockReset();
+		const admitted = await send();
+		const overLimit = await send();
+		expect(admitted.status).toBe(200);
+		expect(overLimit.status).toBe(429);
+		limiter.resetRateLimitsForTesting();
+	});
+
 	it("returns the typed 503 denial before extracting a valid chat turn", async () => {
 		mockExtractTicketFields.mockResolvedValueOnce({
 			title: "Bug title",
@@ -223,20 +268,24 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat", () => {
 			);
 		});
 
-		const res = await request(app)
-			.post("/api/workspaces/1/ticket-intake/chat")
-			.send({
-				message: "More detail",
-				conversationHistory: [{ role: "user", content: "Bug" }],
-			});
+		const send = () =>
+			request(app)
+				.post("/api/workspaces/1/ticket-intake/chat")
+				.send({
+					message: "More detail",
+					conversationHistory: [{ role: "user", content: "Bug" }],
+				});
+		const res = await send();
+		const retry = await send();
 
 		expect(res.status).toBe(503);
+		expect(retry.status).toBe(503);
 		expect(res.body).toEqual({
-			error: "Typed spend-denial message",
+			error: "Agent spend is disabled by kill switch",
 			code: "AGENT_SPEND_KILL_SWITCH",
 		});
-		expect(mockCheckChatLimit).toHaveBeenCalledTimes(1);
-		expect(mockAssertAgentSpendAllowed).toHaveBeenCalledTimes(1);
+		expect(mockCheckChatLimit).not.toHaveBeenCalled();
+		expect(mockAssertAgentSpendAllowed).toHaveBeenCalledTimes(2);
 		expect(mockExtractTicketFields).not.toHaveBeenCalled();
 	});
 
@@ -462,7 +511,7 @@ describe("POST /api/workspaces/:workspaceId/ticket-intake/chat rate limit", () =
 	});
 
 	it("returns 429 with retryAfterMs when chat rate limit is exceeded", async () => {
-		mockCheckChatLimit.mockResolvedValueOnce({
+		mockPeekChatLimit.mockResolvedValueOnce({
 			isLocked: true,
 			retryAfterMs: 5000,
 		});
