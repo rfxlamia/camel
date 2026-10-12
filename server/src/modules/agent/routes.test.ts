@@ -946,6 +946,87 @@ describe("agent HTTP spend guard route characterization", () => {
 		expect(publishEvent).not.toHaveBeenCalled();
 	});
 
+	it("fails the approved board when pipeline startup rejects", async () => {
+		const failRunningBoard = vi.fn().mockResolvedValue(true);
+		const publishEvent = vi.fn(
+			async (_workspaceId, event: Record<string, unknown>) => {
+				if (event.type === "agent.board.generating") {
+					routeTestState.spendKillSwitch = "true";
+				}
+			},
+		);
+		const res = await request(
+			makeApp({
+				getBoard: vi.fn().mockResolvedValue(board),
+				approveBoardAtomic: vi.fn().mockResolvedValue({ rowCount: 1 }),
+				getColumns: vi.fn().mockRejectedValue(new Error("startup failed")),
+				failRunningBoard,
+				publishEvent,
+			}),
+		)
+			.post(`${path}/22/approve`)
+			.send({});
+
+		expect(res.status).toBe(200);
+		await vi.waitFor(() =>
+			expect(failRunningBoard).toHaveBeenCalledWith(22, 11),
+		);
+		expect(publishEvent).toHaveBeenCalledWith(11, {
+			type: "agent.board.failed",
+			boardId: 22,
+		});
+	});
+
+	it("contains regenerate recovery failures without publishing a false terminal event", async () => {
+		const failRunningBoard = vi
+			.fn()
+			.mockRejectedValue(new Error("recovery database unavailable"));
+		const publishEvent = vi.fn(
+			async (_workspaceId, event: Record<string, unknown>) => {
+				if (event.type === "agent.board.generating") {
+					routeTestState.spendKillSwitch = "true";
+				}
+			},
+		);
+		const app = makeApp({
+			getBoard: vi.fn().mockResolvedValue({
+				...board,
+				status: "approved",
+				executionStatus: "done",
+			}),
+			getArtifact: vi.fn().mockResolvedValue(null),
+			getConversationHistory: vi.fn().mockResolvedValue([]),
+			classifyFollowUpIntent: vi.fn().mockResolvedValue({
+				intent: "NEW_DIRECTION",
+				response: "Confirm regenerate?",
+				confidence: 1,
+			}),
+			insertConversation: vi.fn().mockResolvedValue(undefined),
+			updateBoard: vi.fn().mockResolvedValue(undefined),
+			deleteOutputsForBoard: vi.fn().mockResolvedValue(undefined),
+			deleteCardsForBoard: vi.fn().mockResolvedValue(undefined),
+			publishEvent,
+			getColumns: vi.fn().mockRejectedValue(new Error("startup failed")),
+			failRunningBoard,
+		});
+		await request(app)
+			.post(`${path}/22/message`)
+			.send({ message: "New direction" })
+			.expect(200);
+		const confirmed = await request(app)
+			.post(`${path}/22/message`)
+			.send({ action: "confirm_regenerate" });
+
+		expect(confirmed.status).toBe(200);
+		await vi.waitFor(() =>
+			expect(failRunningBoard).toHaveBeenCalledWith(22, 11),
+		);
+		expect(publishEvent).not.toHaveBeenCalledWith(11, {
+			type: "agent.board.failed",
+			boardId: 22,
+		});
+	});
+
 	it("maps approval guard denial and does not start the pipeline", async () => {
 		routeTestState.spendKillSwitch = "true";
 		const approveBoardAtomic = vi.fn();

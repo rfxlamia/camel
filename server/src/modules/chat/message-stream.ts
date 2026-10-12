@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { logger } from "../../lib/logger.js";
 import { sendValidationError } from "../../validators/http.js";
 import {
+	AGENT_SPEND_KILL_SWITCH_RESPONSE,
 	AgentSpendKillSwitchError,
 	assertAgentSpendAllowed,
 } from "../agent/index.js";
@@ -13,6 +14,7 @@ import {
 } from "./message-generation.js";
 import {
 	checkMessageAccess,
+	consumeMessageRateLimit,
 	persistMessageStart,
 	prepareMessageHistory,
 } from "./message-runtime.js";
@@ -48,12 +50,13 @@ export function createPostMessageHandler(service: Service) {
 			);
 			if (!prepared) return;
 			assertAgentSpendAllowed();
+			if (await consumeMessageRateLimit(access.userId, res)) return;
 			setStreamHeaders(res);
 			res.status(200);
 			await streamMessage(service, res, threadId, action, access, prepared);
 		} catch (err) {
 			if (err instanceof AgentSpendKillSwitchError) {
-				res.status(503).json({ error: err.message, code: err.code });
+				res.status(503).json(AGENT_SPEND_KILL_SWITCH_RESPONSE);
 				return;
 			}
 			logger.error({ err, threadId }, "chat postMessage failed");

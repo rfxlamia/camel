@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { checkChatLimit } from "../../lib/chat-rate-limit.js";
+import { checkChatLimit, peekChatLimit } from "../../lib/chat-rate-limit.js";
 import { lookupMembership } from "../../lib/helpers.js";
 import { estimateContextTokens } from "../../lib/llm/run-chat-turn.js";
 import type { resolveChatMessageAction } from "./chat-helpers.js";
@@ -45,18 +45,31 @@ export async function checkMessageAccess(
 		}
 	}
 
-	const rateLimit = await checkChatLimit(userId);
-	if (rateLimit.isLocked) {
+	const existingLimit = await peekChatLimit(userId);
+	if (existingLimit.isLocked) {
 		res.status(429).json({
 			error: "Too many chat messages",
-			...(rateLimit.retryAfterMs !== undefined
-				? { retryAfterMs: rateLimit.retryAfterMs }
+			...(existingLimit.retryAfterMs !== undefined
+				? { retryAfterMs: existingLimit.retryAfterMs }
 				: {}),
 		});
 		return;
 	}
+
 	return { userId, thread, workspaceId };
 }
+export async function consumeMessageRateLimit(userId: number, res: Response) {
+	const rateLimit = await checkChatLimit(userId);
+	if (!rateLimit.isLocked) return false;
+	res.status(429).json({
+		error: "Too many chat messages",
+		...(rateLimit.retryAfterMs !== undefined
+			? { retryAfterMs: rateLimit.retryAfterMs }
+			: {}),
+	});
+	return true;
+}
+
 export async function prepareMessageHistory(
 	service: Service,
 	res: Response,

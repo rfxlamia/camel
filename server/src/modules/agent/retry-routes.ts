@@ -4,7 +4,10 @@ import { logger } from "../../lib/logger.js";
 import { assertWorkspaceMember } from "./membership.js";
 import { parseAgentBoardParams } from "./route-validation.js";
 import type { createAgentBoardService } from "./service.js";
-import { AgentSpendKillSwitchError } from "./spend-kill-switch.js";
+import {
+	AGENT_SPEND_KILL_SWITCH_RESPONSE,
+	AgentSpendKillSwitchError,
+} from "./spend-kill-switch.js";
 
 export function registerRetryRoute(
 	router: Router,
@@ -27,7 +30,7 @@ export function registerRetryRoute(
 				result = await service.retryBoard({ ...params, userId: req.user!.id });
 			} catch (error) {
 				if (error instanceof AgentSpendKillSwitchError) {
-					res.status(503).json({ error: error.message, code: error.code });
+					res.status(503).json(AGENT_SPEND_KILL_SWITCH_RESPONSE);
 					return;
 				}
 				throw error;

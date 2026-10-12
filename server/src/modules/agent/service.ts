@@ -27,7 +27,12 @@ export type {
 
 export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 	const pipeline = createPipeline(deps);
-	const conversation = createBoardConversation(deps, pipeline.runPipeline);
+	const retry = createBoardRetry(deps);
+	const conversation = createBoardConversation(
+		deps,
+		pipeline.runPipeline,
+		retry.handleRetryLaunchFailure,
+	);
 	const queries = createBoardQueries(deps);
 
 	return {
@@ -167,6 +172,6 @@ export function createAgentBoardService(deps: AgentBoardServiceDeps) {
 		...pipeline,
 		...conversation,
 		...queries,
-		...createBoardRetry(deps),
+		...retry,
 	};
 }

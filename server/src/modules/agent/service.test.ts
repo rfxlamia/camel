@@ -3432,7 +3432,7 @@ describe("bug-hunting: multi-turn conversation", () => {
 
 		expect(classifyFollowUpIntent).not.toHaveBeenCalled();
 		expect(result).toMatchObject({
-			explanation: expect.stringContaining("approved and executing"),
+			explanation: expect.stringContaining("Retry"),
 		});
 	});
 

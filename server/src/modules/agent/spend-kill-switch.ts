@@ -1,10 +1,15 @@
 import { config } from "../../config.js";
 
+export const AGENT_SPEND_KILL_SWITCH_RESPONSE = {
+	error: "Agent spend is disabled by kill switch",
+	code: "AGENT_SPEND_KILL_SWITCH",
+} as const;
+
 export class AgentSpendKillSwitchError extends Error {
-	readonly code = "AGENT_SPEND_KILL_SWITCH";
+	readonly code = AGENT_SPEND_KILL_SWITCH_RESPONSE.code;
 
 	constructor() {
-		super("Agent spend is disabled by kill switch");
+		super(AGENT_SPEND_KILL_SWITCH_RESPONSE.error);
 		this.name = "AgentSpendKillSwitchError";
 	}
 }

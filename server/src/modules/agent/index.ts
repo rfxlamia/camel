@@ -14,6 +14,7 @@ export {
 	type FirstCardInfo,
 } from "./service.js";
 export {
+	AGENT_SPEND_KILL_SWITCH_RESPONSE,
 	AgentSpendKillSwitchError,
 	assertAgentSpendAllowed,
 } from "./spend-kill-switch.js";

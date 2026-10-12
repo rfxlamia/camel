@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockRunChatTurn = vi.fn();
 const mockCheckChatLimit = vi.fn();
+const mockPeekChatLimit = vi.fn();
 const routeTestConfig = {
 	AGENT_SPEND_KILL_SWITCH: undefined as string | undefined,
 };
@@ -31,6 +32,7 @@ vi.mock("../../config.js", () => ({
 
 vi.mock("../../lib/chat-rate-limit.js", () => ({
 	checkChatLimit: (...args: unknown[]) => mockCheckChatLimit(...args),
+	peekChatLimit: (...args: unknown[]) => mockPeekChatLimit(...args),
 }));
 
 vi.mock("../../auth.js", () => ({
@@ -81,6 +83,7 @@ describe("chat routes (mocked service + LLM)", () => {
 		);
 		vi.mocked(estimateContextTokens).mockReturnValue(100);
 		mockCheckChatLimit.mockResolvedValue({ isLocked: false });
+		mockPeekChatLimit.mockResolvedValue({ isLocked: false });
 		mockService.listThreads.mockResolvedValue([{ id: 1, title: "Untitled" }]);
 		mockService.createThread.mockResolvedValue({ id: 2, title: "Untitled" });
 		mockService.getThread.mockResolvedValue({
@@ -222,7 +225,7 @@ describe("chat routes (mocked service + LLM)", () => {
 	});
 
 	it("returns 429 when chat rate limit exceeded", async () => {
-		mockCheckChatLimit.mockResolvedValue({
+		mockPeekChatLimit.mockResolvedValue({
 			isLocked: true,
 			retryAfterMs: 5000,
 		});
@@ -318,6 +321,12 @@ describe("chat routes (mocked service + LLM)", () => {
 
 	it("rejects enabled valid send with exact JSON before stream or persistence", async () => {
 		routeTestConfig.AGENT_SPEND_KILL_SWITCH = "true";
+		const limiter = await vi.importActual<
+			typeof import("../../lib/chat-rate-limit.js")
+		>("../../lib/chat-rate-limit.js");
+		limiter.resetChatLimitForTesting();
+		mockCheckChatLimit.mockImplementation(limiter.checkChatLimit);
+		mockPeekChatLimit.mockImplementation(limiter.peekChatLimit);
 		mockRunChatTurn.mockResolvedValue({
 			output: "ok",
 			thinking: "",
@@ -326,23 +335,34 @@ describe("chat routes (mocked service + LLM)", () => {
 		mockService.insertMessage
 			.mockResolvedValueOnce({ id: 30, role: "user", content: "Hi" })
 			.mockResolvedValueOnce({ id: 31, role: "assistant", content: "" });
-
-		const res = await request(app)
-			.post("/api/chat/threads/1/messages")
-			.send({ message: "Hi", workspaceId: 7 });
+		const send = () =>
+			request(app)
+				.post("/api/chat/threads/1/messages")
+				.send({ message: "Hi", workspaceId: 7 });
+		const res = await send();
+		const retry = await send();
 
 		expect(res.status).toBe(503);
+		expect(retry.status).toBe(503);
 		expect(res.body).toEqual({
 			error: "Agent spend is disabled by kill switch",
 			code: "AGENT_SPEND_KILL_SWITCH",
 		});
 		expect(res.headers["content-type"]).not.toMatch(/application\/x-ndjson/);
 		expect(mockService.getThread).toHaveBeenCalled();
-		expect(mockCheckChatLimit).toHaveBeenCalled();
+		expect(mockCheckChatLimit).not.toHaveBeenCalled();
 		expect(mockService.getMessages).toHaveBeenCalled();
 		expect(mockService.insertMessage).not.toHaveBeenCalled();
 		expect(mockService.deleteMessage).not.toHaveBeenCalled();
 		expect(mockRunChatTurn).not.toHaveBeenCalled();
+		expect((await limiter.peekChatLimit(1)).isLocked).toBe(false);
+
+		routeTestConfig.AGENT_SPEND_KILL_SWITCH = undefined;
+		const admitted = await send();
+		const overLimit = await send();
+		expect(admitted.status).toBe(200);
+		expect(overLimit.status).toBe(429);
+		limiter.resetChatLimitForTesting();
 	});
 
 	it("rejects enabled valid retry with exact JSON before stream or persistence", async () => {
@@ -379,7 +399,7 @@ describe("chat routes (mocked service + LLM)", () => {
 		});
 		expect(res.headers["content-type"]).not.toMatch(/application\/x-ndjson/);
 		expect(mockService.getThread).toHaveBeenCalled();
-		expect(mockCheckChatLimit).toHaveBeenCalled();
+		expect(mockCheckChatLimit).not.toHaveBeenCalled();
 		expect(mockService.getMessages).toHaveBeenCalled();
 		expect(mockService.getMessage).toHaveBeenCalledWith(1, 11);
 		expect(mockService.insertMessage).not.toHaveBeenCalled();
@@ -434,7 +454,7 @@ describe("chat routes (mocked service + LLM)", () => {
 		});
 
 		it("returns locked-rate-limit 429 before spend denial", async () => {
-			mockCheckChatLimit.mockResolvedValue({
+			mockPeekChatLimit.mockResolvedValue({
 				isLocked: true,
 				retryAfterMs: 5000,
 			});

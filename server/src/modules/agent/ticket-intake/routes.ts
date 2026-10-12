@@ -8,6 +8,7 @@ import {
 	trimmedRequired,
 } from "../../../validators/schemas.js";
 import {
+	AGENT_SPEND_KILL_SWITCH_RESPONSE,
 	AgentSpendKillSwitchError,
 	assertAgentSpendAllowed,
 } from "../spend-kill-switch.js";
@@ -89,8 +90,11 @@ async function respondWithChatExtraction(
 async function rejectLockedChat(
 	userId: number,
 	res: Response,
+	consume = false,
 ): Promise<boolean> {
-	const rateLimit = await checkChatLimit(userId);
+	const rateLimit = consume
+		? await checkChatLimit(userId)
+		: await peekChatLimit(userId);
 	if (rateLimit.isLocked) {
 		res.status(429).json({
 			error: "Too many chat messages",
@@ -169,11 +173,10 @@ ticketIntakeRouter.post(
 			assertAgentSpendAllowed();
 		} catch (error) {
 			if (!(error instanceof AgentSpendKillSwitchError)) throw error;
-			return res.status(503).json({
-				error: error.message,
-				code: error.code,
-			});
+			return res.status(503).json(AGENT_SPEND_KILL_SWITCH_RESPONSE);
 		}
+
+		if (await rejectLockedChat(req.user!.id, res, true)) return;
 
 		return respondWithChatExtraction(
 			res,
