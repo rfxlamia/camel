@@ -47,6 +47,7 @@ export function BoardPageSurface({
 		onAddCard,
 		onAddColumn,
 		onApplyTemplate,
+		onDeleteColumn,
 		onStartBlank,
 		onUpdateColumn,
 		pickerState,
@@ -119,6 +120,7 @@ export function BoardPageSurface({
 												onOpenCard={onOpenCard}
 												onAddCard={onAddCard}
 												onUpdateColumn={onUpdateColumn}
+												onDeleteColumn={onDeleteColumn}
 											/>
 										</div>
 									))}

@@ -33,6 +33,7 @@ describe("api compatibility surface", () => {
 				"declineInvite",
 				"deleteCard",
 				"deleteCardAttachment",
+				"deleteColumn",
 				"deleteTrackerItem",
 				"deleteTrackerPhase",
 				"deleteTrackerProject",
@@ -430,6 +431,12 @@ describe("scoped board API paths", () => {
 		const moveBody = JSON.parse((moveCall![1] as RequestInit).body as string);
 		expect(moveBody).toEqual({ toColumnId: 2, index: 3, version: 3 });
 		expect(moveBody).not.toHaveProperty("position");
+
+		await api.deleteColumn(7, 5);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/columns/5",
+			expect.objectContaining({ method: "DELETE" }),
+		);
 	});
 });
 
