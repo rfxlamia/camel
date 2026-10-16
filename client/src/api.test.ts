@@ -59,6 +59,7 @@ describe("api compatibility surface", () => {
 				"getWorkItemChangelog",
 				"getWorkspaceMembers",
 				"getWorkspaces",
+				"leaveWorkspace",
 				"heartbeat",
 				"listActiveMyWorkCandidates",
 				"listMyWork",
@@ -516,6 +517,7 @@ describe("workspace API methods", () => {
 			previousOwnerRole: "admin",
 		});
 		await api.deleteWorkspace(7);
+		await api.leaveWorkspace(7);
 
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces",
@@ -563,6 +565,10 @@ describe("workspace API methods", () => {
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/workspaces/7",
 			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/workspaces/7/leave",
+			expect.objectContaining({ method: "POST" }),
 		);
 	});
 });

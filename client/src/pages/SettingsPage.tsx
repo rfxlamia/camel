@@ -3,6 +3,7 @@ import { ApiError, api } from "../api";
 import {
 	canEditWorkspaceSettings,
 	getWorkspaceDangerZoneState,
+	LeaveWorkspaceSection,
 	LogoCropper,
 	ManageMembersSection,
 	validateBoardName,
@@ -480,6 +481,12 @@ export default function SettingsPage() {
 						onMembersChanged={() => void reloadWorkspaces()}
 						showToast={showToast}
 					/>
+				</SettingsSection>
+			)}
+
+			{activeWorkspace && activeWorkspace.role !== "owner" && (
+				<SettingsSection title="Leave workspace">
+					<LeaveWorkspaceSection />
 				</SettingsSection>
 			)}
 
