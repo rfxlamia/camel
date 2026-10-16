@@ -3,6 +3,7 @@ import type {
 	Workspace,
 	WorkspaceListResponse,
 	WorkspaceMember,
+	WorkspacePendingInvite,
 } from "../../types";
 
 export function createWorkspacesApi(request: ApiRequest) {
@@ -22,9 +23,15 @@ export function createWorkspacesApi(request: ApiRequest) {
 			}),
 
 		getWorkspaceMembers: (workspaceId: number) =>
-			request<{ members: WorkspaceMember[] }>(
-				`/workspaces/${workspaceId}/members`,
-			),
+			request<{
+				members: WorkspaceMember[];
+				invites?: WorkspacePendingInvite[];
+			}>(`/workspaces/${workspaceId}/members`),
+
+		cancelWorkspaceInvite: (workspaceId: number, inviteId: number) =>
+			request<void>(`/workspaces/${workspaceId}/invites/${inviteId}`, {
+				method: "DELETE",
+			}),
 
 		addWorkspaceMember: (
 			workspaceId: number,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../../db/kysely.js";
 import { domainBus, EVENTS } from "../../events.js";
+import { checkActorCanManage, lookupMembership } from "../../lib/helpers.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { INVITE_PARAMS_MESSAGE, inviteParams } from "./workspace-params.js";
 export const invitesRouter = Router({ mergeParams: true });
@@ -132,13 +133,26 @@ invitesRouter.delete("/invites/:inviteId", async (req, res) => {
 	if (!parsedParams.ok) return sendValidationError(res, parsedParams.body);
 	const { workspaceId, inviteId } = parsedParams.data;
 
+	// Receiver-side decline first: unchanged behavior for the invited user.
 	const result = await db
 		.deleteFrom("workspace_invites")
 		.where("id", "=", inviteId)
 		.where("workspace_id", "=", workspaceId)
 		.where("username", "=", req.user!.username as string)
 		.executeTakeFirst();
-	if (Number(result.numDeletedRows) === 0)
+	if (Number(result.numDeletedRows) > 0) return res.status(204).end();
+
+	// Otherwise allow an owner/admin to cancel any pending invite.
+	const role = await lookupMembership(req.user!.id, workspaceId);
+	const manage = checkActorCanManage(role ?? "");
+	if (!manage.allowed) return res.status(404).json({ error: "Not found" });
+
+	const adminResult = await db
+		.deleteFrom("workspace_invites")
+		.where("id", "=", inviteId)
+		.where("workspace_id", "=", workspaceId)
+		.executeTakeFirst();
+	if (Number(adminResult.numDeletedRows) === 0)
 		return res.status(404).json({ error: "Not found" });
 	res.status(204).end();
 });
