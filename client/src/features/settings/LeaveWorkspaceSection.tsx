@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../../api";
 import { useShowToast } from "../../shared/ToastContext";
 import { useWorkspace } from "../../shared/WorkspaceContext";
+import { SettingsSection } from "./SettingsSection";
 
 export default function LeaveWorkspaceSection() {
 	const {
@@ -53,7 +54,7 @@ export default function LeaveWorkspaceSection() {
 	}
 
 	return (
-		<>
+		<SettingsSection title="Leave workspace">
 			<p className="text-sm text-neutral-600">
 				You will lose access to this workspace and its boards. You can only
 				rejoin if someone invites you again.
@@ -110,6 +111,6 @@ export default function LeaveWorkspaceSection() {
 					</div>
 				</div>
 			)}
-		</>
+		</SettingsSection>
 	);
 }

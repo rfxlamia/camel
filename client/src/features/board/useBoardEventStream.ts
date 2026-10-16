@@ -94,6 +94,7 @@ export function useBoardEventStream({
 					workspaceId?: number;
 					workspaceName?: string;
 					role?: string;
+					reason?: string;
 				};
 				if (
 					data.type === "membership.role_changed" &&
@@ -109,6 +110,10 @@ export function useBoardEventStream({
 					data.workspaceId !== undefined &&
 					data.workspaceName
 				) {
+					// Self-leave: the API call's own handler reloads and switches, so
+					// the SSE echo must not also fire the removal redirect (double
+					// toast + racing switches).
+					if (data.reason === "left") return;
 					const membershipEvent: Parameters<MembershipEventHandler>[0] = {
 						type: "membership.removed",
 						userId: data.userId,
