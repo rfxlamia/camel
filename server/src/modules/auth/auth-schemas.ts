@@ -37,6 +37,12 @@ export const passwordSchema = z.custom<string>(
 	{ error: PASSWORD_MESSAGE },
 );
 
+/** change-password: the current password must be present to be compared. */
+export const currentPasswordSchema = z.custom<string>(
+	(value) => typeof value === "string" && value.length > 0,
+	{ error: "Current password is required." },
+);
+
 /**
  * Register display name. Wraps `validateDisplayName` and surfaces that
  * validator's own error string. Empty input stays valid with `undefined`.

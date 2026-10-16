@@ -81,6 +81,7 @@ describe("api compatibility surface", () => {
 				"reorderTrackerItem",
 				"reorderWorkItem",
 				"sendAgentBoardMessage",
+				"changePassword",
 				"setPassword",
 				"setUsername",
 				"startOAuth",
@@ -165,6 +166,29 @@ describe("shared request boundary", () => {
 		expect(mockFetch).toHaveBeenCalledWith(
 			"/api/auth/sign-in/social",
 			expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+		);
+	});
+
+	it("changePassword posts current and new password to /auth/change-password", async () => {
+		mockFetch.mockClear();
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ ok: true }),
+		});
+		const { api } = await import("./api");
+
+		await api.changePassword("current-pass", "new-password-123");
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"/api/auth/change-password",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({
+					currentPassword: "current-pass",
+					newPassword: "new-password-123",
+				}),
+			}),
 		);
 	});
 

@@ -1,5 +1,5 @@
 import type { ApiRequest } from "../../shared/apiRequest";
-import type { User } from "../../types";
+import type { User } from "./user";
 
 export function createAuthApi(request: ApiRequest) {
 	return {
@@ -29,6 +29,12 @@ export function createAuthApi(request: ApiRequest) {
 			request<{ ok: boolean }>("/auth/set-password", {
 				method: "POST",
 				body: JSON.stringify({ password }),
+			}),
+
+		changePassword: (currentPassword: string, newPassword: string) =>
+			request<{ ok: boolean }>("/auth/change-password", {
+				method: "POST",
+				body: JSON.stringify({ currentPassword, newPassword }),
 			}),
 
 		startOAuth: async (provider: "google" | "github") => {
