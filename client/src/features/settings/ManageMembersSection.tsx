@@ -33,6 +33,9 @@ export default function ManageMembersSection({
 	const [pendingRemove, setPendingRemove] = useState<WorkspaceMember | null>(
 		null,
 	);
+	const [pendingTransfer, setPendingTransfer] =
+		useState<WorkspaceMember | null>(null);
+	const [transferring, setTransferring] = useState(false);
 	const [removing, setRemoving] = useState(false);
 	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
 	const isFirstLoad = useRef(true);
@@ -77,6 +80,46 @@ export default function ManageMembersSection({
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [pendingRemove]);
+
+	useEffect(() => {
+		if (!pendingTransfer) return;
+		function onKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape") setPendingTransfer(null);
+		}
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [pendingTransfer]);
+
+	async function handleConfirmTransfer() {
+		if (!pendingTransfer) return;
+		setTransferring(true);
+		try {
+			await api.transferWorkspaceOwnership(workspaceId, {
+				newOwnerId: pendingTransfer.userId,
+				previousOwnerRole: "admin",
+			});
+			setMembers((prev) =>
+				prev.map((m) => {
+					if (m.userId === pendingTransfer.userId)
+						return { ...m, role: "owner" as const };
+					if (m.userId === currentUserId)
+						return { ...m, role: "admin" as const };
+					return m;
+				}),
+			);
+			showToast("Ownership transferred", "success");
+			onMembersChanged?.();
+		} catch (err: unknown) {
+			const msg =
+				err instanceof ApiError
+					? err.message
+					: "Couldn't transfer ownership. Try again.";
+			showToast(msg, "error");
+		} finally {
+			setTransferring(false);
+			setPendingTransfer(null);
+		}
+	}
 
 	async function handleRoleChange(
 		member: WorkspaceMember,
@@ -170,6 +213,7 @@ export default function ManageMembersSection({
 					const isOwnerRow = member.role === "owner";
 					const showRemove = canRemove && !isSelf && !isOwnerRow;
 					const showRoleDropdown = canChangeRole && !isOwnerRow;
+					const showTransferOwnership = canChangeRole && !isSelf && !isOwnerRow;
 
 					return (
 						<li
@@ -210,6 +254,15 @@ export default function ManageMembersSection({
 								<span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
 									{roleLabel(member.role)}
 								</span>
+							)}
+							{showTransferOwnership && (
+								<button
+									type="button"
+									onClick={() => setPendingTransfer(member)}
+									className="shrink-0 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+								>
+									Make owner
+								</button>
 							)}
 							{showRemove && (
 								<button
@@ -263,6 +316,51 @@ export default function ManageMembersSection({
 								className="flex-1 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
 							>
 								{removing ? "Removing..." : "Remove"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{pendingTransfer && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="confirm-transfer-ownership-title"
+					onClick={() => setPendingTransfer(null)}
+				>
+					<div
+						className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg"
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
+					>
+						<p
+							id="confirm-transfer-ownership-title"
+							className="font-medium text-neutral-800"
+						>
+							Transfer ownership to {pendingTransfer.displayName}?
+						</p>
+						<p className="mt-1 text-sm text-neutral-500">
+							They will own this workspace and its settings. You will become an
+							admin.
+						</p>
+						<div className="mt-4 flex gap-2">
+							<button
+								type="button"
+								onClick={() => setPendingTransfer(null)}
+								className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => void handleConfirmTransfer()}
+								disabled={transferring}
+								aria-label="Confirm transfer"
+								className="flex-1 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+							>
+								{transferring ? "Transferring..." : "Transfer"}
 							</button>
 						</div>
 					</div>
