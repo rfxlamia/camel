@@ -13,6 +13,7 @@ import { seedTrackerVocabulary } from "../../core/tracker-vocabulary-seed.js";
 import { db } from "../../db/kysely.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import {
+	currentPasswordSchema,
 	displayNameSchema,
 	loginCredentialsSchema,
 	passwordSchema,
@@ -60,7 +61,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 						display_name: name,
 						password_hash: hash,
 					})
-					.returning(["id", "username", "display_name"])
+					.returning(["id", "username", "display_name", "password_hash"])
 					.executeTakeFirstOrThrow();
 				const user = toUser(inserted);
 
@@ -179,6 +180,62 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 			await db.deleteFrom("sessions").where("token", "=", token).execute();
 		res.clearCookie(SESSION_COOKIE, { path: "/" });
 		res.status(204).end();
+	});
+
+	auth.post("/change-password", requireAuth, async (req, res) => {
+		if (!req.user)
+			return res.status(401).json({ error: "authentication required" });
+		const { currentPassword, newPassword } = req.body ?? {};
+		const parsedCurrent = parseWith(currentPasswordSchema, currentPassword);
+		if (!parsedCurrent.ok) return sendValidationError(res, parsedCurrent.body);
+		const parsedNew = parseWith(passwordSchema, newPassword);
+		if (!parsedNew.ok) return sendValidationError(res, parsedNew.body);
+
+		const row = await db
+			.selectFrom("users")
+			.select("password_hash")
+			.where("id", "=", req.user.id)
+			.executeTakeFirst();
+		if (!row || row.password_hash === null) {
+			return res
+				.status(409)
+				.json({ error: "No password set. Use set-password instead." });
+		}
+		const currentOk = await bcrypt.compare(
+			parsedCurrent.data,
+			row.password_hash,
+		);
+		if (!currentOk) {
+			return res.status(403).json({ error: "Current password is incorrect." });
+		}
+
+		const hash = await bcrypt.hash(parsedNew.data, BCRYPT_ROUNDS);
+		// Conditional on the old hash: closes the TOCTOU window between the
+		// compare above and this write — a concurrent change-password must not
+		// be silently overwritten with a hash of a stale current password.
+		const updated = await db
+			.updateTable("users")
+			.set({ password_hash: hash })
+			.where("id", "=", req.user.id)
+			.where("password_hash", "=", row.password_hash)
+			.returning("id")
+			.executeTakeFirst();
+		if (!updated) {
+			return res
+				.status(409)
+				.json({ error: "Password was changed recently — try again." });
+		}
+
+		// Revoke every other session: a password change should log out devices
+		// the user is not holding right now.
+		const presented = req.cookies?.[SESSION_COOKIE];
+		await db
+			.deleteFrom("sessions")
+			.where("user_id", "=", req.user.id)
+			.where("token", "!=", presented ?? "")
+			.execute();
+
+		res.json({ ok: true });
 	});
 
 	auth.get("/me", requireAuth, (req, res) => {

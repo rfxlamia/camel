@@ -11,6 +11,8 @@ export interface AuthUser {
 	email: string | null;
 	emailVerified: boolean;
 	needsUsername: boolean;
+	/** Present on /auth/me — whether the account has a local password to change. */
+	hasPassword?: boolean;
 }
 
 export interface PendingInvite {
@@ -64,6 +66,7 @@ export function toUser(row: {
 	display_name: string;
 	email?: string | null;
 	email_verified?: boolean;
+	password_hash?: string | null;
 }): AuthUser {
 	return {
 		id: row.id,
@@ -72,6 +75,9 @@ export function toUser(row: {
 		email: row.email ?? null,
 		emailVerified: row.email_verified ?? false,
 		needsUsername: row.username === null,
+		...(row.password_hash !== undefined && {
+			hasPassword: row.password_hash !== null,
+		}),
 	};
 }
 
@@ -174,6 +180,7 @@ export async function requireAuth(
 				"u.display_name",
 				"u.email",
 				"u.email_verified",
+				"u.password_hash",
 			])
 			.where("s.token", "=", token)
 			.where("s.expires_at", ">", sql<Date>`now()`)

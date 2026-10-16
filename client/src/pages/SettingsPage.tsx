@@ -5,7 +5,7 @@ import {
 	InviteMemberSection,
 	LeaveWorkspaceSection,
 	ManageMembersSection,
-	RecoveryPasswordSection,
+	PasswordSettings,
 	SettingsSection,
 	WorkspaceIdentitySection,
 } from "../features/settings";
@@ -62,7 +62,7 @@ export default function SettingsPage() {
 
 			<WorkspaceIdentitySection />
 
-			<RecoveryPasswordSection />
+			<PasswordSettings />
 
 			<DangerZoneSection />
 		</div>
