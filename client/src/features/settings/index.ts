@@ -1,5 +1,6 @@
 import { createSettingsApi } from "./settingsApi";
 
+export { default as LeaveWorkspaceSection } from "./LeaveWorkspaceSection";
 // Load transport factories before UI re-exports, which can import the facade.
 export { default as LogoCropper } from "./LogoCropper";
 export {

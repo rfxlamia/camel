@@ -6,7 +6,11 @@ import {
 	type AttachmentPair,
 	getAttachmentStorage,
 } from "../../lib/attachment-storage.js";
-import { lookupMembership, serializeWorkspaceList } from "../../lib/helpers.js";
+import {
+	lookupMembership,
+	serializeWorkspaceList,
+	workspaceAccessService,
+} from "../../lib/helpers.js";
 import { lockWorkspaceMutation } from "../../lib/workspace-mutation-lock.js";
 import { parseWith, sendValidationError } from "../../validators/http.js";
 import { intField, workspaceIdParam } from "../../validators/schemas.js";
@@ -219,6 +223,22 @@ workspacesRouter.delete("/:workspaceId", async (req, res) => {
 		getAttachmentStorage(),
 		result.attachmentPairs,
 	);
+	res.status(204).end();
+});
+
+workspacesRouter.post("/:workspaceId/leave", async (req, res) => {
+	const parsedId = parseWith(workspaceIdParam, req.params.workspaceId);
+	if (!parsedId.ok) return sendValidationError(res, parsedId.body);
+	const workspaceId = parsedId.data;
+
+	const result = await workspaceAccessService.leaveMember({
+		userId: req.user!.id,
+		actor: req.user!,
+		workspaceId,
+	});
+	if (result.status !== 204) {
+		return res.status(result.status).json({ error: result.error });
+	}
 	res.status(204).end();
 });
 
