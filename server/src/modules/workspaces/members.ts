@@ -36,11 +36,37 @@ membersRouter.get("/members", async (req, res) => {
 		.orderBy("u.username")
 		.execute();
 
+	// Pending invites are only exposed to owners/admins (the people who can
+	// act on them) — plain members get the same response shape as before.
+	const canManage = checkActorCanManage(role);
+	if (!canManage.allowed) {
+		return res.json({
+			members: rows.map((row) => ({
+				userId: row.user_id,
+				username: row.username,
+				displayName: row.display_name,
+				role: row.role,
+			})),
+		});
+	}
+
+	const inviteRows = await db
+		.selectFrom("workspace_invites")
+		.select(["id", "username", "role"])
+		.where("workspace_id", "=", workspaceId)
+		.orderBy("created_at")
+		.execute();
+
 	res.json({
 		members: rows.map((row) => ({
 			userId: row.user_id,
 			username: row.username,
 			displayName: row.display_name,
+			role: row.role,
+		})),
+		invites: inviteRows.map((row) => ({
+			id: row.id,
+			username: row.username,
 			role: row.role,
 		})),
 	});
