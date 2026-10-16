@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { type RequestHandler, Router } from "express";
+import { type Request, type RequestHandler, Router } from "express";
 import {
 	BCRYPT_ROUNDS,
 	createSignupWorkspacePlan,
@@ -22,8 +22,29 @@ import {
 } from "./auth-schemas.js";
 import {
 	accountLockoutMiddleware,
+	checkAndRecordPasswordChangeAttempt,
 	clearLoginFailures,
+	clearPasswordChangeFailures,
+	isPasswordChangeLockedOut,
 } from "./login-limiter.js";
+
+/**
+ * Delete the session presented on the request. Used when change-password hits
+ * the per-user lockout: the cookie that was guessing the current password
+ * loses access instead of being able to keep trying against the lockout window.
+ */
+async function killPresentedSession(
+	req: Request,
+	userId: number,
+): Promise<void> {
+	const presented = req.cookies?.[SESSION_COOKIE];
+	if (!presented) return;
+	await db
+		.deleteFrom("sessions")
+		.where("user_id", "=", userId)
+		.where("token", "=", presented)
+		.execute();
+}
 
 export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 	const auth = Router();
@@ -191,6 +212,15 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		const parsedNew = parseWith(passwordSchema, newPassword);
 		if (!parsedNew.ok) return sendValidationError(res, parsedNew.body);
 
+		// Same brute-force policy as /login: a stolen session cookie must not be
+		// able to guess the current password indefinitely.
+		if (await isPasswordChangeLockedOut(req.user.id)) {
+			await killPresentedSession(req, req.user.id);
+			return res.status(429).json({
+				error: "Too many failed attempts — please try again later.",
+			});
+		}
+
 		const row = await db
 			.selectFrom("users")
 			.select("password_hash")
@@ -206,7 +236,19 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 			row.password_hash,
 		);
 		if (!currentOk) {
+			const locked = await checkAndRecordPasswordChangeAttempt(req.user.id);
+			if (locked) {
+				await killPresentedSession(req, req.user.id);
+				return res.status(429).json({
+					error: "Too many failed attempts — please try again later.",
+				});
+			}
 			return res.status(403).json({ error: "Current password is incorrect." });
+		}
+		if (await bcrypt.compare(parsedNew.data, row.password_hash)) {
+			return sendValidationError(res, {
+				error: "New password must be different from the current password.",
+			});
 		}
 
 		const hash = await bcrypt.hash(parsedNew.data, BCRYPT_ROUNDS);
@@ -225,6 +267,18 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 				.status(409)
 				.json({ error: "Password was changed recently — try again." });
 		}
+
+		await clearPasswordChangeFailures(req.user.id);
+
+		// Audit trail without secrets — lets an incident review correlate this
+		// change with the session revocations below.
+		await db
+			.insertInto("auth_audit")
+			.values({
+				actor_id: req.user.id,
+				event_type: "password_changed",
+			})
+			.execute();
 
 		// Revoke every other session: a password change should log out devices
 		// the user is not holding right now.

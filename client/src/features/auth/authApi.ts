@@ -1,5 +1,5 @@
 import type { ApiRequest } from "../../shared/apiRequest";
-import type { User } from "../../types";
+import type { User } from "./user";
 
 export function createAuthApi(request: ApiRequest) {
 	return {

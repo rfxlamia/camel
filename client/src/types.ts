@@ -1,536 +1,83 @@
-export interface CardAssignee {
-	id: number;
-	username: string;
-	displayName: string;
-}
-
-export interface CardAttachment {
-	id: number;
-	thumbnailUrl: string;
-	originalUrl: string;
-	downloadUrl: string;
-	mimeType: string;
-	createdAt: string;
-}
-
-export interface Card {
-	id: number;
-	key?: string | null;
-	columnId: number;
-	title: string;
-	description: string;
-	position: number;
-	version: number;
-	createdAt: string;
-	updatedAt: string;
-	startedAt: string | null;
-	doneAt: string | null;
-	// Calendar date "YYYY-MM-DD" (no time-of-day) or null when unset.
-	dueDate: string | null;
-	status?: TrackerVocabulary | null;
-	priority?: TrackerVocabulary | null;
-	labels?: TrackerVocabulary[];
-	projectId?: number | null;
-	projectName?: string | null;
-	phaseId?: number | null;
-	phaseName?: string | null;
-	assignees: CardAssignee[];
-	attachments?: CardAttachment[];
-	workspaceId?: number;
-}
-
-export interface User {
-	id: number;
-	username: string | null;
-	displayName: string;
-	emailVerified: boolean;
-	needsUsername: boolean;
-	/** Present on /auth/me — whether the account has a local password to change. */
-	hasPassword?: boolean;
-}
-
-export interface PresenceUser extends User {
-	lastSeen: string;
-}
-
-export interface AttachmentActivityPayload {
-	attachmentId: number;
-	mimeType: string;
-	createdAt: string;
-}
-
-export interface ActivityEvent {
-	id: number;
-	type:
-		| "create"
-		| "update"
-		| "move"
-		| "delete"
-		| "attachment_added"
-		| "attachment_removed";
-	cardId: number | null;
-	cardTitle: string | null;
-	fromColumn: string | null;
-	toColumn: string | null;
-	actor: { username: string; displayName: string } | null;
-	createdAt: string;
-	payload?: AttachmentActivityPayload | null;
-}
-
-export type BoardEventType =
-	| "card.created"
-	| "card.updated"
-	| "card.moved"
-	| "card.reordered"
-	| "card.deleted"
-	| "attachment.added"
-	| "attachment.removed"
-	| "column.created"
-	| "column.updated"
-	| "column.deleted"
-	| "presence.changed"
-	| "settings.updated"
-	| "membership.removed"
-	| "membership.role_changed"
-	| "agent.board.generating"
-	| "agent.board.ready"
-	| "agent.board.failed"
-	| "agent.card.started"
-	| "agent.card.token"
-	| "agent.card.done"
-	| "agent.card.failed"
-	| "agent.card.thinking"
-	| "agent.tool.started"
-	| "agent.tool.result"
-	| "agent.tool.failed"
-	| "ticket_intake.submit_result"
-	| "tracker.created"
-	| "tracker.updated"
-	| "tracker.deleted"
-	| "tracker.vocabulary.created"
-	| "tracker.project.created"
-	| "tracker.project.updated"
-	| "tracker.project.deleted"
-	| "tracker.phase.created"
-	| "tracker.phase.updated"
-	| "tracker.phase.deleted"
-	| "focus_session.updated";
-
-export interface BoardEvent {
-	type: BoardEventType;
-	actor: User;
-	cardId?: number;
-	at: string;
-	payload?: AttachmentActivityPayload;
-}
-
-// ---- Agent Template Names (shared across components) ----
-
-export const TEMPLATE_NAMES: Record<string, string> = {
-	"research-report": "Research & Report",
-	"status-report": "Status Report",
-};
-
-export function templateName(templateId: string): string {
-	return TEMPLATE_NAMES[templateId] ?? templateId;
-}
-
-export function formatRelativeTime(iso: string): string {
-	const ms = Date.now() - new Date(iso).getTime();
-	const minute = 60 * 1000;
-	const hour = 60 * minute;
-	const day = 24 * hour;
-	if (ms < minute) return "just now";
-	if (ms < hour) return `${Math.floor(ms / minute)}m ago`;
-	if (ms < day) return `${Math.floor(ms / hour)}h ago`;
-	return `${Math.floor(ms / day)}d ago`;
-}
-
-export interface Column {
-	id: number;
-	title: string;
-	position: number;
-	wipLimit: number | null;
-	policy: string;
-	isDone: boolean;
-	isSignable: boolean;
-	signableAssigneeId: number | null;
-	color: string | null;
-	cards: Card[];
-}
-
-export interface Board {
-	columns: Column[];
-}
-
-export interface FlowMetrics {
-	throughput: number;
-	avgLeadTimeMs: number | null;
-	avgCycleTimeMs: number | null;
-	wipCount: number;
-}
-
-export interface MetricsHistoryBucket {
-	weekStart: string;
-	throughput: number;
-	avgLeadTimeMs: number | null;
-	avgCycleTimeMs: number | null;
-	wipCount: number;
-}
-
-export type WipStatus = "unlimited" | "under" | "at" | "over";
-
-export function wipStatus(count: number, wipLimit: number | null): WipStatus {
-	if (wipLimit === null) return "unlimited";
-	if (count < wipLimit) return "under";
-	if (count === wipLimit) return "at";
-	return "over";
-}
-
-export function formatDuration(ms: number): string {
-	const hour = 60 * 60 * 1000;
-	const day = 24 * hour;
-	if (ms < hour) return `${Math.max(1, Math.round(ms / (60 * 1000)))}m`;
-	if (ms < day) return `${(ms / hour).toFixed(1).replace(/\.0$/, "")}h`;
-	return `${(ms / day).toFixed(1).replace(/\.0$/, "")}d`;
-}
-
-export interface Setting {
-	key: string;
-	textValue: string | null;
-	boolValue: boolean | null;
-	version: number;
-	updatedAt: string;
-}
-
-export interface SettingsMap {
-	boardName: string;
-	logoPath: string;
-	version: number;
-}
-
-export type WorkspaceRole = "owner" | "admin" | "member";
-
-export interface Workspace {
-	id: number;
-	name: string;
-	role: WorkspaceRole;
-	isPersonal: boolean;
-	memberCount: number;
-}
-
-export interface WorkspaceMember {
-	userId: number;
-	username: string;
-	displayName: string;
-	role: WorkspaceRole;
-}
-
-export interface WorkspaceInvite {
-	id: number;
-	workspaceId: number;
-	workspaceName: string;
-	role: WorkspaceRole;
-}
-
-export interface WorkspaceListResponse {
-	workspaces: Workspace[];
-	pendingInvites: WorkspaceInvite[];
-}
-
-export interface WorkspaceSelectionState {
-	activeWorkspaceId: number | null;
-	pickerRequired: boolean;
-	workspacesReady: boolean;
-}
-
-export type SwitchConfirmState =
-	| { open: false }
-	| { open: true; pendingWorkspaceId: number };
-
-export interface WorkspaceCreateState {
-	open: boolean;
-	name: string;
-	busy: boolean;
-	error: string | null;
-}
-
-// ---- Agent ----
-
-export interface AgentColumn {
-	id: number;
-	slug: string;
-	name: string;
-	position: number;
-	reasoning: boolean;
-	systemPrompt: string;
-	cards: AgentCard[];
-}
-
-export interface ToolTraceItem {
-	columnSlug?: string;
-	toolName: string;
-	query?: string;
-	resultCount?: number;
-	errorCode?: string;
-	attempt?: number;
-	createdAt?: string;
-	reasoningText?: string;
-}
-
-export interface AgentCard {
-	id: number;
-	columnId: number;
-	title: string;
-	position: number;
-}
-
-export interface AgentBoard {
-	id: number;
-	workspaceId: number;
-	templateId: string;
-	originalIntent: string;
-	status: "pending" | "approved";
-	executionStatus: "idle" | "running" | "done" | "failed";
-	createdAt: string;
-	columns: AgentColumn[];
-	toolTrace?: ToolTraceItem[];
-	conversations?: Array<{ role: string; content: string }>;
-}
-
-export interface AgentCardOutput {
-	columnSlug: string;
-	output: string;
-	thinking?: string;
-}
-
-export interface AgentArtifact {
-	filename: string;
-	format: "md";
-	content: string;
-}
-
-// ---- Notifications (Inbox) ----
-
-export type AppNotificationType =
-	| "card_assigned"
-	| "due_date_changed"
-	| "due_date_reminder"
-	| "welcome"
-	| "member_joined"
-	| "system_alert";
-
-export interface AppNotification {
-	id: number;
-	type: AppNotificationType;
-	title: string;
-	body: string | null;
-	cardId: number | null;
-	boardId?: number | null;
-	actorId: number | null;
-	readAt: string | null;
-	sourceDeleted: boolean;
-	createdAt: string;
-}
-
-export interface NotificationsResponse {
-	notifications: AppNotification[];
-	unreadCount: number;
-	nextCursor: number | null;
-}
-
-// ---- Chat ----
-
-export type ChatMessageRole = "user" | "assistant" | "error";
-export type ChatAttachmentFormat = "md" | "txt" | "csv";
-
-export interface ChatThread {
-	id: number;
-	title: string;
-	userId?: number;
-	messageCount?: number;
-	createdAt?: string;
-	updatedAt?: string;
-}
-
-export interface ChatMessage {
-	id: number;
-	threadId?: number;
-	role: ChatMessageRole;
-	content: string;
-	thinking?: string | null;
-	toolTrace?: ToolTraceItem[] | null;
-	attachments?: ChatAttachment[];
-	createdAt?: string;
-}
-
-export interface ChatAttachment {
-	id: number;
-	messageId?: number;
-	filename: string;
-	format: ChatAttachmentFormat;
-	content?: string;
-	createdAt?: string;
-}
-
-export type ChatToolEvent = {
-	phase: string;
-	toolName?: string;
-	query?: string;
-	resultCount?: number;
-	errorCode?: string;
-};
-
-export type StreamEvent =
-	| { type: "token"; text: string }
-	| { type: "thinking"; text: string }
-	| { type: "tool_event"; event: ChatToolEvent }
-	| { type: "done"; messageId: number }
-	| { type: "error"; message: string; retryable?: boolean };
-
-// ---- Tracker ----
-
-export type TrackerVocabularyKind = "status" | "priority" | "label";
-
-export type TrackerStatusCategory =
-	| "backlog"
-	| "started"
-	| "completed"
-	| "canceled";
-
-export interface TrackerVocabulary {
-	id: number;
-	kind: TrackerVocabularyKind;
-	name: string;
-	position: number;
-	colour: string;
-	slot?: "backlog" | "todo" | "in_progress" | "done" | "canceled" | null;
-	category?: TrackerStatusCategory | null;
-	createdAt?: string;
-}
-
-export interface TrackerItemAssignee {
-	id: number;
-	username: string;
-	displayName: string;
-}
-
-export interface TrackerItem {
-	id: number;
-	key: string;
-	title: string;
-	description: string;
-	projectId?: number | null;
-	phaseId?: number | null;
-	startDate?: string | null;
-	endDate?: string | null;
-	completedAt?: string | null;
-	position?: number;
-	status: TrackerVocabulary;
-	priority: TrackerVocabulary | null;
-	labels: TrackerVocabulary[];
-	assignees: TrackerItemAssignee[];
-	version: number;
-	createdAt: string;
-	updatedAt: string;
-	canonicalKey?: string;
-	redirectFrom?: string;
-}
-
-export type WorkItemSource = "board" | "tracker";
-
-export type FocusSessionState = "ready" | "running" | "paused" | "finished";
-
-export interface FocusSession {
-	id: number;
-	state: FocusSessionState;
-	accumulatedSeconds: number;
-	runningSince: string | null;
-	version: number;
-	source: WorkItemSource;
-	taskId: number;
-	taskKey: string | null;
-	returnPath: string;
-	finishedAt: string | null;
-}
-
-export interface FocusSessionGetResponse {
-	session: FocusSession | null;
-	autoFinished?: {
-		reason: "task_missing";
-		taskKey: string | null;
-	};
-}
-
-export interface WorkItem extends TrackerItem {
-	source: WorkItemSource;
-	columnId?: number;
-	columnName?: string | null;
-	dueDate?: string | null;
-	startedAt?: string | null;
-	doneAt?: string | null;
-}
-
-export interface TrackerPhase {
-	id: number;
-	projectId: number;
-	name: string;
-	subtitle: string;
-	startDate: string | null;
-	endDate: string | null;
-	position: number;
-	version: number;
-	createdAt: string;
-	updatedAt: string;
-}
-
-export interface TrackerProject {
-	id: number;
-	name: string;
-	startDate: string | null;
-	endDate: string | null;
-	position: number;
-	version: number;
-	phases: TrackerPhase[];
-	createdAt?: string;
-	updatedAt?: string;
-}
-
-export interface TrackerEvent {
-	id: number;
-	eventType: string;
-	trackerItemId: number | null;
-	title: string | null;
-	actor: { username: string; displayName: string } | null;
-	payload?: Record<string, unknown> | null;
-	createdAt: string;
-}
-
-export interface AgentEvent {
-	type:
-		| "agent.board.generating"
-		| "agent.board.ready"
-		| "agent.board.failed"
-		| "agent.card.started"
-		| "agent.card.token"
-		| "agent.card.done"
-		| "agent.card.failed"
-		| "agent.card.thinking"
-		| "agent.tool.started"
-		| "agent.tool.result"
-		| "agent.tool.failed"
-		| "agent.artifact.ready"
-		| "agent.execution.done";
-	columnSlug?: string;
-	token?: string;
-	boardId?: number;
-	error?: string;
-	reason?: string;
-	toolName?: string;
-	query?: string;
-	resultCount?: number;
-	errorCode?: string;
-	attempt?: number;
-}
-
+// Historical `../types` import path for shared app types. Each domain's types
+// live in its feature module; this barrel keeps existing import sites working.
+// Value helpers come from the import-free shared/formatting.ts leaf so the
+// api.ts hub never cycles through a feature barrel (hub↔barrel cycles split
+// module identity under vi.mock — see HUB_TO_LEAF_ALLOWLIST).
+export type {
+	ActivityEvent,
+	AttachmentActivityPayload,
+} from "./features/activity";
+export type {
+	AgentArtifact,
+	AgentBoard,
+	AgentCard,
+	AgentCardOutput,
+	AgentColumn,
+	AgentEvent,
+	ToolTraceItem,
+} from "./features/agent";
+export type { PresenceUser, User } from "./features/auth";
+export type {
+	Board,
+	BoardEvent,
+	BoardEventType,
+	Card,
+	CardAssignee,
+	CardAttachment,
+	Column,
+	FlowMetrics,
+	MetricsHistoryBucket,
+} from "./features/board";
+// chat/index.ts exports a ChatMessage component, so the data-type cluster is
+// re-exported from the pure leaf instead of the barrel.
+export type {
+	ChatAttachment,
+	ChatAttachmentFormat,
+	ChatMessage,
+	ChatMessageRole,
+	ChatThread,
+	ChatToolEvent,
+	StreamEvent,
+} from "./features/chat/chatTypes";
+export type {
+	FocusSession,
+	FocusSessionGetResponse,
+	FocusSessionState,
+} from "./features/focus";
+export type {
+	AppNotification,
+	AppNotificationType,
+	NotificationsResponse,
+} from "./features/notifications";
+export type { Setting, SettingsMap } from "./features/settings";
+export type {
+	TrackerEvent,
+	TrackerItem,
+	TrackerItemAssignee,
+	TrackerPhase,
+	TrackerProject,
+	TrackerStatusCategory,
+	TrackerVocabulary,
+	TrackerVocabularyKind,
+	WorkItem,
+	WorkItemSource,
+} from "./features/tracker";
+export type {
+	SwitchConfirmState,
+	Workspace,
+	WorkspaceCreateState,
+	WorkspaceInvite,
+	WorkspaceListResponse,
+	WorkspaceMember,
+	WorkspaceRole,
+	WorkspaceSelectionState,
+} from "./features/workspaces";
+export type { WipStatus } from "./shared/formatting";
+export {
+	formatDuration,
+	formatRelativeTime,
+	TEMPLATE_NAMES,
+	templateName,
+	wipStatus,
+} from "./shared/formatting";
 export type * from "./shared/myWorkTypes";

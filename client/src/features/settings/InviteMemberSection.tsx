@@ -5,11 +5,7 @@ import { useWorkspace } from "../../shared/WorkspaceContext";
 import { SettingsSection } from "./SettingsSection";
 import { canEditWorkspaceSettings } from "./settingsValidation";
 
-export function InviteMemberSection({
-	onInvited,
-}: {
-	onInvited?: () => void;
-}) {
+export function InviteMemberSection({ onInvited }: { onInvited?: () => void }) {
 	const { activeWorkspaceId, activeWorkspace, reloadWorkspaces } =
 		useWorkspace();
 	const showToast = useShowToast();

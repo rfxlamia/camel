@@ -62,11 +62,7 @@ function submitForm() {
 	fireEvent.submit(form);
 }
 
-function fillAndSubmit(
-	current?: string,
-	next?: string,
-	confirm?: string,
-) {
+function fillAndSubmit(current?: string, next?: string, confirm?: string) {
 	fillPasswords(current, next, confirm);
 	submitForm();
 }
@@ -90,26 +86,24 @@ describe("ChangePasswordSection", () => {
 			(screen.getByLabelText("Current password") as HTMLInputElement).value,
 		).toBe("");
 		expect(
-			(screen.getByLabelText("Confirm new password") as HTMLInputElement)
-				.value,
+			(screen.getByLabelText("Confirm new password") as HTMLInputElement).value,
 		).toBe("");
 	});
 
 	it("keeps the autocomplete hints for password managers", () => {
 		render(<ChangePasswordSection />);
 
-		expect(screen.getByLabelText("Current password")).toHaveAttribute(
-			"autoComplete",
-			"current-password",
-		);
-		expect(screen.getByLabelText("New password")).toHaveAttribute(
-			"autoComplete",
-			"new-password",
-		);
-		expect(screen.getByLabelText("Confirm new password")).toHaveAttribute(
-			"autoComplete",
-			"new-password",
-		);
+		expect(
+			screen.getByLabelText("Current password").getAttribute("autocomplete"),
+		).toBe("current-password");
+		expect(
+			screen.getByLabelText("New password").getAttribute("autocomplete"),
+		).toBe("new-password");
+		expect(
+			screen
+				.getByLabelText("Confirm new password")
+				.getAttribute("autocomplete"),
+		).toBe("new-password");
 	});
 
 	it("disables submission while the new password is shorter than 8 characters", () => {
