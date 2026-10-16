@@ -115,6 +115,7 @@ describe("leaveMember", () => {
 			userId: 4,
 			workspaceId: 8,
 			workspaceName: "WS-R",
+			reason: "left",
 		});
 	});
 
@@ -153,6 +154,7 @@ describe("leaveMember", () => {
 				userId: 4,
 				workspaceId: 8,
 				workspaceName: "WS-R",
+				reason: "left",
 			},
 		]);
 	});

@@ -56,6 +56,12 @@ vi.mock("../../shared/ToastContext", () => ({
 import { ApiError } from "../../api";
 import LeaveWorkspaceSection from "./LeaveWorkspaceSection";
 
+/** The section header toggle and the action button share the accessible name. */
+function getLeaveButton() {
+	const buttons = screen.getAllByRole("button", { name: "Leave workspace" });
+	return buttons[buttons.length - 1]!;
+}
+
 function renderSection() {
 	render(<LeaveWorkspaceSection />);
 }
@@ -94,14 +100,15 @@ describe("LeaveWorkspaceSection", () => {
 		renderSection();
 
 		expect(
-			screen.getByRole("button", { name: "Leave workspace" }),
+			screen.getByText("Leave workspace", { selector: "button" }),
 		).toBeTruthy();
+		expect(getLeaveButton()).toBeTruthy();
 	});
 
 	it("leaves on confirm, switches to the personal workspace, and toasts", async () => {
 		renderSection();
 
-		fireEvent.click(screen.getByRole("button", { name: "Leave workspace" }));
+		fireEvent.click(getLeaveButton());
 		const dialog = await screen.findByRole("dialog");
 		fireEvent.click(
 			within(dialog).getByRole("button", { name: "Confirm leave" }),
@@ -126,7 +133,7 @@ describe("LeaveWorkspaceSection", () => {
 
 		renderSection();
 
-		fireEvent.click(screen.getByRole("button", { name: "Leave workspace" }));
+		fireEvent.click(getLeaveButton());
 		const dialog = await screen.findByRole("dialog");
 		fireEvent.click(
 			within(dialog).getByRole("button", { name: "Confirm leave" }),

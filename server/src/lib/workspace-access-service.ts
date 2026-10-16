@@ -44,6 +44,8 @@ export type WorkspaceAccessDeps = {
 					userId: number;
 					workspaceId: number;
 					workspaceName: string;
+					/** Set when the user left on their own, so their own client can skip the removal redirect. */
+					reason?: "left";
 			  }
 			| {
 					type: "membership.role_changed";
@@ -75,6 +77,7 @@ async function finalizeRemoval(
 	userId: number,
 	removed: RemovalOutcome,
 	workspaceName: string,
+	reason?: "left",
 ): Promise<void> {
 	deps.clearPresence(workspaceId, userId).catch(() => {
 		// best-effort; member already removed
@@ -97,6 +100,7 @@ async function finalizeRemoval(
 			userId: removed.userId,
 			workspaceId,
 			workspaceName,
+			reason,
 		})
 		.catch(() => {
 			// best-effort; member already removed
@@ -175,7 +179,14 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 
 			const removed = await deps.removeMember(workspaceId, userId, actor);
 			if (!removed) return { status: 404 as const, error: "Not found" };
-			await finalizeRemoval(deps, workspaceId, userId, removed, workspace.name);
+			await finalizeRemoval(
+				deps,
+				workspaceId,
+				userId,
+				removed,
+				workspace.name,
+				"left",
+			);
 			return { status: 204 as const };
 		},
 

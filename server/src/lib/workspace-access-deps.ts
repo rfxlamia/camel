@@ -69,6 +69,11 @@ export function buildRemoveMemberDep(
 				.deleteFrom("workspace_members")
 				.where("workspace_id", "=", workspaceId)
 				.where("user_id", "=", userId)
+				// Re-check inside the locked transaction: the service-level owner
+				// check ran before it, so a concurrent ownership transfer could
+				// otherwise make this DELETE remove the new owner and orphan the
+				// workspace.
+				.where("role", "<>", "owner")
 				.returning("user_id")
 				.executeTakeFirst();
 			if (!deleted) return null;
