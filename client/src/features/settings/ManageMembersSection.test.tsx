@@ -12,6 +12,7 @@ import type { WorkspaceMember } from "../../types";
 const getWorkspaceMembers = vi.fn();
 const removeWorkspaceMember = vi.fn();
 const updateWorkspaceMemberRole = vi.fn();
+const transferWorkspaceOwnership = vi.fn();
 
 vi.mock("../../api", () => ({
 	api: {
@@ -19,6 +20,8 @@ vi.mock("../../api", () => ({
 		removeWorkspaceMember: (...a: unknown[]) => removeWorkspaceMember(...a),
 		updateWorkspaceMemberRole: (...a: unknown[]) =>
 			updateWorkspaceMemberRole(...a),
+		transferWorkspaceOwnership: (...a: unknown[]) =>
+			transferWorkspaceOwnership(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -69,6 +72,7 @@ beforeEach(() => {
 		members: [owner, admin, member],
 	});
 	removeWorkspaceMember.mockResolvedValue(undefined);
+	transferWorkspaceOwnership.mockResolvedValue({ ok: true });
 	updateWorkspaceMemberRole.mockImplementation(
 		async (_ws: number, userId: number, body: { role: string }) => ({
 			...(userId === 3 ? member : admin),
@@ -259,5 +263,86 @@ describe("ManageMembersSection interactions", () => {
 		);
 		expect(screen.getByText("Member User")).toBeTruthy();
 		await waitFor(() => expect(getWorkspaceMembers).toHaveBeenCalledTimes(2));
+	});
+});
+
+describe("Transfer ownership", () => {
+	it("offers Make owner only to the owner viewer, on non-owner rows", async () => {
+		renderSection("owner", 1);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+		expect(screen.getAllByRole("button", { name: "Make owner" }).length).toBe(
+			2,
+		);
+
+		cleanup();
+		renderSection("admin", 2);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+		expect(screen.queryByRole("button", { name: "Make owner" })).toBeNull();
+	});
+
+	it("confirms transfer, updates roles, and signals members changed", async () => {
+		const onMembersChanged = vi.fn();
+		render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		const dialog = screen.getByRole("dialog", {
+			name: /Transfer ownership to Admin User\?/,
+		});
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "Confirm transfer" }),
+		);
+
+		await waitFor(() => {
+			expect(transferWorkspaceOwnership).toHaveBeenCalledWith(7, {
+				newOwnerId: 2,
+				previousOwnerRole: "admin",
+			});
+		});
+		await waitFor(() => {
+			expect(onMembersChanged).toHaveBeenCalled();
+		});
+		// The promoted member's role dropdown disappears (owner badge instead).
+		await waitFor(() => {
+			expect(screen.queryByLabelText("Role for Admin User")).toBeNull();
+		});
+	});
+
+	it("shows an error toast and keeps roles when transfer fails", async () => {
+		transferWorkspaceOwnership.mockRejectedValueOnce(
+			new ApiError("Not found", 404),
+		);
+		renderSection("owner", 1);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Admin User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+
+		await waitFor(() => {
+			expect(showToast).toHaveBeenCalledWith("Not found", "error");
+		});
+		expect(screen.getByLabelText("Role for Admin User")).toBeTruthy();
 	});
 });
