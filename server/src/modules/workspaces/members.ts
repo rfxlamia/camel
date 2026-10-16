@@ -86,68 +86,8 @@ membersRouter.post("/members", async (req, res) => {
 				.status(409)
 				.json({ error: "User is already a member of this workspace" });
 		}
-
-		// Snapshot existing members + workspace name, then insert, as one unit —
-		// matching the transaction pattern used for workspace creation and
-		// ownership transfer. onConflict/doNothing makes the insert itself the
-		// authoritative check: if a concurrent request already added this user
-		// between the earlier lookupMembership check and here, this loses the
-		// race cleanly (409) instead of throwing a raw PK-violation 500.
-		const inserted = await db.transaction().execute(async (trx) => {
-			const existingRows = await trx
-				.selectFrom("workspace_members")
-				.select("user_id")
-				.where("workspace_id", "=", workspaceId)
-				.execute();
-			const existingMemberIds = existingRows.map((r) => r.user_id);
-
-			const ws = await trx
-				.selectFrom("workspaces")
-				.select("name")
-				.where("id", "=", workspaceId)
-				.executeTakeFirst();
-			const workspaceName = ws?.name ?? "the workspace";
-
-			const row = await trx
-				.insertInto("workspace_members")
-				.values({
-					workspace_id: workspaceId,
-					user_id: target.id,
-					role: memberRole,
-				})
-				.onConflict((oc) => oc.columns(["workspace_id", "user_id"]).doNothing())
-				.returning("user_id")
-				.executeTakeFirst();
-
-			if (!row) return null;
-			return { existingMemberIds, workspaceName };
-		});
-
-		if (!inserted) {
-			return res
-				.status(409)
-				.json({ error: "User is already a member of this workspace" });
-		}
-		const { existingMemberIds, workspaceName } = inserted;
-
-		domainBus.emit(EVENTS.MEMBER_JOINED, {
-			type: EVENTS.MEMBER_JOINED,
-			workspaceId,
-			actorId: req.user!.id,
-			payload: {
-				newMemberId: target.id,
-				newMemberDisplayName: target.display_name,
-				workspaceName,
-				existingMemberIds,
-			},
-		});
-
-		return res.status(201).json({
-			userId: target.id,
-			username: target.username,
-			displayName: target.display_name,
-			role: memberRole,
-		});
+		// Existing users also get a pending invite — joining requires their
+		// acceptance (POST /invites/:inviteId/accept), never a silent add.
 	}
 
 	const dupInvite = await db
@@ -162,24 +102,35 @@ membersRouter.post("/members", async (req, res) => {
 			.json({ error: "Invite already pending for this username" });
 	}
 
-	const inv = await db
-		.insertInto("workspace_invites")
-		.values({
-			workspace_id: workspaceId,
-			username: normalizedUsername,
-			role: memberRole,
-			invited_by: req.user!.id,
-		})
-		.returning(["id", "workspace_id", "username", "role"])
-		.executeTakeFirstOrThrow();
+	try {
+		const inv = await db
+			.insertInto("workspace_invites")
+			.values({
+				workspace_id: workspaceId,
+				username: normalizedUsername,
+				role: memberRole,
+				invited_by: req.user!.id,
+			})
+			.returning(["id", "workspace_id", "username", "role"])
+			.executeTakeFirstOrThrow();
 
-	res.status(201).json({
-		id: inv.id,
-		workspaceId: inv.workspace_id,
-		username: inv.username,
-		role: inv.role,
-		pending: true,
-	});
+		res.status(201).json({
+			id: inv.id,
+			workspaceId: inv.workspace_id,
+			username: inv.username,
+			role: inv.role,
+			pending: true,
+		});
+	} catch (err) {
+		// A concurrent POST /members for the same username won the duplicate
+		// precheck race above — lose it cleanly instead of a raw 500.
+		if ((err as { code?: string }).code === "23505") {
+			return res
+				.status(409)
+				.json({ error: "Invite already pending for this username" });
+		}
+		throw err;
+	}
 });
 
 membersRouter.patch("/members/:userId", async (req, res) => {
