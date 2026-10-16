@@ -74,6 +74,21 @@ export function useBoardPageActions({
 		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
 	);
 
+	const onDeleteColumn = useCallback(
+		async (id: number) => {
+			if (activeWorkspaceId === null) return;
+			try {
+				cancelScheduledRefresh();
+				await api.deleteColumn(activeWorkspaceId, id);
+				showToast("Column deleted", "success");
+				await refresh();
+			} catch {
+				showToast("Couldn't delete the column. Try again.", "error");
+			}
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
+	);
+
 	const onAddColumn = useCallback(
 		async (title: string) => {
 			if (activeWorkspaceId === null) return;
@@ -129,6 +144,7 @@ export function useBoardPageActions({
 		onAddCard,
 		onAddColumn,
 		onApplyTemplate,
+		onDeleteColumn,
 		onStartBlank,
 		onUpdateColumn,
 		pickerState,
