@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
 	checkAndRecordPasswordChangeAttempt: vi.fn<() => Promise<boolean>>(),
 }));
 
-vi.mock("../../db/kysely.js", () => ({
-	db: {
+vi.mock("../../db/kysely.js", () => {
+	const db = {
 		selectFrom: vi.fn(() => {
 			const chain = {
 				select: vi.fn(() => chain),
@@ -47,8 +47,14 @@ vi.mock("../../db/kysely.js", () => ({
 			};
 			return chain;
 		}),
-	},
-}));
+		transaction: vi.fn(() => ({
+			// The handler's trx shares the top-level chains, so call-count
+			// assertions hold across the transaction boundary.
+			execute: (cb: (t: unknown) => unknown) => cb(db),
+		})),
+	};
+	return { db };
+});
 
 vi.mock("../../auth.js", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../../auth.js")>();

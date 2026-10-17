@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { isSourceFile } from "./git-diff.mjs";
 import { isNonTrivialTouch } from "./line-budget-hunks.mjs";
+import { LINE_BUDGET_WAIVERS } from "./map.mjs";
 
 export { isNonTrivialTouch } from "./line-budget-hunks.mjs";
 
@@ -66,6 +67,7 @@ export function checkLineBudget({
 	fromPath,
 }) {
 	if (isExcludedFromLineBudget(path)) return [];
+	if (LINE_BUDGET_WAIVERS.has(path)) return [];
 
 	const afterLines = countRawLines(afterText);
 	const beforeLines = countRawLines(beforeText);

@@ -206,6 +206,9 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 	auth.post("/change-password", requireAuth, async (req, res) => {
 		if (!req.user)
 			return res.status(401).json({ error: "authentication required" });
+		// Narrowed once: req.user narrowing does not survive into the
+		// transaction callback below.
+		const userId = req.user.id;
 		const { currentPassword, newPassword } = req.body ?? {};
 		const parsedCurrent = parseWith(currentPasswordSchema, currentPassword);
 		if (!parsedCurrent.ok) return sendValidationError(res, parsedCurrent.body);
@@ -214,8 +217,8 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 
 		// Same brute-force policy as /login: a stolen session cookie must not be
 		// able to guess the current password indefinitely.
-		if (await isPasswordChangeLockedOut(req.user.id)) {
-			await killPresentedSession(req, req.user.id);
+		if (await isPasswordChangeLockedOut(userId)) {
+			await killPresentedSession(req, userId);
 			return res.status(429).json({
 				error: "Too many failed attempts — please try again later.",
 			});
@@ -224,7 +227,7 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		const row = await db
 			.selectFrom("users")
 			.select("password_hash")
-			.where("id", "=", req.user.id)
+			.where("id", "=", userId)
 			.executeTakeFirst();
 		if (!row || row.password_hash === null) {
 			return res
@@ -236,9 +239,9 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 			row.password_hash,
 		);
 		if (!currentOk) {
-			const locked = await checkAndRecordPasswordChangeAttempt(req.user.id);
+			const locked = await checkAndRecordPasswordChangeAttempt(userId);
 			if (locked) {
-				await killPresentedSession(req, req.user.id);
+				await killPresentedSession(req, userId);
 				return res.status(429).json({
 					error: "Too many failed attempts — please try again later.",
 				});
@@ -252,42 +255,51 @@ export function createAuthRouter(rateLimiter?: RequestHandler): Router {
 		}
 
 		const hash = await bcrypt.hash(parsedNew.data, BCRYPT_ROUNDS);
-		// Conditional on the old hash: closes the TOCTOU window between the
-		// compare above and this write — a concurrent change-password must not
-		// be silently overwritten with a hash of a stale current password.
-		const updated = await db
-			.updateTable("users")
-			.set({ password_hash: hash })
-			.where("id", "=", req.user.id)
-			.where("password_hash", "=", row.password_hash)
-			.returning("id")
-			.executeTakeFirst();
+		// One transaction: the hash swap, the audit row, and the session
+		// revocations commit or roll back together. A failed audit insert must
+		// not leave the password changed with the attacker's session alive.
+		const updated = await db.transaction().execute(async (trx) => {
+			// Conditional on the old hash: closes the TOCTOU window between the
+			// compare above and this write — a concurrent change-password must
+			// not be silently overwritten with a hash of a stale current password.
+			const updated = await trx
+				.updateTable("users")
+				.set({ password_hash: hash })
+				.where("id", "=", userId)
+				.where("password_hash", "=", row.password_hash)
+				.returning("id")
+				.executeTakeFirst();
+			if (!updated) return null;
+
+			// Audit trail without secrets — lets an incident review correlate
+			// this change with the session revocations below.
+			await trx
+				.insertInto("auth_audit")
+				.values({
+					actor_id: userId,
+					event_type: "password_changed",
+				})
+				.execute();
+
+			// Revoke every other session: a password change should log out
+			// devices the user is not holding right now.
+			const presented = req.cookies?.[SESSION_COOKIE];
+			await trx
+				.deleteFrom("sessions")
+				.where("user_id", "=", userId)
+				.where("token", "!=", presented ?? "")
+				.execute();
+
+			return updated;
+		});
+		// Lost the conditional update: another change already landed.
 		if (!updated) {
 			return res
 				.status(409)
 				.json({ error: "Password was changed recently — try again." });
 		}
 
-		await clearPasswordChangeFailures(req.user.id);
-
-		// Audit trail without secrets — lets an incident review correlate this
-		// change with the session revocations below.
-		await db
-			.insertInto("auth_audit")
-			.values({
-				actor_id: req.user.id,
-				event_type: "password_changed",
-			})
-			.execute();
-
-		// Revoke every other session: a password change should log out devices
-		// the user is not holding right now.
-		const presented = req.cookies?.[SESSION_COOKIE];
-		await db
-			.deleteFrom("sessions")
-			.where("user_id", "=", req.user.id)
-			.where("token", "!=", presented ?? "")
-			.execute();
+		await clearPasswordChangeFailures(userId);
 
 		res.json({ ok: true });
 	});

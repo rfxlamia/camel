@@ -1,8 +1,8 @@
 import { createSettingsApi } from "./settingsApi";
 
 export { DangerZoneSection } from "./DangerZoneSection";
-export { default as LeaveWorkspaceSection } from "./LeaveWorkspaceSection";
 export { InviteMemberSection } from "./InviteMemberSection";
+export { default as LeaveWorkspaceSection } from "./LeaveWorkspaceSection";
 // Load transport factories before UI re-exports, which can import the facade.
 export { default as LogoCropper } from "./LogoCropper";
 export {
@@ -19,5 +19,5 @@ export {
 	validateUnsavedChanges,
 	validateWorkspaceName,
 } from "./settingsValidation";
-export { createSettingsApi };
 export { WorkspaceIdentitySection } from "./WorkspaceIdentitySection";
+export { createSettingsApi };
