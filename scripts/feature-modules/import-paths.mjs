@@ -33,6 +33,10 @@ export const HUB_TO_LEAF_ALLOWLIST = [
 		importer: "client/src/api.ts",
 		target: "client/src/features/my-work/myWork",
 	},
+	{
+		importer: "client/src/types.ts",
+		target: "client/src/features/chat/chatTypes",
+	},
 ];
 
 /**
