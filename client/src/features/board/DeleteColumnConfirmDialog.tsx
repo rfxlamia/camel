@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 
 export interface DeleteColumnConfirmDialogProps {
 	columnTitle: string;
+	/**
+	 * Performs the deletion. Must reject when the deletion itself fails so the
+	 * dialog can stay open for a retry; post-deletion refresh failures are
+	 * handled (and toasted) by the parent and must not keep the dialog open.
+	 */
 	onConfirm: () => Promise<void>;
 	onClose: () => void;
 }
@@ -25,13 +30,14 @@ export default function DeleteColumnConfirmDialog({
 		setDeleting(true);
 		try {
 			await onConfirm();
-			onClose();
 		} catch {
-			// The parent handler owns error surfacing (e.g. an error toast);
-			// keep the dialog open so the user can retry.
-		} finally {
+			// Deletion failed (the parent already toasted). Keep the dialog open
+			// so the user can retry.
 			setDeleting(false);
+			return;
 		}
+		// Deletion succeeded (refresh failures were surfaced by the parent).
+		onClose();
 	}
 
 	return (

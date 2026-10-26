@@ -80,10 +80,23 @@ export function useBoardPageActions({
 			try {
 				cancelScheduledRefresh();
 				await api.deleteColumn(activeWorkspaceId, id);
-				showToast("Column deleted", "success");
+			} catch (err) {
+				showToast("Couldn't delete the column. Try again.", "error");
+				// Rethrow so the confirm dialog can distinguish a failed deletion
+				// from a successful one and stay open for a retry.
+				throw err;
+			}
+			showToast("Column deleted", "success");
+			try {
 				await refresh();
 			} catch {
-				showToast("Couldn't delete the column. Try again.", "error");
+				// Deletion succeeded; only the refresh failed. Avoid a contradictory
+				// "deleted + couldn't delete" pair of toasts.
+				showToast(
+					"Column deleted, but the board couldn't refresh — retrying in the background.",
+					"warning",
+				);
+				void refresh();
 			}
 		},
 		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
