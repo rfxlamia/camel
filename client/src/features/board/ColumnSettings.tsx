@@ -3,18 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useWorkspace } from "../../shared/WorkspaceContext";
 import type { Column, WorkspaceMember } from "../../types";
-import { COLOR_LABELS, type ColumnColor } from "./columnColors";
 import {
 	columnColorPreviewStyle,
+	formatSelectedColorLabel,
 	generateSwatchCandidates,
 } from "./columnColorUtils";
-
-function formatSelectedColorLabel(color: string): string {
-	if (color in COLOR_LABELS) {
-		return COLOR_LABELS[color as ColumnColor];
-	}
-	return color.length > 28 ? `${color.slice(0, 25)}...` : color;
-}
+import DeleteColumnConfirmDialog from "./DeleteColumnConfirmDialog";
 
 export interface ColumnSettingsProps {
 	column: Column;
@@ -58,10 +52,9 @@ export default function ColumnSettings({
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
 	const [membersError, setMembersError] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
-	const [deleting, setDeleting] = useState(false);
 
-	// Ref to avoid stale closure in useEffect while keeping signableAssigneeId
-	// out of deps (re-fetching members on every assignee change is unnecessary)
+	// Ref avoids a stale closure in useEffect while keeping signableAssigneeId out
+	// of deps (re-fetching members on every assignee change is unnecessary)
 	const assigneeIdRef = useRef(signableAssigneeId);
 	assigneeIdRef.current = signableAssigneeId;
 
@@ -94,15 +87,6 @@ export default function ColumnSettings({
 		};
 	}, [isSignable, activeWorkspaceId]);
 
-	useEffect(() => {
-		if (!confirmDelete) return;
-		function onKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape") setConfirmDelete(false);
-		}
-		document.addEventListener("keydown", onKeyDown);
-		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [confirmDelete]);
-
 	const save = async () => {
 		const limit = wipLimit.trim() === "" ? null : Number(wipLimit);
 		// Sanitize signableAssigneeId: validate against current members or clear if errored
@@ -128,16 +112,6 @@ export default function ColumnSettings({
 		});
 		onClose();
 	};
-
-	async function handleDelete() {
-		setDeleting(true);
-		try {
-			await onDeleteColumn(column.id);
-			setConfirmDelete(false);
-		} finally {
-			setDeleting(false);
-		}
-	}
 
 	const inputClass =
 		"w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-500 hover:border-neutral-400 focus:border-primary-600 focus:shadow-[0_0_0_3px_oklch(55%_0.076_250_/_0.15)] focus:outline-none";
@@ -313,49 +287,11 @@ export default function ColumnSettings({
 			</div>
 
 			{confirmDelete && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="confirm-delete-column-title"
-					onClick={() => setConfirmDelete(false)}
-				>
-					<div
-						className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg"
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
-					>
-						<p
-							id="confirm-delete-column-title"
-							className="font-medium text-neutral-800"
-						>
-							Delete {column.title}?
-						</p>
-						<p className="mt-1 text-sm text-neutral-500">
-							Cards in this column move to your first remaining column
-							automatically, and attachments on those cards are permanently
-							deleted. This cannot be undone.
-						</p>
-						<div className="mt-4 flex gap-2">
-							<button
-								type="button"
-								onClick={() => setConfirmDelete(false)}
-								className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								onClick={() => void handleDelete()}
-								disabled={deleting}
-								aria-label="Confirm delete column"
-								className="flex-1 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
-							>
-								{deleting ? "Deleting..." : "Delete"}
-							</button>
-						</div>
-					</div>
-				</div>
+				<DeleteColumnConfirmDialog
+					columnTitle={column.title}
+					onConfirm={() => onDeleteColumn(column.id)}
+					onClose={() => setConfirmDelete(false)}
+				/>
 			)}
 		</div>
 	);
