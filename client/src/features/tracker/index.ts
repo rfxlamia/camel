@@ -60,6 +60,18 @@ export {
 	buildTrackerRowStatusOptions,
 	type TrackerRowPickerContext,
 } from "./trackerRowPickerOptions";
+export type {
+	TrackerEvent,
+	TrackerItem,
+	TrackerItemAssignee,
+	TrackerPhase,
+	TrackerProject,
+	TrackerStatusCategory,
+	TrackerVocabulary,
+	TrackerVocabularyKind,
+	WorkItem,
+	WorkItemSource,
+} from "./trackerTypes";
 export {
 	type OpenPicker,
 	useTrackerRowOpenPicker,

@@ -1,5 +1,10 @@
 /**
- * Integration test for MEMBER_JOINED event emission from the members route.
+ * Integration test for notification timing on the members route.
+ *
+ * POST /members never adds an existing user directly anymore — it creates a
+ * pending invite and must NOT emit MEMBER_JOINED. Membership (and the
+ * MEMBER_JOINED event) only happens when the invite is accepted via
+ * POST /invites/:inviteId/accept (covered by invites.notification.test.ts).
  *
  * Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
  *
@@ -28,7 +33,7 @@ let workspaceId: number;
 const charlieUsername = `members-notif-charlie-${Date.now()}`;
 
 describe.skipIf(!process.env.RUN_INTEGRATION)(
-	"members route — MEMBER_JOINED event emission (real DB)",
+	"members route — inviting an existing user must not emit MEMBER_JOINED (real DB)",
 	() => {
 		beforeAll(async () => {
 			const admin = await db
@@ -76,6 +81,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		afterAll(async () => {
 			await db
+				.deleteFrom("workspace_invites")
+				.where("workspace_id", "=", workspaceId)
+				.execute();
+			await db
 				.deleteFrom("workspace_members")
 				.where("workspace_id", "=", workspaceId)
 				.execute();
@@ -86,7 +95,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.execute();
 		});
 
-		it("emits MEMBER_JOINED after successful member insert with existingMemberIds", async () => {
+		it("creates a pending invite without emitting MEMBER_JOINED or adding a member", async () => {
 			const received: unknown[] = [];
 			domainBus.once(EVENTS.MEMBER_JOINED, (e) => received.push(e));
 
@@ -94,18 +103,47 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.post(`/workspaces/${workspaceId}/members`)
 				.send({ username: charlieUsername });
 
+			// The response is a pending invite, not a direct add.
 			expect(res.status).toBe(201);
-			expect(received).toHaveLength(1);
-			const event = received[0] as {
-				payload: {
-					newMemberId: number;
-					existingMemberIds: number[];
-					workspaceName: string;
-				};
-			};
-			expect(event.payload.newMemberId).toBe(charlieId);
-			expect(event.payload.existingMemberIds).toEqual([adminId]);
-			expect(event.payload.workspaceName).toBe("Team Alpha");
+			expect(res.body).toMatchObject({
+				workspaceId,
+				username: charlieUsername,
+				pending: true,
+			});
+
+			// MEMBER_JOINED must only fire on invite acceptance, not here.
+			// Give any (incorrect) synchronous emit a tick to land.
+			await new Promise((r) => setTimeout(r, 25));
+			expect(received).toHaveLength(0);
+
+			// No membership row at invite time…
+			const members = await db
+				.selectFrom("workspace_members")
+				.where("workspace_id", "=", workspaceId)
+				.where("user_id", "=", charlieId)
+				.select("user_id")
+				.execute();
+			expect(members).toHaveLength(0);
+
+			// …but exactly one pending invite for the username.
+			const invites = await db
+				.selectFrom("workspace_invites")
+				.where("workspace_id", "=", workspaceId)
+				.where("username", "=", charlieUsername)
+				.select("id")
+				.execute();
+			expect(invites).toHaveLength(1);
+		});
+
+		it("returns 409 for a duplicate pending invite of the same username", async () => {
+			const res = await request(app)
+				.post(`/workspaces/${workspaceId}/members`)
+				.send({ username: charlieUsername });
+
+			expect(res.status).toBe(409);
+			expect(res.body).toEqual({
+				error: "Invite already pending for this username",
+			});
 		});
 	},
 );

@@ -13,6 +13,7 @@ const getWorkspaceMembers = vi.fn();
 const removeWorkspaceMember = vi.fn();
 const updateWorkspaceMemberRole = vi.fn();
 const transferWorkspaceOwnership = vi.fn();
+const cancelWorkspaceInvite = vi.fn();
 
 vi.mock("../../api", () => ({
 	api: {
@@ -22,6 +23,7 @@ vi.mock("../../api", () => ({
 			updateWorkspaceMemberRole(...a),
 		transferWorkspaceOwnership: (...a: unknown[]) =>
 			transferWorkspaceOwnership(...a),
+		cancelWorkspaceInvite: (...a: unknown[]) => cancelWorkspaceInvite(...a),
 	},
 	ApiError: class ApiError extends Error {
 		status: number;
@@ -73,6 +75,7 @@ beforeEach(() => {
 	});
 	removeWorkspaceMember.mockResolvedValue(undefined);
 	transferWorkspaceOwnership.mockResolvedValue({ ok: true });
+	cancelWorkspaceInvite.mockResolvedValue(undefined);
 	updateWorkspaceMemberRole.mockImplementation(
 		async (_ws: number, userId: number, body: { role: string }) => ({
 			...(userId === 3 ? member : admin),
@@ -344,5 +347,180 @@ describe("Transfer ownership", () => {
 			expect(showToast).toHaveBeenCalledWith("Not found", "error");
 		});
 		expect(screen.getByLabelText("Role for Admin User")).toBeTruthy();
+	});
+});
+
+describe("Pending invites integration (from #228)", () => {
+	const pendingInvites = [
+		{ id: 11, username: "carol", role: "member" },
+		{ id: 12, username: "dave", role: "admin" },
+	];
+
+	it("shows pending invites to owner and cancelling removes the row", async () => {
+		getWorkspaceMembers.mockResolvedValue({
+			members: [owner, member],
+			invites: pendingInvites,
+		});
+		const onMembersChanged = vi.fn();
+		render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Pending invites")).toBeTruthy();
+		});
+		expect(screen.getByText("@carol")).toBeTruthy();
+		expect(screen.getByText("@dave")).toBeTruthy();
+
+		fireEvent.click(screen.getAllByRole("button", { name: /cancel/i })[0]!);
+
+		await waitFor(() => {
+			expect(cancelWorkspaceInvite).toHaveBeenCalledWith(7, 11);
+		});
+		await waitFor(() => {
+			expect(screen.queryByText("@carol")).toBeNull();
+		});
+		expect(screen.getByText("@dave")).toBeTruthy();
+		expect(onMembersChanged).toHaveBeenCalled();
+	});
+
+	it("shows pending invites to admin but not to ordinary members", async () => {
+		getWorkspaceMembers.mockResolvedValue({
+			members: [owner, admin, member],
+			invites: pendingInvites,
+		});
+
+		cleanup();
+		renderSection("admin", 2);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+		expect(screen.getByText("Pending invites")).toBeTruthy();
+
+		cleanup();
+		renderSection("member", 3);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+		expect(screen.queryByText("Pending invites")).toBeNull();
+	});
+
+	it("keeps showing pending invites for an owner with no members yet", async () => {
+		getWorkspaceMembers.mockResolvedValue({
+			members: [],
+			invites: pendingInvites,
+		});
+		renderSection("owner", 1);
+		await waitFor(() => {
+			expect(screen.getByText("Pending invites")).toBeTruthy();
+		});
+		expect(screen.queryByText("No members yet")).toBeNull();
+	});
+});
+
+describe("Transfer ownership integration contracts", () => {
+	it("cancelling the confirmation dialog never calls the transfer API", async () => {
+		renderSection("owner", 1);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		const dialog = screen.getByRole("dialog", {
+			name: /Transfer ownership to Admin User\?/,
+		});
+		fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(transferWorkspaceOwnership).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.keyDown(document, { key: "Escape" });
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(transferWorkspaceOwnership).not.toHaveBeenCalled();
+	});
+
+	it("removes owner-only controls once the refreshed role arrives after a transfer", async () => {
+		const onMembersChanged = vi.fn();
+		const { rerender } = render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Admin User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+
+		await waitFor(() => {
+			expect(onMembersChanged).toHaveBeenCalled();
+		});
+		// SettingsPage reacts to onMembersChanged with reloadWorkspaces(), which
+		// updates activeWorkspace.role to "admin" for the previous owner. The
+		// refreshed currentUserRole prop must strip every owner-only control.
+		rerender(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="admin"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+
+		expect(screen.queryByRole("button", { name: "Make owner" })).toBeNull();
+		expect(screen.queryByRole("combobox")).toBeNull();
+		// The promoted member shows the Owner badge; the previous owner is
+		// demoted to Admin in the local member list.
+		expect(screen.getByText("Owner")).toBeTruthy();
+		expect(screen.getAllByText("Admin").length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("keeps the local member list untouched when the transfer fails", async () => {
+		transferWorkspaceOwnership.mockRejectedValueOnce(
+			new ApiError("Server error", 500),
+		);
+		renderSection("owner", 1);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+
+		// "Make owner" buttons: [0] = Admin User row, [1] = Member User row.
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[1]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Member User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+
+		await waitFor(() => {
+			expect(showToast).toHaveBeenCalledWith("Server error", "error");
+		});
+		// Roles unchanged: Admin User still editable, Member User still a member,
+		// and no "Ownership transferred" success toast was shown.
+		expect(screen.getByLabelText("Role for Admin User")).toBeTruthy();
+		expect(showToast).not.toHaveBeenCalledWith(
+			"Ownership transferred",
+			"success",
+		);
 	});
 });
