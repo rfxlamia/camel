@@ -146,7 +146,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			domainBus.on(EVENTS.MEMBER_JOINED, (e) => joined.push(e));
 
 			// Owner invites the already-registered Bob.
-			const inviteRes = await ownerApp
+			const inviteRes = await request(ownerApp)
 				.post(`/workspaces/${workspaceId}/members`)
 				.send({ username: bobUsername });
 			expect(inviteRes.status).toBe(201);
@@ -167,7 +167,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(joined).toHaveLength(0);
 
 			// Owner sees the pending invitation; Bob is not listed as a member.
-			const ownerView = await ownerApp.get(
+			const ownerView = await request(ownerApp).get(
 				`/workspaces/${workspaceId}/members`,
 			);
 			expect(ownerView.status).toBe(200);
@@ -181,13 +181,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			]);
 
 			// Duplicate invite of the same username is rejected.
-			const dupRes = await ownerApp
+			const dupRes = await request(ownerApp)
 				.post(`/workspaces/${workspaceId}/members`)
 				.send({ username: bobUsername });
 			expect(dupRes.status).toBe(409);
 
 			// Bob accepts: membership established, invite gone, MEMBER_JOINED once.
-			const acceptRes = await bobApp.post(
+			const acceptRes = await request(bobApp).post(
 				`/workspaces/${workspaceId}/invites/${inviteRes.body.id}/accept`,
 			);
 			expect(acceptRes.status).toBe(200);
@@ -212,12 +212,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		it("Scenario B: a cancelled pending invitation can no longer be accepted", async () => {
-			const inviteRes = await ownerApp
+			const inviteRes = await request(ownerApp)
 				.post(`/workspaces/${workspaceId}/members`)
 				.send({ username: carolUsername });
 			expect(inviteRes.status).toBe(201);
 
-			const ownerView = await ownerApp.get(
+			const ownerView = await request(ownerApp).get(
 				`/workspaces/${workspaceId}/members`,
 			);
 			expect(
@@ -226,7 +226,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				),
 			).toBe(true);
 
-			const cancelRes = await ownerApp.delete(
+			const cancelRes = await request(ownerApp).delete(
 				`/workspaces/${workspaceId}/invites/${inviteRes.body.id}`,
 			);
 			expect(cancelRes.status).toBe(204);
@@ -236,7 +236,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				username: carolUsername,
 				displayName: "Carol",
 			});
-			const acceptRes = await carolApp.post(
+			const acceptRes = await request(carolApp).post(
 				`/workspaces/${workspaceId}/invites/${inviteRes.body.id}/accept`,
 			);
 			expect(acceptRes.status).toBe(404);
@@ -252,13 +252,15 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 
 		it("Scenario D: plain members see no invitations and cannot cancel; the invitee can decline their own invite", async () => {
 			// Re-invite Bob (Scenario A consumed his invite).
-			const inviteRes = await ownerApp
+			const inviteRes = await request(ownerApp)
 				.post(`/workspaces/${workspaceId}/members`)
 				.send({ username: bobUsername });
 			expect(inviteRes.status).toBe(201);
 
 			// A plain member gets no privileged invitation data.
-			const miaView = await miaApp.get(`/workspaces/${workspaceId}/members`);
+			const miaView = await request(miaApp).get(
+				`/workspaces/${workspaceId}/members`,
+			);
 			expect(miaView.status).toBe(200);
 			expect(miaView.body.invites).toBeUndefined();
 			expect(
@@ -268,13 +270,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			).toBe(false);
 
 			// A plain member cannot cancel someone else's invitation.
-			const miaCancel = await miaApp.delete(
+			const miaCancel = await request(miaApp).delete(
 				`/workspaces/${workspaceId}/invites/${inviteRes.body.id}`,
 			);
 			expect(miaCancel.status).toBe(404);
 
 			// The invitee can still decline their own invitation.
-			const bobDecline = await bobApp.delete(
+			const bobDecline = await request(bobApp).delete(
 				`/workspaces/${workspaceId}/invites/${inviteRes.body.id}`,
 			);
 			expect(bobDecline.status).toBe(204);
