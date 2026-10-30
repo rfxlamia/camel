@@ -1,4 +1,4 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BoardProvider } from "./BoardProvider";
@@ -12,6 +12,13 @@ const mocks = vi.hoisted(() => ({
 	switch: vi.fn(),
 	toast: vi.fn(),
 	signOut: vi.fn(),
+	workspaces: [] as Array<{
+		id: number;
+		name: string;
+		role: string;
+		isPersonal: boolean;
+		memberCount: number;
+	}>,
 }));
 vi.mock("../../api", () => ({
 	api: {
@@ -25,7 +32,7 @@ vi.mock("../../shared/WorkspaceContext", () => ({
 	useWorkspace: () => ({
 		activeWorkspaceId: mocks.workspaceId,
 		user: { id: 1 },
-		workspaces: [],
+		workspaces: mocks.workspaces,
 		refreshSettings: mocks.settings,
 		reloadWorkspaces: mocks.reload,
 		switchWorkspace: mocks.switch,
@@ -47,8 +54,10 @@ class MockEventSource {
 beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.workspaceId = 7;
+	mocks.workspaces = [];
 	MockEventSource.instances = [];
 	mocks.getBoard.mockResolvedValue({ columns: [] });
+	mocks.reload.mockResolvedValue([]);
 	vi.stubGlobal("EventSource", MockEventSource);
 });
 afterEach(() => {
@@ -97,5 +106,57 @@ describe("SSE connection revisions", () => {
 		unmount();
 		latestOpen?.();
 		expect(mocks.getBoard).toHaveBeenCalledTimes(calls);
+	});
+});
+
+describe("membership.removed handling", () => {
+	const personalWorkspace = {
+		id: 1,
+		name: "Personal",
+		role: "owner",
+		isPersonal: true,
+		memberCount: 1,
+	};
+
+	function removalEvent(reason?: string) {
+		return JSON.stringify({
+			type: "membership.removed",
+			userId: 1,
+			workspaceId: 7,
+			workspaceName: "Beta WS",
+			...(reason ? { reason } : {}),
+		});
+	}
+
+	it("redirects to the personal workspace with a warning toast on removal", async () => {
+		mocks.workspaces = [personalWorkspace];
+		renderHook(useBoard, { wrapper });
+		const stream = MockEventSource.instances[0];
+
+		await act(async () => {
+			stream.onmessage?.({ data: removalEvent() });
+		});
+
+		expect(mocks.toast).toHaveBeenCalledWith(
+			"You were removed from Beta WS.",
+			"warning",
+		);
+		await waitFor(() => {
+			expect(mocks.switch).toHaveBeenCalledWith(1);
+		});
+	});
+
+	it("skips the removal redirect for a self-leave echo (reason: left)", async () => {
+		mocks.workspaces = [personalWorkspace];
+		renderHook(useBoard, { wrapper });
+		const stream = MockEventSource.instances[0];
+
+		await act(async () => {
+			stream.onmessage?.({ data: removalEvent("left") });
+		});
+
+		expect(mocks.toast).not.toHaveBeenCalled();
+		expect(mocks.switch).not.toHaveBeenCalled();
+		expect(mocks.reload).not.toHaveBeenCalled();
 	});
 });

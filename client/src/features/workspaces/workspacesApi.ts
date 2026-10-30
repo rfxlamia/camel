@@ -96,6 +96,9 @@ export function createWorkspacesApi(request: ApiRequest) {
 				},
 			),
 
+		leaveWorkspace: (workspaceId: number) =>
+			request<void>(`/workspaces/${workspaceId}/leave`, { method: "POST" }),
+
 		deleteWorkspace: (workspaceId: number) =>
 			request<void>(`/workspaces/${workspaceId}`, { method: "DELETE" }),
 	};
