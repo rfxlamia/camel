@@ -9,7 +9,8 @@ export {
 	default as ManageMembersSection,
 	type ManageMembersSectionProps,
 } from "./ManageMembersSection";
-export { RecoveryPasswordSection } from "./RecoveryPasswordSection";
+export { default as ChangePasswordSection } from "./ChangePasswordSection";
+export { PasswordSettings } from "./PasswordSettings";
 export { SettingsSection } from "./SettingsSection";
 export {
 	canEditWorkspaceSettings,
