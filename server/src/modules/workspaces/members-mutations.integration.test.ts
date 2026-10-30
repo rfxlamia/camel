@@ -1,7 +1,13 @@
-// Integration test for POST /members: concurrent requests adding the same
-// target user must not crash — the insert itself (guarded by
-// onConflict/doNothing inside a transaction) is the authoritative check,
-// so a losing request gets a clean 409 instead of a raw PK-violation 500.
+// Integration test for POST /members: concurrent requests inviting the same
+// username must not crash — the invite insert (guarded by the UNIQUE
+// (workspace_id, username) constraint) is the authoritative check, so a
+// losing request gets a clean 409 ("Invite already pending") via the 23505
+// race handler instead of a raw unique-index 500.
+//
+// NOTE: POST /members never inserts a membership row directly anymore —
+// every target gets a pending invite, and membership is only created when
+// the invite is accepted (POST /invites/:inviteId/accept), which is also
+// the only place MEMBER_JOINED is emitted.
 //
 // Requires a running PostgreSQL instance. Gated behind RUN_INTEGRATION=1.
 // Run:
@@ -77,8 +83,12 @@ function createTestApp() {
 const app = createTestApp();
 
 async function cleanup() {
-	// Only drop the target's membership — the owner row from setupFixtures
-	// must survive so the actor stays a member across tests.
+	// Invites must go first (they reference the workspace and users), then
+	// memberships — the owner row from setupFixtures must survive so the
+	// actor stays a member across tests.
+	await pool.query("DELETE FROM workspace_invites WHERE workspace_id = $1", [
+		WORKSPACE_ID,
+	]);
 	await pool.query(
 		"DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id <> $2",
 		[WORKSPACE_ID, mockTestUser.id],
@@ -138,9 +148,9 @@ afterAll(async () => {
 });
 
 describe.skipIf(!process.env.RUN_INTEGRATION)(
-	"POST /api/workspaces/:wid/members — concurrent add race",
+	"POST /api/workspaces/:wid/members — concurrent invite race",
 	() => {
-		it("only lets one of N concurrent adds of the same user succeed, rest get 409 not 500", async () => {
+		it("only lets one of N concurrent invites of the same username succeed, rest get 409 not 500", async () => {
 			// Delay every insertInto call so all N requests' earlier
 			// lookupMembership reads (the pre-insert "already a member?"
 			// check) land before any single request's write commits —
@@ -193,19 +203,33 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				spy.mockRestore();
 			}
 			const statuses = results.map((r) => r.status).sort((a, b) => a - b);
-			const created = statuses.filter((s) => s === 201).length;
+			const created = results.filter((r) => r.status === 201);
 			const conflicted = statuses.filter((s) => s === 409).length;
 			const crashed = statuses.filter((s) => s >= 500).length;
 
 			expect(crashed).toBe(0);
-			expect(created).toBe(1);
+			// Exactly one invite row wins the race; every loser gets a clean
+			// 409 ("Invite already pending"), not a raw unique-index 500.
+			expect(created).toHaveLength(1);
 			expect(conflicted).toBe(N - 1);
+			expect(created[0].body.pending).toBe(true);
+			for (const r of results.filter((x) => x.status === 409)) {
+				expect(r.body.error).toBe("Invite already pending for this username");
+			}
 
-			const rows = await pool.query(
+			// No membership row may be created at invite time — joining
+			// requires the user to accept the invite.
+			const members = await pool.query(
 				"SELECT count(*)::int AS n FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
 				[WORKSPACE_ID, targetUserId],
 			);
-			expect(rows.rows[0].n).toBe(1);
+			expect(members.rows[0].n).toBe(0);
+
+			const invites = await pool.query(
+				"SELECT count(*)::int AS n FROM workspace_invites WHERE workspace_id = $1 AND username = $2",
+				[WORKSPACE_ID, TARGET_USERNAME],
+			);
+			expect(invites.rows[0].n).toBe(1);
 		});
 	},
 );
