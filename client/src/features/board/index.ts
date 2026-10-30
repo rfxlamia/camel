@@ -16,17 +16,6 @@ export {
 } from "./BoardContext";
 export { BoardPageSurface } from "./BoardPageSurface";
 export { moveCardToColumn, revertCardMove } from "./boardColumnMoves";
-export type {
-	Board,
-	BoardEvent,
-	BoardEventType,
-	Card,
-	CardAssignee,
-	CardAttachment,
-	Column,
-	FlowMetrics,
-	MetricsHistoryBucket,
-} from "./boardTypes";
 export { type BoardViewMode } from "./boardViewPrefs";
 export { default as CalendarView } from "./CalendarView";
 export { default as CardAttachments } from "./CardAttachments";

@@ -21,9 +21,4 @@ export {
 	membershipRemovalTargetsUser,
 	TASK_MISSING_TOAST,
 } from "./focusGuards";
-export type {
-	FocusSession,
-	FocusSessionGetResponse,
-	FocusSessionState,
-} from "./focusTypes";
 export { createFocusApi };

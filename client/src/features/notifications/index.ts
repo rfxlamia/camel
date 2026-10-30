@@ -5,9 +5,4 @@ export {
 	NotificationsProvider,
 	useNotificationsContext,
 } from "./NotificationsContext";
-export type {
-	AppNotification,
-	AppNotificationType,
-	NotificationsResponse,
-} from "./notificationTypes";
 export { createNotificationsApi };

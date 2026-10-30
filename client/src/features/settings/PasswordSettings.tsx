@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { ApiError, api } from "../../api";
+import type { User } from "../../types";
 import { useShowToast } from "../../shared/ToastContext";
 import { useWorkspace } from "../../shared/WorkspaceContext";
 import ChangePasswordSection from "./ChangePasswordSection";
 import { SettingsSection } from "./SettingsSection";
+
+/** The server adds `hasPassword` on /auth/me; the shared User type doesn't
+ * declare it yet, so narrow locally instead of editing the oversized
+ * types.ts (FM-RULE-3 300-on-touch). */
+type UserWithPasswordFlag = User & { hasPassword?: boolean };
 
 /**
  * Password area of the settings page. Owns both password sections and their
@@ -19,8 +25,9 @@ export function PasswordSettings() {
 	const [passwordError, setPasswordError] = useState<string | null>(null);
 	const [isSettingPassword, setIsSettingPassword] = useState(false);
 
-	const showSet = !!user?.emailVerified && !user.hasPassword;
-	const showChange = !!user?.hasPassword;
+	const userWithPassword = user as UserWithPasswordFlag | undefined;
+	const showSet = !!userWithPassword?.emailVerified && !userWithPassword?.hasPassword;
+	const showChange = !!userWithPassword?.hasPassword;
 
 	async function handleSetPassword() {
 		if (newPassword.length < 8) {
