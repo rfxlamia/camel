@@ -833,6 +833,15 @@ describe("Cycle Map — map data (unit)", () => {
 				'export { default as AgentCardDetail } from "./AgentCardDetail";',
 				'export { default as AgentChatPanel } from "./AgentChatPanel";',
 				'export { default as AgentComposer } from "./AgentComposer";',
+				"export type {",
+				"\tAgentArtifact,",
+				"\tAgentBoard,",
+				"\tAgentCard,",
+				"\tAgentCardOutput,",
+				"\tAgentColumn,",
+				"\tAgentEvent,",
+				"\tToolTraceItem,",
+				'} from "./agentTypes";',
 				'export { useAgentBoard } from "./useAgentBoard";',
 				'export { useAgentChat } from "./useAgentChat";',
 				"export {",
@@ -1076,7 +1085,7 @@ describe("Cycle Map — map data (unit)", () => {
 		}
 		assert.deepEqual(
 			readdirSync(join(repoRoot, "client/src/features/auth")).sort(),
-			["authApi.ts", "index.ts"],
+			["authApi.ts", "index.ts", "user.ts"],
 			"auth UI stays in pages; the feature owns its extracted API factory",
 		);
 	});
@@ -1168,7 +1177,7 @@ describe("Cycle Map — map data (unit)", () => {
 		);
 		assert.deepEqual(
 			readdirSync(join(repoRoot, "client/src/features/workspaces")).sort(),
-			["index.ts", "workspacesApi.ts"],
+			["index.ts", "workspaceTypes.ts", "workspacesApi.ts"],
 			"workspace feature must own a public API factory, not an empty tree",
 		);
 	});
@@ -1254,7 +1263,7 @@ describe("Cycle Map — map data (unit)", () => {
 		}
 		assert.deepEqual(
 			readdirSync(join(repoRoot, "client/src/features/activity")).sort(),
-			["activityApi.ts", "index.ts"],
+			["activityApi.ts", "activityTypes.ts", "index.ts"],
 			"activity feature must own a public API factory, not an empty tree",
 		);
 	});

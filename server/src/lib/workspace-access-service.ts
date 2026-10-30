@@ -44,6 +44,8 @@ export type WorkspaceAccessDeps = {
 					userId: number;
 					workspaceId: number;
 					workspaceName: string;
+					/** Set when the user left on their own, so their own client can skip the removal redirect. */
+					reason?: "left";
 			  }
 			| {
 					type: "membership.role_changed";
@@ -60,6 +62,50 @@ export type WorkspaceAccessDeps = {
 	) => Promise<void>;
 	clearPresence: (workspaceId: number, userId: number) => Promise<void>;
 };
+
+type RemovalOutcome = {
+	userId: number;
+	username: string;
+	focusSessionFinished: boolean;
+};
+
+// Shared post-removal sequence: clear presence, finish focus-session realtime
+// state if one was closed, then announce the removal to the workspace.
+async function finalizeRemoval(
+	deps: WorkspaceAccessDeps,
+	workspaceId: number,
+	userId: number,
+	removed: RemovalOutcome,
+	workspaceName: string,
+	reason?: "left",
+): Promise<void> {
+	deps.clearPresence(workspaceId, userId).catch(() => {
+		// best-effort; member already removed
+	});
+	if (removed.focusSessionFinished) {
+		await deps
+			.publishEvent(workspaceId, {
+				type: "focus_session.updated",
+				userId: removed.userId,
+				workspaceId,
+				payload: { session: null },
+			})
+			.catch(() => {
+				// best-effort; member already removed
+			});
+	}
+	deps
+		.publishEvent(workspaceId, {
+			type: "membership.removed",
+			userId: removed.userId,
+			workspaceId,
+			workspaceName,
+			reason,
+		})
+		.catch(() => {
+			// best-effort; member already removed
+		});
+}
 
 export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 	return {
@@ -106,31 +152,41 @@ export function createWorkspaceAccessService(deps: WorkspaceAccessDeps) {
 
 			const removed = await deps.removeMember(workspaceId, userId, actor);
 			if (!removed) return { status: 404 as const, error: "Not found" };
-			deps.clearPresence(workspaceId, userId).catch(() => {
-				// best-effort; member already removed
-			});
-			if (removed.focusSessionFinished) {
-				await deps
-					.publishEvent(workspaceId, {
-						type: "focus_session.updated",
-						userId: removed.userId,
-						workspaceId,
-						payload: { session: null },
-					})
-					.catch(() => {
-						// best-effort; member already removed
-					});
+			await finalizeRemoval(deps, workspaceId, userId, removed, workspace.name);
+			return { status: 204 as const };
+		},
+
+		async leaveMember({
+			userId,
+			actor,
+			workspaceId,
+		}: {
+			userId: number;
+			actor: AuthUser;
+			workspaceId: number;
+		}) {
+			const membership = await deps.getActorMembership(workspaceId, userId);
+			if (!membership) return { status: 404 as const, error: "Not found" };
+			if (membership.role === "owner") {
+				return {
+					status: 403 as const,
+					error: "Transfer ownership before leaving this workspace",
+				};
 			}
-			deps
-				.publishEvent(workspaceId, {
-					type: "membership.removed",
-					userId: removed.userId,
-					workspaceId,
-					workspaceName: workspace.name,
-				})
-				.catch(() => {
-					// best-effort; member already removed
-				});
+
+			const workspace = await deps.getWorkspace(workspaceId);
+			if (!workspace) return { status: 404 as const, error: "Not found" };
+
+			const removed = await deps.removeMember(workspaceId, userId, actor);
+			if (!removed) return { status: 404 as const, error: "Not found" };
+			await finalizeRemoval(
+				deps,
+				workspaceId,
+				userId,
+				removed,
+				workspace.name,
+				"left",
+			);
 			return { status: 204 as const };
 		},
 

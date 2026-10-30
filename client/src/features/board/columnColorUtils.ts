@@ -1,5 +1,5 @@
 import { clampChroma, formatCss, parse, random } from "culori";
-import { COLOR_PREVIEWS, type ColumnColor } from "./columnColors";
+import { COLOR_LABELS, COLOR_PREVIEWS, type ColumnColor } from "./columnColors";
 
 /** Border lightness — matches legacy shade-200 OKLCH band (~L 84–94% in index.css). */
 export const PASTEL_BORDER_L = 0.89;
@@ -61,4 +61,12 @@ export function columnColorPreviewStyle(color: string | null): {
 		return { backgroundColor: COLOR_PREVIEWS[color as ColumnColor] };
 	}
 	return { backgroundColor: color };
+}
+
+/** Human-readable label for a known palette color, else a truncated raw value. */
+export function formatSelectedColorLabel(color: string): string {
+	if (color in COLOR_LABELS) {
+		return COLOR_LABELS[color as ColumnColor];
+	}
+	return color.length > 28 ? `${color.slice(0, 25)}...` : color;
 }
