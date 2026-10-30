@@ -232,5 +232,10 @@ export function createBoardApi(request: ApiRequest) {
 				method: "PATCH",
 				body: JSON.stringify(patch),
 			}),
+
+		deleteColumn: (workspaceId: number, id: number) =>
+			request<void>(`/workspaces/${workspaceId}/columns/${id}`, {
+				method: "DELETE",
+			}),
 	};
 }

@@ -115,6 +115,7 @@ function renderColumn(column = makeColumn()) {
 				onOpenCard={vi.fn()}
 				onAddCard={vi.fn().mockResolvedValue(undefined)}
 				onUpdateColumn={vi.fn().mockResolvedValue(undefined)}
+				onDeleteColumn={vi.fn().mockResolvedValue(undefined)}
 			/>
 		</TaskMetadataCatalogProvider>,
 	);
@@ -147,6 +148,7 @@ function openSettings(
 				onOpenCard={vi.fn()}
 				onAddCard={vi.fn().mockResolvedValue(undefined)}
 				onUpdateColumn={onUpdate}
+				onDeleteColumn={vi.fn().mockResolvedValue(undefined)}
 			/>
 		</TaskMetadataCatalogProvider>,
 	);
