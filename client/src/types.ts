@@ -69,6 +69,7 @@ export type {
 	WorkspaceInvite,
 	WorkspaceListResponse,
 	WorkspaceMember,
+	WorkspacePendingInvite,
 	WorkspaceRole,
 	WorkspaceSelectionState,
 } from "./features/workspaces";
