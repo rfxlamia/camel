@@ -74,6 +74,34 @@ export function useBoardPageActions({
 		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
 	);
 
+	const onDeleteColumn = useCallback(
+		async (id: number) => {
+			if (activeWorkspaceId === null) return;
+			try {
+				cancelScheduledRefresh();
+				await api.deleteColumn(activeWorkspaceId, id);
+			} catch (err) {
+				showToast("Couldn't delete the column. Try again.", "error");
+				// Rethrow so the confirm dialog can distinguish a failed deletion
+				// from a successful one and stay open for a retry.
+				throw err;
+			}
+			showToast("Column deleted", "success");
+			try {
+				await refresh();
+			} catch {
+				// Deletion succeeded; only the refresh failed. Avoid a contradictory
+				// "deleted + couldn't delete" pair of toasts.
+				showToast(
+					"Column deleted, but the board couldn't refresh — retrying in the background.",
+					"warning",
+				);
+				void refresh();
+			}
+		},
+		[activeWorkspaceId, cancelScheduledRefresh, refresh, showToast],
+	);
+
 	const onAddColumn = useCallback(
 		async (title: string) => {
 			if (activeWorkspaceId === null) return;
@@ -129,6 +157,7 @@ export function useBoardPageActions({
 		onAddCard,
 		onAddColumn,
 		onApplyTemplate,
+		onDeleteColumn,
 		onStartBlank,
 		onUpdateColumn,
 		pickerState,
