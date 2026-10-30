@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
 import type { ToastType } from "../../shared/ToastContext";
-import { initials } from "../../shared/TrackerGlyphs";
 import type { WorkspaceMember, WorkspaceRole } from "../../types";
+import ConfirmActionDialog from "./ConfirmActionDialog";
+import MemberRow from "./MemberRow";
 import PendingInvitesSection, {
 	type PendingInviteRow,
 } from "./PendingInvitesSection";
-
-function roleLabel(role: WorkspaceRole): string {
-	if (role === "owner") return "Owner";
-	if (role === "admin") return "Admin";
-	return "Member";
-}
 
 export interface ManageMembersSectionProps {
 	workspaceId: number;
@@ -37,12 +32,27 @@ export default function ManageMembersSection({
 	const [pendingRemove, setPendingRemove] = useState<WorkspaceMember | null>(
 		null,
 	);
+	const [pendingTransfer, setPendingTransfer] =
+		useState<WorkspaceMember | null>(null);
+	// The `currentUserRole` prop comes from the workspace context and can lag
+	// behind a just-completed transfer — or never catch up if the workspace
+	// reload triggered by `onMembersChanged` fails. Track the locally-applied
+	// demotion so owner-only controls disappear immediately after a successful
+	// transfer and stay gone until the prop confirms the new role.
+	const [viewerRoleOverride, setViewerRoleOverride] =
+		useState<WorkspaceRole | null>(null);
+	const [transferring, setTransferring] = useState(false);
 	const [removing, setRemoving] = useState(false);
 	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
 	const isFirstLoad = useRef(true);
 
-	const canRemove = currentUserRole === "admin" || currentUserRole === "owner";
-	const canChangeRole = currentUserRole === "owner";
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the override must clear when the role prop catches up or the workspace changes
+	useEffect(() => {
+		setViewerRoleOverride(null);
+	}, [currentUserRole, workspaceId]);
+
+	const viewerRole = viewerRoleOverride ?? currentUserRole;
+	const canRemove = viewerRole === "admin" || viewerRole === "owner";
 
 	const loadMembers = useCallback(async () => {
 		if (isFirstLoad.current) {
@@ -76,14 +86,40 @@ export default function ManageMembersSection({
 		void loadMembers();
 	}, [loadMembers, refreshKey]);
 
-	useEffect(() => {
-		if (!pendingRemove) return;
-		function onKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape") setPendingRemove(null);
+	async function handleConfirmTransfer() {
+		if (!pendingTransfer) return;
+		setTransferring(true);
+		try {
+			await api.transferWorkspaceOwnership(workspaceId, {
+				newOwnerId: pendingTransfer.userId,
+				previousOwnerRole: "admin",
+			});
+			setMembers((prev) =>
+				prev.map((m) => {
+					if (m.userId === pendingTransfer.userId)
+						return { ...m, role: "owner" as const };
+					if (m.userId === currentUserId)
+						return { ...m, role: "admin" as const };
+					return m;
+				}),
+			);
+			showToast("Ownership transferred", "success");
+			// Apply the demotion locally so owner-only controls disappear right
+			// away — independently of the workspace reload that `onMembersChanged`
+			// triggers (which may be delayed or fail entirely).
+			setViewerRoleOverride("admin");
+			onMembersChanged?.();
+		} catch (err: unknown) {
+			const msg =
+				err instanceof ApiError
+					? err.message
+					: "Couldn't transfer ownership. Try again.";
+			showToast(msg, "error");
+		} finally {
+			setTransferring(false);
+			setPendingTransfer(null);
 		}
-		document.addEventListener("keydown", onKeyDown);
-		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [pendingRemove]);
+	}
 
 	async function handleRoleChange(
 		member: WorkspaceMember,
@@ -173,64 +209,18 @@ export default function ManageMembersSection({
 		<>
 			{members.length > 0 && (
 				<ul className="divide-y divide-neutral-200 rounded-md border border-neutral-200">
-					{members.map((member) => {
-						const isSelf = member.userId === currentUserId;
-						const isOwnerRow = member.role === "owner";
-						const showRemove = canRemove && !isSelf && !isOwnerRow;
-						const showRoleDropdown = canChangeRole && !isOwnerRow;
-
-						return (
-							<li
-								key={member.userId}
-								className="flex items-center gap-3 px-3 py-2.5"
-							>
-								<div
-									className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-800"
-									aria-hidden="true"
-								>
-									{initials(member.displayName)}
-								</div>
-								<div className="min-w-0 flex-1">
-									<div className="truncate text-sm font-medium text-neutral-900">
-										{member.displayName}
-									</div>
-									<div className="truncate text-xs text-neutral-500">
-										@{member.username}
-									</div>
-								</div>
-								{showRoleDropdown ? (
-									<select
-										value={member.role}
-										disabled={roleUpdatingId === member.userId}
-										onChange={(e) =>
-											void handleRoleChange(
-												member,
-												e.target.value as "admin" | "member",
-											)
-										}
-										className="appearance-none rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 shadow-sm hover:border-neutral-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/15 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
-										aria-label={`Role for ${member.displayName}`}
-									>
-										<option value="member">Member</option>
-										<option value="admin">Admin</option>
-									</select>
-								) : (
-									<span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
-										{roleLabel(member.role)}
-									</span>
-								)}
-								{showRemove && (
-									<button
-										type="button"
-										onClick={() => setPendingRemove(member)}
-										className="shrink-0 rounded-md border border-error-500 px-2.5 py-1 text-xs font-medium text-error-700 hover:bg-error-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error-500"
-									>
-										Remove
-									</button>
-								)}
-							</li>
-						);
-					})}
+					{members.map((member) => (
+						<MemberRow
+							key={member.userId}
+							member={member}
+							viewerId={currentUserId}
+							viewerRole={viewerRole}
+							roleUpdating={roleUpdatingId === member.userId}
+							onRoleChange={(m, role) => void handleRoleChange(m, role)}
+							onTransfer={setPendingTransfer}
+							onRemove={setPendingRemove}
+						/>
+					))}
 				</ul>
 			)}
 
@@ -247,47 +237,33 @@ export default function ManageMembersSection({
 			)}
 
 			{pendingRemove && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="confirm-remove-member-title"
-					onClick={() => setPendingRemove(null)}
-				>
-					<div
-						className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg"
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
-					>
-						<p
-							id="confirm-remove-member-title"
-							className="font-medium text-neutral-800"
-						>
-							Remove {pendingRemove.displayName}?
-						</p>
-						<p className="mt-1 text-sm text-neutral-500">
-							They will lose access to this workspace and its boards.
-						</p>
-						<div className="mt-4 flex gap-2">
-							<button
-								type="button"
-								onClick={() => setPendingRemove(null)}
-								className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								onClick={() => void handleConfirmRemove()}
-								disabled={removing}
-								aria-label="Confirm remove"
-								className="flex-1 rounded-md bg-error-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-error-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
-							>
-								{removing ? "Removing..." : "Remove"}
-							</button>
-						</div>
-					</div>
-				</div>
+				<ConfirmActionDialog
+					titleId="confirm-remove-member-title"
+					title={`Remove ${pendingRemove.displayName}?`}
+					description="They will lose access to this workspace and its boards."
+					confirmAriaLabel="Confirm remove"
+					confirmLabel="Remove"
+					busyLabel="Removing..."
+					busy={removing}
+					tone="error"
+					onConfirm={() => void handleConfirmRemove()}
+					onCancel={() => setPendingRemove(null)}
+				/>
+			)}
+
+			{pendingTransfer && (
+				<ConfirmActionDialog
+					titleId="confirm-transfer-ownership-title"
+					title={`Transfer ownership to ${pendingTransfer.displayName}?`}
+					description="They will own this workspace and its settings. You will become an admin."
+					confirmAriaLabel="Confirm transfer"
+					confirmLabel="Transfer"
+					busyLabel="Transferring..."
+					busy={transferring}
+					tone="primary"
+					onConfirm={() => void handleConfirmTransfer()}
+					onCancel={() => setPendingTransfer(null)}
+				/>
 			)}
 		</>
 	);
