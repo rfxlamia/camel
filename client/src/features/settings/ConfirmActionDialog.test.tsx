@@ -71,4 +71,34 @@ describe("ConfirmActionDialog", () => {
 		fireEvent.click(confirm);
 		expect(onConfirm).not.toHaveBeenCalled();
 	});
+
+	it("ignores Escape, backdrop, and Cancel while busy", () => {
+		const onCancel = vi.fn();
+		render(
+			<ConfirmActionDialog
+				titleId="confirm-thing-title"
+				title="Do the thing?"
+				description="This cannot be undone."
+				confirmAriaLabel="Confirm thing"
+				confirmLabel="Do it"
+				busyLabel="Doing..."
+				busy={true}
+				onConfirm={() => {}}
+				onCancel={onCancel}
+			/>,
+		);
+
+		// An in-flight action is not cancellable; dismissing the dialog while
+		// it runs would imply the operation was aborted when it was not.
+		fireEvent.keyDown(document, { key: "Escape" });
+		fireEvent.click(screen.getByRole("dialog"));
+
+		const cancel = screen.getByRole("button", { name: "Cancel" });
+		expect((cancel as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(cancel);
+
+		expect(onCancel).not.toHaveBeenCalled();
+		// The dialog stays open so the user can see the operation settle.
+		expect(screen.getByRole("dialog")).toBeTruthy();
+	});
 });

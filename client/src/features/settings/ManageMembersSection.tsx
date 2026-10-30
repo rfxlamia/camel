@@ -34,12 +34,25 @@ export default function ManageMembersSection({
 	);
 	const [pendingTransfer, setPendingTransfer] =
 		useState<WorkspaceMember | null>(null);
+	// The `currentUserRole` prop comes from the workspace context and can lag
+	// behind a just-completed transfer — or never catch up if the workspace
+	// reload triggered by `onMembersChanged` fails. Track the locally-applied
+	// demotion so owner-only controls disappear immediately after a successful
+	// transfer and stay gone until the prop confirms the new role.
+	const [viewerRoleOverride, setViewerRoleOverride] =
+		useState<WorkspaceRole | null>(null);
 	const [transferring, setTransferring] = useState(false);
 	const [removing, setRemoving] = useState(false);
 	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
 	const isFirstLoad = useRef(true);
 
-	const canRemove = currentUserRole === "admin" || currentUserRole === "owner";
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the override must clear when the role prop catches up or the workspace changes
+	useEffect(() => {
+		setViewerRoleOverride(null);
+	}, [currentUserRole, workspaceId]);
+
+	const viewerRole = viewerRoleOverride ?? currentUserRole;
+	const canRemove = viewerRole === "admin" || viewerRole === "owner";
 
 	const loadMembers = useCallback(async () => {
 		if (isFirstLoad.current) {
@@ -91,9 +104,10 @@ export default function ManageMembersSection({
 				}),
 			);
 			showToast("Ownership transferred", "success");
-			// Signal the parent so it can reload workspace state; the refreshed
-			// `currentUserRole` ("admin") removes owner-only controls from this
-			// section once the reload completes.
+			// Apply the demotion locally so owner-only controls disappear right
+			// away — independently of the workspace reload that `onMembersChanged`
+			// triggers (which may be delayed or fail entirely).
+			setViewerRoleOverride("admin");
 			onMembersChanged?.();
 		} catch (err: unknown) {
 			const msg =
@@ -200,7 +214,7 @@ export default function ManageMembersSection({
 							key={member.userId}
 							member={member}
 							viewerId={currentUserId}
-							viewerRole={currentUserRole}
+							viewerRole={viewerRole}
 							roleUpdating={roleUpdatingId === member.userId}
 							onRoleChange={(m, role) => void handleRoleChange(m, role)}
 							onTransfer={setPendingTransfer}

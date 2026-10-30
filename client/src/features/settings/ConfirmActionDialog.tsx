@@ -18,9 +18,11 @@ export interface ConfirmActionDialogProps {
 
 /**
  * Modal confirmation dialog shared by destructive/impactful member actions
- * (remove member, transfer ownership). Escape and backdrop clicks cancel;
- * the confirm button is disabled while `busy` and the parent stays
- * responsible for closing the dialog when the action settles.
+ * (remove member, transfer ownership). Escape, backdrop clicks, and the
+ * Cancel button dismiss the dialog only while the action is NOT in flight —
+ * once `busy` is set the operation cannot be dismissed away (it is not
+ * cancellable), and the parent stays responsible for closing the dialog when
+ * the action settles.
  */
 export default function ConfirmActionDialog({
 	titleId,
@@ -36,11 +38,15 @@ export default function ConfirmActionDialog({
 }: ConfirmActionDialogProps) {
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape") onCancel();
+			if (e.key === "Escape" && !busy) onCancel();
 		}
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [onCancel]);
+	}, [onCancel, busy]);
+
+	function handleBackdropCancel() {
+		if (!busy) onCancel();
+	}
 
 	return (
 		<div
@@ -48,7 +54,7 @@ export default function ConfirmActionDialog({
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={titleId}
-			onClick={onCancel}
+			onClick={handleBackdropCancel}
 		>
 			<div
 				className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg"
@@ -63,7 +69,8 @@ export default function ConfirmActionDialog({
 					<button
 						type="button"
 						onClick={onCancel}
-						className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+						disabled={busy}
+						className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
 					>
 						Cancel
 					</button>

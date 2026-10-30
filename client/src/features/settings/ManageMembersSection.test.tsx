@@ -524,3 +524,127 @@ describe("Transfer ownership integration contracts", () => {
 		);
 	});
 });
+
+describe("Transfer ownership stale-role handling", () => {
+	it("hides owner-only controls immediately after transfer, before the reload lands", async () => {
+		const onMembersChanged = vi.fn();
+		render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Admin User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+		await waitFor(() => {
+			expect(onMembersChanged).toHaveBeenCalled();
+		});
+
+		// The workspace reload triggered by onMembersChanged has not resolved
+		// yet, so the currentUserRole prop is still the stale "owner" — but the
+		// local demotion must already remove every owner-only control.
+		expect(screen.queryByRole("button", { name: "Make owner" })).toBeNull();
+		expect(screen.queryByRole("combobox")).toBeNull();
+		expect(screen.getByText("Owner")).toBeTruthy();
+	});
+
+	it("keeps owner-only controls hidden when the reload fails and the role prop stays stale", async () => {
+		const onMembersChanged = vi.fn();
+		const { rerender } = render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Admin User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+		await waitFor(() => {
+			expect(onMembersChanged).toHaveBeenCalled();
+		});
+
+		// Simulate a failed reloadWorkspaces(): the parent re-renders with the
+		// same stale "owner" role prop and the section must not leak the
+		// owner-only controls back.
+		rerender(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		expect(screen.queryByRole("button", { name: "Make owner" })).toBeNull();
+		expect(screen.queryByRole("combobox")).toBeNull();
+	});
+
+	it("restores role controls when switching to another workspace after a transfer", async () => {
+		const onMembersChanged = vi.fn();
+		const { rerender } = render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Admin User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+		await waitFor(() => {
+			expect(onMembersChanged).toHaveBeenCalled();
+		});
+
+		// The user switches to a different workspace they still own: the local
+		// demotion must not leak into it.
+		rerender(
+			<ManageMembersSection
+				workspaceId={8}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		expect(screen.getAllByRole("button", { name: "Make owner" }).length).toBe(
+			2,
+		);
+		expect(screen.getAllByRole("combobox").length).toBe(2);
+	});
+});
