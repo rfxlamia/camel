@@ -43,3 +43,10 @@ export interface WorkspaceCreateState {
 	busy: boolean;
 	error: string | null;
 }
+
+/** Invite row as exposed to owners/admins in GET /workspaces/:id/members. */
+export interface WorkspacePendingInvite {
+	id: number;
+	username: string;
+	role: WorkspaceRole;
+}

@@ -20,6 +20,7 @@ describe("api compatibility surface", () => {
 				"agentArtifactDownloadUrl",
 				"approveAgentBoard",
 				"applyTemplate",
+				"cancelWorkspaceInvite",
 				"chat",
 				"createAgentBoard",
 				"createCard",

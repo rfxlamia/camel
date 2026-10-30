@@ -3,6 +3,9 @@ import { ApiError, api } from "../../api";
 import type { ToastType } from "../../shared/ToastContext";
 import { initials } from "../../shared/TrackerGlyphs";
 import type { WorkspaceMember, WorkspaceRole } from "../../types";
+import PendingInvitesSection, {
+	type PendingInviteRow,
+} from "./PendingInvitesSection";
 
 function roleLabel(role: WorkspaceRole): string {
 	if (role === "owner") return "Owner";
@@ -28,6 +31,7 @@ export default function ManageMembersSection({
 	showToast,
 }: ManageMembersSectionProps) {
 	const [members, setMembers] = useState<WorkspaceMember[]>([]);
+	const [invites, setInvites] = useState<PendingInviteRow[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState(false);
 	const [pendingRemove, setPendingRemove] = useState<WorkspaceMember | null>(
@@ -46,8 +50,10 @@ export default function ManageMembersSection({
 		}
 		setLoadError(false);
 		try {
-			const { members: rows } = await api.getWorkspaceMembers(workspaceId);
+			const { members: rows, invites: pendingInvites } =
+				await api.getWorkspaceMembers(workspaceId);
 			setMembers(rows);
+			setInvites(pendingInvites ?? []);
 		} catch {
 			setLoadError(true);
 			showToast("Couldn't load members. Try again.", "error");
@@ -61,6 +67,7 @@ export default function ManageMembersSection({
 	useEffect(() => {
 		isFirstLoad.current = true;
 		setMembers([]);
+		setInvites([]);
 		setLoading(true);
 	}, [workspaceId]);
 
@@ -158,72 +165,86 @@ export default function ManageMembersSection({
 		);
 	}
 
-	if (members.length === 0) {
+	if (members.length === 0 && (!canRemove || invites.length === 0)) {
 		return <p className="text-sm text-neutral-600">No members yet</p>;
 	}
 
 	return (
 		<>
-			<ul className="divide-y divide-neutral-200 rounded-md border border-neutral-200">
-				{members.map((member) => {
-					const isSelf = member.userId === currentUserId;
-					const isOwnerRow = member.role === "owner";
-					const showRemove = canRemove && !isSelf && !isOwnerRow;
-					const showRoleDropdown = canChangeRole && !isOwnerRow;
+			{members.length > 0 && (
+				<ul className="divide-y divide-neutral-200 rounded-md border border-neutral-200">
+					{members.map((member) => {
+						const isSelf = member.userId === currentUserId;
+						const isOwnerRow = member.role === "owner";
+						const showRemove = canRemove && !isSelf && !isOwnerRow;
+						const showRoleDropdown = canChangeRole && !isOwnerRow;
 
-					return (
-						<li
-							key={member.userId}
-							className="flex items-center gap-3 px-3 py-2.5"
-						>
-							<div
-								className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-800"
-								aria-hidden="true"
+						return (
+							<li
+								key={member.userId}
+								className="flex items-center gap-3 px-3 py-2.5"
 							>
-								{initials(member.displayName)}
-							</div>
-							<div className="min-w-0 flex-1">
-								<div className="truncate text-sm font-medium text-neutral-900">
-									{member.displayName}
-								</div>
-								<div className="truncate text-xs text-neutral-500">
-									@{member.username}
-								</div>
-							</div>
-							{showRoleDropdown ? (
-								<select
-									value={member.role}
-									disabled={roleUpdatingId === member.userId}
-									onChange={(e) =>
-										void handleRoleChange(
-											member,
-											e.target.value as "admin" | "member",
-										)
-									}
-									className="appearance-none rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 shadow-sm hover:border-neutral-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/15 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
-									aria-label={`Role for ${member.displayName}`}
+								<div
+									className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-800"
+									aria-hidden="true"
 								>
-									<option value="member">Member</option>
-									<option value="admin">Admin</option>
-								</select>
-							) : (
-								<span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
-									{roleLabel(member.role)}
-								</span>
-							)}
-							{showRemove && (
-								<button
-									type="button"
-									onClick={() => setPendingRemove(member)}
-									className="shrink-0 rounded-md border border-error-500 px-2.5 py-1 text-xs font-medium text-error-700 hover:bg-error-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error-500"
-								>
-									Remove
-								</button>
-							)}
-						</li>
-					);
-				})}
-			</ul>
+									{initials(member.displayName)}
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="truncate text-sm font-medium text-neutral-900">
+										{member.displayName}
+									</div>
+									<div className="truncate text-xs text-neutral-500">
+										@{member.username}
+									</div>
+								</div>
+								{showRoleDropdown ? (
+									<select
+										value={member.role}
+										disabled={roleUpdatingId === member.userId}
+										onChange={(e) =>
+											void handleRoleChange(
+												member,
+												e.target.value as "admin" | "member",
+											)
+										}
+										className="appearance-none rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900 shadow-sm hover:border-neutral-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/15 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+										aria-label={`Role for ${member.displayName}`}
+									>
+										<option value="member">Member</option>
+										<option value="admin">Admin</option>
+									</select>
+								) : (
+									<span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
+										{roleLabel(member.role)}
+									</span>
+								)}
+								{showRemove && (
+									<button
+										type="button"
+										onClick={() => setPendingRemove(member)}
+										className="shrink-0 rounded-md border border-error-500 px-2.5 py-1 text-xs font-medium text-error-700 hover:bg-error-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error-500"
+									>
+										Remove
+									</button>
+								)}
+							</li>
+						);
+					})}
+				</ul>
+			)}
+
+			{canRemove && invites.length > 0 && (
+				<PendingInvitesSection
+					workspaceId={workspaceId}
+					invites={invites}
+					onCancelled={(inviteId) => {
+						setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+						onMembersChanged?.();
+					}}
+					showToast={showToast}
+				/>
+			)}
 
 			{pendingRemove && (
 				<div
