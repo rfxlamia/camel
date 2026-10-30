@@ -251,10 +251,12 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 		});
 
 		it("Scenario D: plain members see no invitations and cannot cancel; the invitee can decline their own invite", async () => {
-			// Re-invite Bob (Scenario A consumed his invite).
+			// Invite Carol again (her Scenario B invite was cancelled, so she is
+			// neither a member nor invite-pending). Re-inviting Bob would 409
+			// because he became a member via Scenario A acceptance.
 			const inviteRes = await request(ownerApp)
 				.post(`/workspaces/${workspaceId}/members`)
-				.send({ username: bobUsername });
+				.send({ username: carolUsername });
 			expect(inviteRes.status).toBe(201);
 
 			// A plain member gets no privileged invitation data.
@@ -265,7 +267,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(miaView.body.invites).toBeUndefined();
 			expect(
 				miaView.body.members.some(
-					(m: { username: string }) => m.username === bobUsername,
+					(m: { username: string }) => m.username === carolUsername,
 				),
 			).toBe(false);
 
@@ -276,10 +278,15 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 			expect(miaCancel.status).toBe(404);
 
 			// The invitee can still decline their own invitation.
-			const bobDecline = await request(bobApp).delete(
+			const carolApp = appAs({
+				id: carolId,
+				username: carolUsername,
+				displayName: "Carol",
+			});
+			const carolDecline = await request(carolApp).delete(
 				`/workspaces/${workspaceId}/invites/${inviteRes.body.id}`,
 			);
-			expect(bobDecline.status).toBe(204);
+			expect(carolDecline.status).toBe(204);
 
 			const invitesLeft = await db
 				.selectFrom("workspace_invites")
@@ -288,13 +295,13 @@ describe.skipIf(!process.env.RUN_INTEGRATION)(
 				.execute();
 			expect(invitesLeft).toHaveLength(0);
 
-			const bobMember = await db
+			const carolMember = await db
 				.selectFrom("workspace_members")
 				.where("workspace_id", "=", workspaceId)
-				.where("user_id", "=", bobId)
+				.where("user_id", "=", carolId)
 				.select("user_id")
 				.execute();
-			expect(bobMember).toHaveLength(1); // from Scenario A acceptance only
+			expect(carolMember).toHaveLength(0); // declined, so never joined
 		});
 	},
 );
