@@ -231,13 +231,6 @@ export interface WorkspaceInvite {
 	role: WorkspaceRole;
 }
 
-/** Invite row as exposed to owners/admins in GET /workspaces/:id/members. */
-export interface WorkspacePendingInvite {
-	id: number;
-	username: string;
-	role: WorkspaceRole;
-}
-
 export interface WorkspaceListResponse {
 	workspaces: Workspace[];
 	pendingInvites: WorkspaceInvite[];

@@ -3,8 +3,15 @@ import type {
 	Workspace,
 	WorkspaceListResponse,
 	WorkspaceMember,
-	WorkspacePendingInvite,
+	WorkspaceRole,
 } from "../../types";
+
+/** Invite row as exposed to owners/admins in GET /workspaces/:id/members. */
+export interface WorkspacePendingInvite {
+	id: number;
+	username: string;
+	role: WorkspaceRole;
+}
 
 export function createWorkspacesApi(request: ApiRequest) {
 	return {
