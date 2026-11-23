@@ -39,3 +39,15 @@ export const CLIENT_KERNEL_PREFIXES = [
  * POSIX paths relative to repo root.
  */
 export const KERNEL_IN_WAITING = [];
+
+/**
+ * Files exempt from FM-RULE-3's line budget (including 300-on-touch), with the
+ * reason each is still oversized. Remove the entry when the file finally fits.
+ * POSIX paths relative to repo root.
+ */
+export const LINE_BUDGET_WAIVERS = new Map([
+	// Legacy shared type barrel. The per-module split lives in #232; until it
+	// merges, #226's 2-line hasPassword addition would otherwise trip
+	// 300-on-touch on a file it only extends by 2 lines.
+	["client/src/types.ts", "oversized legacy type barrel — split in #232"],
+]);

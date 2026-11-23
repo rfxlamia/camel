@@ -3,7 +3,10 @@ import { ApiError, api } from "../../api";
 import { useShowToast } from "../../shared/ToastContext";
 import { useWorkspace } from "../../shared/WorkspaceContext";
 import { SettingsSection } from "./SettingsSection";
-import { canEditWorkspaceSettings, getWorkspaceDangerZoneState } from "./settingsValidation";
+import {
+	canEditWorkspaceSettings,
+	getWorkspaceDangerZoneState,
+} from "./settingsValidation";
 
 export function DangerZoneSection() {
 	const {
@@ -78,8 +81,8 @@ export function DangerZoneSection() {
 					<div className="min-w-0">
 						<div className="font-medium text-neutral-800">Reset Settings</div>
 						<div className="text-sm text-neutral-500">
-							Revert board name and logo to defaults. Cards and columns are
-							not affected.
+							Revert board name and logo to defaults. Cards and columns are not
+							affected.
 						</div>
 					</div>
 					<button

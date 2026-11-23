@@ -6,7 +6,10 @@ vi.mock("../../db/redis.js", () => ({
 
 import {
 	checkAndRecordLoginAttempt,
+	checkAndRecordPasswordChangeAttempt,
+	clearPasswordChangeFailures,
 	isLoginLockedOut,
+	isPasswordChangeLockedOut,
 } from "./login-limiter.js";
 
 describe("Auth Redis Fallback", () => {
@@ -31,5 +34,18 @@ describe("Auth Redis Fallback", () => {
 
 		const result = await isLoginLockedOut("testuser");
 		expect(result).toBe(true);
+	});
+
+	it("locks password changes once the failure budget is spent", async () => {
+		const userId = 4242;
+		await clearPasswordChangeFailures(userId);
+		for (let i = 0; i < 5; i++) {
+			expect(await checkAndRecordPasswordChangeAttempt(userId)).toBe(false);
+		}
+
+		// The next guess must already be locked. Peek used to report open
+		// until a sixth failure, so a correct password still went through.
+		expect(await isPasswordChangeLockedOut(userId)).toBe(true);
+		await clearPasswordChangeFailures(userId);
 	});
 });

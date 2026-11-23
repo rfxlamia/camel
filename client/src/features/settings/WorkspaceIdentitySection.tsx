@@ -246,7 +246,9 @@ export function WorkspaceIdentitySection() {
 						{isSaving ? "Saving..." : "Save"}
 					</button>
 				</div>
-				{nameError && <p className="mt-1 text-sm text-error-600">{nameError}</p>}
+				{nameError && (
+					<p className="mt-1 text-sm text-error-600">{nameError}</p>
+				)}
 				{!nameVal.valid && !nameError && boardNameInput.trim() !== "" && (
 					<p className="mt-1 text-sm text-error-600">{nameVal.error}</p>
 				)}

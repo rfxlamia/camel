@@ -31,6 +31,12 @@ export function createAuthApi(request: ApiRequest) {
 				body: JSON.stringify({ password }),
 			}),
 
+		changePassword: (currentPassword: string, newPassword: string) =>
+			request<{ ok: boolean }>("/auth/change-password", {
+				method: "POST",
+				body: JSON.stringify({ currentPassword, newPassword }),
+			}),
+
 		startOAuth: async (provider: "google" | "github") => {
 			const data = await request.raw<{ url?: string }>(
 				"/auth/sign-in/social",
