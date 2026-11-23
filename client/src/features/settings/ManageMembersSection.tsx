@@ -45,6 +45,11 @@ export default function ManageMembersSection({
 	const [removing, setRemoving] = useState(false);
 	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
 	const isFirstLoad = useRef(true);
+	const workspaceIdRef = useRef(workspaceId);
+	workspaceIdRef.current = workspaceId;
+	// Bumped when the workspace changes so an in-flight transfer cannot clear
+	// or overwrite state that now belongs to another workspace.
+	const transferSeq = useRef(0);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the override must clear when the role prop catches up or the workspace changes
 	useEffect(() => {
@@ -73,12 +78,15 @@ export default function ManageMembersSection({
 		}
 	}, [workspaceId, showToast]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId change resets first-load state
+	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId change resets first-load state and drops a transfer started in the previous workspace
 	useEffect(() => {
 		isFirstLoad.current = true;
 		setMembers([]);
 		setInvites([]);
 		setLoading(true);
+		setPendingTransfer(null);
+		setTransferring(false);
+		transferSeq.current += 1;
 	}, [workspaceId]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey triggers re-fetch after invite
@@ -88,26 +96,36 @@ export default function ManageMembersSection({
 
 	async function handleConfirmTransfer() {
 		if (!pendingTransfer) return;
+		const target = pendingTransfer;
+		const originWorkspaceId = workspaceId;
+		const seq = transferSeq.current;
 		setTransferring(true);
 		try {
-			await api.transferWorkspaceOwnership(workspaceId, {
-				newOwnerId: pendingTransfer.userId,
+			await api.transferWorkspaceOwnership(originWorkspaceId, {
+				newOwnerId: target.userId,
 				previousOwnerRole: "admin",
 			});
-			setMembers((prev) =>
-				prev.map((m) => {
-					if (m.userId === pendingTransfer.userId)
-						return { ...m, role: "owner" as const };
-					if (m.userId === currentUserId)
-						return { ...m, role: "admin" as const };
-					return m;
-				}),
-			);
-			showToast("Ownership transferred", "success");
-			// Apply the demotion locally so owner-only controls disappear right
-			// away — independently of the workspace reload that `onMembersChanged`
-			// triggers (which may be delayed or fail entirely).
-			setViewerRoleOverride("admin");
+			const stillOrigin =
+				seq === transferSeq.current &&
+				workspaceIdRef.current === originWorkspaceId;
+			if (stillOrigin) {
+				setMembers((prev) =>
+					prev.map((m) => {
+						if (m.userId === target.userId)
+							return { ...m, role: "owner" as const };
+						if (m.userId === currentUserId)
+							return { ...m, role: "admin" as const };
+						return m;
+					}),
+				);
+				showToast("Ownership transferred", "success");
+				// Apply the demotion locally so owner-only controls disappear right
+				// away — independently of the workspace reload that `onMembersChanged`
+				// triggers (which may be delayed or fail entirely).
+				setViewerRoleOverride("admin");
+			}
+			// The parent reloads workspace roles. That refresh stays valid after
+			// the viewer has switched away; the local role writes above do not.
 			onMembersChanged?.();
 		} catch (err: unknown) {
 			const msg =
@@ -116,8 +134,10 @@ export default function ManageMembersSection({
 					: "Couldn't transfer ownership. Try again.";
 			showToast(msg, "error");
 		} finally {
-			setTransferring(false);
-			setPendingTransfer(null);
+			if (seq === transferSeq.current) {
+				setTransferring(false);
+				setPendingTransfer(null);
+			}
 		}
 	}
 

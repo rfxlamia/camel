@@ -30,9 +30,12 @@ export default function MemberRow({
 	const isSelf = member.userId === viewerId;
 	const isOwnerRow = member.role === "owner";
 	const showRemove =
-		(viewerRole === "admin" || viewerRole === "owner") && !isSelf && !isOwnerRow;
+		(viewerRole === "admin" || viewerRole === "owner") &&
+		!isSelf &&
+		!isOwnerRow;
 	const showRoleDropdown = viewerRole === "owner" && !isOwnerRow;
-	const showTransferOwnership = viewerRole === "owner" && !isSelf && !isOwnerRow;
+	const showTransferOwnership =
+		viewerRole === "owner" && !isSelf && !isOwnerRow;
 
 	return (
 		<li className="flex items-center gap-3 px-3 py-2.5">
@@ -72,7 +75,8 @@ export default function MemberRow({
 				<button
 					type="button"
 					onClick={() => onTransfer(member)}
-					className="shrink-0 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+					disabled={roleUpdating}
+					className="shrink-0 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
 				>
 					Make owner
 				</button>

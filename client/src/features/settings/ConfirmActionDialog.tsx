@@ -1,4 +1,25 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+const FOCUSABLE_SELECTOR =
+	'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusableIn(container: HTMLElement): HTMLElement[] {
+	return Array.from(
+		container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+	);
+}
+
+function restoreFocus(previouslyFocused: HTMLElement | null) {
+	if (previouslyFocused?.isConnected) {
+		previouslyFocused.focus();
+		return;
+	}
+	document
+		.querySelector<HTMLElement>(
+			"button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
+		)
+		?.focus();
+}
 
 export interface ConfirmActionDialogProps {
 	/** DOM id of the title element, referenced by aria-labelledby. */
@@ -22,7 +43,9 @@ export interface ConfirmActionDialogProps {
  * Cancel button dismiss the dialog only while the action is NOT in flight —
  * once `busy` is set the operation cannot be dismissed away (it is not
  * cancellable), and the parent stays responsible for closing the dialog when
- * the action settles.
+ * the action settles. Focus moves into the dialog on open, Tab stays inside
+ * it, and focus returns to the trigger — or another remaining control if that
+ * trigger is gone.
  */
 export default function ConfirmActionDialog({
 	titleId,
@@ -36,13 +59,54 @@ export default function ConfirmActionDialog({
 	onConfirm,
 	onCancel,
 }: ConfirmActionDialogProps) {
+	const panelRef = useRef<HTMLDivElement>(null);
+	const onCancelRef = useRef(onCancel);
+	const busyRef = useRef(busy);
+	onCancelRef.current = onCancel;
+	busyRef.current = busy;
+
 	useEffect(() => {
-		function onKeyDown(e: KeyboardEvent) {
-			if (e.key === "Escape" && !busy) onCancel();
+		const previouslyFocused =
+			document.activeElement instanceof HTMLElement
+				? document.activeElement
+				: null;
+		const panel = panelRef.current;
+		const initial = panel ? focusableIn(panel)[0] : undefined;
+		(initial ?? panel)?.focus();
+
+		// Capture runs before the panel stops keydown propagation, so Escape
+		// from a focused dialog button still reaches this handler.
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				if (!busyRef.current) onCancelRef.current();
+				return;
+			}
+			if (event.key !== "Tab" || !panel) return;
+			const items = focusableIn(panel);
+			const first = items[0];
+			const last = items[items.length - 1];
+			if (!first || !last) {
+				event.preventDefault();
+				panel.focus();
+				return;
+			}
+			const active = document.activeElement;
+			const inside = active instanceof Node && panel.contains(active);
+			if (event.shiftKey && (!inside || active === first)) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && (!inside || active === last)) {
+				event.preventDefault();
+				first.focus();
+			}
 		}
-		document.addEventListener("keydown", onKeyDown);
-		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [onCancel, busy]);
+
+		document.addEventListener("keydown", onKeyDown, true);
+		return () => {
+			document.removeEventListener("keydown", onKeyDown, true);
+			restoreFocus(previouslyFocused);
+		};
+	}, []);
 
 	function handleBackdropCancel() {
 		if (!busy) onCancel();
@@ -57,7 +121,9 @@ export default function ConfirmActionDialog({
 			onClick={handleBackdropCancel}
 		>
 			<div
-				className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg"
+				ref={panelRef}
+				tabIndex={-1}
+				className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg outline-none"
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={(e) => e.stopPropagation()}
 			>

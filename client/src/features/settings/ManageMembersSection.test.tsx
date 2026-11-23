@@ -137,6 +137,34 @@ describe("ManageMembersSection interactions", () => {
 		});
 	});
 
+	it("disables Make owner on the row whose role update is still pending", async () => {
+		let resolveRole: (value: WorkspaceMember) => void = () => {};
+		updateWorkspaceMemberRole.mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveRole = resolve;
+			}),
+		);
+		renderSection("owner", 1);
+		await waitFor(() => {
+			expect(screen.getByText("Member User")).toBeTruthy();
+		});
+
+		fireEvent.change(screen.getByLabelText("Role for Member User"), {
+			target: { value: "admin" },
+		});
+
+		const makeOwner = screen.getAllByRole("button", { name: "Make owner" });
+		expect((makeOwner[0] as HTMLButtonElement).disabled).toBe(false);
+		expect((makeOwner[1] as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(makeOwner[1]!);
+		expect(screen.queryByRole("dialog")).toBeNull();
+
+		resolveRole({ ...member, role: "admin" });
+		await waitFor(() => {
+			expect(showToast).toHaveBeenCalledWith("Role updated", "success");
+		});
+	});
+
 	it("calls PATCH on role change", async () => {
 		renderSection("owner", 1);
 		await waitFor(() => {
@@ -646,5 +674,97 @@ describe("Transfer ownership stale-role handling", () => {
 			2,
 		);
 		expect(screen.getAllByRole("combobox").length).toBe(2);
+	});
+
+	it("clears a pending transfer when the workspace changes before confirm", async () => {
+		const { rerender } = render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		expect(
+			screen.getByRole("dialog", {
+				name: /Transfer ownership to Admin User\?/,
+			}),
+		).toBeTruthy();
+
+		rerender(
+			<ManageMembersSection
+				workspaceId={8}
+				currentUserId={1}
+				currentUserRole="owner"
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(getWorkspaceMembers).toHaveBeenCalledWith(8);
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(transferWorkspaceOwnership).not.toHaveBeenCalled();
+	});
+
+	it("does not apply a transfer that settles after the workspace changed", async () => {
+		let resolveTransfer: (value: { ok: boolean }) => void = () => {};
+		transferWorkspaceOwnership.mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveTransfer = resolve;
+			}),
+		);
+		const onMembersChanged = vi.fn();
+		const { rerender } = render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		fireEvent.click(screen.getAllByRole("button", { name: "Make owner" })[0]!);
+		fireEvent.click(
+			within(
+				screen.getByRole("dialog", {
+					name: /Transfer ownership to Admin User\?/,
+				}),
+			).getByRole("button", { name: "Confirm transfer" }),
+		);
+		await waitFor(() => {
+			expect(transferWorkspaceOwnership).toHaveBeenCalledWith(7, {
+				newOwnerId: 2,
+				previousOwnerRole: "admin",
+			});
+		});
+
+		rerender(
+			<ManageMembersSection
+				workspaceId={8}
+				currentUserId={1}
+				currentUserRole="owner"
+				onMembersChanged={onMembersChanged}
+				showToast={showToast}
+			/>,
+		);
+		resolveTransfer({ ok: true });
+		await waitFor(() => {
+			expect(screen.getByText("Admin User")).toBeTruthy();
+		});
+		expect(screen.getAllByRole("button", { name: "Make owner" }).length).toBe(
+			2,
+		);
+		expect(showToast).not.toHaveBeenCalledWith(
+			"Ownership transferred",
+			"success",
+		);
 	});
 });
