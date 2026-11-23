@@ -141,8 +141,44 @@ describe("ConfirmActionDialog", () => {
 		);
 		trigger.remove();
 		again.unmount();
-		expect(document.activeElement).toBe(remaining);
+		// No section fallback: do not steal focus onto an arbitrary control.
+		expect(document.activeElement).not.toBe(remaining);
 		remaining.remove();
+	});
+
+	it("restores focus inside the fallback section when the trigger is gone", () => {
+		const trigger = document.createElement("button");
+		trigger.textContent = "Make owner";
+		const stray = document.createElement("button");
+		stray.textContent = "Nav";
+		const section = document.createElement("div");
+		section.tabIndex = -1;
+		const stay = document.createElement("button");
+		stay.textContent = "In section";
+		section.append(stay);
+		document.body.append(trigger, stray, section);
+		const fallbackFocusRef = { current: section };
+		trigger.focus();
+
+		const view = render(
+			<ConfirmActionDialog
+				titleId="confirm-thing-title"
+				title="Do the thing?"
+				description="This cannot be undone."
+				confirmAriaLabel="Confirm thing"
+				confirmLabel="Do it"
+				busyLabel="Doing..."
+				busy={false}
+				fallbackFocusRef={fallbackFocusRef}
+				onConfirm={() => {}}
+				onCancel={() => {}}
+			/>,
+		);
+		trigger.remove();
+		view.unmount();
+		expect(document.activeElement).toBe(stay);
+		stray.remove();
+		section.remove();
 	});
 
 	it("disables the confirm button and shows the busy label while busy", () => {

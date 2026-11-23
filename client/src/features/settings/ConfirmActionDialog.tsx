@@ -9,16 +9,20 @@ function focusableIn(container: HTMLElement): HTMLElement[] {
 	);
 }
 
-function restoreFocus(previouslyFocused: HTMLElement | null) {
+function restoreFocus(
+	previouslyFocused: HTMLElement | null,
+	fallback: HTMLElement | null,
+) {
 	if (previouslyFocused?.isConnected) {
 		previouslyFocused.focus();
 		return;
 	}
-	document
-		.querySelector<HTMLElement>(
-			"button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
-		)
-		?.focus();
+	// The trigger is gone (the row is now an owner badge, or the member was
+	// removed). Stay inside the caller's section. A document-wide query would
+	// land on an unrelated header or nav control.
+	if (!fallback?.isConnected) return;
+	const inner = focusableIn(fallback)[0];
+	(inner ?? fallback).focus();
 }
 
 export interface ConfirmActionDialogProps {
@@ -35,6 +39,11 @@ export interface ConfirmActionDialogProps {
 	tone?: "primary" | "error";
 	onConfirm: () => void;
 	onCancel: () => void;
+	/**
+	 * Focus target used when the opening control has unmounted. Typically the
+	 * members section that contains the trigger.
+	 */
+	fallbackFocusRef?: { readonly current: HTMLElement | null };
 }
 
 /**
@@ -44,7 +53,7 @@ export interface ConfirmActionDialogProps {
  * once `busy` is set the operation cannot be dismissed away (it is not
  * cancellable), and the parent stays responsible for closing the dialog when
  * the action settles. Focus moves into the dialog on open, Tab stays inside
- * it, and focus returns to the trigger — or another remaining control if that
+ * it, and focus returns to the trigger — or into `fallbackFocusRef` if that
  * trigger is gone.
  */
 export default function ConfirmActionDialog({
@@ -58,12 +67,15 @@ export default function ConfirmActionDialog({
 	tone = "primary",
 	onConfirm,
 	onCancel,
+	fallbackFocusRef,
 }: ConfirmActionDialogProps) {
 	const panelRef = useRef<HTMLDivElement>(null);
 	const onCancelRef = useRef(onCancel);
 	const busyRef = useRef(busy);
+	const fallbackFocusRefHolder = useRef(fallbackFocusRef);
 	onCancelRef.current = onCancel;
 	busyRef.current = busy;
+	fallbackFocusRefHolder.current = fallbackFocusRef;
 
 	useEffect(() => {
 		const previouslyFocused =
@@ -104,7 +116,10 @@ export default function ConfirmActionDialog({
 		document.addEventListener("keydown", onKeyDown, true);
 		return () => {
 			document.removeEventListener("keydown", onKeyDown, true);
-			restoreFocus(previouslyFocused);
+			restoreFocus(
+				previouslyFocused,
+				fallbackFocusRefHolder.current?.current ?? null,
+			);
 		};
 	}, []);
 

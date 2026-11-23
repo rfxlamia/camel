@@ -29,9 +29,10 @@ export default function ManageMembersSection({
 	const [invites, setInvites] = useState<PendingInviteRow[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState(false);
-	const [pendingRemove, setPendingRemove] = useState<WorkspaceMember | null>(
-		null,
-	);
+	const [pendingRemove, setPendingRemove] = useState<{
+		member: WorkspaceMember;
+		workspaceId: number;
+	} | null>(null);
 	const [pendingTransfer, setPendingTransfer] =
 		useState<WorkspaceMember | null>(null);
 	// The `currentUserRole` prop comes from the workspace context and can lag
@@ -43,13 +44,19 @@ export default function ManageMembersSection({
 		useState<WorkspaceRole | null>(null);
 	const [transferring, setTransferring] = useState(false);
 	const [removing, setRemoving] = useState(false);
-	const [roleUpdatingId, setRoleUpdatingId] = useState<number | null>(null);
+	const [roleUpdatingIds, setRoleUpdatingIds] = useState<ReadonlySet<number>>(
+		() => new Set(),
+	);
 	const isFirstLoad = useRef(true);
+	const membersSectionRef = useRef<HTMLDivElement>(null);
 	const workspaceIdRef = useRef(workspaceId);
 	workspaceIdRef.current = workspaceId;
-	// Bumped when the workspace changes so an in-flight transfer cannot clear
-	// or overwrite state that now belongs to another workspace.
+	// Bumped when the workspace changes so an in-flight member action cannot
+	// clear or overwrite state that now belongs to another workspace.
 	const transferSeq = useRef(0);
+	// Bumped when a transfer demotes the viewer. A members reload that started
+	// before that demotion must not clear the override with a stale "owner" row.
+	const viewerOverrideEpoch = useRef(0);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the override must clear when the role prop catches up or the workspace changes
 	useEffect(() => {
@@ -64,11 +71,22 @@ export default function ManageMembersSection({
 			setLoading(true);
 		}
 		setLoadError(false);
+		const epochAtStart = viewerOverrideEpoch.current;
 		try {
 			const { members: rows, invites: pendingInvites } =
 				await api.getWorkspaceMembers(workspaceId);
 			setMembers(rows);
 			setInvites(pendingInvites ?? []);
+			setViewerRoleOverride((current) => {
+				if (!current || viewerOverrideEpoch.current !== epochAtStart) {
+					return current;
+				}
+				const self = rows.find((m) => m.userId === currentUserId);
+				// A later reload is the source of truth when ownership comes back
+				// and the role prop never flipped away from its previous value.
+				if (self && self.role !== current) return null;
+				return current;
+			});
 		} catch {
 			setLoadError(true);
 			showToast("Couldn't load members. Try again.", "error");
@@ -76,16 +94,19 @@ export default function ManageMembersSection({
 			setLoading(false);
 			isFirstLoad.current = false;
 		}
-	}, [workspaceId, showToast]);
+	}, [workspaceId, showToast, currentUserId]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId change resets first-load state and drops a transfer started in the previous workspace
+	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId change resets first-load state and drops member actions started in the previous workspace
 	useEffect(() => {
 		isFirstLoad.current = true;
 		setMembers([]);
 		setInvites([]);
 		setLoading(true);
 		setPendingTransfer(null);
+		setPendingRemove(null);
 		setTransferring(false);
+		setRemoving(false);
+		setRoleUpdatingIds(new Set());
 		transferSeq.current += 1;
 	}, [workspaceId]);
 
@@ -123,16 +144,31 @@ export default function ManageMembersSection({
 				// away — independently of the workspace reload that `onMembersChanged`
 				// triggers (which may be delayed or fail entirely).
 				setViewerRoleOverride("admin");
+				viewerOverrideEpoch.current += 1;
 			}
 			// The parent reloads workspace roles. That refresh stays valid after
 			// the viewer has switched away; the local role writes above do not.
 			onMembersChanged?.();
 		} catch (err: unknown) {
-			const msg =
-				err instanceof ApiError
-					? err.message
-					: "Couldn't transfer ownership. Try again.";
-			showToast(msg, "error");
+			const stillOrigin =
+				seq === transferSeq.current &&
+				workspaceIdRef.current === originWorkspaceId;
+			if (stillOrigin && err instanceof ApiError && err.status === 404) {
+				// 404 means the target member is gone, or the viewer is no longer
+				// the owner. The list and the role prop are both stale.
+				showToast(
+					"This member or your ownership changed. Refreshing.",
+					"error",
+				);
+				onMembersChanged?.();
+				void loadMembers();
+			} else if (stillOrigin) {
+				const msg =
+					err instanceof ApiError
+						? err.message
+						: "Couldn't transfer ownership. Try again.";
+				showToast(msg, "error");
+			}
 		} finally {
 			if (seq === transferSeq.current) {
 				setTransferring(false);
@@ -141,44 +177,82 @@ export default function ManageMembersSection({
 		}
 	}
 
+	function setRolePending(userId: number, pending: boolean) {
+		setRoleUpdatingIds((prev) => {
+			if (prev.has(userId) === pending) return prev;
+			const next = new Set(prev);
+			if (pending) next.add(userId);
+			else next.delete(userId);
+			return next;
+		});
+	}
+
 	async function handleRoleChange(
 		member: WorkspaceMember,
 		role: "admin" | "member",
 	) {
 		if (role === member.role) return;
-		setRoleUpdatingId(member.userId);
+		const originWorkspaceId = workspaceId;
+		const seq = transferSeq.current;
+		setRolePending(member.userId, true);
 		try {
 			const updated = await api.updateWorkspaceMemberRole(
-				workspaceId,
+				originWorkspaceId,
 				member.userId,
 				{ role },
 			);
+			if (
+				seq !== transferSeq.current ||
+				workspaceIdRef.current !== originWorkspaceId
+			) {
+				return;
+			}
 			setMembers((prev) =>
 				prev.map((m) => (m.userId === updated.userId ? updated : m)),
 			);
 			showToast("Role updated", "success");
 		} catch (err: unknown) {
+			if (
+				seq !== transferSeq.current ||
+				workspaceIdRef.current !== originWorkspaceId
+			) {
+				return;
+			}
 			const msg =
 				err instanceof ApiError
 					? err.message
 					: "Couldn't update role. Try again.";
 			showToast(msg, "error");
 		} finally {
-			setRoleUpdatingId(null);
+			if (seq === transferSeq.current) setRolePending(member.userId, false);
 		}
 	}
 
 	async function handleConfirmRemove() {
 		if (!pendingRemove) return;
+		const target = pendingRemove.member;
+		const originWorkspaceId = pendingRemove.workspaceId;
+		if (workspaceIdRef.current !== originWorkspaceId) {
+			setPendingRemove(null);
+			return;
+		}
+		const seq = transferSeq.current;
 		setRemoving(true);
 		try {
-			await api.removeWorkspaceMember(workspaceId, pendingRemove.userId);
-			setMembers((prev) =>
-				prev.filter((m) => m.userId !== pendingRemove.userId),
-			);
-			showToast("Member removed", "success");
-			onMembersChanged?.();
+			await api.removeWorkspaceMember(originWorkspaceId, target.userId);
+			const stillOrigin =
+				seq === transferSeq.current &&
+				workspaceIdRef.current === originWorkspaceId;
+			if (stillOrigin) {
+				setMembers((prev) => prev.filter((m) => m.userId !== target.userId));
+				showToast("Member removed", "success");
+				onMembersChanged?.();
+			}
 		} catch (err: unknown) {
+			const stillOrigin =
+				seq === transferSeq.current &&
+				workspaceIdRef.current === originWorkspaceId;
+			if (!stillOrigin) return;
 			const msg =
 				err instanceof ApiError
 					? err.message
@@ -188,8 +262,10 @@ export default function ManageMembersSection({
 				void loadMembers();
 			}
 		} finally {
-			setRemoving(false);
-			setPendingRemove(null);
+			if (seq === transferSeq.current) {
+				setRemoving(false);
+				setPendingRemove(null);
+			}
 		}
 	}
 
@@ -227,45 +303,57 @@ export default function ManageMembersSection({
 
 	return (
 		<>
-			{members.length > 0 && (
-				<ul className="divide-y divide-neutral-200 rounded-md border border-neutral-200">
-					{members.map((member) => (
-						<MemberRow
-							key={member.userId}
-							member={member}
-							viewerId={currentUserId}
-							viewerRole={viewerRole}
-							roleUpdating={roleUpdatingId === member.userId}
-							onRoleChange={(m, role) => void handleRoleChange(m, role)}
-							onTransfer={setPendingTransfer}
-							onRemove={setPendingRemove}
-						/>
-					))}
-				</ul>
-			)}
+			<div
+				ref={membersSectionRef}
+				tabIndex={-1}
+				className="space-y-6 focus:outline-none"
+			>
+				{members.length > 0 && (
+					<ul className="divide-y divide-neutral-200 rounded-md border border-neutral-200">
+						{members.map((member) => (
+							<MemberRow
+								key={member.userId}
+								member={member}
+								viewerId={currentUserId}
+								viewerRole={viewerRole}
+								roleUpdating={roleUpdatingIds.has(member.userId)}
+								onRoleChange={(m, role) => void handleRoleChange(m, role)}
+								onTransfer={setPendingTransfer}
+								onRemove={(memberToRemove) =>
+									setPendingRemove({
+										member: memberToRemove,
+										workspaceId,
+									})
+								}
+							/>
+						))}
+					</ul>
+				)}
 
-			{canRemove && invites.length > 0 && (
-				<PendingInvitesSection
-					workspaceId={workspaceId}
-					invites={invites}
-					onCancelled={(inviteId) => {
-						setInvites((prev) => prev.filter((i) => i.id !== inviteId));
-						onMembersChanged?.();
-					}}
-					showToast={showToast}
-				/>
-			)}
+				{canRemove && invites.length > 0 && (
+					<PendingInvitesSection
+						workspaceId={workspaceId}
+						invites={invites}
+						onCancelled={(inviteId) => {
+							setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+							onMembersChanged?.();
+						}}
+						showToast={showToast}
+					/>
+				)}
+			</div>
 
 			{pendingRemove && (
 				<ConfirmActionDialog
 					titleId="confirm-remove-member-title"
-					title={`Remove ${pendingRemove.displayName}?`}
+					title={`Remove ${pendingRemove.member.displayName}?`}
 					description="They will lose access to this workspace and its boards."
 					confirmAriaLabel="Confirm remove"
 					confirmLabel="Remove"
 					busyLabel="Removing..."
 					busy={removing}
 					tone="error"
+					fallbackFocusRef={membersSectionRef}
 					onConfirm={() => void handleConfirmRemove()}
 					onCancel={() => setPendingRemove(null)}
 				/>
@@ -281,6 +369,7 @@ export default function ManageMembersSection({
 					busyLabel="Transferring..."
 					busy={transferring}
 					tone="primary"
+					fallbackFocusRef={membersSectionRef}
 					onConfirm={() => void handleConfirmTransfer()}
 					onCancel={() => setPendingTransfer(null)}
 				/>
