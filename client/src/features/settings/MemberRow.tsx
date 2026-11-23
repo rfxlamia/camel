@@ -11,6 +11,7 @@ export interface MemberRowProps {
 	member: WorkspaceMember;
 	viewerId: number;
 	viewerRole: WorkspaceRole;
+	isPersonal: boolean;
 	/** True while the viewer is updating this member's role. */
 	roleUpdating: boolean;
 	onRoleChange: (member: WorkspaceMember, role: "admin" | "member") => void;
@@ -22,6 +23,7 @@ export default function MemberRow({
 	member,
 	viewerId,
 	viewerRole,
+	isPersonal,
 	roleUpdating,
 	onRoleChange,
 	onTransfer,
@@ -35,7 +37,7 @@ export default function MemberRow({
 		!isOwnerRow;
 	const showRoleDropdown = viewerRole === "owner" && !isOwnerRow;
 	const showTransferOwnership =
-		viewerRole === "owner" && !isSelf && !isOwnerRow;
+		viewerRole === "owner" && !isPersonal && !isSelf && !isOwnerRow;
 
 	return (
 		<li className="flex items-center gap-3 px-3 py-2.5">

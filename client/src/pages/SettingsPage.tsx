@@ -51,6 +51,7 @@ export default function SettingsPage() {
 						workspaceId={activeWorkspaceId}
 						currentUserId={user.id}
 						currentUserRole={activeWorkspace.role}
+						isPersonal={activeWorkspace.isPersonal}
 						refreshKey={membersRefreshKey}
 						onMembersChanged={() => void reloadWorkspaces()}
 						showToast={showToast}

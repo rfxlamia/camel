@@ -12,6 +12,7 @@ export interface ManageMembersSectionProps {
 	workspaceId: number;
 	currentUserId: number;
 	currentUserRole: WorkspaceRole;
+	isPersonal?: boolean;
 	refreshKey?: number;
 	onMembersChanged?: () => void;
 	showToast: (msg: string, type?: ToastType) => void;
@@ -21,6 +22,7 @@ export default function ManageMembersSection({
 	workspaceId,
 	currentUserId,
 	currentUserRole,
+	isPersonal = false,
 	refreshKey = 0,
 	onMembersChanged,
 	showToast,
@@ -316,6 +318,7 @@ export default function ManageMembersSection({
 								member={member}
 								viewerId={currentUserId}
 								viewerRole={viewerRole}
+								isPersonal={isPersonal}
 								roleUpdating={roleUpdatingIds.has(member.userId)}
 								onRoleChange={(m, role) => void handleRoleChange(m, role)}
 								onTransfer={setPendingTransfer}

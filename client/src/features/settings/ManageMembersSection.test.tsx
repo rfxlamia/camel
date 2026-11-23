@@ -90,6 +90,20 @@ afterEach(() => {
 });
 
 describe("ManageMembersSection permissions", () => {
+	it("does not offer ownership transfer in a personal workspace", async () => {
+		render(
+			<ManageMembersSection
+				workspaceId={7}
+				currentUserId={1}
+				currentUserRole="owner"
+				isPersonal
+				showToast={showToast}
+			/>,
+		);
+		await screen.findByText("Member User");
+		expect(screen.queryByRole("button", { name: "Make owner" })).toBeNull();
+	});
+
 	it("member viewer sees badges only, no Remove buttons", async () => {
 		renderSection("member");
 		await waitFor(() => {
