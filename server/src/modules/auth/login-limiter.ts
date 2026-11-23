@@ -29,6 +29,18 @@ const IN_MEMORY_PASSWORD_CHANGE_LIMITER = new InMemoryRateLimiter({
 // ---- Shared per-subject failure tracking ------------------------------------
 // Redis-backed, falling back in-memory (fail-closed) when Redis is down.
 
+/**
+ * Redis locks at count >= max. In-memory peek().isLocked is count > max, so a
+ * subject who has used every allowed failure still looks open and one more
+ * correct guess would succeed. Treat a spent budget as locked on both paths.
+ */
+function failureBudgetSpent(result: {
+	isLocked: boolean;
+	remainingAttempts: number;
+}): boolean {
+	return result.isLocked || result.remainingAttempts <= 0;
+}
+
 async function isLockedOut(
 	prefix: string,
 	subjectKey: string,
@@ -37,8 +49,7 @@ async function isLockedOut(
 ): Promise<boolean> {
 	const client = getRedisClient();
 	if (!client) {
-		const result = await fallback.peek(subjectKey);
-		return result.isLocked;
+		return failureBudgetSpent(await fallback.peek(subjectKey));
 	}
 
 	try {
@@ -46,8 +57,7 @@ async function isLockedOut(
 		return count !== null && Number.parseInt(count, 10) >= max;
 	} catch {
 		// Fail-closed: use in-memory limiter when Redis errors
-		const result = await fallback.peek(subjectKey);
-		return result.isLocked;
+		return failureBudgetSpent(await fallback.peek(subjectKey));
 	}
 }
 
